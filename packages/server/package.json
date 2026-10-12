@@ -1,0 +1,22 @@
+{
+  "name": "isorite",
+  "version": "0.1.0",
+  "description": "isorite: the command, the server and Iso.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "isorite": "./src/main.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "check": "tsc -p ."
+  },
+  "dependencies": {
+    "@isorite/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.2"
+  }
+}

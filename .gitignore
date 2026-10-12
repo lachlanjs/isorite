@@ -1,0 +1,17 @@
+node_modules/
+.DS_Store
+*.swp
+
+# Benchmark results (bench/)
+.bench/
+
+# The SvelteKit app's working files and build
+app/.svelte-kit/
+app/build/
+
+# Browser test output
+test-results/
+playwright-report/
+
+# The embedding model for search by meaning: fetched, not kept in git
+packages/server/models/
