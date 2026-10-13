@@ -113,7 +113,7 @@ ask { note | draft, form: insert | rewrite | note, place, asked, tier }
   └─ iso-done { proposal id, cost }
 ```
 
-- **The limit is enforced by the form, not by the prompt.** For `insert` the reply is text and its place was fixed before Iso was asked. For `rewrite` the reply is parsed into the blocks that were ticked; anything else in it is dropped and the person is told. Iso has no tool that writes.
+- **The limit is enforced by the form, not by the prompt.** For `insert` the reply is text and its place was fixed before Iso was asked. For `rewrite` the passages the person chose are sent between numbered marks, and only what comes back between the same marks is used, each set exactly where its passage was; anything else in the reply is dropped and the person is told. What Iso says of its changes comes back between marks of its own and is offered as ordinary text. Iso has no tool that writes.
 - **Unkept text never enters the note's file.** The editor reads the note and the journal's pending proposals and lays the proposals over the text at the place the core finds for them. If the place cannot be found the proposal is shown at the note's foot.
 - **Keep** writes the proposal into the note through the note store (one `change` entry with `why: keep`). **Edit** appends a `revise` entry, so a half-edited proposal also survives a restart. **Remove** appends `discard`.
 - **A note for Iso** (the draft started by holding on the Atlas) is the third form, `note`. The draft is a file in the study base (`drafts/<id>.md`) with its own journal, so it is "not in your base yet" in fact. Iso's reply is a proposal on the draft. "Keep as a note in `<folder>`" writes it into the knowledge base through the note store and removes the draft.

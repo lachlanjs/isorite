@@ -24,7 +24,7 @@
 
   /** Iso's reply, when there is one waiting: the page is then for reviewing it. */
   const reply = $derived(iso.proposals.at(-1));
-  const said = $derived(reply?.form === "insert" ? reply.text : "");
+  const said = $derived(reply?.text ?? "");
   const editing = $derived(reply && iso.editing?.id === reply.id ? iso.editing : null);
   const writing = $derived(!reply && !iso.asking);
   /** The notes the prompt links to: what Iso is sent with it. */
@@ -108,7 +108,7 @@
               <button class="link" type="button" onclick={() => iso.halt()}>[ stop ]</button>
             </div>
           {:else if editing}
-            <textarea class="revision" bind:value={editing.texts[0]} aria-label="Iso's text, to edit" rows={Math.max(6, (editing.texts[0] ?? "").split("\n").length + 1)}></textarea>
+            <textarea class="revision" bind:value={editing.text} aria-label="Iso's text, to edit" rows={Math.max(6, editing.text.split("\n").length + 1)}></textarea>
           {:else}<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
             <div class="prose said">{@html render(said)}</div>
           {/if}

@@ -1,11 +1,18 @@
-// Blocks laid over the note that are not part of its text: Iso's unkept text,
-// its reply as it arrives, and the line a prompt is written on. Each sits
-// before a line of the document (or after its last) as a block widget. The
-// document, and so the file, never holds them. What a block shows is drawn by
-// whoever sets them (a Svelte component mounted into the widget), so a block
-// whose key has not changed keeps its DOM while its content changes.
+// What Iso lays over the note, none of it part of the note's text:
+//
+// - blocks before a line (its unkept text, its reply as it arrives, the line
+//   a prompt is written on);
+// - marks on stretches of the text (passages chosen for a rewrite; passages a
+//   rewrite would replace, struck through);
+// - small pieces set in the line after a stretch (what a passage would become,
+//   with its own keep and remove).
+//
+// The document, and so the file, never holds them. What a block or a piece
+// shows is drawn by whoever sets them (a Svelte component mounted into the
+// widget), so one whose key has not changed keeps its DOM while its content
+// changes.
 
-import { StateEffect, StateField, type Extension } from "@codemirror/state";
+import { StateEffect, StateField, type Extension, type Range } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType, type DecorationSet } from "@codemirror/view";
 
 export interface Overlay {
@@ -14,67 +21,82 @@ export interface Overlay {
   /** The line (from 0) it sits before; the number of lines puts it after the last. */
   line: number;
 }
+/** A stretch of the text, by character, marked for what Iso is doing with it. */
+export interface Mark { from: number; to: number; kind: "picked" | "old" }
+/** A piece set in the line at a character. */
+export interface Inline { key: string; at: number }
 
-/** Draws a block into `el`; what it returns takes it down again. */
+/** Draws into `el`; what it returns takes it down again. */
 export type Mount = (el: HTMLElement, key: string) => () => void;
 
 export const setOverlays = StateEffect.define<Overlay[]>();
+export const setMarks = StateEffect.define<{ marks: Mark[]; inline: Inline[] }>();
 
-/** Lines of the note marked for what Iso is doing with them: chosen for a rewrite, or to be replaced by one. */
-export interface LineMark { from: number; to: number; kind: "picked" | "old" }
-export const setLineMarks = StateEffect.define<LineMark[]>();
-
-class OverlayWidget extends WidgetType {
+class Mounted extends WidgetType {
   private down: (() => void) | null = null;
-  constructor(readonly key: string, readonly mount: Mount) { super(); }
-  eq(other: OverlayWidget): boolean { return other.key === this.key; }
-  toDOM(): HTMLElement {
-    const el = document.createElement("div");
-    el.className = "cm-overlay";
+  private watch: ResizeObserver | null = null;
+  constructor(readonly key: string, readonly mount: Mount, readonly block: boolean) { super(); }
+  eq(other: Mounted): boolean { return other.key === this.key && other.block === this.block; }
+  toDOM(view: EditorView): HTMLElement {
+    const el = document.createElement(this.block ? "div" : "span");
+    el.className = this.block ? "cm-overlay" : "cm-iso-change";
     el.contentEditable = "false";
     this.down = this.mount(el, this.key);
+    // What is drawn inside changes size on its own (a reply arriving, a row added): the editor must be told, or
+    // it goes on believing the old height and puts a click below the block on the wrong line.
+    this.watch = new ResizeObserver(() => view.requestMeasure());
+    this.watch.observe(el);
     return el;
   }
-  destroy(): void { this.down?.(); this.down = null; }
-  // What happens inside (typing a prompt, pressing keep) is the block's own business, not the editor's.
+  destroy(): void { this.watch?.disconnect(); this.watch = null; this.down?.(); this.down = null; }
+  // What happens inside (typing a prompt, pressing keep) is the piece's own business, not the editor's.
   ignoreEvent(): boolean { return true; }
-  get estimatedHeight(): number { return 120; }
+  get estimatedHeight(): number { return this.block ? 120 : -1; }
 }
 
 export function overlays(mount: Mount): Extension {
-  const build = (list: Overlay[], doc: EditorView["state"]["doc"]): DecorationSet =>
-    Decoration.set(list.map((o) => {
-      const after = o.line >= doc.lines;
-      const pos = after ? doc.length : doc.line(Math.max(1, o.line + 1)).from;
-      return Decoration.widget({ widget: new OverlayWidget(o.key, mount), block: true, side: after ? 1 : -1 }).range(pos);
-    }), true);
-  const field = StateField.define<{ list: Overlay[]; decos: DecorationSet }>({
-    create: () => ({ list: [], decos: Decoration.none }),
+  const blocks = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
     update(value, tr) {
-      for (const e of tr.effects) if (e.is(setOverlays)) return { list: e.value, decos: build(e.value, tr.state.doc) };
+      for (const e of tr.effects) {
+        if (!e.is(setOverlays)) continue;
+        const doc = tr.state.doc;
+        return Decoration.set(e.value.map((o) => {
+          const after = o.line >= doc.lines;
+          const pos = after ? doc.length : doc.line(Math.max(1, o.line + 1)).from;
+          return Decoration.widget({ widget: new Mounted(o.key, mount, true), block: true, side: after ? 1 : -1 }).range(pos);
+        }), true);
+      }
       // Until the places are worked out again from the new text, the blocks ride along with the lines they were on.
-      return tr.docChanged ? { list: value.list, decos: value.decos.map(tr.changes) } : value;
+      return tr.docChanged ? value.map(tr.changes) : value;
     },
-    provide: (f) => EditorView.decorations.from(f, (v) => v.decos),
+    provide: (f) => EditorView.decorations.from(f),
   });
   const marks = StateField.define<DecorationSet>({
     create: () => Decoration.none,
     update(value, tr) {
       for (const e of tr.effects) {
-        if (!e.is(setLineMarks)) continue;
-        const doc = tr.state.doc, out = [];
-        for (const m of e.value) for (let n = Math.max(1, m.from + 1); n <= Math.min(doc.lines, m.to); n++) out.push(Decoration.line({ class: `cm-iso-${m.kind}` }).range(doc.line(n).from));
+        if (!e.is(setMarks)) continue;
+        const len = tr.state.doc.length, out: Range<Decoration>[] = [];
+        for (const m of e.value.marks) {
+          const from = Math.max(0, Math.min(len, m.from)), to = Math.max(0, Math.min(len, m.to));
+          if (to > from) out.push(Decoration.mark({ class: `cm-iso-${m.kind}` }).range(from, to));
+        }
+        for (const i of e.value.inline) out.push(Decoration.widget({ widget: new Mounted(i.key, mount, false), side: 1 }).range(Math.max(0, Math.min(len, i.at))));
         return Decoration.set(out, true);
       }
       return tr.docChanged ? value.map(tr.changes) : value;
     },
     provide: (f) => EditorView.decorations.from(f),
   });
-  return [field, marks, EditorView.theme({
-    ".cm-overlay": { cursor: "default", userSelect: "text" },
-    // Chosen for Iso to rewrite: yours, so lattice. To be replaced if the rewrite is kept: struck, as on the boards.
-    ".cm-iso-picked": { background: "var(--lattice-soft)", boxShadow: "-10px 0 0 var(--lattice-soft), -13px 0 0 var(--lattice), 10px 0 0 var(--lattice-soft)" },
-    ".cm-iso-old": { textDecoration: "line-through", color: "var(--text-faint)" },
+  return [blocks, marks, EditorView.theme({
+    // The space round a block is padding, inside what the editor measures. A margin on what is drawn inside would
+    // fall outside it, and every click below the block would land a line off.
+    ".cm-overlay": { cursor: "default", userSelect: "text", padding: "10px 0", display: "flow-root" },
+    // Chosen for Iso to rewrite: yours, so lattice. To be replaced if the change is kept: struck, as on the boards.
+    ".cm-iso-picked": { background: "var(--lattice-soft)", boxShadow: "inset 0 -2px 0 var(--lattice)", cursor: "pointer" },
+    ".cm-iso-old": { textDecoration: "line-through", textDecorationColor: "var(--text-faint)", color: "var(--text-faint)" },
     ".cm-iso-old *": { color: "var(--text-faint) !important" },
+    ".cm-iso-change": { cursor: "default" },
   })];
 }

@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "vitest";
 import {
-  applyHunks, blocks, change, diffLines, hashText, insertAt, journalLine, locate, moments, pending, readJournal, reconcile, replay, rewriteOf, stamp, textAt, written,
+  applyHunks, blocks, change, diffLines, hashText, insertAt, journalLine, locate, findPassage, moments, passageOf, pending, readJournal, reconcile, replay, stamp, textAt, written,
   SNAPSHOT_EVERY, type Entry, type Insert, type Rewrite, type Stamp,
 } from "../src/index.ts";
 
@@ -169,22 +169,55 @@ describe("Iso's text, not in the file", () => {
   });
 });
 
-describe("a rewrite of chosen blocks", () => {
-  const all = blocks(NOTE);
-  const p: Rewrite = { ...at("iso:model"), kind: "proposal", asked: "tighten", ...rewriteOf(NOTE, [1, 3]) };
-  p.blocks[0]!.new = "Entropy is a source's average surprise.";
-  p.blocks[1]!.new = "";
-  test("changes those blocks and nothing else", () => {
-    const out = written(NOTE, p)!;
-    expect(blocks(out).map((b) => b.text)).toEqual(["# Entropy", "Entropy is a source's average surprise.", all[2]!.text]);
-    expect(out.startsWith("---\ntype: Concept\ntitle: Entropy\n---\n")).toBe(true);
+describe("a rewrite of chosen passages", () => {
+  const from = NOTE.indexOf("average surprise"), last = blocks(NOTE).at(-1)!.text;
+  const p: Rewrite = {
+    ...at("iso:model"), kind: "proposal", form: "rewrite", asked: "tighten",
+    regions: [
+      { old: passageOf(NOTE, from, from + "average surprise".length), new: "mean surprise" }, // a few words inside a sentence
+      { old: passageOf(NOTE, NOTE.indexOf(last), NOTE.indexOf(last) + last.length), new: "" }, // a whole paragraph, taken out
+    ],
+  };
+  test("a passage is named by its text, and found again by it", () => {
+    expect(p.regions[0]!.old).toEqual({ text: "average surprise", nth: 0 });
+    expect(findPassage(NOTE, p.regions[0]!.old)).toEqual({ from, to: from + 16 });
+    // Twins are told apart by their order; when the one meant is gone and one is left, that one is the place.
+    const twice = "an echo, an echo, and the rest";
+    expect(passageOf(twice, 9, 16)).toEqual({ text: "an echo", nth: 1 });
+    expect(findPassage(twice, { text: "an echo", nth: 1 })).toEqual({ from: 9, to: 16 });
+    expect(findPassage("an echo, and the rest", { text: "an echo", nth: 1 })).toEqual({ from: 0, to: 7 });
+    expect(findPassage("no such thing", { text: "an echo", nth: 0 })).toBeNull();
   });
-  test("a block it was to change has been edited: not placed", () => {
-    expect(locate(NOTE.replace("average surprise", "mean surprise"), p)).toBeNull();
+  test("changes those passages and not a character else", () => {
+    expect(written(NOTE, p)).toBe(NOTE.replace("average surprise", "mean surprise").replace(last, ""));
+    expect(written(NOTE, p, 0)).toBe(NOTE.replace("average surprise", "mean surprise"));
+    expect(written(NOTE, p, 1)).toBe(NOTE.replace(last, ""));
   });
-  test("revised block by block", () => {
-    const r: Entry = { ...at("you"), kind: "revise", proposal: p.id, blocks: ["Mine.", "Kept after all."] };
-    expect((pending([p, r])[0] as Rewrite).blocks.map((b) => b.new)).toEqual(["Mine.", "Kept after all."]);
+  test("each region is placed on its own: one edited away does not unplace the others", () => {
+    const edited = NOTE.replace("average surprise", "expected surprise");
+    expect(locate(edited, p)).toMatchObject({ form: "rewrite", regions: [null, { from: edited.indexOf(last) }] });
+    expect(written(edited, p)).toBeNull();
+    expect(written(edited, p, 1)).toBe(edited.replace(last, ""));
+  });
+  test("each region is kept or removed on its own, and the rewrite waits while any does", () => {
+    const open = () => (pending(e)[0] as Rewrite | undefined)?.open;
+    const e: Entry[] = [change([], NOTE, at("you"), "edit")!, p];
+    expect(open()).toEqual([0, 1]);
+    e.push(change(e, written(NOTE, p, 0)!, at("you"), "keep", { proposal: p.id, region: 0 })!);
+    expect(e.at(-1)).toMatchObject({ why: "keep", proposal: p.id, region: 0 });
+    expect(open()).toEqual([1]);
+    // What is still open is written without the one already kept.
+    expect(written(textAt(e)!, pending(e)[0]!)).toBe(NOTE.replace("average surprise", "mean surprise").replace(last, ""));
+    e.push({ ...at("you"), kind: "discard", proposal: p.id, region: 1 });
+    expect(pending(e)).toEqual([]);
+    // All at once: a keep or a discard that names no region settles every one still open.
+    expect(pending([p, { ...at("you"), kind: "discard", proposal: p.id }])).toEqual([]);
+    const start = change([], NOTE, at("you"), "edit")!;
+    expect(pending([start, p, change([start], written(NOTE, p)!, at("you"), "keep", { proposal: p.id })!])).toEqual([]);
+  });
+  test("revised region by region", () => {
+    const r: Entry = { ...at("you"), kind: "revise", proposal: p.id, regions: ["Mine.", "Kept after all."] };
+    expect((pending([p, r])[0] as Rewrite).regions.map((x) => x.new)).toEqual(["Mine.", "Kept after all."]);
   });
 });
 

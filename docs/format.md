@@ -91,8 +91,10 @@ Any earlier version is rebuilt by starting from the nearest `text` before it and
 ```
 
 - `form: "insert"`: new text between the block `after` and the block `before`. Either may be null (the start or the end of the note).
-- `form: "rewrite"`: `blocks`, a list of `{ "old": {text, nth}, "new": "…" }`. An empty `new` removes the block.
-- **A place is the text of a block, never a line number.** `nth` tells apart blocks with identical text. If the note has changed and the place is not found, the proposal is unplaced: shown apart from the text, and still pending.
+- `form: "rewrite"`: `regions`, a list of `{ "old": {text, nth}, "new": "…" }`. Each `old` is a *passage*: any stretch of the note the person chose, from a few words to several paragraphs, named by its exact text; `nth` tells apart passages with the same text, counted from 0 through the whole file. `new` is put exactly where the passage was; an empty `new` takes it out. Only the passages Iso changed are entered.
+- **Each region of a rewrite is settled on its own.** A `change` with `why: keep` and a `discard` may carry `region`, the index of the one region kept or removed; without it they settle every region still open. A rewrite is pending while any region is.
+- **What Iso says of a rewrite is a proposal of its own:** an `insert` with the same `asked`, entered straight after it, with no `cost` (the request's cost is on the rewrite). It is kept or discarded like any other text.
+- **A place is text, never a line or a character number.** For new text it is the blocks before and after; for a rewrite, the passages themselves. If the note has changed and a place is not found, that proposal or that region is unplaced: shown apart from the text, and still pending.
 - Optional on a proposal: `notice`, a sentence for the person (part of the reply was left out; it was cut short); and `copyOf`, on the reply to a note for Iso as it is entered again in the note it became, naming the proposal in the draft's journal. A copy is the same exchange and the same cost, counted once.
 - A block is a run of lines between blank lines. A fenced code block or a displayed equation is one block. Frontmatter is not a block. (`blocks.ts`)
 
@@ -100,7 +102,8 @@ Any earlier version is rebuilt by starting from the nearest `text` before it and
 
 ```json
 {"id":"…", …,"who":"you","kind":"revise","proposal":"01K7…","text":"my edited version"}
-{"id":"…", …,"who":"you","kind":"revise","proposal":"01K7…","blocks":["block one, edited","block two"]}
+{"id":"…", …,"who":"you","kind":"revise","proposal":"01K7…","regions":["region one, edited","region two"]}
+{"id":"…", …,"who":"you","kind":"discard","proposal":"01K7…","region":1}
 {"id":"…", …,"who":"you","kind":"discard","proposal":"01K7…"}
 ```
 

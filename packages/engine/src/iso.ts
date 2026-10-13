@@ -30,26 +30,30 @@ const INSERT = `# What to write
   write from what you know of the subject, and be exact. Never invent a note,
   a link or a quotation.`;
 
-/** The marks round the k-th paragraph they chose, counted from 1. Not part of the note. */
+/** The marks round the k-th passage they chose, counted from 1, and round Iso's word on what it changed. Not part of the note. */
 export const OPEN = (k: number): string => `⟦${k}⟧`, CLOSE = (k: number): string => `⟦/${k}⟧`;
+export const SAY_OPEN = "⟦note⟧", SAY_CLOSE = "⟦/note⟧";
 
 const REWRITE = (n: number) => `# What to write
 
-- They have marked ${n === 1 ? "one paragraph" : `${n} paragraphs`} of their note${n === 1 ? `, between ${OPEN(1)} and ${CLOSE(1)}` : `, each between a pair of marks: ${OPEN(1)} and ${CLOSE(1)}, ${OPEN(2)} and ${CLOSE(2)}, and so on`}.
-  Rewrite ${n === 1 ? "it" : "them"} as they ask. Nothing else in the note can be changed, by you or by this request.
-- Reply with each paragraph you change, whole, between its own marks:
-  ${OPEN(1)}
-  the paragraph as it should now read
-  ${CLOSE(1)}
-  Leave out a paragraph you would not change. To take a paragraph out of the
+- They have marked ${n === 1 ? "one passage" : `${n} passages`} of their note${n === 1 ? `, between ${OPEN(1)} and ${CLOSE(1)}` : `, each between a pair of marks: ${OPEN(1)} and ${CLOSE(1)}, ${OPEN(2)} and ${CLOSE(2)}, and so on`}.
+  A passage is whatever they chose: a few words inside a sentence, a
+  sentence, a formula, a code block, several paragraphs. Rewrite ${n === 1 ? "it" : "them"} as they
+  ask. Nothing else in the note can be changed, by you or by this request.
+- Reply with each passage you change, between its own marks:
+  ${OPEN(1)}the passage as it should now read${CLOSE(1)}
+  What you give is put exactly where the old passage was, between the same
+  neighbours. So give only what was between the marks, rewritten: not the
+  words before or after it, and no quotation marks or labels round it.
+  Leave out a passage you would not change. To take a passage out of the
   note, give its marks with nothing between them.
-- Only what is between the marks is read. No preamble, no explanation, no
-  closing remark: they are thrown away.
-- Change only what the request calls for. Everything else in a paragraph
-  comes back exactly as it is: the same words, the same links, the same maths.
-- A "paragraph" here is a block of the note: it may be a heading, a list, a
-  displayed equation or a code block. Give back the same kind of block unless
-  asked for another.
+- After the passages, between ${SAY_OPEN} and ${SAY_CLOSE}, say to them in one to
+  three plain sentences what you changed and why, or why you changed
+  nothing. They read this beside the note and may keep it or not. If they
+  asked something the passages do not answer, answer it here.
+- Nothing outside these marks is read.
+- Change only what the request calls for. Everything else in a passage comes
+  back exactly as it is: the same words, the same links, the same maths.
 - Write as the note is written: its language, its notation, its level.
 - The base is theirs and may be small. Where it does not hold what is asked,
   write from what you know of the subject, and be exact. Never invent a note,
@@ -126,9 +130,9 @@ export function exchanges(note: string, title: string, entries: readonly Entry[]
   const out: Exchange[] = [];
   for (const e of entries) {
     if (e.kind !== "proposal" || e.session !== session || e.id <= since) continue;
-    const text = e.form === "insert" ? e.text : e.blocks.map((b) => b.new).filter(Boolean).join("\n\n");
+    const text = e.form === "insert" ? e.text : e.regions.map((r) => `${r.old.text.trim()}\n→ ${r.new.trim() || "(taken out)"}`).join("\n\n");
     const became = open.has(e.id) ? "It is still waiting in the note, not yet kept." : fate.get(e.id) === "kept" ? "They kept it." : "They removed it.";
-    out.push({ id: e.id, note, text: `In ${title} (/${note}.md) they asked${e.form === "rewrite" ? ", of paragraphs they chose" : ""}: ${e.asked}\n\nYou wrote:\n\n${text}\n\n${became}` });
+    out.push({ id: e.id, note, text: `In ${title} (/${note}.md) they asked${e.form === "rewrite" ? ", of passages they chose" : ""}: ${e.asked}\n\nYou wrote:\n\n${text}\n\n${became}` });
   }
   return out;
 }
@@ -230,7 +234,7 @@ export function insertMessages(a: Asked): { messages: Message[]; parts: Part[] }
 }
 
 export interface AskedRewrite extends Omit<Asked, "marked"> {
-  /** The note's text with each chosen paragraph between its marks. */
+  /** The note's text with each chosen passage between its marks. */
   marked: string;
   count: number;
 }
@@ -240,7 +244,7 @@ export function rewriteMessages(a: AskedRewrite): { messages: Message[]; parts: 
   const system = [WHO, REWRITE(a.count), FORMAT, LOOKUP(ROUNDS[a.tier], a.meaning)].join("\n\n");
   const note = `# Their note: ${a.title} (/${a.id}.md)\n\n${a.marked}`;
   const earlier = a.conversation ? `# Earlier in this session\n\n${a.conversation}` : "";
-  const request = `# What they ask now, of the marked ${a.count === 1 ? "paragraph" : "paragraphs"}\n\n${a.asked}`;
+  const request = `# What they ask now, of the marked ${a.count === 1 ? "passage" : "passages"}\n\n${a.asked}`;
   return {
     messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [earlier, note, request].filter(Boolean).join("\n\n") }],
     parts: [
@@ -253,22 +257,32 @@ export function rewriteMessages(a: AskedRewrite): { messages: Message[]; parts: 
   };
 }
 
-/** A rewrite's reply, taken apart: the new text for each of the `count` paragraphs (null where it left one as it
- *  was), and whether it wrote anything outside the marks, which is never used. The limit on what a rewrite can
- *  touch is here, not in what it was told. */
-export function parseRewrite(reply: string, count: number): { blocks: (string | null)[]; outside: boolean } {
-  const blocks: (string | null)[] = Array.from({ length: count }, () => null);
-  let rest = reply, found = 0;
-  for (const m of reply.matchAll(/⟦(\d+)⟧[ \t]*\n?([\s\S]*?)\n?[ \t]*⟦\/\1⟧/g)) {
+/** A rewrite's reply, taken apart: the new text for each of the `count` passages (null where it left one as it
+ *  was), what it says about them, and whether it wrote anything outside the marks, which is never used. The limit
+ *  on what a rewrite can touch is here, not in what it was told. */
+export function parseRewrite(reply: string, count: number): { regions: (string | null)[]; say: string; outside: boolean } {
+  const regions: (string | null)[] = Array.from({ length: count }, () => null);
+  let rest = reply, found = 0, say = "";
+  const said = /⟦note⟧([\s\S]*?)(?:⟦\/note⟧|$)/.exec(reply);
+  if (said) { say = said[1]!.trim(); rest = rest.replace(said[0], ""); }
+  for (const m of rest.matchAll(/⟦(\d+)⟧([\s\S]*?)⟦\/\1⟧/g)) {
     const k = Number(m[1]) - 1;
     rest = rest.replace(m[0], "");
-    if (k < 0 || k >= count) continue; // marks for a paragraph that was not chosen
-    blocks[k] = m[2]!.replace(/^\n+|\s+$/g, "");
+    if (k < 0 || k >= count) continue; // marks for a passage that was not chosen
+    regions[k] = m[2]!;
     found++;
   }
-  // One paragraph, and a reply with no marks at all: the reply is that paragraph.
-  if (!found && count === 1 && !/⟦\/?\d+⟧/.test(reply) && reply.trim()) return { blocks: [replyText(reply)], outside: false };
-  return { blocks, outside: rest.replace(/⟦\/?\d+⟧/g, "").trim() !== "" };
+  // One passage, and a reply with no marks at all: the reply is that passage.
+  if (!found && !said && count === 1 && !/⟦\/?\w+⟧/.test(reply) && reply.trim()) return { regions: [replyText(reply)], say: "", outside: false };
+  return { regions, say, outside: rest.replace(/⟦\/?\w+⟧/g, "").trim() !== "" };
+}
+
+/** A passage's new text, set between the same neighbours as the old: it keeps the old one's space and line
+ *  breaks at either end, whatever the model put round what it wrote. An empty one takes the passage out. */
+export function fitted(old: string, text: string): string {
+  const core = text.trim();
+  if (!core) return "";
+  return /^\s*/.exec(old)![0] + core + /\s*$/.exec(old)![0];
 }
 
 /** The most of the notes linked from a note for Iso that is sent with it, in tokens: the rest it reads with its tools. */

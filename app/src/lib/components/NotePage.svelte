@@ -89,6 +89,17 @@
 
     {#key asSource}<NoteEditor {note} {iso} source={asSource} />{/key}
 
+    <!-- A rewrite's changes are kept or removed one by one in the text; here, all that are left at once. -->
+    {#if iso.changes.length}
+      <div class="changes" role="status">
+        <i class="dia" aria-hidden="true"></i>
+        <span class="soft">{iso.changes.length} {iso.changes.length === 1 ? "change" : "changes"} from Iso waiting</span>
+        <span class="grow"></span>
+        <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(true)}>[ keep all ]</button>
+        <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(false)}>[ remove all ]</button>
+      </div>
+    {/if}
+
     <!-- On a phone there is no Ctrl+Enter: a field at the foot opens the prompt where the cursor was (Mobile-Note). -->
     {#if iso.prompt === null && !iso.asking}
       <div class="seed"><button class="field" type="button" onclick={() => iso.promptHere()}><span class="faint">›</span><span class="faint">ask Iso here</span></button></div>
@@ -108,11 +119,15 @@
   .choice { padding: var(--space-6) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); --edge: var(--rose); }
   .row { display: flex; gap: var(--space-2); }
   .bad { color: var(--rose); }
+  .changes { position: sticky; bottom: 28px; z-index: 8; display: flex; align-items: center; gap: 12px; padding: 10px 2px; background: var(--ground-0); border-top: 1px solid var(--line); }
+  .changes .dia { margin: 0 3px; }
+  .link { background: none; border: 0; padding: 4px 0; color: var(--lattice); white-space: nowrap; }
   .seed { display: none; }
   @media (max-width: 600px) {
     .seed { display: block; position: fixed; left: 0; right: 0; bottom: 84px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--ground-1); z-index: 9; }
     .seed .field { width: 100%; height: 44px; display: flex; align-items: center; gap: 8px; text-align: left; }
     .note { padding: 20px 20px 80px; }
+    .changes { bottom: 156px; flex-wrap: wrap; }
     .head { flex-direction: column-reverse; gap: var(--space-1); }
     .tools { align-self: flex-end; padding-top: 0; }
     .title { font-size: 30px; width: 100%; }

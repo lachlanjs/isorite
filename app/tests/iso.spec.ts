@@ -170,57 +170,120 @@ test("a prompt sent twice in a hurry is asked once", async ({ page }) => {
   expect(journal.filter((e) => e.kind === "proposal")).toHaveLength(1);
 });
 
-test("chosen paragraphs are rewritten and nothing else: the old is struck, the new waits under it, and keeping changes only those", async ({ page }) => {
-  const { id, text } = await open(page, "rewrite");
-  // Select the first paragraph and ask.
+/** Open the prompt with the cursor in the first paragraph, and turn it to choosing passages for a rewrite. */
+async function choosing(page: Page) {
+  await editor(page).getByText("The average surprise of a source.").click();
+  if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
+  else await page.keyboard.press("Control+Enter");
+  await page.getByRole("radio", { name: "rewrite a selection" }).click();
+  await expect(page.getByText("select text in the note: each selection is added")).toBeVisible();
+}
+/** Select one word of the note by double-clicking it. */
+const word = (page: Page, text: string) => page.evaluate((w) => {
+  const walker = document.createTreeWalker(document.querySelector(".cm-content")!, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const at = n.textContent!.indexOf(w);
+    if (at < 0 || (n.parentElement as HTMLElement).closest(".cm-overlay, .cm-iso-change")) continue;
+    const range = document.createRange();
+    range.setStart(n, at); range.setEnd(n, at + w.length);
+    const r = range.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  }
+  throw new Error(`"${w}" is not in the note`);
+}, text).then(({ x, y }) => page.mouse.dblclick(x, y));
+
+test("several passages are chosen anywhere in the note and rewritten; each change is kept or removed on its own", async ({ page }) => {
+  const { id, text } = await open(page, "regions");
+  await choosing(page);
+  // Passages in two different paragraphs, each a word inside a sentence.
+  await word(page, "surprise");
+  await expect(page.locator(".cm-iso-picked")).toHaveText(["surprise"]);
+  await word(page, "largest");
+  await expect(page.locator(".cm-iso-picked")).toHaveText(["surprise", "largest"]);
+  await expect(page.getByText("2 passages chosen")).toBeVisible();
+  // One chosen by mistake is dropped by clicking it, and chosen again.
+  await page.locator(".cm-iso-picked", { hasText: "largest" }).click();
+  await expect(page.getByText("1 passage chosen")).toBeVisible();
+  await word(page, "largest");
+  await expect(page.getByText("2 passages chosen")).toBeVisible();
+  await look(page, "choosing");
+
+  const field = page.getByRole("textbox", { name: "Ask Iso" });
+  await field.fill("say these another way");
+  await field.press("Enter");
+
+  // Each change is set in the text after the passage it would replace, which is struck through.
+  const changes = page.locator("[data-change]");
+  await expect(changes).toHaveCount(2);
+  await expect(changes.nth(0).locator(".new")).toHaveText("rewritten 1");
+  await expect(changes.nth(1).locator(".new")).toHaveText("rewritten 2");
+  await expect(page.locator(".cm-iso-old")).toHaveText(["surprise", "largest"]);
+  // What Iso says of them is in its usual place, kept or removed as usual. What it wrote outside its marks is not shown.
+  const said = page.locator(".between[data-proposal]");
+  await expect(said.locator(".said")).toHaveText("I rewrote what you chose, plainly.");
+  await expect(page.getByText("Here is the rewrite.")).toHaveCount(0);
+  await expect(page.getByText("2 changes from Iso waiting")).toBeVisible();
+  expect(onDisk(id)).toBe(text);
+  await look(page, "changes");
+
+  // Keep the first: that word changes in the file, and nothing else.
+  await changes.nth(0).getByRole("button", { name: "Keep this change" }).click();
+  await expect(changes).toHaveCount(1);
+  expect(onDisk(id)).toBe(text.replace("average surprise", "average rewritten 1"));
+  // Remove the second: the note keeps its own word.
+  await changes.nth(0).getByRole("button", { name: "Remove this change" }).click();
+  await expect(changes).toHaveCount(0);
+  await expect(page.locator(".cm-iso-old")).toHaveCount(0);
+  expect(onDisk(id)).toBe(text.replace("average surprise", "average rewritten 1"));
+  // Iso's word on it is still there, and is removed like any text of its.
+  await said.getByRole("button", { name: "remove" }).click();
+  await expect(page.locator(".between")).toHaveCount(0);
+  const journal = await (await page.request.get(`api/journal?id=${id}`)).json() as { kind: string; why?: string; region?: number; form?: string }[];
+  expect(journal.map((e) => [e.why ?? e.form ?? e.kind, e.region])).toEqual([["start", undefined], ["rewrite", undefined], ["insert", undefined], ["keep", 0], ["discard", 1], ["discard", undefined]]);
+});
+
+test("text selected before asking is the first passage; changes wait across a reload and are kept all at once", async ({ page }) => {
+  const { id, text } = await open(page, "regions-all");
   await editor(page).getByText("The average surprise of a source.").click();
   await page.keyboard.press("Home");
   await page.keyboard.press("Shift+End");
   if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
   else await page.keyboard.press("Control+Enter");
-  const field = page.getByRole("textbox", { name: "Ask Iso" });
-  await expect(field).toHaveAttribute("placeholder", "say how Iso should rewrite the paragraph chosen");
+  await expect(page.getByRole("radio", { name: "rewrite a selection" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByText("1 passage chosen")).toBeVisible();
   await expect(page.locator(".cm-iso-picked")).toHaveText("The average surprise of a source.");
-  await field.fill("say the unit");
+  await word(page, "symbol");
+  const field = page.getByRole("textbox", { name: "Ask Iso" });
+  await field.fill("another way, and be quiet about it");
   await field.press("Enter");
-
-  const block = page.locator(".between[data-form=rewrite]");
-  await expect(block).toContainText("Entropy is the average surprise of a source, in bits.");
-  await expect(block).toContainText("Iso also wrote outside the paragraphs you chose. That part was left out.");
-  await expect(block).not.toContainText("Here is the rewrite.");
-  await expect(page.locator(".cm-iso-old")).toHaveText("The average surprise of a source.");
+  await expect(page.locator("[data-change]")).toHaveCount(2);
+  await expect(page.locator(".between")).toHaveCount(0); // it said nothing, so there is no block
+  await page.reload();
+  await expect(page.locator("[data-change]")).toHaveCount(2);
   expect(onDisk(id)).toBe(text);
-  await look(page, "rewrite");
-
-  await block.getByRole("button", { name: "keep" }).click();
-  await expect(page.locator(".between")).toHaveCount(0);
-  await expect(page.locator(".cm-iso-old")).toHaveCount(0);
-  expect(onDisk(id)).toBe(text.replace("The average surprise of a source.", "Entropy is the average surprise of a source, in **bits**."));
+  await page.getByRole("button", { name: "[ keep all ]" }).click();
+  await expect(page.locator("[data-change]")).toHaveCount(0);
+  expect(onDisk(id)).toBe(text.replace("The average surprise of a source.", "rewritten 1").replace("symbol", "rewritten 2"));
 });
 
-test("a rewrite of two paragraphs can take one out, and is edited block by block before it is kept", async ({ page }) => {
-  const { id, text } = await open(page, "rewrite-two");
-  await editor(page).getByText("The average surprise of a source.").click();
-  await page.keyboard.press("Home");
-  await page.keyboard.press("Control+Shift+End");
-  if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
-  else await page.keyboard.press("Control+Enter");
-  const field = page.getByRole("textbox", { name: "Ask Iso" });
-  await expect(field).toHaveAttribute("placeholder", "say how Iso should rewrite the 2 paragraphs chosen");
-  await field.fill("say the unit and drop the second");
-  await field.press("Enter");
-
-  const blocks = page.locator(".between[data-form=rewrite]");
-  await expect(blocks).toHaveCount(2);
-  await expect(blocks.nth(1)).toContainText("The paragraph above is taken out.");
-  await expect(page.locator(".cm-iso-old")).toHaveCount(2);
-  // The buttons are on the last block, for the whole rewrite.
-  await expect(blocks.nth(0).getByRole("button", { name: "keep" })).toHaveCount(0);
-  await blocks.nth(1).getByRole("button", { name: "edit" }).click();
-  await blocks.nth(0).getByRole("textbox", { name: "Iso's text, to edit" }).fill("Entropy, in bits.");
-  await blocks.nth(1).getByRole("button", { name: "keep" }).click();
+test("a change whose passage you have edited since is told of at the foot, and the rest are removed at once", async ({ page }) => {
+  const { id, text } = await open(page, "regions-lost");
+  await choosing(page);
+  await word(page, "surprise");
+  await word(page, "largest");
+  await page.getByRole("textbox", { name: "Ask Iso" }).fill("another way, quiet");
+  await page.getByRole("textbox", { name: "Ask Iso" }).press("Enter");
+  await expect(page.locator("[data-change]")).toHaveCount(2);
+  // The second passage is typed over.
+  await word(page, "largest");
+  await page.keyboard.type("greatest");
+  await expect(page.getByRole("status").filter({ hasText: "saved" })).toBeVisible();
+  await expect(page.locator("[data-change]")).toHaveCount(1);
+  await expect(page.getByText("One change Iso offered is for text that is no longer in the note as it was")).toBeVisible();
+  await page.getByRole("button", { name: "[ remove all ]" }).click();
+  await expect(page.locator("[data-change]")).toHaveCount(0);
   await expect(page.locator(".between")).toHaveCount(0);
-  expect(onDisk(id)).toBe(text.replace("The average surprise of a source.\n\nIt is largest when every symbol is equally likely.\n", "Entropy, in bits.\n"));
+  await expect.poll(() => onDisk(id)).toBe(text.replace("largest", "greatest"));
 });
 
 test("the header counts what Iso would be sent and what the session has cost; the count opens the breakdown", async ({ page }) => {

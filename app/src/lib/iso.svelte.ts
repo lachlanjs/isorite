@@ -1,22 +1,25 @@
 // Iso in one note: what it has offered that is not kept yet, what it is
 // writing now, and the prompt being written to it. Everything here comes from
 // the note's journal and the engine's events, so a second tab, or this one
-// reopened, shows the same.
+// reopened, shows the same. Places are lines and characters of the whole file.
 
-import { anchorOf, blocks, findAnchor, insertAt, locate, pending, splitSource, type Anchor, type Entry, type Proposal } from "@isorite/core";
+import { blocks, findPassage, insertAt, locate, passageOf, pending, splitSource, type Entry, type Insert, type Passage, type Proposal, type Rewrite } from "@isorite/core";
 import type { EngineEvent, Step, Tier } from "@isorite/engine";
 import { app } from "./app.svelte.ts";
 import type { NoteSession } from "./note.svelte.ts";
 
-/** Lines of the whole file, from `from` up to but not including `to`. */
-export interface Lines { from: number; to: number }
+/** A stretch of the file, by character. */
+export interface Span { from: number; to: number }
 
-/** A prompt being written: where Iso's block will sit, and, for a rewrite, the paragraphs chosen. */
-export interface Prompt { line: number; picked: Lines[] }
+/** A prompt being written: where Iso's block will sit, and whether it asks for new text there or for a rewrite
+ *  of the passages chosen. */
+export interface Prompt { line: number; mode: "insert" | "rewrite"; regions: Passage[] }
 /** A request that is running. */
-export interface Asking { request: string; asked: string; line: number; picked: Lines[]; text: string; steps: Step[] }
-/** One block Iso has laid over the note, before a line of the whole file. */
+export interface Asking { request: string; asked: string; line: number; regions: Passage[]; text: string; steps: Step[] }
+/** One block Iso has laid over the note, before a line. */
 export interface Block { key: string; line: number }
+/** One change a rewrite offers, where its passage is now. */
+export interface Change { key: string; proposal: Rewrite; k: number; at: Span | null }
 
 const TIERS: Tier[] = ["low", "mid", "max"];
 function remembered(): Tier {
@@ -32,57 +35,59 @@ export class NoteIso {
   /** Why the last request came to nothing. */
   failed = $state.raw<{ line: number; message: string } | null>(null);
   tier = $state<Tier>(remembered());
-  /** The lines of the whole file the cursor or selection was last on: where the phone's prompt field asks. */
-  cursor = $state.raw<Lines | null>(null);
-  /** A proposal being kept or removed: its buttons wait. */
+  /** Where the cursor or the selection last was: where the phone's prompt field asks. */
+  cursor = $state.raw<{ line: number; from: number; to: number } | null>(null);
+  /** What is being kept or removed: its buttons wait. A proposal's id, or a change's key. */
   busy = $state("");
-  /** A proposal being edited before it is kept: its text, or for a rewrite the text of each block. */
-  editing = $state<{ id: string; texts: string[] } | null>(null);
+  /** Iso's text being edited before it is kept. */
+  editing = $state<{ id: string; text: string } | null>(null);
   private stop: (() => void) | null = null;
 
   constructor(note: NoteSession) { this.note = note; }
 
   /** What Iso has offered here that is neither kept nor removed, oldest first. */
-  readonly proposals = $derived(pending(this.entries));
+  private readonly waiting = $derived(pending(this.entries));
+  /** Text it has offered: a block each. */
+  readonly proposals = $derived(this.waiting.filter((p): p is Insert => p.form === "insert"));
+  /** The changes its rewrites offer that are still waiting, each where its passage is now, in the order of the text. */
+  readonly changes = $derived.by((): Change[] => {
+    const out: Change[] = [];
+    for (const p of this.waiting) {
+      if (p.form !== "rewrite") continue;
+      for (const k of p.open ?? []) out.push({ key: `r:${p.id}:${k}`, proposal: p, k, at: findPassage(this.note.text, p.regions[k]!.old) });
+    }
+    return out.sort((a, b) => (a.at?.from ?? Infinity) - (b.at?.from ?? Infinity));
+  });
 
-  /** How many lines of the file are frontmatter: the editor shows the text under it. */
+  /** How much of the file is frontmatter, in lines and in characters: the editor shows the text under it. */
   readonly head = $derived.by(() => {
-    try { return splitSource(this.note.text)[0].split("\n").length - 1; } catch { return 0; }
+    try { const prefix = splitSource(this.note.text)[0]; return { lines: prefix.split("\n").length - 1, chars: prefix.length }; } catch { return { lines: 0, chars: 0 }; }
   });
 
   private get foot(): number { return this.note.text.split("\n").length; }
+  private spans(regions: Passage[]): Span[] { return regions.flatMap((r) => { const at = findPassage(this.note.text, r); return at ? [at] : []; }); }
 
-  /** For a rewrite: each block it changes, where the old one is now (null when its place is gone), in order. */
-  changes(p: Proposal): { k: number; old: Lines | null; text: string }[] {
-    if (p.form !== "rewrite") return [];
-    const at = locate(this.note.text, p), all = blocks(this.note.text);
-    return p.blocks.flatMap((b, k) => {
-      const now = at?.form === "rewrite" ? at.blocks[k]! : null;
-      const was = now ? all.find((x) => x.from === now.from)?.text : b.old.text;
-      return b.new === was ? [] : [{ k, old: now ? { from: now.from, to: now.to } : null, text: b.new }];
-    });
-  }
-  placed(p: Proposal): boolean { return locate(this.note.text, p) !== null; }
+  placed(p: Insert): boolean { return locate(this.note.text, p) !== null; }
 
-  /** Every block Iso has in the note, and the lines of the note it marks, as the note now stands. */
-  readonly layout = $derived.by((): { blocks: Block[]; picked: Lines[]; old: Lines[] } => {
-    const out: Block[] = [], old: Lines[] = [];
+  /** Everything Iso has over the note, as the note now stands. */
+  readonly layout = $derived.by((): { blocks: Block[]; picked: Span[]; old: Span[]; inline: { key: string; at: number }[] } => {
+    const out: Block[] = [];
     for (const p of this.proposals) {
-      if (p.form === "insert") {
-        const at = locate(this.note.text, p);
-        out.push({ key: `p:${p.id}`, line: at?.form === "insert" ? at.line : this.foot });
-        continue;
-      }
-      // A rewrite: each new block sits under the block it would replace, which is struck through.
-      for (const c of this.changes(p)) {
-        out.push({ key: `p:${p.id}:${c.k}`, line: c.old ? c.old.to : this.foot });
-        if (c.old) old.push(c.old);
-      }
+      const at = locate(this.note.text, p);
+      out.push({ key: `p:${p.id}`, line: at?.form === "insert" ? at.line : this.foot });
     }
+    // Changes whose passages were edited away cannot be set in the text: they are told of at the note's foot.
+    if (this.changes.some((c) => !c.at)) out.push({ key: "lost", line: this.foot });
     if (this.asking) out.push({ key: "asking", line: this.asking.line });
     if (this.failed) out.push({ key: "failed", line: this.failed.line });
     if (this.prompt) out.push({ key: "prompt", line: this.prompt.line });
-    return { blocks: out, picked: this.prompt?.picked ?? this.asking?.picked ?? [], old };
+    const placed = this.changes.filter((c) => c.at);
+    return {
+      blocks: out,
+      picked: this.spans(this.prompt?.regions ?? this.asking?.regions ?? []),
+      old: placed.map((c) => c.at!),
+      inline: placed.map((c) => ({ key: c.key, at: c.at!.to })),
+    };
   });
 
   async open(): Promise<void> {
@@ -90,12 +95,6 @@ export class NoteIso {
     try { this.entries = await app.api.journal(this.note.id); } catch { /* shown when the next event comes */ }
   }
   close(): void { this.stop?.(); }
-
-  /** The lines the blocks named by these anchors are on now. */
-  private linesOf(anchors: Anchor[]): Lines[] {
-    const all = blocks(this.note.text);
-    return anchors.flatMap((a) => { const k = findAnchor(all, a); return k < 0 ? [] : [{ from: all[k]!.from, to: all[k]!.to }]; });
-  }
 
   private hear(e: EngineEvent): void {
     if (e.type === "journal") {
@@ -109,17 +108,12 @@ export class NoteIso {
     if (e.type === "iso-start") {
       // Sent from here: the block is up already and now learns its request's id. Sent from another tab: it is put up.
       if (this.asking && !this.asking.request) { this.asking = { ...this.asking, request: e.request }; return; }
-      let line = this.foot, picked: Lines[] = [];
-      if (e.place.form === "note") {
-        // A note written for Iso: its reply goes under the whole of it.
-      } else if (e.place.form === "insert") {
+      let line = this.foot;
+      if (e.place.form !== "note") {
         const at = locate(this.note.text, { form: "insert", after: e.place.after, before: e.place.before } as Proposal);
         if (at?.form === "insert") line = at.line;
-      } else {
-        picked = this.linesOf(e.place.blocks);
-        if (picked.length) line = picked.at(-1)!.to;
       }
-      this.asking = { request: e.request, asked: e.asked, line, picked, text: "", steps: [] };
+      this.asking = { request: e.request, asked: e.asked, line, regions: e.place.form === "rewrite" ? e.place.regions : [], text: "", steps: [] };
       this.failed = null;
       this.prompt = null;
       return;
@@ -129,28 +123,61 @@ export class NoteIso {
     if (e.type === "iso-text") this.asking = { ...a, text: e.again ? e.delta : a.text + e.delta };
     else if (e.type === "iso-step") this.asking = { ...a, text: "", steps: [...a.steps, e.step] };
     else if (e.type === "iso-failed") { this.failed = { line: a.line, message: e.message }; this.asking = null; }
-    else this.asking = null; // done (the proposal has arrived by the journal) or stopped
+    else this.asking = null; // done (what it offers has arrived by the journal) or stopped
   }
 
-  /** Open the prompt line. A bare cursor asks for new text under the block it is in; a selection asks for a
-   *  rewrite of every block it touches. Lines are of the whole file, from 0, `to` included. */
-  promptAt(from: number, to = from, selection = false): void {
-    const all = blocks(this.note.text);
+  // ------------------------------------------------------------ the prompt
+
+  /** Open the prompt line under the block a line is in. With text selected, it opens asking for a rewrite of that. */
+  promptAt(line: number, selected?: Span): void {
+    const inside = blocks(this.note.text).find((b) => b.from <= line && line < b.to);
     this.failed = null;
-    if (selection) {
-      const picked = all.filter((b) => b.from <= to && from < b.to).map((b) => ({ from: b.from, to: b.to }));
-      if (picked.length) { this.prompt = { line: picked.at(-1)!.to, picked }; return; }
-    }
-    const inside = all.find((b) => b.from <= to && to < b.to);
-    this.prompt = { line: inside ? inside.to : to, picked: [] };
+    this.prompt = { line: inside ? inside.to : line, mode: "insert", regions: [] };
+    if (selected && selected.to > selected.from) { this.setMode("rewrite"); this.pick([selected]); }
   }
 
   /** Open the prompt line where the cursor or the selection last was, or at the note's foot. */
   promptHere(): void {
     const c = this.cursor;
     if (!c) this.promptAt(this.foot);
-    else if (c.to > c.from) this.promptAt(c.from, c.to - 1, true); // a selection: `to` is the line after its last
-    else this.promptAt(c.from);
+    else this.promptAt(c.line, c);
+  }
+
+  /** New text here, or a rewrite of passages chosen in the note. What was chosen is kept while switching. */
+  setMode(mode: Prompt["mode"]): void {
+    if (this.prompt) this.prompt = { ...this.prompt, mode };
+  }
+  get picking(): boolean { return this.prompt?.mode === "rewrite"; }
+
+  /** Choose passages for the rewrite. Space at either end is not part of a passage; one that touches another already
+   *  chosen is joined to it. */
+  pick(spans: Span[]): void {
+    const prompt = this.prompt;
+    if (!prompt) return;
+    const text = this.note.text;
+    let all = this.spans(prompt.regions);
+    for (const s of spans) {
+      let { from, to } = s;
+      while (from < to && /\s/.test(text[from]!)) from++;
+      while (to > from && /\s/.test(text[to - 1]!)) to--;
+      if (to <= from || from < this.head.chars) continue; // nothing but space, or in the frontmatter
+      const touching = all.filter((x) => x.from <= to && from <= x.to);
+      all = [...all.filter((x) => !touching.includes(x)), { from: Math.min(from, ...touching.map((x) => x.from)), to: Math.max(to, ...touching.map((x) => x.to)) }];
+    }
+    all.sort((a, b) => a.from - b.from);
+    this.prompt = { ...prompt, regions: all.map((x) => passageOf(text, x.from, x.to)) };
+  }
+
+  /** Drop the passage chosen at a character, if there is one. */
+  unpick(at: number): void {
+    const prompt = this.prompt;
+    if (!prompt) return;
+    const keep = prompt.regions.filter((r) => { const s = findPassage(this.note.text, r); return !s || at < s.from || at >= s.to; });
+    if (keep.length !== prompt.regions.length) this.prompt = { ...prompt, regions: keep };
+  }
+
+  clearPicked(): void {
+    if (this.prompt) this.prompt = { ...this.prompt, regions: [] };
   }
 
   setTier(tier: Tier): void {
@@ -158,22 +185,24 @@ export class NoteIso {
     try { localStorage.setItem("isorite.tier", tier); } catch { /* not kept */ }
   }
 
+  // ------------------------------------------------------------ asking
+
   /** Send the prompt. The note is saved first: Iso reads the file. */
   async ask(asked: string): Promise<void> {
     const prompt = this.prompt;
-    if (!prompt || !asked.trim() || this.asking) return;
+    if (!prompt || !asked.trim() || this.asking || (prompt.mode === "rewrite" && !prompt.regions.length)) return;
     // The prompt line gives way to Iso's block at once, before anything is awaited: a second Enter finds no
     // prompt to send. (Waiting for the engine's word that it had started let a prompt be sent twice.)
+    const regions = prompt.mode === "rewrite" ? prompt.regions : [];
     this.prompt = null;
     this.failed = null;
-    this.asking = { request: "", asked, line: prompt.line, picked: prompt.picked, text: "", steps: [] };
+    this.asking = { request: "", asked, line: prompt.line, regions, text: "", steps: [] };
     try {
       await this.note.save();
-      const text = this.note.text, all = blocks(text);
-      const place = prompt.picked.length
-        ? { form: "rewrite" as const, blocks: prompt.picked.flatMap((l) => { const k = all.findIndex((b) => b.from === l.from); return k < 0 ? [] : [anchorOf(all, k)]; }) }
-        : insertAt(text, prompt.line);
-      const { request } = await app.api.ask({ note: this.note.id, ...place, asked, tier: this.tier });
+      const place = insertAt(this.note.text, prompt.line);
+      const { request } = await app.api.ask(regions.length
+        ? { note: this.note.id, form: "rewrite", regions, after: place.after, before: place.before, asked, tier: this.tier }
+        : { note: this.note.id, ...place, asked, tier: this.tier });
       if (this.asking && !this.asking.request) this.asking = { ...this.asking, request };
     } catch (e) {
       this.asking = null;
@@ -185,7 +214,7 @@ export class NoteIso {
   async send(): Promise<void> {
     if (this.asking) return;
     this.failed = null;
-    this.asking = { request: "", asked: "", line: this.foot, picked: [], text: "", steps: [] };
+    this.asking = { request: "", asked: "", line: this.foot, regions: [], text: "", steps: [] };
     try {
       await this.note.save();
       const { request } = await app.api.ask({ note: this.note.id, form: "note", tier: this.tier });
@@ -204,38 +233,66 @@ export class NoteIso {
     const stop = app.on((e) => { if (e.type === "iso-start" && e.note === this.note.id) { stop(); void app.api.stop(e.request); } });
   }
 
-  private say(p: Proposal, e: unknown): void {
-    const at = this.layout.blocks.find((b) => b.key.startsWith(`p:${p.id}`));
-    this.failed = { line: at?.line ?? this.foot, message: (e as Error).message };
-  }
+  // ------------------------------------------------------------ keeping and removing
 
-  /** Start editing a proposal in place. */
-  edit(p: Proposal): void {
-    this.editing = { id: p.id, texts: p.form === "insert" ? [p.text] : p.blocks.map((b) => b.new) };
+  private say(line: number | undefined, e: unknown): void {
+    this.failed = { line: line ?? this.foot, message: (e as Error).message };
   }
+  private lineOf(p: Insert): number | undefined { return this.layout.blocks.find((b) => b.key === `p:${p.id}`)?.line; }
+
+  /** Start editing Iso's text in place. */
+  edit(p: Insert): void { this.editing = { id: p.id, text: p.text }; }
 
   /** Enter the edit in the journal, so it is there after a reload, and stop editing. */
-  async done(p: Proposal): Promise<void> {
+  async done(p: Insert): Promise<void> {
     const edit = this.editing;
     if (edit?.id !== p.id) return;
     try {
-      await app.api.revise(this.note.id, p.id, p.form === "insert" ? edit.texts[0]! : $state.snapshot(edit.texts));
+      await app.api.revise(this.note.id, p.id, edit.text);
       this.editing = null;
-    } catch (e) { this.say(p, e); }
+    } catch (e) { this.say(this.lineOf(p), e); }
   }
 
-  /** Keep a proposal: with an edit in hand, the edit is what is kept. */
-  async keep(p: Proposal): Promise<void> {
+  /** Keep Iso's text: with an edit in hand, the edit is what is kept. */
+  async keep(p: Insert): Promise<void> {
     this.busy = p.id;
     try {
       await this.note.save();
       if (this.editing?.id === p.id) await this.done(p);
       this.note.adopt(await app.api.keep(this.note.id, p.id));
-    } catch (e) { this.say(p, e); } finally { this.busy = ""; }
+    } catch (e) { this.say(this.lineOf(p), e); } finally { this.busy = ""; }
   }
 
-  async discard(p: Proposal): Promise<void> {
+  async discard(p: Insert): Promise<void> {
     this.busy = p.id;
-    try { await app.api.discard(this.note.id, p.id); } catch (e) { this.say(p, e); } finally { this.busy = ""; }
+    try { await app.api.discard(this.note.id, p.id); } catch (e) { this.say(this.lineOf(p), e); } finally { this.busy = ""; }
+  }
+
+  /** Keep one change of a rewrite: its passage becomes the new text, and nothing else moves. */
+  async keepChange(c: Change): Promise<void> {
+    this.busy = c.key;
+    try {
+      await this.note.save();
+      this.note.adopt(await app.api.keep(this.note.id, c.proposal.id, c.k));
+    } catch (e) { this.say(undefined, e); } finally { this.busy = ""; }
+  }
+
+  async discardChange(c: Change): Promise<void> {
+    this.busy = c.key;
+    try { await app.api.discard(this.note.id, c.proposal.id, c.k); } catch (e) { this.say(undefined, e); } finally { this.busy = ""; }
+  }
+
+  /** Every change still waiting, kept or removed at once. Kept one by one from the end of the note backwards, so
+   *  one whose passage has been edited away stops only itself. */
+  async settleAll(keep: boolean): Promise<void> {
+    this.busy = "all";
+    try {
+      if (keep) await this.note.save();
+      for (const c of [...this.changes].reverse()) {
+        if (keep && !c.at) continue;
+        if (keep) this.note.adopt(await app.api.keep(this.note.id, c.proposal.id, c.k));
+        else await app.api.discard(this.note.id, c.proposal.id, c.k);
+      }
+    } catch (e) { this.say(undefined, e); } finally { this.busy = ""; }
   }
 }

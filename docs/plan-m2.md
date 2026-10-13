@@ -105,7 +105,7 @@ All eight steps of section 5, on the branch `m2-iso`.
 **What you can do:**
 
 - **Ask at a point.** Ctrl+Enter under the paragraph the cursor is in; on a phone, the field at the foot. Iso's text arrives between dotted rules, with what it is looking up beside `[ stop ]`. Keep, edit, remove, and the answer / prompt switch, as on `Desktop-Editor`.
-- **Ask for a rewrite.** Select text and press Ctrl+Enter: every paragraph the selection touches is chosen. Each rewritten paragraph waits under the one it would replace, which is struck through. Only what comes back between the paragraphs' own marks is used, so nothing else in the note can change. It is edited block by block and kept as one.
+- **Ask for a rewrite** (reworked on Lachlan's word, 2026-10-13). Ctrl+Enter, then "rewrite a selection": every selection you then make in the note, anywhere, of any length, is added as a passage (a click on one drops it). Text selected before Ctrl+Enter is the first. Each change Iso offers is set in the line after the passage it would replace, which is struck through, with its own keep and remove; a strip at the foot keeps or removes all that are left. What Iso says of its changes arrives in its usual place between the dotted rules, kept, edited or removed as usual. Only what comes back between a passage's own marks is used, so nothing else in the note can change.
 - **Write a note for Iso.** "new note for Iso" on the notes list. The draft is a file of the study base. Sent with the notes it links to, it is answered with a note that waits under your folded prompt, is edited in place, and is kept in a folder you choose (`Desktop-Ask`, `Desktop-Review`).
 - **See the context and the cost** in the header; the count opens the five parts and `[ clear the conversation ]` (`Header-Context`).
 - **Settings behind the logo:** the ground, the provider key, which model each tier is.
@@ -113,19 +113,21 @@ All eight steps of section 5, on the branch `m2-iso`.
 
 **Checked:**
 
-- 371 unit tests pass: 280 core, 45 engine, 19 server, 27 editor. The type checks are clean.
-- 68 browser tests pass: 17 tests at two widths on both grounds, against a scripted provider. Among them: the note's file is byte for byte unchanged until keep; a waiting proposal and an edit to it are there after a reload; a prompt sent twice is asked once; a rewrite changes only the chosen paragraphs; a draft is not in the base until kept.
+- 375 unit tests pass: 282 core, 47 engine, 19 server, 27 editor. The type checks are clean.
+- 72 browser tests pass: 18 tests at two widths on both grounds, against a scripted provider. Among them: the note's file is byte for byte unchanged until keep; a waiting proposal and an edit to it are there after a reload; a prompt sent twice is asked once; a rewrite changes only the chosen paragraphs; a draft is not in the base until kept.
 - rdstudio's retrieval measure on its 230-note base gives the same figures here as there (45 questions; an answering note in the first five: keyword 62%, by meaning 73%, either 80%).
-- Against the real mid-tier model (Sonnet 5.5 through OpenRouter), on a temporary copy of the information theory base: new text at a point (5 s, $0.010), a rewrite of one paragraph of ten that changed exactly that one (3 s, $0.008), and a note for Iso on cross-entropy, resting on the entropy note, kept as a note (12 s, $0.023, after two searches of its own).
+- Against the real mid-tier model (Sonnet 5.5 through OpenRouter), on a temporary copy of the information theory base: new text at a point (5 s, $0.010), a rewrite of three passages of different kinds (a few words inside a sentence, a line of code, a whole sentence) that changed exactly those and said what it had done ($0.012), and a note for Iso on cross-entropy, resting on the entropy note, kept as a note (12 s, $0.023, after two searches of its own).
 - I looked at the screenshots of a proposal, a rewrite, Iso working, the context breakdown, the settings, the draft and its review, on both grounds and both widths, against the boards named above.
 
 **What the real key was charged:** about $0.05 by these checks, and about $0.05 by Lachlan's own first use, of which $0.016 was the answer that arrived twice.
+
+**Found while reworking the rewrite and fixed:** the editor measured Iso's blocks without their outer margin, so a click in the text below one landed a line off. The space is now inside what the editor measures.
 
 **Found by use and fixed:** a prompt was sent twice when Enter was pressed again before the engine had said it had started. The prompt line now gives way at once, and the engine takes one request for a note at a time.
 
 **Where it departs from the plan or the boards:**
 
-- **The rewrite is not side by side.** Each new paragraph sits under the old one, struck through. Side by side does not fit a 680 px column or a phone.
+- **A rewrite's new text is shown as it would be written,** Markdown and all, in the line beside the old. It is not drawn as the note would draw it until it is kept.
 - **A draft's prompt is shown as written** when folded, links as Markdown, not drawn.
 - **`[ + pick on the atlas ]` is absent**, and a note for Iso starts from the notes list, until the Atlas is built (agreed).
 - **Suggested links are absent** (agreed).

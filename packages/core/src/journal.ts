@@ -43,8 +43,10 @@ export interface Change extends Stamp {
   hunks: Hunk[];
   /** The whole file after the change: on the first entry, at intervals, and wherever the chain was broken. */
   text?: string;
-  /** For `keep`: the proposal kept. For `restore`: the entry restored to. */
+  /** For `keep`: the proposal kept, and for a rewrite the one region kept (without it, all that were still open).
+   *  For `restore`: the entry restored to. */
   proposal?: string;
+  region?: number;
   to?: string;
 }
 
@@ -77,10 +79,16 @@ export interface Insert extends ProposalBase {
   before: Anchor | null;
   text: string;
 }
-/** Whole blocks rewritten, and nothing else. An empty `new` removes the block. */
+/** A passage of the note, named by its text: `nth` tells apart passages with the same text, counted from 0 through
+ *  the whole file. It may be a few words or several paragraphs. */
+export type Passage = Anchor;
+/** Chosen passages rewritten, and nothing else. An empty `new` takes the passage out. Each is kept or removed on
+ *  its own. */
 export interface Rewrite extends ProposalBase {
   form: "rewrite";
-  blocks: { old: Anchor; new: string }[];
+  regions: { old: Passage; new: string }[];
+  /** As `pending` gives it: the regions neither kept nor removed yet, by index. */
+  open?: number[];
 }
 export type Proposal = Insert | Rewrite;
 
@@ -89,11 +97,14 @@ export interface Revise extends Stamp {
   kind: "revise";
   proposal: string;
   text?: string;
-  blocks?: string[];
+  /** For a rewrite: the new text of each region, in order. */
+  regions?: string[];
 }
 export interface Discard extends Stamp {
   kind: "discard";
   proposal: string;
+  /** For a rewrite: the one region removed. Without it, all that are still open. */
+  region?: number;
 }
 export type Entry = Change | Proposal | Revise | Discard;
 
@@ -150,7 +161,7 @@ export const textAt = (entries: readonly Entry[], id?: string): string | null =>
 
 /** The entry for a change of the note's file to `after`, or null when nothing changed. The difference is taken
  *  from the journal's own last version, so the chain holds whatever the caller thought the file was. */
-export function change(entries: readonly Entry[], after: string, s: Stamp, why: Why, extra: { proposal?: string; to?: string } = {}): Change | null {
+export function change(entries: readonly Entry[], after: string, s: Stamp, why: Why, extra: { proposal?: string; region?: number; to?: string } = {}): Change | null {
   const head = replay(entries);
   if (head && head.text === after) return null;
   const changes = entries.filter(isChange);
@@ -172,39 +183,66 @@ export function reconcile(entries: readonly Entry[], file: string, s: Omit<Stamp
 
 // ------------------------------------------------------------ unkept text
 
-/** The proposals neither kept nor discarded, as last revised, oldest first. */
+/** The proposals neither kept nor discarded, as last revised, oldest first. A rewrite waits while any of its
+ *  regions does, and says which (`open`). */
 export function pending(entries: readonly Entry[]): Proposal[] {
   const open = new Map<string, Proposal>();
+  const settle = (id: string, region: number | undefined) => {
+    const p = open.get(id);
+    if (!p) return;
+    const left = p.form === "rewrite" && region !== undefined ? (p.open ?? []).filter((k) => k !== region) : [];
+    if (p.form === "rewrite" && left.length) open.set(id, { ...p, open: left });
+    else open.delete(id);
+  };
   for (const e of entries) {
-    if (e.kind === "proposal") open.set(e.id, e);
-    else if (e.kind === "discard" || (e.kind === "change" && e.proposal && e.why === "keep")) open.delete(e.proposal!);
+    if (e.kind === "proposal") open.set(e.id, e.form === "rewrite" ? { ...e, open: e.regions.map((_, k) => k) } : e);
+    else if (e.kind === "discard") settle(e.proposal, e.region);
+    else if (e.kind === "change" && e.proposal && e.why === "keep") settle(e.proposal, e.region);
     else if (e.kind === "revise") {
       const p = open.get(e.proposal);
       if (!p) continue;
       if (p.form === "insert" && e.text !== undefined) open.set(p.id, { ...p, text: e.text });
-      if (p.form === "rewrite" && e.blocks) open.set(p.id, { ...p, blocks: p.blocks.map((b, k) => ({ old: b.old, new: e.blocks![k] ?? b.new })) });
+      if (p.form === "rewrite" && e.regions) open.set(p.id, { ...p, regions: p.regions.map((r, k) => ({ old: r.old, new: e.regions![k] ?? r.new })) });
     }
   }
   return [...open.values()];
 }
 
-/** Where a proposal sits in the note as it now is. */
+/** Where a passage is in the note now, as character offsets, or null when its text is no longer there. */
+export function findPassage(note: string, p: Passage): { from: number; to: number } | null {
+  if (!p.text) return null;
+  let at = -1;
+  for (let n = 0; n <= p.nth; n++) {
+    at = note.indexOf(p.text, at + 1);
+    if (at < 0) break;
+  }
+  // The one meant is gone (an earlier twin was deleted, say): if exactly one is left, that is the place.
+  if (at < 0) {
+    const first = note.indexOf(p.text);
+    if (first < 0 || note.indexOf(p.text, first + 1) >= 0) return null;
+    at = first;
+  }
+  return { from: at, to: at + p.text.length };
+}
+
+/** The passage between two character offsets of the note, as it is named in the journal. */
+export function passageOf(note: string, from: number, to: number): Passage {
+  const text = note.slice(from, to);
+  let nth = 0;
+  for (let at = note.indexOf(text); at >= 0 && at < from; at = note.indexOf(text, at + 1)) nth++;
+  return { text, nth };
+}
+
+/** Where a proposal sits in the note as it now is. A rewrite's regions are placed one by one: one whose passage
+ *  has been edited away is null, and the others stand. */
 export type Placement =
   | { form: "insert"; line: number }
-  | { form: "rewrite"; blocks: { from: number; to: number; new: string }[] };
+  | { form: "rewrite"; regions: ({ from: number; to: number } | null)[] };
 
-/** Null when the place cannot be found: the proposal is then shown apart from the text, and is not lost. */
+/** Null when the place of new text cannot be found: the proposal is then shown apart from the text, and is not lost. */
 export function locate(note: string, p: Proposal): Placement | null {
+  if (p.form === "rewrite") return { form: "rewrite", regions: p.regions.map((r) => findPassage(note, r.old)) };
   const all = blocks(note);
-  if (p.form === "rewrite") {
-    const out: { from: number; to: number; new: string }[] = [];
-    for (const b of p.blocks) {
-      const k = findAnchor(all, b.old);
-      if (k < 0) return null;
-      out.push({ from: all[k]!.from, to: all[k]!.to, new: b.new });
-    }
-    return { form: "rewrite", blocks: out };
-  }
   const a = p.after ? findAnchor(all, p.after) : -1, b = p.before ? findAnchor(all, p.before) : -1;
   if (a >= 0) return { form: "insert", line: all[a]!.to };
   if (b >= 0) return { form: "insert", line: all[b]!.from };
@@ -220,23 +258,25 @@ export function locate(note: string, p: Proposal): Placement | null {
   return null;
 }
 
-/** The note with a proposal written in, or null when its place cannot be found. */
-export function written(note: string, p: Proposal): string | null {
+/** The note with a proposal written in. For a rewrite, `region` writes that one alone; without it, every region
+ *  still open. Null when the place (or, for a rewrite, any of the places asked for) cannot be found. */
+export function written(note: string, p: Proposal, region?: number): string | null {
+  if (p.form === "rewrite") {
+    const which = region !== undefined ? [region] : p.open ?? p.regions.map((_, k) => k);
+    const places = which.map((k) => ({ k, at: p.regions[k] ? findPassage(note, p.regions[k]!.old) : null }));
+    if (!places.length || places.some((x) => !x.at)) return null;
+    // From the last to the first, so the offsets of the earlier ones hold.
+    let out = note;
+    for (const { k, at } of places.sort((x, y) => y.at!.from - x.at!.from)) out = out.slice(0, at!.from) + p.regions[k]!.new + out.slice(at!.to);
+    return out;
+  }
   const place = locate(note, p);
-  if (!place) return null;
+  if (!place || place.form !== "insert") return null;
   const lines = note.split("\n");
   const blank = (k: number): boolean => k < 0 || k >= lines.length || !lines[k]!.trim();
-  if (place.form === "insert") {
-    const ins = p.form === "insert" ? p.text.replace(/^\n+|\n+$/g, "").split("\n") : [];
-    const at = place.line;
-    lines.splice(at, 0, ...(blank(at - 1) ? [] : [""]), ...ins, ...(blank(at) ? [] : [""]));
-    return lines.join("\n");
-  }
-  for (const b of [...place.blocks].sort((x, y) => y.from - x.from)) {
-    const next = b.new.replace(/^\n+|\n+$/g, "");
-    if (next) lines.splice(b.from, b.to - b.from, ...next.split("\n"));
-    else lines.splice(b.from, b.to - b.from + (blank(b.to) && b.to < lines.length ? 1 : 0)); // the block, and the blank line after it
-  }
+  const ins = p.text.replace(/^\n+|\n+$/g, "").split("\n");
+  const at = place.line;
+  lines.splice(at, 0, ...(blank(at - 1) ? [] : [""]), ...ins, ...(blank(at) ? [] : [""]));
   return lines.join("\n");
 }
 
@@ -246,12 +286,6 @@ export function insertAt(note: string, line: number): Pick<Insert, "form" | "aft
   let prev = -1;
   for (let k = 0; k < all.length; k++) if (all[k]!.from < line) prev = k;
   return { form: "insert", after: prev >= 0 ? anchorOf(all, prev) : null, before: prev + 1 < all.length ? anchorOf(all, prev + 1) : null };
-}
-
-/** A proposal to rewrite the blocks at these indexes (into `blocks(note)`), before Iso has filled in the new text. */
-export function rewriteOf(note: string, indexes: readonly number[]): Pick<Rewrite, "form" | "blocks"> {
-  const all = blocks(note);
-  return { form: "rewrite", blocks: indexes.filter((k) => all[k]).map((k) => ({ old: anchorOf(all, k), new: all[k]!.text })) };
 }
 
 // ------------------------------------------------------------ the timeline

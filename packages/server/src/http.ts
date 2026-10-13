@@ -35,10 +35,10 @@ const Anchor = z.object({ text: z.string(), nth: z.number().int().min(0) }).stri
 const Tier = z.enum(["low", "mid", "max"]);
 const Ask = z.discriminatedUnion("form", [
   z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
-  z.object({ note: z.string(), form: z.literal("rewrite"), blocks: z.array(Anchor).min(1).max(40), asked: z.string(), tier: Tier }).strict(),
+  z.object({ note: z.string(), form: z.literal("rewrite"), regions: z.array(Anchor).min(1).max(40), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
   z.object({ note: z.string(), form: z.literal("note"), tier: Tier }).strict(),
 ]);
-const Named = z.object({ proposal: z.string().max(64) }).strict();
+const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
 const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
 const Key = z.object({ key: z.string().nullable() }).strict();
 
@@ -116,9 +116,9 @@ export function createApp({ api, token, loopback, web, allowHosts = [] }: Server
     });
   post("/api/iso/ask", Ask, (_c, b) => api.ask(b));
   post("/api/iso/stop", z.object({ request: z.string().max(64) }).strict(), (_c, b) => api.stop(b.request));
-  post("/api/proposal/keep", Named, (c, b) => api.keep(id(c), b.proposal));
+  post("/api/proposal/keep", Named, (c, b) => api.keep(id(c), b.proposal, b.region));
   post("/api/proposal/revise", Revised, (c, b) => api.revise(id(c), b.proposal, b.text));
-  post("/api/proposal/discard", Named, (c, b) => api.discard(id(c), b.proposal));
+  post("/api/proposal/discard", Named, (c, b) => api.discard(id(c), b.proposal, b.region));
   app.get("/api/drafts", (c) => answer(c, () => api.drafts()));
   post("/api/drafts", z.object({}).strict(), () => api.createDraft());
   post("/api/draft/keep", z.object({ proposal: z.string().max(64), folder: z.string().max(400) }).strict(), (c, b) => api.keepDraft(id(c), b.proposal, b.folder));

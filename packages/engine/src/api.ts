@@ -2,7 +2,7 @@
 // interface and nothing else, so it does not know whether the engine is
 // behind HTTP (the server) or in the same process (a webview, later).
 
-import type { Anchor, Cost, Entry } from "@isorite/core";
+import type { Anchor, Cost, Entry, Passage } from "@isorite/core";
 import type { Part } from "./iso.ts";
 import type { Step } from "./lookup.ts";
 import type { Tier } from "./provider.ts";
@@ -53,8 +53,8 @@ export interface SearchHit {
 export type AskRequest =
   /** New text at a point: between the block `after` and the block `before`. */
   | { note: string; form: "insert"; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier }
-  /** These blocks rewritten, and nothing else. */
-  | { note: string; form: "rewrite"; blocks: Anchor[]; asked: string; tier: Tier }
+  /** These passages rewritten, and nothing else. What Iso says of the changes goes between `after` and `before`. */
+  | { note: string; form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier }
   /** A note written for Iso (a draft, `@draft/…`): the draft is what is asked, and the reply is a note to keep in its place. */
   | { note: string; form: "note"; tier: Tier };
 
@@ -87,12 +87,13 @@ export type EngineEvent =
   /** An event was added to the study record. */
   | { type: "record"; event: string }
   /** Iso was asked. Every request ends in exactly one of iso-done, iso-stopped, iso-failed. */
-  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; blocks: Anchor[] } | { form: "note" } }
+  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null } | { form: "note" } }
   /** Iso looked something up. */
   | { type: "iso-step"; request: string; note: string; step: Step }
   /** A piece of its reply. `again`: what came before was not the reply; start over. */
   | { type: "iso-text"; request: string; note: string; delta: string; again: boolean }
-  | { type: "iso-done"; request: string; note: string; proposal: string; cost: Cost }
+  /** `proposal` is what it offers; for a rewrite that says something of its changes, `said` is that, a proposal of its own. */
+  | { type: "iso-done"; request: string; note: string; proposal: string; said?: string; cost: Cost }
   | { type: "iso-stopped"; request: string; note: string }
   | { type: "iso-failed"; request: string; note: string; message: string };
 
@@ -111,12 +112,13 @@ export interface Api {
   ask(request: AskRequest): Promise<{ request: string }>;
   /** Stop a request. Nothing is entered. */
   stop(request: string): Promise<void>;
-  /** Write a proposal into its note. The note's file changes here and nowhere else on Iso's account. */
-  keep(id: string, proposal: string): Promise<Saved>;
-  /** Your edit to a proposal before keeping it: its text, or for a rewrite the text of each of its blocks. */
+  /** Write a proposal into its note. The note's file changes here and nowhere else on Iso's account. For a
+   *  rewrite, `region` keeps that one passage; without it, every one still waiting. */
+  keep(id: string, proposal: string, region?: number): Promise<Saved>;
+  /** Your edit to a proposal before keeping it: its text, or for a rewrite the text of each of its regions. */
   revise(id: string, proposal: string, text: string | string[]): Promise<void>;
-  /** Take a proposal away. It stays in the journal. */
-  discard(id: string, proposal: string): Promise<void>;
+  /** Take a proposal away (for a rewrite, one region of it, or all that still wait). It stays in the journal. */
+  discard(id: string, proposal: string, region?: number): Promise<void>;
   /** The notes for Iso that are waiting outside the base, newest first. */
   drafts(): Promise<DraftSummary[]>;
   /** Start a note for Iso. It is a file of the study base, read and saved like any note, under the id it is given. */

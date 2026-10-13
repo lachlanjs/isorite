@@ -29,10 +29,12 @@ async function provider(): Promise<void> {
     const data = (o: unknown) => res.write(`data: ${JSON.stringify(o)}\n\n`);
     const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
     if (user.includes("⟦1⟧")) {
-      // A rewrite: the first chosen paragraph comes back changed, with a remark outside the marks that must be dropped;
-      // "drop" takes the second out.
-      data({ choices: [{ delta: { content: "Here is the rewrite.\n⟦1⟧\nEntropy is the average surprise of a source, in **bits**.\n⟦/1⟧\n" } }] });
-      if (asked.includes("drop")) data({ choices: [{ delta: { content: "⟦2⟧\n⟦/2⟧" } }] });
+      // A rewrite: each chosen passage comes back as "rewritten k" ("drop" takes the second out), with a remark
+      // outside the marks that must be dropped, and a word on the changes ("quiet" says nothing).
+      const count = new Set(user.match(/⟦\d+⟧/g)).size;
+      data({ choices: [{ delta: { content: "Here is the rewrite.\n" } }] });
+      for (let k = 1; k <= count; k++) data({ choices: [{ delta: { content: `⟦${k}⟧${asked.includes("drop") && k === 2 ? "" : ` rewritten ${k} `}⟦/${k}⟧\n` } }] });
+      if (!asked.includes("quiet")) data({ choices: [{ delta: { content: "⟦note⟧I rewrote what you chose, **plainly**.⟦/note⟧" } }] });
     } else if (asked.includes("look") && !looked) {
       data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "read_note", arguments: JSON.stringify({ id: "/basics/surprise.md" }) } }] } }] });
     } else {

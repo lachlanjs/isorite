@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import { blocks, hashText, insertAt, pending, readJournal, replay, rewriteOf, type Change, type Proposal } from "@isorite/core";
-import { CONVERSATION_BUDGET, Engine, HERE, MemoryFiles, MemorySecrets, KEY, NOTE_BUDGET, conversation, estimate, parseRewrite, windowed, type EngineEvent } from "../src/index.ts";
+import { hashText, insertAt, passageOf, pending, readJournal, replay, type Change, type Proposal, type Rewrite } from "@isorite/core";
+import { CONVERSATION_BUDGET, Engine, HERE, MemoryFiles, MemorySecrets, KEY, NOTE_BUDGET, conversation, estimate, fitted, parseRewrite, windowed, type EngineEvent } from "../src/index.ts";
 import { scripted, type Scripted } from "./scripted.ts";
 
 const ENTROPY = "---\ntype: Concept\ntitle: Entropy\n---\n\nThe average surprise of a source.\n\nIt is largest when every symbol is equally likely.\n";
@@ -203,70 +203,114 @@ test("a request that is refused does not leave the note claimed", async () => {
   expect(await ended((await ask()).request)).toMatchObject({ type: "iso-done" });
 });
 
-// ------------------------------------------------------------ rewriting chosen paragraphs
+// ------------------------------------------------------------ rewriting chosen passages
 
-/** Ask for a rewrite of the note's two paragraphs. */
-const both = () => rewriteOf(ENTROPY, [0, 1]).blocks.map((b) => b.old);
+/** A passage of the note, by its text. */
+const passage = (text: string) => { const at = ENTROPY.indexOf(text); return passageOf(ENTROPY, at, at + text.length); };
+/** Ask for a rewrite of two passages: a few words inside the first sentence, and the whole second paragraph. Iso's word on it goes at the end. */
+const two = () => ({ note: "basics/entropy", form: "rewrite" as const, regions: [passage("average surprise"), passage("It is largest when every symbol is equally likely.")], after: null, before: null, tier: "mid" as const });
 
-test("a rewrite marks the chosen paragraphs, and what comes back is offered for those and nothing else", async () => {
-  const { engine, ended, notes, journal, sent } = await open([{ text: ["Some chat first.\n⟦1⟧\nEntropy is the average surprise of a source.\n⟦/1⟧\n", "⟦3⟧\nA paragraph nobody chose.\n⟦/3⟧\nAnd a closing remark."] }]);
-  expect(blocks(ENTROPY).map((b) => b.text)).toEqual(["The average surprise of a source.", "It is largest when every symbol is equally likely."]);
-  const done = await ended((await engine.ask({ note: "basics/entropy", form: "rewrite", blocks: both(), asked: "make the first a full sentence", tier: "mid" })).request);
+test("a rewrite marks the chosen passages where they stand, and offers each change apart, with what Iso says of them as text of its own", async () => {
+  const { engine, ended, notes, journal, sent } = await open([{ text: ["Some chat first.\n⟦1⟧ expected surprise ⟦/1⟧\n", "⟦3⟧A passage nobody chose.⟦/3⟧\n⟦note⟧I used the standard term, and left the second sentence alone.⟦/note⟧"] }]);
+  const done = await ended((await engine.ask({ ...two(), asked: "use the textbook term" })).request);
   expect(done).toMatchObject({ type: "iso-done" });
   const user = String(sent[0]!.messages[1]!.content);
-  expect(user).toContain("⟦1⟧\nThe average surprise of a source.\n⟦/1⟧\n\n⟦2⟧\nIt is largest when every symbol is equally likely.\n⟦/2⟧");
+  expect(user).toContain("The ⟦1⟧average surprise⟦/1⟧ of a source.\n\n⟦2⟧It is largest when every symbol is equally likely.⟦/2⟧");
   expect(notes.files.get("basics/entropy.md")).toBe(ENTROPY);
-  const [p] = pending(journal());
-  expect(p).toMatchObject({
-    form: "rewrite", notice: "Iso also wrote outside the paragraphs you chose. That part was left out.",
-    blocks: [
-      { old: { text: "The average surprise of a source.", nth: 0 }, new: "Entropy is the average surprise of a source." },
-      { old: { text: "It is largest when every symbol is equally likely.", nth: 0 }, new: "It is largest when every symbol is equally likely." }, // left as it was
-    ],
+
+  const [changes, said] = pending(journal()) as [Rewrite, Proposal];
+  // Only the passage it changed is offered; the reply is set between the old one's neighbours, spaces and all.
+  expect(changes).toMatchObject({
+    form: "rewrite", open: [0], notice: "Iso also wrote outside the passages you chose. That part was left out.",
+    regions: [{ old: { text: "average surprise", nth: 0 }, new: "expected surprise" }],
+    cost: { usd: 0.004 },
   });
-  // Kept: the one paragraph changes, and not a character else.
-  await engine.keep("basics/entropy", p!.id);
-  expect(notes.files.get("basics/entropy.md")).toBe(ENTROPY.replace("The average surprise of a source.", "Entropy is the average surprise of a source."));
-});
+  expect(said).toMatchObject({ form: "insert", after: null, before: null, text: "I used the standard term, and left the second sentence alone.", asked: "use the textbook term" });
+  expect(said.cost).toBeUndefined(); // one request, paid for once
+  expect(done).toMatchObject({ proposal: changes.id, said: said.id });
+  expect((await engine.context("basics/entropy")).session).toEqual({ usd: 0.004, requests: 1 });
 
-test("a rewrite is revised block by block, and an empty block takes its paragraph out", async () => {
-  const { engine, ended, notes, journal } = await open([{ text: ["⟦1⟧\nRewritten.\n⟦/1⟧\n⟦2⟧\n⟦/2⟧"] }]);
-  await ended((await engine.ask({ note: "basics/entropy", form: "rewrite", blocks: both(), asked: "shorten, and drop the second", tier: "mid" })).request);
-  const [p] = pending(journal());
-  expect(p).toMatchObject({ blocks: [{ new: "Rewritten." }, { new: "" }] });
-  await expect(engine.revise("basics/entropy", p!.id, "one text")).rejects.toMatchObject({ status: 400 });
-  await engine.revise("basics/entropy", p!.id, ["Rewritten by me.", ""]);
-  await engine.keep("basics/entropy", p!.id);
-  expect(notes.files.get("basics/entropy.md")).toBe("---\ntype: Concept\ntitle: Entropy\n---\n\nRewritten by me.\n");
-});
-
-test("a reply that rewrites nothing offers nothing, and says which way it failed", async () => {
-  const { engine, ended, journal } = await open([{ text: ["I think both paragraphs are fine as they are."] }, { text: ["⟦1⟧\nThe average surprise of a source.\n⟦/1⟧"] }]);
-  const ask = () => engine.ask({ note: "basics/entropy", form: "rewrite", blocks: both(), asked: "improve", tier: "mid" });
-  expect(await ended((await ask()).request)).toMatchObject({ type: "iso-failed", message: expect.stringContaining("not with a rewrite") });
-  expect(await ended((await ask()).request)).toMatchObject({ type: "iso-failed", message: "Iso left the paragraphs as they are." });
+  // Kept: those words change, and not a character else. What Iso said is still waiting, to be kept or removed like any text of its.
+  await engine.keep("basics/entropy", changes.id, 0);
+  expect(notes.files.get("basics/entropy.md")).toBe(ENTROPY.replace("average surprise", "expected surprise"));
+  expect(journal().at(-1)).toMatchObject({ why: "keep", proposal: changes.id, region: 0 });
+  expect(pending(journal()).map((p) => p.id)).toEqual([said.id]);
+  await engine.discard("basics/entropy", said.id);
   expect(pending(journal())).toEqual([]);
 });
 
-test("paragraphs that are no longer in the note cannot be asked about", async () => {
+test("each change is kept or removed on its own; an empty one takes its passage out", async () => {
+  const { engine, ended, notes, journal } = await open([{ text: ["⟦1⟧mean surprise⟦/1⟧⟦2⟧⟦/2⟧"] }]);
+  await ended((await engine.ask({ ...two(), asked: "shorten, and drop the second" })).request);
+  const [p] = pending(journal()) as Rewrite[];
+  expect(p).toMatchObject({ regions: [{ new: "mean surprise" }, { new: "" }], open: [0, 1] });
+  expect(pending(journal())).toHaveLength(1); // it said nothing of them, so there is no second block
+
+  await engine.discard("basics/entropy", p!.id, 0);
+  expect(notes.files.get("basics/entropy.md")).toBe(ENTROPY);
+  expect((pending(journal())[0] as Rewrite).open).toEqual([1]);
+  await expect(engine.keep("basics/entropy", p!.id, 0)).rejects.toMatchObject({ status: 409 });
+  await engine.keep("basics/entropy", p!.id, 1);
+  expect(notes.files.get("basics/entropy.md")).toBe(ENTROPY.replace("It is largest when every symbol is equally likely.", ""));
+  expect(pending(journal())).toEqual([]);
+});
+
+test("all the changes still waiting are kept at once, or removed at once", async () => {
+  const reply = { text: ["⟦1⟧mean surprise⟦/1⟧⟦2⟧It peaks when all symbols are equally likely.⟦/2⟧"] };
+  const { engine, ended, notes, journal } = await open([reply, reply]);
+  await ended((await engine.ask({ ...two(), asked: "tighten" })).request);
+  await engine.discard("basics/entropy", pending(journal())[0]!.id);
+  expect(pending(journal())).toEqual([]);
+  await ended((await engine.ask({ ...two(), asked: "tighten" })).request);
+  await engine.keep("basics/entropy", pending(journal())[0]!.id);
+  expect(notes.files.get("basics/entropy.md")).toBe(ENTROPY.replace("average surprise", "mean surprise").replace("It is largest when every symbol is equally likely.", "It peaks when all symbols are equally likely."));
+  expect(pending(journal())).toEqual([]);
+});
+
+test("a change whose passage was edited meanwhile cannot be kept; the others can", async () => {
+  const { engine, ended, journal } = await open([{ text: ["⟦1⟧mean surprise⟦/1⟧⟦2⟧It peaks then.⟦/2⟧"] }]);
+  await ended((await engine.ask({ ...two(), asked: "tighten" })).request);
+  const p = pending(journal())[0]!;
+  await engine.saveNote("basics/entropy", { base: hashText(ENTROPY), text: ENTROPY.replace("average surprise", "usual surprise") });
+  await expect(engine.keep("basics/entropy", p.id)).rejects.toMatchObject({ status: 409 });
+  await expect(engine.keep("basics/entropy", p.id, 0)).rejects.toMatchObject({ status: 409 });
+  expect((await engine.keep("basics/entropy", p.id, 1)).text).toContain("usual surprise of a source.\n\nIt peaks then.");
+});
+
+test("a reply with no change and nothing said offers nothing; one that only says something offers that", async () => {
+  const { engine, ended, journal } = await open([{ text: ["I think both are fine as they are."] }, { text: ["⟦1⟧average surprise⟦/1⟧"] }, { text: ["⟦note⟧Both read well already; I would leave them.⟦/note⟧"] }]);
+  const ask = () => engine.ask({ ...two(), asked: "improve" });
+  expect(await ended((await ask()).request)).toMatchObject({ type: "iso-failed", message: expect.stringContaining("not with a rewrite") });
+  expect(await ended((await ask()).request)).toMatchObject({ type: "iso-failed", message: "Iso left what you chose as it is." });
+  expect(pending(journal())).toEqual([]);
+  expect(await ended((await ask()).request)).toMatchObject({ type: "iso-done" });
+  expect(pending(journal())).toMatchObject([{ form: "insert", text: "Both read well already; I would leave them.", cost: { usd: 0.004 } }]);
+});
+
+test("passages that are not in the note, or that overlap, cannot be asked about", async () => {
   const { engine, sent } = await open([]);
-  await expect(engine.ask({ note: "basics/entropy", form: "rewrite", blocks: [{ text: "Not in the note.", nth: 0 }], asked: "x", tier: "mid" })).rejects.toMatchObject({ status: 409 });
-  await expect(engine.ask({ note: "basics/entropy", form: "rewrite", blocks: [], asked: "x", tier: "mid" })).rejects.toMatchObject({ status: 400 });
-  const twice = both()[0]!;
-  await expect(engine.ask({ note: "basics/entropy", form: "rewrite", blocks: [twice, twice], asked: "x", tier: "mid" })).rejects.toMatchObject({ status: 409 });
+  const ask = (regions: { text: string; nth: number }[]) => engine.ask({ ...two(), regions, asked: "x" });
+  await expect(ask([{ text: "Not in the note.", nth: 0 }])).rejects.toMatchObject({ status: 409 });
+  await expect(ask([])).rejects.toMatchObject({ status: 400 });
+  await expect(ask([passage("average surprise of"), passage("surprise of a source")])).rejects.toMatchObject({ status: 400, message: "the passages chosen overlap" });
   expect(sent).toEqual([]);
 });
 
-test("a rewrite's reply is taken apart by its marks", () => {
-  expect(parseRewrite("⟦1⟧\nA\n⟦/1⟧\n\n⟦2⟧\nB\nB2\n⟦/2⟧", 2)).toEqual({ blocks: ["A", "B\nB2"], outside: false });
-  expect(parseRewrite("⟦2⟧ B ⟦/2⟧", 2)).toEqual({ blocks: [null, "B"], outside: false });
-  expect(parseRewrite("⟦1⟧\n⟦/1⟧", 1)).toEqual({ blocks: [""], outside: false });
-  expect(parseRewrite("Sure!\n⟦1⟧\nA\n⟦/1⟧", 1)).toEqual({ blocks: ["A"], outside: true });
-  // One paragraph and no marks at all: the reply is the paragraph.
-  expect(parseRewrite("Just the new paragraph.", 1)).toEqual({ blocks: ["Just the new paragraph."], outside: false });
-  expect(parseRewrite("Just some talk.", 2)).toEqual({ blocks: [null, null], outside: true });
-  // A code block comes back whole, indentation and all.
-  expect(parseRewrite("⟦1⟧\n```python\nif x:\n    pass\n```\n⟦/1⟧", 1).blocks[0]).toBe("```python\nif x:\n    pass\n```");
+test("a rewrite's reply is taken apart by its marks, and each passage set back between its neighbours", () => {
+  expect(parseRewrite("⟦1⟧A⟦/1⟧\n\n⟦2⟧\nB\nB2\n⟦/2⟧", 2)).toEqual({ regions: ["A", "\nB\nB2\n"], say: "", outside: false });
+  expect(parseRewrite("⟦2⟧ B ⟦/2⟧ ⟦note⟧ Why. ⟦/note⟧", 2)).toEqual({ regions: [null, " B "], say: "Why.", outside: false });
+  expect(parseRewrite("⟦1⟧⟦/1⟧", 1)).toEqual({ regions: [""], say: "", outside: false });
+  expect(parseRewrite("Sure!\n⟦1⟧A⟦/1⟧", 1)).toMatchObject({ regions: ["A"], outside: true });
+  // One passage and no marks at all: the reply is the passage.
+  expect(parseRewrite("Just the new passage.", 1)).toEqual({ regions: ["Just the new passage."], say: "", outside: false });
+  expect(parseRewrite("Just some talk.", 2)).toMatchObject({ regions: [null, null], outside: true });
+  // A note that was never closed is still what it says.
+  expect(parseRewrite("⟦1⟧A⟦/1⟧⟦note⟧Cut off here", 1)).toEqual({ regions: ["A"], say: "Cut off here", outside: false });
+
+  expect(fitted("average surprise", "  mean surprise\n")).toBe("mean surprise");
+  expect(fitted(" average surprise ", "mean surprise")).toBe(" mean surprise ");
+  expect(fitted("A paragraph.\n\n", "\nAnother.\n")).toBe("Another.\n\n");
+  expect(fitted("x", "   ")).toBe("");
 });
 
 // ------------------------------------------------------------ the session: context and cost
@@ -310,7 +354,7 @@ test("the context report names the five parts, sums them, and counts what the se
   expect(after.parts[4]!.tokens).toBeGreaterThan(0);
 
   // A reply that was paid for and offered nothing is still counted.
-  const failed = await ended((await engine.ask({ note: "basics/entropy", form: "rewrite", blocks: both(), asked: "improve", tier: "mid" })).request);
+  const failed = await ended((await engine.ask({ ...two(), asked: "improve" })).request);
   expect(failed.type).toBe("iso-failed");
   await new Promise((r) => setTimeout(r, 0));
   const both2 = (await engine.context("basics/entropy")).session;
