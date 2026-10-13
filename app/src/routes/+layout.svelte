@@ -54,12 +54,20 @@
     {#if app.session}
       <span>{app.session.study ? "study" : "project: no journal is kept"}</span>
       {#if inNote && app.saving}<span class:bad={app.saving.bad} role="status">{app.saving.text}</span>{/if}
-      <span class="grow"></span>
-      <span>{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span>
+      {#if app.atlas}
+        <span>{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span>
+        {#if app.atlas.items}<span>{app.atlas.items} study {app.atlas.items === 1 ? "item" : "items"}</span>{/if}
+        <span class="grow"></span>
+        <span class="hint">click a note to see what it rests on, again to open it</span>
+      {:else}
+        <span class="grow"></span>
+        <span>{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span>
+      {/if}
     {/if}
   </footer>
 </div>
 
 <style>
+  .hint { overflow: hidden; text-overflow: ellipsis; }
   .stopped { padding: var(--space-12) var(--space-4); text-align: center; color: var(--rose); }
 </style>

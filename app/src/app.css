@@ -28,6 +28,8 @@
   --malachite: #5FD3A4; --malachite-deep: #1F8F68;
   --rose: #FF8FA6;
   --soft: 16%;
+  /* On the Atlas only: what a note requires, and what builds on it. */
+  --requires: #B79CFF; --builds: #FF9E64;
 
   --lattice-soft: color-mix(in srgb, var(--lattice) var(--soft), var(--ground-1));
   --growth-soft: color-mix(in srgb, var(--growth) var(--soft), var(--ground-1));
@@ -57,6 +59,7 @@
   --growth: #8C6200; --growth-deep: #D9A21B;
   --malachite: #0B6B4A; --malachite-deep: #2FA37A;
   --rose: #A81E48;
+  --requires: #6A3FC0; --builds: #B5521B;
   --soft: 10%;
 }
 @media (prefers-color-scheme: light) {
@@ -69,6 +72,7 @@
     --growth: #8C6200; --growth-deep: #D9A21B;
     --malachite: #0B6B4A; --malachite-deep: #2FA37A;
     --rose: #A81E48;
+  --requires: #6A3FC0; --builds: #B5521B;
     --soft: 10%;
   }
 }

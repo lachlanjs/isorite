@@ -17,6 +17,8 @@ class AppState {
   here = $state("");
   /** How the open note's saving stands, for the status line. */
   saving = $state<{ text: string; bad: boolean } | null>(null);
+  /** The Atlas, while it is the page: how many study items it shows, for the status line. */
+  atlas = $state.raw<{ items: number } | null>(null);
   private readonly listeners = new Set<(event: EngineEvent) => void>();
   private relist: ReturnType<typeof setTimeout> | null = null;
 
