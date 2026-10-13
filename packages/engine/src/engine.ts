@@ -3,11 +3,11 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, change, hashText, isStudyId, journalLine, journalPath, locate, newId, pending, readJournal, reconcile, splitFrontmatter, stamp, written,
-  type Cost, type Entry, type FileEntry, type Insert, type Proposal, type Stamp,
+  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, blocks, change, findAnchor, hashText, isStudyId, journalLine, journalPath, locate, newId, pending, readJournal, reconcile, splitFrontmatter, stamp, written,
+  type Cost, type Entry, type FileEntry, type Insert, type Proposal, type Rewrite, type Stamp,
 } from "@isorite/core";
 import { Conflict, EngineError, type Api, type AskRequest, type EngineEvent, type Listing, type NoteSource, type Saved, type SearchHit, type Session, type Settings } from "./api.ts";
-import { HERE, conversation, insertMessages, replyText } from "./iso.ts";
+import { CLOSE, HERE, OPEN, conversation, insertMessages, parseRewrite, replyText, rewriteMessages } from "./iso.ts";
 import { rounds } from "./loop.ts";
 import { Lookup, type Similar } from "./lookup.ts";
 import { KEY, OPENROUTER, TIERS, type ProviderConfig } from "./provider.ts";
@@ -223,44 +223,72 @@ export class Engine implements Api {
 
     // The note as it is on disk now: what the journal has not seen is entered first, as for any read.
     const { text } = await this.readNote(req.note);
-    const place: Insert = { ...(await this.stamp("iso")), kind: "proposal", form: "insert", asked, after: req.after, before: req.before, text: "" };
-    const at = locate(text, place);
-    if (!at || at.form !== "insert") throw new Conflict("the place asked about is no longer in the note", { id: req.note, text, version: hashText(text) });
-    const lines = text.split("\n");
-    lines.splice(at.line, 0, ...(at.line > 0 && lines[at.line - 1]!.trim() ? [""] : []), HERE, ...(at.line < lines.length && lines[at.line]!.trim() ? [""] : []));
+    const gone = () => new Conflict("the place asked about is no longer in the note", { id: req.note, text, version: hashText(text) });
+    const lines = text.split("\n"), all = blocks(text);
+    let chosen: number[] = [];
+    if (req.form === "insert") {
+      const at = locate(text, { form: "insert", after: req.after, before: req.before } as Proposal);
+      if (!at || at.form !== "insert") throw gone();
+      lines.splice(at.line, 0, ...(at.line > 0 && lines[at.line - 1]!.trim() ? [""] : []), HERE, ...(at.line < lines.length && lines[at.line]!.trim() ? [""] : []));
+    } else {
+      if (!req.blocks.length || req.blocks.length > 40) throw new EngineError("choose between one and forty paragraphs to rewrite");
+      chosen = req.blocks.map((a) => findAnchor(all, a));
+      if (chosen.some((k) => k < 0) || new Set(chosen).size !== chosen.length) throw gone();
+      // Marked from the last to the first, so the lines of the earlier ones do not move.
+      for (const [n, k] of [...chosen.entries()].sort((x, y) => y[1] - x[1])) {
+        lines.splice(all[k]!.to, 0, CLOSE(n + 1));
+        lines.splice(all[k]!.from, 0, OPEN(n + 1));
+      }
+    }
     let title = req.note.split("/").at(-1)!;
     try { const t = splitFrontmatter(text)[0]?.title; if (typeof t === "string" && t) title = t; } catch { /* the id will do */ }
 
     const entries = await this.journal(req.note);
-    const { messages } = insertMessages({
+    const session = (await this.stamp("iso")).session;
+    const given = {
       tier: req.tier, meaning: Boolean(this.opts.similar), title, id: req.note, marked: lines.join("\n"), asked,
       unkept: pending(entries).map((p) => (p.form === "insert" ? p.text : p.blocks.map((b) => b.new).join("\n\n"))),
-      conversation: conversation(entries, place.session),
-    });
+      conversation: conversation(entries, session),
+    };
+    const { messages } = req.form === "insert" ? insertMessages(given) : rewriteMessages({ ...given, count: chosen.length });
+    const olds = chosen.map((k) => all[k]!.text);
+    const maxTokens = req.form === "insert" ? REPLY_TOKENS : Math.max(REPLY_TOKENS, Math.ceil(olds.join("").length / 3) + 1000);
 
     const request = newId(this.opts.clock.now()), abort = new AbortController();
     this.running.set(request, abort);
     this.asking.set(req.note, request);
-    this.publish({ type: "iso-start", request, note: req.note, asked, after: req.after, before: req.before, tier: req.tier });
+    const place = req.form === "insert" ? { form: req.form, after: req.after, before: req.before } : { form: req.form, blocks: req.blocks };
+    this.publish({ type: "iso-start", request, note: req.note, asked, tier: req.tier, place });
     const lookup = new Lookup(this.bundle, req.note, this.opts.similar ?? null);
     // The request returns at once; the rest happens as events, and ends in exactly one of done, stopped, failed.
     void (async () => {
       try {
         const ran = await rounds({
-          http, provider: this.provider, key, tier: req.tier, messages, lookup, maxTokens: REPLY_TOKENS, signal: abort.signal,
+          http, provider: this.provider, key, tier: req.tier, messages, lookup, maxTokens, signal: abort.signal,
           onText: (delta, again) => this.publish({ type: "iso-text", request, note: req.note, delta, again }),
           onStep: (step) => this.publish({ type: "iso-step", request, note: req.note, step }),
         });
         if (abort.signal.aborted) throw Object.assign(new Error("stopped"), { name: "AbortError" });
-        const reply = replyText(ran.text);
-        if (!reply) throw new EngineError("Iso replied with nothing. Ask again, or at another tier.");
+        const notices: string[] = ran.cut ? ["The reply was cut off at its length limit. Ask for less at once."] : [];
+        // What it wrote is fitted to the form here: this, not its instructions, is what limits where its text can go.
+        let body: Pick<Insert, "form" | "after" | "before" | "text"> | Pick<Rewrite, "form" | "blocks">;
+        if (req.form === "insert") {
+          const reply = replyText(ran.text);
+          if (!reply) throw new EngineError("Iso replied with nothing. Ask again, or at another tier.");
+          body = { form: "insert", after: req.after, before: req.before, text: reply };
+        } else {
+          const parsed = parseRewrite(ran.text, chosen.length);
+          if (parsed.blocks.every((b, k) => b === null || b === olds[k])) throw new EngineError(parsed.outside ? "Iso replied, but not with a rewrite of the paragraphs you chose, so nothing is offered. Ask for new text at a point instead, or ask again." : "Iso left the paragraphs as they are.");
+          if (parsed.outside) notices.push("Iso also wrote outside the paragraphs you chose. That part was left out.");
+          body = { form: "rewrite", blocks: req.blocks.map((old, k) => ({ old, new: parsed.blocks[k] ?? olds[k]! })) };
+        }
         const cost: Cost = { model: ran.usage.model, tier: req.tier, tokensIn: ran.usage.tokensIn, tokensOut: ran.usage.tokensOut, tokensCached: ran.usage.tokensCached, usd: ran.usage.usd };
         // Entered in its turn among the writes. From here it survives closing the browser.
         const proposal = await this.one(async () => {
-          const p: Proposal = {
-            ...(await this.stamp(`iso:${this.provider.name}/${ran.usage.model}`)), kind: "proposal", form: "insert",
-            asked, after: req.after, before: req.before, text: reply, cost, read: lookup.read(),
-          };
+          const p = {
+            ...(await this.stamp(`iso:${this.provider.name}/${ran.usage.model}`)), kind: "proposal", asked, ...body, cost, read: lookup.read(),
+            ...(notices.length ? { notice: notices.join(" ") } : {}),
+          } as Proposal;
           await this.enter(req.note, await this.journal(req.note), p);
           return p;
         });
@@ -307,12 +335,17 @@ export class Engine implements Api {
     });
   }
 
-  revise(id: string, proposal: string, text: string): Promise<void> {
+  revise(id: string, proposal: string, text: string | string[]): Promise<void> {
     return this.one(async () => {
       const { entries, p } = await this.waiting(id, proposal);
-      if (p.form !== "insert") throw new EngineError("a rewrite is revised block by block");
-      if (text.length > MAX_NOTE_BYTES) throw new EngineError("too large", 413);
-      if (text !== p.text) await this.enter(id, entries, { ...(await this.stamp("you")), kind: "revise", proposal, text });
+      if ((typeof text === "string" ? text.length : text.join("").length) > MAX_NOTE_BYTES) throw new EngineError("too large", 413);
+      if (p.form === "insert") {
+        if (typeof text !== "string") throw new EngineError("new text at a point is revised as one text");
+        if (text !== p.text) await this.enter(id, entries, { ...(await this.stamp("you")), kind: "revise", proposal, text });
+      } else {
+        if (typeof text === "string" || text.length !== p.blocks.length) throw new EngineError("a rewrite is revised block by block");
+        if (text.some((t, k) => t !== p.blocks[k]!.new)) await this.enter(id, entries, { ...(await this.stamp("you")), kind: "revise", proposal, blocks: text });
+      }
     });
   }
 

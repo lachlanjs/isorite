@@ -30,6 +30,31 @@ const INSERT = `# What to write
   write from what you know of the subject, and be exact. Never invent a note,
   a link or a quotation.`;
 
+/** The marks round the k-th paragraph they chose, counted from 1. Not part of the note. */
+export const OPEN = (k: number): string => `⟦${k}⟧`, CLOSE = (k: number): string => `⟦/${k}⟧`;
+
+const REWRITE = (n: number) => `# What to write
+
+- They have marked ${n === 1 ? "one paragraph" : `${n} paragraphs`} of their note${n === 1 ? `, between ${OPEN(1)} and ${CLOSE(1)}` : `, each between a pair of marks: ${OPEN(1)} and ${CLOSE(1)}, ${OPEN(2)} and ${CLOSE(2)}, and so on`}.
+  Rewrite ${n === 1 ? "it" : "them"} as they ask. Nothing else in the note can be changed, by you or by this request.
+- Reply with each paragraph you change, whole, between its own marks:
+  ${OPEN(1)}
+  the paragraph as it should now read
+  ${CLOSE(1)}
+  Leave out a paragraph you would not change. To take a paragraph out of the
+  note, give its marks with nothing between them.
+- Only what is between the marks is read. No preamble, no explanation, no
+  closing remark: they are thrown away.
+- Change only what the request calls for. Everything else in a paragraph
+  comes back exactly as it is: the same words, the same links, the same maths.
+- A "paragraph" here is a block of the note: it may be a heading, a list, a
+  displayed equation or a code block. Give back the same kind of block unless
+  asked for another.
+- Write as the note is written: its language, its notation, its level.
+- The base is theirs and may be small. Where it does not hold what is asked,
+  write from what you know of the subject, and be exact. Never invent a note,
+  a link or a quotation.`;
+
 const FORMAT = `# How notes work here
 
 - A link to a note is [its title](/its/path.md), with the path exactly as a
@@ -118,6 +143,48 @@ export function insertMessages(a: Asked): { messages: Message[]; parts: Part[] }
       { name: "linked notes", detail: "", tokens: 0 },
     ],
   };
+}
+
+export interface AskedRewrite extends Omit<Asked, "marked"> {
+  /** The note's text with each chosen paragraph between its marks. */
+  marked: string;
+  count: number;
+}
+
+/** The messages for a rewrite of chosen paragraphs. */
+export function rewriteMessages(a: AskedRewrite): { messages: Message[]; parts: Part[] } {
+  const system = [WHO, REWRITE(a.count), FORMAT, LOOKUP(ROUNDS[a.tier], a.meaning)].join("\n\n");
+  const note = `# Their note: ${a.title} (/${a.id}.md)\n\n${a.marked}`;
+  const earlier = a.conversation ? `# Earlier in this session, in this note\n\n${a.conversation}` : "";
+  const request = `# What they ask now, of the marked ${a.count === 1 ? "paragraph" : "paragraphs"}\n\n${a.asked}`;
+  return {
+    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [earlier, note, request].filter(Boolean).join("\n\n") }],
+    parts: [
+      { name: "instructions and tools", detail: "", tokens: estimate(system) + 500 },
+      { name: "study record", detail: "nothing yet", tokens: 0 },
+      { name: "your prompts and Iso's answers", detail: "", tokens: estimate(earlier) },
+      { name: "this note", detail: a.title, tokens: estimate(note) + estimate(request) },
+      { name: "linked notes", detail: "", tokens: 0 },
+    ],
+  };
+}
+
+/** A rewrite's reply, taken apart: the new text for each of the `count` paragraphs (null where it left one as it
+ *  was), and whether it wrote anything outside the marks, which is never used. The limit on what a rewrite can
+ *  touch is here, not in what it was told. */
+export function parseRewrite(reply: string, count: number): { blocks: (string | null)[]; outside: boolean } {
+  const blocks: (string | null)[] = Array.from({ length: count }, () => null);
+  let rest = reply, found = 0;
+  for (const m of reply.matchAll(/⟦(\d+)⟧[ \t]*\n?([\s\S]*?)\n?[ \t]*⟦\/\1⟧/g)) {
+    const k = Number(m[1]) - 1;
+    rest = rest.replace(m[0], "");
+    if (k < 0 || k >= count) continue; // marks for a paragraph that was not chosen
+    blocks[k] = m[2]!.replace(/^\n+|\s+$/g, "");
+    found++;
+  }
+  // One paragraph, and a reply with no marks at all: the reply is that paragraph.
+  if (!found && count === 1 && !/⟦\/?\d+⟧/.test(reply) && reply.trim()) return { blocks: [replyText(reply)], outside: false };
+  return { blocks, outside: rest.replace(/⟦\/?\d+⟧/g, "").trim() !== "" };
 }
 
 /** Iso's reply as the text of a proposal: what a model adds around it against its instructions is taken off. */

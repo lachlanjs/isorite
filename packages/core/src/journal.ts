@@ -64,6 +64,8 @@ interface ProposalBase extends Stamp {
   cost?: Cost;
   /** The notes Iso read to write it, in order. */
   read?: string[];
+  /** Something the person should know about it: that part of the reply was left out, or that it was cut short. */
+  notice?: string;
 }
 /** New text at a point: between the block `after` and the block `before`. */
 export interface Insert extends ProposalBase {

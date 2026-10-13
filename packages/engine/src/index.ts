@@ -11,4 +11,4 @@ export type { Call, Message, ProviderConfig, Reply, Tier, ToolCall, ToolDef, Usa
 export { Lookup } from "./lookup.ts";
 export type { How, Similar, Step } from "./lookup.ts";
 export { ROUNDS } from "./loop.ts";
-export { HERE, estimate } from "./iso.ts";
+export { CLOSE, HERE, OPEN, estimate, parseRewrite } from "./iso.ts";

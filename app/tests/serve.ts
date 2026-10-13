@@ -28,7 +28,12 @@ async function provider(): Promise<void> {
     res.writeHead(200, { "content-type": "text/event-stream" });
     const data = (o: unknown) => res.write(`data: ${JSON.stringify(o)}\n\n`);
     const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-    if (asked.includes("look") && !looked) {
+    if (user.includes("⟦1⟧")) {
+      // A rewrite: the first chosen paragraph comes back changed, with a remark outside the marks that must be dropped;
+      // "drop" takes the second out.
+      data({ choices: [{ delta: { content: "Here is the rewrite.\n⟦1⟧\nEntropy is the average surprise of a source, in **bits**.\n⟦/1⟧\n" } }] });
+      if (asked.includes("drop")) data({ choices: [{ delta: { content: "⟦2⟧\n⟦/2⟧" } }] });
+    } else if (asked.includes("look") && !looked) {
       data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "read_note", arguments: JSON.stringify({ id: "/basics/surprise.md" }) } }] } }] });
     } else {
       const pieces = REPLY.match(/[\s\S]{1,12}/g)!;

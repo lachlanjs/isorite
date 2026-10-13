@@ -48,15 +48,12 @@ export interface SearchHit {
   snippet: string;
 }
 
-/** A request to Iso for new text at a point of a note: between the block `after` and the block `before`. */
-export interface AskRequest {
-  note: string;
-  form: "insert";
-  after: Anchor | null;
-  before: Anchor | null;
-  asked: string;
-  tier: Tier;
-}
+/** A request to Iso in a note. The form decides where its text may go, whatever it writes. */
+export type AskRequest =
+  /** New text at a point: between the block `after` and the block `before`. */
+  | { note: string; form: "insert"; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier }
+  /** These blocks rewritten, and nothing else. */
+  | { note: string; form: "rewrite"; blocks: Anchor[]; asked: string; tier: Tier };
 
 /** What can be set, as the app may know it. The key itself is never sent back. */
 export interface Settings {
@@ -72,7 +69,7 @@ export type EngineEvent =
   /** An entry was added to a note's journal. */
   | { type: "journal"; id: string; entry: Entry }
   /** Iso was asked. Every request ends in exactly one of iso-done, iso-stopped, iso-failed. */
-  | { type: "iso-start"; request: string; note: string; asked: string; after: Anchor | null; before: Anchor | null; tier: Tier }
+  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; blocks: Anchor[] } }
   /** Iso looked something up. */
   | { type: "iso-step"; request: string; note: string; step: Step }
   /** A piece of its reply. `again`: what came before was not the reply; start over. */
@@ -98,8 +95,8 @@ export interface Api {
   stop(request: string): Promise<void>;
   /** Write a proposal into its note. The note's file changes here and nowhere else on Iso's account. */
   keep(id: string, proposal: string): Promise<Saved>;
-  /** Your edit to a proposal's text before keeping it. */
-  revise(id: string, proposal: string, text: string): Promise<void>;
+  /** Your edit to a proposal before keeping it: its text, or for a rewrite the text of each of its blocks. */
+  revise(id: string, proposal: string, text: string | string[]): Promise<void>;
   /** Take a proposal away. It stays in the journal. */
   discard(id: string, proposal: string): Promise<void>;
   settings(): Promise<Settings>;

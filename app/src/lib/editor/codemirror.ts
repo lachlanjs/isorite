@@ -31,10 +31,10 @@ export interface EditorOptions {
   placeholder?: string;
   /** A link to a note was followed (Ctrl or Cmd and a click): its id. */
   onFollow?: (id: string) => void;
-  /** Iso was asked for (Ctrl or Cmd and Enter): the line the cursor is on, from 0. */
-  onAsk?: (line: number) => void;
-  /** The cursor moved: the line it is on, from 0. */
-  onCursor?: (line: number) => void;
+  /** Iso was asked for (Ctrl or Cmd and Enter): the lines the selection runs over, from 0 (the same line twice for a bare cursor). */
+  onAsk?: (from: number, to: number) => void;
+  /** The cursor or the selection moved: the lines it runs over, from 0. */
+  onCursor?: (from: number, to: number) => void;
   /** Draws a block laid over the text (overlays.ts). */
   mountOverlay?: Mount;
 }
@@ -73,6 +73,12 @@ const highlight = HighlightStyle.define([
   { tag: tags.quote, color: "var(--text-soft)", fontStyle: "italic" },
 ]);
 
+/** The lines the main selection runs over, from 0. A selection that ends at the very start of a line does not count that line. */
+function selected(state: EditorState): [from: number, to: number] {
+  const r = state.selection.main, a = state.doc.lineAt(r.from), b = state.doc.lineAt(r.to);
+  return [a.number - 1, (r.empty || r.to > b.from || b.number === a.number ? b.number : b.number - 1) - 1];
+}
+
 export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorView {
   const state = EditorState.create({
     doc: opts.doc,
@@ -93,7 +99,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       EditorView.contentAttributes.of({ "aria-label": opts.label, spellcheck: "true", autocapitalize: "sentences", autocorrect: "on" }),
       keymap.of([
         { key: "Mod-s", preventDefault: true, run: () => { opts.onSave(); return true; } },
-        { key: "Mod-Enter", preventDefault: true, run: (view) => { opts.onAsk?.(view.state.doc.lineAt(view.state.selection.main.head).number - 1); return Boolean(opts.onAsk); } },
+        { key: "Mod-Enter", preventDefault: true, run: (view) => { opts.onAsk?.(...selected(view.state)); return Boolean(opts.onAsk); } },
         ...formatKeymap,
         ...closeBracketsKeymap,
         ...completionKeymap,
@@ -115,7 +121,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       }),
       EditorView.updateListener.of((u) => {
         if (u.docChanged) opts.onChange(u.state.doc.toString());
-        if (opts.onCursor && (u.selectionSet || u.docChanged)) opts.onCursor(u.state.doc.lineAt(u.state.selection.main.head).number - 1);
+        if (opts.onCursor && (u.selectionSet || u.docChanged)) opts.onCursor(...selected(u.state));
       }),
     ],
   });

@@ -20,6 +20,10 @@ export type Mount = (el: HTMLElement, key: string) => () => void;
 
 export const setOverlays = StateEffect.define<Overlay[]>();
 
+/** Lines of the note marked for what Iso is doing with them: chosen for a rewrite, or to be replaced by one. */
+export interface LineMark { from: number; to: number; kind: "picked" | "old" }
+export const setLineMarks = StateEffect.define<LineMark[]>();
+
 class OverlayWidget extends WidgetType {
   private down: (() => void) | null = null;
   constructor(readonly key: string, readonly mount: Mount) { super(); }
@@ -53,5 +57,24 @@ export function overlays(mount: Mount): Extension {
     },
     provide: (f) => EditorView.decorations.from(f, (v) => v.decos),
   });
-  return [field, EditorView.theme({ ".cm-overlay": { cursor: "default", userSelect: "text" } })];
+  const marks = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update(value, tr) {
+      for (const e of tr.effects) {
+        if (!e.is(setLineMarks)) continue;
+        const doc = tr.state.doc, out = [];
+        for (const m of e.value) for (let n = Math.max(1, m.from + 1); n <= Math.min(doc.lines, m.to); n++) out.push(Decoration.line({ class: `cm-iso-${m.kind}` }).range(doc.line(n).from));
+        return Decoration.set(out, true);
+      }
+      return tr.docChanged ? value.map(tr.changes) : value;
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  });
+  return [field, marks, EditorView.theme({
+    ".cm-overlay": { cursor: "default", userSelect: "text" },
+    // Chosen for Iso to rewrite: yours, so lattice. To be replaced if the rewrite is kept: struck, as on the boards.
+    ".cm-iso-picked": { background: "var(--lattice-soft)", boxShadow: "-10px 0 0 var(--lattice-soft), -13px 0 0 var(--lattice), 10px 0 0 var(--lattice-soft)" },
+    ".cm-iso-old": { textDecoration: "line-through", color: "var(--text-faint)" },
+    ".cm-iso-old *": { color: "var(--text-faint) !important" },
+  })];
 }

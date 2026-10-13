@@ -6,7 +6,7 @@
   import type { EditorView } from "@codemirror/view";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { createEditor, setText } from "$lib/editor/codemirror.ts";
-  import { setOverlays, type Overlay } from "$lib/editor/overlays.ts";
+  import { setLineMarks, setOverlays, type LineMark, type Overlay } from "$lib/editor/overlays.ts";
   import type { NoteIso } from "$lib/iso.svelte.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
   import IsoBlock from "./IsoBlock.svelte";
@@ -19,13 +19,11 @@
   // The source shows the whole file; the live preview shows the text under the frontmatter.
   const head = $derived(source ? 0 : iso.head);
 
-  /** Iso's blocks, each before a line of what the editor shows. */
-  const blocks = $derived.by((): Overlay[] => {
-    const out: Overlay[] = iso.proposals.map((p) => ({ key: `p:${p.id}`, line: iso.lineOf(p) - head }));
-    if (iso.asking) out.push({ key: "asking", line: iso.asking.line - head });
-    if (iso.failed) out.push({ key: "failed", line: iso.failed.line - head });
-    if (iso.prompt !== null) out.push({ key: "prompt", line: iso.prompt - head });
-    return out.map((o) => ({ ...o, line: Math.max(0, o.line) })).sort((a, b) => a.line - b.line);
+  /** Iso's blocks, each before a line of what the editor shows, and the lines it marks. */
+  const laid = $derived.by(() => {
+    const blocks: Overlay[] = iso.layout.blocks.map((b) => ({ key: b.key, line: Math.max(0, b.line - head) })).sort((a, b) => a.line - b.line);
+    const within = (kind: LineMark["kind"]) => (l: { from: number; to: number }): LineMark => ({ kind, from: Math.max(0, l.from - head), to: l.to - head });
+    return { blocks, marks: [...iso.layout.picked.map(within("picked")), ...iso.layout.old.map(within("old"))] };
   });
 
   onMount(() => {
@@ -38,9 +36,9 @@
       onSave: () => { void note.save(); },
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
       onFollow: (id) => { void goto(noteHref(id)); },
-      // Ctrl+Enter: ask Iso for text under the paragraph the cursor is in.
-      onAsk: (line) => iso.promptAt(line + (source ? 0 : iso.head)),
-      onCursor: (line) => { iso.cursor = line + (source ? 0 : iso.head); },
+      // Ctrl+Enter: with a bare cursor, text under its paragraph; with a selection, a rewrite of what it touches.
+      onAsk: (from, to) => { const h = source ? 0 : iso.head; iso.promptAt(from + h, to + h, !made.state.selection.main.empty); },
+      onCursor: (from, to) => { const h = source ? 0 : iso.head; iso.cursor = { from: from + h, to: made.state.selection.main.empty ? from + h : to + h + 1 }; },
       mountOverlay: (el, key) => {
         const block = mount(IsoBlock, { target: el, props: { iso, key } });
         return () => { void unmount(block); };
@@ -58,8 +56,8 @@
 
   // The blocks are placed again whenever the note or what Iso has in it changes.
   $effect(() => {
-    const list = blocks;
-    if (view) view.dispatch({ effects: setOverlays.of(list) });
+    const { blocks, marks } = laid;
+    if (view) view.dispatch({ effects: [setOverlays.of(blocks), setLineMarks.of(marks)] });
   });
 </script>
 

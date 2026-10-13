@@ -32,9 +32,13 @@ const TYPES: Record<string, string> = {
 const Edit = z.object({ base: z.string().max(64), text: z.string() }).strict();
 const Make = z.object({ text: z.string() }).strict();
 const Anchor = z.object({ text: z.string(), nth: z.number().int().min(0) }).strict();
-const Ask = z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: z.enum(["low", "mid", "max"]) }).strict();
+const Tier = z.enum(["low", "mid", "max"]);
+const Ask = z.discriminatedUnion("form", [
+  z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
+  z.object({ note: z.string(), form: z.literal("rewrite"), blocks: z.array(Anchor).min(1).max(40), asked: z.string(), tier: Tier }).strict(),
+]);
 const Named = z.object({ proposal: z.string().max(64) }).strict();
-const Revised = z.object({ proposal: z.string().max(64), text: z.string() }).strict();
+const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
 const Key = z.object({ key: z.string().nullable() }).strict();
 
 export function createApp({ api, token, loopback, web, allowHosts = [] }: ServerOptions): Hono {

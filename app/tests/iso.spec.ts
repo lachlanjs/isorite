@@ -169,3 +169,56 @@ test("a prompt sent twice in a hurry is asked once", async ({ page }) => {
   const journal = await (await page.request.get(`api/journal?id=${id}`)).json() as { kind: string }[];
   expect(journal.filter((e) => e.kind === "proposal")).toHaveLength(1);
 });
+
+test("chosen paragraphs are rewritten and nothing else: the old is struck, the new waits under it, and keeping changes only those", async ({ page }) => {
+  const { id, text } = await open(page, "rewrite");
+  // Select the first paragraph and ask.
+  await editor(page).getByText("The average surprise of a source.").click();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Shift+End");
+  if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
+  else await page.keyboard.press("Control+Enter");
+  const field = page.getByRole("textbox", { name: "Ask Iso" });
+  await expect(field).toHaveAttribute("placeholder", "say how Iso should rewrite the paragraph chosen");
+  await expect(page.locator(".cm-iso-picked")).toHaveText("The average surprise of a source.");
+  await field.fill("say the unit");
+  await field.press("Enter");
+
+  const block = page.locator(".between[data-form=rewrite]");
+  await expect(block).toContainText("Entropy is the average surprise of a source, in bits.");
+  await expect(block).toContainText("Iso also wrote outside the paragraphs you chose. That part was left out.");
+  await expect(block).not.toContainText("Here is the rewrite.");
+  await expect(page.locator(".cm-iso-old")).toHaveText("The average surprise of a source.");
+  expect(onDisk(id)).toBe(text);
+  await look(page, "rewrite");
+
+  await block.getByRole("button", { name: "keep" }).click();
+  await expect(page.locator(".between")).toHaveCount(0);
+  await expect(page.locator(".cm-iso-old")).toHaveCount(0);
+  expect(onDisk(id)).toBe(text.replace("The average surprise of a source.", "Entropy is the average surprise of a source, in **bits**."));
+});
+
+test("a rewrite of two paragraphs can take one out, and is edited block by block before it is kept", async ({ page }) => {
+  const { id, text } = await open(page, "rewrite-two");
+  await editor(page).getByText("The average surprise of a source.").click();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Control+Shift+End");
+  if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
+  else await page.keyboard.press("Control+Enter");
+  const field = page.getByRole("textbox", { name: "Ask Iso" });
+  await expect(field).toHaveAttribute("placeholder", "say how Iso should rewrite the 2 paragraphs chosen");
+  await field.fill("say the unit and drop the second");
+  await field.press("Enter");
+
+  const blocks = page.locator(".between[data-form=rewrite]");
+  await expect(blocks).toHaveCount(2);
+  await expect(blocks.nth(1)).toContainText("The paragraph above is taken out.");
+  await expect(page.locator(".cm-iso-old")).toHaveCount(2);
+  // The buttons are on the last block, for the whole rewrite.
+  await expect(blocks.nth(0).getByRole("button", { name: "keep" })).toHaveCount(0);
+  await blocks.nth(1).getByRole("button", { name: "edit" }).click();
+  await blocks.nth(0).getByRole("textbox", { name: "Iso's text, to edit" }).fill("Entropy, in bits.");
+  await blocks.nth(1).getByRole("button", { name: "keep" }).click();
+  await expect(page.locator(".between")).toHaveCount(0);
+  expect(onDisk(id)).toBe(text.replace("The average surprise of a source.\n\nIt is largest when every symbol is equally likely.\n", "Entropy, in bits.\n"));
+});
