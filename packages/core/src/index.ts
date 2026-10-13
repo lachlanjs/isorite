@@ -6,6 +6,7 @@ export { Bundle, Concept, Directory, OKF_VERSION, citeKind } from "./bundle.ts";
 export type { Cite, FileEntry, Issue, IssueCode, Link, Trust } from "./bundle.ts";
 export { FrontmatterError, dumpFrontmatter, frontmatterText, parseYaml, splitFrontmatter } from "./frontmatter.ts";
 export type { Meta } from "./frontmatter.ts";
+export { editFrontmatter, spliceText, splitSource } from "./source.ts";
 export { RATINGS, headings, linkRefs, rating, section, slugify } from "./markdown.ts";
 export type { Heading, Rating } from "./markdown.ts";
 export { cmp, cmpTuple, contentHash, floatRepr, iso, pyRepr, sha256, strip, text, toTime } from "./text.ts";
