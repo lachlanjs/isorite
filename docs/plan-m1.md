@@ -88,3 +88,31 @@ Not carried over from the editor: pins, marked places and suggestions. They belo
 - **Untangling the editor.** rdstudio's live preview leans on its 1,900-line stylesheet and its Markdown renderer. Carrying it over cleanly is the largest piece of work here.
 - **The save interval and the journal.** If 1.5 seconds makes the journal grow too fast, the interval lengthens or runs of saves are folded when written. The measurement decides.
 - **Svelte.** Every `.svelte` file is checked with the Svelte tool before it is committed.
+
+## 7. What was built (2026-10-13)
+
+Everything in sections 1 and 2, on the branch `m1-shell`.
+
+**Checked:**
+
+- 334 tests pass: 280 in the core, 14 in the engine, 13 in the server, 27 in the editor.
+- 24 browser tests pass: six tests, each at 1280 and 390 px, on lapis and on quartz. They write a note with a displayed equation, inline maths and a `requires` link, reload it, and read its journal; narrow the list; edit the details and check only those lines of the file changed; meet a change made elsewhere and take each side of the choice; and close a tab with unsaved text and find it again.
+- The type check and `svelte-check` are clean. Every `.svelte` file went through the Svelte tool.
+- `isorite serve` was started on the real, empty base at `~/Repositories/information-theory` and answered.
+- I looked at the screenshots of the notes list, a note, the details, the choice and the parts page on both grounds and both widths.
+
+**Where it departs from the plan:**
+
+- **No OpenAPI description and no generated client.** The app's client is 50 lines written against the `Api` interface the engine exports, so the two ends share one set of types. Reasoned in `architecture.md`, section 1.
+- **Opening a note enters it in its journal** if the journal has not seen it, as found (`who: external`, `why: start`). Section 3 of the plan said outside changes are found on read or save; this is that, applied to a note older than its journal.
+- **Following a link** is Ctrl or Cmd and a click. A plain click puts the cursor in the link, as in any editor.
+
+**Not checked, or not done:**
+
+- Nobody has written a real note in it yet. The journal's growth is a model (see `architecture.md`, section 14), not a measurement of you writing.
+- Firefox and Safari. The tests run in Chromium only. The title wraps by `field-sizing`, which Firefox may not have; there it would clip a long title, not break.
+- A phone itself. 390 px is a narrow Chromium window with touch on.
+- There is no toolbar for formatting on a phone; rdstudio had one. Formatting is by keyboard (Ctrl+B, Ctrl+I) or by typing Markdown.
+- Pictures, artifacts and Mermaid diagrams in a note show as their Markdown.
+- `npm audit` reports three low-severity findings, all from `cookie` under SvelteKit, which is used only to build.
+- The fonts are addressed from the site's root (`/fonts/…`), which is right for `isorite serve` and will need changing for Tauri.

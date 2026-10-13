@@ -1,0 +1,164 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { expect, test, type Page } from "@playwright/test";
+import { NOTES } from "./serve.ts";
+
+type Entry = { kind: string; why?: string; who: string; text?: string };
+
+const editor = (page: Page) => page.getByRole("textbox", { name: "The note", exact: true });
+const saved = (page: Page) => expect(page.getByRole("status")).toHaveText("saved");
+const file = async (page: Page, id: string) => ((await (await page.request.get(`api/note?id=${id}`)).json()) as { text: string }).text;
+const journal = async (page: Page, id: string) => (await (await page.request.get(`api/journal?id=${id}`)).json()) as Entry[];
+/** A screenshot to be looked at, and a check that nothing runs off the side of the page. */
+async function look(page: Page, name: string) {
+  await page.screenshot({ path: `test-results/screens/${test.info().project.name}-${name}.png`, fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} is no wider than the window`).toBe(true);
+}
+
+test("a note with maths and a typed link is written, saved, and there when reopened", async ({ page }) => {
+  const name = test.info().project.name, id = `basics/entropy-${name}`;
+  await page.goto("");
+  await expect(page.getByRole("link", { name: "Surprise" })).toBeVisible();
+  await look(page, "notes");
+
+  await page.getByRole("button", { name: "new note", exact: true }).click();
+  await page.getByPlaceholder("Entropy").fill(`Entropy ${name}`);
+  await page.getByLabel("folder").fill("basics");
+  await expect(page.getByText(`${id}.md`)).toBeVisible();
+  await page.getByRole("button", { name: "make it" }).click();
+
+  await expect(page.getByLabel("Title")).toHaveValue(`Entropy ${name}`);
+  await editor(page).click();
+  await page.keyboard.type("The average surprise of a source.\n\n$$\nH = -\\sum_x p(x) \\log p(x)\n$$\n\nIt rests on [[Surpr");
+  await page.getByRole("option", { name: /Surprise/ }).click();
+  // The link's kind, set on the link without touching its Markdown: Alt-1 is "requires".
+  await page.keyboard.press("Alt+1");
+  await page.keyboard.type(" and inline $p(x)$ too.");
+  await saved(page);
+  expect(await file(page, id)).toContain('[Surprise](/basics/surprise.md "requires")');
+
+  await page.reload();
+  await expect(page.getByLabel("Title")).toHaveValue(`Entropy ${name}`);
+  await expect(page.locator(".cm-lp-maths .katex-display")).toBeVisible();
+  await expect(page.locator(".cm-lp-imaths .katex")).toBeVisible();
+  await expect(page.locator(".cm-lp-link")).toHaveText("Surprise");
+  await expect(page.getByText("](/basics/surprise.md")).toHaveCount(0); // the markup is hidden away from the cursor
+  await look(page, "note");
+
+  // The journal: the note began as yours, and every later entry is an edit of yours that replays to the file.
+  const entries = await journal(page, id);
+  expect(entries[0]).toMatchObject({ kind: "change", why: "start", who: "you" });
+  expect(entries.length).toBeGreaterThan(1);
+  expect(entries.slice(1).every((e) => e.kind === "change" && e.why === "edit" && e.who === "you")).toBe(true);
+
+  // The header says where you are; the link in the list leads back here.
+  await expect(page.locator("header .path")).toHaveText(`information-theory/Entropy ${name}`);
+  await page.getByRole("navigation", { name: "Views" }).getByRole("link", { name: "notes" }).click();
+  await page.getByRole("link", { name: `Entropy ${name}` }).click();
+  await expect(page.getByLabel("Title")).toHaveValue(`Entropy ${name}`);
+});
+
+test("the list narrows as you type, by title and by what the notes say", async ({ page }) => {
+  await page.goto("");
+  const find = page.getByRole("searchbox", { name: "Find a note" });
+  await find.fill("bit");
+  await expect(page.getByRole("link", { name: /The bit/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Surprise/ })).toHaveCount(0);
+  await find.fill("coin toss");
+  await expect(page.getByText("in the text")).toBeVisible();
+  await expect(page.getByRole("link", { name: /The bit/ })).toBeVisible();
+  await find.fill("zzzz");
+  await expect(page.getByText("No note matches.")).toBeVisible();
+});
+
+test("the details are hidden until asked for, and change only their own lines of the file", async ({ page }) => {
+  await page.goto("#/n/basics/bit");
+  await expect(page.locator(".cm-lp-table table")).toBeVisible(); // a table is drawn as one
+  const before = await file(page, "basics/bit");
+  await page.evaluate(() => localStorage.removeItem("isorite.details"));
+  await expect(page.getByLabel("description")).toHaveCount(0);
+  await page.getByRole("button", { name: "details" }).click();
+  await expect(page.getByLabel("tags")).toHaveValue("units");
+  const said = `Said on ${test.info().project.name}.`;
+  await page.getByLabel("description").fill(said);
+  await saved(page);
+  const after = await file(page, "basics/bit");
+  expect(after).toContain(`description: ${said}`);
+  expect(after).toContain("# kept as written\ntags: [units]"); // the comment and the other fields are as they were
+  expect(after.split("---\n").at(-1)).toBe(before.split("---\n").at(-1)); // and so is the body
+  await look(page, "details");
+
+  // The source is the file itself.
+  await page.getByRole("button", { name: "source" }).click();
+  await expect(page.getByRole("textbox", { name: "The note's file" })).toContainText("# kept as written");
+  await page.getByRole("button", { name: "details" }).waitFor({ state: "detached" });
+  await page.getByRole("button", { name: "source" }).click();
+  await page.getByRole("button", { name: "details" }).click();
+  await expect(page.getByLabel("description")).toHaveCount(0);
+});
+
+test("a note changed elsewhere while you write is offered as a choice, and nothing is overwritten", async ({ page }) => {
+  const name = test.info().project.name, id = `channels/capacity-${name}`;
+  const made = await page.request.get("api/session").then((r) => r.json()) as { token: string };
+  const mine = `---\ntype: Concept\ntitle: Capacity ${name}\n---\n\nThe most a channel carries.\n`;
+  await page.request.post(`api/note?id=${id}`, { data: { text: mine }, headers: { "x-isorite-token": made.token, Origin: new URL(test.info().project.use.baseURL!).origin } });
+  await page.goto(`#/n/${id}`);
+  await expect(editor(page)).toContainText("The most a channel carries.");
+
+  const theirs = mine + "\nWritten in another editor.\n";
+  writeFileSync(join(NOTES, `${id}.md`), theirs);
+  await editor(page).click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("Typed here meanwhile.");
+  await expect(page.getByRole("alert")).toContainText("changed somewhere else");
+  expect(await file(page, id)).toBe(theirs);
+  await look(page, "choice");
+
+  await page.getByRole("button", { name: "take theirs" }).click();
+  await expect(editor(page)).toContainText("Written in another editor.");
+  await expect(editor(page)).not.toContainText("Typed here meanwhile.");
+  await saved(page);
+  // Their change is in the journal as made elsewhere.
+  expect((await journal(page, id)).map((e) => e.who)).toEqual(["you", "external"]);
+
+  // And the other way: keep what was written here.
+  writeFileSync(join(NOTES, `${id}.md`), mine);
+  await editor(page).click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("Mine stays.");
+  await page.getByRole("button", { name: "keep mine" }).click();
+  await saved(page);
+  expect(await file(page, id)).toContain("Mine stays.");
+});
+
+test("what is typed and not yet saved survives the tab closing", async ({ page, context }) => {
+  const name = test.info().project.name;
+  await page.goto("#/n/basics/surprise");
+  await editor(page).click();
+  await page.keyboard.press("Control+End");
+  // The server stops answering saves; the page is closed before any gets through.
+  await context.route("**/api/note?*", (route) => (route.request().method() === "PUT" ? route.abort() : route.continue()));
+  await page.keyboard.type(`Kept for ${name}.`);
+  await expect(page.getByRole("status")).toContainText("not saved");
+  await page.close();
+  await context.unroute("**/api/note?*");
+  const again = await context.newPage();
+  await again.goto("#/n/basics/surprise");
+  await expect(editor(again)).toContainText(`Kept for ${name}.`);
+  await saved(again);
+  expect(await file(again, "basics/surprise")).toContain(`Kept for ${name}.`);
+});
+
+test("the parts, the pages not built yet, and a note that is not there", async ({ page }) => {
+  await page.goto("#/parts");
+  await expect(page.getByRole("button", { name: "keep" })).toBeVisible();
+  await look(page, "parts");
+  await page.goto("#/atlas");
+  await expect(page.getByText("It comes in milestone 3.")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Views" }).getByRole("link", { name: "atlas" })).toHaveAttribute("aria-current", "page");
+  await look(page, "atlas");
+  await page.goto("#/study");
+  await expect(page.getByText("It comes in milestone 4.")).toBeVisible();
+  await page.goto("#/n/no/such-note");
+  await expect(page.getByText("There is no note at")).toBeVisible();
+});
