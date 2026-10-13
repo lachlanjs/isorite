@@ -17,7 +17,7 @@
   const VIEWS = [["atlas", resolve("/atlas")], ["notes", resolve("/notes")], ["study", resolve("/study")]] as const;
   // A note belongs to notes; the parts page to nothing.
   const view = $derived(page.route.id === "/atlas" ? "atlas" : page.route.id === "/study" ? "study" : page.route.id === "/parts" ? "" : "notes");
-  const inNote = $derived(page.route.id === "/n/[...id]");
+  const inNote = $derived(page.route.id === "/n/[...id]" || page.route.id === "/draft/[id]");
 </script>
 
 <svelte:head><title>{inNote && app.here ? `${app.here} · isorite` : "isorite"}</title></svelte:head>

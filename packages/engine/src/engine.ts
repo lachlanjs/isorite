@@ -6,8 +6,8 @@ import {
   Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, blocks, change, findAnchor, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written,
   type Cost, type Entry, type FileEntry, type Insert, type Proposal, type Rewrite, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, type Api, type AskRequest, type ContextReport, type EngineEvent, type Listing, type NoteSource, type Saved, type SearchHit, type Session, type Settings } from "./api.ts";
-import { CLOSE, HERE, OPEN, conversation, estimate, exchanges, insertMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
+import { Conflict, EngineError, type Api, type AskRequest, type ContextReport, type DraftSummary, type EngineEvent, type Listing, type NoteSource, type Saved, type SearchHit, type Session, type Settings } from "./api.ts";
+import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, insertMessages, noteMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { rounds } from "./loop.ts";
 import { Lookup, type Similar } from "./lookup.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
@@ -38,7 +38,15 @@ export interface EngineOptions {
 }
 
 /** The longest request and the longest reply asked for, in characters and tokens. */
-export const MAX_ASKED = 4000, REPLY_TOKENS = 2500;
+export const MAX_ASKED = 4000, REPLY_TOKENS = 2500, NOTE_TOKENS = 6000;
+
+/** Notes for Iso that are not in the base yet: files of the study base, under this prefix wherever notes are named. */
+export const DRAFT_PREFIX = "@draft/", DRAFT_DIR = "drafts";
+export const isDraftId = (id: string): boolean => id.startsWith(DRAFT_PREFIX);
+/** A note's id without the prefix that says which folder of the study base it is in. */
+const bare = (id: string): string => (isStudyId(id) ? id.slice(STUDY_PREFIX.length) : isDraftId(id) ? id.slice(DRAFT_PREFIX.length) : id);
+/** In the knowledge base itself: neither an exercise nor a draft. */
+const inBase = (id: string): boolean => !isStudyId(id) && !isDraftId(id);
 
 const BAD_PART = /^\.|[\0\\:*?"<>|]|^\s|\s$/;
 
@@ -145,7 +153,7 @@ export class Engine implements Api {
   }
 
   async journal(id: string): Promise<Entry[]> {
-    checkNoteId(id.startsWith(STUDY_PREFIX) ? id.slice(STUDY_PREFIX.length) : id);
+    checkNoteId(bare(id));
     if (!this.opts.study) return [];
     return readJournal((await this.opts.study.read(journalPath(id))) ?? "");
   }
@@ -179,9 +187,9 @@ export class Engine implements Api {
 
   /** Where a note's file is: study notes (`@study/…`) are in the study base's own folder of notes. */
   private where(id: string): { files: Files; path: string } {
-    if (isStudyId(id)) {
+    if (!inBase(id)) {
       if (!this.opts.study) throw new EngineError("there is no study base open", 404);
-      return { files: this.opts.study, path: `${STUDY_DIR}/${checkNoteId(id.slice(STUDY_PREFIX.length))}.md` };
+      return { files: this.opts.study, path: `${isDraftId(id) ? DRAFT_DIR : STUDY_DIR}/${checkNoteId(bare(id))}.md` };
     }
     return { files: this.opts.notes, path: `${checkNoteId(id)}.md` };
   }
@@ -201,7 +209,7 @@ export class Engine implements Api {
 
     await files.write(path, text);
     await this.enter(id, entries, change(entries, text, await this.stamp("you"), "edit"));
-    if (!isStudyId(id)) {
+    if (inBase(id)) {
       this.files.set(path, { path, text });
       this.built = this.index = null;
       this.embedSoon();
@@ -232,8 +240,10 @@ export class Engine implements Api {
     if (!http) throw new EngineError("Iso cannot be asked here", 409);
     if (!this.opts.study) throw new EngineError("Iso's text is kept in a study base until you keep it, and none is open (isorite study init)", 409);
     if (isStudyId(req.note)) throw new EngineError("Iso is asked in a note of the knowledge base for now");
+    if (isDraftId(req.note) !== (req.form === "note")) throw new EngineError("a note for Iso is sent whole, and only a note for Iso is");
     if (!TIERS.includes(req.tier)) throw new EngineError("the tier is low, mid or max");
-    const asked = req.asked.trim();
+    // For a note written for Iso, what is asked is the note: its title stands for it in the journal.
+    const asked = req.form === "note" ? this.titleOf(req.note, (await this.readNote(req.note)).text) : req.asked.trim();
     if (!asked) throw new EngineError("say what you want from Iso");
     // Claimed before anything is awaited, so a prompt sent twice (a second Enter, a second tab) is one request.
     if (this.asking.has(req.note)) throw new EngineError("Iso is already writing in this note. Wait for it, or stop it.", 409);
@@ -248,12 +258,12 @@ export class Engine implements Api {
 
     const { messages, all, chosen } = await this.compose(req, asked);
     const olds = chosen.map((k) => all[k]!.text);
-    const maxTokens = req.form === "insert" ? REPLY_TOKENS : Math.max(REPLY_TOKENS, Math.ceil(olds.join("").length / 3) + 1000);
+    const maxTokens = req.form === "insert" ? REPLY_TOKENS : req.form === "note" ? NOTE_TOKENS : Math.max(REPLY_TOKENS, Math.ceil(olds.join("").length / 3) + 1000);
 
     const request = newId(this.opts.clock.now()), abort = new AbortController();
     this.running.set(request, abort);
     this.asking.set(req.note, request);
-    const place = req.form === "insert" ? { form: req.form, after: req.after, before: req.before } : { form: req.form, blocks: req.blocks };
+    const place = req.form === "insert" ? { form: req.form, after: req.after, before: req.before } : req.form === "rewrite" ? { form: req.form, blocks: req.blocks } : { form: req.form };
     this.publish({ type: "iso-start", request, note: req.note, asked, tier: req.tier, place });
     const lookup = new Lookup(this.bundle, req.note, this.similar);
     // The request returns at once; the rest happens as events, and ends in exactly one of done, stopped, failed.
@@ -269,10 +279,11 @@ export class Engine implements Api {
         const notices: string[] = got.cut ? ["The reply was cut off at its length limit. Ask for less at once."] : [];
         // What it wrote is fitted to the form here: this, not its instructions, is what limits where its text can go.
         let body: Pick<Insert, "form" | "after" | "before" | "text"> | Pick<Rewrite, "form" | "blocks">;
-        if (req.form === "insert") {
-          const reply = replyText(got.text);
+        if (req.form !== "rewrite") {
+          // A note written for Iso is answered with a note: offered whole, under what they wrote.
+          const reply = replyText(got.text).replace(/^#\s+.*\n+/, ""); // a title line, against its instructions: the title is theirs
           if (!reply) throw new EngineError("Iso replied with nothing. Ask again, or at another tier.");
-          body = { form: "insert", after: req.after, before: req.before, text: reply };
+          body = { form: "insert", after: req.form === "insert" ? req.after : null, before: req.form === "insert" ? req.before : null, text: reply };
         } else {
           const parsed = parseRewrite(got.text, chosen.length);
           if (parsed.blocks.every((b, k) => b === null || b === olds[k])) throw new EngineError(parsed.outside ? "Iso replied, but not with a rewrite of the paragraphs you chose, so nothing is offered. Ask for new text at a point instead, or ask again." : "Iso left the paragraphs as they are.");
@@ -315,6 +326,24 @@ export class Engine implements Api {
     const gone = () => new Conflict("the place asked about is no longer in the note", { id: req.note, text, version: hashText(text) });
     const lines = text.split("\n"), all = blocks(text);
     let chosen: number[] = [], keep: number[] = [];
+    if (req.form === "note") {
+      let body = text;
+      try { body = splitFrontmatter(text)[1]; } catch { /* sent as it is */ }
+      if (!body.trim()) throw new EngineError("write what you want from Iso first");
+      // The notes it links to go with it, as far as there is room; the rest Iso reads with its tools.
+      const linked: { id: string; title: string; text: string }[] = [];
+      let room = LINKED_BUDGET;
+      for (const m of body.matchAll(/\]\(\/([^)\s#]+)\.md(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/g)) {
+        const c = this.bundle.concepts.get(decodeURIComponent(m[1]!));
+        if (!c || linked.some((l) => l.id === c.id)) continue;
+        const piece = c.body.trim().slice(0, Math.max(0, room) * 4);
+        if (piece.length < Math.min(c.body.trim().length, 400)) break; // no room for a useful part of it
+        linked.push({ id: c.id, title: c.title, text: piece + (piece.length < c.body.trim().length ? "\n[…cut: read the rest with read_note]" : "") });
+        room -= estimate(piece);
+      }
+      const earlier = await this.exchangesNow();
+      return { ...noteMessages({ tier: req.tier, meaning: Boolean(this.similar), title: this.titleOf(req.note, text), body: windowed(body.split("\n"), [0]), linked, conversation: conversation(earlier), moments: earlier.length }), text, all, chosen };
+    }
     if (req.form === "insert") {
       const at = locate(text, { form: "insert", after: req.after, before: req.before } as Proposal);
       if (!at || at.form !== "insert") throw gone();
@@ -415,10 +444,11 @@ export class Engine implements Api {
   }
 
   async context(note?: string): Promise<ContextReport> {
-    let parts: Part[];
-    if (note && !isStudyId(note)) {
-      ({ parts } = await this.compose({ note, form: "insert", after: null, before: null, asked: "", tier: "mid" }, ""));
-    } else {
+    let parts: Part[] | null = null;
+    // A note for Iso with nothing written in it yet is counted as no note at all.
+    if (note && isDraftId(note)) parts = await this.compose({ note, form: "note", tier: "mid" }, "").then((c) => c.parts, () => null);
+    else if (note && !isStudyId(note)) ({ parts } = await this.compose({ note, form: "insert", after: null, before: null, asked: "", tier: "mid" }, ""));
+    if (!parts) {
       // In no note: the instructions, and the conversation as it would be sent.
       const earlier = await this.exchangesNow();
       ({ parts } = insertMessages({ tier: "mid", meaning: Boolean(this.similar), title: "", id: "", marked: "", unkept: [], conversation: conversation(earlier), moments: earlier.length, asked: "" }));
@@ -431,6 +461,59 @@ export class Engine implements Api {
     const text = this.opts.study ? await this.opts.study.read(recordPath(this.opts.device)) : null;
     for (const e of readRecord(text ?? "")) if (e.event === "iso-unused" && e.session === session) { usd += typeof e.usd === "number" ? e.usd : 0; requests++; }
     return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: { usd, requests } };
+  }
+
+  // ------------------------------------------------------------ notes for Iso
+
+  async drafts(): Promise<DraftSummary[]> {
+    const study = this.opts.study;
+    if (!study) return [];
+    const out: DraftSummary[] = [];
+    for (const info of await study.list(DRAFT_DIR)) {
+      if (info.dir || !info.name.endsWith(".md")) continue;
+      const id = DRAFT_PREFIX + info.name.slice(0, -3);
+      out.push({ id, title: this.titleOf(id, (await study.read(`${DRAFT_DIR}/${info.name}`)) ?? "") });
+    }
+    return out.sort((a, b) => (a.id < b.id ? 1 : -1)); // ids begin with the time: newest first
+  }
+
+  async createDraft(): Promise<NoteSource> {
+    if (!this.opts.study) throw new EngineError("a note for Iso is kept in a study base until it is a note, and none is open (isorite study init)", 409);
+    const id = DRAFT_PREFIX + newId(this.opts.clock.now()).toLowerCase();
+    return this.createNote(id, "---\ntype: Concept\ntitle: \"\"\n---\n\n");
+  }
+
+  /** The draft's file is removed; its journal stays, as every journal does. */
+  async discardDraft(draft: string): Promise<void> {
+    if (!isDraftId(draft)) throw new EngineError("not a note for Iso");
+    const { files, path } = this.where(draft);
+    await this.one(() => files.remove(path));
+    this.publish({ type: "note-changed", id: draft, version: null, who: "you" });
+  }
+
+  async keepDraft(draft: string, proposal: string, folder: string): Promise<Saved> {
+    if (!isDraftId(draft)) throw new EngineError("not a note for Iso");
+    const { p } = await this.waiting(draft, proposal);
+    const source = await this.readNote(draft);
+    const title = this.titleOf(draft, source.text);
+    const name = title.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "");
+    if (!name || title === bare(draft)) throw new EngineError("give the note a title before keeping it");
+    const id = [folder.trim().replace(/^\/+|\/+$/g, ""), name].filter(Boolean).join("/");
+    // The note begins as its title alone, yours; Iso's text is then offered in it and kept, so its journal says
+    // who wrote what and what was asked, as for any text of Iso's.
+    await this.createNote(id, `---\ntype: Concept\ntitle: ${JSON.stringify(title)}\n---\n`);
+    let asked = source.text;
+    try { asked = splitFrontmatter(source.text)[1].trim(); } catch { /* the whole of it */ }
+    const copy = await this.one(async () => {
+      const entry = { ...p, ...(await this.stamp(p.who)), asked, after: null, before: null } as Proposal;
+      await this.enter(id, await this.journal(id), entry);
+      return entry;
+    });
+    const kept = await this.keep(id, copy.id);
+    // The draft has become the note: it is settled in its own journal, and its file goes.
+    await this.one(async () => this.enter(draft, await this.journal(draft), { ...(await this.stamp("you")), kind: "discard", proposal }));
+    await this.discardDraft(draft);
+    return kept;
   }
 
   async stop(request: string): Promise<void> {
@@ -457,7 +540,7 @@ export class Engine implements Api {
       if (text === null) throw new EngineError("the paragraphs this would rewrite are no longer in the note", 409);
       await files.write(path, text);
       await this.enter(id, entries, change(entries, text, await this.stamp("you"), "keep", { proposal }));
-      if (!isStudyId(id)) { this.files.set(path, { path, text }); this.built = this.index = null; this.embedSoon(); }
+      if (inBase(id)) { this.files.set(path, { path, text }); this.built = this.index = null; this.embedSoon(); }
       const version = hashText(text);
       this.publish({ type: "note-changed", id, version, who: "you" });
       return { id, text, version, changed: true };

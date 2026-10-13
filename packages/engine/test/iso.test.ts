@@ -348,3 +348,60 @@ test("a long note is cut to its budget round the place asked about, keeping its 
   // A short note is sent whole.
   expect(windowed(["a", "b"], [0])).toBe("a\nb");
 });
+
+// ------------------------------------------------------------ a note for Iso
+
+test("a note for Iso is a draft outside the base; sent, its reply is kept as a note with its own history, and the draft is gone", async () => {
+  const { engine, ended, notes, study, sent } = await open([{ text: ["# Self-information\n\nThe surprise of one outcome is $-\\log p$, as [Surprise](/basics/surprise.md) says.\n\nYour picture holds."] }]);
+  const draft = await engine.createDraft();
+  expect(draft.id).toMatch(/^@draft\/[0-9a-z]{26}$/);
+  expect([...study.files.keys()].filter((k) => k.startsWith("drafts/"))).toHaveLength(1);
+  expect((await engine.notes()).notes.map((n) => n.id)).toEqual(["basics/entropy", "basics/surprise"]); // not in the base
+  // Nothing written yet: there is nothing to send.
+  await expect(engine.ask({ note: draft.id, form: "note", tier: "mid" })).rejects.toMatchObject({ status: 400 });
+
+  const text = '---\ntype: Concept\ntitle: "Self-information, in my own words"\n---\n\nI think the surprise of an outcome is what [Surprise](/basics/surprise.md "requires") defines. Write it up, and say where I am wrong.\n';
+  const saved = await engine.saveNote(draft.id, { base: draft.version, text });
+  expect(await engine.drafts()).toEqual([{ id: draft.id, title: "Self-information, in my own words" }]);
+  // Only a draft is sent whole, and a draft is sent no other way.
+  await expect(engine.ask({ note: "basics/entropy", form: "note", tier: "mid" })).rejects.toMatchObject({ status: 400 });
+  await expect(engine.ask({ note: draft.id, form: "insert", after: null, before: null, asked: "x", tier: "mid" })).rejects.toMatchObject({ status: 400 });
+
+  const done = await ended((await engine.ask({ note: draft.id, form: "note", tier: "mid" })).request);
+  expect(done).toMatchObject({ type: "iso-done" });
+  // What they wrote went as the request, with the note they linked beside it.
+  const user = String(sent[0]!.messages[1]!.content);
+  expect(user).toContain('# What they wrote for you, under the title "Self-information, in my own words"');
+  expect(user).toContain("# The notes they linked\n\n## Surprise (/basics/surprise.md)\n\nAn outcome of probability $p$ carries");
+  expect(String((sent[0]!.messages[0]!.content as { text: string }[])[0]!.text)).toContain("They have written a note\n  *for you*");
+
+  const id = done.type === "iso-done" ? done.proposal : "";
+  await expect(engine.keepDraft("basics/entropy", id, "basics")).rejects.toMatchObject({ status: 400 });
+  const kept = await engine.keepDraft(draft.id, id, "basics");
+  expect(kept.id).toBe("basics/self-information-in-my-own-words");
+  // The title line Iso added against its instructions is gone: the title is theirs.
+  expect(notes.files.get("basics/self-information-in-my-own-words.md")).toBe('---\ntype: Concept\ntitle: "Self-information, in my own words"\n---\n\nThe surprise of one outcome is $-\\log p$, as [Surprise](/basics/surprise.md) says.\n\nYour picture holds.\n');
+  // The new note's journal: begun by you, offered by Iso with what you asked, kept by you.
+  const journal = readJournal(study.files.get("journal/basics/self-information-in-my-own-words.jsonl")!);
+  expect(journal.map((e) => [e.kind, e.who])).toEqual([["change", "you"], ["proposal", "iso:openrouter/anthropic/claude-sonnet-5.5"], ["change", "you"]]);
+  expect(journal[1]).toMatchObject({ asked: expect.stringContaining("Write it up, and say where I am wrong.") });
+  expect(journal[2]).toMatchObject({ why: "keep" });
+  // The draft is gone from the study base; its journal stays.
+  expect(await engine.drafts()).toEqual([]);
+  expect([...study.files.keys()].some((k) => k.startsWith("drafts/"))).toBe(false);
+  expect([...study.files.keys()].some((k) => k.startsWith("journal/@draft/"))).toBe(true);
+  expect((await engine.notes()).notes.map((n) => n.id)).toContain("basics/self-information-in-my-own-words");
+  void saved;
+});
+
+test("a draft needs a title to be kept, and can be thrown away", async () => {
+  const { engine, ended, study } = await open([{ text: ["A note."] }]);
+  const draft = await engine.createDraft();
+  await engine.saveNote(draft.id, { base: draft.version, text: draft.text + "Write something on entropy.\n" });
+  const done = await ended((await engine.ask({ note: draft.id, form: "note", tier: "low" })).request);
+  await expect(engine.keepDraft(draft.id, done.type === "iso-done" ? done.proposal : "", "")).rejects.toMatchObject({ message: "give the note a title before keeping it" });
+  await engine.discardDraft(draft.id);
+  expect(await engine.drafts()).toEqual([]);
+  expect([...study.files.keys()].some((k) => k.startsWith("drafts/"))).toBe(false);
+  await expect(engine.discardDraft("basics/entropy")).rejects.toMatchObject({ status: 400 });
+});

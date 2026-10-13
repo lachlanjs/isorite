@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { NOTES, REPLY, ROOT } from "./serve.ts";
@@ -253,4 +253,57 @@ test("the header counts what Iso would be sent and what the session has cost; th
   await page.keyboard.press("Escape");
   await expect(box).toHaveCount(0);
   await expect(page.locator(".between[data-proposal]")).toBeVisible(); // clearing took nothing out of the note
+});
+
+test("a note for Iso: written outside the base with the notes it rests on, sent, reviewed, and kept as a note", async ({ page }) => {
+  const name = test.info().project.name, title = `Units of information ${name}`, slug = `units-of-information-${name}`;
+  await page.goto("#/notes");
+  await page.getByRole("button", { name: "new note for Iso" }).click();
+  await expect(page.getByText("for Iso · not in your base yet")).toBeVisible();
+  await page.getByLabel("Title").fill(title);
+  const box = page.getByRole("textbox", { name: "The note", exact: true });
+  await box.click();
+  await page.keyboard.type("I think information is counted in bits because of coin tosses. Write this up, resting on [[Surpr");
+  await page.getByRole("option", { name: /Surprise/ }).click();
+  await page.keyboard.type(", and say where I am wrong.");
+  await expect(page.locator(".deck .chip")).toHaveText("Surprise");
+  await expect(page.getByRole("status")).toHaveText("saved, outside your base");
+  await look(page, "draft");
+  // Not in the base: no such note is listed, and nothing was written into the knowledge base.
+  expect(existsSync(join(NOTES, `${slug}.md`))).toBe(false);
+
+  await page.getByRole("button", { name: "send to Iso" }).click();
+  const reply = page.locator(".between .said");
+  await expect(reply.locator("strong")).toHaveText("bits");
+  await expect(page.getByRole("button", { name: "[ show all ]" })).toBeVisible(); // what you wrote is folded above it
+  await expect(page.getByText("mid · $0.012")).toBeVisible();
+  await look(page, "review");
+
+  // Edited in place, then kept in a folder.
+  await page.getByRole("button", { name: "edit" }).click();
+  await page.getByRole("textbox", { name: "Iso's text, to edit" }).fill("Information is counted in **bits**.");
+  await page.getByLabel("Folder").fill("basics");
+  await page.getByRole("button", { name: "keep as a note" }).click();
+  await expect(page.getByLabel("Title")).toHaveValue(title);
+  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Information is counted in bits.");
+  expect(onDisk(`basics/${slug}`)).toBe(`---\ntype: Concept\ntitle: ${JSON.stringify(title)}\n---\n\nInformation is counted in **bits**.\n`);
+  // It is a note now, and no longer a draft.
+  await page.goto("#/notes");
+  await expect(page.getByRole("link", { name: title })).toHaveCount(1);
+  await expect(page.locator(".title.draft", { hasText: title })).toHaveCount(0);
+});
+
+test("a note for Iso can be taken back to be rewritten, or discarded", async ({ page }) => {
+  await page.goto("#/notes");
+  await page.getByRole("button", { name: "new note for Iso" }).click();
+  await page.getByLabel("Title").fill(`Thrown away ${test.info().project.name}`);
+  await page.getByRole("textbox", { name: "The note", exact: true }).click();
+  await page.keyboard.type("Write about noise.");
+  await page.getByRole("button", { name: "send to Iso" }).click();
+  await expect(page.locator(".between .said strong")).toHaveText("bits");
+  await page.getByRole("button", { name: "[ back to what I wrote ]" }).click();
+  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Write about noise.");
+  await page.getByRole("button", { name: "[ discard ]" }).click();
+  await expect(page.getByRole("searchbox", { name: "Find a note" })).toBeVisible();
+  await expect(page.getByText(`Thrown away ${test.info().project.name}`)).toHaveCount(0);
 });

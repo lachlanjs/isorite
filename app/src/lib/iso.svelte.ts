@@ -110,7 +110,9 @@ export class NoteIso {
       // Sent from here: the block is up already and now learns its request's id. Sent from another tab: it is put up.
       if (this.asking && !this.asking.request) { this.asking = { ...this.asking, request: e.request }; return; }
       let line = this.foot, picked: Lines[] = [];
-      if (e.place.form === "insert") {
+      if (e.place.form === "note") {
+        // A note written for Iso: its reply goes under the whole of it.
+      } else if (e.place.form === "insert") {
         const at = locate(this.note.text, { form: "insert", after: e.place.after, before: e.place.before } as Proposal);
         if (at?.form === "insert") line = at.line;
       } else {
@@ -176,6 +178,21 @@ export class NoteIso {
     } catch (e) {
       this.asking = null;
       this.failed = { line: prompt.line, message: (e as Error).message };
+    }
+  }
+
+  /** Send a note written for Iso, whole. The reply is a note to keep in its place. */
+  async send(): Promise<void> {
+    if (this.asking) return;
+    this.failed = null;
+    this.asking = { request: "", asked: "", line: this.foot, picked: [], text: "", steps: [] };
+    try {
+      await this.note.save();
+      const { request } = await app.api.ask({ note: this.note.id, form: "note", tier: this.tier });
+      if (this.asking && !this.asking.request) this.asking = { ...this.asking, request };
+    } catch (e) {
+      this.asking = null;
+      this.failed = { line: this.foot, message: (e as Error).message };
     }
   }
 

@@ -55,6 +55,27 @@ const REWRITE = (n: number) => `# What to write
   write from what you know of the subject, and be exact. Never invent a note,
   a link or a quotation.`;
 
+const NOTE = `# What to write
+
+- They have not asked for text at a place in a note. They have written a note
+  *for you*: what they understand, what they do not, and what they want from
+  you. It is not in their knowledge base. Write the note they ask for, to go
+  into the base in its place.
+- Reply with the note's text and nothing else: Markdown, with no frontmatter
+  and no title line (the title is theirs, and is added). No preamble, no
+  closing remark addressed to them.
+- Write it as a note of theirs: their notation, their level, their language,
+  plain words. As long as the matter needs and no longer. Headings only where
+  the note is long enough to need them.
+- Where their own account is right, build on it in their terms. Where it is
+  wrong or incomplete and they ask to be told, say so in the note, plainly,
+  at the place it matters.
+- Rest it on the notes they linked: read what you need of them, agree with
+  them, and link to them where the new note leans on them.
+- The base is theirs and may be small. Where it does not hold what is asked,
+  write from what you know of the subject, and be exact. Never invent a note,
+  a link or a quotation.`;
+
 const FORMAT = `# How notes work here
 
 - A link to a note is [its title](/its/path.md), with the path exactly as a
@@ -248,6 +269,39 @@ export function parseRewrite(reply: string, count: number): { blocks: (string | 
   // One paragraph, and a reply with no marks at all: the reply is that paragraph.
   if (!found && count === 1 && !/⟦\/?\d+⟧/.test(reply) && reply.trim()) return { blocks: [replyText(reply)], outside: false };
   return { blocks, outside: rest.replace(/⟦\/?\d+⟧/g, "").trim() !== "" };
+}
+
+/** The most of the notes linked from a note for Iso that is sent with it, in tokens: the rest it reads with its tools. */
+export const LINKED_BUDGET = 8000;
+
+export interface AskedNote {
+  tier: Tier;
+  meaning: boolean;
+  title: string;
+  /** What they wrote for Iso. */
+  body: string;
+  /** The notes it links to, as far as there was room: each with its text. */
+  linked: { id: string; title: string; text: string }[];
+  conversation: string;
+  moments?: number;
+}
+
+/** The messages for a note written for Iso. */
+export function noteMessages(a: AskedNote): { messages: Message[]; parts: Part[] } {
+  const system = [WHO.replace("They have asked you for\nsomething at one place in the note they have open.", "This time they have written to you at length."), NOTE, FORMAT, LOOKUP(ROUNDS[a.tier], a.meaning).replace("below there is only the note.", "below there is what they wrote, and the notes they linked.")].join("\n\n");
+  const linked = a.linked.length ? `# The notes they linked\n\n${a.linked.map((l) => `## ${l.title} (/${l.id}.md)\n\n${l.text}`).join("\n\n")}` : "";
+  const earlier = a.conversation ? `# Earlier in this session\n\n${a.conversation}` : "";
+  const note = `# What they wrote for you, under the title "${a.title}"\n\n${a.body}`;
+  return {
+    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [earlier, linked, note].filter(Boolean).join("\n\n") }],
+    parts: [
+      { name: "instructions and tools", detail: "", tokens: estimate(system) + 500 },
+      { name: "study record", detail: "nothing yet", tokens: 0 },
+      { name: "your prompts and Iso's answers", detail: a.moments ? `${a.moments} ${a.moments === 1 ? "moment" : "moments"}` : "", tokens: estimate(earlier) },
+      { name: "this note", detail: a.title, tokens: estimate(note) },
+      { name: "linked notes", detail: a.linked.length ? `${a.linked.length} sent` : "", tokens: estimate(linked) },
+    ],
+  };
 }
 
 /** Iso's reply as the text of a proposal: what a model adds around it against its instructions is taken off. */

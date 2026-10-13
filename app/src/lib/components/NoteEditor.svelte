@@ -11,16 +11,18 @@
   import type { NoteSession } from "$lib/note.svelte.ts";
   import IsoBlock from "./IsoBlock.svelte";
 
-  let { note, iso, source }: { note: NoteSession; iso: NoteIso; source: boolean } = $props();
+  // Without `iso` (a note written for Iso) there is no prompt line and nothing is laid over the text.
+  let { note, iso, source }: { note: NoteSession; iso?: NoteIso; source: boolean } = $props();
 
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
 
   // The source shows the whole file; the live preview shows the text under the frontmatter.
-  const head = $derived(source ? 0 : iso.head);
+  const head = $derived(source || !iso ? 0 : iso.head);
 
   /** Iso's blocks, each before a line of what the editor shows, and the lines it marks. */
   const laid = $derived.by(() => {
+    if (!iso) return { blocks: [], marks: [] };
     const blocks: Overlay[] = iso.layout.blocks.map((b) => ({ key: b.key, line: Math.max(0, b.line - head) })).sort((a, b) => a.line - b.line);
     const within = (kind: LineMark["kind"]) => (l: { from: number; to: number }): LineMark => ({ kind, from: Math.max(0, l.from - head), to: l.to - head });
     return { blocks, marks: [...iso.layout.picked.map(within("picked")), ...iso.layout.old.map(within("old"))] };
@@ -36,13 +38,15 @@
       onSave: () => { void note.save(); },
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
       onFollow: (id) => { void goto(noteHref(id)); },
-      // Ctrl+Enter: with a bare cursor, text under its paragraph; with a selection, a rewrite of what it touches.
-      onAsk: (from, to) => { const h = source ? 0 : iso.head; iso.promptAt(from + h, to + h, !made.state.selection.main.empty); },
-      onCursor: (from, to) => { const h = source ? 0 : iso.head; iso.cursor = { from: from + h, to: made.state.selection.main.empty ? from + h : to + h + 1 }; },
-      mountOverlay: (el, key) => {
-        const block = mount(IsoBlock, { target: el, props: { iso, key } });
-        return () => { void unmount(block); };
-      },
+      ...(iso ? {
+        // Ctrl+Enter: with a bare cursor, text under its paragraph; with a selection, a rewrite of what it touches.
+        onAsk: (from: number, to: number) => { const h = source ? 0 : iso.head; iso.promptAt(from + h, to + h, !made.state.selection.main.empty); },
+        onCursor: (from: number, to: number) => { const h = source ? 0 : iso.head; iso.cursor = { from: from + h, to: made.state.selection.main.empty ? from + h : to + h + 1 }; },
+        mountOverlay: (el: HTMLElement, key: string) => {
+          const block = mount(IsoBlock, { target: el, props: { iso, key } });
+          return () => { void unmount(block); };
+        },
+      } : { placeholder: "Write what you understand, what you do not, and what you want from Iso. [[ links a note it should rest on." }),
     });
     view = made;
     return () => made.destroy();

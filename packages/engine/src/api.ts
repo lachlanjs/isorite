@@ -54,7 +54,12 @@ export type AskRequest =
   /** New text at a point: between the block `after` and the block `before`. */
   | { note: string; form: "insert"; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier }
   /** These blocks rewritten, and nothing else. */
-  | { note: string; form: "rewrite"; blocks: Anchor[]; asked: string; tier: Tier };
+  | { note: string; form: "rewrite"; blocks: Anchor[]; asked: string; tier: Tier }
+  /** A note written for Iso (a draft, `@draft/…`): the draft is what is asked, and the reply is a note to keep in its place. */
+  | { note: string; form: "note"; tier: Tier };
+
+/** A note for Iso that is not in the base yet. */
+export interface DraftSummary { id: string; title: string }
 
 /** What a request to Iso would be sent now, part by part, and what the session has cost. Sizes are estimates
  *  (four characters a token) until a provider's own count replaces them. */
@@ -82,7 +87,7 @@ export type EngineEvent =
   /** An event was added to the study record. */
   | { type: "record"; event: string }
   /** Iso was asked. Every request ends in exactly one of iso-done, iso-stopped, iso-failed. */
-  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; blocks: Anchor[] } }
+  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; blocks: Anchor[] } | { form: "note" } }
   /** Iso looked something up. */
   | { type: "iso-step"; request: string; note: string; step: Step }
   /** A piece of its reply. `again`: what came before was not the reply; start over. */
@@ -112,6 +117,14 @@ export interface Api {
   revise(id: string, proposal: string, text: string | string[]): Promise<void>;
   /** Take a proposal away. It stays in the journal. */
   discard(id: string, proposal: string): Promise<void>;
+  /** The notes for Iso that are waiting outside the base, newest first. */
+  drafts(): Promise<DraftSummary[]>;
+  /** Start a note for Iso. It is a file of the study base, read and saved like any note, under the id it is given. */
+  createDraft(): Promise<NoteSource>;
+  /** Keep Iso's reply to a draft as a note of the knowledge base, in a folder, under the draft's title. The draft is then gone. */
+  keepDraft(draft: string, proposal: string, folder: string): Promise<Saved>;
+  /** Throw a draft away. Its journal stays. */
+  discardDraft(draft: string): Promise<void>;
   /** What Iso would be sent if asked now, in this note (or in none). */
   context(note?: string): Promise<ContextReport>;
   /** Leave the session's earlier exchanges out of what Iso is sent from now on. Nothing is deleted. */
