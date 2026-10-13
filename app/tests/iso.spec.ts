@@ -153,3 +153,19 @@ test("settings are behind the logo: the ground, and a key that goes in and is no
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
 });
+
+test("a prompt sent twice in a hurry is asked once", async ({ page }) => {
+  const { id } = await open(page, "twice");
+  await editor(page).getByText("The average surprise of a source.").click();
+  if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
+  else await page.keyboard.press("Control+Enter");
+  const field = page.getByRole("textbox", { name: "Ask Iso" });
+  await field.fill("say what it is measured in");
+  // Two Enters before the page can have heard anything back.
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".between[data-proposal]")).toHaveCount(1);
+  await expect(page.locator(".between")).toHaveCount(1);
+  const journal = await (await page.request.get(`api/journal?id=${id}`)).json() as { kind: string }[];
+  expect(journal.filter((e) => e.kind === "proposal")).toHaveLength(1);
+});

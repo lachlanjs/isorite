@@ -59,6 +59,8 @@ export class NoteIso {
     if (e.type === "journal") { if (e.id === this.note.id && !this.entries.some((x) => x.id === e.entry.id)) this.entries = [...this.entries, e.entry]; return; }
     if (e.type === "note-changed" || e.note !== this.note.id) return;
     if (e.type === "iso-start") {
+      // Sent from here: the block is up already and now learns its request's id. Sent from another tab: it is put up.
+      if (this.asking && !this.asking.request) { this.asking = { ...this.asking, request: e.request }; return; }
       const at = locate(this.note.text, { form: "insert", after: e.after, before: e.before } as Proposal);
       this.asking = { request: e.request, asked: e.asked, line: at?.form === "insert" ? at.line : this.note.text.split("\n").length, text: "", steps: [] };
       this.failed = null;
@@ -92,16 +94,28 @@ export class NoteIso {
   async ask(asked: string): Promise<void> {
     const line = this.prompt;
     if (line === null || !asked.trim() || this.asking) return;
+    // The prompt line gives way to Iso's block at once, before anything is awaited: a second Enter finds no
+    // prompt to send. (Waiting for the engine's word that it had started let a prompt be sent twice.)
+    this.prompt = null;
+    this.failed = null;
+    this.asking = { request: "", asked, line, text: "", steps: [] };
     try {
       await this.note.save();
-      await app.api.ask({ note: this.note.id, ...insertAt(this.note.text, line), asked, tier: this.tier });
+      const { request } = await app.api.ask({ note: this.note.id, ...insertAt(this.note.text, line), asked, tier: this.tier });
+      if (this.asking && !this.asking.request) this.asking = { ...this.asking, request };
     } catch (e) {
+      this.asking = null;
       this.failed = { line, message: (e as Error).message };
-      this.prompt = null;
     }
   }
 
-  halt(): void { if (this.asking) void app.api.stop(this.asking.request); }
+  /** Stop the request. One that has not been answered with its id yet is stopped as soon as it is. */
+  halt(): void {
+    const a = this.asking;
+    if (!a) return;
+    if (a.request) { void app.api.stop(a.request); return; }
+    const stop = app.on((e) => { if (e.type === "iso-start" && e.note === this.note.id) { stop(); void app.api.stop(e.request); } });
+  }
 
   async keep(p: Proposal, edited?: string): Promise<void> {
     this.busy = p.id;

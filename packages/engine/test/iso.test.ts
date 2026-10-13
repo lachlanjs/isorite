@@ -181,3 +181,24 @@ test("the key is held and forgotten, and never given back", async () => {
   await expect(engine.setKey("two words")).rejects.toMatchObject({ status: 400 });
   expect((await engine.setKey(null)).key).toBe(false);
 });
+
+test("a prompt sent twice is one request: a note is asked one thing at a time", async () => {
+  let release!: () => void;
+  const { engine, ask, ended, journal, sent } = await open([{ text: ["Entropy is ", "measured in bits."], hold: new Promise<void>((r) => { release = r; }) }, { text: ["A second answer."] }]);
+  const [first, second] = await Promise.allSettled([ask(), ask()]);
+  expect(first.status).toBe("fulfilled");
+  expect(second).toMatchObject({ status: "rejected", reason: { status: 409 } });
+  release();
+  await ended(first.status === "fulfilled" ? first.value.request : "");
+  expect(sent).toHaveLength(1);
+  expect(journal().filter((e) => e.kind === "proposal")).toHaveLength(1);
+  // Once it has ended the note can be asked again, and another note could be asked meanwhile.
+  await ended((await engine.ask({ note: "basics/entropy", form: "insert", after: null, before: null, asked: "again", tier: "mid" })).request);
+  expect(journal().filter((e) => e.kind === "proposal")).toHaveLength(2);
+});
+
+test("a request that is refused does not leave the note claimed", async () => {
+  const { engine, ask, ended } = await open([{ text: ["Bits."] }]);
+  await expect(engine.ask({ note: "basics/entropy", form: "insert", after: { text: "Not there.", nth: 0 }, before: { text: "Nor this.", nth: 0 }, asked: "x", tier: "mid" })).rejects.toMatchObject({ status: 409 });
+  expect(await ended((await ask()).request)).toMatchObject({ type: "iso-done" });
+});

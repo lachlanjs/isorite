@@ -72,8 +72,9 @@ export class Engine implements Api {
   /** The newest entry made anywhere in the study base: it decides the session. Undefined until looked for. */
   private last: Pick<Stamp, "at" | "session"> | null | undefined;
   private queue: Promise<unknown> = Promise.resolve();
-  /** Requests to Iso that are running, by id. */
+  /** Requests to Iso that are running, by id, and the note each is for: a note is asked one thing at a time. */
   private readonly running = new Map<string, AbortController>();
+  private readonly asking = new Map<string, string>();
 
   private constructor(opts: EngineOptions) { this.opts = opts; }
 
@@ -209,6 +210,13 @@ export class Engine implements Api {
     if (!TIERS.includes(req.tier)) throw new EngineError("the tier is low, mid or max");
     const asked = req.asked.trim();
     if (!asked) throw new EngineError("say what you want from Iso");
+    // Claimed before anything is awaited, so a prompt sent twice (a second Enter, a second tab) is one request.
+    if (this.asking.has(req.note)) throw new EngineError("Iso is already writing in this note. Wait for it, or stop it.", 409);
+    this.asking.set(req.note, "");
+    try { return await this.begin(req, http, asked); } catch (err) { this.asking.delete(req.note); throw err; }
+  }
+
+  private async begin(req: AskRequest, http: Http, asked: string): Promise<{ request: string }> {
     if (asked.length > MAX_ASKED) throw new EngineError("that is too long to ask at once", 413);
     const key = (await this.opts.secrets?.get(KEY)) ?? null;
     if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
@@ -232,6 +240,7 @@ export class Engine implements Api {
 
     const request = newId(this.opts.clock.now()), abort = new AbortController();
     this.running.set(request, abort);
+    this.asking.set(req.note, request);
     this.publish({ type: "iso-start", request, note: req.note, asked, after: req.after, before: req.before, tier: req.tier });
     const lookup = new Lookup(this.bundle, req.note, this.opts.similar ?? null);
     // The request returns at once; the rest happens as events, and ends in exactly one of done, stopped, failed.
@@ -261,6 +270,7 @@ export class Engine implements Api {
         else this.publish({ type: "iso-failed", request, note: req.note, message: (err as Error).message || "Iso could not answer" });
       } finally {
         this.running.delete(request);
+        this.asking.delete(req.note);
       }
     })();
     return { request };
