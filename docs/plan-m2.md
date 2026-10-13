@@ -1,6 +1,6 @@
 # Milestone 2: Iso in the note
 
-A plan for Lachlan's approval, 2026-10-13. Nothing here is built. Branch: `m2-iso`.
+Approved by Lachlan on 2026-10-13 with the answers in section 4. Branch: `m2-iso`. Steps 1 to 3 of section 5 are built; see section 8.
 
 **Done when:** both ways of asking Iso work against a real model on the information theory base; a test shows a note's file is byte-identical until you keep; and closing the browser with a proposal waiting, then returning, shows the proposal again.
 
@@ -63,6 +63,15 @@ The boards followed: `Desktop-Editor` and `Header-Context` (Iso's text in a note
 6. **Testing against a real model costs money.** The automated tests use a scripted provider and cost nothing. For "done when" I would run each of the three forms once or twice on the mid tier and report the cost; I expect well under a dollar. Say if you want a ceiling.
 7. **The answer / prompt switch.** On `Desktop-Editor` a proposal shows either Iso's answer or your prompt. I would build that as drawn.
 
+### Lachlan's answers (2026-10-13)
+
+1. Ctrl+Enter: agreed.
+2. The tier on the prompt line: agreed, and may change later.
+3. A note for Iso from the notes list for now: fine.
+4. No suggested links for now. When they come, they come from what Iso reads in the knowledge base during the conversation.
+5. Use the key from rdstudio. The field for it is still to be built, **and a settings menu, with the choice of ground (light or dark) in it.**
+6. Test against real models as needed, within the key's $10 limit. Be careful, say if it gets expensive, and work out how Iso's context is managed.
+
 ## 5. Order of work
 
 1. Provider, tiers, prices, the key, with rdstudio's provider tests against a scripted server.
@@ -88,3 +97,22 @@ Each step ends with its tests passing and a commit. I would stop and show you af
 - **The proposal in the editor** is the hardest part: a block that is not in the document, sits between two blocks of it, survives the document changing under it, and becomes editable on request. CodeMirror block widgets do the first three; "edit" is an editor inside the widget.
 - **Size.** This is the largest milestone of the slice, perhaps twice milestone 1. The stop after step 3 is there so a wrong turn is caught early.
 - **Streaming through the event stream** rather than through the request means a second tab sees Iso working too, which is wanted, and that a dropped connection must not lose the proposal, which the journal already guarantees.
+
+## 8. Progress
+
+**Steps 1 to 3, built 2026-10-13.**
+
+- The provider over plain `fetch`, the read-only lookup tools and the loop, in the engine, tested against a scripted provider.
+- Asking at a point: Ctrl+Enter opens a prompt line under the paragraph the cursor is in (on a phone, a field at the foot of the note). The reply arrives between dotted rules, with what Iso is looking up beside `[ stop ]`. Keep, edit, remove, and the answer / prompt switch, as on `Desktop-Editor`.
+- Settings behind the logo: the ground (the system's, lapis, quartz), the provider key (held, replaced or forgotten; never shown again), and which model each tier is.
+- Tested: 27 engine tests and 16 server tests; 44 browser tests (11 tests at two widths on both grounds), among them that the note's file is byte for byte unchanged until keep, and that a waiting proposal, and an edit to it, are there after a reload.
+- One request to a real model (Haiku, through OpenRouter, on a temporary base): answered in 4.5 seconds for $0.004, after one keyword search of its own.
+
+**Not built yet:** the rewrite of selected paragraphs (step 4); the header's count, cost and breakdown, and clearing the conversation (5); search by meaning (6); the note for Iso (7); the run on the information theory base (8).
+
+**Known gaps in what is built:**
+
+- Editing Iso's text is a plain box of Markdown, not the live preview.
+- Iso's conversation is this note's earlier requests in this session, not yet the whole session across notes.
+- Nothing limits how much is sent: a very long note is sent whole. This is part of step 5.
+- While Iso's reply is arriving its Markdown is drawn as it stands, so an unfinished `**` shows for a moment.

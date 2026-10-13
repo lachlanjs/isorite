@@ -4,6 +4,7 @@
   // session's business (note.svelte.ts); this shows how it stands and offers the choice when a save is refused.
   import { onMount } from "svelte";
   import { app } from "$lib/app.svelte.ts";
+  import { NoteIso } from "$lib/iso.svelte.ts";
   import { NoteSession } from "$lib/note.svelte.ts";
   import NoteDetails from "./NoteDetails.svelte";
   import NoteEditor from "./NoteEditor.svelte";
@@ -13,6 +14,7 @@
   // One session for the page's life: the route gives each note its own page ({#key}).
   // svelte-ignore state_referenced_locally
   const note = new NoteSession(id);
+  const iso = new NoteIso(note);
 
   const remembered = (key: string): boolean => { try { return localStorage.getItem(key) === "1"; } catch { return false; } };
   const remember = (key: string, on: boolean) => { try { localStorage.setItem(key, on ? "1" : "0"); } catch { /* not kept */ } };
@@ -22,13 +24,14 @@
   const asSource = $derived(source || note.meta === null);
 
   onMount(() => {
-    void note.open();
+    void note.open().then(() => iso.open());
     const leaving = () => { void note.save(); };
     addEventListener("pagehide", leaving);
     document.addEventListener("visibilitychange", leaving);
     return () => {
       removeEventListener("pagehide", leaving);
       document.removeEventListener("visibilitychange", leaving);
+      iso.close();
       void note.close();
       app.here = "";
       app.saving = null;
@@ -82,7 +85,12 @@
     </div>
     {#if details && !asSource}<NoteDetails {note} />{/if}
 
-    {#key asSource}<NoteEditor {note} source={asSource} />{/key}
+    {#key asSource}<NoteEditor {note} {iso} source={asSource} />{/key}
+
+    <!-- On a phone there is no Ctrl+Enter: a field at the foot opens the prompt where the cursor was (Mobile-Note). -->
+    {#if iso.prompt === null && !iso.asking}
+      <div class="seed"><button class="field" type="button" onclick={() => iso.promptHere()}><span class="faint">›</span><span class="faint">ask Iso here</span></button></div>
+    {/if}
   {/if}
 </article>
 
@@ -98,8 +106,11 @@
   .choice { padding: var(--space-6) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); --edge: var(--rose); }
   .row { display: flex; gap: var(--space-2); }
   .bad { color: var(--rose); }
+  .seed { display: none; }
   @media (max-width: 600px) {
-    .note { padding: 20px 20px 0; }
+    .seed { display: block; position: fixed; left: 0; right: 0; bottom: 84px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--ground-1); z-index: 9; }
+    .seed .field { width: 100%; height: 44px; display: flex; align-items: center; gap: 8px; text-align: left; }
+    .note { padding: 20px 20px 80px; }
     .head { flex-direction: column-reverse; gap: var(--space-1); }
     .tools { align-self: flex-end; padding-top: 0; }
     .title { font-size: 30px; width: 100%; }

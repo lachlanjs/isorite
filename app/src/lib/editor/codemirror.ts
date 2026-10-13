@@ -16,6 +16,7 @@ import { linkCompletion, type LinkTarget } from "./links.ts";
 import { livePreview, livePreviewTheme } from "./livePreview.ts";
 import { mathsSyntax } from "./maths.ts";
 import { noteOf } from "./noteOf.ts";
+import { overlays, type Mount } from "./overlays.ts";
 
 export type { Format, LinkTarget };
 
@@ -30,6 +31,12 @@ export interface EditorOptions {
   placeholder?: string;
   /** A link to a note was followed (Ctrl or Cmd and a click): its id. */
   onFollow?: (id: string) => void;
+  /** Iso was asked for (Ctrl or Cmd and Enter): the line the cursor is on, from 0. */
+  onAsk?: (line: number) => void;
+  /** The cursor moved: the line it is on, from 0. */
+  onCursor?: (line: number) => void;
+  /** Draws a block laid over the text (overlays.ts). */
+  mountOverlay?: Mount;
 }
 
 // Plain source is set in the monospaced face; the live preview in the reading one.
@@ -80,11 +87,13 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       closeBrackets(),
       // Only brackets: closing quotes would get in the way of apostrophes in prose.
       EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["(", "["] } }]),
+      ...(opts.mountOverlay ? [overlays(opts.mountOverlay)] : []),
       linkCompletion(opts.notes),
       placeholder(opts.placeholder ?? "Write the note here. # for a heading, [[ to link to another note, $x$ for maths."),
       EditorView.contentAttributes.of({ "aria-label": opts.label, spellcheck: "true", autocapitalize: "sentences", autocorrect: "on" }),
       keymap.of([
         { key: "Mod-s", preventDefault: true, run: () => { opts.onSave(); return true; } },
+        { key: "Mod-Enter", preventDefault: true, run: (view) => { opts.onAsk?.(view.state.doc.lineAt(view.state.selection.main.head).number - 1); return Boolean(opts.onAsk); } },
         ...formatKeymap,
         ...closeBracketsKeymap,
         ...completionKeymap,
@@ -104,7 +113,10 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
           return true;
         },
       }),
-      EditorView.updateListener.of((u) => { if (u.docChanged) opts.onChange(u.state.doc.toString()); }),
+      EditorView.updateListener.of((u) => {
+        if (u.docChanged) opts.onChange(u.state.doc.toString());
+        if (opts.onCursor && (u.selectionSet || u.docChanged)) opts.onCursor(u.state.doc.lineAt(u.state.selection.main.head).number - 1);
+      }),
     ],
   });
   return new EditorView({ state, parent });

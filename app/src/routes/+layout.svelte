@@ -8,8 +8,10 @@
   import { page } from "$app/state";
   import { app } from "$lib/app.svelte.ts";
   import Logo from "$lib/components/Logo.svelte";
+  import Menu from "$lib/components/Menu.svelte";
 
   let { children }: { children: Snippet } = $props();
+  let menu = $state(false);
 
   const VIEWS = [["atlas", resolve("/atlas")], ["notes", resolve("/notes")], ["study", resolve("/study")]] as const;
   // A note belongs to notes; the parts page to nothing.
@@ -21,7 +23,7 @@
 
 <div class="shell">
   <header class="bar">
-    <a class="home" class:in-note={inNote} href={resolve("/notes")} aria-label="isorite: all notes"><Logo /></a>
+    <button class="home" class:in-note={inNote} type="button" aria-label="isorite: settings" aria-haspopup="dialog" aria-expanded={menu} onclick={() => (menu = !menu)}><Logo /></button>
     {#if inNote && app.session}<a class="back" href={resolve("/notes")}>‹ {app.session.name}</a>{/if}
     <span class="path" class:in-note={inNote}>
       {#if app.session}
@@ -35,6 +37,8 @@
       {/each}
     </nav>
   </header>
+
+  {#if menu}<Menu close={() => (menu = false)} />{/if}
 
   <main class="page">
     {#if app.error}
