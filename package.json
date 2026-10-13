@@ -1,0 +1,24 @@
+{
+  "name": "isorite-workspace",
+  "private": true,
+  "type": "module",
+  "description": "isorite: an agentic harness for understanding. The packages are npm workspaces.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "npm test --workspaces --if-present",
+    "check": "npm run check --workspaces --if-present",
+    "fixtures": "node fixtures/expected.ts",
+    "bench:atlas": "node bench/atlas_layout.mjs"
+  },
+  "overrides": {
+    "typescript": "$typescript"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}
