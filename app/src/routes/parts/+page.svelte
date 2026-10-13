@@ -1,25 +1,20 @@
 <script lang="ts">
   // The parts: every token and component of the one style, to be looked at on both grounds.
   import Logo from "$lib/components/Logo.svelte";
+  import { GROUNDS as CHOICES, ground } from "$lib/ground.svelte.ts";
 
   const GROUNDS = ["ground-0", "ground-1", "ground-2", "ground-3", "line", "line-strong"];
   const INKS = ["text", "text-soft", "text-faint"];
   const ACCENTS = ["lattice", "growth", "malachite", "rose"];
 
-  let ground = $state(document.documentElement.dataset.ground ?? "");
-  function choose(g: string) {
-    ground = g;
-    if (g) document.documentElement.dataset.ground = g; else delete document.documentElement.dataset.ground;
-    try { if (g) localStorage.setItem("isorite.ground", g); else localStorage.removeItem("isorite.ground"); } catch { /* not kept */ }
-  }
 </script>
 
 <div class="parts">
   <section>
     <h2 class="label">the ground</h2>
     <div class="row" role="radiogroup" aria-label="Ground">
-      {#each [["", "the system's"], ["lapis", "lapis"], ["quartz", "quartz"]] as [value, name] (value)}
-        <button class="btn" class:primary={ground === value} type="button" role="radio" aria-checked={ground === value} onclick={() => choose(value!)}>{name}</button>
+      {#each CHOICES as [value, name] (value)}
+        <button class="btn" class:primary={ground.chosen === value} type="button" role="radio" aria-checked={ground.chosen === value} onclick={() => ground.choose(value)}>{name}</button>
       {/each}
     </div>
   </section>

@@ -7,21 +7,24 @@
   import type { Snippet } from "svelte";
   import { page } from "$app/state";
   import { app } from "$lib/app.svelte.ts";
+  import ContextCount from "$lib/components/ContextCount.svelte";
   import Logo from "$lib/components/Logo.svelte";
+  import Menu from "$lib/components/Menu.svelte";
 
   let { children }: { children: Snippet } = $props();
+  let menu = $state(false);
 
   const VIEWS = [["atlas", resolve("/atlas")], ["notes", resolve("/notes")], ["study", resolve("/study")]] as const;
   // A note belongs to notes; the parts page to nothing.
   const view = $derived(page.route.id === "/atlas" ? "atlas" : page.route.id === "/study" ? "study" : page.route.id === "/parts" ? "" : "notes");
-  const inNote = $derived(page.route.id === "/n/[...id]");
+  const inNote = $derived(page.route.id === "/n/[...id]" || page.route.id === "/draft/[id]");
 </script>
 
 <svelte:head><title>{inNote && app.here ? `${app.here} · isorite` : "isorite"}</title></svelte:head>
 
 <div class="shell">
   <header class="bar">
-    <a class="home" class:in-note={inNote} href={resolve("/notes")} aria-label="isorite: all notes"><Logo /></a>
+    <button class="home" class:in-note={inNote} type="button" aria-label="isorite: settings" aria-haspopup="dialog" aria-expanded={menu} onclick={() => (menu = !menu)}><Logo /></button>
     {#if inNote && app.session}<a class="back" href={resolve("/notes")}>‹ {app.session.name}</a>{/if}
     <span class="path" class:in-note={inNote}>
       {#if app.session}
@@ -29,12 +32,15 @@
       {/if}
     </span>
     <span class="grow"></span>
+    {#if !app.error}<ContextCount />{/if}
     <nav class="switch" aria-label="Views">
       {#each VIEWS as [name, href] (name)}
         <a {href} aria-current={view === name ? "page" : undefined}><span>{name}</span></a>
       {/each}
     </nav>
   </header>
+
+  {#if menu}<Menu close={() => (menu = false)} />{/if}
 
   <main class="page">
     {#if app.error}

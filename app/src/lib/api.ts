@@ -40,10 +40,24 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     createNote: (id, text) => write("POST", "note" + q(id), { text }),
     journal: (id) => ask("journal" + q(id)),
     search: (query) => ask(`search?q=${encodeURIComponent(query)}`),
+    ask: (request) => write("POST", "iso/ask", request),
+    stop: async (request) => { await write("POST", "iso/stop", { request }); },
+    keep: (id, proposal, region) => write("POST", "proposal/keep" + q(id), { proposal, ...(region === undefined ? {} : { region }) }),
+    revise: async (id, proposal, text) => { await write("POST", "proposal/revise" + q(id), { proposal, text }); },
+    discard: async (id, proposal, region) => { await write("POST", "proposal/discard" + q(id), { proposal, ...(region === undefined ? {} : { region }) }); },
+    drafts: () => ask("drafts"),
+    createDraft: () => write("POST", "drafts", {}),
+    keepDraft: (draft, proposal, folder) => write("POST", "draft/keep" + q(draft), { proposal, folder }),
+    discardDraft: async (draft) => { await write("POST", "draft/discard" + q(draft), {}); },
+    context: (note) => ask("context" + (note ? q(note) : "")),
+    clearConversation: async () => { await write("POST", "context/clear", {}); },
+    settings: () => ask("settings"),
+    setKey: (key) => write("PUT", "settings/key", { key }),
     events(listener) {
       const source = new EventSource(root + "events");
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
-      for (const type of ["note-changed", "journal"] satisfies EngineEvent["type"][]) source.addEventListener(type, on);
+      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-done", "iso-stopped", "iso-failed"] satisfies EngineEvent["type"][];
+      for (const type of types) source.addEventListener(type, on);
       return () => source.close();
     },
   };

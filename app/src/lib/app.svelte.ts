@@ -11,6 +11,8 @@ class AppState {
   listing = $state.raw<Listing>({ notes: [], dirs: [] });
   /** Why nothing could be loaded, when nothing could. */
   error = $state("");
+  /** The note that is open, for what Iso would be sent: its id, or "". */
+  open = $state("");
   /** What the header's path ends in: the open note's title. */
   here = $state("");
   /** How the open note's saving stands, for the status line. */

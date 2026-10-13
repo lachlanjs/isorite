@@ -1,0 +1,35 @@
+// The embedding model, run in a thread of its own so the server answers while
+// it works. bge-small-en-v1.5 (8-bit), through onnxruntime-web's WebAssembly
+// build: no native binary, and the same runtime a webview has. Asked for a
+// vector by a message {id, text}; answers {id, vector} or {id, error}.
+
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { parentPort, workerData } from "node:worker_threads";
+
+const MAX_TOKENS = 512; // the model reads no more
+const { dir, dim } = workerData as { dir: string; dim: number };
+
+const ort = await import("onnxruntime-web/wasm");
+const { Tokenizer } = await import("@huggingface/tokenizers");
+// One thread: the web runtime's own workers do not start under Node. And it cannot fetch its binary from a file here, so it is handed it.
+ort.env.wasm.numThreads = 1;
+ort.env.wasm.wasmBinary = readFileSync(join(dirname(createRequire(import.meta.url).resolve("onnxruntime-web")), "ort-wasm-simd-threaded.wasm"));
+const tok = new Tokenizer(JSON.parse(readFileSync(join(dir, "tokenizer.json"), "utf8")), JSON.parse(readFileSync(join(dir, "tokenizer_config.json"), "utf8")));
+const session = await ort.InferenceSession.create(readFileSync(join(dir, "model.onnx")), { executionProviders: ["wasm"] });
+const typed = session.inputNames.includes("token_type_ids");
+
+async function embed(text: string): Promise<Float32Array> {
+  let ids: number[] = tok.encode(text).ids;
+  if (ids.length > MAX_TOKENS) ids = [...ids.slice(0, MAX_TOKENS - 1), ids.at(-1)!];
+  const big = (v: number[]) => new ort.Tensor("int64", BigInt64Array.from(v, BigInt), [1, ids.length]);
+  const out = await session.run({ input_ids: big(ids), attention_mask: big(ids.map(() => 1)), ...(typed ? { token_type_ids: big(ids.map(() => 0)) } : {}) });
+  // The first token's state stands for the whole text, as this model is used.
+  const state = (out.last_hidden_state ?? Object.values(out)[0])!;
+  return Float32Array.from((state.data as Float32Array).subarray(0, dim));
+}
+
+parentPort!.on("message", (m: { id: number; text: string }) => {
+  embed(m.text).then((vector) => parentPort!.postMessage({ id: m.id, vector }), (e: Error) => parentPort!.postMessage({ id: m.id, error: e.message }));
+});

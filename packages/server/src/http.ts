@@ -19,6 +19,8 @@ export interface ServerOptions {
   loopback: boolean;
   /** The built app's folder, or null to serve the API alone. */
   web: string | null;
+  /** Other names this server may be reached by (isorite serve --allow-host). */
+  allowHosts?: Iterable<string>;
 }
 
 const TYPES: Record<string, string> = {
@@ -29,9 +31,20 @@ const TYPES: Record<string, string> = {
 
 const Edit = z.object({ base: z.string().max(64), text: z.string() }).strict();
 const Make = z.object({ text: z.string() }).strict();
+const Anchor = z.object({ text: z.string(), nth: z.number().int().min(0) }).strict();
+const Tier = z.enum(["low", "mid", "max"]);
+const Ask = z.discriminatedUnion("form", [
+  z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
+  z.object({ note: z.string(), form: z.literal("rewrite"), regions: z.array(Anchor).min(1).max(40), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
+  z.object({ note: z.string(), form: z.literal("note"), tier: Tier }).strict(),
+]);
+const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
+const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
+const Key = z.object({ key: z.string().nullable() }).strict();
 
-export function createApp({ api, token, loopback, web }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [] }: ServerOptions): Hono {
   const app = new Hono();
+  const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
     c.body(JSON.stringify(value), status as 200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
   const refuse = (c: Context, status: number, error: string) => reply(c, status, { error });
@@ -39,8 +52,10 @@ export function createApp({ api, token, loopback, web }: ServerOptions): Hono {
   const hostOk = (c: Context): boolean => {
     let host = "";
     try { host = new URL("http://" + (c.req.header("host") ?? "")).hostname.replace(/^\[|\]$/g, "").toLowerCase(); } catch { /* none */ }
-    return !loopback || LOOPBACK.has(host);
+    // A tailnet's names (tailscale serve) are yours: nobody outside the tailnet can point one at this machine.
+    return !loopback || LOOPBACK.has(host) || host.endsWith(".ts.net") || allowed.has(host);
   };
+  const NOT_HERE = "isorite answers only to this machine's own names (localhost) and to a tailnet's (….ts.net). To be reached by another name, start it with: isorite serve <base> --allow-host <that name>";
   /** Why a write is refused, or null. */
   const writeRefused = (c: Context): Response | null => {
     let origin = "";
@@ -69,7 +84,7 @@ export function createApp({ api, token, loopback, web }: ServerOptions): Hono {
   };
   const id = (c: Context): string => c.req.query("id") ?? "";
 
-  app.use("/api/*", async (c, next) => (hostOk(c) ? next() : refuse(c, 403, "host not allowed")));
+  app.use("/api/*", async (c, next) => (hostOk(c) ? next() : refuse(c, 403, NOT_HERE)));
 
   // The token is given to the page that asks from this origin. Another site's page cannot read the reply.
   app.get("/api/session", (c) => answer(c, async () => ({ ...(await api.session()), token })));
@@ -91,6 +106,29 @@ export function createApp({ api, token, loopback, web }: ServerOptions): Hono {
     return made instanceof Response ? made : answer(c, () => api.createNote(id(c), made.text));
   });
 
+  /** A write with a JSON body of a known shape, answered by the engine. */
+  const post = <T>(path: string, shape: z.ZodType<T>, act: (c: Context, body: T) => Promise<unknown>, method: "post" | "put" = "post") =>
+    app[method](path, async (c) => {
+      const refused = writeRefused(c);
+      if (refused) return refused;
+      const sent = await body(c, shape);
+      return sent instanceof Response ? sent : answer(c, async () => (await act(c, sent)) ?? {});
+    });
+  post("/api/iso/ask", Ask, (_c, b) => api.ask(b));
+  post("/api/iso/stop", z.object({ request: z.string().max(64) }).strict(), (_c, b) => api.stop(b.request));
+  post("/api/proposal/keep", Named, (c, b) => api.keep(id(c), b.proposal, b.region));
+  post("/api/proposal/revise", Revised, (c, b) => api.revise(id(c), b.proposal, b.text));
+  post("/api/proposal/discard", Named, (c, b) => api.discard(id(c), b.proposal, b.region));
+  app.get("/api/drafts", (c) => answer(c, () => api.drafts()));
+  post("/api/drafts", z.object({}).strict(), () => api.createDraft());
+  post("/api/draft/keep", z.object({ proposal: z.string().max(64), folder: z.string().max(400) }).strict(), (c, b) => api.keepDraft(id(c), b.proposal, b.folder));
+  post("/api/draft/discard", z.object({}).strict(), (c) => api.discardDraft(id(c)));
+  app.get("/api/context", (c) => answer(c, () => api.context(c.req.query("id") || undefined)));
+  post("/api/context/clear", z.object({}).strict(), () => api.clearConversation());
+  // The key goes in and never comes out: settings say only whether one is held.
+  app.get("/api/settings", (c) => answer(c, () => api.settings()));
+  post("/api/settings/key", Key, (_c, b) => api.setKey(b.key), "put");
+
   // Everything the engine does, as it happens. A comment every 25 seconds keeps the connection open.
   app.get("/api/events", (c) => streamSSE(c, async (stream) => {
     const stop = api.events((event) => { void stream.writeSSE({ event: event.type, data: JSON.stringify(event) }); });
@@ -102,7 +140,7 @@ export function createApp({ api, token, loopback, web }: ServerOptions): Hono {
   }));
 
   app.all("/api/*", (c) => refuse(c, 404, "not found"));
-  app.on(["GET", "HEAD"], "*", (c) => (web && hostOk(c) ? staticFile(c, web) : c.text("Not found", 404)));
+  app.on(["GET", "HEAD"], "*", (c) => (!hostOk(c) ? c.text(NOT_HERE, 403) : web ? staticFile(c, web) : c.text("Not found", 404)));
   return app;
 }
 

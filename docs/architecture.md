@@ -33,7 +33,7 @@ Three layers, each allowed to know only the one below it.
 | Layer | Package | What it is | Runs in |
 |---|---|---|---|
 | core | `@isorite/core` | Parsing, the link graph, keyword search, the journal, placing Iso's text, understanding, the Atlas layout. Text in, data out. No file system, no clock, no network. **Built.** | anywhere |
-| engine | `@isorite/engine` | Everything that has state or talks to the outside: the note store, the journal's writer, Iso's loop, providers, search by meaning, the study record. Written against four small ports, never against Node. **Built** in milestone 1: the note store, the journal's writer, sessions, events, and the `Files` and `Clock` ports. The rest is **slice**. | Node now; a Tauri webview later |
+| engine | `@isorite/engine` | Everything that has state or talks to the outside: the note store, the journal's writer, Iso's loop, providers, search by meaning, the study record. Written against five small ports, never against Node. **Built** in milestones 1 and 2: the note store, the journal's writer, sessions, events, Iso's loop, the provider, search by meaning. The study record's exercises are **slice**. | Node now; a Tauri webview later |
 | shells | `isorite` (server and command), `@isorite/app`, later the terminal plugin and the Tauri app | Adapters. The server gives the engine Node's files and exposes it over HTTP. The app draws. **Slice.** | |
 
 **Why an engine separate from the server** (a change from rdstudio, where all of it was in the command-line package). On a phone there is no local server to run. If the note store and Iso's loop are written against `node:fs` and Hono, mobile means writing them a second time, and the lesson recorded from rdstudio is that two implementations drift within days. Written against ports, the same engine runs in the Tauri webview with Tauri's file API behind `Files`. The cost now is one interface and the discipline of not importing `node:` in the engine, which a test enforces (the core already has that test).
@@ -52,7 +52,10 @@ interface Files {                       // one per base: rooted at the base's fo
 interface Http    { fetch: typeof fetch }               // providers; a webview has it already
 interface Clock   { now(): number }                     // so sessions and the recall curve are testable
 interface Secrets { get(name): Promise<string | null>; set(name, value): Promise<void> }
+interface Embedder { model: string; dim: number; embed(text): Promise<Float32Array> }   // search by meaning
 ```
+
+All five are built. The server's `Embedder` runs the model in a worker thread; a webview can run the same model.
 
 ### The Api
 
@@ -110,7 +113,7 @@ ask { note | draft, form: insert | rewrite | note, place, asked, tier }
   └─ iso-done { proposal id, cost }
 ```
 
-- **The limit is enforced by the form, not by the prompt.** For `insert` the reply is text and its place was fixed before Iso was asked. For `rewrite` the reply is parsed into the blocks that were ticked; anything else in it is dropped and the person is told. Iso has no tool that writes.
+- **The limit is enforced by the form, not by the prompt.** For `insert` the reply is text and its place was fixed before Iso was asked. For `rewrite` the passages the person chose are sent between numbered marks, and only what comes back between the same marks is used, each set exactly where its passage was; anything else in the reply is dropped and the person is told. What Iso says of its changes comes back between marks of its own and is offered as ordinary text. Iso has no tool that writes.
 - **Unkept text never enters the note's file.** The editor reads the note and the journal's pending proposals and lays the proposals over the text at the place the core finds for them. If the place cannot be found the proposal is shown at the note's foot.
 - **Keep** writes the proposal into the note through the note store (one `change` entry with `why: keep`). **Edit** appends a `revise` entry, so a half-edited proposal also survives a restart. **Remove** appends `discard`.
 - **A note for Iso** (the draft started by holding on the Atlas) is the third form, `note`. The draft is a file in the study base (`drafts/<id>.md`) with its own journal, so it is "not in your base yet" in fact. Iso's reply is a proposal on the draft. "Keep as a note in `<folder>`" writes it into the knowledge base through the note store and removes the draft.
@@ -146,6 +149,8 @@ The context of a request is assembled from five parts, and the breakdown is exac
 
 - **There is no separate conversation store.** The conversation is the session's journal entries. This is what makes "the prompt stays in the note's history" and "what was I asking about" the same data.
 - **Clear the conversation** appends a `context-cleared` event to the study record. Earlier moments of the session are then left out of later requests. Nothing is deleted.
+- **What is sent is bounded.** The conversation has a budget of 6,000 tokens: the last three exchanges go whole, older ones with Iso's text cut to 400 characters, and the oldest are left out with a line saying how many. A note has a budget of 12,000: past that, the lines round the place asked about are sent with every heading and the frontmatter, and each stretch left out is marked. Notes linked from a note for Iso share 8,000. Iso is always told what was left out, and can read the rest with its tools. **Built.**
+- **A note is asked one thing at a time.** A second request while one is running is refused, so a prompt sent twice is one request.
 - **Counting.** Before a request, the count is an estimate (characters over four, which is good to about 10%). After it, the provider's own figures replace the estimate for the parts it reports.
 - **Cost** comes from the provider's usage figures and a price table, as in rdstudio. Per request it is on the proposal entry; per session and per base are sums over the journal.
 

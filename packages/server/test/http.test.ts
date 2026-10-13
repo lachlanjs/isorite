@@ -23,7 +23,7 @@ beforeAll(async () => {
   study = initStudyBase(notes).path;
   mkdirSync(join(root, "web"));
   writeFileSync(join(root, "web", "index.html"), "<!doctype html><title>isorite</title>");
-  const api = await openEngine(locate(study), "testdev1");
+  const api = await openEngine(locate(study), "testdev1", join(root, "config.toml"), undefined, null);
   server = nodeServe({ fetch: createApp({ api, token: TOKEN, loopback: true, web: join(root, "web") }).fetch, hostname: "127.0.0.1", port: 0 });
   await new Promise((done) => server.once("listening", done));
   url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -90,10 +90,16 @@ test("each write that should be refused is", async () => {
 
 test("a name that is not this machine's is not answered", async () => {
   // A page on another site whose name has been pointed at this machine arrives with its own name as the Host.
-  const app = createApp({ api: await openEngine(locate(study), "testdev1"), token: TOKEN, loopback: true, web: join(root, "web") });
+  const app = createApp({ api: await openEngine(locate(study), "testdev1", join(root, "config.toml"), undefined, null), token: TOKEN, loopback: true, web: join(root, "web") });
   const as = (host: string, path: string) => app.request("http://x" + path, { headers: { host } });
   expect((await as("evil.example", "/api/session")).status).toBe(403);
-  expect((await as("evil.example:4767", "/")).status).toBe(404);
+  const page = await as("evil.example:4767", "/");
+  expect(page.status).toBe(403);
+  expect(await page.text()).toContain("--allow-host");
+  // A tailnet's name is answered (tailscale serve), and so is a name allowed when it was started.
+  expect((await as("laptop.tail1234.ts.net", "/")).status).toBe(200);
+  const named = createApp({ api: await openEngine(locate(study), "testdev1", join(root, "config.toml"), undefined, null), token: TOKEN, loopback: true, web: null, allowHosts: ["Notes.Example"] });
+  expect((await named.request("http://x/api/session", { headers: { host: "notes.example" } })).status).toBe(200);
   expect((await as("localhost:4767", "/api/session")).status).toBe(200);
   expect((await as("127.0.0.1:4767", "/api/session")).status).toBe(200);
   expect((await as("[::1]:4767", "/")).status).toBe(200);

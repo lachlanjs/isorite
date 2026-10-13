@@ -51,3 +51,22 @@ export class MemoryFiles implements Files {
     return [...found].map(([name, isDir]) => ({ name, dir: isDir }));
   }
 }
+
+/** The network: providers are reached through it. A webview has `fetch` already. */
+export interface Http {
+  fetch: typeof fetch;
+}
+
+/** What must not be in either repository: provider keys. Kept by the device (a file its owner alone can read; a keychain). */
+export interface Secrets {
+  get(name: string): Promise<string | null>;
+  /** Null forgets it. */
+  set(name: string, value: string | null): Promise<void>;
+}
+
+export class MemorySecrets implements Secrets {
+  private readonly held = new Map<string, string>();
+  constructor(held: Record<string, string> = {}) { for (const [k, v] of Object.entries(held)) this.held.set(k, v); }
+  async get(name: string): Promise<string | null> { return this.held.get(name) ?? null; }
+  async set(name: string, value: string | null): Promise<void> { if (value === null) this.held.delete(name); else this.held.set(name, value); }
+}

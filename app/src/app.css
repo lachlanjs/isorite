@@ -97,6 +97,7 @@ button { cursor: pointer; }
 
 .shell { display: flex; flex-direction: column; min-height: 100dvh; }
 .bar { height: var(--bar-h); flex: none; display: flex; align-items: center; gap: 22px; padding: 0 16px; border-bottom: 1px solid var(--line); white-space: nowrap; position: sticky; top: 0; z-index: 10; background: var(--ground-0); }
+.bar .home { background: none; border: 0; padding: 0; display: flex; }
 .bar .path { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-soft); }
 .bar .path a { color: inherit; }
 .bar .path .sep { margin: 0 1ch; }

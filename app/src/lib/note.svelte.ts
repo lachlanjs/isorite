@@ -89,6 +89,9 @@ export class NoteSession {
     await this.save();
   }
 
+  /** The note was written by the engine on your say (a proposal kept): this is its text now. */
+  adopt(note: NoteSource): void { this.take(note); }
+
   private take(note: NoteSource): void {
     this.text = this.saved = note.text;
     this.base = note.version;

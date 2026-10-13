@@ -16,8 +16,12 @@ import { linkCompletion, type LinkTarget } from "./links.ts";
 import { livePreview, livePreviewTheme } from "./livePreview.ts";
 import { mathsSyntax } from "./maths.ts";
 import { noteOf } from "./noteOf.ts";
+import { overlays, type Mount } from "./overlays.ts";
 
 export type { Format, LinkTarget };
+
+/** Where the main selection is: the line its head is on (from 0), and its ends by character (equal for a bare cursor). */
+export interface Where { line: number; from: number; to: number }
 
 export interface EditorOptions {
   doc: string;
@@ -30,6 +34,18 @@ export interface EditorOptions {
   placeholder?: string;
   /** A link to a note was followed (Ctrl or Cmd and a click): its id. */
   onFollow?: (id: string) => void;
+  /** Iso was asked for (Ctrl or Cmd and Enter): where the cursor or the selection is. */
+  onAsk?: (where: Where) => void;
+  /** The cursor or the selection moved. */
+  onCursor?: (where: Where) => void;
+  /** Whether passages are being chosen for a rewrite: a selection made then is handed over, not kept as a selection. */
+  picking?: () => boolean;
+  /** Passages chosen while picking, by character. */
+  onPick?: (ranges: { from: number; to: number }[]) => void;
+  /** A click with nothing selected while picking: the character it was on (to drop a passage chosen there). */
+  onUnpick?: (at: number) => void;
+  /** Draws what is laid over the text (overlays.ts). */
+  mountOverlay?: Mount;
 }
 
 // Plain source is set in the monospaced face; the live preview in the reading one.
@@ -66,6 +82,11 @@ const highlight = HighlightStyle.define([
   { tag: tags.quote, color: "var(--text-soft)", fontStyle: "italic" },
 ]);
 
+function where(state: EditorState): Where {
+  const r = state.selection.main;
+  return { line: state.doc.lineAt(r.to).number - 1, from: r.from, to: r.to };
+}
+
 export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorView {
   const state = EditorState.create({
     doc: opts.doc,
@@ -80,11 +101,13 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       closeBrackets(),
       // Only brackets: closing quotes would get in the way of apostrophes in prose.
       EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["(", "["] } }]),
+      ...(opts.mountOverlay ? [overlays(opts.mountOverlay)] : []),
       linkCompletion(opts.notes),
       placeholder(opts.placeholder ?? "Write the note here. # for a heading, [[ to link to another note, $x$ for maths."),
       EditorView.contentAttributes.of({ "aria-label": opts.label, spellcheck: "true", autocapitalize: "sentences", autocorrect: "on" }),
       keymap.of([
         { key: "Mod-s", preventDefault: true, run: () => { opts.onSave(); return true; } },
+        { key: "Mod-Enter", preventDefault: true, run: (view) => { opts.onAsk?.(where(view.state)); return Boolean(opts.onAsk); } },
         ...formatKeymap,
         ...closeBracketsKeymap,
         ...completionKeymap,
@@ -92,6 +115,24 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
         ...defaultKeymap,
         ...historyKeymap,
       ]),
+      // Choosing passages for a rewrite: when a selection is finished (the button or the finger lifted, Shift let
+      // go) it is handed over and marked, and the selection itself is let go, so the next can be made anywhere.
+      EditorView.domEventHandlers((() => {
+        // The selection is read as the event arrives: a double click's two releases come together, and each must
+        // see the selection as it was at its own moment. Only the letting go of it waits, until the editor's own
+        // handling of the click is over.
+        const finished = (view: EditorView, clicked: boolean) => {
+          if (!opts.picking?.()) return;
+          const sel = view.state.selection, chosen = sel.ranges.filter((r) => !r.empty).map((r) => ({ from: r.from, to: r.to }));
+          if (chosen.length) { opts.onPick?.(chosen); setTimeout(() => view.dispatch({ selection: { anchor: Math.min(sel.main.head, view.state.doc.length) } }), 0); }
+          else if (clicked) opts.onUnpick?.(sel.main.head);
+        };
+        return {
+          mouseup: (e, view) => { finished(view, e.detail === 1); return false; },
+          touchend: (_e, view) => { finished(view, false); return false; },
+          keyup: (e, view) => { if (e.key === "Shift") finished(view, false); return false; },
+        };
+      })()),
       EditorView.domEventHandlers({
         mousedown(event, view) {
           if (!opts.onFollow || !(event.ctrlKey || event.metaKey) || event.button !== 0) return false;
@@ -104,7 +145,10 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
           return true;
         },
       }),
-      EditorView.updateListener.of((u) => { if (u.docChanged) opts.onChange(u.state.doc.toString()); }),
+      EditorView.updateListener.of((u) => {
+        if (u.docChanged) opts.onChange(u.state.doc.toString());
+        if (opts.onCursor && (u.selectionSet || u.docChanged)) opts.onCursor(where(u.state));
+      }),
     ],
   });
   return new EditorView({ state, parent });
