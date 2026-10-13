@@ -3,17 +3,21 @@
 //
 //   isorite check <notes>                  lint a folder of notes
 //   isorite study init <notes> [<where>]   make a study base beside a knowledge base
+//   isorite serve <study base | notes>     open it in the browser
 
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { StudyError } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
+import { serve } from "./serve.ts";
 import { initStudyBase } from "./studybase.ts";
 
 const USAGE = `isorite: an agentic harness for understanding
 
   isorite check <notes>                  check a folder of notes: frontmatter, links, cycles
   isorite study init <notes> [<where>]   make a study base for it (default: beside its repository)
+  isorite serve <study base | notes> [--port <n>]
+                                         open it in the browser, on this machine only
 `;
 
 export function check(notes: string, out: (line: string) => void = console.log): number {
@@ -27,10 +31,19 @@ export function check(notes: string, out: (line: string) => void = console.log):
   return errors ? 1 : 0;
 }
 
-export function main(argv: string[]): number {
+export function main(argv: string[]): number | Promise<number> {
   const [command, ...rest] = argv;
   try {
     if (command === "check" && rest[0]) return check(rest[0]);
+    if (command === "serve" && rest[0]) {
+      const at = rest.indexOf("--port"), port = at < 0 ? undefined : Number(rest[at + 1]);
+      if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
+      // Runs until stopped; what it refuses at the start is reported like any other command's.
+      return serve(rest[0], port === undefined ? {} : { port }).then(() => new Promise<number>(() => undefined), (e) => {
+        if (e instanceof StudyError) { console.error(e.message); return 2; }
+        throw e;
+      });
+    }
     if (command === "study" && rest[0] === "init" && rest[1]) {
       const made = initStudyBase(rest[1], rest[2]);
       console.log(`study base made at ${made.path}`);
@@ -46,4 +59,4 @@ export function main(argv: string[]): number {
   return command && command !== "help" && command !== "--help" ? 2 : 0;
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href) process.exit(main(process.argv.slice(2)));
+if (process.argv[1] && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href) process.exit(await main(process.argv.slice(2)));

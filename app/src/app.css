@@ -1,0 +1,217 @@
+/* isorite: the one style. Two grounds (lapis, the dark one, and quartz), and four accents: lattice blue for
+   structure and for you, growth gold for Iso, malachite for what you got right, rose for what failed. Nothing
+   else has a hue. Nothing is rounded and nothing casts a shadow. */
+
+@font-face { font-family: "Ioskeley Mono"; font-style: normal; font-weight: 100 550; font-display: swap; src: url(/fonts/ioskeley-mono-latin-regular.woff2) format("woff2"); }
+@font-face { font-family: "Ioskeley Mono"; font-style: italic; font-weight: 100 550; font-display: swap; src: url(/fonts/ioskeley-mono-latin-italic.woff2) format("woff2"); }
+@font-face { font-family: "Ioskeley Mono"; font-style: normal; font-weight: 551 900; font-display: swap; src: url(/fonts/ioskeley-mono-latin-bold.woff2) format("woff2"); }
+@font-face { font-family: "Ioskeley Mono"; font-style: italic; font-weight: 551 900; font-display: swap; src: url(/fonts/ioskeley-mono-latin-bolditalic.woff2) format("woff2"); }
+@font-face { font-family: "Departure Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/departure-mono-latin-regular.woff2) format("woff2"); }
+@font-face { font-family: "Charter"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/charter-regular.woff2) format("woff2"); }
+@font-face { font-family: "Charter"; font-style: italic; font-weight: 400; font-display: swap; src: url(/fonts/charter-italic.woff2) format("woff2"); }
+@font-face { font-family: "Charter"; font-style: normal; font-weight: 700; font-display: swap; src: url(/fonts/charter-bold.woff2) format("woff2"); }
+@font-face { font-family: "Charter"; font-style: italic; font-weight: 700; font-display: swap; src: url(/fonts/charter-bold-italic.woff2) format("woff2"); }
+/* Maths letters and digits in Charter, to match the reading text; symbols, Greek and big operators stay in KaTeX's fonts. */
+@font-face { font-family: "Math Charter"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/charter-regular.woff2) format("woff2"); unicode-range: U+30-39, U+41-5A, U+61-7A; size-adjust: 92.6%; }
+@font-face { font-family: "Math Charter"; font-style: italic; font-weight: 400; font-display: swap; src: url(/fonts/charter-italic.woff2) format("woff2"); unicode-range: U+30-39, U+41-5A, U+61-7A; size-adjust: 92.6%; }
+@font-face { font-family: "Math Charter"; font-style: normal; font-weight: 700; font-display: swap; src: url(/fonts/charter-bold.woff2) format("woff2"); unicode-range: U+30-39, U+41-5A, U+61-7A; size-adjust: 92.6%; }
+
+/* ------------------------------------------------------------ tokens */
+
+:root {
+  color-scheme: dark;
+  --ground-0: #07101C; --ground-1: #0C1828; --ground-2: #122238; --ground-3: #1A3150;
+  --line: #23395A; --line-strong: #5C7BA6;
+  --text: #E9EEF5; --text-soft: #B4C0D2; --text-faint: #8796AD;
+  --lattice: #6BA6FF; --lattice-deep: #2D6BE0;
+  --growth: #F0BE4A; --growth-deep: #C28F1E;
+  --malachite: #5FD3A4; --malachite-deep: #1F8F68;
+  --rose: #FF8FA6;
+  --soft: 16%;
+
+  --lattice-soft: color-mix(in srgb, var(--lattice) var(--soft), var(--ground-1));
+  --growth-soft: color-mix(in srgb, var(--growth) var(--soft), var(--ground-1));
+  --malachite-soft: color-mix(in srgb, var(--malachite) var(--soft), var(--ground-1));
+  --rose-soft: color-mix(in srgb, var(--rose) var(--soft), var(--ground-1));
+
+  /* Ioskeley Mono for the interface, Departure Mono for display, Charter for prose. */
+  --font-text: "Charter", "Bitstream Charter", Georgia, serif;
+  --font-ui: "Ioskeley Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-mono: var(--font-ui);
+  --font-pixel: "Departure Mono", "Ioskeley Mono", ui-monospace, monospace;
+  --text-size: 18px;
+  --measure: 680px;
+  --bar-h: 44px;
+
+  /* Space: a 4px base. */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px; --space-12: 48px; --space-16: 64px;
+}
+
+/* Quartz: chosen, or the system's when nothing is chosen. The two blocks are the same on purpose. */
+:root[data-ground="quartz"] {
+  color-scheme: light;
+  --ground-0: #F2F0EA; --ground-1: #F8F7F3; --ground-2: #FFFFFF; --ground-3: #E6E4DC;
+  --line: #D3D0C5; --line-strong: #7F7D70;
+  --text: #0E1726; --text-soft: #3B475B; --text-faint: #5B677A;
+  --lattice: #1E4FB8; --lattice-deep: #2A62D8;
+  --growth: #8C6200; --growth-deep: #D9A21B;
+  --malachite: #0B6B4A; --malachite-deep: #2FA37A;
+  --rose: #A81E48;
+  --soft: 10%;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-ground="lapis"]) {
+    color-scheme: light;
+    --ground-0: #F2F0EA; --ground-1: #F8F7F3; --ground-2: #FFFFFF; --ground-3: #E6E4DC;
+    --line: #D3D0C5; --line-strong: #7F7D70;
+    --text: #0E1726; --text-soft: #3B475B; --text-faint: #5B677A;
+    --lattice: #1E4FB8; --lattice-deep: #2A62D8;
+    --growth: #8C6200; --growth-deep: #D9A21B;
+    --malachite: #0B6B4A; --malachite-deep: #2FA37A;
+    --rose: #A81E48;
+    --soft: 10%;
+  }
+}
+
+/* ------------------------------------------------------------ base */
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--ground-0); color: var(--text); font: 13px/1.5 var(--font-ui); -webkit-text-size-adjust: 100%; }
+h1, h2, h3, p { margin: 0; }
+a { color: var(--lattice); text-decoration: none; }
+a:hover { color: var(--lattice-deep); text-decoration: underline; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--lattice); outline-offset: 2px; }
+::selection { background: color-mix(in srgb, var(--lattice) 40%, transparent); }
+.soft { color: var(--text-soft); }
+.faint { color: var(--text-faint); }
+.grow { flex: 1 1 0; min-width: 0; }
+.pixel { font-family: var(--font-pixel); font-weight: 400; line-height: 1; }
+.serif { font-family: var(--font-text); }
+.label { font-size: 12px; color: var(--text-faint); }
+.hidden-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ------------------------------------------------------------ the shell */
+
+.shell { display: flex; flex-direction: column; min-height: 100dvh; }
+.bar { height: var(--bar-h); flex: none; display: flex; align-items: center; gap: 22px; padding: 0 16px; border-bottom: 1px solid var(--line); white-space: nowrap; position: sticky; top: 0; z-index: 10; background: var(--ground-0); }
+.bar .path { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-soft); }
+.bar .path a { color: inherit; }
+.bar .path .sep { margin: 0 1ch; }
+.switch { display: flex; align-items: center; gap: 18px; }
+.switch a { color: var(--text-soft); line-height: 20px; }
+.switch a span { padding: 0 6px; display: inline-block; }
+.switch a:hover { color: var(--text); text-decoration: none; }
+.switch a[aria-current="page"] span { background: var(--text); color: var(--ground-0); }
+.bar .back { display: none; }
+.page { flex: 1 1 auto; min-width: 0; }
+.status { height: 28px; flex: none; display: flex; align-items: center; gap: 22px; padding: 0 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-faint); white-space: nowrap; position: sticky; bottom: 0; background: var(--ground-0); }
+.status .bad { color: var(--rose); }
+
+.logo { display: block; flex: none; overflow: visible; }
+.logo path { fill: none; stroke: var(--text); stroke-width: .7; stroke-linecap: round; stroke-linejoin: round; }
+.logo .iso { fill: var(--growth); stroke: none; }
+.logo .right { fill: var(--malachite); stroke: none; }
+
+/* On a phone the switch is a row of tabs at the foot, where a thumb reaches. */
+@media (max-width: 600px) {
+  .bar { gap: 12px; padding: 0 12px; }
+  .switch { position: fixed; left: 0; right: 0; bottom: 0; height: 56px; gap: 0; background: var(--ground-0); border-top: 1px solid var(--line); z-index: 10; padding-bottom: env(safe-area-inset-bottom); }
+  .switch a { flex: 1 1 0; height: 100%; display: flex; align-items: center; justify-content: center; }
+  /* In a note the header is the way back, as on the boards: "‹ the base". The title is on the page below it. */
+  .bar:has(.back) { height: 48px; }
+  .bar .back { display: inline-flex; align-items: center; height: 44px; }
+  .bar .home.in-note, .bar .path.in-note { display: none; }
+  .status { bottom: 56px; }
+  .shell { padding-bottom: 56px; }
+}
+
+/* ------------------------------------------------------------ parts */
+
+/* A corner is cut at 45 degrees, and the cut is painted, not clipped, so a focus ring and a menu that opens
+   out of a part are left whole. --cut is how deep, measured along the side. A state changes --fill, never the
+   background, so the cut is kept. */
+
+/* A filled part with no edge: cut at the top left and the bottom right. */
+.btn, .chip {
+  --cut: 6px; --c: calc(var(--cut) * .7071); --fill: var(--ground-3);
+  border: 0; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; color: var(--text);
+  background:
+    linear-gradient(var(--fill), var(--fill)) center / calc(100% - 2 * var(--cut)) 100% no-repeat,
+    linear-gradient(135deg, transparent var(--c), var(--fill) 0) left top / var(--cut) var(--cut) no-repeat,
+    linear-gradient(var(--fill), var(--fill)) left bottom / var(--cut) calc(100% - var(--cut)) no-repeat,
+    linear-gradient(var(--fill), var(--fill)) right top / var(--cut) calc(100% - var(--cut)) no-repeat,
+    linear-gradient(315deg, transparent var(--c), var(--fill) 0) right bottom / var(--cut) var(--cut) no-repeat;
+}
+.btn { height: 32px; padding: 0 14px; font-size: 13px; }
+a.btn:hover { text-decoration: none; color: var(--text); }
+.btn:hover:not(:disabled) { --fill: var(--line); }
+.btn:disabled { color: var(--text-faint); cursor: default; }
+.btn.tall { height: 44px; padding: 0 18px; }
+.btn.primary { --fill: var(--lattice); color: var(--ground-0); font-weight: 700; }
+.btn.primary:hover:not(:disabled) { --fill: var(--lattice-deep); }
+.btn.danger { --fill: var(--rose); color: var(--ground-0); font-weight: 700; }
+/* Keep, edit, remove: the same three fills on both grounds, with the lapis ground's ink. */
+.btn.keep, .btn.edit, .btn.remove { color: #07101C; font-weight: 700; }
+.btn.keep { --fill: #7DDDB5; } .btn.edit { --fill: #F2C968; } .btn.remove { --fill: #F7A8BA; }
+.btn.quiet { --fill: transparent; color: var(--text-soft); padding: 0 8px; }
+.btn.quiet:hover:not(:disabled) { --fill: var(--ground-2); color: var(--text); }
+.chip { --cut: 4px; height: 22px; padding: 0 8px; font-size: 12px; color: var(--text-soft); }
+.chip.lattice { --fill: var(--lattice-soft); color: var(--lattice); }
+.chip.growth { --fill: var(--growth-soft); color: var(--growth); }
+.chip.malachite { --fill: var(--malachite-soft); color: var(--malachite); }
+.chip.rose { --fill: var(--rose-soft); color: var(--rose); }
+
+/* A frame: all four corners cut, a 1 px edge, the ground inside. Two shapes in the background, the inside one
+   a pixel in from the edge's, with its cut shorter by what keeps the slanted edge a pixel wide. */
+.frame {
+  --cut: 10px; --edge: var(--line-strong); --inside: var(--ground-1);
+  --c: calc(var(--cut) * .7071); --ci: calc((var(--cut) - .586px) * .7071); --k: calc(var(--cut) - 1px);
+  border: 0; position: relative;
+  background:
+    linear-gradient(var(--inside), var(--inside)) center / calc(100% - 2 * var(--cut)) calc(100% - 2px) no-repeat,
+    linear-gradient(var(--inside), var(--inside)) center / calc(100% - 2px) calc(100% - 2 * var(--cut)) no-repeat,
+    linear-gradient(135deg, transparent var(--ci), var(--inside) 0) left 1px top 1px / var(--k) var(--k) no-repeat,
+    linear-gradient(225deg, transparent var(--ci), var(--inside) 0) right 1px top 1px / var(--k) var(--k) no-repeat,
+    linear-gradient(315deg, transparent var(--ci), var(--inside) 0) right 1px bottom 1px / var(--k) var(--k) no-repeat,
+    linear-gradient(45deg, transparent var(--ci), var(--inside) 0) left 1px bottom 1px / var(--k) var(--k) no-repeat,
+    linear-gradient(var(--edge), var(--edge)) center / calc(100% - 2 * var(--cut)) 100% no-repeat,
+    linear-gradient(var(--edge), var(--edge)) center / 100% calc(100% - 2 * var(--cut)) no-repeat,
+    linear-gradient(135deg, transparent var(--c), var(--edge) 0) left top / var(--cut) var(--cut) no-repeat,
+    linear-gradient(225deg, transparent var(--c), var(--edge) 0) right top / var(--cut) var(--cut) no-repeat,
+    linear-gradient(315deg, transparent var(--c), var(--edge) 0) right bottom / var(--cut) var(--cut) no-repeat,
+    linear-gradient(45deg, transparent var(--c), var(--edge) 0) left bottom / var(--cut) var(--cut) no-repeat;
+}
+/* A frame's title sits in its top edge. */
+.frame > .frame-title { position: absolute; top: -9px; left: 22px; padding: 0 6px; font-size: 12px; line-height: 18px; color: var(--text-faint); background: var(--behind, var(--ground-0)); white-space: nowrap; }
+
+/* A field: a fill and one line under it. */
+.field { background: var(--ground-2); border: 0; border-bottom: 1px solid var(--line-strong); height: 32px; padding: 0 10px; min-width: 0; }
+.field::placeholder { color: var(--text-faint); }
+.field:focus-visible { outline: none; border-bottom-color: var(--lattice); box-shadow: 0 1px 0 var(--lattice); }
+
+/* Marks: a square is you, a diamond is Iso. */
+.sq { display: inline-block; width: 8px; height: 8px; background: var(--lattice); flex: none; }
+.sq.empty { background: transparent; border: 1px solid var(--line-strong); }
+.dia { display: inline-block; width: 8px; height: 8px; background: var(--growth); transform: rotate(45deg); flex: none; }
+.dia.open { background: transparent; border: 1.5px solid var(--growth); }
+.dots { background-image: radial-gradient(var(--line) 1px, transparent 1.2px); background-size: 24px 24px; }
+
+/* ------------------------------------------------------------ prose (rendered blocks in the editor) */
+
+.prose { font: var(--text-size)/1.6 var(--font-text); }
+.prose > :first-child { margin-top: 0; }
+.prose p, .prose table { margin: 0 0 1em; }
+.prose .table-wrap { overflow-x: auto; margin: 0 0 1em; }
+.prose table { border-collapse: collapse; font: 14px/1.45 var(--font-ui); min-width: 60%; margin: 0; }
+.prose th, .prose td { border-bottom: 1px solid var(--line); padding: 8px 12px 8px 0; text-align: left; vertical-align: top; }
+.prose th { font-weight: 700; border-bottom: 2px solid var(--text-faint); }
+.prose .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+.prose eqn, .prose section.eqno { display: block; }
+.prose section.eqno { display: flex; align-items: center; }
+.prose section.eqno > eqn { flex: 1; }
+.katex { font-size: 1.05em; }
+.katex, .katex .mathit, .katex .mathbf, .katex .mainrm { font-family: "Math Charter", KaTeX_Main, serif; }
+.katex .mathnormal, .katex .boldsymbol { font-family: "Math Charter", KaTeX_Math, serif; }

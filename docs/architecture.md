@@ -33,7 +33,7 @@ Three layers, each allowed to know only the one below it.
 | Layer | Package | What it is | Runs in |
 |---|---|---|---|
 | core | `@isorite/core` | Parsing, the link graph, keyword search, the journal, placing Iso's text, understanding, the Atlas layout. Text in, data out. No file system, no clock, no network. **Built.** | anywhere |
-| engine | `@isorite/engine` | Everything that has state or talks to the outside: the note store, the journal's writer, Iso's loop, providers, search by meaning, the study record. Written against four small ports, never against Node. **Slice.** | Node now; a Tauri webview later |
+| engine | `@isorite/engine` | Everything that has state or talks to the outside: the note store, the journal's writer, Iso's loop, providers, search by meaning, the study record. Written against four small ports, never against Node. **Built** in milestone 1: the note store, the journal's writer, sessions, events, and the `Files` and `Clock` ports. The rest is **slice**. | Node now; a Tauri webview later |
 | shells | `isorite` (server and command), `@isorite/app`, later the terminal plugin and the Tauri app | Adapters. The server gives the engine Node's files and exposes it over HTTP. The app draws. **Slice.** | |
 
 **Why an engine separate from the server** (a change from rdstudio, where all of it was in the command-line package). On a phone there is no local server to run. If the note store and Iso's loop are written against `node:fs` and Hono, mobile means writing them a second time, and the lesson recorded from rdstudio is that two implementations drift within days. Written against ports, the same engine runs in the Tauri webview with Tauri's file API behind `Files`. The cost now is one interface and the discipline of not importing `node:` in the engine, which a test enforces (the core already has that test).
@@ -58,7 +58,7 @@ interface Secrets { get(name): Promise<string | null>; set(name, value): Promise
 
 The app never calls the engine directly. It calls an `Api` object with one method per operation (`readNote`, `saveNote`, `ask`, `keep`, `layoutModel`, `events`, ...). There are two implementations:
 
-- **HTTP** (slice): a client generated from the server's OpenAPI description, as in rdstudio.
+- **HTTP** (**built**): a small client written by hand in the app (`app/src/lib/api.ts`), typed by the `Api` interface itself. rdstudio generated its client from an OpenAPI description; here the interface is shared code, so the compiler already holds the two ends together and a generated copy would be a second source of the same types. The server checks what it is sent with zod. An OpenAPI description can be added when something that is not TypeScript needs one.
 - **In process** (later, for Tauri): the same methods calling the engine in the webview.
 
 Every screen is written against `Api`, so nothing in the app knows which it has.
@@ -270,7 +270,15 @@ Answered by Lachlan on 2026-10-13:
 
 **What never trimming a journal costs.**
 
-- *Size.* Each save is a line, and every 40th carries the whole note. How much that is depends on how often the editor saves, which is set in milestone 1; the journal's size per hour of writing is to be measured there, not guessed.
+- *Size.* Each save is a line, and every 40th carries the whole note. A model run in milestone 1 (not a person: prose typed steadily at 40 words a minute for an hour into one note, in 400-character paragraphs) gives, per hour of writing:
+
+  | A save every | Entries | Journal |
+  |---|---|---|
+  | 3 seconds | 1,200 | about 1.0 MB |
+  | 10 seconds | 360 | about 0.3 MB |
+  | 30 seconds | 120 | about 0.1 MB |
+
+  The editor saves 1.5 seconds after the typing stops, so real writing falls somewhere in this range depending on how often you pause. Most of each entry is the paragraph being typed, written out twice (the line removed and the line added). If the week of use shows this is too much, the first remedy is to record a change within a line as the characters changed, not the whole line; the second is fewer whole-note copies. Neither changes what an entry means.
 - *Reading.* The timeline replays from the nearest whole text, so opening a late version is cheap however long the file is. Listing every moment of a long-lived note reads the whole file.
 - *Deleted text is not gone.* Anything typed or pasted into a note and then removed stays in its journal, and in git once committed. This is the one that matters: a pasted key or a private remark survives deletion.
 - *If it becomes a problem:* old sessions can be folded to one entry each, because a `change` entry may carry the whole text and restart the chain. That rewrites a file that is otherwise only added to, so it must be done on one device and synced. A "forget this" command for one note's history is the same operation. Neither is built.

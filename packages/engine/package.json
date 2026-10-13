@@ -1,0 +1,22 @@
+{
+  "name": "@isorite/engine",
+  "version": "0.1.0",
+  "description": "isorite's engine: the note store, the journal's writer, sessions and events. Written against ports (files, a clock), never against Node, so it runs behind a server or inside a webview.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "check": "tsc -p ."
+  },
+  "dependencies": {
+    "@isorite/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.2"
+  }
+}
