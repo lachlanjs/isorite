@@ -117,3 +117,40 @@ export function mapModel(base: Bundle, study: Bundle | null = null): MapModel {
   };
   return { root: dir(""), edges };
 }
+
+// ------------------------------------------------------------ what a note rests on
+
+/** One link of a note's reach: `from` requires `to`. */
+export interface ReachLink { from: string; to: string; kind: "requires" | "builds" }
+export interface Reach {
+  /** What the note requires, all the way back, nearest first. */
+  requires: string[];
+  /** What builds on it directly. */
+  builds: string[];
+  /** The links between them: every one down the chain of what it requires, and each from what builds on it. */
+  links: ReachLink[];
+}
+
+/** What lights when a note is chosen on the Atlas (refs, as the map model names notes). Where the base rates its
+ *  links, only "requires" counts; where it rates none, every link does. A study note requires what it tests. */
+export function reach(model: Pick<MapModel, "edges">, note: string): Reach {
+  const least = model.edges.some(([from, , s]) => s >= STRENGTH.requires && !isStudyId(from)) ? STRENGTH.requires : STRENGTH.uses;
+  const needs = new Map<string, string[]>(), neededBy = new Map<string, string[]>();
+  for (const [from, to, s] of model.edges) {
+    if (from === to || (s < least && !isStudyId(from))) continue;
+    needs.set(from, [...(needs.get(from) ?? []), to]);
+    neededBy.set(to, [...(neededBy.get(to) ?? []), from]);
+  }
+  const seen = new Set([note]), requires: string[] = [], links: ReachLink[] = [], todo = [note];
+  for (let k = 0; k < todo.length; k++) {
+    const from = todo[k]!;
+    for (const to of needs.get(from) ?? []) {
+      links.push({ from, to, kind: "requires" });
+      if (seen.has(to)) continue;
+      seen.add(to); requires.push(to); todo.push(to);
+    }
+  }
+  const builds = [...new Set(neededBy.get(note) ?? [])];
+  for (const from of builds) links.push({ from, to: note, kind: "builds" });
+  return { requires, builds, links };
+}

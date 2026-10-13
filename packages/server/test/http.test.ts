@@ -42,6 +42,7 @@ test("a study base is found from either folder", () => {
 test("the session, the listing and the search", async () => {
   expect(await (await fetch(url + "/api/session")).json()).toEqual({ name: "information-theory", study: true, device: "testdev1", token: TOKEN });
   expect(await (await fetch(url + "/api/notes")).json()).toMatchObject({ notes: [{ id: "basics/entropy", title: "Entropy" }], dirs: ["basics"] });
+  expect(await (await fetch(url + "/api/map")).json()).toMatchObject({ notes: { "basics/entropy": { title: "Entropy", step: 0 } }, model: { root: { kind: "dir" } } });
   expect(await (await fetch(url + "/api/search?q=surprise")).json()).toMatchObject([{ id: "basics/entropy" }]);
 });
 

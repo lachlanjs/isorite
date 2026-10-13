@@ -1,6 +1,6 @@
 # Milestone 3: the Atlas
 
-Written 2026-10-13 for Lachlan's approval. Branch: `m3-atlas`, which holds only this plan until it is approved. Nothing below is built.
+Approved by Lachlan on 2026-10-13, with the choices of section 4 as proposed. Branch: `m3-atlas`.
 
 **Done when:** the information theory base and rdstudio's 225-note base both draw; selecting a note lights what it requires and what builds on it; Iso's path is drawn while it reads; a note for Iso can be started by holding on the map and its linked notes picked there; and pan and zoom frame times on the 225-note base are measured and reported.
 

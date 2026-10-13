@@ -1,7 +1,7 @@
 // The study base's files, and the two bases as one map for the Atlas.
 
 import { describe, expect, test } from "vitest";
-import { Bundle, StudyError, dumpStudyConfig, journalPath, mapModel, parseStudyConfig, recordPath, testsOf, type MapDir } from "../src/index.ts";
+import { Bundle, StudyError, dumpStudyConfig, journalPath, mapModel, parseStudyConfig, reach, recordPath, sprout, testsOf, type MapDir } from "../src/index.ts";
 import { gridLayout } from "../src/atlas/layout.js";
 
 const note = (title: string, body = "") => `---\ntype: Concept\ntitle: ${title}\n---\n\n${body}\n`;
@@ -70,5 +70,43 @@ describe("the two bases as one map", () => {
     expect(byRef.get("@study/basics/entropy-of-a-coin")).toMatchObject({ kind: "note" });
     expect(layout.items.filter((i) => i.kind === "note")).toHaveLength(6);
     expect(layout.trunks.length).toBeGreaterThan(0);
+  });
+});
+
+describe("what a note rests on", () => {
+  const edges: [string, string, number][] = [
+    ["c", "b", 3], ["b", "a", 3], ["a", "c", 3], // a cycle
+    ["d", "c", 3], ["d", "a", 2], // "uses" does not count where links are rated
+    ["e", "e", 3], ["@study/x", "d", 2], // a study note requires what it tests
+  ];
+  test("what it requires, all the way back, and what builds on it directly", () => {
+    const r = reach({ edges }, "d");
+    expect(r.requires).toEqual(["c", "b", "a"]);
+    expect(r.builds).toEqual(["@study/x"]);
+    expect(r.links).toContainEqual({ from: "a", to: "c", kind: "requires" });
+    expect(r.links).not.toContainEqual({ from: "d", to: "a", kind: "requires" });
+    expect(r.links).toContainEqual({ from: "@study/x", to: "d", kind: "builds" });
+  });
+  test("a study note lights what it tests, and what that requires", () => {
+    expect(reach({ edges }, "@study/x").requires).toEqual(["d", "c", "b", "a"]);
+  });
+  test("a note nothing joins, or that only names itself", () => {
+    expect(reach({ edges }, "e")).toEqual({ requires: [], builds: [], links: [] });
+    expect(reach({ edges }, "nowhere")).toEqual({ requires: [], builds: [], links: [] });
+  });
+  test("where no link is rated, every link counts", () => {
+    expect(reach({ edges: [["b", "a", 2], ["c", "b", 2]] }, "c").requires).toEqual(["b", "a"]);
+  });
+});
+
+describe("the grown mark", () => {
+  test("the same seed grows the same plant, and another seed another", () => {
+    expect(sprout(3, 3)).toEqual(sprout(3, 3));
+    expect(sprout(3, 3).d).not.toBe(sprout(4, 3).d);
+  });
+  test("it grows with depth, from a bare shoot", () => {
+    expect(sprout(1, 0).d).toBe("M0 0L0 -1");
+    expect(sprout(1, 2).d.length).toBeGreaterThan(sprout(1, 1).d.length);
+    expect(sprout(1, 2).viewBox.split(" ")).toHaveLength(4);
   });
 });
