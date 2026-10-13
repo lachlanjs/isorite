@@ -48,7 +48,7 @@ fixtures/         conformance bundles
 docs/             the two documents, this plan, architecture.md, format.md, decisions.md
 ```
 
-The engine as a package of its own is proposed in `architecture.md` section 1 and is to be confirmed in the plan for M1.
+The engine as a package of its own is described in `architecture.md` section 1. Lachlan read it and agreed on 2026-10-13.
 
 - The Atlas layout (`nested.js`, `router.js`, `cells.js`, their tests) moves into `packages/core`, unchanged, so a later terminal view reads the same layout data.
 - Final names from the first line. No `rdstudio`, `axis`, `teacher` or old token names anywhere.

@@ -73,7 +73,7 @@ Every screen is written against `Api`, so nothing in the app knows which it has.
 | Git | the project's own repository | a private repository, `merge=union` on `*.jsonl` |
 
 - A study base names the knowledge base it studies in `isorite.toml`. Nothing in the knowledge base names a study base, so the knowledge base is the same for every reader and exports clean.
-- **Project mode** is a knowledge base opened with no study base: reading, the Atlas, and editing work, and there is no journal, no Iso proposals to keep and no study. **Open:** whether project mode should still have a journal, kept somewhere per person. The decided rule is that the journal lives in the study base, so for now project mode has none, and the slice always has a study base.
+- **Project mode** is a knowledge base opened with no study base: reading, the Atlas, editing and Iso work, and there is no study. **Decided (2026-10-13):** project mode still keeps a journal for each note, and with no study base it is kept in the knowledge base itself. **Later** (the slice always has a study base). Proposed place: `.isorite/journal/<note id>.jsonl`, the same entries as section 3 of `docs/format.md`, so the engine's journal writer only needs a different root. Still open: whether that folder is committed (the project's shared history, and then `who: you` must name a person) or ignored by git (each person's own).
 - **Built:** `isorite study init`, the configuration, the paths, and the combined map model.
 
 ## 3. A note's life: one writer
@@ -155,7 +155,7 @@ The context of a request is assembled from five parts, and the breakdown is exac
 - **By meaning** (engine, **slice**, carried over): `bge-small-en-v1.5`, 8-bit, 34 MB, run by `onnxruntime-web`'s WebAssembly build, so no native binary. Notes are cut at first- and second-level headings; each piece is embedded with its note's title and description.
 - **The vectors are a cache, not data.** They are kept outside both repositories (`~/.cache/isorite/` on a desktop), keyed by a fingerprint of the text, so an edit re-embeds one section and nothing is ever committed.
 - **The two searches are two tools,** not one merged list. rdstudio measured that offering both finds more than either or their merge.
-- **Later, on a phone:** embedding a base in a phone's browser took about ten minutes in rdstudio's measurement. Two ways out, to be chosen when mobile is built: the vectors are computed on a desktop and synced as a cache file, or a paired home server answers the query. Keyword search and links work with neither.
+- **Later, on a phone:** the model has to run on the phone in any case, because every query is embedded before it is compared, and a query is one short text. What is slow is the first pass over a whole base: about ten minutes in a phone's browser in rdstudio's measurement. **Decided (2026-10-13):** one full pass when a base is first opened on the phone, in the background and resumable, then only the sections whose text changed. This is how the cache already works (it is keyed by a fingerprint of each section's text), so the phone needs no design of its own. Keyword search and links work while the pass runs. Optional shortcut, not needed for correctness: copy the cache file from a desktop to skip the first pass. Nothing is embedded on anyone else's machine.
 
 ## 7. The Atlas
 
@@ -255,11 +255,27 @@ The interface plays sound (later) by listening to this same stream and to its ow
 | server | vitest against the real HTTP routes on a temporary folder |
 | app | `@playwright/test`, selecting by text and role; each streamed state has a name a test can wait on; every screen at 1280 and 390 px on both grounds |
 
-## 14. Open
+## 14. Questions
 
-1. Does project mode (no study base) keep a journal anywhere?
-2. How the marked answer line of an exercise is recorded in the exercise's file (`docs/format.md`, section 5).
-3. Whether a suggestion that was never kept is recorded once it disappears.
-4. A "mentions" link kind.
-5. How far back a journal is kept. Nothing is trimmed for now.
-6. On a phone: where the vectors for search by meaning come from.
+Answered by Lachlan on 2026-10-13:
+
+| Question | Answer |
+|---|---|
+| Does project mode keep a journal? | Yes, attached to the notes in the knowledge base (section 2). |
+| How the marked answer line of an exercise is recorded | As proposed: in the `attempt` event, as the working at that moment and the answer's block. The exercise's file stays plain Markdown. |
+| Is a suggestion that was never kept recorded? | A suggested link (on a new note from the Atlas) is not recorded once it disappears. Text from Iso stays pending until the person keeps or discards it. |
+| A "mentions" link kind | Not added. "see also" covers it. |
+| How far back a journal is kept | Nothing is trimmed. See below for what to watch. |
+| Vectors for search by meaning on a phone | One full pass, then only what changed (section 6). |
+
+**What never trimming a journal costs.**
+
+- *Size.* Each save is a line, and every 40th carries the whole note. How much that is depends on how often the editor saves, which is set in milestone 1; the journal's size per hour of writing is to be measured there, not guessed.
+- *Reading.* The timeline replays from the nearest whole text, so opening a late version is cheap however long the file is. Listing every moment of a long-lived note reads the whole file.
+- *Deleted text is not gone.* Anything typed or pasted into a note and then removed stays in its journal, and in git once committed. This is the one that matters: a pasted key or a private remark survives deletion.
+- *If it becomes a problem:* old sessions can be folded to one entry each, because a `change` entry may carry the whole text and restart the chain. That rewrites a file that is otherwise only added to, so it must be done on one device and synced. A "forget this" command for one note's history is the same operation. Neither is built.
+
+Still open:
+
+1. Whether the project-mode journal folder is committed or ignored (section 2).
+2. Whether to add a command that removes text from a journal for good.

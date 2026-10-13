@@ -13,7 +13,9 @@ A folder of notes in the Open Knowledge Format 0.2, as rdstudio read it. `fixtur
 - Links are absolute within the base (`/folder/note.md`).
 - A note's id is its path without `.md`: `basics/entropy`.
 
-isorite writes nothing of its own into a knowledge base. No markers for unkept text, no journal, no settings.
+When there is a study base, isorite writes nothing of its own into the knowledge base. No markers for unkept text, no journal, no settings.
+
+**Project mode (later, proposed).** A knowledge base opened with no study base keeps its notes' journals in itself, at `.isorite/journal/<note id>.jsonl`, in the form of section 3. Whether that folder is committed is open.
 
 ## 2. The study base (`study.ts`)
 
@@ -140,7 +142,7 @@ Show that the entropy of a fair coin is one bit.
 ```
 
 - `tests` names notes of the knowledge base by id. This is how a study note links to the base; the base never links back.
-- **Open:** how the line marked as the answer is recorded. Proposed: it is not in the file at all. Marking a line is part of the `attempt` event, which holds the working as it was and the answer's block as an anchor, so the file stays plain Markdown. To be settled in the plan for milestone 4.
+- **The line marked as the answer is not in the file.** Marking a line is part of the `attempt` event, which holds the working as it was and the answer's block as an anchor (`{text, nth}`, as in section 3), so the file stays plain Markdown. Agreed 2026-10-13; the event's exact fields are set in milestone 4.
 
 ## 6. What is kept outside both repositories
 

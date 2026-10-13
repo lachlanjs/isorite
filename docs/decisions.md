@@ -58,7 +58,7 @@ Transcribed on 2026-10-13 from the two decisions boards in the design artifact (
 |---|---|---|
 | open | the logo menu and settings | Desktop menu behind the logo; mobile home screen. |
 | open | first run | Choosing or making a base and a study base, the provider key, sync. |
-| open | project mode | And how study mode differs from it at a glance. |
+| decided | project mode | Keeps a journal for each note, in the knowledge base itself since there is no study base (2026-10-13). Open: how study mode differs from it at a glance, and whether that journal is committed. |
 | open | empty, error and offline states | A base with no notes; Iso unreachable; a failed sync. |
 | open | "what changed while I was away" | The session tour. The first-run tour exists for desktop only. |
 | open | the Atlas at scale on a phone | And the timeline on the mobile Atlas. |
@@ -88,8 +88,8 @@ none of these blocks the first slice except the logo menu and first run.
 | decided | understanding | A number, always derived from events in the study record (attempts, reviews, wind-backs). Never edited by hand or stored as the truth. |
 | decided | which study base goes with which base | Written in the study base itself ( isorite.toml : the knowledge base's remote and path). A phone has no ~/.config . |
 | my call | a terminal agent's edits to notes | Wait to be kept, through the same journal. Its edits to code use the harness's own accept and reject. |
-| open | suggested links | Whether a suggestion is recorded at all once it disappears. |
-| open | a "mentions" link kind | Beside "requires" and "see also". |
+| decided | suggested links | Not recorded once they disappear. Text from Iso is different: it stays pending until kept or discarded (2026-10-13). |
+| decided | a "mentions" link kind | Not added; "see also" covers it (2026-10-13). |
 
 these change what is committed, so they are expensive to change later.
 
