@@ -422,12 +422,15 @@ export class Engine implements Api {
   /** The session's exchanges with Iso, across its notes, since the conversation was last cleared. */
   private async exchangesNow(): Promise<Exchange[]> {
     const since = await this.clearedAt(), session = await this.sessionNow(), out: Exchange[] = [];
-    for (const [note, entries] of await this.sessionEntries()) {
+    const log = await this.sessionEntries();
+    // A reply to a note for Iso that was kept is in two journals, the draft's and the new note's: told once, as kept.
+    const copied = new Set([...log.values()].flatMap((entries) => entries.flatMap((e) => (e.kind === "proposal" && e.copyOf ? [e.copyOf] : []))));
+    for (const [note, entries] of log) {
       // What became of each is read from the note's whole journal: a keep may be in a later session.
       const whole = entries.some((e) => e.kind === "proposal") ? await this.journal(note) : [];
       out.push(...exchanges(note, this.bundle.concepts.get(note)?.title ?? note, whole, session, since));
     }
-    return out;
+    return out.filter((x) => !copied.has(x.id));
   }
 
   /** An event in the study record, on this device's file. */
@@ -457,7 +460,7 @@ export class Engine implements Api {
     // What the session has cost: every reply offered, kept or not, and every reply that came to nothing.
     const session = await this.sessionNow();
     let usd = 0, requests = 0;
-    for (const entries of (await this.sessionEntries()).values()) for (const e of entries) if (e.kind === "proposal") { usd += e.cost?.usd ?? 0; requests++; }
+    for (const entries of (await this.sessionEntries()).values()) for (const e of entries) if (e.kind === "proposal" && !e.copyOf) { usd += e.cost?.usd ?? 0; requests++; }
     const text = this.opts.study ? await this.opts.study.read(recordPath(this.opts.device)) : null;
     for (const e of readRecord(text ?? "")) if (e.event === "iso-unused" && e.session === session) { usd += typeof e.usd === "number" ? e.usd : 0; requests++; }
     return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: { usd, requests } };
@@ -505,7 +508,7 @@ export class Engine implements Api {
     let asked = source.text;
     try { asked = splitFrontmatter(source.text)[1].trim(); } catch { /* the whole of it */ }
     const copy = await this.one(async () => {
-      const entry = { ...p, ...(await this.stamp(p.who)), asked, after: null, before: null } as Proposal;
+      const entry = { ...p, ...(await this.stamp(p.who)), asked, after: null, before: null, copyOf: p.id } as Proposal;
       await this.enter(id, await this.journal(id), entry);
       return entry;
     });

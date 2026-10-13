@@ -64,6 +64,9 @@ interface ProposalBase extends Stamp {
   cost?: Cost;
   /** The notes Iso read to write it, in order. */
   read?: string[];
+  /** For a reply to a note written for Iso, entered again in the note it became: the proposal it is a copy of, in
+   *  the draft's journal. A copy is the same exchange and the same cost, counted once. */
+  copyOf?: string;
   /** Something the person should know about it: that part of the reply was left out, or that it was cut short. */
   notice?: string;
 }

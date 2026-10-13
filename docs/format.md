@@ -27,7 +27,7 @@ isorite.toml
 journal/<note id>.jsonl         section 3
 record/<device>.jsonl           section 4
 study/<folder>/<name>.md        section 5
-drafts/<id>.md                  notes for Iso that are not in the base yet (milestone 2)
+drafts/<id>.md                  notes for Iso that are not in the base yet
 ```
 
 `isorite.toml`:
@@ -41,6 +41,7 @@ remote = ""                      # where to clone it from, on a device that lack
 root = "9f4def6…"                # its root commit: the same in every clone
 ```
 
+- **A note for Iso** is a draft: `drafts/<id>.md`, an OKF note like any other, whose id is a lower-case ULID. Wherever notes are named it is `@draft/<id>`, and its journal is at `journal/@draft/<id>.jsonl`. When Iso's reply is kept as a note the draft's file is removed and its journal stays.
 - **A study folder** is the folder under `study/` with the same path as a folder of the knowledge base. `study/basics/` studies `basics/`. `study/` itself studies the root.
 - Wherever the two bases are spoken of together, a study note's id is prefixed: `@study/basics/entropy-of-a-coin`. Its journal is at `journal/@study/basics/entropy-of-a-coin.jsonl`.
 
@@ -92,12 +93,14 @@ Any earlier version is rebuilt by starting from the nearest `text` before it and
 - `form: "insert"`: new text between the block `after` and the block `before`. Either may be null (the start or the end of the note).
 - `form: "rewrite"`: `blocks`, a list of `{ "old": {text, nth}, "new": "…" }`. An empty `new` removes the block.
 - **A place is the text of a block, never a line number.** `nth` tells apart blocks with identical text. If the note has changed and the place is not found, the proposal is unplaced: shown apart from the text, and still pending.
+- Optional on a proposal: `notice`, a sentence for the person (part of the reply was left out; it was cut short); and `copyOf`, on the reply to a note for Iso as it is entered again in the note it became, naming the proposal in the draft's journal. A copy is the same exchange and the same cost, counted once.
 - A block is a run of lines between blank lines. A fenced code block or a displayed equation is one block. Frontmatter is not a block. (`blocks.ts`)
 
 ### `revise` and `discard`
 
 ```json
 {"id":"…", …,"who":"you","kind":"revise","proposal":"01K7…","text":"my edited version"}
+{"id":"…", …,"who":"you","kind":"revise","proposal":"01K7…","blocks":["block one, edited","block two"]}
 {"id":"…", …,"who":"you","kind":"discard","proposal":"01K7…"}
 ```
 
@@ -111,7 +114,8 @@ One file per device, so two devices never write the same file. One JSON event pe
 |---|---|---|
 | `attempt` | `exercise`, `tests` (note ids), `result` (`right`, `partly`, `wrong`), `by` (`iso:<model>` or `you`) | an exercise was marked |
 | `wind-back` | `note` | the person lowered Iso's reading of them by one |
-| `context-cleared` | | earlier moments of the session are left out of Iso's context (milestone 2) |
+| `context-cleared` | | Iso is no longer sent this session's exchanges from before this event. Nothing is deleted. |
+| `iso-unused` | `note`, `session`, `model`, `usd` | a reply that was paid for and offered nothing (a rewrite that changed nothing, an empty reply): counted in what the session cost |
 
 **Understanding is not stored.** It is a number from 0 to 6 worked out from these events by `understanding()`:
 
@@ -150,5 +154,22 @@ Show that the entropy of a fair coin is one bit.
 |---|---|---|
 | provider keys, tier to model | `~/.config/isorite/config.toml` | secrets |
 | this device's id | `~/.config/isorite/config.toml` | one per device |
-| vectors for search by meaning | `~/.cache/isorite/` | a cache, rebuilt from the notes |
-| the embedding model | fetched once into the package | 34 MB |
+| vectors for search by meaning | `~/.cache/isorite/vectors-<hash of the notes' folder>.json` | a cache, rebuilt from the notes |
+| the embedding model | `packages/server/models/`, fetched by `npm run model` and checked against its SHA-256 | 34 MB |
+
+`config.toml`:
+
+```toml
+device = "91d4235f"
+
+[provider]            # OpenRouter unless `url` names another OpenAI-compatible endpoint
+key = "…"
+# name = "local"
+# url = "http://localhost:11434/v1"
+
+[tiers]               # which model each tier is, as the provider names it
+# mid = "anthropic/claude-sonnet-5.5"
+
+[prices]              # US dollars a million tokens, in and out, for a provider that does not report cost
+# "llama3" = [0, 0]
+```

@@ -98,21 +98,45 @@ Each step ends with its tests passing and a commit. I would stop and show you af
 - **Size.** This is the largest milestone of the slice, perhaps twice milestone 1. The stop after step 3 is there so a wrong turn is caught early.
 - **Streaming through the event stream** rather than through the request means a second tab sees Iso working too, which is wanted, and that a dropped connection must not lose the proposal, which the journal already guarantees.
 
-## 8. Progress
+## 8. What was built (2026-10-13)
 
-**Steps 1 to 3, built 2026-10-13.**
+All eight steps of section 5, on the branch `m2-iso`.
 
-- The provider over plain `fetch`, the read-only lookup tools and the loop, in the engine, tested against a scripted provider.
-- Asking at a point: Ctrl+Enter opens a prompt line under the paragraph the cursor is in (on a phone, a field at the foot of the note). The reply arrives between dotted rules, with what Iso is looking up beside `[ stop ]`. Keep, edit, remove, and the answer / prompt switch, as on `Desktop-Editor`.
-- Settings behind the logo: the ground (the system's, lapis, quartz), the provider key (held, replaced or forgotten; never shown again), and which model each tier is.
-- Tested: 27 engine tests and 16 server tests; 44 browser tests (11 tests at two widths on both grounds), among them that the note's file is byte for byte unchanged until keep, and that a waiting proposal, and an edit to it, are there after a reload.
-- One request to a real model (Haiku, through OpenRouter, on a temporary base): answered in 4.5 seconds for $0.004, after one keyword search of its own.
+**What you can do:**
 
-**Not built yet:** the rewrite of selected paragraphs (step 4); the header's count, cost and breakdown, and clearing the conversation (5); search by meaning (6); the note for Iso (7); the run on the information theory base (8).
+- **Ask at a point.** Ctrl+Enter under the paragraph the cursor is in; on a phone, the field at the foot. Iso's text arrives between dotted rules, with what it is looking up beside `[ stop ]`. Keep, edit, remove, and the answer / prompt switch, as on `Desktop-Editor`.
+- **Ask for a rewrite.** Select text and press Ctrl+Enter: every paragraph the selection touches is chosen. Each rewritten paragraph waits under the one it would replace, which is struck through. Only what comes back between the paragraphs' own marks is used, so nothing else in the note can change. It is edited block by block and kept as one.
+- **Write a note for Iso.** "new note for Iso" on the notes list. The draft is a file of the study base. Sent with the notes it links to, it is answered with a note that waits under your folded prompt, is edited in place, and is kept in a folder you choose (`Desktop-Ask`, `Desktop-Review`).
+- **See the context and the cost** in the header; the count opens the five parts and `[ clear the conversation ]` (`Header-Context`).
+- **Settings behind the logo:** the ground, the provider key, which model each tier is.
+- **Search by meaning** is a second tool for Iso wherever the model is installed (`npm run model`).
 
-**Known gaps in what is built:**
+**Checked:**
 
+- 371 unit tests pass: 280 core, 45 engine, 19 server, 27 editor. The type checks are clean.
+- 68 browser tests pass: 17 tests at two widths on both grounds, against a scripted provider. Among them: the note's file is byte for byte unchanged until keep; a waiting proposal and an edit to it are there after a reload; a prompt sent twice is asked once; a rewrite changes only the chosen paragraphs; a draft is not in the base until kept.
+- rdstudio's retrieval measure on its 230-note base gives the same figures here as there (45 questions; an answering note in the first five: keyword 62%, by meaning 73%, either 80%).
+- Against the real mid-tier model (Sonnet 5.5 through OpenRouter), on a temporary copy of the information theory base: new text at a point (5 s, $0.010), a rewrite of one paragraph of ten that changed exactly that one (3 s, $0.008), and a note for Iso on cross-entropy, resting on the entropy note, kept as a note (12 s, $0.023, after two searches of its own).
+- I looked at the screenshots of a proposal, a rewrite, Iso working, the context breakdown, the settings, the draft and its review, on both grounds and both widths, against the boards named above.
+
+**What the real key was charged:** about $0.05 by these checks, and about $0.05 by Lachlan's own first use, of which $0.016 was the answer that arrived twice.
+
+**Found by use and fixed:** a prompt was sent twice when Enter was pressed again before the engine had said it had started. The prompt line now gives way at once, and the engine takes one request for a note at a time.
+
+**Where it departs from the plan or the boards:**
+
+- **The rewrite is not side by side.** Each new paragraph sits under the old one, struck through. Side by side does not fit a 680 px column or a phone.
+- **A draft's prompt is shown as written** when folded, links as Markdown, not drawn.
+- **`[ + pick on the atlas ]` is absent**, and a note for Iso starts from the notes list, until the Atlas is built (agreed).
+- **Suggested links are absent** (agreed).
+- **A question asked at a point is answered as text for the note.** That is the plan, but in use it means "is this a good summary?" produces a critique you then keep or remove. Whether a question should have a form of its own, with an answer that is never meant for the note, is worth deciding after more use.
+
+**Not done, or not checked:**
+
+- A real model has been run through the engine, not through the browser by me. Lachlan has done that.
+- The max tier, and any provider but OpenRouter, against a real model.
 - Editing Iso's text is a plain box of Markdown, not the live preview.
-- Iso's conversation is this note's earlier requests in this session, not yet the whole session across notes.
-- Nothing limits how much is sent: a very long note is sent whole. This is part of step 5.
-- While Iso's reply is arriving its Markdown is drawn as it stands, so an unfinished `**` shows for a moment.
+- The first pass of search by meaning over a large base runs on one thread: about two and a half minutes for 230 notes, in the background. rdstudio shared it among four processes.
+- While a reply arrives its Markdown is drawn as it stands, so an unfinished `**` shows for a moment.
+- Prompt caching: the instructions are marked for it, but at about 1,200 tokens they are near the smallest size a provider will cache, and the first two real requests reported nothing read from the cache.
+- Firefox, Safari and a real phone, as in milestone 1.

@@ -392,6 +392,10 @@ test("a note for Iso is a draft outside the base; sent, its reply is kept as a n
   expect([...study.files.keys()].some((k) => k.startsWith("journal/@draft/"))).toBe(true);
   expect((await engine.notes()).notes.map((n) => n.id)).toContain("basics/self-information-in-my-own-words");
   void saved;
+  // The reply is in two journals now, and is one request, paid for once, and one exchange, told as kept.
+  expect((await engine.context()).session).toEqual({ usd: 0.004, requests: 1 });
+  expect(journal[1]).toMatchObject({ copyOf: id });
+  sent.length = 0;
 });
 
 test("a draft needs a title to be kept, and can be thrown away", async () => {
