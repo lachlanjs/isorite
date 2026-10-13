@@ -16,7 +16,7 @@ const USAGE = `isorite: an agentic harness for understanding
 
   isorite check <notes>                  check a folder of notes: frontmatter, links, cycles
   isorite study init <notes> [<where>]   make a study base for it (default: beside its repository)
-  isorite serve <study base | notes> [--port <n>]
+  isorite serve <study base | notes> [--port <n>] [--allow-host <name>]
                                          open it in the browser, on this machine only
 `;
 
@@ -39,7 +39,8 @@ export function main(argv: string[]): number | Promise<number> {
       const at = rest.indexOf("--port"), port = at < 0 ? undefined : Number(rest[at + 1]);
       if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
       // Runs until stopped; what it refuses at the start is reported like any other command's.
-      return serve(rest[0], port === undefined ? {} : { port }).then(() => new Promise<number>(() => undefined), (e) => {
+      const allowHosts = rest.flatMap((a, i) => (a === "--allow-host" && rest[i + 1] ? [rest[i + 1]!] : []));
+      return serve(rest[0], { ...(port === undefined ? {} : { port }), allowHosts }).then(() => new Promise<number>(() => undefined), (e) => {
         if (e instanceof StudyError) { console.error(e.message); return 2; }
         throw e;
       });

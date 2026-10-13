@@ -35,11 +35,11 @@ export async function openEngine({ notes, study }: Opened, device = deviceId()):
   return Engine.open({ notes: new NodeFiles(notes), study: study ? new NodeFiles(study) : null, clock: systemClock, device, name: basename(notes) });
 }
 
-export async function serve(path: string, { host = "127.0.0.1", port = 4767 } = {}): Promise<void> {
+export async function serve(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[] } = {}): Promise<void> {
   const opened = locate(path);
   const api = await openEngine(opened);
   const web = existsSync(join(WEB_DIR, "index.html")) ? WEB_DIR : null;
-  const app = createApp({ api, token: randomBytes(24).toString("base64url"), loopback: LOOPBACK.has(host), web });
+  const app = createApp({ api, token: randomBytes(24).toString("base64url"), loopback: LOOPBACK.has(host), web, allowHosts });
   const server = nodeServe({ fetch: app.fetch, hostname: host, port });
   server.on("error", (e: NodeJS.ErrnoException) => {
     console.error(e.code === "EADDRINUSE" ? `port ${port} is in use (isorite serve --port <n>)` : e.message);

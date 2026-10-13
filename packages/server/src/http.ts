@@ -19,6 +19,8 @@ export interface ServerOptions {
   loopback: boolean;
   /** The built app's folder, or null to serve the API alone. */
   web: string | null;
+  /** Other names this server may be reached by (isorite serve --allow-host). */
+  allowHosts?: Iterable<string>;
 }
 
 const TYPES: Record<string, string> = {
@@ -30,8 +32,9 @@ const TYPES: Record<string, string> = {
 const Edit = z.object({ base: z.string().max(64), text: z.string() }).strict();
 const Make = z.object({ text: z.string() }).strict();
 
-export function createApp({ api, token, loopback, web }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [] }: ServerOptions): Hono {
   const app = new Hono();
+  const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
     c.body(JSON.stringify(value), status as 200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
   const refuse = (c: Context, status: number, error: string) => reply(c, status, { error });
@@ -39,8 +42,10 @@ export function createApp({ api, token, loopback, web }: ServerOptions): Hono {
   const hostOk = (c: Context): boolean => {
     let host = "";
     try { host = new URL("http://" + (c.req.header("host") ?? "")).hostname.replace(/^\[|\]$/g, "").toLowerCase(); } catch { /* none */ }
-    return !loopback || LOOPBACK.has(host);
+    // A tailnet's names (tailscale serve) are yours: nobody outside the tailnet can point one at this machine.
+    return !loopback || LOOPBACK.has(host) || host.endsWith(".ts.net") || allowed.has(host);
   };
+  const NOT_HERE = "isorite answers only to this machine's own names (localhost) and to a tailnet's (….ts.net). To be reached by another name, start it with: isorite serve <base> --allow-host <that name>";
   /** Why a write is refused, or null. */
   const writeRefused = (c: Context): Response | null => {
     let origin = "";
@@ -69,7 +74,7 @@ export function createApp({ api, token, loopback, web }: ServerOptions): Hono {
   };
   const id = (c: Context): string => c.req.query("id") ?? "";
 
-  app.use("/api/*", async (c, next) => (hostOk(c) ? next() : refuse(c, 403, "host not allowed")));
+  app.use("/api/*", async (c, next) => (hostOk(c) ? next() : refuse(c, 403, NOT_HERE)));
 
   // The token is given to the page that asks from this origin. Another site's page cannot read the reply.
   app.get("/api/session", (c) => answer(c, async () => ({ ...(await api.session()), token })));
@@ -102,7 +107,7 @@ export function createApp({ api, token, loopback, web }: ServerOptions): Hono {
   }));
 
   app.all("/api/*", (c) => refuse(c, 404, "not found"));
-  app.on(["GET", "HEAD"], "*", (c) => (web && hostOk(c) ? staticFile(c, web) : c.text("Not found", 404)));
+  app.on(["GET", "HEAD"], "*", (c) => (!hostOk(c) ? c.text(NOT_HERE, 403) : web ? staticFile(c, web) : c.text("Not found", 404)));
   return app;
 }
 
