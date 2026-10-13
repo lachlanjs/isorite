@@ -6,7 +6,7 @@
     item: LayoutItem;
     title: string;
     kind: string;
-    mark?: "" | "at" | "req" | "bld";
+    mark?: "" | "at" | "req" | "bld" | "use" | "also";
     dim?: boolean;
     href: string;
     onpick: (event: MouseEvent) => void;
@@ -37,6 +37,8 @@
   .dim { opacity: .5; }
   .at, .req, .bld { outline: 2px solid var(--text); outline-offset: 2px; }
   .req { outline-color: var(--requires); }
+  .use { outline: 1px solid var(--text-soft); outline-offset: 2px; }
+  .also { outline: 1px dotted var(--text-faint); outline-offset: 2px; }
   .bld { outline-color: var(--builds); }
   .sn:focus-visible { outline: 2px solid var(--lattice); outline-offset: 2px; }
 </style>

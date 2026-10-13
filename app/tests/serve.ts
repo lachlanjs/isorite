@@ -62,7 +62,8 @@ if (process.argv[1] === import.meta.filename) {
   const coding = (title: string, requires: string) => `---\ntype: Concept\ntitle: ${title}\n---\n\nIt rests on [this](/${requires}.md "requires").\n`;
   writeFileSync(join(NOTES, "coding", "source-coding.md"), coding("Source coding", "basics/surprise"));
   writeFileSync(join(NOTES, "coding", "kraft-inequality.md"), coding("Kraft inequality", "coding/source-coding"));
-  writeFileSync(join(NOTES, "coding", "huffman-codes.md"), coding("Huffman codes", "coding/kraft-inequality"));
+  // The last of them also joined by weaker links: "uses", which the map draws lighter, and "see also", which it does not draw.
+  writeFileSync(join(NOTES, "coding", "huffman-codes.md"), coding("Huffman codes", "coding/kraft-inequality") + `\nIt counts in [bits](/basics/bit.md "uses"). See also [surprise](/basics/surprise.md "see also").\n`);
   process.env.XDG_CONFIG_HOME = join(ROOT, "config");
   process.env.XDG_CACHE_HOME = join(ROOT, "cache");
   process.env.ISORITE_EMBED = "off"; // the browser tests are about the pages; the model has its own tests

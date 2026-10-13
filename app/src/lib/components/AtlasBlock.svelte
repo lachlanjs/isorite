@@ -3,12 +3,14 @@
   // understood); what is lit round it is an outline. It knows nothing of the layout or of Iso.
   import type { LayoutItem } from "@isorite/core/atlas";
 
-  let { item, title, step, mark = "", dim = false, href, onpick, onpoint }: {
+  let { item, title, step, mark = "", far = 0, dim = false, href, onpick, onpoint }: {
     item: LayoutItem;
     title: string;
     step: 0 | 1 | 2 | 3;
-    /** Lit: the note chosen, what it requires, or what builds on it. */
-    mark?: "" | "at" | "req" | "bld";
+    /** Lit: the note chosen, what it requires, what builds on it, or what it is joined to by a weaker link ("uses", "see also"). */
+    mark?: "" | "at" | "req" | "bld" | "use" | "also";
+    /** For what it requires: how many steps back. Past the first the outline thins and fades. */
+    far?: number;
     dim?: boolean;
     href: string;
     onpick: (event: MouseEvent) => void;
@@ -17,7 +19,7 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a class="n s{step} {mark}" class:dim {href} aria-label={title} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h}"
+<a class="n s{step} {mark}" class:dim class:far={far > 1} {href} aria-label={title} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
@@ -38,7 +40,10 @@
   .s3 { border: 3px double var(--lattice); background: var(--ground-3); color: var(--text); }
   .dim { opacity: .5; }
   .at, .req, .bld { color: var(--text); outline: 2px solid var(--text); outline-offset: 2px; }
-  .req { outline-color: var(--requires); }
+  .req { outline-color: color-mix(in srgb, var(--requires) var(--lit, 100%), transparent); }
+  .req.far { outline-width: 1px; color: var(--text-soft); }
+  .use { color: var(--text); outline: 1px solid var(--text-soft); outline-offset: 2px; }
+  .also { color: var(--text-soft); outline: 1px dotted var(--text-faint); outline-offset: 2px; }
   .bld { outline-color: var(--builds); }
   .n:focus-visible { outline: 2px solid var(--lattice); outline-offset: 2px; }
 </style>

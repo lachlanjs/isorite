@@ -87,12 +87,28 @@ describe("what a note rests on", () => {
     expect(r.links).not.toContainEqual({ from: "d", to: "a", kind: "requires" });
     expect(r.links).toContainEqual({ from: "@study/x", to: "d", kind: "builds" });
   });
+  test("how far back each is, the way to it, and the weaker links of the note itself", () => {
+    const r = reach({ edges: [...edges, ["f", "d", 2], ["d", "g", 1], ["b", "h", 2]] }, "d");
+    expect(r.depth).toEqual({ c: 1, b: 2, a: 3 });
+    expect(r.via).toEqual({ c: "d", b: "c", a: "b" });
+    expect(r.uses).toEqual(["f"]); // d uses a too, which it also requires a longer way; b's own "uses" is not d's
+    expect(r.also).toEqual(["g"]);
+    expect(r.links).toContainEqual({ from: "f", to: "d", kind: "uses" });
+    expect(r.links.filter((l) => l.kind === "uses")).toHaveLength(1);
+  });
+  test("a link a longer way already makes is spare, and never both of two that make each other", () => {
+    const r = reach({ edges: [["x", "y", 3], ["y", "z", 3], ["x", "z", 3]] }, "x");
+    expect(r.links).toEqual([{ from: "x", to: "y", kind: "requires" }, { from: "x", to: "z", kind: "requires", spare: true }, { from: "y", to: "z", kind: "requires" }]);
+    const knot = reach({ edges: [["x", "y", 3], ["x", "z", 3], ["y", "z", 3], ["z", "y", 3]] }, "x");
+    expect(knot.links.filter((l) => l.from === "x" && l.spare)).toHaveLength(1);
+  });
   test("a study note lights what it tests, and what that requires", () => {
     expect(reach({ edges }, "@study/x").requires).toEqual(["d", "c", "b", "a"]);
   });
   test("a note nothing joins, or that only names itself", () => {
-    expect(reach({ edges }, "e")).toEqual({ requires: [], builds: [], links: [] });
-    expect(reach({ edges }, "nowhere")).toEqual({ requires: [], builds: [], links: [] });
+    const nothing = { requires: [], depth: {}, via: {}, builds: [], uses: [], also: [], links: [] };
+    expect(reach({ edges }, "e")).toEqual(nothing);
+    expect(reach({ edges }, "nowhere")).toEqual(nothing);
   });
   test("where no link is rated, every link counts", () => {
     expect(reach({ edges: [["b", "a", 2], ["c", "b", 2]] }, "c").requires).toEqual(["b", "a"]);

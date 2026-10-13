@@ -7,7 +7,7 @@
   import type { Layout } from "@isorite/core/atlas";
   import type { MapReport } from "@isorite/engine";
   import { app, noteHref } from "$lib/app.svelte.ts";
-  import { CELL, LABELS_AT, fit, indexLayout, linePath, litRoutes, openAt, restRoutes, zoomAbout, type Lit, type View } from "$lib/atlas/geometry.ts";
+  import { CELL, LABELS_AT, fit, indexLayout, linePath, litRoutes, openAt, restRoutes, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
   import AtlasFolder from "./AtlasFolder.svelte";
@@ -20,9 +20,13 @@
   let failed = $state("");
   let view = $state.raw<View>({ x: 0, y: 0, k: 1 });
   let size = $state.raw({ w: 0, h: 0 });
-  /** The note pointed at, and the note chosen: their names in the model. */
+  /** The note pointed at, and the notes walked: the one first chosen, then each requirement stepped back to.
+   *  The last is the note chosen. Their names in the model. */
   let pointed = $state("");
-  let chosen = $state("");
+  let walk = $state.raw<string[]>([]);
+  const chosen = $derived(walk.at(-1) ?? "");
+  /** Every link down the chain of what the note requires is drawn, not only its own. */
+  let chain = $state(false);
   let viewport = $state<HTMLDivElement>();
   let moved = false; // the map was moved by hand: a new layout then leaves the view alone
 
@@ -69,26 +73,57 @@
 
   const folders = $derived(L ? L.items.flatMap((item, i) => (item.kind === "folder" && open[i] !== "-" ? [{ item, i, open: open[i] === "o" }] : [])) : []);
   const notes = $derived(L ? L.items.flatMap((item, i) => (item.kind === "note" && open[i] === "s" ? [{ item, i }] : [])) : []);
-  const rest = $derived(L ? restRoutes(L, open).map((r) => ({ key: r.key, d: linePath(r.pts, r.lane), count: r.count, study: r.study, feed: r.feed, mid: r.pts[r.pts.length >> 1]! })) : []);
+  const rest = $derived(L ? restRoutes(L, open, idx!.strong).map((r) => ({ key: r.key, d: linePath(r.pts, r.lane), count: r.count, study: r.study, strong: r.strong, feed: r.feed, mid: r.pts[r.pts.length >> 1]! })) : []);
 
-  // What is lit: the note pointed at, or else the one chosen; what it requires, and what builds on it.
-  const at = $derived(pointed || chosen);
+  // What is lit: the note chosen, or with none chosen the one pointed at. Its own links are drawn, one step each
+  // way; the rest of what it requires is outlined, fainter the further back, and drawn only when asked for.
+  const at = $derived(chosen || pointed);
   const lit = $derived(at && report && idx?.at.has(at) ? reach(report.model, at) : null);
+  type Mark = "at" | "req" | "bld" | "use" | "also";
   const marks = $derived.by(() => {
-    const out = new Map<string, "at" | "req" | "bld">();
+    const out = new Map<string, { mark: Mark; far: number }>();
     if (!lit) return out;
-    for (const r of lit.builds) out.set(r, "bld");
-    for (const r of lit.requires) out.set(r, "req");
-    out.set(at, "at");
+    for (const r of lit.also) out.set(r, { mark: "also", far: 0 });
+    for (const r of lit.uses) out.set(r, { mark: "use", far: 0 });
+    for (const r of lit.builds) out.set(r, { mark: "bld", far: 0 });
+    for (const r of lit.requires) out.set(r, { mark: "req", far: lit.depth[r] ?? 1 });
+    for (const r of walk) out.set(r, { mark: "req", far: 1 }); // the way walked stays lit behind you
+    out.set(at, { mark: "at", far: 0 });
     return out;
   });
+  const links = $derived.by(() => {
+    if (!lit) return [];
+    const walked = walk.slice(1).map((to, k) => ({ from: walk[k]!, to, kind: "requires" as const })), last = walk.at(-2);
+    return [...walked, ...lit.links.filter((l) => (l.kind === "requires" ? (chain ? !l.spare : l.from === at) : !(l.kind === "builds" && l.from === last)))];
+  });
+  // A folder apart from the chosen note's own stands for the notes in it: how many of them it requires, and
+  // how many build on it.
+  const held = $derived.by(() => {
+    const out = new Map<number, { req: number; bld: number }>();
+    if (!lit || !idx) return out;
+    const mine = new Set(idx.up[idx.at.get(at)!]);
+    const count = (refs: string[], k: "req" | "bld"): void => {
+      for (const r of refs) for (const p of idx.up[idx.at.get(r) ?? -1] ?? []) {
+        if (mine.has(p)) break;
+        const h = out.get(p) ?? { req: 0, bld: 0 };
+        h[k]++; out.set(p, h);
+      }
+    };
+    count(lit.requires, "req"); count(lit.builds, "bld");
+    return out;
+  });
+  /** What a folder says it holds: a closed one always, an open one only where it is the outermost apart from the note's own. */
+  const holds = (i: number, isOpen: boolean): { req: number; bld: number } => {
+    const h = held.get(i), parent = L!.items[i]!.parent;
+    return h && (!isOpen || parent < 0 || !held.has(parent)) ? h : { req: 0, bld: 0 };
+  };
 
-  // The lit routes: the layout's own ways at once, and the rest when the router has found them.
-  let hot = $state.raw<{ key: string; d: string; kind: "requires" | "builds" }[]>([]);
+  // The lit routes: the layout's own ways at once, and the few it drew none for when the router has found them.
+  let hot = $state.raw<{ key: string; d: string; kind: LitKind }[]>([]);
   $effect(() => {
-    if (!lit || !L || !idx || !laid) { hot = []; return; }
-    const links = lit.links.flatMap((l) => { const a = idx.at.get(l.from), b = idx.at.get(l.to); return a === undefined || b === undefined ? [] : [{ a, b, kind: l.kind }]; });
-    const { fixed, asks } = litRoutes(L, idx, open, links);
+    if (!links.length || !L || !idx || !laid) { hot = []; return; }
+    const ends = links.flatMap((l) => { const a = idx.at.get(l.from), b = idx.at.get(l.to); return a === undefined || b === undefined ? [] : [{ a, b, kind: l.kind }]; });
+    const { fixed, asks } = litRoutes(L, idx, open, ends);
     const drawn = (r: Lit) => ({ key: r.key, kind: r.kind, d: linePath(r.pts) });
     hot = fixed.map(drawn);
     if (!asks.length) return;
@@ -172,15 +207,18 @@
     return () => el.removeEventListener("wheel", wheel);
   });
 
-  /** A click on a note chooses it; on the chosen note, opens it. */
+  /** A click on a note chooses it; on the chosen note, opens it. On a note the chosen one requires it steps
+   *  back to it, the way there kept; on one already walked, returns to it. */
   function pick(e: MouseEvent, ref: string): void {
     if (e.metaKey || e.ctrlKey || e.shiftKey) return; // a new tab is the browser's
     e.preventDefault();
     e.stopPropagation();
     if (dragged) return;
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
-    if (chosen === ref) void goto(noteHref(ref));
-    else chosen = ref;
+    if (chosen === ref) { void goto(noteHref(ref)); return; }
+    const back: string[] = [];
+    if (lit && at === chosen && lit.depth[ref]) for (let r: string | undefined = ref; r && r !== chosen; r = lit.via[r]) back.unshift(r);
+    walk = walk.includes(ref) ? walk.slice(0, walk.indexOf(ref) + 1) : back.length ? [...walk, ...back] : [ref];
   }
   /** A click on a folder frames it; on one already framed, the folder it is in. */
   function enter(i: number): void {
@@ -195,12 +233,13 @@
     if (dragged || !(e.target instanceof Element)) return;
     const folder = e.target.closest<HTMLElement>("[data-folder]");
     if (e.target.closest("a, button")) return;
-    if (chosen) chosen = "";
+    if (chosen) walk = [];
     else if (folder && L) enter(L.items.findIndex((n) => n.kind === "folder" && n.ref === folder.dataset.folder));
     else fly(whole());
   }
   function key(e: KeyboardEvent): void {
-    if (e.key === "Escape") { chosen = pointed = ""; return; }
+    if (e.key === "Escape") { walk = []; pointed = ""; return; }
+    if (e.key === "w" && chosen && !e.metaKey && !e.ctrlKey && !e.altKey) { chain = !chain; return; }
     if (e.target !== viewport) return;
     const pan = 80, c = { x: size.w / 2, y: size.h / 2 };
     if (e.key === "+" || e.key === "=") view = zoomAbout(view, 1.25, c.x, c.y);
@@ -218,7 +257,7 @@
   const labels = $derived(view.k >= LABELS_AT);
   const count = $derived(L ? L.items.filter((n) => n.kind === "note" && n.ref.startsWith("@study")).length : 0);
   $effect(() => {
-    app.atlas = { items: count };
+    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", steps: walk.length - 1, chain, whole: () => { chain = !chain; } };
     return () => { app.atlas = null; };
   });
 </script>
@@ -236,7 +275,7 @@
         {#if f.item.ref.startsWith("@study")}
           <AtlasStudyFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} onpick={() => enter(f.i)} />
         {:else}
-          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} onpick={() => enter(f.i)} />
+          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} onpick={() => enter(f.i)} />
         {/if}
       {/each}
       <AtlasRoutes k={view.k} {rest} {hot} />
@@ -246,12 +285,13 @@
         {/each}
       {/if}
       {#each notes as n (n.item.id)}
-        {@const mark = marks.get(n.item.ref) ?? ""}
+        {@const m = marks.get(n.item.ref)}
+        {@const mark = m?.mark ?? ""}
         {#if n.item.ref.startsWith("@study")}
           <AtlasStudyItem item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? "note"} {mark} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => pick(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {:else}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} step={report.notes[n.item.ref]?.step ?? 0} {mark} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} step={report.notes[n.item.ref]?.step ?? 0} {mark} far={m?.far ?? 0} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => pick(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {/if}
       {/each}

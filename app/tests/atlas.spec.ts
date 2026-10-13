@@ -26,7 +26,7 @@ test("the map draws both bases: folders, notes where you stand, a study folder a
   await look(page, "atlas");
 });
 
-test("choosing a note lights what it requires, all the way back, and what builds on it; again opens it", async ({ page }) => {
+test("choosing a note outlines what it requires, all the way back, and what builds on it; again opens it", async ({ page }) => {
   await atlas(page);
   await note(page, "coding/kraft-inequality").click();
   await expect(note(page, "coding/kraft-inequality")).toHaveClass(/\bat\b/);
@@ -35,8 +35,12 @@ test("choosing a note lights what it requires, all the way back, and what builds
   await expect(note(page, "coding/huffman-codes")).toHaveClass(/\bbld\b/);
   await expect(note(page, "basics/bit")).toHaveClass(/\bdim\b/);
   await expect(note(page, "@study/coding/a-prefix-code")).toHaveClass(/\bdim\b/); // it builds on Huffman codes, not on this
-  await expect(page.locator(".routes path.lit.requires")).not.toHaveCount(0);
+  // Lines are drawn for one step each way only; the note two steps back is outlined, fainter.
+  await expect(page.locator(".routes path.lit.requires")).toHaveCount(1);
   await expect(page.locator(".routes path.lit.builds")).toHaveCount(1);
+  await expect(note(page, "coding/source-coding")).not.toHaveClass(/\bfar\b/);
+  await expect(note(page, "basics/surprise")).toHaveClass(/\bfar\b/);
+  await expect(folder(page, "basics")).toContainText("1 required here");
   await look(page, "atlas-chosen");
 
   await page.keyboard.press("Escape");
@@ -47,6 +51,46 @@ test("choosing a note lights what it requires, all the way back, and what builds
   await note(page, "coding/kraft-inequality").click();
   await expect(page).toHaveURL(/#\/n\/coding\/kraft-inequality$/);
   await expect(page.getByLabel("Title")).toHaveValue("Kraft inequality");
+});
+
+test("the chain is walked a step at a time, the way kept; the whole of it is drawn when asked for", async ({ page }) => {
+  await atlas(page);
+  const lines = page.locator(".routes path.lit.requires");
+  await note(page, "coding/huffman-codes").click();
+  await expect(lines).toHaveCount(1);
+  // Its weaker links, one step: "uses" is a plain line to a note outlined, "see also" an outline alone. Here
+  // the note it sees also is one it requires three steps back, and that comes first.
+  await expect(note(page, "basics/bit")).toHaveClass(/\buse\b/);
+  await expect(page.locator(".routes path.lit.uses")).toHaveCount(1);
+  await expect(note(page, "basics/surprise")).toHaveClass(/\breq\b/);
+
+  // Pointing at another note changes nothing while one is chosen.
+  await note(page, "basics/bit").hover();
+  await expect(note(page, "coding/huffman-codes")).toHaveClass(/\bat\b/);
+
+  // Two steps back at once: the way there is walked and stays lit, and the note's own step is drawn.
+  await note(page, "coding/source-coding").click();
+  await expect(note(page, "coding/source-coding")).toHaveClass(/\bat\b/);
+  await expect(note(page, "coding/kraft-inequality")).toHaveClass(/\breq\b/);
+  await expect(note(page, "coding/huffman-codes")).toHaveClass(/\breq\b/);
+  await expect(lines).toHaveCount(3);
+  await expect(page.locator(".routes path.lit.builds")).toHaveCount(0); // what builds on it is the way walked
+  await expect(page.getByText("2 steps back")).toBeVisible();
+  await look(page, "atlas-walked");
+
+  // A note already walked is returned to.
+  await note(page, "coding/kraft-inequality").click();
+  await expect(note(page, "coding/kraft-inequality")).toHaveClass(/\bat\b/);
+  await expect(page.getByText("1 step back")).toBeVisible();
+  await expect(lines).toHaveCount(2);
+
+  await page.keyboard.press("Escape");
+  await note(page, "coding/huffman-codes").click();
+  await page.getByRole("button", { name: "[ whole chain ]" }).click();
+  await expect(lines).toHaveCount(3);
+  await look(page, "atlas-whole-chain");
+  await page.getByRole("button", { name: "[ one step ]" }).click();
+  await expect(lines).toHaveCount(1);
 });
 
 test("a study item lights the note it tests and what that requires", async ({ page }) => {
@@ -87,9 +131,9 @@ test("a folder is zoomed to, open ground steps out, and the map is dragged and z
 
 test("a note made while the map is open appears on it", async ({ page }) => {
   await atlas(page);
-  const id = `channels/capacity-${test.info().project.name}`;
+  const id = `channels/rate-${test.info().project.name}`;
   const token = ((await (await page.request.get("api/session")).json()) as { token: string }).token;
-  const made = await page.request.post(`api/note?id=${id}`, { headers: { "x-isorite-token": token, origin: new URL(page.url()).origin }, data: { text: "---\ntype: Concept\ntitle: Capacity\n---\n\nIt rests on [the bit](/basics/bit.md \"requires\").\n" } });
+  const made = await page.request.post(`api/note?id=${id}`, { headers: { "x-isorite-token": token, origin: new URL(page.url()).origin }, data: { text: "---\ntype: Concept\ntitle: Rate\n---\n\nIt rests on [the bit](/basics/bit.md \"requires\").\n" } });
   expect(made.ok()).toBe(true);
   await expect(note(page, id)).toBeVisible();
 });

@@ -54,7 +54,12 @@
     {#if app.session}
       <span>{app.session.study ? "study" : "project: no journal is kept"}</span>
       {#if inNote && app.saving}<span class:bad={app.saving.bad} role="status">{app.saving.text}</span>{/if}
-      {#if app.atlas}
+      {#if app.atlas?.chosen}
+        {#if app.atlas.steps}<span>{app.atlas.steps} {app.atlas.steps === 1 ? "step" : "steps"} back</span>{/if}
+        <span class="grow"></span>
+        <span class="hint">click a note it requires to step back to it, the note again to open it</span>
+        <button class="link" type="button" aria-pressed={app.atlas.chain} onclick={app.atlas.whole}>{app.atlas.chain ? "[ one step ]" : "[ whole chain ]"}</button>
+      {:else if app.atlas}
         <span>{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span>
         {#if app.atlas.items}<span>{app.atlas.items} study {app.atlas.items === 1 ? "item" : "items"}</span>{/if}
         <span class="grow"></span>
@@ -68,6 +73,7 @@
 </div>
 
 <style>
-  .hint { overflow: hidden; text-overflow: ellipsis; }
+  .hint { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .link { background: none; border: 0; padding: 4px 0; color: var(--lattice); white-space: nowrap; font-size: 12px; flex: none; }
   .stopped { padding: var(--space-12) var(--space-4); text-align: center; color: var(--rose); }
 </style>

@@ -57,6 +57,17 @@ describe("routes", () => {
     const closed = litRoutes(L, idx, openAt(L, 0.05), [{ a: at("basics/b"), b: at("basics/a"), kind: "requires" }]);
     expect(closed).toEqual({ fixed: [], asks: [] });
   });
+  test("a route that carries only weaker links is told apart, where the base rates any link as required", () => {
+    const mixed: MapModel = { root: model.root, edges: [["basics/b", "basics/a", 3], ["coding/d", "coding/c", 2], ["coding/c", "basics/b", 2]] };
+    const M = gridLayout(mixed, { gridFlow: "right" }), mi = indexLayout(M), of = (a: string, b: string) => mi.strong[mi.trunkAt.get(`${M.items.findIndex((n) => n.ref === a)}|${M.items.findIndex((n) => n.ref === b)}`)!];
+    expect(of("basics/b", "basics/a")).toBe(true);
+    expect(of("coding/d", "coding/c")).toBe(false);
+    expect(of("coding", "basics")).toBe(false);
+    expect(restRoutes(M, openAt(M, 1), mi.strong).filter((r) => !r.strong).length).toBeGreaterThanOrEqual(2);
+    // With nothing rated "requires", every drawn link is the strongest there is.
+    const plain = gridLayout({ root: model.root, edges: [["basics/b", "basics/a", 2]] }, { gridFlow: "right" });
+    expect(indexLayout(plain).strong).toEqual([true]);
+  });
   test("a path is in pixels at zoom 1, corners cut", () => {
     expect(linePath([[0, 0], [10, 0]])).toBe(`M0 0L${10 * CELL} 0`);
     expect(linePath([[0, 0], [10, 0], [10, 10]])).toMatch(/^M0 0L\d+(\.\d)? 0L70 \d+(\.\d)?L70 70$/);

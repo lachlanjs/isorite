@@ -26,16 +26,26 @@ export interface Index {
   feederAt: Map<string, number>;
   /** The path the layout drew between two items of one folder: from the one required to the one requiring it. */
   ownPath: Map<string, Point[]>;
+  /** Each trunk: whether a link of the strongest kind the base rates ("requires", where it rates any) runs along it. */
+  strong: boolean[];
 }
 
 export function indexLayout(L: Layout): Index {
   const up = L.items.map((n) => { const out: number[] = []; for (let p = n.parent; p >= 0; p = L.items[p]!.parent) out.push(p); return out; });
   const noteCount = L.items.map(() => 0);
   L.items.forEach((n, i) => { if (n.kind === "note") for (const p of up[i]!) noteCount[p]!++; });
+  // The trunk a link runs along joins the two items that hold its ends in the lowest folder holding both.
+  const under = (i: number, level: number): number => { while (L.items[i]!.parent !== level) i = L.items[i]!.parent; return i; };
+  const trunkAt = new Map(L.trunks.map((t, k) => [`${t.a}|${t.b}`, k]));
+  const most = L.links.some((l) => l.s >= 3 && !L.items[l.a]!.ref.startsWith("@study")) ? 3 : 2, strong = L.trunks.map(() => false);
+  for (const l of L.links) {
+    const t = l.s >= most ? trunkAt.get(`${under(l.a, l.level)}|${under(l.b, l.level)}`) : undefined;
+    if (t !== undefined) strong[t] = true;
+  }
   return {
-    up, noteCount,
+    up, noteCount, strong,
     at: new Map(L.items.flatMap((n, i) => (n.kind === "note" ? [[n.ref, i] as const] : []))),
-    trunkAt: new Map(L.trunks.map((t, k) => [`${t.a}|${t.b}`, k])),
+    trunkAt,
     feederAt: new Map(L.feeders.map((f, k) => [`${f.trunk}|${f.folder}|${f.item}`, k])),
     ownPath: new Map(L.trunks.flatMap((t) => (t.pts ? [[`${t.a}|${t.b}`, t.pts] as const] : []))),
   };
@@ -60,20 +70,21 @@ export function shownAs(idx: Index, open: string, i: number): number {
   return i;
 }
 
-export interface Route { key: string; pts: Point[]; lane: number; count: number; feed: boolean; study: boolean }
+/** A route at rest. `strong`: a "requires" runs along it; the rest carry only weaker links and are drawn lighter. */
+export interface Route { key: string; pts: Point[]; lane: number; count: number; feed: boolean; study: boolean; strong: boolean }
 
 /** The routes drawn at rest: each of the layout's trunks whose two ends are shown, and inside an open folder
  *  the branches from its subfolders to where a trunk arrives. A link a longer way already makes has no path
  *  of its own and is left out. */
-export function restRoutes(L: Layout, open: string): Route[] {
+export function restRoutes(L: Layout, open: string, strong: boolean[] = []): Route[] {
   const shown = (i: number): boolean => open[i] !== "-", study = (i: number): boolean => L.items[i]!.ref.startsWith("@study");
   const out: Route[] = [];
   L.trunks.forEach((t, k) => {
-    if (t.pts && shown(t.a) && shown(t.b)) out.push({ key: "t" + k, pts: t.pts, lane: 0, count: t.count, feed: false, study: study(t.a) || study(t.b) });
+    if (t.pts && shown(t.a) && shown(t.b)) out.push({ key: "t" + k, pts: t.pts, lane: 0, count: t.count, feed: false, study: study(t.a) || study(t.b), strong: strong[k] ?? true });
   });
   L.feeders.forEach((f, k) => {
     const t = L.trunks[f.trunk]!;
-    if (!f.leaf && open[f.folder] === "o" && shown(f.item) && shown(t.a) && shown(t.b)) out.push({ key: "f" + k, pts: f.pts, lane: f.lane, count: f.count, feed: true, study: study(t.a) || study(t.b) });
+    if (!f.leaf && open[f.folder] === "o" && shown(f.item) && shown(t.a) && shown(t.b)) out.push({ key: "f" + k, pts: f.pts, lane: f.lane, count: f.count, feed: true, study: study(t.a) || study(t.b), strong: strong[f.trunk] ?? true });
   });
   return out;
 }
@@ -109,13 +120,14 @@ export function tracePath(L: Layout, idx: Index, a: number, b: number): Point[] 
   return pts.filter((p, k) => !k || !same(p, pts[k - 1]!));
 }
 
-export interface Lit { key: string; kind: "requires" | "builds"; pts: Point[] }
-export interface LitAsk { key: string; kind: "requires" | "builds"; a: number; b: number }
+export type LitKind = "requires" | "builds" | "uses";
+export interface Lit { key: string; kind: LitKind; pts: Point[] }
+export interface LitAsk { key: string; kind: LitKind; a: number; b: number }
 
 /** The lit routes of a note's reach: `a` requires `b`, as items. Those with a drawn way are given at once,
  *  each running from what is required to what requires it; the rest are to be asked of the router, between
  *  the items that stand for their ends on screen. */
-export function litRoutes(L: Layout, idx: Index, open: string, links: { a: number; b: number; kind: "requires" | "builds" }[]): { fixed: Lit[]; asks: LitAsk[] } {
+export function litRoutes(L: Layout, idx: Index, open: string, links: { a: number; b: number; kind: LitKind }[]): { fixed: Lit[]; asks: LitAsk[] } {
   const fixed: Lit[] = [], asks: LitAsk[] = [], seen = new Set<string>();
   for (const { a, b, kind } of links) {
     const sa = shownAs(idx, open, a), sb = shownAs(idx, open, b), key = `${kind}:${sa}|${sb}`;

@@ -20,7 +20,7 @@ Not followed: `Atlas-Large` and `Atlas-Study-Open`, which `decisions.md` records
 
 1. **Open the atlas** from the header and see the whole base: every folder a cut-corner frame with its title in its top edge, every note a block, laid out by what requires what.
 2. **Move about.** Drag to pan, wheel or pinch to zoom. A folder that is small on screen is one closed block with its name and note count (as on `Mobile-Atlas`); it opens as you zoom in. Click a folder to zoom to it, open ground to step out.
-3. **Select a note.** Pointing at a note, or clicking it, lights what it requires all the way back (purple, the dashes running toward it) and what builds on it directly (orange, running away), and dims the rest. Clicking the selected note opens it.
+3. **Select a note.** Pointing at a note, or clicking it, draws its own links one step each way (what it requires in purple, the dashes running toward it; what builds on it in orange, running away), outlines the rest of what it requires fainter with each step back, and dims everything else. Clicking a note it requires steps back to it; clicking the selected note opens it. Changed on 2026-10-14 from "lights what it requires all the way back": see `decisions.md`.
 4. **Read understanding off the block:** dotted for not reached, a solid line for opened, filled for worked through, a double blue line for understood (`Marks`).
 5. **See study folders** beside the folders they study: a solid title band with the grown mark, cut-corner items with their kind on the top edge, dotted links to the notes they test.
 6. **Start a note for Iso on the map.** Hold on open ground for a blank one, or on a note to start from it. The draft opens as it does now.

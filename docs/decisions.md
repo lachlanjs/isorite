@@ -149,3 +149,17 @@ these change what is committed, so they are expensive to change later.
 | architecture | The complex parts and how they fit are worked out and written down (`architecture.md`), not left until after the slice. "It will be hard to properly test until those features are implemented." |
 | the repository | `github.com/lachlanjs/isorite` is its remote. Milestone branches are local and nothing is pushed unless Lachlan says so. |
 
+## Decided on 2026-10-14, in conversation
+
+Lachlan found the Atlas's lighting unreadable on real bases: lines drawn at rest that did not light, lit lines along paths that were not there before, and on "Stokes' theorem" 32 lit links at one weight. This replaces what `Atlas-Nested` shows for a chosen note (the whole chain of what it requires, drawn).
+
+| What | Decision |
+|---|---|
+| lines for a chosen note | One step each way: what it requires itself (purple) and what requires it (orange). |
+| the rest of the chain | Outlined, not drawn: thinner and fainter with each step back. |
+| walking | Clicking a note the chosen one requires steps back to it; the way walked stays lit. Clicking a note already walked returns to it. |
+| folders apart from the note's own | Stand for their notes: the frame takes the colour and says "N required here". |
+| the whole chain | Drawn only when asked for (`[ whole chain ]` in the status line, or the key w), without the links a longer way already makes. |
+| the three kinds of link | "Requires" is drawn as before; a route carrying only "uses" is drawn lighter; "see also" is not drawn. A chosen note's own "uses" light as a plain line and its "see also" as a dotted outline, one step only. |
+| pointing | Previews a note only while none is chosen, so the walk does not flicker. |
+

@@ -121,26 +121,45 @@ export function mapModel(base: Bundle, study: Bundle | null = null): MapModel {
 // ------------------------------------------------------------ what a note rests on
 
 /** One link of a note's reach: `from` requires `to`. */
-export interface ReachLink { from: string; to: string; kind: "requires" | "builds" }
+export interface ReachLink {
+  from: string; to: string; kind: "requires" | "builds" | "uses";
+  /** A link down the chain that a longer way already makes: left out when the whole chain is drawn. */
+  spare?: true;
+}
 export interface Reach {
   /** What the note requires, all the way back, nearest first. */
   requires: string[];
+  /** How many steps back each of those is: 1 for what the note itself requires. */
+  depth: Record<string, number>;
+  /** The note each was first reached from, so the way back to the note can be walked. */
+  via: Record<string, string>;
   /** What builds on it directly. */
   builds: string[];
-  /** The links between them: every one down the chain of what it requires, and each from what builds on it. */
+  /** What it is joined to by a weaker link, either way, one step: by "uses", which the map draws, and by "see also", which it does not. */
+  uses: string[];
+  also: string[];
+  /** The links between them: every one down the chain of what it requires, each from what builds on it, and its own "uses". */
   links: ReachLink[];
 }
 
 /** What lights when a note is chosen on the Atlas (refs, as the map model names notes). Where the base rates its
- *  links, only "requires" counts; where it rates none, every link does. A study note requires what it tests. */
+ *  links, only "requires" is followed back; where it rates none, every drawn link is. A study note requires what it tests. */
 export function reach(model: Pick<MapModel, "edges">, note: string): Reach {
   const least = model.edges.some(([from, , s]) => s >= STRENGTH.requires && !isStudyId(from)) ? STRENGTH.requires : STRENGTH.uses;
   const needs = new Map<string, string[]>(), neededBy = new Map<string, string[]>();
+  const uses = new Set<string>(), also = new Set<string>(), weak: ReachLink[] = [];
   for (const [from, to, s] of model.edges) {
-    if (from === to || (s < least && !isStudyId(from))) continue;
+    if (from === to) continue;
+    if (s < least && !isStudyId(from)) {
+      if (from !== note && to !== note) continue;
+      (s >= STRENGTH.uses ? uses : also).add(from === note ? to : from);
+      if (s >= STRENGTH.uses) weak.push({ from, to, kind: "uses" });
+      continue;
+    }
     needs.set(from, [...(needs.get(from) ?? []), to]);
     neededBy.set(to, [...(neededBy.get(to) ?? []), from]);
   }
+  const depth: Record<string, number> = {}, via: Record<string, string> = {};
   const seen = new Set([note]), requires: string[] = [], links: ReachLink[] = [], todo = [note];
   for (let k = 0; k < todo.length; k++) {
     const from = todo[k]!;
@@ -148,9 +167,24 @@ export function reach(model: Pick<MapModel, "edges">, note: string): Reach {
       links.push({ from, to, kind: "requires" });
       if (seen.has(to)) continue;
       seen.add(to); requires.push(to); todo.push(to);
+      depth[to] = (depth[from] ?? 0) + 1; via[to] = from;
     }
+  }
+  // A link is spare when the links kept so far join its ends a longer way.
+  const kept = new Map<string, Set<string>>();
+  for (const l of links) kept.set(l.from, (kept.get(l.from) ?? new Set()).add(l.to));
+  for (const l of links) {
+    const met = new Set<string>(), walk = [...kept.get(l.from)!].filter((t) => t !== l.to);
+    let found = false;
+    while (walk.length && !found) {
+      const v = walk.pop()!;
+      if (v === l.to) found = true;
+      else if (v !== l.from && !met.has(v)) { met.add(v); walk.push(...(kept.get(v) ?? [])); }
+    }
+    if (found) { l.spare = true; kept.get(l.from)!.delete(l.to); }
   }
   const builds = [...new Set(neededBy.get(note) ?? [])];
   for (const from of builds) links.push({ from, to: note, kind: "builds" });
-  return { requires, builds, links };
+  const own = new Set([...requires, ...builds]);
+  return { requires, depth, via, builds, uses: [...uses].filter((r) => !own.has(r)), also: [...also].filter((r) => !own.has(r) && !uses.has(r)), links: [...links, ...weak.filter((l) => !own.has(l.from === note ? l.to : l.from))] };
 }
