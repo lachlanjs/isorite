@@ -13,3 +13,5 @@ export type { How, Similar, Step } from "./lookup.ts";
 export { ROUNDS } from "./loop.ts";
 export { CLOSE, CONVERSATION_BUDGET, HERE, NOTE_BUDGET, OPEN, conversation, estimate, parseRewrite, windowed } from "./iso.ts";
 export type { Exchange, Part } from "./iso.ts";
+export { INLINE, Meaning, pieces } from "./meaning.ts";
+export type { Embedder, Found, Hit, Piece } from "./meaning.ts";

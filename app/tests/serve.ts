@@ -55,6 +55,8 @@ if (process.argv[1] === import.meta.filename) {
   writeFileSync(join(NOTES, "basics", "surprise.md"), "---\ntype: Concept\ntitle: Surprise\ndescription: How unexpected one outcome is.\n---\n\nAn outcome of probability $p$ carries $-\\log p$ of surprise.\n");
   writeFileSync(join(NOTES, "basics", "bit.md"), "---\ntype: Concept\ntitle: The bit\n# kept as written\ntags: [units]\n---\n\nOne fair coin toss, the unit of information.\n\n| tosses | bits |\n|---|---|\n| 1 | 1 |\n| 2 | 2 |\n");
   process.env.XDG_CONFIG_HOME = join(ROOT, "config");
+  process.env.XDG_CACHE_HOME = join(ROOT, "cache");
+  process.env.ISORITE_EMBED = "off"; // the browser tests are about the pages; the model has its own tests
   mkdirSync(join(ROOT, "config", "isorite"), { recursive: true });
   writeFileSync(join(ROOT, "config", "isorite", "config.toml"), `device = "browser01"\n\n[provider]\nname = "scripted"\nurl = "http://127.0.0.1:${PROVIDER_PORT}/v1"\n\n[tiers]\nlow = "scripted-low"\nmid = "scripted-mid"\nmax = "scripted-max"\n`);
   await provider();

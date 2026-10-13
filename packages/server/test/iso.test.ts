@@ -23,7 +23,7 @@ beforeAll(async () => {
   writeFileSync(join(notes, "basics", "entropy.md"), NOTE);
   study = initStudyBase(notes).path;
   config = join(root, "config.toml");
-  const api = await openEngine(locate(study), "testdev1", config, provider.http);
+  const api = await openEngine(locate(study), "testdev1", config, provider.http, null);
   server = nodeServe({ fetch: createApp({ api, token: TOKEN, loopback: true, web: null }).fetch, hostname: "127.0.0.1", port: 0 });
   await new Promise((done) => server.once("listening", done));
   url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

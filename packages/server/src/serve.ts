@@ -1,7 +1,7 @@
 // isorite serve: open a knowledge base and its study base, and serve the app
 // and the engine on this machine.
 
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +9,7 @@ import { serve as nodeServe } from "@hono/node-server";
 import { CONFIG_FILE, StudyError } from "@isorite/core";
 import { Engine, systemClock, type Http } from "@isorite/engine";
 import { ConfigSecrets, configPath, deviceId, providerConfig } from "./config.ts";
+import { cacheDir, modelDir, nodeEmbedder } from "./embedder.ts";
 import { LOOPBACK, createApp } from "./http.ts";
 import { NodeFiles } from "./nodefiles.ts";
 import { defaultStudyPath, openStudyBase } from "./studybase.ts";
@@ -31,11 +32,14 @@ export function locate(path: string): Opened {
   return { notes: at, study: existsSync(join(beside, CONFIG_FILE)) && openStudyBase(beside).notes === at ? beside : null };
 }
 
-export async function openEngine({ notes, study }: Opened, device = deviceId(), config = configPath(), http: Http = { fetch: (input, init) => fetch(input, init) }): Promise<Engine> {
+export async function openEngine({ notes, study }: Opened, device = deviceId(), config = configPath(), http: Http = { fetch: (input, init) => fetch(input, init) }, model: string | null = modelDir()): Promise<Engine> {
   // The provider is OpenRouter unless the configuration names another. The engine compares against OPENROUTER to know.
   return Engine.open({
     notes: new NodeFiles(notes), study: study ? new NodeFiles(study) : null, clock: systemClock, device, name: basename(notes),
     http, secrets: new ConfigSecrets(config), provider: providerConfig(config),
+    // Search by meaning, where the model is installed (npm run model). Its vectors are a cache of this base's
+    // notes, kept outside both repositories under a name made from where the notes are.
+    ...(model ? { embedder: nodeEmbedder(model), cache: { files: new NodeFiles(cacheDir()), name: `vectors-${createHash("sha256").update(notes).digest("hex").slice(0, 16)}.json` } } : {}),
   });
 }
 
@@ -51,6 +55,7 @@ export async function serve(path: string, { host = "127.0.0.1", port = 4767, all
   });
   console.log(`isorite: ${opened.notes}`);
   console.log(opened.study ? `  study base ${opened.study}` : "  no study base beside it: no journal is kept (isorite study init)");
+  console.log(api.meaning ? "  search by meaning: on" : "  search by meaning: off (npm run model fetches its model)");
   console.log(web ? `  http://localhost:${port}/` : `  the app is not built (npm run build); the engine alone is at http://localhost:${port}/api/`);
   const stop = () => { server.close(); process.exit(0); };
   process.on("SIGINT", stop);

@@ -13,9 +13,11 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.4",
+    "@huggingface/tokenizers": "^0.2.0",
     "@isorite/core": "*",
     "@isorite/engine": "^0.1.0",
     "hono": "^4.13.13",
+    "onnxruntime-web": "^1.30.0",
     "smol-toml": "^1.9.1",
     "zod": "^4.6.7"
   },

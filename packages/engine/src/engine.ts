@@ -10,6 +10,7 @@ import { Conflict, EngineError, type Api, type AskRequest, type ContextReport, t
 import { CLOSE, HERE, OPEN, conversation, estimate, exchanges, insertMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { rounds } from "./loop.ts";
 import { Lookup, type Similar } from "./lookup.ts";
+import { Meaning, type Embedder } from "./meaning.ts";
 import { KEY, OPENROUTER, TIERS, type Message, type ProviderConfig } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
 
@@ -28,7 +29,11 @@ export interface EngineOptions {
   http?: Http;
   secrets?: Secrets;
   provider?: ProviderConfig;
-  /** Search by meaning, where the device can run it. */
+  /** Search by meaning, where the device can run the model: the model, and a folder outside both repositories
+   *  for its vectors, with the name of this base's file in it. */
+  embedder?: Embedder;
+  cache?: { files: Files; name: string };
+  /** Or a search by meaning from elsewhere (tests). */
   similar?: Similar;
 }
 
@@ -76,11 +81,30 @@ export class Engine implements Api {
   private readonly running = new Map<string, AbortController>();
   private readonly asking = new Map<string, string>();
 
-  private constructor(opts: EngineOptions) { this.opts = opts; }
+  /** Search by meaning, when the device has the model. */
+  readonly meaning: Meaning | null;
+
+  private constructor(opts: EngineOptions) {
+    this.opts = opts;
+    this.meaning = opts.embedder && opts.cache ? new Meaning(opts.embedder, opts.cache.files, opts.cache.name) : null;
+  }
+
+  /** The search by meaning Iso is offered as a tool, over the base as it is now. */
+  private get similar(): Similar | null {
+    const meaning = this.meaning;
+    if (!meaning) return this.opts.similar ?? null;
+    return (text, o) => meaning.similar(this.bundle, text, o);
+  }
+
+  /** Make the vectors the base lacks, in the background: after opening, and after every write. */
+  private embedSoon(): void {
+    void this.meaning?.refresh(this.bundle).catch(() => undefined);
+  }
 
   static async open(opts: EngineOptions): Promise<Engine> {
     const engine = new Engine(opts);
     await engine.reload();
+    engine.embedSoon();
     return engine;
   }
 
@@ -180,6 +204,7 @@ export class Engine implements Api {
     if (!isStudyId(id)) {
       this.files.set(path, { path, text });
       this.built = this.index = null;
+      this.embedSoon();
     }
     const version = hashText(text);
     this.publish({ type: "note-changed", id, version, who: "you" });
@@ -230,7 +255,7 @@ export class Engine implements Api {
     this.asking.set(req.note, request);
     const place = req.form === "insert" ? { form: req.form, after: req.after, before: req.before } : { form: req.form, blocks: req.blocks };
     this.publish({ type: "iso-start", request, note: req.note, asked, tier: req.tier, place });
-    const lookup = new Lookup(this.bundle, req.note, this.opts.similar ?? null);
+    const lookup = new Lookup(this.bundle, req.note, this.similar);
     // The request returns at once; the rest happens as events, and ends in exactly one of done, stopped, failed.
     void (async () => {
       let ran: Awaited<ReturnType<typeof rounds>> | null = null, offered = false;
@@ -315,7 +340,7 @@ export class Engine implements Api {
     // What Iso read for this note's exchanges that are still in the conversation: it may well read them again.
     const read = new Set(entries.flatMap((e) => (e.kind === "proposal" && earlier.some((x) => x.id === e.id) ? e.read ?? [] : [])));
     const given = {
-      tier: req.tier, meaning: Boolean(this.opts.similar), title, id: req.note, marked: windowed(lines, keep), asked,
+      tier: req.tier, meaning: Boolean(this.similar), title, id: req.note, marked: windowed(lines, keep), asked,
       unkept: pending(entries).map((p) => (p.form === "insert" ? p.text : p.blocks.map((b) => b.new).join("\n\n"))),
       conversation: conversation(earlier), moments: earlier.length,
       linked: { notes: read.size, tokens: [...read].reduce((n, id) => n + estimate(this.bundle.concepts.get(id)?.body ?? ""), 0) },
@@ -396,7 +421,7 @@ export class Engine implements Api {
     } else {
       // In no note: the instructions, and the conversation as it would be sent.
       const earlier = await this.exchangesNow();
-      ({ parts } = insertMessages({ tier: "mid", meaning: Boolean(this.opts.similar), title: "", id: "", marked: "", unkept: [], conversation: conversation(earlier), moments: earlier.length, asked: "" }));
+      ({ parts } = insertMessages({ tier: "mid", meaning: Boolean(this.similar), title: "", id: "", marked: "", unkept: [], conversation: conversation(earlier), moments: earlier.length, asked: "" }));
       parts = parts.map((p) => (p.name === "this note" ? { ...p, detail: "none open", tokens: 0 } : p));
     }
     // What the session has cost: every reply offered, kept or not, and every reply that came to nothing.
@@ -432,7 +457,7 @@ export class Engine implements Api {
       if (text === null) throw new EngineError("the paragraphs this would rewrite are no longer in the note", 409);
       await files.write(path, text);
       await this.enter(id, entries, change(entries, text, await this.stamp("you"), "keep", { proposal }));
-      if (!isStudyId(id)) { this.files.set(path, { path, text }); this.built = this.index = null; }
+      if (!isStudyId(id)) { this.files.set(path, { path, text }); this.built = this.index = null; this.embedSoon(); }
       const version = hashText(text);
       this.publish({ type: "note-changed", id, version, who: "you" });
       return { id, text, version, changed: true };
