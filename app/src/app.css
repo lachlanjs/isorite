@@ -101,9 +101,11 @@ button { cursor: pointer; }
 .bar .path a { color: inherit; }
 .bar .path .sep { margin: 0 1ch; }
 .switch { display: flex; align-items: center; gap: 18px; }
-.switch a { color: var(--text-soft); padding: 0 6px; line-height: 20px; }
+.switch a { color: var(--text-soft); line-height: 20px; }
+.switch a span { padding: 0 6px; display: inline-block; }
 .switch a:hover { color: var(--text); text-decoration: none; }
-.switch a[aria-current="page"] { background: var(--text); color: var(--ground-0); }
+.switch a[aria-current="page"] span { background: var(--text); color: var(--ground-0); }
+.bar .back { display: none; }
 .page { flex: 1 1 auto; min-width: 0; }
 .status { height: 28px; flex: none; display: flex; align-items: center; gap: 22px; padding: 0 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-faint); white-space: nowrap; position: sticky; bottom: 0; background: var(--ground-0); }
 .status .bad { color: var(--rose); }
@@ -117,8 +119,11 @@ button { cursor: pointer; }
 @media (max-width: 600px) {
   .bar { gap: 12px; padding: 0 12px; }
   .switch { position: fixed; left: 0; right: 0; bottom: 0; height: 56px; gap: 0; background: var(--ground-0); border-top: 1px solid var(--line); z-index: 10; padding-bottom: env(safe-area-inset-bottom); }
-  .switch a { flex: 1 1 0; height: 100%; display: flex; align-items: center; justify-content: center; padding: 0; }
-  .switch a[aria-current="page"] { background: none; color: var(--text); box-shadow: inset 0 2px 0 var(--text); }
+  .switch a { flex: 1 1 0; height: 100%; display: flex; align-items: center; justify-content: center; }
+  /* In a note the header is the way back, as on the boards: "‹ the base". The title is on the page below it. */
+  .bar:has(.back) { height: 48px; }
+  .bar .back { display: inline-flex; align-items: center; height: 44px; }
+  .bar .home.in-note, .bar .path.in-note { display: none; }
   .status { bottom: 56px; }
   .shell { padding-bottom: 56px; }
 }

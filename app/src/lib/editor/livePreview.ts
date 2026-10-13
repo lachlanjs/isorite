@@ -73,6 +73,12 @@ function build(view: EditorView): DecorationSet {
   const ranges = view.visibleRanges;
   if (ranges.length) {
     const from = ranges[0]!.from, to = ranges[ranges.length - 1]!.to;
+    // An empty line is the space between two blocks, not a line of text: it is set as a gap, so paragraphs,
+    // equations and tables stand one gap apart, as on the boards. (Inside a code block it is a line of code.)
+    for (let n = state.doc.lineAt(from).number, last = state.doc.lineAt(to).number; n <= last; n++) {
+      const l = state.doc.line(n);
+      if (l.length === 0 && !/Code|Math|HTML|Comment/.test(syntaxTree(state).resolveInner(l.from, 1).name)) decos.push(line("cm-lp-gap").range(l.from));
+    }
     syntaxTree(state).iterate({
       from, to,
       enter: (node) => {
@@ -186,7 +192,8 @@ export const livePreview = ViewPlugin.fromClass(
 /** How live preview looks: the note's own reading type, from the theme's variables.
  *  Backgrounds are translucent so a selection (drawn beneath the text) shows through. */
 export const livePreviewTheme = EditorView.theme({
-  ".cm-scroller": { fontFamily: "var(--font-text)", fontSize: "var(--text-size)", lineHeight: "1.68" },
+  ".cm-scroller": { fontFamily: "var(--font-text)", fontSize: "var(--text-size)", lineHeight: "1.55" },
+  ".cm-lp-gap": { lineHeight: "20px" },
   ".cm-content": { fontVariationSettings: '"opsz" 18' },
   ".cm-lp-h1, .cm-lp-h2, .cm-lp-h3, .cm-lp-h4, .cm-lp-h5, .cm-lp-h6": {
     fontWeight: "600", lineHeight: "1.3", fontVariationSettings: '"opsz" 36', paddingTop: ".5em !important",
@@ -203,7 +210,8 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-lp-bullet": { color: "var(--text-faint)", display: "inline-block", minWidth: "1ch" },
   ".cm-lp-listmark, .cm-lp-task": { color: "var(--text-faint)", fontFamily: "var(--font-mono)" },
   ".cm-lp-quote": { borderLeft: "3px solid var(--lattice)", paddingLeft: "14px !important", color: "var(--text-soft)" },
-  ".cm-lp-codeblock": { fontFamily: "var(--font-mono)", fontSize: "15px", lineHeight: "1.5", background: "color-mix(in srgb, var(--text) 6%, transparent)", padding: "0 12px !important" },
+  // A code block as on the boards: the interface's face on the raised ground, one line down its left side.
+  ".cm-lp-codeblock": { fontFamily: "var(--font-mono)", fontSize: "13px", lineHeight: "20px", background: "var(--ground-1)", borderLeft: "2px solid var(--line-strong)", padding: "0 16px !important" },
   ".cm-lp-mathsrc": { fontFamily: "var(--font-mono)", fontSize: ".86em", color: "var(--text-soft)" },
   ".cm-lp-imaths .katex": { fontSize: "1.05em" },
   ".cm-lp-hr": { display: "inline-block", width: "100%", borderTop: "1px solid var(--line)", verticalAlign: "middle" },

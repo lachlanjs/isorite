@@ -87,9 +87,9 @@
 </article>
 
 <style>
-  .note { max-width: calc(var(--measure) + 2 * var(--space-4)); margin: 0 auto; padding: var(--space-12) var(--space-4) 0; display: flex; flex-direction: column; gap: var(--space-3); }
+  .note { max-width: calc(var(--measure) + 2 * var(--space-4)); margin: 0 auto; padding: 40px var(--space-4) 0; display: flex; flex-direction: column; gap: var(--space-2); }
   .head { display: flex; align-items: flex-start; gap: var(--space-3); }
-  .title { flex: 1 1 auto; min-width: 0; font-size: 34px; line-height: 1.2; font-weight: 700; background: none; border: 0; padding: 0; color: var(--text); resize: none; field-sizing: content; overflow: hidden; }
+  .title { flex: 1 1 auto; min-width: 0; font-size: 34px; line-height: 1.2; font-weight: 700; background: none; border: 0; padding: 0 2px; color: var(--text); resize: none; field-sizing: content; overflow: hidden; }
   .title::placeholder { color: var(--text-faint); }
   .title:focus-visible { outline: none; }
   .tools { display: flex; flex: none; padding-top: 6px; }
@@ -99,9 +99,9 @@
   .row { display: flex; gap: var(--space-2); }
   .bad { color: var(--rose); }
   @media (max-width: 600px) {
-    .note { padding-top: var(--space-6); }
+    .note { padding: 20px 20px 0; }
     .head { flex-direction: column-reverse; gap: var(--space-1); }
     .tools { align-self: flex-end; padding-top: 0; }
-    .title { font-size: 26px; width: 100%; }
+    .title { font-size: 30px; width: 100%; }
   }
 </style>

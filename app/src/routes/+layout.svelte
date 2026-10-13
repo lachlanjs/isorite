@@ -21,8 +21,9 @@
 
 <div class="shell">
   <header class="bar">
-    <a href={resolve("/notes")} aria-label="isorite: all notes"><Logo /></a>
-    <span class="path">
+    <a class="home" class:in-note={inNote} href={resolve("/notes")} aria-label="isorite: all notes"><Logo /></a>
+    {#if inNote && app.session}<a class="back" href={resolve("/notes")}>‹ {app.session.name}</a>{/if}
+    <span class="path" class:in-note={inNote}>
       {#if app.session}
         <a href={resolve("/notes")}>{app.session.name}</a>{#if inNote && app.here}<span class="faint sep">/</span>{app.here}{/if}
       {/if}
@@ -30,7 +31,7 @@
     <span class="grow"></span>
     <nav class="switch" aria-label="Views">
       {#each VIEWS as [name, href] (name)}
-        <a {href} aria-current={view === name ? "page" : undefined}>{name}</a>
+        <a {href} aria-current={view === name ? "page" : undefined}><span>{name}</span></a>
       {/each}
     </nav>
   </header>

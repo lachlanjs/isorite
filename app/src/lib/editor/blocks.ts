@@ -80,7 +80,9 @@ export const renderedBlocks = StateField.define<DecorationSet>({
 });
 
 export const blocksTheme = EditorView.theme({
-  ".cm-lp-block": { padding: "6px 0", cursor: "text" },
+  // No space of its own: the empty lines around a block are the gap (livePreview.ts).
+  ".cm-lp-block": { padding: "0", cursor: "text" },
+  ".cm-lp-block .katex-display > .katex": { fontSize: "1.17em" },
   ".cm-lp-block .prose": { maxWidth: "none" },
   ".cm-lp-block .prose > :last-child, .cm-lp-block .table-wrap": { marginBottom: "0" },
   ".cm-lp-block .katex-display": { margin: "0" },

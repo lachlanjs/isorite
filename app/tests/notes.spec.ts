@@ -33,7 +33,7 @@ test("a note with maths and a typed link is written, saved, and there when reope
   await page.getByRole("option", { name: /Surprise/ }).click();
   // The link's kind, set on the link without touching its Markdown: Alt-1 is "requires".
   await page.keyboard.press("Alt+1");
-  await page.keyboard.type(" and inline $p(x)$ too.");
+  await page.keyboard.type(" and inline $p(x)$ too.\n\nA second paragraph, to see the space between two.\n\n```python\ndef entropy(p):\nreturn -sum(q * log2(q) for q in p)\n```");
   await saved(page);
   expect(await file(page, id)).toContain('[Surprise](/basics/surprise.md "requires")');
 
@@ -52,7 +52,8 @@ test("a note with maths and a typed link is written, saved, and there when reope
   expect(entries.slice(1).every((e) => e.kind === "change" && e.why === "edit" && e.who === "you")).toBe(true);
 
   // The header says where you are; the link in the list leads back here.
-  await expect(page.locator("header .path")).toHaveText(`information-theory/Entropy ${name}`);
+  if (name.startsWith("phone")) await expect(page.getByRole("link", { name: "‹ information-theory" })).toBeVisible();
+  else await expect(page.locator("header .path")).toHaveText(`information-theory/Entropy ${name}`);
   await page.getByRole("navigation", { name: "Views" }).getByRole("link", { name: "notes" }).click();
   await page.getByRole("link", { name: `Entropy ${name}` }).click();
   await expect(page.getByLabel("Title")).toHaveValue(`Entropy ${name}`);

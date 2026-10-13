@@ -17,7 +17,7 @@
 </div>
 
 <style>
-  .details { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-6); font-size: 12px; color: var(--text-faint); }
+  .details { padding: 0 2px; display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-6); font-size: 12px; color: var(--text-faint); }
   label { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
   .wide { flex: 1 1 160px; }
   .full { flex: 1 1 100%; }
