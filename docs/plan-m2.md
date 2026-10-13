@@ -1,6 +1,6 @@
 # Milestone 2: Iso in the note
 
-Approved by Lachlan on 2026-10-13 with the answers in section 4. Branch: `m2-iso`. Steps 1 to 3 of section 5 are built; see section 8.
+Approved by Lachlan on 2026-10-13 with the answers in section 4. Branch: `m2-iso`. All eight steps of section 5 are built; see section 8.
 
 **Done when:** both ways of asking Iso work against a real model on the information theory base; a test shows a note's file is byte-identical until you keep; and closing the browser with a proposal waiting, then returning, shows the proposal again.
 
