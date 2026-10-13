@@ -222,3 +222,35 @@ test("a rewrite of two paragraphs can take one out, and is edited block by block
   await expect(page.locator(".between")).toHaveCount(0);
   expect(onDisk(id)).toBe(text.replace("The average surprise of a source.\n\nIt is largest when every symbol is equally likely.\n", "Entropy, in bits.\n"));
 });
+
+test("the header counts what Iso would be sent and what the session has cost; the count opens the breakdown", async ({ page }) => {
+  await open(page, "count");
+  const count = page.getByRole("button", { name: /^Context: / });
+  await expect(count).toBeVisible();
+  const spent = async () => Number((await page.getByLabel(/This session has cost/).getAttribute("aria-label"))!.replace(/[^0-9.]/g, ""));
+  const before = await spent();
+  await prompt(page, "say what it is measured in");
+  await expect(page.locator(".between[data-proposal]")).toBeVisible();
+  // The scripted provider charges $0.0123 a call.
+  // The scripted provider charges $0.0123 a call; past ten cents the header shows whole cents.
+  await expect.poll(async () => (await spent()) - before).toBeGreaterThan(0.004);
+  expect((await spent()) - before).toBeLessThan(0.021);
+
+  await count.click();
+  const box = page.getByRole("dialog", { name: "Context" });
+  for (const part of ["instructions and tools", "study record", "your prompts and Iso's answers", "this note", "linked notes"]) await expect(box).toContainText(part);
+  await expect(box).toContainText("Entropy count");
+  await expect(box).toContainText(/\d+ moments?/);
+  // The parts sum to the count.
+  const shown = await box.locator(".part .n").allTextContents();
+  const tokens = (t: string) => (t.endsWith("k") ? Number(t.slice(0, -1)) * 1000 : Number(t));
+  const total = tokens((await count.textContent())!);
+  expect(Math.abs(shown.map(tokens).reduce((a, b) => a + b, 0) - total)).toBeLessThanOrEqual(300); // each is rounded to a tenth of a thousand
+  await look(page, "context");
+
+  await box.getByRole("button", { name: "[ clear the conversation ]" }).click();
+  await expect(box).not.toContainText(/\d+ moments?/);
+  await page.keyboard.press("Escape");
+  await expect(box).toHaveCount(0);
+  await expect(page.locator(".between[data-proposal]")).toBeVisible(); // clearing took nothing out of the note
+});

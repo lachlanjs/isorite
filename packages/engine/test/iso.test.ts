@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { blocks, hashText, insertAt, pending, readJournal, replay, rewriteOf, type Change, type Proposal } from "@isorite/core";
-import { Engine, HERE, MemoryFiles, MemorySecrets, KEY, parseRewrite, type EngineEvent } from "../src/index.ts";
+import { CONVERSATION_BUDGET, Engine, HERE, MemoryFiles, MemorySecrets, KEY, NOTE_BUDGET, conversation, estimate, parseRewrite, windowed, type EngineEvent } from "../src/index.ts";
 import { scripted, type Scripted } from "./scripted.ts";
 
 const ENTROPY = "---\ntype: Concept\ntitle: Entropy\n---\n\nThe average surprise of a source.\n\nIt is largest when every symbol is equally likely.\n";
@@ -170,7 +170,7 @@ test("a second request in the session is told what was asked before and what bec
   await engine.keep("basics/entropy", first.type === "iso-done" ? first.proposal : "");
   await ended((await engine.ask({ note: "basics/entropy", form: "insert", after: null, before: null, asked: "who named it", tier: "mid" })).request);
   const user = String(sent[1]!.messages[1]!.content);
-  expect(user).toContain("They asked: say what it is measured in\n\nYou wrote:\n\nEntropy is measured in bits.\n\nThey kept it.");
+  expect(user).toContain("# Earlier in this session\n\nIn Entropy (/basics/entropy.md) they asked: say what it is measured in\n\nYou wrote:\n\nEntropy is measured in bits.\n\nThey kept it.");
 });
 
 test("the key is held and forgotten, and never given back", async () => {
@@ -267,4 +267,84 @@ test("a rewrite's reply is taken apart by its marks", () => {
   expect(parseRewrite("Just some talk.", 2)).toEqual({ blocks: [null, null], outside: true });
   // A code block comes back whole, indentation and all.
   expect(parseRewrite("⟦1⟧\n```python\nif x:\n    pass\n```\n⟦/1⟧", 1).blocks[0]).toBe("```python\nif x:\n    pass\n```");
+});
+
+// ------------------------------------------------------------ the session: context and cost
+
+test("the conversation is the session's exchanges across its notes, until it is cleared; nothing is deleted", async () => {
+  const { engine, ask, ended, sent, study, journal } = await open([{ text: ["Bits."] }, { text: ["Minus log p."] }, { text: ["Third."] }]);
+  await ended((await ask("the unit")).request);
+  // In another note of the same session, Iso is told what it wrote in the first.
+  await ended((await engine.ask({ note: "basics/surprise", form: "insert", after: null, before: null, asked: "the formula", tier: "mid" })).request);
+  expect(String(sent[1]!.messages[1]!.content)).toContain("In Entropy (/basics/entropy.md) they asked: the unit\n\nYou wrote:\n\nBits.\n\nIt is still waiting in the note, not yet kept.");
+
+  await engine.clearConversation();
+  expect(study.files.get("record/laptop1.jsonl")).toContain('"event":"context-cleared"');
+  await ended((await engine.ask({ note: "basics/surprise", form: "insert", after: null, before: null, asked: "once more", tier: "mid" })).request);
+  const user = String(sent[2]!.messages[1]!.content);
+  expect(user).not.toContain("# Earlier in this session");
+  // The text still waiting in this note is still named, so it is not written twice; and the journal is whole.
+  expect(user).toContain("Text you offered in this note that they have not kept yet");
+  expect(journal().filter((e) => e.kind === "proposal")).toHaveLength(1);
+});
+
+test("the context report names the five parts, sums them, and counts what the session has cost", async () => {
+  const { engine, ask, ended } = await open([
+    { calls: [{ name: "read_note", arguments: { id: "basics/surprise" } }], usage: { prompt_tokens: 1000, completion_tokens: 10, cost: 0.01 } },
+    { text: ["Bits."], usage: { prompt_tokens: 1200, completion_tokens: 5, cost: 0.02 } },
+    { text: ["No marks, two paragraphs."], usage: { prompt_tokens: 900, completion_tokens: 5, cost: 0.005 } },
+  ]);
+  const before = await engine.context("basics/entropy");
+  expect(before.parts.map((p) => p.name)).toEqual(["instructions and tools", "study record", "your prompts and Iso's answers", "this note", "linked notes"]);
+  expect(before).toMatchObject({ limit: 200_000, session: { usd: 0, requests: 0 } });
+  expect(before.tokens).toBe(before.parts.reduce((n, p) => n + p.tokens, 0));
+  expect(before.parts[2]).toMatchObject({ tokens: 0, detail: "" });
+
+  await ended((await ask()).request);
+  const after = await engine.context("basics/entropy");
+  expect(after.session).toEqual({ usd: 0.03, requests: 1 });
+  expect(after.parts[2]).toMatchObject({ detail: "1 moment" });
+  expect(after.parts[2]!.tokens).toBeGreaterThan(0);
+  expect(after.parts[3]).toMatchObject({ detail: "Entropy" });
+  expect(after.parts[4]).toMatchObject({ detail: "1 read" });
+  expect(after.parts[4]!.tokens).toBeGreaterThan(0);
+
+  // A reply that was paid for and offered nothing is still counted.
+  const failed = await ended((await engine.ask({ note: "basics/entropy", form: "rewrite", blocks: both(), asked: "improve", tier: "mid" })).request);
+  expect(failed.type).toBe("iso-failed");
+  await new Promise((r) => setTimeout(r, 0));
+  const both2 = (await engine.context("basics/entropy")).session;
+  expect(both2.requests).toBe(2);
+  expect(both2.usd).toBeCloseTo(0.035, 6);
+  // With no note open there is still the conversation and the cost.
+  expect(await engine.context()).toMatchObject({ session: { requests: 2 }, parts: [{}, {}, { detail: "1 moment" }, { detail: "none open", tokens: 0 }, {}] });
+});
+
+test("a long conversation is cut to its budget: the newest whole, older ones shortened, the oldest left out", () => {
+  const long = "x".repeat(12_000);
+  const all = Array.from({ length: 60 }, (_, k) => ({ id: String(k).padStart(2, "0"), note: "n", text: `In N (/n.md) they asked: q${k}\n\nYou wrote:\n\n${long}\n\nThey kept it.` }));
+  const sent = conversation(all);
+  expect(estimate(sent)).toBeLessThanOrEqual(CONVERSATION_BUDGET + 50);
+  expect(sent).toContain(`q59\n\nYou wrote:\n\n${long}\n\nThey kept it.`); // the newest, whole
+  expect(sent).toContain("q58\n\nYou wrote:\n\n" + "x".repeat(400) + " […]\n\nThey kept it."); // no room for it whole: shortened
+  expect(sent).toMatch(/^\[\d+ earlier exchanges of this session left out for length\.\]/);
+  expect(conversation(all.slice(0, 2))).not.toContain("left out");
+});
+
+test("a long note is cut to its budget round the place asked about, keeping its headings and saying what is left out", () => {
+  const lines = ["---", "type: Concept", "---", ""];
+  for (let s = 0; s < 40; s++) { lines.push(`## Section ${s}`, ""); for (let k = 0; k < 8; k++) lines.push(`Section ${s}, paragraph ${k}. ` + "word ".repeat(60), ""); }
+  const at = lines.indexOf("## Section 20") + 2;
+  lines.splice(at, 0, HERE);
+  const sent = windowed(lines, [at]);
+  expect(estimate(lines.join("\n"))).toBeGreaterThan(NOTE_BUDGET * 2);
+  expect(estimate(sent)).toBeLessThan(NOTE_BUDGET * 1.15);
+  expect(sent).toContain(HERE);
+  expect(sent).toContain("Section 20, paragraph 0.");
+  expect(sent).toContain("## Section 0\n[… ");
+  expect(sent).toContain("## Section 39");
+  expect(sent).not.toContain("Section 0, paragraph 3.");
+  expect(sent).toContain("type: Concept");
+  // A short note is sent whole.
+  expect(windowed(["a", "b"], [0])).toBe("a\nb");
 });

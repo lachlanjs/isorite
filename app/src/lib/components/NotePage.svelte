@@ -24,6 +24,7 @@
   const asSource = $derived(source || note.meta === null);
 
   onMount(() => {
+    app.open = id;
     void note.open().then(() => iso.open());
     const leaving = () => { void note.save(); };
     addEventListener("pagehide", leaving);
@@ -34,6 +35,7 @@
       iso.close();
       void note.close();
       app.here = "";
+      app.open = "";
       app.saving = null;
     };
   });

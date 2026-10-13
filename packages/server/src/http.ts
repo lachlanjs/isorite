@@ -118,6 +118,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [] }: Server
   post("/api/proposal/keep", Named, (c, b) => api.keep(id(c), b.proposal));
   post("/api/proposal/revise", Revised, (c, b) => api.revise(id(c), b.proposal, b.text));
   post("/api/proposal/discard", Named, (c, b) => api.discard(id(c), b.proposal));
+  app.get("/api/context", (c) => answer(c, () => api.context(c.req.query("id") || undefined)));
+  post("/api/context/clear", z.object({}).strict(), () => api.clearConversation());
   // The key goes in and never comes out: settings say only whether one is held.
   app.get("/api/settings", (c) => answer(c, () => api.settings()));
   post("/api/settings/key", Key, (_c, b) => api.setKey(b.key), "put");

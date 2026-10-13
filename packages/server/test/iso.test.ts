@@ -75,6 +75,19 @@ test("asking over HTTP: the reply streams as events and ends as a proposal; keep
   expect((await send("/api/proposal/discard?id=basics/entropy", { proposal: p!.id })).status).toBe(409);
 });
 
+test("the context report and clearing the conversation over HTTP", async () => {
+  const report = await (await fetch(url + "/api/context?id=basics/entropy")).json() as { tokens: number; parts: { name: string; detail: string }[]; session: { requests: number } };
+  expect(report.parts.map((p) => p.name)).toEqual(["instructions and tools", "study record", "your prompts and Iso's answers", "this note", "linked notes"]);
+  expect(report.session.requests).toBe(1);
+  expect(report.parts[2]!.detail).toBe("1 moment");
+  expect((await send("/api/context/clear", {}, "POST", { [TOKEN_HEADER]: "wrong" })).status).toBe(403);
+  expect((await send("/api/context/clear", {})).status).toBe(200);
+  const cleared = await (await fetch(url + "/api/context")).json() as typeof report;
+  expect(cleared.parts[2]!.detail).toBe("");
+  expect(cleared.session.requests).toBe(1); // what was spent is still spent
+  expect(readFileSync(join(study, "record", "testdev1.jsonl"), "utf8")).toContain("context-cleared");
+});
+
 test("another provider and other models are read from the configuration", () => {
   const path = join(root, "other.toml");
   writeFileSync(path, 'device = "abcd1234"\n\n[provider]\nname = "local"\nurl = "http://localhost:11434/v1"\n\n[tiers]\nmid = "llama3"\n\n[prices]\nllama3 = [0, 0]\n');

@@ -95,18 +95,78 @@ export const estimate = (text: string): number => Math.ceil(text.length / 4);
 /** One part of what is sent, as the header's breakdown names it. */
 export interface Part { name: "instructions and tools" | "study record" | "your prompts and Iso's answers" | "this note" | "linked notes"; detail: string; tokens: number }
 
-/** This session's earlier requests in a note, as asked and as answered, with what became of each. */
-export function conversation(entries: readonly Entry[], session: string): string {
+/** One earlier request of this session: what was asked, what Iso wrote, and what became of it. */
+export interface Exchange { id: string; note: string; text: string }
+
+/** This session's requests in one note's journal, after the entry `since` (the conversation was cleared there). */
+export function exchanges(note: string, title: string, entries: readonly Entry[], session: string, since = ""): Exchange[] {
   const open = new Set(pending(entries).map((p) => p.id));
   const fate = new Map(moments(entries).filter((m) => m.asked !== undefined).map((m) => [m.ids[0]!, m.what]));
-  const out: string[] = [];
+  const out: Exchange[] = [];
   for (const e of entries) {
-    if (e.kind !== "proposal" || e.session !== session) continue;
-    const text = e.form === "insert" ? e.text : e.blocks.map((b) => b.new).join("\n\n");
-    const became = open.has(e.id) ? "It is still in the note, not yet kept." : fate.get(e.id) === "kept" ? "They kept it." : "They removed it.";
-    out.push(`They asked: ${e.asked}\n\nYou wrote:\n\n${text}\n\n${became}`);
+    if (e.kind !== "proposal" || e.session !== session || e.id <= since) continue;
+    const text = e.form === "insert" ? e.text : e.blocks.map((b) => b.new).filter(Boolean).join("\n\n");
+    const became = open.has(e.id) ? "It is still waiting in the note, not yet kept." : fate.get(e.id) === "kept" ? "They kept it." : "They removed it.";
+    out.push({ id: e.id, note, text: `In ${title} (/${note}.md) they asked${e.form === "rewrite" ? ", of paragraphs they chose" : ""}: ${e.asked}\n\nYou wrote:\n\n${text}\n\n${became}` });
   }
-  return out.join("\n\n---\n\n");
+  return out;
+}
+
+/** The most of the conversation and of the note that is sent, in tokens. Past these, the oldest exchanges and the
+ *  parts of the note furthest from the place asked about are left out, and Iso is told so. */
+export const CONVERSATION_BUDGET = 6000, NOTE_BUDGET = 12000;
+/** An exchange older than the last few is cut to this many characters of what Iso wrote. */
+const OLD_EXCHANGE = 400;
+
+/** The session's exchanges as they are sent: in order, the newest whole, older ones shortened, the oldest left
+ *  out when there is no room. */
+export function conversation(all: readonly Exchange[], budget = CONVERSATION_BUDGET): string {
+  const sorted = [...all].sort((a, b) => (a.id < b.id ? -1 : 1));
+  const kept: string[] = [];
+  let room = budget;
+  const shortened = (text: string): string => {
+    const at = text.indexOf("You wrote:\n\n") + 12, end = text.lastIndexOf("\n\n");
+    return end - at > OLD_EXCHANGE ? text.slice(0, at + OLD_EXCHANGE).trimEnd() + " […]" + text.slice(end) : text;
+  };
+  for (let k = sorted.length - 1; k >= 0; k--) {
+    // The last three whole where there is room; anything older, or too long for what room is left, shortened.
+    let text = sorted[k]!.text;
+    if (sorted.length - 1 - k >= 3 || estimate(text) > room) text = shortened(text);
+    if (estimate(text) > room) { kept.unshift(`[${k + 1} earlier ${k === 0 ? "exchange" : "exchanges"} of this session left out for length.]`); break; }
+    room -= estimate(text);
+    kept.unshift(text);
+  }
+  return kept.join("\n\n---\n\n");
+}
+
+/** A long note cut to fit: the lines round the places that matter are kept whole, the headings everywhere, and
+ *  each stretch left out is said to be. `keep` is the lines (from 0) that must be there. */
+export function windowed(lines: readonly string[], keep: readonly number[], budget = NOTE_BUDGET): string {
+  const whole = lines.join("\n");
+  if (estimate(whole) <= budget || !keep.length) return whole;
+  const shown = new Set<number>(keep);
+  let used = keep.reduce((n, k) => n + estimate(lines[k] ?? "") + 1, 0);
+  // Outwards from the kept lines, a line at a time on each side, until the budget is spent.
+  let lo = Math.min(...keep) - 1, hi = Math.max(...keep) + 1;
+  for (let k = Math.min(...keep); k <= Math.max(...keep); k++) if (!shown.has(k)) { shown.add(k); used += estimate(lines[k]!) + 1; }
+  while (used < budget && (lo >= 0 || hi < lines.length)) {
+    for (const k of [hi, lo]) {
+      if (k < 0 || k >= lines.length || used >= budget) continue;
+      shown.add(k); used += estimate(lines[k]!) + 1;
+    }
+    lo--; hi++;
+  }
+  const out: string[] = [];
+  let skipped = 0;
+  // The frontmatter is always sent: the note's title and what it says of itself.
+  const front = lines[0] === "---" ? lines.indexOf("---", 1) : -1;
+  const flush = () => { if (skipped) out.push(`[… ${skipped} ${skipped === 1 ? "line" : "lines"} of the note not shown …]`); skipped = 0; };
+  for (const [k, line] of lines.entries()) {
+    if (shown.has(k) || /^#{1,6}\s/.test(line) || k <= front) { flush(); out.push(line); }
+    else skipped++;
+  }
+  flush();
+  return out.join("\n");
 }
 
 export interface Asked {
@@ -120,6 +180,9 @@ export interface Asked {
   unkept: string[];
   conversation: string;
   asked: string;
+  /** How many exchanges the conversation holds, and what Iso read for them: for the breakdown. */
+  moments?: number;
+  linked?: { notes: number; tokens: number };
 }
 
 /** The messages for new text at a point, and what they hold, part by part. */
@@ -127,7 +190,7 @@ export function insertMessages(a: Asked): { messages: Message[]; parts: Part[] }
   const system = [WHO, INSERT, FORMAT, LOOKUP(ROUNDS[a.tier], a.meaning)].join("\n\n");
   const note = `# Their note: ${a.title} (/${a.id}.md)\n\n${a.marked}`
     + (a.unkept.length ? `\n\n# Text you offered in this note that they have not kept yet\n\nIt is not part of the note. Do not write it again.\n\n${a.unkept.join("\n\n---\n\n")}` : "");
-  const earlier = a.conversation ? `# Earlier in this session, in this note\n\n${a.conversation}` : "";
+  const earlier = a.conversation ? `# Earlier in this session\n\n${a.conversation}` : "";
   const request = `# What they ask now\n\n${a.asked}`;
   return {
     messages: [
@@ -138,9 +201,9 @@ export function insertMessages(a: Asked): { messages: Message[]; parts: Part[] }
     parts: [
       { name: "instructions and tools", detail: "", tokens: estimate(system) + 500 },
       { name: "study record", detail: "nothing yet", tokens: 0 },
-      { name: "your prompts and Iso's answers", detail: "", tokens: estimate(earlier) },
+      { name: "your prompts and Iso's answers", detail: a.moments ? `${a.moments} ${a.moments === 1 ? "moment" : "moments"}` : "", tokens: estimate(earlier) },
       { name: "this note", detail: a.title, tokens: estimate(note) + estimate(request) },
-      { name: "linked notes", detail: "", tokens: 0 },
+      { name: "linked notes", detail: a.linked?.notes ? `${a.linked.notes} read` : "", tokens: a.linked?.tokens ?? 0 },
     ],
   };
 }
@@ -155,16 +218,16 @@ export interface AskedRewrite extends Omit<Asked, "marked"> {
 export function rewriteMessages(a: AskedRewrite): { messages: Message[]; parts: Part[] } {
   const system = [WHO, REWRITE(a.count), FORMAT, LOOKUP(ROUNDS[a.tier], a.meaning)].join("\n\n");
   const note = `# Their note: ${a.title} (/${a.id}.md)\n\n${a.marked}`;
-  const earlier = a.conversation ? `# Earlier in this session, in this note\n\n${a.conversation}` : "";
+  const earlier = a.conversation ? `# Earlier in this session\n\n${a.conversation}` : "";
   const request = `# What they ask now, of the marked ${a.count === 1 ? "paragraph" : "paragraphs"}\n\n${a.asked}`;
   return {
     messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [earlier, note, request].filter(Boolean).join("\n\n") }],
     parts: [
       { name: "instructions and tools", detail: "", tokens: estimate(system) + 500 },
       { name: "study record", detail: "nothing yet", tokens: 0 },
-      { name: "your prompts and Iso's answers", detail: "", tokens: estimate(earlier) },
+      { name: "your prompts and Iso's answers", detail: a.moments ? `${a.moments} ${a.moments === 1 ? "moment" : "moments"}` : "", tokens: estimate(earlier) },
       { name: "this note", detail: a.title, tokens: estimate(note) + estimate(request) },
-      { name: "linked notes", detail: "", tokens: 0 },
+      { name: "linked notes", detail: a.linked?.notes ? `${a.linked.notes} read` : "", tokens: a.linked?.tokens ?? 0 },
     ],
   };
 }

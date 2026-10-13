@@ -45,12 +45,14 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     keep: (id, proposal) => write("POST", "proposal/keep" + q(id), { proposal }),
     revise: async (id, proposal, text) => { await write("POST", "proposal/revise" + q(id), { proposal, text }); },
     discard: async (id, proposal) => { await write("POST", "proposal/discard" + q(id), { proposal }); },
+    context: (note) => ask("context" + (note ? q(note) : "")),
+    clearConversation: async () => { await write("POST", "context/clear", {}); },
     settings: () => ask("settings"),
     setKey: (key) => write("PUT", "settings/key", { key }),
     events(listener) {
       const source = new EventSource(root + "events");
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
-      const types = ["note-changed", "journal", "iso-start", "iso-step", "iso-text", "iso-done", "iso-stopped", "iso-failed"] satisfies EngineEvent["type"][];
+      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-done", "iso-stopped", "iso-failed"] satisfies EngineEvent["type"][];
       for (const type of types) source.addEventListener(type, on);
       return () => source.close();
     },

@@ -3,6 +3,7 @@
 // behind HTTP (the server) or in the same process (a webview, later).
 
 import type { Anchor, Cost, Entry } from "@isorite/core";
+import type { Part } from "./iso.ts";
 import type { Step } from "./lookup.ts";
 import type { Tier } from "./provider.ts";
 
@@ -55,6 +56,16 @@ export type AskRequest =
   /** These blocks rewritten, and nothing else. */
   | { note: string; form: "rewrite"; blocks: Anchor[]; asked: string; tier: Tier };
 
+/** What a request to Iso would be sent now, part by part, and what the session has cost. Sizes are estimates
+ *  (four characters a token) until a provider's own count replaces them. */
+export interface ContextReport {
+  tokens: number;
+  /** The most the mid tier's model takes. */
+  limit: number;
+  parts: Part[];
+  session: { usd: number; requests: number };
+}
+
 /** What can be set, as the app may know it. The key itself is never sent back. */
 export interface Settings {
   provider: string;
@@ -68,6 +79,8 @@ export type EngineEvent =
   | { type: "note-changed"; id: string; version: string | null; who: string }
   /** An entry was added to a note's journal. */
   | { type: "journal"; id: string; entry: Entry }
+  /** An event was added to the study record. */
+  | { type: "record"; event: string }
   /** Iso was asked. Every request ends in exactly one of iso-done, iso-stopped, iso-failed. */
   | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; blocks: Anchor[] } }
   /** Iso looked something up. */
@@ -99,6 +112,10 @@ export interface Api {
   revise(id: string, proposal: string, text: string | string[]): Promise<void>;
   /** Take a proposal away. It stays in the journal. */
   discard(id: string, proposal: string): Promise<void>;
+  /** What Iso would be sent if asked now, in this note (or in none). */
+  context(note?: string): Promise<ContextReport>;
+  /** Leave the session's earlier exchanges out of what Iso is sent from now on. Nothing is deleted. */
+  clearConversation(): Promise<void>;
   settings(): Promise<Settings>;
   /** Hold a provider key (null forgets it). */
   setKey(key: string | null): Promise<Settings>;

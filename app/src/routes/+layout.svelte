@@ -7,6 +7,7 @@
   import type { Snippet } from "svelte";
   import { page } from "$app/state";
   import { app } from "$lib/app.svelte.ts";
+  import ContextCount from "$lib/components/ContextCount.svelte";
   import Logo from "$lib/components/Logo.svelte";
   import Menu from "$lib/components/Menu.svelte";
 
@@ -31,6 +32,7 @@
       {/if}
     </span>
     <span class="grow"></span>
+    {#if !app.error}<ContextCount />{/if}
     <nav class="switch" aria-label="Views">
       {#each VIEWS as [name, href] (name)}
         <a {href} aria-current={view === name ? "page" : undefined}><span>{name}</span></a>

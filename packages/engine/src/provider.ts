@@ -20,6 +20,8 @@ export interface ProviderConfig {
   tiers: Record<Tier, string>;
   /** US dollars a million tokens, in and out, for a provider that does not say what a call cost. */
   prices: Record<string, [number, number]>;
+  /** The most tokens its models take at once; 200,000 unless said. */
+  context?: number;
 }
 
 export const OPENROUTER: ProviderConfig = {

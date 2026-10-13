@@ -3,14 +3,14 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, blocks, change, findAnchor, hashText, isStudyId, journalLine, journalPath, locate, newId, pending, readJournal, reconcile, splitFrontmatter, stamp, written,
+  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, blocks, change, findAnchor, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written,
   type Cost, type Entry, type FileEntry, type Insert, type Proposal, type Rewrite, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, type Api, type AskRequest, type EngineEvent, type Listing, type NoteSource, type Saved, type SearchHit, type Session, type Settings } from "./api.ts";
-import { CLOSE, HERE, OPEN, conversation, insertMessages, parseRewrite, replyText, rewriteMessages } from "./iso.ts";
+import { Conflict, EngineError, type Api, type AskRequest, type ContextReport, type EngineEvent, type Listing, type NoteSource, type Saved, type SearchHit, type Session, type Settings } from "./api.ts";
+import { CLOSE, HERE, OPEN, conversation, estimate, exchanges, insertMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { rounds } from "./loop.ts";
 import { Lookup, type Similar } from "./lookup.ts";
-import { KEY, OPENROUTER, TIERS, type ProviderConfig } from "./provider.ts";
+import { KEY, OPENROUTER, TIERS, type Message, type ProviderConfig } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
 
 /** The largest note taken. */
@@ -221,36 +221,7 @@ export class Engine implements Api {
     const key = (await this.opts.secrets?.get(KEY)) ?? null;
     if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
 
-    // The note as it is on disk now: what the journal has not seen is entered first, as for any read.
-    const { text } = await this.readNote(req.note);
-    const gone = () => new Conflict("the place asked about is no longer in the note", { id: req.note, text, version: hashText(text) });
-    const lines = text.split("\n"), all = blocks(text);
-    let chosen: number[] = [];
-    if (req.form === "insert") {
-      const at = locate(text, { form: "insert", after: req.after, before: req.before } as Proposal);
-      if (!at || at.form !== "insert") throw gone();
-      lines.splice(at.line, 0, ...(at.line > 0 && lines[at.line - 1]!.trim() ? [""] : []), HERE, ...(at.line < lines.length && lines[at.line]!.trim() ? [""] : []));
-    } else {
-      if (!req.blocks.length || req.blocks.length > 40) throw new EngineError("choose between one and forty paragraphs to rewrite");
-      chosen = req.blocks.map((a) => findAnchor(all, a));
-      if (chosen.some((k) => k < 0) || new Set(chosen).size !== chosen.length) throw gone();
-      // Marked from the last to the first, so the lines of the earlier ones do not move.
-      for (const [n, k] of [...chosen.entries()].sort((x, y) => y[1] - x[1])) {
-        lines.splice(all[k]!.to, 0, CLOSE(n + 1));
-        lines.splice(all[k]!.from, 0, OPEN(n + 1));
-      }
-    }
-    let title = req.note.split("/").at(-1)!;
-    try { const t = splitFrontmatter(text)[0]?.title; if (typeof t === "string" && t) title = t; } catch { /* the id will do */ }
-
-    const entries = await this.journal(req.note);
-    const session = (await this.stamp("iso")).session;
-    const given = {
-      tier: req.tier, meaning: Boolean(this.opts.similar), title, id: req.note, marked: lines.join("\n"), asked,
-      unkept: pending(entries).map((p) => (p.form === "insert" ? p.text : p.blocks.map((b) => b.new).join("\n\n"))),
-      conversation: conversation(entries, session),
-    };
-    const { messages } = req.form === "insert" ? insertMessages(given) : rewriteMessages({ ...given, count: chosen.length });
+    const { messages, all, chosen } = await this.compose(req, asked);
     const olds = chosen.map((k) => all[k]!.text);
     const maxTokens = req.form === "insert" ? REPLY_TOKENS : Math.max(REPLY_TOKENS, Math.ceil(olds.join("").length / 3) + 1000);
 
@@ -262,36 +233,38 @@ export class Engine implements Api {
     const lookup = new Lookup(this.bundle, req.note, this.opts.similar ?? null);
     // The request returns at once; the rest happens as events, and ends in exactly one of done, stopped, failed.
     void (async () => {
+      let ran: Awaited<ReturnType<typeof rounds>> | null = null, offered = false;
       try {
-        const ran = await rounds({
+        const got = ran = await rounds({
           http, provider: this.provider, key, tier: req.tier, messages, lookup, maxTokens, signal: abort.signal,
           onText: (delta, again) => this.publish({ type: "iso-text", request, note: req.note, delta, again }),
           onStep: (step) => this.publish({ type: "iso-step", request, note: req.note, step }),
         });
         if (abort.signal.aborted) throw Object.assign(new Error("stopped"), { name: "AbortError" });
-        const notices: string[] = ran.cut ? ["The reply was cut off at its length limit. Ask for less at once."] : [];
+        const notices: string[] = got.cut ? ["The reply was cut off at its length limit. Ask for less at once."] : [];
         // What it wrote is fitted to the form here: this, not its instructions, is what limits where its text can go.
         let body: Pick<Insert, "form" | "after" | "before" | "text"> | Pick<Rewrite, "form" | "blocks">;
         if (req.form === "insert") {
-          const reply = replyText(ran.text);
+          const reply = replyText(got.text);
           if (!reply) throw new EngineError("Iso replied with nothing. Ask again, or at another tier.");
           body = { form: "insert", after: req.after, before: req.before, text: reply };
         } else {
-          const parsed = parseRewrite(ran.text, chosen.length);
+          const parsed = parseRewrite(got.text, chosen.length);
           if (parsed.blocks.every((b, k) => b === null || b === olds[k])) throw new EngineError(parsed.outside ? "Iso replied, but not with a rewrite of the paragraphs you chose, so nothing is offered. Ask for new text at a point instead, or ask again." : "Iso left the paragraphs as they are.");
           if (parsed.outside) notices.push("Iso also wrote outside the paragraphs you chose. That part was left out.");
           body = { form: "rewrite", blocks: req.blocks.map((old, k) => ({ old, new: parsed.blocks[k] ?? olds[k]! })) };
         }
-        const cost: Cost = { model: ran.usage.model, tier: req.tier, tokensIn: ran.usage.tokensIn, tokensOut: ran.usage.tokensOut, tokensCached: ran.usage.tokensCached, usd: ran.usage.usd };
+        const cost: Cost = { model: got.usage.model, tier: req.tier, tokensIn: got.usage.tokensIn, tokensOut: got.usage.tokensOut, tokensCached: got.usage.tokensCached, usd: got.usage.usd };
         // Entered in its turn among the writes. From here it survives closing the browser.
         const proposal = await this.one(async () => {
           const p = {
-            ...(await this.stamp(`iso:${this.provider.name}/${ran.usage.model}`)), kind: "proposal", asked, ...body, cost, read: lookup.read(),
+            ...(await this.stamp(`iso:${this.provider.name}/${got.usage.model}`)), kind: "proposal", asked, ...body, cost, read: lookup.read(),
             ...(notices.length ? { notice: notices.join(" ") } : {}),
           } as Proposal;
           await this.enter(req.note, await this.journal(req.note), p);
           return p;
         });
+        offered = true;
         this.publish({ type: "iso-done", request, note: req.note, proposal: proposal.id, cost });
       } catch (err) {
         if (abort.signal.aborted || (err as Error).name === "AbortError") this.publish({ type: "iso-stopped", request, note: req.note });
@@ -299,9 +272,140 @@ export class Engine implements Api {
       } finally {
         this.running.delete(request);
         this.asking.delete(req.note);
+        // A reply that was paid for and came to nothing is still part of what the session cost.
+        if (ran && !offered && ran.usage.usd > 0) {
+          const spent = ran.usage;
+          void this.one(async () => this.record({ event: "iso-unused", note: req.note, session: await this.sessionNow(), model: spent.model, usd: spent.usd })).catch(() => undefined);
+        }
       }
     })();
     return { request };
+  }
+
+  /** What a request is sent: the note with its place marked (cut to fit when it is long), the session's earlier
+   *  exchanges (cut to fit likewise), and the request. Used to ask, and to say what asking would send. */
+  private async compose(req: AskRequest, asked: string): Promise<{ messages: Message[]; parts: Part[]; text: string; all: ReturnType<typeof blocks>; chosen: number[] }> {
+    // The note as it is on disk now: what the journal has not seen is entered first, as for any read.
+    const { text } = await this.readNote(req.note);
+    const gone = () => new Conflict("the place asked about is no longer in the note", { id: req.note, text, version: hashText(text) });
+    const lines = text.split("\n"), all = blocks(text);
+    let chosen: number[] = [], keep: number[] = [];
+    if (req.form === "insert") {
+      const at = locate(text, { form: "insert", after: req.after, before: req.before } as Proposal);
+      if (!at || at.form !== "insert") throw gone();
+      const before = at.line > 0 && lines[at.line - 1]!.trim() ? [""] : [];
+      lines.splice(at.line, 0, ...before, HERE, ...(at.line < lines.length && lines[at.line]!.trim() ? [""] : []));
+      keep = [at.line + before.length];
+    } else {
+      if (!req.blocks.length || req.blocks.length > 40) throw new EngineError("choose between one and forty paragraphs to rewrite");
+      chosen = req.blocks.map((a) => findAnchor(all, a));
+      if (chosen.some((k) => k < 0) || new Set(chosen).size !== chosen.length) throw gone();
+      // Marked from the last to the first, so the lines of the earlier ones do not move.
+      for (const [n, k] of [...chosen.entries()].sort((x, y) => y[1] - x[1])) {
+        lines.splice(all[k]!.to, 0, CLOSE(n + 1));
+        lines.splice(all[k]!.from, 0, OPEN(n + 1));
+      }
+      keep = lines.flatMap((l, k) => (/^⟦\/?\d+⟧$/.test(l) ? [k] : []));
+      // Every line of a chosen paragraph must be sent, however long the note.
+      keep = Array.from({ length: Math.max(...keep) - Math.min(...keep) + 1 }, (_, k) => Math.min(...keep) + k);
+    }
+    const title = this.titleOf(req.note, text);
+    const entries = await this.journal(req.note);
+    const earlier = await this.exchangesNow();
+    // What Iso read for this note's exchanges that are still in the conversation: it may well read them again.
+    const read = new Set(entries.flatMap((e) => (e.kind === "proposal" && earlier.some((x) => x.id === e.id) ? e.read ?? [] : [])));
+    const given = {
+      tier: req.tier, meaning: Boolean(this.opts.similar), title, id: req.note, marked: windowed(lines, keep), asked,
+      unkept: pending(entries).map((p) => (p.form === "insert" ? p.text : p.blocks.map((b) => b.new).join("\n\n"))),
+      conversation: conversation(earlier), moments: earlier.length,
+      linked: { notes: read.size, tokens: [...read].reduce((n, id) => n + estimate(this.bundle.concepts.get(id)?.body ?? ""), 0) },
+    };
+    return { ...(req.form === "insert" ? insertMessages(given) : rewriteMessages({ ...given, count: chosen.length })), text, all, chosen };
+  }
+
+  private titleOf(id: string, text: string): string {
+    try { const t = splitFrontmatter(text)[0]?.title; if (typeof t === "string" && t) return t; } catch { /* the id will do */ }
+    return id.split("/").at(-1)!;
+  }
+
+  // ------------------------------------------------------------ the session
+
+  /** The session an entry made now would belong to. */
+  private async sessionNow(): Promise<string> { return (await this.stamp("you")).session; }
+
+  /** Every journal's entries of the current session, by note. Read from the study base once a session, then kept
+   *  current as entries are made. */
+  private sessionLog: { session: string; notes: Map<string, Entry[]> } | null = null;
+  private async sessionEntries(): Promise<Map<string, Entry[]>> {
+    const session = await this.sessionNow();
+    if (this.sessionLog?.session === session) return this.sessionLog.notes;
+    const notes = new Map<string, Entry[]>(), study = this.opts.study;
+    const visit = async (dir: string): Promise<void> => {
+      for (const info of study ? await study.list(dir) : []) {
+        const path = `${dir}/${info.name}`;
+        if (info.dir) await visit(path);
+        else if (info.name.endsWith(".jsonl")) {
+          const mine = readJournal((await study!.read(path)) ?? "").filter((e) => e.session === session);
+          if (mine.length) notes.set(path.slice("journal/".length, -".jsonl".length), mine);
+        }
+      }
+    };
+    await visit("journal");
+    this.sessionLog = { session, notes };
+    return notes;
+  }
+
+  /** The id of the last event that cleared the conversation, or "": exchanges before it are not sent. */
+  private cleared: string | undefined;
+  private async clearedAt(): Promise<string> {
+    if (this.cleared === undefined) {
+      const text = this.opts.study ? await this.opts.study.read(recordPath(this.opts.device)) : null;
+      this.cleared = readRecord(text ?? "").filter((e) => e.event === "context-cleared").map((e) => e.id).sort().at(-1) ?? "";
+    }
+    return this.cleared;
+  }
+
+  /** The session's exchanges with Iso, across its notes, since the conversation was last cleared. */
+  private async exchangesNow(): Promise<Exchange[]> {
+    const since = await this.clearedAt(), session = await this.sessionNow(), out: Exchange[] = [];
+    for (const [note, entries] of await this.sessionEntries()) {
+      // What became of each is read from the note's whole journal: a keep may be in a later session.
+      const whole = entries.some((e) => e.kind === "proposal") ? await this.journal(note) : [];
+      out.push(...exchanges(note, this.bundle.concepts.get(note)?.title ?? note, whole, session, since));
+    }
+    return out;
+  }
+
+  /** An event in the study record, on this device's file. */
+  private async record(event: Record<string, unknown>): Promise<string> {
+    const e = cleanEvent(event, { device: this.opts.device, now: this.opts.clock.now() });
+    await this.opts.study?.append(recordPath(this.opts.device), JSON.stringify(e) + "\n");
+    this.publish({ type: "record", event: String(e.event) });
+    return e.id;
+  }
+
+  async clearConversation(): Promise<void> {
+    if (!this.opts.study) return;
+    this.cleared = await this.one(() => this.record({ event: "context-cleared" }));
+  }
+
+  async context(note?: string): Promise<ContextReport> {
+    let parts: Part[];
+    if (note && !isStudyId(note)) {
+      ({ parts } = await this.compose({ note, form: "insert", after: null, before: null, asked: "", tier: "mid" }, ""));
+    } else {
+      // In no note: the instructions, and the conversation as it would be sent.
+      const earlier = await this.exchangesNow();
+      ({ parts } = insertMessages({ tier: "mid", meaning: Boolean(this.opts.similar), title: "", id: "", marked: "", unkept: [], conversation: conversation(earlier), moments: earlier.length, asked: "" }));
+      parts = parts.map((p) => (p.name === "this note" ? { ...p, detail: "none open", tokens: 0 } : p));
+    }
+    // What the session has cost: every reply offered, kept or not, and every reply that came to nothing.
+    const session = await this.sessionNow();
+    let usd = 0, requests = 0;
+    for (const entries of (await this.sessionEntries()).values()) for (const e of entries) if (e.kind === "proposal") { usd += e.cost?.usd ?? 0; requests++; }
+    const text = this.opts.study ? await this.opts.study.read(recordPath(this.opts.device)) : null;
+    for (const e of readRecord(text ?? "")) if (e.event === "iso-unused" && e.session === session) { usd += typeof e.usd === "number" ? e.usd : 0; requests++; }
+    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: { usd, requests } };
   }
 
   async stop(request: string): Promise<void> {
@@ -361,6 +465,7 @@ export class Engine implements Api {
     await this.opts.study.append(journalPath(id), journalLine(entry));
     entries.push(entry);
     this.last = { at: entry.at, session: entry.session };
+    if (this.sessionLog?.session === entry.session) this.sessionLog.notes.set(id, [...(this.sessionLog.notes.get(id) ?? []), entry]);
     this.publish({ type: "journal", id, entry });
   }
 
