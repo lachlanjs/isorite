@@ -7,8 +7,8 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve as nodeServe } from "@hono/node-server";
 import { CONFIG_FILE, StudyError } from "@isorite/core";
-import { Engine, systemClock } from "@isorite/engine";
-import { deviceId } from "./config.ts";
+import { Engine, systemClock, type Http } from "@isorite/engine";
+import { ConfigSecrets, configPath, deviceId, providerConfig } from "./config.ts";
 import { LOOPBACK, createApp } from "./http.ts";
 import { NodeFiles } from "./nodefiles.ts";
 import { defaultStudyPath, openStudyBase } from "./studybase.ts";
@@ -31,8 +31,12 @@ export function locate(path: string): Opened {
   return { notes: at, study: existsSync(join(beside, CONFIG_FILE)) && openStudyBase(beside).notes === at ? beside : null };
 }
 
-export async function openEngine({ notes, study }: Opened, device = deviceId()): Promise<Engine> {
-  return Engine.open({ notes: new NodeFiles(notes), study: study ? new NodeFiles(study) : null, clock: systemClock, device, name: basename(notes) });
+export async function openEngine({ notes, study }: Opened, device = deviceId(), config = configPath(), http: Http = { fetch: (input, init) => fetch(input, init) }): Promise<Engine> {
+  // The provider is OpenRouter unless the configuration names another. The engine compares against OPENROUTER to know.
+  return Engine.open({
+    notes: new NodeFiles(notes), study: study ? new NodeFiles(study) : null, clock: systemClock, device, name: basename(notes),
+    http, secrets: new ConfigSecrets(config), provider: providerConfig(config),
+  });
 }
 
 export async function serve(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[] } = {}): Promise<void> {

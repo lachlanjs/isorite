@@ -2,7 +2,9 @@
 // interface and nothing else, so it does not know whether the engine is
 // behind HTTP (the server) or in the same process (a webview, later).
 
-import type { Entry } from "@isorite/core";
+import type { Anchor, Cost, Entry } from "@isorite/core";
+import type { Step } from "./lookup.ts";
+import type { Tier } from "./provider.ts";
 
 /** What is open. */
 export interface Session {
@@ -46,11 +48,38 @@ export interface SearchHit {
   snippet: string;
 }
 
+/** A request to Iso for new text at a point of a note: between the block `after` and the block `before`. */
+export interface AskRequest {
+  note: string;
+  form: "insert";
+  after: Anchor | null;
+  before: Anchor | null;
+  asked: string;
+  tier: Tier;
+}
+
+/** What can be set, as the app may know it. The key itself is never sent back. */
+export interface Settings {
+  provider: string;
+  /** Whether a key is held. */
+  key: boolean;
+  tiers: Record<Tier, string>;
+}
+
 export type EngineEvent =
   /** A note's file was written, or found changed. `version` is null when the note is gone. */
   | { type: "note-changed"; id: string; version: string | null; who: string }
   /** An entry was added to a note's journal. */
-  | { type: "journal"; id: string; entry: Entry };
+  | { type: "journal"; id: string; entry: Entry }
+  /** Iso was asked. Every request ends in exactly one of iso-done, iso-stopped, iso-failed. */
+  | { type: "iso-start"; request: string; note: string; asked: string; after: Anchor | null; before: Anchor | null; tier: Tier }
+  /** Iso looked something up. */
+  | { type: "iso-step"; request: string; note: string; step: Step }
+  /** A piece of its reply. `again`: what came before was not the reply; start over. */
+  | { type: "iso-text"; request: string; note: string; delta: string; again: boolean }
+  | { type: "iso-done"; request: string; note: string; proposal: string; cost: Cost }
+  | { type: "iso-stopped"; request: string; note: string }
+  | { type: "iso-failed"; request: string; note: string; message: string };
 
 export interface Api {
   session(): Promise<Session>;
@@ -63,6 +92,19 @@ export interface Api {
   /** The note's journal, oldest first. Empty with no study base. */
   journal(id: string): Promise<Entry[]>;
   search(query: string): Promise<SearchHit[]>;
+  /** Ask Iso. Returns at once with the request's id; what follows comes as events, and ends as a proposal in the note's journal. */
+  ask(request: AskRequest): Promise<{ request: string }>;
+  /** Stop a request. Nothing is entered. */
+  stop(request: string): Promise<void>;
+  /** Write a proposal into its note. The note's file changes here and nowhere else on Iso's account. */
+  keep(id: string, proposal: string): Promise<Saved>;
+  /** Your edit to a proposal's text before keeping it. */
+  revise(id: string, proposal: string, text: string): Promise<void>;
+  /** Take a proposal away. It stays in the journal. */
+  discard(id: string, proposal: string): Promise<void>;
+  settings(): Promise<Settings>;
+  /** Hold a provider key (null forgets it). */
+  setKey(key: string | null): Promise<Settings>;
   /** Listen to everything the engine does, until the returned function is called. */
   events(listener: (event: EngineEvent) => void): () => void;
 }

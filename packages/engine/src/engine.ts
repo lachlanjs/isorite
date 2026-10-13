@@ -3,11 +3,15 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, change, hashText, isStudyId, journalLine, journalPath, readJournal, reconcile, stamp,
-  type Entry, type FileEntry, type Stamp,
+  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, change, hashText, isStudyId, journalLine, journalPath, locate, newId, pending, readJournal, reconcile, splitFrontmatter, stamp, written,
+  type Cost, type Entry, type FileEntry, type Insert, type Proposal, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, type Api, type EngineEvent, type Listing, type NoteSource, type Saved, type SearchHit, type Session } from "./api.ts";
-import type { Clock, Files } from "./ports.ts";
+import { Conflict, EngineError, type Api, type AskRequest, type EngineEvent, type Listing, type NoteSource, type Saved, type SearchHit, type Session, type Settings } from "./api.ts";
+import { HERE, conversation, insertMessages, replyText } from "./iso.ts";
+import { rounds } from "./loop.ts";
+import { Lookup, type Similar } from "./lookup.ts";
+import { KEY, OPENROUTER, TIERS, type ProviderConfig } from "./provider.ts";
+import type { Clock, Files, Http, Secrets } from "./ports.ts";
 
 /** The largest note taken. */
 export const MAX_NOTE_BYTES = 2_000_000;
@@ -20,7 +24,16 @@ export interface EngineOptions {
   clock: Clock;
   device: string;
   name: string;
+  /** For Iso: the network, where the key is kept, and which provider. Without `http`, Iso cannot be asked. */
+  http?: Http;
+  secrets?: Secrets;
+  provider?: ProviderConfig;
+  /** Search by meaning, where the device can run it. */
+  similar?: Similar;
 }
+
+/** The longest request and the longest reply asked for, in characters and tokens. */
+export const MAX_ASKED = 4000, REPLY_TOKENS = 2500;
 
 const BAD_PART = /^\.|[\0\\:*?"<>|]|^\s|\s$/;
 
@@ -59,6 +72,8 @@ export class Engine implements Api {
   /** The newest entry made anywhere in the study base: it decides the session. Undefined until looked for. */
   private last: Pick<Stamp, "at" | "session"> | null | undefined;
   private queue: Promise<unknown> = Promise.resolve();
+  /** Requests to Iso that are running, by id. */
+  private readonly running = new Map<string, AbortController>();
 
   private constructor(opts: EngineOptions) { this.opts = opts; }
 
@@ -168,6 +183,134 @@ export class Engine implements Api {
     const version = hashText(text);
     this.publish({ type: "note-changed", id, version, who: "you" });
     return { id, text, version, changed: true };
+  }
+
+  // ------------------------------------------------------------ Iso
+
+  private get provider(): ProviderConfig { return this.opts.provider ?? OPENROUTER; }
+
+  async settings(): Promise<Settings> {
+    return { provider: this.provider.name, key: Boolean(await this.opts.secrets?.get(KEY)), tiers: this.provider.tiers };
+  }
+
+  async setKey(key: string | null): Promise<Settings> {
+    if (!this.opts.secrets) throw new EngineError("keys cannot be kept here", 409);
+    const clean = key?.trim() || null;
+    if (clean && (clean.length > 400 || /\s/.test(clean))) throw new EngineError("that does not look like a key");
+    await this.opts.secrets.set(KEY, clean);
+    return this.settings();
+  }
+
+  async ask(req: AskRequest): Promise<{ request: string }> {
+    const http = this.opts.http;
+    if (!http) throw new EngineError("Iso cannot be asked here", 409);
+    if (!this.opts.study) throw new EngineError("Iso's text is kept in a study base until you keep it, and none is open (isorite study init)", 409);
+    if (isStudyId(req.note)) throw new EngineError("Iso is asked in a note of the knowledge base for now");
+    if (!TIERS.includes(req.tier)) throw new EngineError("the tier is low, mid or max");
+    const asked = req.asked.trim();
+    if (!asked) throw new EngineError("say what you want from Iso");
+    if (asked.length > MAX_ASKED) throw new EngineError("that is too long to ask at once", 413);
+    const key = (await this.opts.secrets?.get(KEY)) ?? null;
+    if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
+
+    // The note as it is on disk now: what the journal has not seen is entered first, as for any read.
+    const { text } = await this.readNote(req.note);
+    const place: Insert = { ...(await this.stamp("iso")), kind: "proposal", form: "insert", asked, after: req.after, before: req.before, text: "" };
+    const at = locate(text, place);
+    if (!at || at.form !== "insert") throw new Conflict("the place asked about is no longer in the note", { id: req.note, text, version: hashText(text) });
+    const lines = text.split("\n");
+    lines.splice(at.line, 0, ...(at.line > 0 && lines[at.line - 1]!.trim() ? [""] : []), HERE, ...(at.line < lines.length && lines[at.line]!.trim() ? [""] : []));
+    let title = req.note.split("/").at(-1)!;
+    try { const t = splitFrontmatter(text)[0]?.title; if (typeof t === "string" && t) title = t; } catch { /* the id will do */ }
+
+    const entries = await this.journal(req.note);
+    const { messages } = insertMessages({
+      tier: req.tier, meaning: Boolean(this.opts.similar), title, id: req.note, marked: lines.join("\n"), asked,
+      unkept: pending(entries).map((p) => (p.form === "insert" ? p.text : p.blocks.map((b) => b.new).join("\n\n"))),
+      conversation: conversation(entries, place.session),
+    });
+
+    const request = newId(this.opts.clock.now()), abort = new AbortController();
+    this.running.set(request, abort);
+    this.publish({ type: "iso-start", request, note: req.note, asked, after: req.after, before: req.before, tier: req.tier });
+    const lookup = new Lookup(this.bundle, req.note, this.opts.similar ?? null);
+    // The request returns at once; the rest happens as events, and ends in exactly one of done, stopped, failed.
+    void (async () => {
+      try {
+        const ran = await rounds({
+          http, provider: this.provider, key, tier: req.tier, messages, lookup, maxTokens: REPLY_TOKENS, signal: abort.signal,
+          onText: (delta, again) => this.publish({ type: "iso-text", request, note: req.note, delta, again }),
+          onStep: (step) => this.publish({ type: "iso-step", request, note: req.note, step }),
+        });
+        if (abort.signal.aborted) throw Object.assign(new Error("stopped"), { name: "AbortError" });
+        const reply = replyText(ran.text);
+        if (!reply) throw new EngineError("Iso replied with nothing. Ask again, or at another tier.");
+        const cost: Cost = { model: ran.usage.model, tier: req.tier, tokensIn: ran.usage.tokensIn, tokensOut: ran.usage.tokensOut, tokensCached: ran.usage.tokensCached, usd: ran.usage.usd };
+        // Entered in its turn among the writes. From here it survives closing the browser.
+        const proposal = await this.one(async () => {
+          const p: Proposal = {
+            ...(await this.stamp(`iso:${this.provider.name}/${ran.usage.model}`)), kind: "proposal", form: "insert",
+            asked, after: req.after, before: req.before, text: reply, cost, read: lookup.read(),
+          };
+          await this.enter(req.note, await this.journal(req.note), p);
+          return p;
+        });
+        this.publish({ type: "iso-done", request, note: req.note, proposal: proposal.id, cost });
+      } catch (err) {
+        if (abort.signal.aborted || (err as Error).name === "AbortError") this.publish({ type: "iso-stopped", request, note: req.note });
+        else this.publish({ type: "iso-failed", request, note: req.note, message: (err as Error).message || "Iso could not answer" });
+      } finally {
+        this.running.delete(request);
+      }
+    })();
+    return { request };
+  }
+
+  async stop(request: string): Promise<void> {
+    this.running.get(request)?.abort();
+  }
+
+  /** A proposal still waiting in a note's journal, or a refusal. */
+  private async waiting(id: string, proposal: string): Promise<{ entries: Entry[]; p: Proposal }> {
+    const entries = await this.journal(id);
+    const p = pending(entries).find((x) => x.id === proposal);
+    if (!p) throw new EngineError("that text is no longer waiting: it was kept or removed", 409);
+    return { entries, p };
+  }
+
+  keep(id: string, proposal: string): Promise<Saved> {
+    return this.one(async () => {
+      const { files, path } = this.where(id);
+      const now = await files.read(path);
+      if (now === null) throw new Conflict(`${id} is gone`, null);
+      const { entries, p } = await this.waiting(id, proposal);
+      await this.enter(id, entries, reconcile(entries, now, await this.stamp("external")));
+      // A proposal whose place has gone is kept at the end of the note: shown apart, never lost.
+      const text = written(now, p) ?? written(now, p.form === "insert" ? { ...p, after: null, before: null } : p);
+      if (text === null) throw new EngineError("the paragraphs this would rewrite are no longer in the note", 409);
+      await files.write(path, text);
+      await this.enter(id, entries, change(entries, text, await this.stamp("you"), "keep", { proposal }));
+      if (!isStudyId(id)) { this.files.set(path, { path, text }); this.built = this.index = null; }
+      const version = hashText(text);
+      this.publish({ type: "note-changed", id, version, who: "you" });
+      return { id, text, version, changed: true };
+    });
+  }
+
+  revise(id: string, proposal: string, text: string): Promise<void> {
+    return this.one(async () => {
+      const { entries, p } = await this.waiting(id, proposal);
+      if (p.form !== "insert") throw new EngineError("a rewrite is revised block by block");
+      if (text.length > MAX_NOTE_BYTES) throw new EngineError("too large", 413);
+      if (text !== p.text) await this.enter(id, entries, { ...(await this.stamp("you")), kind: "revise", proposal, text });
+    });
+  }
+
+  discard(id: string, proposal: string): Promise<void> {
+    return this.one(async () => {
+      const { entries } = await this.waiting(id, proposal);
+      await this.enter(id, entries, { ...(await this.stamp("you")), kind: "discard", proposal });
+    });
   }
 
   private async enter(id: string, entries: Entry[], entry: Entry | null): Promise<void> {

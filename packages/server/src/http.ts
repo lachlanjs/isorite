@@ -31,6 +31,11 @@ const TYPES: Record<string, string> = {
 
 const Edit = z.object({ base: z.string().max(64), text: z.string() }).strict();
 const Make = z.object({ text: z.string() }).strict();
+const Anchor = z.object({ text: z.string(), nth: z.number().int().min(0) }).strict();
+const Ask = z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: z.enum(["low", "mid", "max"]) }).strict();
+const Named = z.object({ proposal: z.string().max(64) }).strict();
+const Revised = z.object({ proposal: z.string().max(64), text: z.string() }).strict();
+const Key = z.object({ key: z.string().nullable() }).strict();
 
 export function createApp({ api, token, loopback, web, allowHosts = [] }: ServerOptions): Hono {
   const app = new Hono();
@@ -95,6 +100,23 @@ export function createApp({ api, token, loopback, web, allowHosts = [] }: Server
     const made = await body(c, Make);
     return made instanceof Response ? made : answer(c, () => api.createNote(id(c), made.text));
   });
+
+  /** A write with a JSON body of a known shape, answered by the engine. */
+  const post = <T>(path: string, shape: z.ZodType<T>, act: (c: Context, body: T) => Promise<unknown>, method: "post" | "put" = "post") =>
+    app[method](path, async (c) => {
+      const refused = writeRefused(c);
+      if (refused) return refused;
+      const sent = await body(c, shape);
+      return sent instanceof Response ? sent : answer(c, async () => (await act(c, sent)) ?? {});
+    });
+  post("/api/iso/ask", Ask, (_c, b) => api.ask(b));
+  post("/api/iso/stop", z.object({ request: z.string().max(64) }).strict(), (_c, b) => api.stop(b.request));
+  post("/api/proposal/keep", Named, (c, b) => api.keep(id(c), b.proposal));
+  post("/api/proposal/revise", Revised, (c, b) => api.revise(id(c), b.proposal, b.text));
+  post("/api/proposal/discard", Named, (c, b) => api.discard(id(c), b.proposal));
+  // The key goes in and never comes out: settings say only whether one is held.
+  app.get("/api/settings", (c) => answer(c, () => api.settings()));
+  post("/api/settings/key", Key, (_c, b) => api.setKey(b.key), "put");
 
   // Everything the engine does, as it happens. A comment every 25 seconds keeps the connection open.
   app.get("/api/events", (c) => streamSSE(c, async (stream) => {
