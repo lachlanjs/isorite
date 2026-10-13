@@ -1,6 +1,6 @@
 # Milestone 1: the shell, and writing a note
 
-A plan for Lachlan's approval, 2026-10-13. Nothing here is built. Branch: `m1-shell`.
+Approved by Lachlan on 2026-10-13, with the change to frontmatter in section 3. Branch: `m1-shell`.
 
 **Done when:** `isorite serve` opens a base in the browser; a note with maths and typed links can be written, closed and reopened; and its journal in the study base shows your edits as entries.
 
@@ -60,7 +60,7 @@ Not carried over from the editor: pins, marked places and suggestions. They belo
 ## 3. Choices in this milestone that need your eye
 
 1. **Saving.** No save button. The note is saved 1.5 seconds after you stop typing, when you leave the note, and on Ctrl+S. Unsaved text is also kept in the browser, so a closed tab loses nothing. The header's path shows "saved" or "saving".
-2. **Frontmatter.** The server deals in the whole file. The editor shows the title as the note's heading and the type, description and tags in a fold beneath it; a source toggle shows the file exactly as it is on disk.
+2. **Frontmatter.** The server deals in the whole file. The relevant fields (title, type, description, tags) are editable, shown in a very minimal form that can be hidden (Lachlan, 2026-10-13); other fields are left exactly as they are. A source toggle shows the file as it is on disk.
 3. **A note changed elsewhere while it is open.** With nothing unsaved, the editor takes the new text. With unsaved text, the save is refused and you choose yours or theirs. No merging yet.
 4. **Outside changes are found when a note is read or saved,** not by watching the folder. Watching arrives with the Atlas in milestone 3, where a live view needs it.
 5. **Not in this milestone:** renaming, moving and deleting notes; pictures and artifacts; Mermaid; the logo menu. Until then a note is renamed in a file manager, and the journal enters it as a new note.
