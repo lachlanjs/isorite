@@ -52,7 +52,7 @@
         onPick: (ranges: { from: number; to: number }[]) => iso.pick(ranges.map((r) => ({ from: r.from + head.chars, to: r.to + head.chars }))),
         onUnpick: (at: number) => iso.unpick(at + head.chars),
         mountOverlay: (el: HTMLElement, key: string) => {
-          const piece = mount(key.startsWith("r:") ? IsoChange : IsoBlock, { target: el, props: { iso, key } });
+          const piece = mount(key.startsWith("r:") ? IsoChange : IsoBlock, { target: el, props: { iso, key } }); // "r:…" is one change of a rewrite
           return () => { void unmount(piece); };
         },
       } : { placeholder: "Write what you understand, what you do not, and what you want from Iso. [[ links a note it should rest on." }),

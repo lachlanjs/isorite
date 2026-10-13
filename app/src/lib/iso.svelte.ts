@@ -18,8 +18,10 @@ export interface Prompt { line: number; mode: "insert" | "rewrite"; regions: Pas
 export interface Asking { request: string; asked: string; line: number; regions: Passage[]; text: string; steps: Step[] }
 /** One block Iso has laid over the note, before a line. */
 export interface Block { key: string; line: number }
-/** One change a rewrite offers, where its passage is now. */
-export interface Change { key: string; proposal: Rewrite; k: number; at: Span | null }
+/** One change a rewrite offers, where its passage is now. A change of more than one line (the old or the new) is
+ *  shown as a block under its passage, since lines cannot be set inside a line; `code` says the passage is in a
+ *  code block, so the new text is shown in the code's face with its indentation. */
+export interface Change { key: string; proposal: Rewrite; k: number; at: Span | null; block: boolean; code: boolean }
 
 const TIERS: Tier[] = ["low", "mid", "max"];
 function remembered(): Tier {
@@ -51,10 +53,15 @@ export class NoteIso {
   readonly proposals = $derived(this.waiting.filter((p): p is Insert => p.form === "insert"));
   /** The changes its rewrites offer that are still waiting, each where its passage is now, in the order of the text. */
   readonly changes = $derived.by((): Change[] => {
-    const out: Change[] = [];
+    const out: Change[] = [], all = blocks(this.note.text);
     for (const p of this.waiting) {
       if (p.form !== "rewrite") continue;
-      for (const k of p.open ?? []) out.push({ key: `r:${p.id}:${k}`, proposal: p, k, at: findPassage(this.note.text, p.regions[k]!.old) });
+      for (const k of p.open ?? []) {
+        const r = p.regions[k]!, at = findPassage(this.note.text, r.old);
+        const line = at ? this.note.text.slice(0, at.from).split("\n").length - 1 : -1;
+        const inside = all.find((b) => b.from <= line && line < b.to);
+        out.push({ key: `r:${p.id}:${k}`, proposal: p, k, at, block: /\n/.test(r.old.text.trim()) || /\n/.test(r.new.trim()), code: Boolean(inside && /^\s*(```|~~~)/.test(inside.text)) });
+      }
     }
     return out.sort((a, b) => (a.at?.from ?? Infinity) - (b.at?.from ?? Infinity));
   });
@@ -82,11 +89,13 @@ export class NoteIso {
     if (this.failed) out.push({ key: "failed", line: this.failed.line });
     if (this.prompt) out.push({ key: "prompt", line: this.prompt.line });
     const placed = this.changes.filter((c) => c.at);
+    // A change of several lines is a block under the last line of its passage.
+    for (const c of placed) if (c.block) out.push({ key: c.key, line: this.note.text.slice(0, c.at!.to).split("\n").length });
     return {
       blocks: out,
       picked: this.spans(this.prompt?.regions ?? this.asking?.regions ?? []),
       old: placed.map((c) => c.at!),
-      inline: placed.map((c) => ({ key: c.key, at: c.at!.to })),
+      inline: placed.filter((c) => !c.block).map((c) => ({ key: c.key, at: c.at!.to })),
     };
   });
 

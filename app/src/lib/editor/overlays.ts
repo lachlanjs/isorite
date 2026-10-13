@@ -92,7 +92,9 @@ export function overlays(mount: Mount): Extension {
   return [blocks, marks, EditorView.theme({
     // The space round a block is padding, inside what the editor measures. A margin on what is drawn inside would
     // fall outside it, and every click below the block would land a line off.
-    ".cm-overlay": { cursor: "default", userSelect: "text", padding: "10px 0", display: "flow-root" },
+    // The editor keeps every space and line break of its text (white-space: break-spaces). What is drawn in a block is
+    // not the note's text: left to inherit that, the line break after each paragraph of Iso's showed as an empty line.
+    ".cm-overlay": { cursor: "default", userSelect: "text", padding: "10px 0", display: "flow-root", whiteSpace: "normal" },
     // Chosen for Iso to rewrite: yours, so lattice. To be replaced if the change is kept: struck, as on the boards.
     ".cm-iso-picked": { background: "var(--lattice-soft)", boxShadow: "inset 0 -2px 0 var(--lattice)", cursor: "pointer" },
     ".cm-iso-old": { textDecoration: "line-through", textDecorationColor: "var(--text-faint)", color: "var(--text-faint)" },
