@@ -3,7 +3,15 @@
 
 import { nestedLayout } from "./nested.js";
 import { buildCells } from "./cells.js";
-import { makeRouter, lanes, routeAll as gridRouteAll } from "./router.js";
+import { gatedRoutes } from "./gates.js";
+import { highwayTrunks, highwayFeeders, cornerEnds } from "./highways.js";
+import { makeRouter, lanes, routeAll as gridRouteAll, ROUTER_DEFAULTS } from "./router.js";
+
+// What the router sees, for drawing it (the Atlas's grid, a debugging view).
+export { buildCells, KEEP } from "./cells.js";
+export { ROUTER_DEFAULTS };
+export { gatedRoutes, GATE_COSTS } from "./gates.js";
+export { highwayTrunks, highwayFeeders, cornerEnds, CORNER, HIGHWAY_COSTS, FEEDER_COSTS } from "./highways.js";
 
 // What the layout needs from the map model, as plain data a worker can receive.
 // `flat`: the folderless view (T71): every note an item of one folder, the root, so the whole base is one DAG.
@@ -22,14 +30,62 @@ export function plainModel(model, flat = false) {
 
 // The grid Atlas's layout (grid/nested.js, which says what one is): each
 // folder a layered DAG of its items, and one item in its parent's. `gridFlow`
-// is the top level's direction, "up" or "right".
+// is the top level's direction, "up" or "right"; `coarse`, cells twice the size and folders further apart;
+// `blocks`, a folder holding folders placed as blocks (floorplan.js) and not in layers.
 export function gridLayout(model, o) {
-  const layout = nestedLayout(model, { flow: o.gridFlow === "right" ? "right" : "up" });
+  const opts = { flow: o.gridFlow === "right" ? "right" : "up", coarse: !!o.coarse, plan: !!o.blocks };
+  let layout = nestedLayout(model, opts);
+  // Blocks: laid out once, the highways found, and packed again as they were with each busy gutter widened.
+  if (o.blocks) {
+    const planned = gutters(layout, highwayTrunks(layout, buildCells(layout)));
+    if ([...planned.values()].some((p) => p.wider.size)) layout = nestedLayout(model, { ...opts, planned });
+  }
   layout.feeders = feeders(layout);
+  layout.gated = gatedRoutes(layout); // the gated routes, beside the trunks and feeders until one is chosen
+  const cells = buildCells(layout), highways = highwayTrunks(layout, cells); // and the highways (highways.js), with their own feeders
+  const fed = highwayFeeders(layout, highways, cells);
+  cornerEnds(layout, [...highways, ...fed]); // after the feeders are found: they start from where the highways end
+  layout.highways = { trunks: highways, feeders: fed };
   return layout;
 }
 
-// Feeders (T72): where a trunk ends on a folder, what is in the folder that the trunk's links come from.
+// How much wider each gutter between two blocks of a floorplanned folder should be: by a lane (3 cells, 2 on the
+// coarse grid) for each line beyond the first running along it (lines side by side, counted by the columns, or
+// rows, that a highway runs at least 4 cells along within the gutter). ref -> { pair, wider: "refA|refB" -> cells }.
+export function gutters(layout, highways) {
+  const { items } = layout, lane = layout.cell > 7 ? 2 : 3, out = new Map();
+  for (const [ref, pair] of layout.pairs ?? []) {
+    const F = ref === "" ? -1 : items.findIndex((n) => n.kind === "folder" && n.ref === ref), kids = items.map((n, i) => i).filter((i) => items[i].parent === F);
+    const mine = highways.filter((h) => h.pts && items[h.a].parent === F), wider = new Map();
+    for (const a of kids) for (const b of kids) {
+      if (a >= b) continue;
+      const A = items[a], B = items[b], [L, R] = A.gx <= B.gx ? [A, B] : [B, A], [T, U] = A.gy <= B.gy ? [A, B] : [B, A];
+      const across = R.gx - (L.gx + L.w), down = U.gy - (T.gy + T.h);
+      // The gutter: between two blocks side by side (or one above the other) that overlap along it.
+      let rect = null, upright = false;
+      if (across > 0 && across <= 16 && Math.min(A.gy + A.h, B.gy + B.h) - Math.max(A.gy, B.gy) >= 4) { rect = [L.gx + L.w, Math.max(A.gy, B.gy), R.gx, Math.min(A.gy + A.h, B.gy + B.h)]; upright = true; }
+      else if (down > 0 && down <= 16 && Math.min(A.gx + A.w, B.gx + B.w) - Math.max(A.gx, B.gx) >= 4) rect = [Math.max(A.gx, B.gx), T.gy + T.h, Math.min(A.gx + A.w, B.gx + B.w), U.gy];
+      if (!rect) continue;
+      const runs = new Map(); // column (or row) -> cells along it
+      for (const h of mine) for (let k = 1; k < h.pts.length; k++) {
+        const [x0, y0] = h.pts[k - 1], [x1, y1] = h.pts[k], n = Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))));
+        for (let s = 0; s <= n; s++) {
+          const x = Math.floor(x0 + ((x1 - x0) * s) / n), y = Math.floor(y0 + ((y1 - y0) * s) / n);
+          if (x < rect[0] || x >= rect[2] || y < rect[1] || y >= rect[3]) continue;
+          const key = upright ? x : y;
+          if (!runs.has(key)) runs.set(key, new Set());
+          runs.get(key).add(upright ? y : x);
+        }
+      }
+      const lines = [...runs.values()].filter((c) => c.size >= 4).length;
+      if (lines > 1) wider.set([A.ref, B.ref].sort().join("|"), lane * (lines - 1));
+    }
+    out.set(ref, { pair, wider });
+  }
+  return out;
+}
+
+// Feeders (T72): where a trunk (`trunks`: the layout's, or the highways) ends on a folder, what is in the folder that the trunk's links come from.
 // From each of the folder's items holding an end of one of those links, a branch runs to the trunk's foot,
 // the cell just inside the wall where the trunk arrives, with the number of links it carries. Branches to
 // one foot join: subfolders are routed first, the one with the most links before the rest, and each one
@@ -40,10 +96,13 @@ export function gridLayout(model, o) {
 //   [{ item, folder, trunk, count, pts, lane, leaf, via }]: the item fed from, the folder it is in, the
 //   trunk fed (an index into `trunks`), the links carried, the path in cells from the item's edge, whether
 //   the item is a note, and the feeder whose branch this one ends on (its index, or -1 at the foot).
-export function feeders(layout) {
-  const { items, links, trunks, W } = layout;
+export function feeders(layout, trunks = layout.trunks) {
+  const { items, links, W } = layout;
   if (!trunks.some((t) => t.pts && (items[t.a].kind === "folder" || items[t.b].kind === "folder"))) return [];
-  const cells = buildCells(layout), router = makeRouter(layout, cells, { crowd: 1 });
+  // haste 1.5, not the router's 3.2: overstated that far, the search ran greedily at the foot and came back, so
+  // a branch could dip and climb for nothing. Each search heads for the foot (`toward`) and counts the way left
+  // along a branch it joins. On 1,177 notes both layouts take a second (2.6 s before); haste 1 takes 9.
+  const cells = buildCells(layout), router = makeRouter(layout, cells, { crowd: 1, haste: 1.5 });
   for (const t of trunks) if (t.pts) router.occupy(t.pts);
   const childIn = (i, f) => { while (items[i].parent !== f) i = items[i].parent; return i; }; // the item of folder f that holds i
   const foot = (f, [x, y]) => { // the cell just inside f's wall at a point on the wall
@@ -68,13 +127,21 @@ export function feeders(layout) {
     const footCell = fy * W + fx, isNote = (i) => items[i].kind === "note";
     const ends = new Map([[footCell, [footCell, at[0], at[1]]]]), endsAny = new Map(ends), owner = new Map([[footCell, -1]]);
     for (const [item, held] of [...by].sort((a, b) => isNote(a[0]) - isNote(b[0]) || b[1].length - a[1].length || a[0] - b[0])) {
-      const leaf = isNote(item), r = router.routeTo(item, { ends: leaf ? endsAny : ends, folder });
+      const leaf = isNote(item), r = router.routeTo(item, { ends: leaf ? endsAny : ends, folder, toward: footCell });
       if (!r) continue;
       const me = out.length;
       out.push({ item, folder, trunk, count: held.length, pts: r.pts, cells: r.cells, leaf, via: owner.get(r.cells[r.cells.length - 1]) ?? -1 });
-      for (const c of r.cells) {
+      // What is left from each of its cells to the foot: along this branch, then from where it ends, at what the
+      // router would charge for the steps (their length, and the clearance of notes and walls).
+      const rest = new Float32Array(r.cells.length);
+      rest[rest.length - 1] = endsAny.get(r.cells[r.cells.length - 1])?.[3] ?? 0;
+      for (let k = r.cells.length - 2; k >= 0; k--) {
+        const p = r.cells[k], q = r.cells[k + 1];
+        rest[k] = rest[k + 1] + (p % W !== q % W && Math.floor(p / W) !== Math.floor(q / W) ? Math.SQRT2 : 1) + (cells.close[q] ? ROUTER_DEFAULTS.hug : 0);
+      }
+      for (const [k, c] of r.cells.entries()) {
         if (endsAny.has(c)) continue;
-        const end = [c, (c % W) + 0.5, Math.floor(c / W) + 0.5];
+        const end = [c, (c % W) + 0.5, Math.floor(c / W) + 0.5, rest[k]];
         endsAny.set(c, end); owner.set(c, me);
         if (!leaf) ends.set(c, end);
       }
@@ -106,8 +173,8 @@ function hash(str) {
 }
 
 // Bump whenever the layout changes what it returns, so nothing keeps an old one.
-export const LAYOUT_VERSION = 1;
-/** What a kept layout is filed under: the version, the direction, and what the map contains. */
+export const LAYOUT_VERSION = 11;
+/** What a kept layout is filed under: the version, the direction, the grid, and what the map contains. */
 export function layoutKey(plain, o = {}) {
-  return hash(JSON.stringify([LAYOUT_VERSION, o.gridFlow === "right" ? "right" : "up", plain]));
+  return hash(JSON.stringify([LAYOUT_VERSION, o.gridFlow === "right" ? "right" : "up", !!o.coarse, !!o.blocks, plain]));
 }

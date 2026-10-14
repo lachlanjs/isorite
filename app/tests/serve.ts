@@ -9,6 +9,7 @@ import { join } from "node:path";
 export const PORT = 4799;
 export const ROOT = join(tmpdir(), "isorite-browser-tests");
 export const NOTES = join(ROOT, "information-theory");
+export const STUDY = NOTES + "-study";
 
 export const PROVIDER_PORT = 4798;
 export const REPLY = "It is measured in **bits**, as [Surprise](/basics/surprise.md) is.\n\n$$\nH(X) \\le \\log_2 n\n$$";
@@ -56,6 +57,13 @@ if (process.argv[1] === import.meta.filename) {
   mkdirSync(join(NOTES, "channels"));
   writeFileSync(join(NOTES, "basics", "surprise.md"), "---\ntype: Concept\ntitle: Surprise\ndescription: How unexpected one outcome is.\n---\n\nAn outcome of probability $p$ carries $-\\log p$ of surprise.\n");
   writeFileSync(join(NOTES, "basics", "bit.md"), "---\ntype: Concept\ntitle: The bit\n# kept as written\ntags: [units]\n---\n\nOne fair coin toss, the unit of information.\n\n| tosses | bits |\n|---|---|\n| 1 | 1 |\n| 2 | 2 |\n");
+  // For the Atlas: a folder of three notes, each requiring the one before, the first requiring one of basics.
+  mkdirSync(join(NOTES, "coding"));
+  const coding = (title: string, requires: string) => `---\ntype: Concept\ntitle: ${title}\n---\n\nIt rests on [this](/${requires}.md "requires").\n`;
+  writeFileSync(join(NOTES, "coding", "source-coding.md"), coding("Source coding", "basics/surprise"));
+  writeFileSync(join(NOTES, "coding", "kraft-inequality.md"), coding("Kraft inequality", "coding/source-coding"));
+  // The last of them also joined by weaker links: "uses", which the map draws lighter, and "see also", which it does not draw.
+  writeFileSync(join(NOTES, "coding", "huffman-codes.md"), coding("Huffman codes", "coding/kraft-inequality") + `\nIt counts in [bits](/basics/bit.md "uses"). See also [surprise](/basics/surprise.md "see also").\n`);
   process.env.XDG_CONFIG_HOME = join(ROOT, "config");
   process.env.XDG_CACHE_HOME = join(ROOT, "cache");
   process.env.ISORITE_EMBED = "off"; // the browser tests are about the pages; the model has its own tests
@@ -65,5 +73,10 @@ if (process.argv[1] === import.meta.filename) {
   const { initStudyBase } = await import("../../packages/server/src/studybase.ts");
   const { serve } = await import("../../packages/server/src/serve.ts");
   initStudyBase(NOTES);
+  // And in the study base: one exercise on the last of them, and a record that says the first is worked through.
+  mkdirSync(join(STUDY, "study", "coding"), { recursive: true });
+  writeFileSync(join(STUDY, "study", "coding", "a-prefix-code.md"), "---\ntype: Exercise\nkind: written\ntitle: Build a prefix code\ntests: [coding/huffman-codes]\n---\n\nFor four symbols.\n");
+  mkdirSync(join(STUDY, "record"), { recursive: true });
+  writeFileSync(join(STUDY, "record", "browser01.jsonl"), [1, 2, 3].map((n) => JSON.stringify({ id: `01K7B00000000000000000000${n}`, at: `2026-10-12T09:00:0${n}Z`, device: "browser01", event: "attempt", exercise: "@study/coding/a-prefix-code", tests: ["coding/source-coding"], result: "right", by: "iso:scripted" }) + "\n").join(""));
   await serve(NOTES, { port: PORT });
 }

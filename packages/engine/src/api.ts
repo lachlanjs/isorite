@@ -2,7 +2,7 @@
 // interface and nothing else, so it does not know whether the engine is
 // behind HTTP (the server) or in the same process (a webview, later).
 
-import type { Anchor, Cost, Entry, Passage } from "@isorite/core";
+import type { Anchor, Cost, Entry, MapModel, Passage } from "@isorite/core";
 import type { Part } from "./iso.ts";
 import type { Step } from "./lookup.ts";
 import type { Tier } from "./provider.ts";
@@ -41,6 +41,21 @@ export interface NoteSource {
 export interface Saved extends NoteSource {
   /** False when the text sent was what the file already held: nothing was written or entered. */
   changed: boolean;
+}
+
+/** Both bases as one map: what the layout takes, and what each block says, by the note's name in the model
+ *  (a study note's begins `@study/`). */
+export interface MapReport {
+  model: MapModel;
+  notes: Record<string, {
+    title: string;
+    /** Understanding in the Atlas's four steps: 0 not reached, 1 opened, 2 worked through, 3 understood. */
+    step: 0 | 1 | 2 | 3;
+    /** A study note's kind, as its top edge says it. */
+    kind?: string;
+    /** A note of the knowledge base: the size of its text, as an estimate in tokens (what linking it to a note for Iso adds). */
+    tokens?: number;
+  }>;
 }
 
 export interface SearchHit {
@@ -108,6 +123,8 @@ export interface Api {
   /** The note's journal, oldest first. Empty with no study base. */
   journal(id: string): Promise<Entry[]>;
   search(query: string): Promise<SearchHit[]>;
+  /** The Atlas's map of the base and, with it, the study base. */
+  map(): Promise<MapReport>;
   /** Ask Iso. Returns at once with the request's id; what follows comes as events, and ends as a proposal in the note's journal. */
   ask(request: AskRequest): Promise<{ request: string }>;
   /** Stop a request. Nothing is entered. */

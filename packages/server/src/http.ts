@@ -91,6 +91,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [] }: Server
   app.get("/api/notes", (c) => answer(c, () => api.notes()));
   app.get("/api/note", (c) => answer(c, () => api.readNote(id(c))));
   app.get("/api/journal", (c) => answer(c, () => api.journal(id(c))));
+  app.get("/api/map", (c) => answer(c, () => api.map()));
   app.get("/api/search", (c) => answer(c, () => api.search(c.req.query("q") ?? "")));
 
   app.put("/api/note", async (c) => {

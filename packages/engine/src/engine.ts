@@ -3,10 +3,10 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, change, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written,
+  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, change, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, mapModel, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, text as plain, understanding, written,
   type Cost, type Entry, type FileEntry, type Insert, type Proposal, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, type Api, type AskRequest, type ContextReport, type DraftSummary, type EngineEvent, type Listing, type NoteSource, type Saved, type SearchHit, type Session, type Settings } from "./api.ts";
+import { Conflict, EngineError, type Api, type AskRequest, type ContextReport, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, noteMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { rounds } from "./loop.ts";
 import { Lookup, type Similar } from "./lookup.ts";
@@ -59,15 +59,16 @@ export function checkNoteId(id: string): string {
 
 async function walk(files: Files, root: string): Promise<FileEntry[]> {
   const out: FileEntry[] = [];
+  const at = (path: string): string => (root && path ? `${root}/${path}` : root || path);
   const visit = async (dir: string): Promise<void> => {
-    for (const info of await files.list(root + dir)) {
+    for (const info of await files.list(at(dir))) {
       if (info.name.startsWith(".")) continue; // .git, and anything else hidden
       const path = dir ? `${dir}/${info.name}` : info.name;
       if (info.dir) {
         out.push({ path, dir: true });
         await visit(path);
       } else if (info.name.endsWith(".md")) {
-        const text = await files.read(root + path);
+        const text = await files.read(at(path));
         if (text !== null) out.push({ path, text });
       } else out.push({ path });
     }
@@ -150,6 +151,18 @@ export class Engine implements Api {
       await this.enter(id, entries, reconcile(entries, text, await this.stamp("external")));
       return { id, text, version: hashText(text) };
     });
+  }
+
+  /** Both bases as the Atlas draws them: the model the layout takes, and what each block says. */
+  async map(): Promise<MapReport> {
+    const study = this.opts.study;
+    const exercises = study ? Bundle.fromFiles(await walk(study, STUDY_DIR)) : null;
+    const records = study ? await Promise.all((await study.list("record")).filter((f) => !f.dir && f.name.endsWith(".jsonl")).map(async (f) => readRecord((await study.read(`record/${f.name}`)) ?? ""))) : [];
+    const read = understanding(mergeRecords(...records), this.opts.clock.now());
+    const notes: MapReport["notes"] = {};
+    for (const c of this.bundle.concepts.values()) notes[c.id] = { title: c.title, step: read.get(c.id)?.step ?? 0, tokens: estimate(c.body.trim()) };
+    for (const c of exercises?.concepts.values() ?? []) notes[studyId(c.id)] = { title: c.title, step: 0, kind: plain(c.meta.kind ?? "") || "note" };
+    return { model: mapModel(this.bundle, exercises), notes };
   }
 
   async journal(id: string): Promise<Entry[]> {

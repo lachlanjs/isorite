@@ -8,6 +8,7 @@ export const FREE = 0, NOTE = 1;
 // Clearance: the cells a route keeps clear of a note or a folder's wall when it passes one. Notes and
 // folders stand 6 cells apart (grid/nested.js), so each keeps 2 and a third of the gap is left to run in.
 export const KEEP = 2;
+const KEEP_FINE = KEEP;
 
 export function buildCells(layout) {
   const { W, H, items } = layout;
@@ -26,7 +27,7 @@ export function buildCells(layout) {
   });
   // Close: the free cells within KEEP of a note, or of a folder's wall on either side of it. A route may
   // cross them (it must, to reach a note or go through a wall) but pays for each (grid/router.js).
-  const close = new Uint8Array(W * H);
+  const close = new Uint8Array(W * H), KEEP = layout.keep ?? KEEP_FINE; // the coarse grid keeps 1 (nested.js)
   const band = (x0, y0, x1, y1) => { for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) for (let x = Math.max(0, x0); x < Math.min(W, x1); x++) close[y * W + x] = 1; };
   for (const n of items) {
     if (n.kind === "note") { band(n.gx - KEEP, n.gy - KEEP, n.gx + n.w + KEEP, n.gy + n.h + KEEP); continue; }

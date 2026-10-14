@@ -2,8 +2,9 @@
 import { describe, expect, it } from "vitest";
 import { gridLayout, gridRouter } from "../src/atlas/layout.js";
 import { buildCells, reachedCells, maskPaths, NOTE, KEEP } from "../src/atlas/cells.js";
-import { plainModel, feeders } from "../src/atlas/layout.js";
+import { plainModel, feeders, HIGHWAY_COSTS } from "../src/atlas/layout.js";
 import { greedyOrder, NOTE_W, NOTE_H } from "../src/atlas/nested.js";
+import { floorplan } from "../src/atlas/floorplan.js";
 
 const GAP = 2; // clear cells between siblings, at least
 
@@ -276,4 +277,96 @@ describe("feeders (T72)", () => {
       }
     });
   }
+});
+
+describe("highways", () => {
+  // Every pair the trunks join has a way; each runs from b's wall to a's over their folder's floor, never through
+  // a note or another folder, and its steps are along the grid's eight directions.
+  for (const coarse of [false, true]) {
+    it(`a way between every pair of linked neighbours, on the folder's floor${coarse ? " (the coarse grid)" : ""}`, () => {
+      const L = gridLayout(model(8, 10), { gridFlow: "right", coarse }), cells = buildCells(L), { W, owner, blocked } = cells;
+      expect(L.highways.trunks).toHaveLength(L.trunks.length);
+      for (const t of L.highways.trunks) {
+        expect(t.pts).toBeDefined();
+        const inner = t.pts.slice(1, -1), region = L.items[t.a].parent;
+        for (const [x, y] of inner) {
+          const c = Math.floor(y) * W + Math.floor(x);
+          expect(blocked[c]).toBe(0);
+          expect(owner[c]).toBe(region);
+        }
+        for (let k = 2; k < inner.length; k++) {
+          const dx = inner[k][0] - inner[k - 1][0], dy = inner[k][1] - inner[k - 1][1];
+          expect(Math.max(Math.abs(dx), Math.abs(dy))).toBe(1);
+        }
+      }
+    });
+  }
+  it("gathers the gates close together on one side of a folder into one", () => {
+    const L = gridLayout(model(8, 10), { gridFlow: "right" }), near = HIGHWAY_COSTS.gather / L.cell, at = new Map();
+    for (const h of L.highways.trunks) for (const [i, p] of [[h.b, h.pts[0]], [h.a, h.pts.at(-1)]]) {
+      const F = L.items[i];
+      if (F.kind !== "folder") continue;
+      const across = Math.abs(p[1] - F.gy) < 1e-6 || Math.abs(p[1] - F.gy - F.h) < 1e-6, key = `${i}|${across ? p[1] : p[0]}`;
+      at.set(key, new Set([...(at.get(key) || []), across ? p[0] : p[1]]));
+    }
+    for (const gates of at.values()) {
+      const ts = [...gates].sort((p, q) => p - q);
+      for (let k = 1; k < ts.length; k++) expect(ts[k] - ts[k - 1]).toBeGreaterThan(near);
+    }
+  });
+  it("is straight between two notes that face each other, through the middle of what they share", () => {
+    const m = { root: { kind: "dir", id: "d:", ref: "", children: [{ kind: "dir", id: "d:f", ref: "f", children: ["a", "b"].map((r) => ({ kind: "concept", id: "c:f/" + r, ref: "f/" + r, weight: 1, rank: 0 })) }] }, edges: [["f/b", "f/a", 3]] };
+    const L = gridLayout(m, { gridFlow: "right" }), t = L.highways.trunks[0], A = L.items[t.a], B = L.items[t.b];
+    const ys = new Set(t.pts.map(([, y]) => y)), xs = new Set(t.pts.map(([x]) => x));
+    expect(ys.size === 1 || xs.size === 1).toBe(true);
+    if (ys.size === 1) expect([...ys][0]).toBe(Math.floor((Math.max(A.gy, B.gy) + Math.min(A.gy + A.h, B.gy + B.h)) / 2 - 0.5 + 1e-9) + 0.5);
+  });
+  it("is fed from inside folders as the trunks are, over each folder's own floor, branches joining branches", () => {
+    const L = gridLayout(model(8, 10), { gridFlow: "right" }), { W, owner, blocked } = buildCells(L), F = L.highways.feeders;
+    expect(F.length).toBeGreaterThan(0);
+    expect(F.some((f) => f.via >= 0)).toBe(true);
+    for (const f of F) {
+      expect(L.highways.trunks[f.trunk].pts).toBeDefined();
+      expect(f.leaf).toBe(L.items[f.item].kind === "note");
+      for (const [x, y] of f.pts.slice(1, -1)) { const c = Math.floor(y) * W + Math.floor(x); expect(blocked[c]).toBe(0); expect(owner[c]).toBe(f.folder); }
+      if (f.via < 0) continue;
+      // It ends on the branch it joins, in the same folder (to the same gate, perhaps for another highway through
+      // it), and a subfolder's only on a subfolder's.
+      const on = F[f.via];
+      expect(on.folder).toBe(f.folder);
+      if (!f.leaf) expect(on.leaf).toBe(false);
+      expect(on.pts.some(([x, y]) => x === f.pts.at(-1)[0] && y === f.pts.at(-1)[1])).toBe(true);
+    }
+  });
+});
+
+describe("floorplan", () => {
+  // Blocks never overlap, keep the room asked between them, and the same input is always placed the same way.
+  it("places blocks apart, as asked, the same way each time", () => {
+    const sizes = [[30, 20], [12, 40], [18, 5], [18, 5], [50, 30], [8, 8]], joins = [[0, 1, 3], [1, 4, 2], [2, 3, 1], [0, 4, 1], [5, 2, 1]];
+    for (const way of ["right", "up"]) {
+      const r = floorplan(sizes, joins, () => 6, way);
+      for (let i = 0; i < sizes.length; i++) for (let j = i + 1; j < sizes.length; j++) {
+        const apartX = r.x[j] >= r.x[i] + sizes[i][0] + 6 || r.x[i] >= r.x[j] + sizes[j][0] + 6;
+        const apartY = r.y[j] >= r.y[i] + sizes[i][1] + 6 || r.y[i] >= r.y[j] + sizes[j][1] + 6;
+        expect(apartX || apartY).toBe(true);
+      }
+      for (let i = 0; i < sizes.length; i++) { expect(r.x[i] + sizes[i][0]).toBeLessThanOrEqual(r.w); expect(r.y[i] + sizes[i][1]).toBeLessThanOrEqual(r.h); }
+      expect(floorplan(sizes, joins, () => 6, way)).toEqual(r);
+    }
+  });
+  it("puts what is required before what requires it, along the way", () => {
+    const r = floorplan([[20, 20], [20, 20]], [[0, 1, 5]], () => 6, "right");
+    expect(r.x[0]).toBeLessThan(r.x[1]);
+  });
+  it("lays out folders of folders as blocks, each inside its folder, with every highway found", () => {
+    const L = gridLayout(model(8, 10), { gridFlow: "right", blocks: true });
+    for (const n of L.items) {
+      if (n.parent < 0) continue;
+      const F = L.items[n.parent];
+      expect(n.gx).toBeGreaterThanOrEqual(F.gx); expect(n.gy).toBeGreaterThan(F.gy);
+      expect(n.gx + n.w).toBeLessThanOrEqual(F.gx + F.w); expect(n.gy + n.h).toBeLessThanOrEqual(F.gy + F.h);
+    }
+    expect(L.highways.trunks.every((t) => t.pts)).toBe(true);
+  });
 });

@@ -175,11 +175,12 @@ study base bundle ─────┴─► mapModel (core) ─► gridLayout (co
                    selection: what it requires, what builds on it (core graph)
 ```
 
-- **The layout is rdstudio's, unchanged,** and now lives in the core so the browser, the server and a terminal read the same layout data. Its benchmark reproduces rdstudio's recorded numbers exactly. **Built.**
+- **The layout lives in the core** so the browser, the server and a terminal read the same layout data. Folders of notes are laid out in layers, as rdstudio did; folders holding folders are placed as blocks by a floorplan; every line is a highway between siblings or a feeder inside a folder. How it works and what was learned building it: `atlas-layout.md`. **Built** (milestone 3).
 - **Study folders are ordinary folders** in the model, flagged, placed beside the folder they study. There is no second layout. **Built.**
 - **A layout is kept by a key** made from a version number, the direction and the model. Bump the version when the layout's output changes.
 - **Drawing (slice):** Svelte components over SVG, one component per kind of thing (folder, block, trunk). Only pan and zoom are imperative. Overlays never touch the layout: they are looked up by note id while drawing.
-- **Measured before changed.** If SVG is slow at 225 notes, the trunk layer alone moves to a canvas under the SVG. Blocks and folders stay as elements so they keep focus, hit-testing and text.
+- **Iso's path** is followed for the whole app (`app.iso`, from the `iso-*` events), so the map draws a request sent from any page or tab: the notes opened by how they were reached, the steps along links lit as links are. **Built** (milestone 3). A page connecting mid-request does not yet learn of it.
+- **Measured before changed.** If SVG is slow at 225 notes, the trunk layer alone moves to a canvas under the SVG. (Measured in milestone 3: 60 frames a second panning and zooming 230 notes, so it stays SVG.) Blocks and folders stay as elements so they keep focus, hit-testing and text.
 - **Later:** stability under small edits (the layout is recomputed whole, which is accepted for now); only the open folder laid out in detail, for bases over a thousand notes.
 
 ## 8. Study

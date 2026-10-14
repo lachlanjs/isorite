@@ -149,3 +149,32 @@ these change what is committed, so they are expensive to change later.
 | architecture | The complex parts and how they fit are worked out and written down (`architecture.md`), not left until after the slice. "It will be hard to properly test until those features are implemented." |
 | the repository | `github.com/lachlanjs/isorite` is its remote. Milestone branches are local and nothing is pushed unless Lachlan says so. |
 
+## Decided on 2026-10-14, in conversation
+
+Lachlan found the Atlas's lighting unreadable on real bases: lines drawn at rest that did not light, lit lines along paths that were not there before, and on "Stokes' theorem" 32 lit links at one weight. This replaces what `Atlas-Nested` shows for a chosen note (the whole chain of what it requires, drawn).
+
+| What | Decision |
+|---|---|
+| lines for a chosen note | One step each way: what it requires itself (purple) and what requires it (orange). |
+| the rest of the chain | Outlined, not drawn: thinner and fainter with each step back. |
+| walking | Clicking a note the chosen one requires steps back to it; the way walked stays lit. Clicking a note already walked returns to it. |
+| folders apart from the note's own | Stand for their notes: the frame takes the colour and says "N required here". |
+| the whole chain | Drawn only when asked for (`[ whole chain ]` in the status line, or the key w), without the links a longer way already makes. |
+| the three kinds of link | "Requires" is drawn as before; a route carrying only "uses" is drawn lighter; "see also" is not drawn. A chosen note's own "uses" light as a plain line and its "see also" as a dotted outline, one step only. |
+| pointing | Previews a note only while none is chosen, so the walk does not flicker. |
+
+
+## Decided on 2026-10-14 and 15, in conversation
+
+The Atlas's layout and routing, rebuilt after Lachlan found rdstudio's router's lines hard to read on real bases (sawtooth branches, lines hugging walls, many gates close together). How it works, what it measured, and what was tried and dropped: `atlas-layout.md`. This replaces "the Atlas layout: carried over unchanged" above, for folders holding folders and for every route.
+
+| What | Decision |
+|---|---|
+| highways (Lachlan's idea) | Between two linked items of a folder, the shortest way across its floor, drawn straight or with one 45° run, from the middle of a side. Searched only where blocked. |
+| feeders | Inside each folder, trees from the items to the highway's gate, searched separately from the highways. |
+| gathering | Gates on one side of a folder within 224 units become one, at the busiest. |
+| folders holding folders | Placed as blocks by a floorplan (sequence pair and annealing), not in layers. The default since 2026-10-15: "a huge improvement. Especially on DG." Folders of notes keep layers. Key `b` switches back. |
+| gutters | Widened by a lane for each parallel highway beyond the first, keeping the arrangement. |
+| cut corners | 10 map units, scaling with the zoom. A route may end at the middle of a cut, square to it; never on the wall inside one. Frames drawn as the boards draw them, as two clipped shapes. |
+| line style | Back to `Atlas-Nested`'s values: 1.5 px at rest at 0.6, highways between folders 3 px, lit lines 3 px whatever they carry, dashed 7 and 5. A count beside each highway between folders, once, on its longest straight stretch. |
+| stability | Not wanted at the cost of readability: the layout may reshuffle when notes change. |

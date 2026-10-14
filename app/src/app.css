@@ -28,6 +28,8 @@
   --malachite: #5FD3A4; --malachite-deep: #1F8F68;
   --rose: #FF8FA6;
   --soft: 16%;
+  /* On the Atlas only: what a note requires, and what builds on it. */
+  --requires: #B79CFF; --builds: #FF9E64;
 
   --lattice-soft: color-mix(in srgb, var(--lattice) var(--soft), var(--ground-1));
   --growth-soft: color-mix(in srgb, var(--growth) var(--soft), var(--ground-1));
@@ -57,6 +59,7 @@
   --growth: #8C6200; --growth-deep: #D9A21B;
   --malachite: #0B6B4A; --malachite-deep: #2FA37A;
   --rose: #A81E48;
+  --requires: #6A3FC0; --builds: #B5521B;
   --soft: 10%;
 }
 @media (prefers-color-scheme: light) {
@@ -69,6 +72,7 @@
     --growth: #8C6200; --growth-deep: #D9A21B;
     --malachite: #0B6B4A; --malachite-deep: #2FA37A;
     --rose: #A81E48;
+  --requires: #6A3FC0; --builds: #B5521B;
     --soft: 10%;
   }
 }
@@ -165,26 +169,20 @@ a.btn:hover { text-decoration: none; color: var(--text); }
 .chip.malachite { --fill: var(--malachite-soft); color: var(--malachite); }
 .chip.rose { --fill: var(--rose-soft); color: var(--rose); }
 
-/* A frame: all four corners cut, a 1 px edge, the ground inside. Two shapes in the background, the inside one
-   a pixel in from the edge's, with its cut shorter by what keeps the slanted edge a pixel wide. */
+/* A frame: all four corners cut, a 1 px edge, the ground inside. Drawn as on the boards: two shapes behind the
+   frame's contents, the edge, and the inside a pixel in from it with its cut shorter by what keeps the slanted
+   edge a pixel wide (.586 px: 2 - √2). Clipped shapes, not painted corners: those left a sliver of the edge
+   inside each corner where the two met. */
 .frame {
   --cut: 10px; --edge: var(--line-strong); --inside: var(--ground-1);
-  --c: calc(var(--cut) * .7071); --ci: calc((var(--cut) - .586px) * .7071); --k: calc(var(--cut) - 1px);
-  border: 0; position: relative;
-  background:
-    linear-gradient(var(--inside), var(--inside)) center / calc(100% - 2 * var(--cut)) calc(100% - 2px) no-repeat,
-    linear-gradient(var(--inside), var(--inside)) center / calc(100% - 2px) calc(100% - 2 * var(--cut)) no-repeat,
-    linear-gradient(135deg, transparent var(--ci), var(--inside) 0) left 1px top 1px / var(--k) var(--k) no-repeat,
-    linear-gradient(225deg, transparent var(--ci), var(--inside) 0) right 1px top 1px / var(--k) var(--k) no-repeat,
-    linear-gradient(315deg, transparent var(--ci), var(--inside) 0) right 1px bottom 1px / var(--k) var(--k) no-repeat,
-    linear-gradient(45deg, transparent var(--ci), var(--inside) 0) left 1px bottom 1px / var(--k) var(--k) no-repeat,
-    linear-gradient(var(--edge), var(--edge)) center / calc(100% - 2 * var(--cut)) 100% no-repeat,
-    linear-gradient(var(--edge), var(--edge)) center / 100% calc(100% - 2 * var(--cut)) no-repeat,
-    linear-gradient(135deg, transparent var(--c), var(--edge) 0) left top / var(--cut) var(--cut) no-repeat,
-    linear-gradient(225deg, transparent var(--c), var(--edge) 0) right top / var(--cut) var(--cut) no-repeat,
-    linear-gradient(315deg, transparent var(--c), var(--edge) 0) right bottom / var(--cut) var(--cut) no-repeat,
-    linear-gradient(45deg, transparent var(--c), var(--edge) 0) left bottom / var(--cut) var(--cut) no-repeat;
+  border: 0; position: relative; isolation: isolate; background: none;
 }
+.frame::before, .frame::after {
+  content: ""; position: absolute; inset: 0; z-index: -2; background: var(--edge); pointer-events: none;
+  --k: var(--cut);
+  clip-path: polygon(var(--k) 0, calc(100% - var(--k)) 0, 100% var(--k), 100% calc(100% - var(--k)), calc(100% - var(--k)) 100%, var(--k) 100%, 0 calc(100% - var(--k)), 0 var(--k));
+}
+.frame::after { z-index: -1; inset: 1px; background: var(--inside); --k: max(0px, calc(var(--cut) - .586px)); }
 /* A frame's title sits in its top edge. */
 .frame > .frame-title { position: absolute; top: -9px; left: 22px; padding: 0 6px; font-size: 12px; line-height: 18px; color: var(--text-faint); background: var(--behind, var(--ground-0)); white-space: nowrap; }
 

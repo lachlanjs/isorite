@@ -155,7 +155,7 @@ test("the parts, the pages not built yet, and a note that is not there", async (
   await expect(page.getByRole("button", { name: "keep" })).toBeVisible();
   await look(page, "parts");
   await page.goto("#/atlas");
-  await expect(page.getByText("It comes in milestone 3.")).toBeVisible();
+  await expect(page.getByRole("application", { name: "The atlas: the map of the base" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Views" }).getByRole("link", { name: "atlas" })).toHaveAttribute("aria-current", "page");
   await look(page, "atlas");
   await page.goto("#/study");
