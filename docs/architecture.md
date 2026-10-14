@@ -175,7 +175,7 @@ study base bundle ─────┴─► mapModel (core) ─► gridLayout (co
                    selection: what it requires, what builds on it (core graph)
 ```
 
-- **The layout is rdstudio's, unchanged,** and now lives in the core so the browser, the server and a terminal read the same layout data. Its benchmark reproduces rdstudio's recorded numbers exactly. **Built.**
+- **The layout lives in the core** so the browser, the server and a terminal read the same layout data. Folders of notes are laid out in layers, as rdstudio did; folders holding folders are placed as blocks by a floorplan; every line is a highway between siblings or a feeder inside a folder. How it works and what was learned building it: `atlas-layout.md`. **Built** (milestone 3).
 - **Study folders are ordinary folders** in the model, flagged, placed beside the folder they study. There is no second layout. **Built.**
 - **A layout is kept by a key** made from a version number, the direction and the model. Bump the version when the layout's output changes.
 - **Drawing (slice):** Svelte components over SVG, one component per kind of thing (folder, block, trunk). Only pan and zoom are imperative. Overlays never touch the layout: they are looked up by note id while drawing.

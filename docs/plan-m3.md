@@ -31,7 +31,7 @@ Not followed: `Atlas-Large` and `Atlas-Study-Open`, which `decisions.md` records
 
 ### In the core
 
-Nothing new in the layout: `gridLayout`, `feeders`, `gridRouter` and `layoutKey` are there and benchmarked. Added, with tests:
+Nothing new in the layout (as planned; changed during step 5, see below): `gridLayout`, `feeders`, `gridRouter` and `layoutKey` are there and benchmarked. Added, with tests:
 
 | Part | Does |
 |---|---|
@@ -66,6 +66,8 @@ map(): Promise<MapReport>
 | the atlas while Iso thinks | The draft's block, its lines, the path, `[ stop ]`. |
 
 The board's sizes are taken as drawn: a block 126 by 35 px at 10.5 px type, 0.5 opacity at rest, routes 1.5 px, lit routes 3 px dashed 7 and 5, a study folder's band 20 px high, a study item's corners cut by 8 px.
+
+**Changed after step 5, at Lachlan's asking (2026-10-14 and 15):** the layout and routing were rebuilt: highways, feeders, gathered gates, a floorplan for folders holding folders, widened gutters, routes ending at cut corners. Recorded in `decisions.md` and explained in `atlas-layout.md`.
 
 ## 3. Where rdstudio's code does not carry over as it is
 

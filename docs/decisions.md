@@ -163,3 +163,18 @@ Lachlan found the Atlas's lighting unreadable on real bases: lines drawn at rest
 | the three kinds of link | "Requires" is drawn as before; a route carrying only "uses" is drawn lighter; "see also" is not drawn. A chosen note's own "uses" light as a plain line and its "see also" as a dotted outline, one step only. |
 | pointing | Previews a note only while none is chosen, so the walk does not flicker. |
 
+
+## Decided on 2026-10-14 and 15, in conversation
+
+The Atlas's layout and routing, rebuilt after Lachlan found rdstudio's router's lines hard to read on real bases (sawtooth branches, lines hugging walls, many gates close together). How it works, what it measured, and what was tried and dropped: `atlas-layout.md`. This replaces "the Atlas layout: carried over unchanged" above, for folders holding folders and for every route.
+
+| What | Decision |
+|---|---|
+| highways (Lachlan's idea) | Between two linked items of a folder, the shortest way across its floor, drawn straight or with one 45° run, from the middle of a side. Searched only where blocked. |
+| feeders | Inside each folder, trees from the items to the highway's gate, searched separately from the highways. |
+| gathering | Gates on one side of a folder within 224 units become one, at the busiest. |
+| folders holding folders | Placed as blocks by a floorplan (sequence pair and annealing), not in layers. The default since 2026-10-15: "a huge improvement. Especially on DG." Folders of notes keep layers. Key `b` switches back. |
+| gutters | Widened by a lane for each parallel highway beyond the first, keeping the arrangement. |
+| cut corners | 10 map units, scaling with the zoom. A route may end at the middle of a cut, square to it; never on the wall inside one. Frames drawn as the boards draw them, as two clipped shapes. |
+| line style | Back to `Atlas-Nested`'s values: 1.5 px at rest at 0.6, highways between folders 3 px, lit lines 3 px whatever they carry, dashed 7 and 5. A count beside each highway between folders, once, on its longest straight stretch. |
+| stability | Not wanted at the cost of readability: the layout may reshuffle when notes change. |
