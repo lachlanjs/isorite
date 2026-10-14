@@ -36,8 +36,8 @@ test("choosing a note outlines what it requires, all the way back, and what buil
   await expect(note(page, "basics/bit")).toHaveClass(/\bdim\b/);
   await expect(note(page, "@study/coding/a-prefix-code")).toHaveClass(/\bdim\b/); // it builds on Huffman codes, not on this
   // Lines are drawn for one step each way only; the note two steps back is outlined, fainter.
-  await expect(page.locator(".routes path.lit.requires")).toHaveCount(1);
-  await expect(page.locator(".routes path.lit.builds")).toHaveCount(1);
+  await expect(page.locator(".routes")).toHaveAttribute("data-requires", "1");
+  await expect(page.locator(".routes")).toHaveAttribute("data-builds", "1");
   await expect(note(page, "coding/source-coding")).not.toHaveClass(/\bfar\b/);
   await expect(note(page, "basics/surprise")).toHaveClass(/\bfar\b/);
   await expect(folder(page, "basics")).toContainText("1 required here");
@@ -55,13 +55,14 @@ test("choosing a note outlines what it requires, all the way back, and what buil
 
 test("the chain is walked a step at a time, the way kept; the whole of it is drawn when asked for", async ({ page }) => {
   await atlas(page);
-  const lines = page.locator(".routes path.lit.requires");
+  // Links are counted on the layer: where their lines overlap they are drawn as one.
+  const lines = page.locator(".routes");
   await note(page, "coding/huffman-codes").click();
-  await expect(lines).toHaveCount(1);
+  await expect(lines).toHaveAttribute("data-requires", "1");
   // Its weaker links, one step: "uses" is a plain line to a note outlined, "see also" an outline alone. Here
   // the note it sees also is one it requires three steps back, and that comes first.
   await expect(note(page, "basics/bit")).toHaveClass(/\buse\b/);
-  await expect(page.locator(".routes path.lit.uses")).toHaveCount(1);
+  await expect(page.locator(".routes")).toHaveAttribute("data-uses", "1");
   await expect(note(page, "basics/surprise")).toHaveClass(/\breq\b/);
 
   // Pointing at another note changes nothing while one is chosen.
@@ -73,8 +74,8 @@ test("the chain is walked a step at a time, the way kept; the whole of it is dra
   await expect(note(page, "coding/source-coding")).toHaveClass(/\bat\b/);
   await expect(note(page, "coding/kraft-inequality")).toHaveClass(/\breq\b/);
   await expect(note(page, "coding/huffman-codes")).toHaveClass(/\breq\b/);
-  await expect(lines).toHaveCount(3);
-  await expect(page.locator(".routes path.lit.builds")).toHaveCount(0); // what builds on it is the way walked
+  await expect(lines).toHaveAttribute("data-requires", "3");
+  await expect(page.locator(".routes")).toHaveAttribute("data-builds", "0"); // what builds on it is the way walked
   await expect(page.getByText("2 steps back")).toBeVisible();
   await look(page, "atlas-walked");
 
@@ -82,15 +83,15 @@ test("the chain is walked a step at a time, the way kept; the whole of it is dra
   await note(page, "coding/kraft-inequality").click();
   await expect(note(page, "coding/kraft-inequality")).toHaveClass(/\bat\b/);
   await expect(page.getByText("1 step back")).toBeVisible();
-  await expect(lines).toHaveCount(2);
+  await expect(lines).toHaveAttribute("data-requires", "2");
 
   await page.keyboard.press("Escape");
   await note(page, "coding/huffman-codes").click();
   await page.getByRole("button", { name: "[ whole chain ]" }).click();
-  await expect(lines).toHaveCount(3);
+  await expect(lines).toHaveAttribute("data-requires", "3");
   await look(page, "atlas-whole-chain");
   await page.getByRole("button", { name: "[ one step ]" }).click();
-  await expect(lines).toHaveCount(1);
+  await expect(lines).toHaveAttribute("data-requires", "1");
 });
 
 test("a study item lights the note it tests and what that requires", async ({ page }) => {

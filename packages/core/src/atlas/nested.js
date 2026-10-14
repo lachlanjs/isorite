@@ -45,25 +45,44 @@
 //                                finds a way for when it is wanted)
 
 import { KEEP } from "./cells.js";
+import { floorplan, PLAN_COSTS } from "./floorplan.js";
 
 export const NOTE_W = 18, NOTE_H = 5; // room for a whole title, on two or three lines, before the map is zoomed far in
 // Room: 6 cells between neighbours and between layers, half as much again as the first grid's 4. A route
 // keeps KEEP (2) clear of what it passes, so a third of each gap is left for routes to run in.
 // Folders stand 8 apart, a quarter more again: feeders run between them and never through them (T72).
-const GAP = 6, GAP_FOLDERS = 8; // clear cells between neighbours in a layer
-const CHANNEL = 6, CHANNEL_FOLDERS = 8; // free cells between two layers, at least; between layers with folders in them
-export const PAD = 8; // cells between a folder's wall and its contents: room for the feeders that run inside the wall (T72)
-const HEAD = 2; // free rows under a folder's top edge, where its title sits: they keep a subfolder's title clear of it
-const MARGIN = 3; // free cells around the whole map
-const MIN_FOLDER = 12; // a folder is at least this wide, for its title
+const FINE = {
+  cell: 7, // units a cell, at zoom 1 (the app's CELL)
+  note: [NOTE_W, NOTE_H],
+  gap: 6, gapFolders: 8, // clear cells between neighbours in a layer
+  channel: 6, channelFolders: 8, // free cells between two layers, at least; between layers with folders in them
+  pad: 6, // cells between a folder's wall and its contents: room for the routes that run inside the wall
+  head: 2, // free rows under a folder's top edge, where its title sits: they keep a subfolder's title clear of it
+  margin: 8, // free cells around the whole map: as much as between folders, for the ways round the outside
+  minFolder: 12, // a folder is at least this wide, for its title
+  slant: 8, // a slant goes at most this far across: further, and its channel must grow more than the run is worth (this base: 13 trunks at 4 with no growth, 25 at 8 for 2% more map, 32 at 18 for 6%)
+  keep: KEEP,
+};
+// The coarse grid (the Atlas's `c`): cells twice the size, so a route has half as many places to bend, and
+// folders half as far apart again as on the fine grid (84 units against 56). A note is 126 by 42 units, not 35.
+const COARSE = { cell: 14, note: [9, 3], gap: 3, gapFolders: 6, channel: 3, channelFolders: 6, pad: 3, head: 1, margin: 6, minFolder: 6, slant: 4, keep: 1 };
+export const PAD = FINE.pad;
 const SHAPE = 1.4; // a folder's contents aim to be this much wider than tall
 const SWEEPS = 8, PULLS = 12;
-const REACH = NOTE_W + GAP; // a node moves no further than one note's place across to stand in line with a neighbour: further, and the folder grows by a third
-const SLANT = 8; // a slant goes at most this far across: further, and its channel must grow more than the run is worth (this base: 13 trunks at 4 with no growth, 25 at 8 for 2% more map, 32 at 18 for 6%)
-const LANE_REACH = 3 * REACH; // a lane goes three times as far to keep a passing trunk in one line: at that, no trunk on this base has more than four bends
+// The room of the layout being made: set from FINE or COARSE as each begins (a layout is made in one go).
+let NOTE = FINE.note, GAP = 0, GAP_FOLDERS = 0, CHANNEL = 0, CHANNEL_FOLDERS = 0, HEAD = 0, MARGIN = 0, MIN_FOLDER = 0, SLANT = 0, ROOM_PAD = 0, KEEP_ = KEEP;
+let REACH = 0; // a node moves no further than one note's place across to stand in line with a neighbour: further, and the folder grows by a third
+let LANE_REACH = 0; // a lane goes three times as far to keep a passing trunk in one line: at that, no trunk on this base has more than four bends
+function useRoom(r) {
+  ({ note: NOTE, gap: GAP, gapFolders: GAP_FOLDERS, channel: CHANNEL, channelFolders: CHANNEL_FOLDERS, head: HEAD, margin: MARGIN, minFolder: MIN_FOLDER, slant: SLANT, pad: ROOM_PAD, keep: KEEP_ } = r);
+  REACH = NOTE[0] + GAP; LANE_REACH = 3 * REACH;
+}
 
-/** @param model { root, edges }: the map's plain model (layout.js `plainModel`) @param flow "up" or "right": the top level's direction */
-export function nestedLayout(model, { flow = "up" } = {}) {
+/** @param model { root, edges }: the map's plain model (layout.js `plainModel`) @param flow "up" or "right": the top level's direction
+ *  @param plan a folder holding folders placed as blocks (floorplan.js), not in layers; `planCosts` its weights */
+export function nestedLayout(model, { flow = "up", coarse = false, plan = false, planCosts = {}, planned: again = null } = {}) {
+  const room = coarse ? COARSE : FINE;
+  useRoom(room);
   const isDir = (n) => n.kind === "dir";
   const parent = new Map(), byRef = new Map(), dirs = [model.root];
   for (let k = 0; k < dirs.length; k++) for (const c of dirs[k].children || []) { parent.set(c, dirs[k]); if (isDir(c)) dirs.push(c); else byRef.set(c.ref, c); }
@@ -91,21 +110,23 @@ export function nestedLayout(model, { flow = "up" } = {}) {
   }
 
   const box = new Map(); // node -> { w, h, x, y (in its folder's contents) }
+  const pairs = new Map(); // a floorplanned folder's ref -> the arrangement found for it (floorplan.js `pair`)
   const trunksIn = new Map(); // folder -> [{ p, q, count, back, implied, pts (in its contents) }]
   const other = (f) => (f === "up" ? "right" : "up");
   const arrange = (folder, way) => {
     const kids = folder.children || [];
-    for (const c of kids) { if (isDir(c)) arrange(c, other(way)); else box.set(c, { w: NOTE_W, h: NOTE_H }); }
+    for (const c of kids) { if (isDir(c)) arrange(c, other(way)); else box.set(c, { w: NOTE[0], h: NOTE[1] }); }
     const inner = kids.length ? place(folder, kids, way) : { w: 0, h: 0 };
     box.set(folder, folder === model.root ? inner
-      : kids.length ? { w: Math.max(MIN_FOLDER, inner.w + 2 * PAD), h: inner.h + PAD + HEAD + PAD }
-      : { w: MIN_FOLDER, h: HEAD + 2 * PAD });
+      : kids.length ? { w: Math.max(MIN_FOLDER, inner.w + 2 * ROOM_PAD), h: inner.h + ROOM_PAD + HEAD + ROOM_PAD }
+      : { w: MIN_FOLDER, h: HEAD + 2 * ROOM_PAD });
   };
 
   // Lay out one folder's items along `way`. Items joined to each other, directly or through others, are a
   // group, and each group is a diagram of its own (T117); the items joined to nothing are one more. The
   // diagrams stand in shelves, largest first, so a big folder reads as several small maps and not one wide one.
   function place(folder, kids, way) {
+    if (plan && kids.some(isDir)) return planned(folder, kids, way);
     const group = new Map(kids.map((c) => [c, c])), find = (c) => { while (group.get(c) !== c) c = group.get(c); return c; };
     for (const j of joins.get(folder).values()) { const a = find(j.p), b = find(j.q); if (a !== b) group.set(b, a); }
     const parts = new Map(), tied = new Set([...joins.get(folder).values()].flatMap((j) => [j.p, j.q]));
@@ -126,6 +147,31 @@ export function nestedLayout(model, { flow = "up" } = {}) {
     }
     trunksIn.set(folder, out);
     return { w, h: y + shelf };
+  }
+
+  // A folder holding folders (`plan`): its items placed as blocks by floorplan.js, the joins between them left to
+  // the highways (no path is planned here).
+  function planned(folder, kids, way) {
+    const index = new Map(kids.map((c, i) => [c, i]));
+    const all = [...joins.get(folder).values()].filter((j) => index.has(j.p) && index.has(j.q));
+    // `again` (a layout made before, its highways counted): this folder's arrangement then, packed again with
+    // each gutter between two blocks widened by what the highways along it need.
+    const name = folder === model.root ? "" : folder.ref, before = again?.get(name), wider = (i, j) => before?.wider.get([kids[i].ref, kids[j].ref].sort().join("|")) ?? 0;
+    const gap = (i, j) => (isDir(kids[i]) || isDir(kids[j]) ? GAP_FOLDERS : GAP) + wider(i, j);
+    const sizes = kids.map((c) => [box.get(c).w, box.get(c).h]);
+    // The whole map takes the screen's shape: wide where the top level runs right, tall where it runs up (a phone).
+    const shape = folder === model.root && way === "up" ? 1 / PLAN_COSTS.shape : PLAN_COSTS.shape;
+    const r = floorplan(sizes, all.map((j) => [index.get(j.p), index.get(j.q), j.count]), gap, way, { shape, ...planCosts, pair: before?.pair });
+    pairs.set(name, r.pair);
+    kids.forEach((c, i) => Object.assign(box.get(c), { x: r.x[i], y: r.y[i] }));
+    // A join is back where what is required stands past what requires it; implied, between notes, where a
+    // longer way joins them.
+    const along = (i) => (way === "right" ? r.x[i] + sizes[i][0] / 2 : -(r.y[i] + sizes[i][1] / 2));
+    const next = new Map();
+    for (const j of all) next.set(j.p, [...(next.get(j.p) || []), j.q]);
+    const reaches = (from, to) => { const seen = new Set(), todo = (next.get(from) || []).filter((m) => m !== to); while (todo.length) { const v = todo.pop(); if (v === to) return true; if (!seen.has(v)) { seen.add(v); todo.push(...(next.get(v) || [])); } } return false; };
+    trunksIn.set(folder, all.map((j) => ({ p: j.p, q: j.q, count: j.count, back: along(index.get(j.p)) > along(index.get(j.q)), implied: !isDir(j.p) && !isDir(j.q) && reaches(j.p, j.q), pts: null })));
+    return { w: r.w, h: r.h };
   }
 
   // One diagram: some of a folder's items, and the joins among them. Along the way is "main", across it "cross".
@@ -251,7 +297,7 @@ export function nestedLayout(model, { flow = "up" } = {}) {
     if (best) rows.forEach((r, k) => { r.splice(0, r.length, ...best[k]); r.forEach((v, i) => { at[v] = i; }); });
 
     // Across: each row packed in order and centred, then every node drawn level with its neighbours, keeping order and gaps.
-    const space = (u, v) => (passing(u) && passing(v) ? 1 : passing(u) || passing(v) ? KEEP : gap); // a lane keeps its clearance from an item
+    const space = (u, v) => (passing(u) && passing(v) ? 1 : passing(u) || passing(v) ? KEEP_ : gap); // a lane keeps its clearance from an item
     const c = new Array(size.length).fill(0);
     for (const r of rows) { let x = 0; r.forEach((v, k) => { if (k) x += space(r[k - 1], v); c[v] = x; x += size[v]; }); }
     const end = (r) => (r.length ? c[r[r.length - 1]] + size[r[r.length - 1]] : 0);
@@ -408,8 +454,8 @@ export function nestedLayout(model, { flow = "up" } = {}) {
     // The tracks sit in the middle of their channel, never nearer a row than the clearance; so does a slant, with a cell's run at each end.
     rows.forEach((_, r) => {
       start[r] = m; m += thick[r];
-      const channel = Math.max(kids.some(isDir) ? CHANNEL_FOLDERS : CHANNEL, tracks[r] + 2 * KEEP, slants[r] + 2);
-      track0[r] = m + Math.max(KEEP, Math.floor((channel - tracks[r]) / 2));
+      const channel = Math.max(kids.some(isDir) ? CHANNEL_FOLDERS : CHANNEL, tracks[r] + 2 * KEEP_, slants[r] + 2);
+      track0[r] = m + Math.max(KEEP_, Math.floor((channel - tracks[r]) / 2));
       const side = m;
       slant0[r] = (d) => side + Math.floor((channel - d) / 2);
       if (r < rows.length - 1) m += channel;
@@ -451,7 +497,7 @@ export function nestedLayout(model, { flow = "up" } = {}) {
       const b = box.get(c);
       index.set(c, items.length);
       items.push({ id: c.id, ref: c.ref, kind: isDir(c) ? "folder" : "note", parent: upIndex, depth, gx: ox + b.x, gy: oy + b.y, w: b.w, h: b.h });
-      if (isDir(c)) origin.set(c, [ox + b.x + PAD, oy + b.y + HEAD + PAD]);
+      if (isDir(c)) origin.set(c, [ox + b.x + ROOM_PAD, oy + b.y + HEAD + ROOM_PAD]);
     }
   }
   const trunks = [], backward = new Set();
@@ -467,7 +513,7 @@ export function nestedLayout(model, { flow = "up" } = {}) {
   const under = (i, level) => { while (items[i].parent !== level) i = items[i].parent; return i; };
   for (const l of links) l.placed = l.s >= 2 && !backward.has(under(l.a, l.level) + "|" + under(l.b, l.level));
   const root = box.get(model.root);
-  return { W: root.w + 2 * MARGIN, H: root.h + 2 * MARGIN, flow, items, links, trunks };
+  return { W: root.w + 2 * MARGIN, H: root.h + 2 * MARGIN, flow, cell: room.cell, keep: room.keep, margin: MARGIN, items, links, trunks, pairs };
 }
 
 // The layout's links: each with the lowest folder that holds both its ends.

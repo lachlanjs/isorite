@@ -5,15 +5,16 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { reach } from "@isorite/core";
-  import type { Layout } from "@isorite/core/atlas";
+  import type { Layout, Point } from "@isorite/core/atlas";
   import type { MapReport, NoteSource } from "@isorite/engine";
   import { linkedIn, place, titleIn, withLink, withoutLink } from "$lib/atlas/picks.ts";
   import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
-  import { CELL, LABELS_AT, fit, indexLayout, linePath, litRoutes, openAt, restRoutes, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
+  import { CELL, LABELS_AT, fit, gatedLit, gatedRest, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
   import AtlasFolder from "./AtlasFolder.svelte";
+  import AtlasGrid from "./AtlasGrid.svelte";
   import AtlasRoutes from "./AtlasRoutes.svelte";
   import AtlasStudyFolder from "./AtlasStudyFolder.svelte";
   import AtlasStudyItem from "./AtlasStudyItem.svelte";
@@ -39,15 +40,50 @@
   /** Every link down the chain of what the note requires is drawn, not only its own. */
   let chain = $state(false);
   let viewport = $state<HTMLDivElement>();
+  /** A debugging view: the router's grid of points over the map (key g). Remembered in this browser. */
+  let grid = $state(stored("isorite.atlas.grid") === "on");
+  /** Which routes are drawn, while they are compared (key r): the highways (core's highways.js), through the
+   *  gates (gates.js), or the layout's trunks; the highways and the trunks are fed the same way. */
+  type Routes = "highways" | "gates" | "trunks";
+  const ROUTES: Routes[] = ["highways", "gates", "trunks"];
+  let routes = $state<Routes>(ROUTES.find((r) => r === stored("isorite.atlas.routes")) ?? "highways");
+  const gated = $derived(routes === "gates");
+  /** The grid the map is laid on (key c): the fine one, or the coarse one, cells twice the size and folders further apart. */
+  let coarse = $state(stored("isorite.atlas.grain") === "coarse");
+  /** How folders holding folders are laid out (key b): as blocks (core's floorplan.js), or in layers as a folder of notes is. */
+  let blocks = $state(stored("isorite.atlas.layout") !== "layers");
   let moved = false; // the map was moved by hand: a new layout then leaves the view alone
 
   // The top level runs the long way of the screen: what is required at the left of a wide one, at the foot of a tall one.
   const flow: "up" | "right" = window.innerWidth >= window.innerHeight ? "right" : "up";
 
+  function stored(name: string): string | null {
+    try { return localStorage.getItem(name); } catch { return null; }
+  }
+  function showGrid(on: boolean): void {
+    grid = on;
+    try { localStorage.setItem("isorite.atlas.grid", on ? "on" : "off"); } catch { /* storage unavailable: not remembered */ }
+  }
+
+  function nextRoutes(): void {
+    routes = ROUTES[(ROUTES.indexOf(routes) + 1) % ROUTES.length]!;
+    try { localStorage.setItem("isorite.atlas.routes", routes); } catch { /* storage unavailable: not remembered */ }
+  }
+  function useCoarse(on: boolean): void {
+    coarse = on; moved = false; // a new grid is a new map: framed afresh
+    try { localStorage.setItem("isorite.atlas.grain", on ? "coarse" : "fine"); } catch { /* storage unavailable: not remembered */ }
+    void load();
+  }
+  function useBlocks(on: boolean): void {
+    blocks = on; moved = false; // a new layout is a new map: framed afresh
+    try { localStorage.setItem("isorite.atlas.layout", on ? "blocks" : "layers"); } catch { /* storage unavailable: not remembered */ }
+    void load();
+  }
+
   async function load(): Promise<void> {
     try {
       const next = await app.api.map();
-      const next_laid = await layoutOf(next.model, { gridFlow: flow });
+      const next_laid = await layoutOf(next.model, { gridFlow: flow, coarse, blocks });
       const first = !laid || (laid.key !== next_laid.key && !moved);
       report = next; laid = next_laid; failed = "";
       if (first && size.w) view = whole();
@@ -65,10 +101,12 @@
     return () => { off(); clearTimeout(again); };
   });
 
-  const L = $derived(laid?.layout ?? null);
+  // With the highways chosen, the layout's trunks and feeders are the highways' (one object a layout, kept).
+  const L = $derived(laid ? (routes === "highways" ? withHighways(laid.layout) : laid.layout) : null);
   const idx = $derived(L ? indexLayout(L) : null);
   const open = $derived(L ? openAt(L, view.k) : "");
-  const whole = (): View => fit({ gx: 0, gy: 0, w: L?.W ?? 1, h: L?.H ?? 1 }, size.w, size.h, 1);
+  // The whole map: what is on it, and half the margin round it, where the ways round the outside run.
+  const whole = (): View => { const m = (L?.margin ?? 0) / 2; return fit({ gx: m, gy: m, w: (L?.W ?? 1) - 2 * m, h: (L?.H ?? 1) - 2 * m }, size.w, size.h, 1, L?.cell); };
 
   // The viewport's size; the first time it is known, the whole map is framed.
   $effect(() => {
@@ -84,7 +122,25 @@
 
   const folders = $derived(L ? L.items.flatMap((item, i) => (item.kind === "folder" && open[i] !== "-" ? [{ item, i, open: open[i] === "o" }] : [])) : []);
   const notes = $derived(L ? L.items.flatMap((item, i) => (item.kind === "note" && open[i] === "s" ? [{ item, i }] : [])) : []);
-  const rest = $derived(L ? restRoutes(L, open, idx!.strong).map((r) => ({ key: r.key, d: linePath(r.pts, r.lane), count: r.count, study: r.study, strong: r.strong, feed: r.feed, mid: r.pts[r.pts.length >> 1]! })) : []);
+  // The routes at rest, merged where they overlap. A line between folders is labelled with its count, as on the boards,
+  // where it is long enough to carry it (5 cells); one inside a folder, only where it is long (30 cells).
+  const rest = $derived(L ? mergeRoutes(gated ? gatedRest(L, open) : restRoutes(L, open, idx!.strong)).map((r) => ({ key: r.key, pts: r.pts, d: linePath(r.pts, 0, L.cell), count: r.count, study: r.study, strong: r.strong, trunk: r.trunk, ...countAt(r) })).map((r, i, all) => ({ ...r, label: r.label && !all.some((o, j) => j !== i && o.label && o.count === r.count && Math.hypot(o.mid[0] - r.mid[0], o.mid[1] - r.mid[1]) < 10 && (o.length > r.length || (o.length === r.length && j < i))) })) : []);
+  // A count: on a line between folders only, where it carries more than one link, once along its longest straight
+  // stretch of 3 cells or more, beside the line (to the right of an upright one, above any other). Where a highway
+  // is cut in two by a line joining it, the same count close by is shown once, on the longer piece.
+  function countAt(r: { pts: Point[]; count: number; trunk: boolean }): { label: boolean; mid: Point; side: "right" | "above"; length: number } {
+    // Stretches: runs of steps the same way (a merged run comes in half-cell steps).
+    let a = r.pts[0]!, b = a, length = 0;
+    for (let i = 1, from = 0; i < r.pts.length; i++) {
+      const p = r.pts[i - 1]!, q = r.pts[i]!, n = r.pts[i + 1];
+      const same = n && Math.abs((q[0] - p[0]) * (n[1] - q[1]) - (q[1] - p[1]) * (n[0] - q[0])) < 1e-6 && (q[0] - p[0]) * (n[0] - q[0]) + (q[1] - p[1]) * (n[1] - q[1]) > 0;
+      if (same) continue;
+      const s = r.pts[from]!, l = Math.hypot(q[0] - s[0], q[1] - s[1]);
+      if (l > length) { length = l; a = s; b = q; }
+      from = i;
+    }
+    return { label: r.trunk && r.count > 1 && length >= 3, mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], side: Math.abs(a[0] - b[0]) < 1e-6 ? "right" : "above", length };
+  }
 
   // What is lit: the note chosen, or with none chosen the one pointed at. Its own links are drawn, one step each
   // way; the rest of what it requires is outlined, fainter the further back, and drawn only when asked for.
@@ -130,18 +186,24 @@
   };
 
   // The lit routes: the layout's own ways at once, and the few it drew none for when the router has found them.
-  let hot = $state.raw<{ key: string; d: string; kind: LitKind }[]>([]);
+  let hot = $state.raw<{ key: string; d: string; kind: LitKind; count: number; still: boolean }[]>([]);
+  /** The lit links of each kind, however their lines merge. */
+  let litCount = $state.raw<Record<LitKind, number>>({ requires: 0, builds: 0, uses: 0 });
   $effect(() => {
-    if (!links.length || !L || !idx || !laid) { hot = []; return; }
+    if (!links.length || !L || !idx || !laid) { hot = []; litCount = { requires: 0, builds: 0, uses: 0 }; return; }
     const ends = links.flatMap((l) => { const a = idx.at.get(l.from), b = idx.at.get(l.to); return a === undefined || b === undefined ? [] : [{ a, b, kind: l.kind }]; });
-    const { fixed, asks } = litRoutes(L, idx, open, ends);
-    const drawn = (r: Lit) => ({ key: r.key, kind: r.kind, d: linePath(r.pts) });
-    hot = fixed.map(drawn);
+    const { fixed, asks } = (gated ? gatedLit : litRoutes)(L, idx, open, ends);
+    // Merged where they overlap, as at rest.
+    const drawn = (lits: Lit[]) => {
+      litCount = { requires: lits.filter((l) => l.kind === "requires").length, builds: lits.filter((l) => l.kind === "builds").length, uses: lits.filter((l) => l.kind === "uses").length };
+      return mergeRoutes(lits, true).map((r) => ({ key: r.key, kind: r.kind, d: linePath(r.pts, 0, L!.cell), count: r.count, still: !r.flow }));
+    };
+    hot = drawn(fixed);
     if (!asks.length) return;
     let stale = false;
     // The router's way runs from the note requiring to the one required: turned round, so every lit route runs the same way.
     void routesOf(laid.key, L, asks.map(({ a, b }) => ({ a, b }))).then((found) => {
-      if (!stale) hot = [...fixed, ...asks.flatMap((m, k) => (found[k] ? [{ key: m.key, kind: m.kind, pts: [...found[k]].reverse() }] : []))].map(drawn);
+      if (!stale) hot = drawn([...fixed, ...asks.flatMap((m, k) => (found[k] ? [{ key: m.key, kind: m.kind, pts: [...found[k]].reverse() }] : []))]);
     }).catch(() => undefined);
     return () => { stale = true; };
   });
@@ -190,8 +252,9 @@
     if (pick || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock")) return;
     const on = e.target.closest<HTMLElement>("[data-note]")?.dataset.note ?? "";
     if (on.startsWith("@")) return; // a study item is not a note to start from
-    const item = on ? L.items[idx.at.get(on) ?? -1] : undefined, u = CELL * view.k;
-    const what = item ? { note: on, gx: item.gx, gy: item.gy, w: item.w, h: item.h } : { note: "", gx: Math.round((at.x - view.x) / u) - 9, gy: Math.round((at.y - view.y) / u) - 3, w: 18, h: 5 };
+    const item = on ? L.items[idx.at.get(on) ?? -1] : undefined, u = L.cell * view.k;
+    const w = Math.round(126 / L.cell), h = Math.round(35 / L.cell); // a note's size in cells: 18 by 5, or 9 by 3 on the coarse grid
+    const what = item ? { note: on, gx: item.gx, gy: item.gy, w: item.w, h: item.h } : { note: "", gx: Math.round((at.x - view.x) / u) - Math.floor(w / 2), gy: Math.round((at.y - view.y) / u) - Math.ceil(h / 2), w, h };
     holdShow = setTimeout(() => { grasp = what; }, HOLD_SHOWN);
     holdDone = setTimeout(() => { dragged = true; void begin(what); }, HOLD);
   }
@@ -200,7 +263,7 @@
     try {
       const made = await app.api.createDraft();
       if (what.note) await app.api.saveNote(made.id, { base: made.version, text: withLink(made.text, what.note, title(what.note)) });
-      place(made.id, { gx: what.gx, gy: what.gy });
+      place(made.id, { gx: (what.gx * L!.cell) / CELL, gy: (what.gy * L!.cell) / CELL }); // kept in cells of the fine grid, whichever is shown
       await goto(resolve("/draft/[id]", { id: made.id.slice("@draft/".length) }));
     } catch (e) { notice = (e as Error).message; unhold(); }
   }
@@ -297,13 +360,13 @@
   function enter(i: number): void {
     if (dragged || !L) return;
     moved = true;
-    const to = fit(L.items[i]!, size.w, size.h, 1.5), there = Math.abs(to.k - view.k) < 0.01 * to.k && Math.hypot(to.x - view.x, to.y - view.y) < 4;
+    const to = fit(L.items[i]!, size.w, size.h, 1.5, L.cell), there = Math.abs(to.k - view.k) < 0.01 * to.k && Math.hypot(to.x - view.x, to.y - view.y) < 4;
     const parent = L.items[i]!.parent;
-    fly(there ? (parent < 0 ? whole() : fit(L.items[parent]!, size.w, size.h, 1.5)) : to);
+    fly(there ? (parent < 0 ? whole() : fit(L.items[parent]!, size.w, size.h, 1.5, L.cell)) : to);
   }
   /** A click on open ground lets go of the note chosen, or else steps out to the whole map. */
   function ground(e: MouseEvent): void {
-    if (dragged || !(e.target instanceof Element) || e.target.closest(".dock")) return;
+    if (dragged || !(e.target instanceof Element) || e.target.closest(".dock, .key")) return;
     const folder = e.target.closest<HTMLElement>("[data-folder]");
     if (e.target.closest("a, button")) return;
     if (chosen) walk = [];
@@ -313,6 +376,10 @@
   function key(e: KeyboardEvent): void {
     if (e.key === "Escape") { walk = []; pointed = ""; return; }
     if (e.key === "w" && chosen && !e.metaKey && !e.ctrlKey && !e.altKey) { chain = !chain; return; }
+    if (e.key === "g" && !e.metaKey && !e.ctrlKey && !e.altKey) { showGrid(!grid); return; }
+    if (e.key === "r" && !e.metaKey && !e.ctrlKey && !e.altKey) { nextRoutes(); return; }
+    if (e.key === "c" && !e.metaKey && !e.ctrlKey && !e.altKey) { useCoarse(!coarse); return; }
+    if (e.key === "b" && !e.metaKey && !e.ctrlKey && !e.altKey) { useBlocks(!blocks); return; }
     if (e.target !== viewport) return;
     const pan = 80, c = { x: size.w / 2, y: size.h / 2 };
     if (e.key === "+" || e.key === "=") view = zoomAbout(view, 1.25, c.x, c.y);
@@ -344,7 +411,7 @@
     <p class="said">The map could not be drawn: {failed}</p>
   {:else if L && report}
     {#if !L.items.length}<p class="said faint">There are no notes yet. The map draws itself as you write them.</p>{/if}
-    <div class="atlas-world" class:labels data-open={open} style="transform: translate({view.x}px, {view.y}px); --u: {CELL * view.k}px; --fs: {(10.5 * Math.min(1.5, Math.max(0.8, view.k))).toFixed(2)}px; --lines: {view.k < 0.9 ? 1 : 2}">
+    <div class="atlas-world" class:labels data-open={open} style="transform: translate({view.x}px, {view.y}px); --u: {(L?.cell ?? 7) * view.k}px; --k: {view.k}; --fs: {(10.5 * Math.min(1.5, Math.max(0.8, view.k))).toFixed(2)}px; --lines: {view.k < 0.9 ? 1 : 2}">
       {#each folders as f (f.item.id)}
         {#if f.item.ref.startsWith("@study")}
           <AtlasStudyFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} onpick={() => enter(f.i)} />
@@ -352,10 +419,10 @@
           <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} onpick={() => enter(f.i)} />
         {/if}
       {/each}
-      <AtlasRoutes k={view.k} {rest} {hot} />
+      <AtlasRoutes k={view.k} {rest} {hot} counts={litCount} />
       {#if labels}
         {#each rest as r (r.key)}
-          {#if r.count > 1 && !r.feed}<span class="count" style="--x:{r.mid[0]};--y:{r.mid[1]}">{r.count}</span>{/if}
+          {#if r.label}<span class="count {r.side}" style="--x:{r.mid[0]};--y:{r.mid[1]}">{r.count}</span>{/if}
         {/each}
       {/if}
       {#each notes as n (n.item.id)}
@@ -376,6 +443,7 @@
         </div>
       {/if}
     </div>
+    {#if grid}<AtlasGrid layout={L} {view} {size} rested={rest.map((r) => r.pts)} {routes} {coarse} {blocks} onhide={() => showGrid(false)} onroutes={nextRoutes} ongrain={() => useCoarse(!coarse)} onlayout={() => useBlocks(!blocks)} />{/if}
     {#if pick}
       <AtlasDock title={draft ? titleIn(draft.text) : ""} picked={picked.map((id) => ({ id, title: title(id), tokens: report!.notes[id]?.tokens ?? 0 }))} budget={LINKED_BUDGET} {notice}
         href={resolve("/draft/[id]", { id: pick.slice("@draft/".length) })} />
@@ -399,5 +467,7 @@
   @keyframes march { to { stroke-dashoffset: -5; } }
   @media (prefers-reduced-motion: reduce) { .grasp rect { animation: none; } }
   .notice { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--rose); color: var(--rose); font-size: 12px; z-index: 2; }
-  .count { position: absolute; left: calc(var(--x) * var(--u) + 8px); top: calc(var(--y) * var(--u) - 9px); font-size: 12px; line-height: 18px; color: var(--text-faint); pointer-events: none; }
+  .count { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); font-size: 12px; line-height: 18px; color: var(--text-faint); pointer-events: none; }
+  .count.right { transform: translate(7px, -50%); }
+  .count.above { transform: translate(-50%, calc(-100% - 3px)); }
 </style>

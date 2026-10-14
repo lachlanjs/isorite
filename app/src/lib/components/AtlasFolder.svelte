@@ -37,7 +37,7 @@
 <style>
   .folder {
     position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(var(--w) * var(--u)); height: calc(var(--h) * var(--u));
-    --cut: min(10px, calc(var(--u) * 1.5)); container-type: size;
+    --cut: calc(10px * var(--k)); container-type: size; /* 10 units of the map, as core's CORNER: routes meet a cut corner in its middle */
   }
   .frame-title { z-index: 1; border: 0; max-width: calc(100% - 44px); overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
   .frame-title:hover { color: var(--text); }

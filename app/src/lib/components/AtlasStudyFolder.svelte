@@ -38,7 +38,7 @@
 <style>
   .folder {
     position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(var(--w) * var(--u)); height: calc(var(--h) * var(--u));
-    --cut: min(10px, calc(var(--u) * 1.5)); --edge: var(--text-soft); container-type: size; padding: 0; text-align: left;
+    --cut: calc(10px * var(--k)); --edge: var(--text-soft); container-type: size; padding: 0; text-align: left;
   }
   .band {
     position: absolute; left: 1px; right: 1px; top: 1px; height: min(20px, 100%); padding: 0 12px 0 14px; border: 0;

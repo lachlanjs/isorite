@@ -3,7 +3,7 @@
 import { describe, expect, test } from "vitest";
 import { gridLayout } from "@isorite/core/atlas";
 import type { MapModel } from "@isorite/core";
-import { CELL, fit, indexLayout, linePath, litRoutes, openAt, restRoutes, shownAs, zoomAbout } from "./geometry.ts";
+import { CELL, fit, indexLayout, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout } from "./geometry.ts";
 
 const note = (ref: string) => ({ kind: "concept" as const, id: "c:" + ref, ref, weight: 1, rank: 0 });
 const dir = (ref: string, children: MapModel["root"]["children"]) => ({ kind: "dir" as const, id: "d:" + ref, ref, children });
@@ -40,7 +40,7 @@ describe("routes", () => {
     expect(rest[0]).toMatchObject({ feed: false, study: false, count: 1 });
   });
   test("at rest, open: a route for each link drawn inside a folder as well", () => {
-    expect(restRoutes(L, openAt(L, 1)).filter((r) => !r.feed).length).toBeGreaterThanOrEqual(4);
+    expect(restRoutes(L, openAt(L, 1)).filter((r) => r.key.startsWith("t")).length).toBeGreaterThanOrEqual(4);
   });
   test("a lit link inside a folder takes the layout's own way, from what is required", () => {
     const { fixed, asks } = litRoutes(L, idx, openAt(L, 1), [{ a: at("basics/b"), b: at("basics/a"), kind: "requires" }]);
@@ -71,6 +71,8 @@ describe("routes", () => {
   test("a path is in pixels at zoom 1, corners cut", () => {
     expect(linePath([[0, 0], [10, 0]])).toBe(`M0 0L${10 * CELL} 0`);
     expect(linePath([[0, 0], [10, 0], [10, 10]])).toMatch(/^M0 0L\d+(\.\d)? 0L70 \d+(\.\d)?L70 70$/);
+    // A 45 degree turn stays sharp, so no run is drawn at 22.5 degrees.
+    expect(linePath([[0, 0], [10, 0], [20, 10]])).toBe(`M0 0L${10 * CELL} 0L${20 * CELL} ${10 * CELL}`);
   });
 });
 
@@ -86,5 +88,31 @@ describe("the view", () => {
     expect(z.k).toBe(1);
     expect((400 - z.x) / z.k).toBeCloseTo((400 - v.x) / v.k);
     expect(zoomAbout(v, 1e6, 0, 0).k).toBe(3);
+  });
+});
+
+describe("routes merged where they overlap", () => {
+  test("draws a shared stretch once, counted for each route, and parts where they part", () => {
+    // Two routes share the run from (0, 0.5) to (4, 0.5), then one goes on and one turns down.
+    const runs = mergeRoutes([{ pts: [[0, 0.5], [8, 0.5]] }, { pts: [[0, 0.5], [4, 0.5], [4, 4.5]], count: 2 }]);
+    const by = (n: number) => runs.filter((r) => r.count === n);
+    expect(by(3)).toHaveLength(1);
+    expect(by(3)[0]!.pts.at(0)).toEqual([0, 0.5]);
+    expect(by(3)[0]!.pts.at(-1)).toEqual([4, 0.5]);
+    expect(by(1)).toHaveLength(1);
+    expect(by(2)).toHaveLength(1);
+  });
+  test("keeps a lit run's way, and stills it where links of its kind run both ways", () => {
+    const one = mergeRoutes([{ pts: [[4, 0.5], [0, 0.5]], kind: "requires" }], true);
+    expect(one).toHaveLength(1);
+    expect(one[0]!.pts[0]).toEqual([4, 0.5]);
+    expect(one[0]!.flow).toBe(1);
+    // A weaker link running back does not stop the dashes (Affine connection: a "uses" out along its "requires" in).
+    const weaker = mergeRoutes([{ pts: [[4, 0.5], [0, 0.5]], kind: "requires" }, { pts: [[0, 0.5], [4, 0.5]], kind: "uses" }], true);
+    expect(weaker).toHaveLength(1);
+    expect(weaker[0]!).toMatchObject({ count: 2, kind: "requires", flow: 1 });
+    expect(weaker[0]!.pts[0]).toEqual([4, 0.5]);
+    const both = mergeRoutes([{ pts: [[4, 0.5], [0, 0.5]], kind: "requires" }, { pts: [[0, 0.5], [4, 0.5]], kind: "requires" }], true);
+    expect(both[0]!).toMatchObject({ count: 2, kind: "requires", flow: 0 });
   });
 });

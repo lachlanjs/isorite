@@ -30,6 +30,7 @@ export function makeRouter(layout, cells, opts = {}) {
   // says which entries belong to the current search, so nothing is cleared.
   const dist = new Float32Array(N * 9), prev = new Int32Array(N * 9), seen = new Uint32Array(N * 9);
   const allow = new Uint32Array(items.length); // folders the current route may cross freely
+  const DONE = N * 9; // a state past this is a finish: the route ends at state (s - DONE)
   let gen = 0;
 
   // A binary heap of [estimate, cost so far, state], in typed arrays.
@@ -83,8 +84,10 @@ export function makeRouter(layout, cells, opts = {}) {
   };
 
   // `goal`: in place of an item b, the cells a route may end on, each with the point it is drawn to
-  // ({ ends: Map(cell -> [cell, x, y]), folder }): a feeder ends on a trunk's foot inside `folder`,
-  // or on a feeder already running to it.
+  // ({ ends: Map(cell -> [cell, x, y, rest]), folder }): a feeder ends on a trunk's foot inside `folder`,
+  // or on a feeder already running to it. `rest` is the way still to go from that cell, along the feeder it
+  // joins, to the foot: ending there costs it too, so a route does not join a branch just to run back along it.
+  // `toward`: the foot's cell, which the search then heads for.
   function search(a, b, x0, y0, x1, y1, goal = null) {
     gen++;
     hn = 0;
@@ -97,7 +100,9 @@ export function makeRouter(layout, cells, opts = {}) {
     // `haste`. With turns as dear as they are, a search at 1.6 took 130 ms on a
     // grid of a thousand notes (1,045 by 1,185 cells); at 3.2 it takes 9.
     let bx0, bx1, by0, by1;
-    if (goal) {
+    if (goal?.toward !== undefined) { // every finish counts the rest of the way to this cell, so it is what is left at least
+      bx0 = bx1 = goal.toward % W; by0 = by1 = (goal.toward / W) | 0;
+    } else if (goal) {
       bx0 = by0 = Infinity; bx1 = by1 = -Infinity;
       for (const c of ends.keys()) { const x = c % W, y = (c / W) | 0; bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y); }
     } else { bx0 = B.gx - 1; bx1 = B.gx + B.w; by0 = B.gy - 1; by1 = B.gy + B.h; }
@@ -115,9 +120,14 @@ export function makeRouter(layout, cells, opts = {}) {
     while (hn) {
       pop();
       const s = topS, g = topG;
+      if (s >= DONE) { end = s - DONE; break; } // the cheapest finish, the rest of the way counted
       if (g !== dist[s]) continue; // a better way here was found since
       const c = (s / 9) | 0, d = s % 9;
-      if (ends.has(c)) { end = s; break; }
+      const at = ends.get(c);
+      if (at) {
+        if (!at[3]) { end = s; break; }
+        push(Math.fround(g + at[3]), Math.fround(g + at[3]), DONE + s); // a finish here, weighed with the others
+      }
       const cx = c % W, cy = (c / W) | 0;
       for (let k = 0; k < 8; k++) {
         const nx = cx + DX[k], ny = cy + DY[k];
