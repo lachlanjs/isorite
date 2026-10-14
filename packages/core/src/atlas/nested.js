@@ -66,10 +66,14 @@ const FINE = {
 // The coarse grid (the Atlas's `c`): cells twice the size, so a route has half as many places to bend, and
 // folders half as far apart again as on the fine grid (84 units against 56). A note is 126 by 42 units, not 35.
 const COARSE = { cell: 14, note: [9, 3], gap: 3, gapFolders: 6, channel: 3, channelFolders: 6, pad: 3, head: 1, margin: 6, minFolder: 6, slant: 4, keep: 1 };
+// The coarser grid: cells of 18 units, so a note is 7 by 2 of them (126 by 36 units, the boards' 126 by 35), and
+// the room between things about as on the coarse grid, in fewer cells.
+const COARSER = { cell: 18, note: [7, 2], gap: 2, gapFolders: 5, channel: 2, channelFolders: 5, pad: 2, head: 1, margin: 5, minFolder: 5, slant: 3, keep: 1 };
+const ROOMS = { fine: FINE, coarse: COARSE, coarser: COARSER };
 export const PAD = FINE.pad;
 const SHAPE = 1.4; // a folder's contents aim to be this much wider than tall
 const SWEEPS = 8, PULLS = 12;
-// The room of the layout being made: set from FINE or COARSE as each begins (a layout is made in one go).
+// The room of the layout being made: set from FINE, COARSE or COARSER as each begins (a layout is made in one go).
 let NOTE = FINE.note, GAP = 0, GAP_FOLDERS = 0, CHANNEL = 0, CHANNEL_FOLDERS = 0, HEAD = 0, MARGIN = 0, MIN_FOLDER = 0, SLANT = 0, ROOM_PAD = 0, KEEP_ = KEEP;
 let REACH = 0; // a node moves no further than one note's place across to stand in line with a neighbour: further, and the folder grows by a third
 let LANE_REACH = 0; // a lane goes three times as far to keep a passing trunk in one line: at that, no trunk on this base has more than four bends
@@ -80,8 +84,8 @@ function useRoom(r) {
 
 /** @param model { root, edges }: the map's plain model (layout.js `plainModel`) @param flow "up" or "right": the top level's direction
  *  @param plan a folder holding folders placed as blocks (floorplan.js), not in layers; `planCosts` its weights */
-export function nestedLayout(model, { flow = "up", coarse = false, plan = false, planCosts = {}, planned: again = null } = {}) {
-  const room = coarse ? COARSE : FINE;
+export function nestedLayout(model, { flow = "up", grain = "fine", plan = false, planCosts = {}, planned: again = null } = {}) {
+  const room = ROOMS[grain] ?? FINE;
   useRoom(room);
   const isDir = (n) => n.kind === "dir";
   const parent = new Map(), byRef = new Map(), dirs = [model.root];

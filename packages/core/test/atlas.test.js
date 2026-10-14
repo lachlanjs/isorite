@@ -282,9 +282,9 @@ describe("feeders (T72)", () => {
 describe("highways", () => {
   // Every pair the trunks join has a way; each runs from b's wall to a's over their folder's floor, never through
   // a note or another folder, and its steps are along the grid's eight directions.
-  for (const coarse of [false, true]) {
-    it(`a way between every pair of linked neighbours, on the folder's floor${coarse ? " (the coarse grid)" : ""}`, () => {
-      const L = gridLayout(model(8, 10), { gridFlow: "right", coarse }), cells = buildCells(L), { W, owner, blocked } = cells;
+  for (const grain of ["fine", "coarse", "coarser"]) {
+    it(`a way between every pair of linked neighbours, on the folder's floor (the ${grain} grid)`, () => {
+      const L = gridLayout(model(8, 10), { gridFlow: "right", grain }), cells = buildCells(L), { W, owner, blocked } = cells;
       expect(L.highways.trunks).toHaveLength(L.trunks.length);
       for (const t of L.highways.trunks) {
         expect(t.pts).toBeDefined();

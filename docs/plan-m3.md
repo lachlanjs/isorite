@@ -142,7 +142,7 @@ All eight steps of section 6, on the branch `m3-atlas`. The layout and routing w
 - **Read understanding** off each block, and study items with their kinds and dotted links.
 - **Hold** on open ground for a blank note for Iso, or on a note to start from it; **pick** notes on the map into it, numbered, with their size in tokens in the dock.
 - **Watch Iso read** (`Desktop-Think`, `Mobile-Think`): a note for Iso, once sent, is watched on the map. Its block is dotted gold where you held for it, or beside the map, with a blue line to each note it links. Each note Iso opens is outlined by how it got there (dashed: by its words; dotted: by meaning; solid: along a link or named outright). The note being read is filled gold, and its steps along links are gold lines. Under the block a marching line says what Iso is doing. The note opens again when Iso is done. A request made in a note draws the same path from that note's block. Stopped or failed, the path stays until you click open ground. `[ stop ]` is in the status line, and on a phone in the header.
-- **Judge the routing:** `g` shows the router's grid and a panel of switches. `b` switches the layout between blocks and layers, `r` cycles the routing, `c` switches the grid between fine and coarse, and `l` draws each note's line to its folder's wall at rest. All are remembered in this browser.
+- **Two keys for the map:** `c` cycles the grid through fine, coarse and coarser, and `l` draws each note's line to its folder's wall at rest. Both are remembered in this browser. The switches used while the routing was compared (`b`, `r`, `g`) were removed on 2026-10-15, with the gated routes and the grid panel.
 
 **Checked:**
 
@@ -163,5 +163,4 @@ All eight steps of section 6, on the branch `m3-atlas`. The layout and routing w
 
 - **After a reload while Iso runs, the path is gone** until the next request. The engine does not say which requests are running when a page connects.
 - **No routing for the blue lines.** A draft's blue lines are drawn, not routed.
-- **The switches are still in.** The comparison modes (`r`'s gates and trunks, `c`, and `l` as a switch) remain until the routing is settled. Trunks draws nothing between folders placed as blocks.
 - **Measured under limits.** Frame times were measured in headless Chromium only, not on a phone or in Firefox or Safari. One real request was run, as planned.

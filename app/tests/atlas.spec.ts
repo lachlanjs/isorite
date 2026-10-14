@@ -276,3 +276,15 @@ test("on a phone, ↑ out steps out of the folder the screen is in", async ({ pa
   await page.getByRole("button", { name: "↑ out" }).click();
   await expect.poll(() => cell(page)).toBeCloseTo(whole, 3);
 });
+
+test("the grid is fine, coarse or coarser (key c), and the map draws on each", async ({ page }) => {
+  await atlas(page);
+  const grain = () => page.evaluate(() => localStorage.getItem("isorite.atlas.grain"));
+  for (const next of ["coarse", "coarser", "fine"]) {
+    await page.locator(".atlas").focus();
+    await page.keyboard.press("c");
+    await expect.poll(grain).toBe(next);
+    await expect(note(page, "coding/huffman-codes")).toBeVisible();
+    await expect(page.locator(".routes path.base").first()).toBeAttached();
+  }
+});
