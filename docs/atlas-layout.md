@@ -24,7 +24,7 @@ All of it is `gridLayout` in `layout.js`, run in the app's worker and kept under
 
 The costs are named constants beside their code: `PLAN_COSTS`, `HIGHWAY_COSTS`, `FEEDER_COSTS`. Each was chosen by a sweep, not by reasoning, and section 4 says how to run one.
 
-The Atlas still has keys for comparing: `b` switches blocks and layers, `r` cycles highways, gates and trunks, `c` switches fine and coarse cells, and `g` shows the router's grid. Gates (`gates.js`) and trunks are leftovers from the comparison, and trunks draws nothing between floorplanned blocks. They should go once the routing is settled.
+Two keys stay on the Atlas (Lachlan, 2026-10-15): `c` cycles the grid through fine (7 units a cell), coarse (14) and coarser (18; a note is 7 by 2 cells), and `l` draws each note's line to its folder's wall at rest. Both are remembered in the browser. The comparison switches (`b` blocks or layers, `r` highways, gated routes or trunks, `g` the router's grid) were removed with the code behind them: the gated routes (`gates.js`, every link routed note to note through gates on each wall) and the grid panel. Layers remain for folders of notes, and the `blocks` option of `gridLayout` remains for tests and the benchmark.
 
 ## 2. What it measured
 
@@ -60,6 +60,7 @@ Each was built, measured over several seeds on both bases, and removed from the 
 | wider gaps between all blocks | room for lines | more line and area, crossings no better; widening only the busy gutters, after the lines are found, replaced it |
 | a higher flow weight in the floorplan (3) | fewer back links | back links 10% → 6%, but crossings 16 → 26 |
 | a folder padding of 4 cells (6 kept) | a smaller map | longer lines and twice the layout time |
+| gated routes (`gates.js`): every link routed note to note, crossing each wall at a gate, kept beside the highways for comparison until 2026-10-15 | one search, gates shared by every link through them | read worse than highways with their feeders on dg; removed with the switch |
 | gates at quarter points of a side, not only the middle | shorter ways | dg 4% shorter but rdstudio 6% longer: links spread over more gates and shared less |
 
 ## 4. How to judge a change
@@ -87,4 +88,3 @@ Each was built, measured over several seeds on both bases, and removed from the 
 - dg has slightly more crossings than under layers, and more links run backwards.
 - Crossings that meet at cut corners crowd there.
 - Highway counts show only when zoomed in.
-- The comparison keys and modes (`r`, `c`, `g`, gates, trunks) are still in the app and the core.

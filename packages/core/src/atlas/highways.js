@@ -1,4 +1,4 @@
-// The Atlas's highways: Lachlan's routing, beside the layout's trunks (nested.js) and the gated routes (gates.js).
+// The Atlas's highways: Lachlan's routing, in place of the layout's trunks (nested.js) and rdstudio's router.
 //
 //   The tree   The base is a tree: notes its leaves, folders the rest, each folder laid out as a DAG of its items.
 //   Highways   Between two items of one folder that a link joins (the layout's trunks name every such pair), the

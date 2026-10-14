@@ -2,7 +2,7 @@
 // folders are open at a zoom, which routes are drawn at rest, the way a link runs from note to note, and the
 // view that frames an item. Carried over from rdstudio's gridmap.js; nothing here touches the page.
 
-import type { Gate, Layout, Point } from "@isorite/core/atlas";
+import type { Layout, Point } from "@isorite/core/atlas";
 
 /** A cell's side at zoom 1, as the boards draw it: a note's block is 18 by 5 cells, 126 by 35 px. */
 export const CELL = 7;
@@ -131,60 +131,6 @@ export function tracePath(L: Layout, idx: Index, a: number, b: number): Point[] 
   if (!from || !to) return null;
   const pts = [...from, ...L.trunks[t]!.pts!, ...to.reverse()];
   return pts.filter((p, k) => !k || !same(p, pts[k - 1]!));
-}
-
-// ------------------------------------------------------------ gated routes (core's gates.js), beside the above
-
-const gatedIndex = new WeakMap<Layout, { gateAt: Map<number, Gate>; linkAt: Map<string, number>; most: number }>();
-function gatedOf(L: Layout): { gateAt: Map<number, Gate>; linkAt: Map<string, number>; most: number } {
-  let g = gatedIndex.get(L);
-  if (!g) {
-    const gateAt = new Map<number, Gate>();
-    for (const gate of L.gated.gates) { gateAt.set(gate.cell, gate); if (gate.inner >= 0) gateAt.set(gate.inner, gate); }
-    const linkAt = new Map<string, number>();
-    L.links.forEach((l, k) => { if (L.gated.paths[k]) linkAt.set(`${l.a}|${l.b}`, k); });
-    const most = L.links.some((l) => l.s >= 3 && !L.items[l.a]!.ref.startsWith("@study")) ? 3 : 2;
-    gatedIndex.set(L, (g = { gateAt, linkAt, most }));
-  }
-  return g;
-}
-const seenIn = (L: Layout, open: string, region: number): boolean => region < 0 || open[region] === "o";
-
-/** The gated routes drawn at rest: each stretch so marked, in a folder that is open, between items shown.
- *  Its count is the links along it; only a stretch between two sibling folders' gates is labelled with it. */
-export function gatedRest(L: Layout, open: string): Route[] {
-  const { gateAt, most } = gatedOf(L), study = (i: number): boolean => L.items[i]!.ref.startsWith("@study");
-  const out: Route[] = [];
-  L.gated.stretches.forEach((st, k) => {
-    if (!st.rest || !seenIn(L, open, st.region)) return;
-    const ga = gateAt.get(st.a)!, gb = gateAt.get(st.b)!;
-    if (open[ga.item] === "-" || open[gb.item] === "-") return;
-    const bridge = ga.inner >= 0 && gb.inner >= 0 && ga.cell === st.a && gb.cell === st.b;
-    out.push({ key: "g" + k, pts: st.pts, lane: 0, count: st.links.length, feed: !bridge, study: study(ga.item) || study(gb.item), strong: most === 2 || st.strong });
-  });
-  return out;
-}
-
-/** As `litRoutes`, along the gated routes: a link's way is its stretches in folders that are open, so where a
- *  folder is closed it ends at the gate in its wall. */
-export function gatedLit(L: Layout, idx: Index, open: string, links: { a: number; b: number; kind: LitKind }[]): { fixed: Lit[]; asks: LitAsk[] } {
-  const { linkAt } = gatedOf(L), fixed: Lit[] = [], asks: LitAsk[] = [], seen = new Set<string>();
-  for (const { a, b, kind } of links) {
-    const sa = shownAs(idx, open, a), sb = shownAs(idx, open, b), key = `${kind}:${sa}|${sb}`;
-    if (sa === sb || seen.has(key)) continue;
-    seen.add(key);
-    const forward = linkAt.get(`${a}|${b}`), k = forward ?? linkAt.get(`${b}|${a}`);
-    if (k === undefined) { asks.push({ key, kind, a: sa, b: sb }); continue; }
-    let pts: Point[] = [];
-    for (const [s, back] of L.gated.paths[k]!) {
-      const st = L.gated.stretches[s]!;
-      if (seenIn(L, open, st.region)) pts = pts.concat(back ? [...st.pts].reverse() : st.pts);
-    }
-    pts = pts.filter((p, j) => !j || !same(p, pts[j - 1]!));
-    // The way runs from link.a to link.b; a lit route runs from what is required (b) to what requires it (a).
-    fixed.push({ key, kind, pts: forward !== undefined ? pts.reverse() : pts });
-  }
-  return { fixed, asks };
 }
 
 /** What a lit route is: a link of the note chosen ("requires", "builds", "uses"), or a step of Iso's along a link ("iso"). */

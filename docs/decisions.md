@@ -173,8 +173,9 @@ The Atlas's layout and routing, rebuilt after Lachlan found rdstudio's router's 
 | highways (Lachlan's idea) | Between two linked items of a folder, the shortest way across its floor, drawn straight or with one 45° run, from the middle of a side. Searched only where blocked. |
 | feeders | Inside each folder, trees from the items to the highway's gate, searched separately from the highways. |
 | gathering | Gates on one side of a folder within 224 units become one, at the busiest. |
-| folders holding folders | Placed as blocks by a floorplan (sequence pair and annealing), not in layers. The default since 2026-10-15: "a huge improvement. Especially on DG." Folders of notes keep layers. Key `b` switches back. |
+| folders holding folders | Placed as blocks by a floorplan (sequence pair and annealing), not in layers. The default since 2026-10-15: "a huge improvement. Especially on DG." Folders of notes keep layers. (Key `b` switched back until 2026-10-15.) |
 | gutters | Widened by a lane for each parallel highway beyond the first, keeping the arrangement. |
 | cut corners | 10 map units, scaling with the zoom. A route may end at the middle of a cut, square to it; never on the wall inside one. Frames drawn as the boards draw them, as two clipped shapes. |
 | line style | Back to `Atlas-Nested`'s values: 1.5 px at rest at 0.6, highways between folders 3 px, lit lines 3 px whatever they carry, dashed 7 and 5. A count beside each highway between folders, once, on its longest straight stretch. |
 | stability | Not wanted at the cost of readability: the layout may reshuffle when notes change. |
+| the Atlas's keys (2026-10-15) | Kept: `l`, each note's line to its folder's wall at rest, and `c`, the grid fine, coarse or coarser (a third, 18-unit cell, added). Removed with their code: `b` (layers for folders of folders), `r` (gated routes, the layout's trunks) and `g` (the router's grid). M3 closed. |

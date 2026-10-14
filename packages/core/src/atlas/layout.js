@@ -3,14 +3,12 @@
 
 import { nestedLayout } from "./nested.js";
 import { buildCells } from "./cells.js";
-import { gatedRoutes } from "./gates.js";
 import { highwayTrunks, highwayFeeders, cornerEnds } from "./highways.js";
 import { makeRouter, lanes, routeAll as gridRouteAll, ROUTER_DEFAULTS } from "./router.js";
 
 // What the router sees, for drawing it (the Atlas's grid, a debugging view).
 export { buildCells, KEEP } from "./cells.js";
 export { ROUTER_DEFAULTS };
-export { gatedRoutes, GATE_COSTS } from "./gates.js";
 export { highwayTrunks, highwayFeeders, cornerEnds, CORNER, HIGHWAY_COSTS, FEEDER_COSTS } from "./highways.js";
 
 // What the layout needs from the map model, as plain data a worker can receive.
@@ -30,10 +28,10 @@ export function plainModel(model, flat = false) {
 
 // The grid Atlas's layout (grid/nested.js, which says what one is): each
 // folder a layered DAG of its items, and one item in its parent's. `gridFlow`
-// is the top level's direction, "up" or "right"; `coarse`, cells twice the size and folders further apart;
+// is the top level's direction, "up" or "right"; `grain`, the cell's size ("fine", "coarse" or "coarser");
 // `blocks`, a folder holding folders placed as blocks (floorplan.js) and not in layers.
 export function gridLayout(model, o) {
-  const opts = { flow: o.gridFlow === "right" ? "right" : "up", coarse: !!o.coarse, plan: !!o.blocks };
+  const opts = { flow: o.gridFlow === "right" ? "right" : "up", grain: grainOf(o), plan: !!o.blocks };
   let layout = nestedLayout(model, opts);
   // Blocks: laid out once, the highways found, and packed again as they were with each busy gutter widened.
   if (o.blocks) {
@@ -41,7 +39,6 @@ export function gridLayout(model, o) {
     if ([...planned.values()].some((p) => p.wider.size)) layout = nestedLayout(model, { ...opts, planned });
   }
   layout.feeders = feeders(layout);
-  layout.gated = gatedRoutes(layout); // the gated routes, beside the trunks and feeders until one is chosen
   const cells = buildCells(layout), highways = highwayTrunks(layout, cells); // and the highways (highways.js), with their own feeders
   const fed = highwayFeeders(layout, highways, cells);
   cornerEnds(layout, [...highways, ...fed]); // after the feeders are found: they start from where the highways end
@@ -173,8 +170,9 @@ function hash(str) {
 }
 
 // Bump whenever the layout changes what it returns, so nothing keeps an old one.
-export const LAYOUT_VERSION = 11;
+export const LAYOUT_VERSION = 12;
+const grainOf = (o) => (o.grain === "coarse" || o.grain === "coarser" ? o.grain : "fine");
 /** What a kept layout is filed under: the version, the direction, the grid, and what the map contains. */
 export function layoutKey(plain, o = {}) {
-  return hash(JSON.stringify([LAYOUT_VERSION, o.gridFlow === "right" ? "right" : "up", !!o.coarse, !!o.blocks, plain]));
+  return hash(JSON.stringify([LAYOUT_VERSION, o.gridFlow === "right" ? "right" : "up", grainOf(o), !!o.blocks, plain]));
 }
