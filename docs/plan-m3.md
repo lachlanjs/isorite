@@ -129,3 +129,39 @@ Each step ends with its tests passing and a commit.
 - Squares on a block for its exercises, and the list of what tests a note (`Study-Fit`): milestone 4.
 - Suggested links, lenses, study paths, the tours.
 - Stability of the layout under small edits (accepted in `decisions.md`).
+
+## 10. What was built (2026-10-15)
+
+All eight steps of section 6, on the branch `m3-atlas`. The layout and routing were rebuilt during step 5, at Lachlan's asking: `decisions.md` (2026-10-14 and 15) and `atlas-layout.md`, which also holds what was learned.
+
+**What you can do:**
+
+- **Open the atlas** and see both bases: folders as cut-corner frames, folders holding folders placed as blocks, notes in layers inside them, study folders beside what they study. Lines run as highways between linked neighbours and feeders inside folders, with a count beside each busy highway once zoomed in.
+- **Move about:** drag, wheel, pinch; a click on a folder zooms to it, on open ground steps out. A small folder is a block with its count. On a phone, zoomed into a folder, the header names it and `↑ out` steps out (`Mobile-Atlas`).
+- **Choose a note:** its own links one step each way, the rest of the chain outlined, walked back a note at a time; `[ whole chain ]` or `w` for the whole of it (as decided on 2026-10-14).
+- **Read understanding** off each block, and study items with their kinds and dotted links.
+- **Hold** on open ground for a blank note for Iso, or on a note to start from it; **pick** notes on the map into it, numbered, with their size in tokens in the dock.
+- **Watch Iso read** (`Desktop-Think`, `Mobile-Think`): a note for Iso, once sent, is watched on the map. Its block is dotted gold where you held for it, or beside the map, with a blue line to each note it links. Each note Iso opens is outlined by how it got there (dashed: by its words; dotted: by meaning; solid: along a link or named outright). The note being read is filled gold, and its steps along links are gold lines. Under the block a marching line says what Iso is doing. The note opens again when Iso is done. A request made in a note draws the same path from that note's block. Stopped or failed, the path stays until you click open ground. `[ stop ]` is in the status line, and on a phone in the header.
+- **Judge the routing:** `g` shows the router's grid and a panel of switches. `b` switches the layout between blocks and layers, `r` cycles the routing, `c` switches the grid between fine and coarse, and `l` draws each note's line to its folder's wall at rest. All are remembered in this browser.
+
+**Checked:**
+
+- 411 unit tests pass: 299 core, 49 engine, 19 server, 44 app. The type checks are clean, and every changed `.svelte` file passes the Svelte tool.
+- 118 browser tests pass, 2 skipped (`↑ out` is tried at a phone's width only): 30 tests at two widths on both grounds, against a scripted provider. New in step 6: a note for Iso sent from its page is watched on the map, with its block, its blue line, the note being read filled gold, and stop; the path stays until let go; the note opens with its answer when Iso is done; `l` draws and hides the notes' lines; `↑ out`.
+- **Both bases draw:** `~/Repositories/information-theory` (one folder, one note, viewed through your running server, nothing written) and the copy of rdstudio's 230 notes.
+- **Frame times** (section 4.9's limit: a 95th percentile under 25 ms). Measured on the 230-note base at 1280 by 800, in headless Chromium on this machine, scripted pans and wheel zooms over the whole map and zoomed in. Every frame came at 16.7 ms (60 a second), at the median and at the 95th percentile, with all 230 blocks drawn. The same with the processor slowed four times, as a check that the measure can see trouble: panning stayed at 16.7 ms, while zooming reached a 95th percentile of 33 to 50 ms (worst 100 ms). Zooming resizes every block, which panning does not. The routes stay as SVG; nothing moved to a canvas.
+- **A real model once,** on the mid tier, through OpenRouter, on a temporary copy of rdstudio's base. A note for Iso was linked to "The grid Atlas replaces the continuous Atlas" and asked whether routes were the reason. It was watched on the map. Iso opened six notes in about 25 seconds (T60, T63, T57, T68 and others), found by keyword and along links, and the gold lines followed the links it took. The note then opened with a correct, sourced answer ("Only partly … the layout was the point of the change"). **It cost $0.128,** four times the $0.03 estimated: each note read is another round with everything before it resent. The key's total is now about $0.24.
+- **Against the boards,** at 1280 and 390 px on both grounds (on the differential-geometry copy and the test base):
+  - `Atlas-Nested`: frames, cut corners (now drawn as the board draws them), line weights, lit lines and counts match the board's values. Counts show only once zoomed in. Every block is dotted until milestone 4, as foreseen in 4.3.
+  - `Desktop-Atlas`: the marching gold box and "a new note" match.
+  - `Desktop-Think`: the block, the blue lines, the four outlines, the gold fill, the marching line and the status line match. The blue lines run straight (with one 45° run) across whatever is between, under the blocks, where the board's go round the folders. "Iso is reading …" wraps under the block instead of running on.
+  - `Mobile-Atlas`: the header, `↑ out` and closed folders with counts match. **Different:** at the whole map's zoom on a phone, folders wide enough on screen (53 px) open with notes too small to read. The board shows them closed, as cards with counts. Opening folders later on a phone (150 px) matched the board on the larger base but closed folders the tests and the small base need. Section 4.10 says phones are compared, not tuned, so it was taken out. It is the first thing to change if the phone is tuned.
+  - `Mobile-Pick`: the picks are numbered in order and the dock works with "back to it". Note titles are hidden at the zoom that shows a small base whole (below 0.55), where the board shows them.
+  - `Mobile-Think`: `stop` in the header, the block under the map, and the line of what Iso does match.
+
+**Not checked or not built:**
+
+- **After a reload while Iso runs, the path is gone** until the next request. The engine does not say which requests are running when a page connects.
+- **No routing for the blue lines.** A draft's blue lines are drawn, not routed.
+- **The switches are still in.** The comparison modes (`r`'s gates and trunks, `c`, and `l` as a switch) remain until the routing is settled. Trunks draws nothing between folders placed as blocks.
+- **Measured under limits.** Frame times were measured in headless Chromium only, not on a phone or in Firefox or Safari. One real request was run, as planned.
