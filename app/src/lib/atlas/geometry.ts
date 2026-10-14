@@ -86,8 +86,9 @@ export interface Route { key: string; pts: Point[]; lane: number; count: number;
 /** The routes drawn at rest: each of the layout's trunks whose two ends are shown, and inside an open folder
  *  the branches from its subfolders to where a trunk arrives. A link a longer way already makes (an implied
  *  trunk: the highways give it a way, to be lit) is left out. A trunk between two folders is drawn heavy
- *  (`feed` false); one with a note at an end is drawn as the feeders are, as on the boards. */
-export function restRoutes(L: Layout, open: string, strong: boolean[] = []): Route[] {
+ *  (`feed` false); one with a note at an end is drawn as the feeders are, as on the boards. With `leaves`, the
+ *  branches from each note to its folder's wall are drawn too (the Atlas's key l). */
+export function restRoutes(L: Layout, open: string, strong: boolean[] = [], leaves = false): Route[] {
   const shown = (i: number): boolean => open[i] !== "-", study = (i: number): boolean => L.items[i]!.ref.startsWith("@study");
   const out: Route[] = [];
   L.trunks.forEach((t, k) => {
@@ -96,7 +97,7 @@ export function restRoutes(L: Layout, open: string, strong: boolean[] = []): Rou
   });
   L.feeders.forEach((f, k) => {
     const t = L.trunks[f.trunk]!;
-    if (!f.leaf && !t.implied && open[f.folder] === "o" && shown(f.item) && shown(t.a) && shown(t.b)) out.push({ key: "f" + k, pts: f.pts, lane: f.lane, count: f.count, feed: true, study: study(t.a) || study(t.b), strong: strong[f.trunk] ?? true });
+    if ((leaves || !f.leaf) && !t.implied && open[f.folder] === "o" && shown(f.item) && shown(t.a) && shown(t.b)) out.push({ key: "f" + k, pts: f.pts, lane: f.lane, count: f.count, feed: true, study: study(t.a) || study(t.b), strong: strong[f.trunk] ?? true });
   });
   return out;
 }
@@ -186,7 +187,8 @@ export function gatedLit(L: Layout, idx: Index, open: string, links: { a: number
   return { fixed, asks };
 }
 
-export type LitKind = "requires" | "builds" | "uses";
+/** What a lit route is: a link of the note chosen ("requires", "builds", "uses"), or a step of Iso's along a link ("iso"). */
+export type LitKind = "requires" | "builds" | "uses" | "iso";
 export interface Lit { key: string; kind: LitKind; pts: Point[] }
 
 // ------------------------------------------------------------ routes merged where they overlap
@@ -196,7 +198,7 @@ export interface Lit { key: string; kind: LitKind; pts: Point[] }
  *  the way its points go (1), or both ways (0), when its dashes stand still. */
 export interface Run { key: string; pts: Point[]; count: number; strong: boolean; study: boolean; trunk: boolean; kind: LitKind; flow: 0 | 1 }
 
-const STRENGTH: LitKind[] = ["uses", "builds", "requires"];
+const STRENGTH: LitKind[] = ["uses", "builds", "requires", "iso"];
 interface Edge { a: string; b: string; A: Point; B: Point; count: number; strong: boolean; study: boolean; trunk: boolean; kind: number; fwd: number[]; back: number[] }
 
 /**
@@ -221,7 +223,7 @@ export function mergeRoutes(routes: { pts: Point[]; count?: number; strong?: boo
         taken.add(key);
         let e = edges.get(key);
         if (!e) {
-          e = p < q ? { a: p, b: q, A: P, B: Q, count: 0, strong: false, study: false, trunk: false, kind: 0, fwd: [0, 0, 0], back: [0, 0, 0] } : { a: q, b: p, A: Q, B: P, count: 0, strong: false, study: false, trunk: false, kind: 0, fwd: [0, 0, 0], back: [0, 0, 0] };
+          e = p < q ? { a: p, b: q, A: P, B: Q, count: 0, strong: false, study: false, trunk: false, kind: 0, fwd: [0, 0, 0, 0], back: [0, 0, 0, 0] } : { a: q, b: p, A: Q, B: P, count: 0, strong: false, study: false, trunk: false, kind: 0, fwd: [0, 0, 0, 0], back: [0, 0, 0, 0] };
           edges.set(key, e);
           for (const n of [e.a, e.b]) { const list = at.get(n); if (list) list.push(key); else at.set(n, [key]); }
         }
@@ -323,6 +325,18 @@ export function linePath(cells: Point[], lane = 0, cell = CELL): string {
   }
   const z = Q.at(-1)!;
   return out + `L${f(z[0])} ${f(z[1])}`;
+}
+
+/** A line drawn as the boards draw one between two blocks: from `p` to `q` (in cells), a run along the main
+ *  axis, one run at 45 degrees halfway, and the rest of the run (or, where they are further apart across than
+ *  along, 45 degrees, across, 45 degrees). */
+export function directLine(p: Point, q: Point, horizontal: boolean): Point[] {
+  const along = horizontal ? q[0] - p[0] : q[1] - p[1], across = horizontal ? q[1] - p[1] : q[0] - p[0];
+  const la = Math.abs(along), lc = Math.abs(across), sa = Math.sign(along), sc = Math.sign(across);
+  const at = (a: number, c: number): Point => (horizontal ? [p[0] + a, p[1] + c] : [p[0] + c, p[1] + a]);
+  if (la >= lc) { const before = (la - lc) / 2; return [at(0, 0), at(sa * before, 0), at(sa * (before + lc), sc * lc), at(along, across)]; }
+  const half = la / 2;
+  return [at(0, 0), at(sa * half, sc * half), at(sa * half, sc * (lc - half)), at(along, across)];
 }
 
 /** The view that frames a block of cells in a viewport, with a little room, no closer than `most`. */

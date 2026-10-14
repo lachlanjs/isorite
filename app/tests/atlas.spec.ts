@@ -210,3 +210,69 @@ test("notes are picked on the map for a note for Iso: numbered in order, sized i
   await expect(page.locator(".cm-content")).toContainText("A code is short where the source is likely.");
   await page.getByRole("button", { name: "[ discard ]" }).click();
 });
+
+/** A note for Iso, written from the notes page and linked to Huffman codes, then sent. */
+async function sendForIso(page: Page, title: string, asked: string) {
+  await page.goto("#/notes");
+  await page.getByRole("button", { name: "new note for Iso" }).click();
+  await page.getByLabel("Title").fill(title);
+  await page.getByRole("textbox", { name: "The note", exact: true }).click();
+  await page.keyboard.type(`${asked}, resting on [[Huff`);
+  await page.getByRole("option", { name: /Huffman codes/ }).click();
+  await expect(page.locator(".deck .chip")).toHaveText("Huffman codes");
+  await page.getByRole("button", { name: "send to Iso" }).click();
+}
+
+test("a note for Iso is watched on the map: its block, blue lines to what it links, what Iso reads; stopped, its path stays until let go", async ({ page }) => {
+  const title = `Watched ${test.info().project.name}`;
+  await sendForIso(page, title, "look slowly at codes");
+  await page.waitForURL(/#\/atlas$/);
+  await expect(page.getByRole("link", { name: `${title}: your note for Iso` })).toBeVisible();
+  await expect(note(page, "coding/huffman-codes")).toHaveClass(/\blinked\b/);
+  await expect(page.locator(".routes path.sent")).toHaveCount(1);
+  // The scripted provider reads Surprise, then writes slowly: the note it rests on is filled gold.
+  await expect(note(page, "basics/surprise")).toHaveClass(/\bp-used\b/);
+  await expect(page.locator(".asker .doing")).toContainText("Iso is");
+  await expect(page.getByText("your note opens when Iso is done")).toBeAttached();
+  await look(page, "atlas-think");
+
+  await page.getByRole("button", { name: "[ stop ]" }).click();
+  await expect(page.getByText(/Iso was stopped/)).toBeAttached();
+  await expect(page.locator(".asker .doing")).toHaveCount(0);
+  await expect(note(page, "basics/surprise")).toHaveClass(/\bp-(link|key|sem)\b/); // reached, no longer being read
+  await expect(page).toHaveURL(/#\/atlas$/); // stopped: nothing to open
+  const box = (await page.locator(".atlas").boundingBox())!;
+  await page.mouse.click(box.x + 4, box.y + 4);
+  await expect(page.getByRole("link", { name: `${title}: your note for Iso` })).toHaveCount(0);
+  await expect(note(page, "basics/surprise")).not.toHaveClass(/\bp-/);
+});
+
+test("a note for Iso opens again with its answer when Iso is done", async ({ page }) => {
+  await sendForIso(page, `Answered ${test.info().project.name}`, "look at codes");
+  await page.waitForURL(/#\/draft\//);
+  await expect(page.locator(".between .said strong")).toHaveText("bits");
+  await page.getByRole("button", { name: "discard" }).last().click();
+});
+
+test("lines from notes to their folder's wall are drawn at rest when asked for (key l)", async ({ page }) => {
+  await atlas(page);
+  const lines = () => page.locator(".routes path.base").count();
+  const before = await lines();
+  await page.locator(".atlas").focus();
+  await page.keyboard.press("l");
+  await expect.poll(lines).toBeGreaterThan(before);
+  await page.keyboard.press("l");
+  await expect.poll(lines).toBe(before);
+});
+
+test("on a phone, ↑ out steps out of the folder the screen is in", async ({ page }) => {
+  test.skip(!test.info().project.name.startsWith("phone"), "the phone's header");
+  await atlas(page);
+  const whole = await cell(page);
+  await expect(page.getByRole("button", { name: "↑ out" })).toHaveCount(0);
+  await folder(page, "coding").getByRole("button", { name: "coding", exact: true }).click();
+  await expect.poll(() => cell(page)).toBeGreaterThan(whole);
+  await expect(page.locator(".bar .where")).toHaveText("coding");
+  await page.getByRole("button", { name: "↑ out" }).click();
+  await expect.poll(() => cell(page)).toBeCloseTo(whole, 3);
+});

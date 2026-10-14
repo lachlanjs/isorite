@@ -3,7 +3,7 @@
   // understood); what is lit round it is an outline. It knows nothing of the layout or of Iso.
   import type { LayoutItem } from "@isorite/core/atlas";
 
-  let { item, title, step, mark = "", far = 0, num = 0, dim = false, href, onpick, onpoint }: {
+  let { item, title, step, mark = "", far = 0, num = 0, iso = "", linked = false, dim = false, href, onpick, onpoint }: {
     item: LayoutItem;
     title: string;
     step: 0 | 1 | 2 | 3;
@@ -13,6 +13,10 @@
     far?: number;
     /** Picked for a note for Iso: its place in the order, from 1. */
     num?: number;
+    /** On Iso's path (Marks): found by keyword, by meaning, along a link (or named outright), or being read now. */
+    iso?: "" | "key" | "sem" | "link" | "used";
+    /** Linked from the note for Iso being answered: what it was sent with. */
+    linked?: boolean;
     dim?: boolean;
     href: string;
     onpick: (event: MouseEvent) => void;
@@ -21,7 +25,7 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a class="n s{step} {mark}" class:dim={dim && !num} class:far={far > 1} class:pick={num > 0} {href} aria-label={num ? `${title}: linked, number ${num}` : title} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%"
+<a class="n s{step} {iso ? `p-${iso}` : ''} {mark}" class:linked class:dim={dim && !num && !iso && !linked} class:far={far > 1} class:pick={num > 0} {href} aria-label={num ? `${title}: linked, number ${num}` : title} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
@@ -41,6 +45,12 @@
   .s2 { background: var(--ground-3); color: var(--text); }
   .s3 { border: 3px double var(--lattice); background: var(--ground-3); color: var(--text); }
   .dim { opacity: .5; }
+  /* Iso's path (Marks, Desktop-Think), under the outlines of what is chosen. */
+  .linked { outline: 2px solid var(--lattice); outline-offset: 3px; color: var(--text); }
+  .p-key { outline: 1.5px dashed var(--growth); outline-offset: 3px; }
+  .p-sem { outline: 2px dotted var(--growth); outline-offset: 3px; }
+  .p-link { outline: 1.5px solid var(--growth); outline-offset: 3px; }
+  .p-used { outline: 1.5px solid var(--growth); outline-offset: 3px; background: var(--growth-soft); color: var(--text); }
   .at, .req, .bld { color: var(--text); outline: 2px solid var(--text); outline-offset: 2px; }
   .req { outline-color: color-mix(in srgb, var(--requires) var(--lit, 100%), transparent); }
   .req.far { outline-width: 1px; color: var(--text-soft); }

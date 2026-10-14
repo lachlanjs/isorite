@@ -6,11 +6,11 @@
   import { resolve } from "$app/paths";
   import { reach } from "@isorite/core";
   import type { Layout, Point } from "@isorite/core/atlas";
-  import type { MapReport, NoteSource } from "@isorite/engine";
-  import { linkedIn, place, titleIn, withLink, withoutLink } from "$lib/atlas/picks.ts";
+  import type { How, MapReport, NoteSource } from "@isorite/engine";
+  import { linkedIn, place, placeOf, titleIn, withLink, withoutLink } from "$lib/atlas/picks.ts";
   import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
-  import { CELL, LABELS_AT, fit, gatedLit, gatedRest, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
+  import { CELL, LABELS_AT, directLine, fit, gatedLit, gatedRest, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
   import AtlasFolder from "./AtlasFolder.svelte";
@@ -52,6 +52,8 @@
   let coarse = $state(stored("isorite.atlas.grain") === "coarse");
   /** How folders holding folders are laid out (key b): as blocks (core's floorplan.js), or in layers as a folder of notes is. */
   let blocks = $state(stored("isorite.atlas.layout") !== "layers");
+  /** Whether the branches from each note to its folder's wall are drawn at rest (key l), while that is judged. */
+  let leaves = $state(stored("isorite.atlas.leaves") === "on");
   let moved = false; // the map was moved by hand: a new layout then leaves the view alone
 
   // The top level runs the long way of the screen: what is required at the left of a wide one, at the foot of a tall one.
@@ -73,6 +75,10 @@
     coarse = on; moved = false; // a new grid is a new map: framed afresh
     try { localStorage.setItem("isorite.atlas.grain", on ? "coarse" : "fine"); } catch { /* storage unavailable: not remembered */ }
     void load();
+  }
+  function useLeaves(on: boolean): void {
+    leaves = on;
+    try { localStorage.setItem("isorite.atlas.leaves", on ? "on" : "off"); } catch { /* storage unavailable: not remembered */ }
   }
   function useBlocks(on: boolean): void {
     blocks = on; moved = false; // a new layout is a new map: framed afresh
@@ -106,7 +112,13 @@
   const idx = $derived(L ? indexLayout(L) : null);
   const open = $derived(L ? openAt(L, view.k) : "");
   // The whole map: what is on it, and half the margin round it, where the ways round the outside run.
-  const whole = (): View => { const m = (L?.margin ?? 0) / 2; return fit({ gx: m, gy: m, w: (L?.W ?? 1) - 2 * m, h: (L?.H ?? 1) - 2 * m }, size.w, size.h, 1, L?.cell); };
+  // With a note for Iso being answered, its block beside the map is framed too.
+  const whole = (): View => {
+    const m = (L?.margin ?? 0) / 2, box = { gx: m, gy: m, w: (L?.W ?? 1) - 2 * m, h: (L?.H ?? 1) - 2 * m }, d = origin?.draft ? origin : null;
+    // With room under it and to its right for what Iso is doing.
+    if (d && L) { const x1 = Math.max(box.gx + box.w, d.gx + Math.max(d.w, 240 / L.cell) + 2), y1 = Math.max(box.gy + box.h, d.gy + d.h + 70 / L.cell); box.gx = Math.min(box.gx, d.gx - 2); box.gy = Math.min(box.gy, d.gy - 2); box.w = x1 - box.gx; box.h = y1 - box.gy; }
+    return fit(box, size.w, size.h, 1, L?.cell);
+  };
 
   // The viewport's size; the first time it is known, the whole map is framed.
   $effect(() => {
@@ -124,7 +136,7 @@
   const notes = $derived(L ? L.items.flatMap((item, i) => (item.kind === "note" && open[i] === "s" ? [{ item, i }] : [])) : []);
   // The routes at rest, merged where they overlap. A line between folders is labelled with its count, as on the boards,
   // where it is long enough to carry it (5 cells); one inside a folder, only where it is long (30 cells).
-  const rest = $derived(L ? mergeRoutes(gated ? gatedRest(L, open) : restRoutes(L, open, idx!.strong)).map((r) => ({ key: r.key, pts: r.pts, d: linePath(r.pts, 0, L.cell), count: r.count, study: r.study, strong: r.strong, trunk: r.trunk, ...countAt(r) })).map((r, i, all) => ({ ...r, label: r.label && !all.some((o, j) => j !== i && o.label && o.count === r.count && Math.hypot(o.mid[0] - r.mid[0], o.mid[1] - r.mid[1]) < 10 && (o.length > r.length || (o.length === r.length && j < i))) })) : []);
+  const rest = $derived(L ? mergeRoutes(gated ? gatedRest(L, open) : restRoutes(L, open, idx!.strong, leaves)).map((r) => ({ key: r.key, pts: r.pts, d: linePath(r.pts, 0, L.cell), count: r.count, study: r.study, strong: r.strong, trunk: r.trunk, ...countAt(r) })).map((r, i, all) => ({ ...r, label: r.label && !all.some((o, j) => j !== i && o.label && o.count === r.count && Math.hypot(o.mid[0] - r.mid[0], o.mid[1] - r.mid[1]) < 10 && (o.length > r.length || (o.length === r.length && j < i))) })) : []);
   // A count: on a line between folders only, where it carries more than one link, once along its longest straight
   // stretch of 3 cells or more, beside the line (to the right of an upright one, above any other). Where a highway
   // is cut in two by a line joining it, the same count close by is shown once, on the longer piece.
@@ -186,26 +198,112 @@
   };
 
   // The lit routes: the layout's own ways at once, and the few it drew none for when the router has found them.
-  let hot = $state.raw<{ key: string; d: string; kind: LitKind; count: number; still: boolean }[]>([]);
+  type Hot = { key: string; d: string; kind: LitKind; count: number; still: boolean };
+  let hot = $state.raw<Hot[]>([]);
   /** The lit links of each kind, however their lines merge. */
-  let litCount = $state.raw<Record<LitKind, number>>({ requires: 0, builds: 0, uses: 0 });
-  $effect(() => {
-    if (!links.length || !L || !idx || !laid) { hot = []; litCount = { requires: 0, builds: 0, uses: 0 }; return; }
-    const ends = links.flatMap((l) => { const a = idx.at.get(l.from), b = idx.at.get(l.to); return a === undefined || b === undefined ? [] : [{ a, b, kind: l.kind }]; });
+  let litCount = $state.raw<Record<Exclude<LitKind, "iso">, number>>({ requires: 0, builds: 0, uses: 0 });
+  /** Light the links between notes (`a` requires `b`, by name), handing what is drawn to `set` now and again once
+   *  the router has found the ways the layout has none for. Returns what stops a late answer. */
+  function light(list: { from: string; to: string; kind: LitKind }[], set: (hot: Hot[], lits: Lit[]) => void): (() => void) | undefined {
+    if (!list.length || !L || !idx || !laid) { set([], []); return; }
+    const ends = list.flatMap((l) => { const a = idx.at.get(l.from), b = idx.at.get(l.to); return a === undefined || b === undefined ? [] : [{ a, b, kind: l.kind }]; });
     const { fixed, asks } = (gated ? gatedLit : litRoutes)(L, idx, open, ends);
     // Merged where they overlap, as at rest.
-    const drawn = (lits: Lit[]) => {
-      litCount = { requires: lits.filter((l) => l.kind === "requires").length, builds: lits.filter((l) => l.kind === "builds").length, uses: lits.filter((l) => l.kind === "uses").length };
-      return mergeRoutes(lits, true).map((r) => ({ key: r.key, kind: r.kind, d: linePath(r.pts, 0, L!.cell), count: r.count, still: !r.flow }));
-    };
-    hot = drawn(fixed);
+    const drawn = (lits: Lit[]): void => set(mergeRoutes(lits, true).map((r) => ({ key: r.key, kind: r.kind, d: linePath(r.pts, 0, L!.cell), count: r.count, still: !r.flow })), lits);
+    drawn(fixed);
     if (!asks.length) return;
     let stale = false;
     // The router's way runs from the note requiring to the one required: turned round, so every lit route runs the same way.
     void routesOf(laid.key, L, asks.map(({ a, b }) => ({ a, b }))).then((found) => {
-      if (!stale) hot = drawn([...fixed, ...asks.flatMap((m, k) => (found[k] ? [{ key: m.key, kind: m.kind, pts: [...found[k]].reverse() }] : []))]);
+      if (!stale) drawn([...fixed, ...asks.flatMap((m, k) => (found[k] ? [{ key: m.key, kind: m.kind, pts: [...found[k]].reverse() }] : []))]);
     }).catch(() => undefined);
     return () => { stale = true; };
+  }
+  $effect(() => light(links, (h, lits) => {
+    hot = h;
+    litCount = { requires: lits.filter((l) => l.kind === "requires").length, builds: lits.filter((l) => l.kind === "builds").length, uses: lits.filter((l) => l.kind === "uses").length };
+  }));
+
+  // ------------------------------------------------------------ Iso's path (Desktop-Think)
+
+  /** Iso's latest request, from whichever page sent it. */
+  const run = $derived(pick ? null : app.iso);
+  const running = $derived(run?.state === "reading" || run?.state === "writing");
+  /** Each note Iso opened, and how it got there: by its words, by its meaning, along a link, or named outright. */
+  const reached = $derived.by(() => {
+    const out = new Map<string, How>();
+    for (const s of run?.steps ?? []) if (s.opened && !s.failed && !out.has(s.opened)) out.set(s.opened, s.how);
+    return out;
+  });
+  /** The note it is reading now. */
+  const reading = $derived(running ? (run!.steps.findLast((s) => s.opened && !s.failed)?.opened ?? "") : "");
+  // Its steps along links, drawn as the map draws a link: from the note in hand to the one it led to.
+  const isoLinks = $derived((run?.steps ?? []).flatMap((s) => (s.how === "link" && s.from && s.opened && !s.failed ? [{ from: s.opened, to: s.from, kind: "iso" as const }] : [])));
+  let isoHot = $state.raw<Hot[]>([]);
+  $effect(() => light(isoLinks, (h) => { isoHot = h; }));
+
+  // A note for Iso is not in the base: its block stands where the map was held for it, or beside the map, with
+  // a blue line to each note it links to. A note in the base asks from its own block.
+  let asking = $state.raw<NoteSource | null>(null);
+  $effect(() => {
+    const id = run?.note ?? "";
+    asking = null;
+    if (!id.startsWith("@draft/")) return;
+    let stale = false;
+    app.api.readNote(id).then((d) => { if (!stale) asking = d; }, () => undefined);
+    return () => { stale = true; };
+  });
+  const origin = $derived.by((): { gx: number; gy: number; w: number; h: number; draft: boolean; title: string } | null => {
+    if (!run || !L || !idx) return null;
+    if (!run.note.startsWith("@draft/")) {
+      const i = idx.at.get(run.note);
+      if (i === undefined) return null;
+      const s = L.items[shownAs(idx, open, i)]!;
+      return { gx: s.gx, gy: s.gy, w: s.w, h: s.h, draft: false, title: title(run.note) };
+    }
+    const w = Math.round(126 / L.cell), h = Math.round(35 / L.cell), name = asking ? titleIn(asking.text) || "a new note" : "";
+    const held = placeOf(run.note), at = held ? { gx: Math.round((held.gx * CELL) / L.cell), gy: Math.round((held.gy * CELL) / L.cell) } : null;
+    const clear = at && !L.items.some((n) => n.kind === "note" && at.gx < n.gx + n.w + 1 && n.gx < at.gx + w + 1 && at.gy < n.gy + n.h + 1 && n.gy < at.gy + h + 1);
+    if (clear) return { ...at, w, h, draft: true, title: name };
+    // Beside the map, the long way of the screen: at its right on a wide one, under it on a tall one.
+    const tops = L.items.filter((n) => n.parent < 0), right = Math.max(...tops.map((n) => n.gx + n.w)), foot = Math.max(...tops.map((n) => n.gy + n.h)), gap = Math.round(84 / L.cell);
+    return flow === "right" ? { gx: right + gap, gy: Math.round((L.H - h) / 2), w, h, draft: true, title: name } : { gx: Math.round((L.W - w) / 2), gy: foot + gap, w, h, draft: true, title: name };
+  });
+  /** The notes the note for Iso links to: what it was sent with. */
+  const sent = $derived(asking ? linkedIn(asking.text).filter((id) => report?.notes[id]) : []);
+  const sentLines = $derived.by(() => {
+    if (!origin?.draft || !L || !idx) return [];
+    return sent.flatMap((id) => {
+      const i = idx.at.get(id);
+      if (i === undefined) return [];
+      const n = L.items[shownAs(idx, open, i)]!, o = origin;
+      const dx = n.gx + n.w / 2 - (o.gx + o.w / 2), dy = n.gy + n.h / 2 - (o.gy + o.h / 2), across = Math.abs(dx) * (5 / 18) >= Math.abs(dy);
+      const p: [number, number] = across ? [dx < 0 ? o.gx : o.gx + o.w, o.gy + o.h / 2] : [o.gx + o.w / 2, dy < 0 ? o.gy : o.gy + o.h];
+      const q: [number, number] = across ? [dx < 0 ? n.gx + n.w : n.gx, n.gy + n.h / 2] : [n.gx + n.w / 2, dy < 0 ? n.gy + n.h : n.gy];
+      return [{ key: id, d: linePath(directLine(p, q, across), 0, L.cell) }];
+    });
+  });
+  /** How a note is outlined for Iso's path: by keyword, by meaning, along a link (or named outright), or being read now. */
+  const isoMark = (ref: string): "" | "key" | "sem" | "link" | "used" => {
+    if (ref === reading) return "used";
+    const how = reached.get(ref);
+    return how === "keyword" ? "key" : how === "meaning" ? "sem" : how ? "link" : "";
+  };
+
+  // A note for Iso sent to be watched here opens again when Iso is done with it (even if that was before the
+  // map was up).
+  $effect(() => {
+    const r = run;
+    if (!r || r.request !== app.watching || r.state === "reading" || r.state === "writing") return;
+    app.watching = "";
+    if (r.state === "done") void goto(resolve("/draft/[id]", { id: r.note.slice("@draft/".length) }));
+  });
+  // A note for Iso being answered is framed with the map when it begins.
+  let framedFor = "";
+  $effect(() => {
+    if (!origin?.draft || !run || framedFor === run.request || !size.w) return;
+    framedFor = run.request;
+    if (!moved) view = whole();
   });
 
   // ------------------------------------------------------------ notes picked for a note for Iso
@@ -370,6 +468,7 @@
     const folder = e.target.closest<HTMLElement>("[data-folder]");
     if (e.target.closest("a, button")) return;
     if (chosen) walk = [];
+    else if (run && !running) app.iso = null; // Iso's path is let go once it has ended
     else if (folder && L) enter(L.items.findIndex((n) => n.kind === "folder" && n.ref === folder.dataset.folder));
     else fly(whole());
   }
@@ -380,6 +479,7 @@
     if (e.key === "r" && !e.metaKey && !e.ctrlKey && !e.altKey) { nextRoutes(); return; }
     if (e.key === "c" && !e.metaKey && !e.ctrlKey && !e.altKey) { useCoarse(!coarse); return; }
     if (e.key === "b" && !e.metaKey && !e.ctrlKey && !e.altKey) { useBlocks(!blocks); return; }
+    if (e.key === "l" && !e.metaKey && !e.ctrlKey && !e.altKey) { useLeaves(!leaves); return; }
     if (e.target !== viewport) return;
     const pan = 80, c = { x: size.w / 2, y: size.h / 2 };
     if (e.key === "+" || e.key === "=") view = zoomAbout(view, 1.25, c.x, c.y);
@@ -394,10 +494,30 @@
     moved = true;
   }
 
+  /** The folder the screen is in: zoomed in past the whole map, the deepest whose frame holds the screen's middle
+   *  and is most of the screen across. */
+  const inside = $derived.by(() => {
+    if (!L || !size.w || view.k <= whole().k * 1.05) return -1;
+    const u = L.cell * view.k, cx = (size.w / 2 - view.x) / u, cy = (size.h / 2 - view.y) / u;
+    let best = -1;
+    L.items.forEach((n, i) => {
+      if (n.kind !== "folder" || open[i] !== "o" || cx < n.gx || cx > n.gx + n.w || cy < n.gy || cy > n.gy + n.h) return;
+      if ((n.w * u >= 0.6 * size.w || n.h * u >= 0.6 * size.h) && (best < 0 || L.items[best]!.depth < n.depth)) best = i;
+    });
+    return best;
+  });
+  /** Out of the folder the screen is in, to the one holding it (Mobile-Atlas's `↑ out`). */
+  function out(): void {
+    if (!L) return;
+    moved = true;
+    const parent = inside < 0 ? -1 : L.items[inside]!.parent;
+    fly(parent < 0 ? whole() : fit(L.items[parent]!, size.w, size.h, 1.5, L.cell));
+  }
+
   const labels = $derived(view.k >= LABELS_AT);
   const count = $derived(L ? L.items.filter((n) => n.kind === "note" && n.ref.startsWith("@study")).length : 0);
   $effect(() => {
-    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", steps: walk.length - 1, chain, whole: () => { chain = !chain; }, pick: !!pick };
+    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", steps: walk.length - 1, chain, whole: () => { chain = !chain; }, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out };
     return () => { app.atlas = null; };
   });
 </script>
@@ -419,7 +539,7 @@
           <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} onpick={() => enter(f.i)} />
         {/if}
       {/each}
-      <AtlasRoutes k={view.k} {rest} {hot} counts={litCount} />
+      <AtlasRoutes k={view.k} {rest} hot={[...isoHot, ...hot]} counts={litCount} sent={sentLines} />
       {#if labels}
         {#each rest as r (r.key)}
           {#if r.label}<span class="count {r.side}" style="--x:{r.mid[0]};--y:{r.mid[1]}">{r.count}</span>{/if}
@@ -432,10 +552,19 @@
           <AtlasStudyItem item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? "note"} {mark} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {:else}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} step={report.notes[n.item.ref]?.step ?? 0} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} step={report.notes[n.item.ref]?.step ?? 0} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {/if}
       {/each}
+      {#if origin}
+        <div class="asker" class:draft={origin.draft} style="--x:{origin.gx};--y:{origin.gy};--w:{origin.w};--h:{origin.h}">
+          {#if origin.draft}<a class="eph" href={resolve("/draft/[id]", { id: run!.note.slice("@draft/".length) })} aria-label="{origin.title}: your note for Iso"><span class="t">{origin.title}</span></a>{/if}
+          {#if running}
+            <svg class="loader" aria-hidden="true"><path d="M0 1H1000" /></svg>
+            <p class="doing" role="status"><i class="dia" aria-hidden="true"></i>{#if run!.state === "writing"}Iso is writing{:else if reading}Iso is reading <span class="c-gold">{title(reading)}</span>{:else}Iso is thinking{/if}</p>
+          {/if}
+        </div>
+      {/if}
       {#if grasp}
         <div class="grasp" class:on-note={!!grasp.note} style="--x:{grasp.gx};--y:{grasp.gy};--w:{grasp.w};--h:{grasp.h}">
           <svg aria-hidden="true"><rect x="1" y="1" width="100%" height="100%" /></svg>
@@ -443,7 +572,7 @@
         </div>
       {/if}
     </div>
-    {#if grid}<AtlasGrid layout={L} {view} {size} rested={rest.map((r) => r.pts)} {routes} {coarse} {blocks} onhide={() => showGrid(false)} onroutes={nextRoutes} ongrain={() => useCoarse(!coarse)} onlayout={() => useBlocks(!blocks)} />{/if}
+    {#if grid}<AtlasGrid layout={L} {view} {size} rested={rest.map((r) => r.pts)} {routes} {coarse} {blocks} {leaves} onhide={() => showGrid(false)} onroutes={nextRoutes} ongrain={() => useCoarse(!coarse)} onlayout={() => useBlocks(!blocks)} onleaves={() => useLeaves(!leaves)} />{/if}
     {#if pick}
       <AtlasDock title={draft ? titleIn(draft.text) : ""} picked={picked.map((id) => ({ id, title: title(id), tokens: report!.notes[id]?.tokens ?? 0 }))} budget={LINKED_BUDGET} {notice}
         href={resolve("/draft/[id]", { id: pick.slice("@draft/".length) })} />
@@ -467,6 +596,18 @@
   @keyframes march { to { stroke-dashoffset: -5; } }
   @media (prefers-reduced-motion: reduce) { .grasp rect { animation: none; } }
   .notice { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--rose); color: var(--rose); font-size: 12px; z-index: 2; }
+  /* Iso's note while it is answered (Desktop-Think): the draft's block, dotted gold, and under it (or under the
+     note asking) a marching gold line and what Iso is doing. */
+  .asker { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(var(--w) * var(--u)); height: calc(var(--h) * var(--u)); pointer-events: none; z-index: 1; }
+  .eph { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 min(7px, calc(var(--u) * .8)); overflow: hidden; font-size: var(--fs); line-height: 1.2; color: var(--text); text-decoration: none; background: var(--growth-soft); border: 1.5px dotted var(--growth); pointer-events: auto; }
+  .eph .t { display: none; overflow: hidden; -webkit-line-clamp: var(--lines, 2); line-clamp: var(--lines, 2); -webkit-box-orient: vertical; }
+  :global(.atlas-world.labels) .eph .t { display: -webkit-box; }
+  .loader { position: absolute; left: 0; top: calc(100% + 10px); width: 100%; height: 2px; overflow: hidden; }
+  .loader path { stroke: var(--growth); stroke-width: 2.5; stroke-dasharray: 2 3; animation: march .6s linear infinite; }
+  .doing { position: absolute; left: 0; top: calc(100% + 20px); width: max(100%, 240px); margin: 0; font-size: 12px; line-height: 18px; color: var(--text-soft); }
+  .doing .dia { margin: 0 8px 0 3px; }
+  .c-gold { color: var(--growth); }
+  @media (prefers-reduced-motion: reduce) { .loader path { animation: none; } }
   .count { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); font-size: 12px; line-height: 18px; color: var(--text-faint); pointer-events: none; }
   .count.right { transform: translate(7px, -50%); }
   .count.above { transform: translate(-50%, calc(-100% - 3px)); }

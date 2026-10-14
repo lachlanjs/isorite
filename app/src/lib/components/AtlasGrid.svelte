@@ -4,7 +4,7 @@
   import { buildCells, ROUTER_DEFAULTS, type Layout, type Point } from "@isorite/core/atlas";
   import type { View } from "$lib/atlas/geometry.ts";
 
-  let { layout, view, size, rested, routes, coarse, blocks, onhide, onroutes, ongrain, onlayout }: {
+  let { layout, view, size, rested, routes, coarse, blocks, leaves, onhide, onroutes, ongrain, onlayout, onleaves }: {
     layout: Layout;
     view: View;
     size: { w: number; h: number };
@@ -16,10 +16,13 @@
     coarse: boolean;
     /** Whether folders holding folders are placed as blocks, not in layers. */
     blocks: boolean;
+    /** Whether each note's branch to its folder's wall is drawn at rest. */
+    leaves: boolean;
     onhide: () => void;
     onroutes: () => void;
     ongrain: () => void;
     onlayout: () => void;
+    onleaves: () => void;
   } = $props();
 
   /** Below this many pixels a cell, the points are too close to tell apart and are not drawn. */
@@ -104,6 +107,7 @@
   <span>routes: {routes === "highways" ? "highways between linked neighbours" : routes === "gates" ? "through the gates" : "the layout's trunks"} <button class="link" type="button" onclick={onroutes}>[ next · r ]</button></span>
   <span>grid: {coarse ? "coarse, folders further apart" : "fine"} <button class="link" type="button" onclick={ongrain}>[ {coarse ? "fine" : "coarse"} · c ]</button></span>
   <span>layout: {blocks ? "folders as blocks" : "layers"} <button class="link" type="button" onclick={onlayout}>[ {blocks ? "layers" : "blocks"} · b ]</button></span>
+  <span>lines from notes to walls: {leaves ? "drawn" : "not drawn"} <button class="link" type="button" onclick={onleaves}>[ {leaves ? "hide" : "show"} · l ]</button></span>
   <span class="faint">{u < LEAST ? "zoom in to see the points" : under || "point at a cell"}</span>
   <button class="link" type="button" onclick={onhide}>[ hide · g ]</button>
 </div>

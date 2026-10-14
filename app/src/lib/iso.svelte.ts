@@ -219,18 +219,21 @@ export class NoteIso {
     }
   }
 
-  /** Send a note written for Iso, whole. The reply is a note to keep in its place. */
-  async send(): Promise<void> {
-    if (this.asking) return;
+  /** Send a note written for Iso, whole. The reply is a note to keep in its place. Returns the request, or "" when
+   *  it was not sent. */
+  async send(): Promise<string> {
+    if (this.asking) return "";
     this.failed = null;
     this.asking = { request: "", asked: "", line: this.foot, regions: [], text: "", steps: [] };
     try {
       await this.note.save();
       const { request } = await app.api.ask({ note: this.note.id, form: "note", tier: this.tier });
       if (this.asking && !this.asking.request) this.asking = { ...this.asking, request };
+      return request;
     } catch (e) {
       this.asking = null;
       this.failed = { line: this.foot, message: (e as Error).message };
+      return "";
     }
   }
 

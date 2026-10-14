@@ -74,6 +74,14 @@
     await goto(`${resolve("/atlas")}?pick=${encodeURIComponent(id.slice("@draft/".length))}`);
   }
 
+  /** Send it, and watch Iso read on the map (Desktop-Think). The note opens again when Iso is done. */
+  async function send() {
+    const request = await iso.send();
+    if (!request) return;
+    app.watching = request;
+    await goto(resolve("/atlas"));
+  }
+
   async function discard() {
     busy = true;
     try {
@@ -133,7 +141,7 @@
           <button class="link" type="button" onclick={pickOnAtlas}>[ + pick on the atlas ]</button>
         </div>
         <div class="row">
-          <button class="btn primary tall" type="button" disabled={!note.body.trim()} onclick={() => iso.send()}><i class="dia inverse" aria-hidden="true"></i>send to Iso</button>
+          <button class="btn primary tall" type="button" disabled={!note.body.trim()} onclick={send}><i class="dia inverse" aria-hidden="true"></i>send to Iso</button>
           <span class="tiers" role="radiogroup" aria-label="Tier">
             {#each ["low", "mid", "max"] as const as t (t)}<button type="button" role="radio" aria-checked={iso.tier === t} onclick={() => iso.setTier(t)}>{t}</button>{/each}
           </span>

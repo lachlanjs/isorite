@@ -4,21 +4,25 @@
   // line that does not run. Where routes overlap they are one line (geometry's mergeRoutes). At rest, as on the
   // boards, a line between two folders is heavy (3 px) and one inside a folder light (1.5 px), whatever it
   // carries: the count says how many. A lit line is 3 px however many links run along it, as on the boards; one
-  // whose links run both ways stands still.
-  let { k, rest, hot, counts }: {
+  // whose links run both ways stands still. Iso's steps along links are gold, as its lines on Desktop-Think, and a
+  // note for Iso has a blue line to each note it links to.
+  let { k, rest, hot, counts, sent = [] }: {
     /** The zoom: paths are given at zoom 1. */
     k: number;
     /** `strong`: a "requires" runs along it. A route of weaker links only is drawn lighter. `trunk`: between two folders. */
     rest: { key: string; d: string; count: number; study: boolean; strong: boolean; trunk: boolean }[];
-    hot: { key: string; d: string; kind: "requires" | "builds" | "uses"; count: number; still: boolean }[];
+    hot: { key: string; d: string; kind: "requires" | "builds" | "uses" | "iso"; count: number; still: boolean }[];
     /** The lit links of each kind, however their lines merge: said on the layer, for whoever reads it. */
     counts: { requires: number; builds: number; uses: number };
+    /** A note for Iso's lines to the notes it links to. */
+    sent?: { key: string; d: string }[];
   } = $props();
 </script>
 
 <svg class="routes" aria-hidden="true" data-requires={counts.requires} data-builds={counts.builds} data-uses={counts.uses}>
   <g transform="scale({k})">
     {#each rest as r (r.key)}<path class={r.study ? "study" : r.strong ? "base" : "base weak"} class:trunk={r.trunk && !r.study} d={r.d} />{/each}
+    {#each sent as r (r.key)}<path class="sent" d={r.d} />{/each}
     {#each hot as r (r.key)}<path class="lit {r.kind}" class:still={r.still} d={r.d} />{/each}
   </g>
 </svg>
@@ -34,6 +38,8 @@
   .lit { stroke-width: 3px; stroke-dasharray: 7 5; animation: run .7s linear infinite; }
   .requires { stroke: var(--requires); }
   .builds { stroke: var(--builds); }
+  .iso { stroke: var(--growth); stroke-width: 2.5px; } /* as the boards' .au */
+  .sent { stroke: var(--lattice); stroke-width: 2px; } /* as the boards' .me */
   .uses { stroke: var(--text-soft); stroke-width: 1.5px; stroke-dasharray: none; animation: none; }
   @keyframes run { to { stroke-dashoffset: -12; } }
   .still { animation: none; }
