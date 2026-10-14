@@ -54,7 +54,10 @@
     {#if app.session}
       <span>{app.session.study ? "study" : "project: no journal is kept"}</span>
       {#if inNote && app.saving}<span class:bad={app.saving.bad} role="status">{app.saving.text}</span>{/if}
-      {#if app.atlas?.chosen}
+      {#if app.atlas?.pick}
+        <span class="grow"></span>
+        <span class="hint">click a note to link it, again to take it away</span>
+      {:else if app.atlas?.chosen}
         {#if app.atlas.steps}<span>{app.atlas.steps} {app.atlas.steps === 1 ? "step" : "steps"} back</span>{/if}
         <span class="grow"></span>
         <span class="hint">click a note it requires to step back to it, the note again to open it</span>
@@ -63,7 +66,7 @@
         <span>{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span>
         {#if app.atlas.items}<span>{app.atlas.items} study {app.atlas.items === 1 ? "item" : "items"}</span>{/if}
         <span class="grow"></span>
-        <span class="hint">click a note to see what it rests on, again to open it</span>
+        <span class="hint">click a note to see what it rests on · hold on open ground to start a note for Iso, on a note to start from it</span>
       {:else}
         <span class="grow"></span>
         <span>{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span>

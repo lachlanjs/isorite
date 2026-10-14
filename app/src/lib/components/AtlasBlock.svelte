@@ -3,7 +3,7 @@
   // understood); what is lit round it is an outline. It knows nothing of the layout or of Iso.
   import type { LayoutItem } from "@isorite/core/atlas";
 
-  let { item, title, step, mark = "", far = 0, dim = false, href, onpick, onpoint }: {
+  let { item, title, step, mark = "", far = 0, num = 0, dim = false, href, onpick, onpoint }: {
     item: LayoutItem;
     title: string;
     step: 0 | 1 | 2 | 3;
@@ -11,6 +11,8 @@
     mark?: "" | "at" | "req" | "bld" | "use" | "also";
     /** For what it requires: how many steps back. Past the first the outline thins and fades. */
     far?: number;
+    /** Picked for a note for Iso: its place in the order, from 1. */
+    num?: number;
     dim?: boolean;
     href: string;
     onpick: (event: MouseEvent) => void;
@@ -19,11 +21,11 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a class="n s{step} {mark}" class:dim class:far={far > 1} {href} aria-label={title} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%"
+<a class="n s{step} {mark}" class:dim={dim && !num} class:far={far > 1} class:pick={num > 0} {href} aria-label={num ? `${title}: linked, number ${num}` : title} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
-  onfocus={() => onpoint(true)} onblur={() => onpoint(false)}><span class="t">{title}</span></a>
+  onfocus={() => onpoint(true)} onblur={() => onpoint(false)}><span class="t">{title}</span>{#if num}<b class="num">{num}</b>{/if}</a>
 
 <style>
   .n {
@@ -45,5 +47,8 @@
   .use { color: var(--text); outline: 1px solid var(--text-soft); outline-offset: 2px; }
   .also { color: var(--text-soft); outline: 1px dotted var(--text-faint); outline-offset: 2px; }
   .bld { outline-color: var(--builds); }
+  /* Picked (Mobile-Pick): a blue outline and its number at the corner. The number stands outside the block. */
+  .pick { outline: 2px solid var(--lattice); outline-offset: 3px; color: var(--text); overflow: visible; }
+  .num { position: absolute; top: -10px; right: -10px; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; background: var(--lattice); color: var(--ground-0); font-size: 11px; font-weight: 700; z-index: 1; }
   .n:focus-visible { outline: 2px solid var(--lattice); outline-offset: 2px; }
 </style>

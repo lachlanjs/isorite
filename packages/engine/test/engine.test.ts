@@ -169,10 +169,11 @@ test("the map: both bases as one model, each block with its title and where you 
   );
   const map = await engine.map();
   expect(map.notes).toEqual({
-    "basics/entropy": { title: "Entropy", step: 2 },
-    "basics/coding": { title: "Coding", step: 0 },
+    "basics/entropy": { title: "Entropy", step: 2, tokens: expect.any(Number) },
+    "basics/coding": { title: "Coding", step: 0, tokens: expect.any(Number) },
     "@study/basics/a-fair-coin": { title: "A fair coin", step: 0, kind: "written" },
   });
+  expect(map.notes["basics/entropy"]!.tokens).toBeGreaterThan(0); // its size, for the notes linked to a note for Iso
   expect(map.model.edges).toContainEqual(["basics/coding", "basics/entropy", 3]);
   expect(map.model.edges).toContainEqual(["@study/basics/a-fair-coin", "basics/entropy", 2]);
   expect(map.model.root.children.map((c) => c.ref)).toEqual(["basics", "@study/basics"]);

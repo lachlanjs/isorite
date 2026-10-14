@@ -137,3 +137,75 @@ test("a note made while the map is open appears on it", async ({ page }) => {
   expect(made.ok()).toBe(true);
   await expect(note(page, id)).toBeVisible();
 });
+
+/** Press and keep still, as long as starts a note for Iso. */
+async function hold(page: Page, x: number, y: number) {
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await expect(page.locator(".atlas .grasp")).toBeVisible();
+  await page.waitForURL(/#\/draft\//);
+  await page.mouse.up();
+}
+const notesOnDisk = async (page: Page) => ((await (await page.request.get("api/notes")).json()) as { notes: unknown[] }).notes.length;
+
+test("holding on open ground starts a blank note for Iso, on a note one that links it; the base is not touched", async ({ page }) => {
+  await atlas(page);
+  const before = await notesOnDisk(page), box = (await page.locator(".atlas").boundingBox())!;
+  await expect(page.getByText("hold on open ground to start a note for Iso")).toBeAttached();
+
+  // A press that moves is a drag, however long it lasts.
+  await page.mouse.move(box.x + 6, box.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 30, box.y + 20, { steps: 3 });
+  await page.waitForTimeout(900);
+  await page.mouse.up();
+  await expect(page).toHaveURL(/#\/atlas$/);
+
+  await hold(page, box.x + 6, box.y + 6);
+  await expect(page.getByText("for Iso · not in your base yet")).toBeVisible();
+  await expect(page.getByText("no notes yet")).toBeVisible();
+  await page.getByRole("button", { name: "[ discard ]" }).click();
+
+  await atlas(page);
+  const on = (await note(page, "coding/kraft-inequality").boundingBox())!;
+  await hold(page, on.x + on.width / 2, on.y + on.height / 2);
+  await expect(page.locator(".deck .chip")).toHaveText(["Kraft inequality"]);
+  expect(await notesOnDisk(page)).toBe(before);
+  await page.getByRole("button", { name: "[ discard ]" }).click();
+});
+
+test("notes are picked on the map for a note for Iso: numbered in order, sized in the dock, and taken away again", async ({ page }) => {
+  await atlas(page);
+  const box = (await page.locator(".atlas").boundingBox())!;
+  await hold(page, box.x + 6, box.y + 6);
+  await page.getByLabel("Title").fill("Codes, in my words");
+  await page.locator(".cm-content").click();
+  await page.keyboard.type("A code is short where the source is likely.");
+  await page.getByRole("button", { name: "[ + pick on the atlas ]" }).click();
+  await expect(page).toHaveURL(/#\/atlas\?pick=/);
+
+  const dock = page.getByRole("region", { name: "Notes linked to the note for Iso" });
+  await expect(dock).toContainText("Codes, in my words");
+  await expect(dock).toContainText("0 linked");
+  await expect(page.getByText("click a note to link it")).toBeAttached();
+  await note(page, "coding/huffman-codes").click();
+  await note(page, "basics/surprise").click();
+  await expect(note(page, "coding/huffman-codes").locator(".num")).toHaveText("1");
+  await expect(note(page, "basics/surprise").locator(".num")).toHaveText("2");
+  await expect(dock).toContainText(/2 linked · \d+ tokens/);
+  await look(page, "atlas-pick");
+  // A click here links; it neither chooses the note nor opens it.
+  await expect(page).toHaveURL(/#\/atlas\?pick=/);
+  await expect(note(page, "coding/huffman-codes")).not.toHaveClass(/\bat\b/);
+
+  await note(page, "coding/huffman-codes").click();
+  await expect(note(page, "coding/huffman-codes").locator(".num")).toHaveCount(0);
+  await expect(note(page, "basics/surprise").locator(".num")).toHaveText("1");
+  await note(page, "coding/kraft-inequality").click();
+  await expect(dock).toContainText("2 linked");
+
+  await dock.getByRole("link", { name: "back to it" }).click();
+  await expect(page.locator(".deck .chip")).toHaveText(["Surprise", "Kraft inequality"]);
+  await expect(page.locator(".cm-content")).toContainText("A code is short where the source is likely.");
+  await page.getByRole("button", { name: "[ discard ]" }).click();
+});

@@ -67,6 +67,13 @@
     } catch (e) { problem = (e as Error).message; } finally { busy = false; }
   }
 
+  /** To the map, to link notes there. What is written is saved first, so the map adds to it. */
+  async function pickOnAtlas() {
+    await note.save();
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, with what is picked for after it
+    await goto(`${resolve("/atlas")}?pick=${encodeURIComponent(id.slice("@draft/".length))}`);
+  }
+
   async function discard() {
     busy = true;
     try {
@@ -122,7 +129,8 @@
       {#if writing}
         <div class="row">
           <span class="label">linked</span>
-          {#each linked as n (n.id)}<span class="chip lattice">{n.title}</span>{:else}<span class="faint">no notes yet: type [[ in what you write</span>{/each}
+          {#each linked as n (n.id)}<span class="chip lattice">{n.title}</span>{:else}<span class="faint">no notes yet: type [[ in what you write, or</span>{/each}
+          <button class="link" type="button" onclick={pickOnAtlas}>[ + pick on the atlas ]</button>
         </div>
         <div class="row">
           <button class="btn primary tall" type="button" disabled={!note.body.trim()} onclick={() => iso.send()}><i class="dia inverse" aria-hidden="true"></i>send to Iso</button>

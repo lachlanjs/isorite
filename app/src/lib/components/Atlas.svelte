@@ -3,9 +3,12 @@
   // zoom, what is open at this zoom) and what is chosen, and hands each folder, block and route its place and
   // its marks. The marks are plain maps from a note to a mark, looked up while drawing.
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { reach } from "@isorite/core";
   import type { Layout } from "@isorite/core/atlas";
-  import type { MapReport } from "@isorite/engine";
+  import type { MapReport, NoteSource } from "@isorite/engine";
+  import { linkedIn, place, titleIn, withLink, withoutLink } from "$lib/atlas/picks.ts";
+  import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { CELL, LABELS_AT, fit, indexLayout, linePath, litRoutes, openAt, restRoutes, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
@@ -14,6 +17,14 @@
   import AtlasRoutes from "./AtlasRoutes.svelte";
   import AtlasStudyFolder from "./AtlasStudyFolder.svelte";
   import AtlasStudyItem from "./AtlasStudyItem.svelte";
+
+  let { pick = "" }: {
+    /** A note for Iso (`@draft/…`) that notes are being picked for: a click then links a note to it. */
+    pick?: string;
+  } = $props();
+
+  /** The most of the linked notes that is sent with a note for Iso (the engine's LINKED_BUDGET). */
+  const LINKED_BUDGET = 8000;
 
   let report = $state.raw<MapReport | null>(null);
   let laid = $state.raw<{ key: string; layout: Layout } | null>(null);
@@ -77,7 +88,7 @@
 
   // What is lit: the note chosen, or with none chosen the one pointed at. Its own links are drawn, one step each
   // way; the rest of what it requires is outlined, fainter the further back, and drawn only when asked for.
-  const at = $derived(chosen || pointed);
+  const at = $derived(pick ? "" : chosen || pointed); // while notes are picked, the marks are the picks alone
   const lit = $derived(at && report && idx?.at.has(at) ? reach(report.model, at) : null);
   type Mark = "at" | "req" | "bld" | "use" | "also";
   const marks = $derived.by(() => {
@@ -135,6 +146,65 @@
     return () => { stale = true; };
   });
 
+  // ------------------------------------------------------------ notes picked for a note for Iso
+
+  let draft = $state.raw<NoteSource | null>(null);
+  let notice = $state("");
+  $effect(() => {
+    draft = null; notice = "";
+    if (!pick) return;
+    let stale = false;
+    app.api.readNote(pick).then((d) => { if (!stale) draft = d; }, () => { if (!stale) notice = "that note for Iso is not here any more"; });
+    return () => { stale = true; };
+  });
+  const picked = $derived(draft ? linkedIn(draft.text).filter((id) => report?.notes[id] && !id.startsWith("@")) : []);
+  let writing: Promise<void> = Promise.resolve();
+  /** Link a note to the draft, or take away a link picked here. One at a time, each on the file as the last left it. */
+  function toggle(ref: string): void {
+    writing = writing.then(async () => {
+      if (!draft || ref.startsWith("@")) return;
+      const change = (text: string): string | null => (linkedIn(text).includes(ref) ? withoutLink(text, ref) : withLink(text, ref, title(ref)));
+      const next = change(draft.text);
+      if (next === null) { notice = "linked in what you wrote: take it out there"; return; }
+      notice = "";
+      try { draft = await app.api.saveNote(pick, { base: draft.version, text: next }); }
+      catch {
+        // It changed under us (the draft's own page was still saving): once more, on what is there now.
+        try {
+          const now = await app.api.readNote(pick), again = change(now.text);
+          draft = again === null ? now : await app.api.saveNote(pick, { base: now.version, text: again });
+        } catch (e) { notice = `not linked: ${(e as Error).message}`; }
+      }
+    });
+  }
+
+  // ------------------------------------------------------------ holding, to start a note for Iso
+
+  const HOLD_SHOWN = 180, HOLD = 650;
+  /** What is held: a note, or a place on open ground (in cells). Shown as a marching box until the note is made. */
+  let grasp = $state.raw<{ note: string; gx: number; gy: number; w: number; h: number } | null>(null);
+  let holdShow: ReturnType<typeof setTimeout> | undefined, holdDone: ReturnType<typeof setTimeout> | undefined;
+  function unhold(): void { clearTimeout(holdShow); clearTimeout(holdDone); holdShow = holdDone = undefined; grasp = null; }
+  function holding(e: PointerEvent, at: { x: number; y: number }): void {
+    unhold();
+    if (pick || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock")) return;
+    const on = e.target.closest<HTMLElement>("[data-note]")?.dataset.note ?? "";
+    if (on.startsWith("@")) return; // a study item is not a note to start from
+    const item = on ? L.items[idx.at.get(on) ?? -1] : undefined, u = CELL * view.k;
+    const what = item ? { note: on, gx: item.gx, gy: item.gy, w: item.w, h: item.h } : { note: "", gx: Math.round((at.x - view.x) / u) - 9, gy: Math.round((at.y - view.y) / u) - 3, w: 18, h: 5 };
+    holdShow = setTimeout(() => { grasp = what; }, HOLD_SHOWN);
+    holdDone = setTimeout(() => { dragged = true; void begin(what); }, HOLD);
+  }
+  /** A note for Iso, begun where the map was held: blank, or linking the note held. It opens as any does. */
+  async function begin(what: { note: string; gx: number; gy: number }): Promise<void> {
+    try {
+      const made = await app.api.createDraft();
+      if (what.note) await app.api.saveNote(made.id, { base: made.version, text: withLink(made.text, what.note, title(what.note)) });
+      place(made.id, { gx: what.gx, gy: what.gy });
+      await goto(resolve("/draft/[id]", { id: made.id.slice("@draft/".length) }));
+    } catch (e) { notice = (e as Error).message; unhold(); }
+  }
+
   const title = (ref: string): string => report?.notes[ref]?.title ?? ref.split("/").at(-1) ?? ref;
   const folderName = (ref: string): string => (ref.startsWith("@study") ? ref.replace(/^@study\/?/, "").split("/").at(-1) || app.session?.name || "the base" : ref.split("/").at(-1) ?? ref);
 
@@ -175,6 +245,7 @@
     if (!pointers.size) dragged = false;
     pointers.set(e.pointerId, local(e));
     regrip();
+    if (pointers.size === 1) holding(e, local(e)); else unhold();
   }
   function move(e: PointerEvent): void {
     if (!pointers.has(e.pointerId) || !grip) return;
@@ -182,13 +253,14 @@
     const ps = [...pointers.values()];
     const x = ps.reduce((s, p) => s + p.x, 0) / ps.length, y = ps.reduce((s, p) => s + p.y, 0) / ps.length;
     if (!dragged && ps.length === 1 && Math.hypot(x - grip.x, y - grip.y) < 5) return;
-    if (!dragged) { dragged = moved = true; viewport!.setPointerCapture(e.pointerId); }
+    if (!dragged) { dragged = moved = true; unhold(); viewport!.setPointerCapture(e.pointerId); }
     const span = ps.length > 1 ? Math.hypot(ps[0]!.x - ps[1]!.x, ps[0]!.y - ps[1]!.y) : 0;
     const zoomed = grip.span && span ? zoomAbout(grip.view, span / grip.span, grip.x, grip.y) : grip.view;
     view = { k: zoomed.k, x: zoomed.x + x - grip.x, y: zoomed.y + y - grip.y };
   }
   function up(e: PointerEvent): void {
     if (!pointers.delete(e.pointerId)) return;
+    if (holdDone !== undefined) unhold(); // let go before the note was made
     regrip();
   }
   function wheel(e: WheelEvent): void {
@@ -209,11 +281,12 @@
 
   /** A click on a note chooses it; on the chosen note, opens it. On a note the chosen one requires it steps
    *  back to it, the way there kept; on one already walked, returns to it. */
-  function pick(e: MouseEvent, ref: string): void {
+  function choose(e: MouseEvent, ref: string): void {
     if (e.metaKey || e.ctrlKey || e.shiftKey) return; // a new tab is the browser's
     e.preventDefault();
     e.stopPropagation();
     if (dragged) return;
+    if (pick) { toggle(ref); return; }
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
     if (chosen === ref) { void goto(noteHref(ref)); return; }
     const back: string[] = [];
@@ -230,7 +303,7 @@
   }
   /** A click on open ground lets go of the note chosen, or else steps out to the whole map. */
   function ground(e: MouseEvent): void {
-    if (dragged || !(e.target instanceof Element)) return;
+    if (dragged || !(e.target instanceof Element) || e.target.closest(".dock")) return;
     const folder = e.target.closest<HTMLElement>("[data-folder]");
     if (e.target.closest("a, button")) return;
     if (chosen) walk = [];
@@ -257,7 +330,7 @@
   const labels = $derived(view.k >= LABELS_AT);
   const count = $derived(L ? L.items.filter((n) => n.kind === "note" && n.ref.startsWith("@study")).length : 0);
   $effect(() => {
-    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", steps: walk.length - 1, chain, whole: () => { chain = !chain; } };
+    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", steps: walk.length - 1, chain, whole: () => { chain = !chain; }, pick: !!pick };
     return () => { app.atlas = null; };
   });
 </script>
@@ -265,7 +338,8 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div class="atlas dots" class:lit={!!lit} bind:this={viewport} role="application" aria-label="The atlas: the map of the base" tabindex="0"
   style="background-position: {view.x}px {view.y}px"
-  onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onclick={ground} onkeydown={key}>
+  onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onclick={ground} onkeydown={key}
+  oncontextmenu={(e) => { if (grasp || holdShow !== undefined) e.preventDefault(); }}>
   {#if failed}
     <p class="said">The map could not be drawn: {failed}</p>
   {:else if L && report}
@@ -289,13 +363,25 @@
         {@const mark = m?.mark ?? ""}
         {#if n.item.ref.startsWith("@study")}
           <AtlasStudyItem item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? "note"} {mark} dim={!!lit && !mark} href={noteHref(n.item.ref)}
-            onpick={(e) => pick(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
+            onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {:else}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} step={report.notes[n.item.ref]?.step ?? 0} {mark} far={m?.far ?? 0} dim={!!lit && !mark} href={noteHref(n.item.ref)}
-            onpick={(e) => pick(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
+          <AtlasBlock item={n.item} title={title(n.item.ref)} step={report.notes[n.item.ref]?.step ?? 0} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+            onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {/if}
       {/each}
+      {#if grasp}
+        <div class="grasp" class:on-note={!!grasp.note} style="--x:{grasp.gx};--y:{grasp.gy};--w:{grasp.w};--h:{grasp.h}">
+          <svg aria-hidden="true"><rect x="1" y="1" width="100%" height="100%" /></svg>
+          {#if !grasp.note && labels}<span><i class="dia" aria-hidden="true"></i>a new note</span>{/if}
+        </div>
+      {/if}
     </div>
+    {#if pick}
+      <AtlasDock title={draft ? titleIn(draft.text) : ""} picked={picked.map((id) => ({ id, title: title(id), tokens: report!.notes[id]?.tokens ?? 0 }))} budget={LINKED_BUDGET} {notice}
+        href={resolve("/draft/[id]", { id: pick.slice("@draft/".length) })} />
+    {:else if notice}
+      <p class="notice" role="alert">{notice}</p>
+    {/if}
   {/if}
 </div>
 
@@ -304,5 +390,14 @@
   .atlas:active { cursor: grabbing; }
   .atlas-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
   .said { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-4); text-align: center; }
+  /* What is held, until its note is made: a gold box whose dots march (Desktop-Atlas). */
+  .grasp { position: absolute; left: calc(var(--x) * var(--u) - 4px); top: calc(var(--y) * var(--u) - 4px); width: calc(var(--w) * var(--u) + 8px); height: calc(var(--h) * var(--u) + 8px); display: flex; align-items: center; padding: 0 12px; gap: 8px; font-size: 11px; pointer-events: none; z-index: 1; }
+  .grasp svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .grasp rect { width: calc(100% - 2px); height: calc(100% - 2px); fill: var(--growth-soft); stroke: var(--growth); stroke-width: 2; stroke-dasharray: 2 3; animation: march .6s linear infinite; }
+  .grasp.on-note rect { fill: none; }
+  .grasp span { position: relative; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  @keyframes march { to { stroke-dashoffset: -5; } }
+  @media (prefers-reduced-motion: reduce) { .grasp rect { animation: none; } }
+  .notice { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--rose); color: var(--rose); font-size: 12px; z-index: 2; }
   .count { position: absolute; left: calc(var(--x) * var(--u) + 8px); top: calc(var(--y) * var(--u) - 9px); font-size: 12px; line-height: 18px; color: var(--text-faint); pointer-events: none; }
 </style>

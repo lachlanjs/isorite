@@ -160,7 +160,7 @@ export class Engine implements Api {
     const records = study ? await Promise.all((await study.list("record")).filter((f) => !f.dir && f.name.endsWith(".jsonl")).map(async (f) => readRecord((await study.read(`record/${f.name}`)) ?? ""))) : [];
     const read = understanding(mergeRecords(...records), this.opts.clock.now());
     const notes: MapReport["notes"] = {};
-    for (const c of this.bundle.concepts.values()) notes[c.id] = { title: c.title, step: read.get(c.id)?.step ?? 0 };
+    for (const c of this.bundle.concepts.values()) notes[c.id] = { title: c.title, step: read.get(c.id)?.step ?? 0, tokens: estimate(c.body.trim()) };
     for (const c of exercises?.concepts.values() ?? []) notes[studyId(c.id)] = { title: c.title, step: 0, kind: plain(c.meta.kind ?? "") || "note" };
     return { model: mapModel(this.bundle, exercises), notes };
   }
