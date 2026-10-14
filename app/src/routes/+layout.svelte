@@ -98,6 +98,8 @@
   /* Out of a folder, and stopping Iso from the header, are the phone's (Mobile-Atlas, Mobile-Think): on a desktop
      a click on open ground steps out, and the status line has [ stop ]. */
   @media (min-width: 601px) { .bar .out, .bar .where, .bar .stop { display: none; } }
+  /* In a folder, a phone's header names the folder, not the base (Mobile-Atlas). */
+  @media (max-width: 600px) { .bar:has(.where) .path { display: none; } }
   .bad { color: var(--rose); }
   .stopped { padding: var(--space-12) var(--space-4); text-align: center; color: var(--rose); }
 </style>

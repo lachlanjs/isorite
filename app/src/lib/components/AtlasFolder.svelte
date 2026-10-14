@@ -3,12 +3,14 @@
   // a single block that says how many notes it holds.
   import type { LayoutItem } from "@isorite/core/atlas";
 
-  let { item, name, count, open, held = { req: 0, bld: 0 }, dim = false, onpick }: {
+  let { item, name, count, open, titled = true, held = { req: 0, bld: 0 }, dim = false, onpick }: {
     item: LayoutItem;
     name: string;
     /** The notes in it, however deep. */
     count: number;
     open: boolean;
+    /** Open, whether its name is written in its top edge: not where it would run into the name of the folder it is in. */
+    titled?: boolean;
     /** With a note chosen elsewhere: how many notes in here it requires, and how many build on it. */
     held?: { req: number; bld: number };
     dim?: boolean;
@@ -25,7 +27,7 @@
 
 {#if open}
   <div class="folder frame {tone}" data-folder={item.ref} style="{place};--inside:{inside};--behind:{behind};--ground-here:{inside}">
-    <button class="frame-title" type="button" onclick={onpick}>{name}</button>
+    {#if titled}<button class="frame-title" type="button" onclick={onpick}>{name}</button>{/if}
     {#if says}<span class="frame-title held">{says}</span>{/if}
   </div>
 {:else}
