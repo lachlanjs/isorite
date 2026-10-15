@@ -81,7 +81,8 @@ export type AskRequest =
 export interface DraftSummary { id: string; title: string; exercise?: true }
 
 /** One thing that moved a note's understanding: an attempt, with what Iso judged and why, or your wind back. */
-export interface Evidence { id: string; at: string; event: "attempt" | "wind-back"; by: number; why?: string; exercise?: string; result?: Result }
+/** `marks` names the marking's entry in the exercise's journal. */
+export interface Evidence { id: string; at: string; event: "attempt" | "wind-back"; by: number; why?: string; exercise?: string; result?: Result; marks?: string }
 
 /** What the study page and the squares read. */
 export interface StudyReport {

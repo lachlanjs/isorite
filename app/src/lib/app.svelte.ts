@@ -19,6 +19,11 @@ class AppState {
   saving = $state<{ text: string; bad: boolean } | null>(null);
   /** The Atlas, while it is the page: how many study items it shows, for the status line. */
   atlas = $state.raw<{ items: number; chosen: string; steps: number; chain: boolean; whole: () => void; pick: boolean; here: string; out: () => void } | null>(null);
+  /** An exercise, while one is open: what the header shows of it (Study-Written): its kind, the squares for what it
+   *  tests, whether they flash, and the two things done from there. */
+  exercise = $state.raw<{ kind: string; squares: number; due: boolean; flash: number; windBack: () => void; why: () => void; next: string | null } | null>(null);
+  /** A hint for the status line from the page, when it has one. */
+  hint = $state("");
   /** Iso's latest request, from any page or tab, as the Atlas draws its path: the note asking, each step, and how
    *  it ended. It stays until the next request, or until the Atlas lets it go. */
   iso = $state.raw<IsoRun | null>(null);

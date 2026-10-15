@@ -722,7 +722,7 @@ export class Engine implements Api {
       if (!e) return [];
       if (e.event === "wind-back") return [{ id, at: String(e.at), event: "wind-back", by: -1 }];
       const move = (e.moves as Record<string, { by?: unknown; why?: unknown }> | undefined)?.[note];
-      return [{ id, at: String(e.at), event: "attempt", by: typeof move?.by === "number" ? move.by : 0, ...(typeof move?.why === "string" && move.why ? { why: move.why } : {}), ...(typeof e.exercise === "string" ? { exercise: studyId(e.exercise) } : {}), ...(typeof e.result === "string" ? { result: e.result as Evidence["result"] } : {}) }];
+      return [{ id, at: String(e.at), event: "attempt", by: typeof move?.by === "number" ? move.by : 0, ...(typeof move?.why === "string" && move.why ? { why: move.why } : {}), ...(typeof e.exercise === "string" ? { exercise: studyId(e.exercise) } : {}), ...(typeof e.result === "string" ? { result: e.result as Evidence["result"] } : {}), ...(typeof e.marks === "string" ? { marks: e.marks } : {}) }];
     });
     const notes: StudyReport["notes"] = {};
     for (const [note, u] of read) notes[note] = { level: u.level, squares: u.squares, step: u.step, due: u.due, evidence: evidence(note, u) };

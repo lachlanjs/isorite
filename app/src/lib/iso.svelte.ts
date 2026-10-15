@@ -31,7 +31,8 @@ function remembered(): Tier {
 
 export class NoteIso {
   private readonly note: NoteSession;
-  private entries = $state.raw<Entry[]>([]);
+  /** The note's journal, oldest first, as it grows. */
+  entries = $state.raw<Entry[]>([]);
   prompt = $state.raw<Prompt | null>(null);
   asking = $state.raw<Asking | null>(null);
   /** Why the last request came to nothing. */

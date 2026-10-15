@@ -15,8 +15,8 @@
   let menu = $state(false);
 
   const VIEWS = [["atlas", resolve("/atlas")], ["notes", resolve("/notes")], ["study", resolve("/study")]] as const;
-  // A note belongs to notes; the parts page to nothing.
-  const view = $derived(page.route.id === "/atlas" ? "atlas" : page.route.id === "/study" ? "study" : page.route.id === "/parts" ? "" : "notes");
+  // A note belongs to notes, an exercise to study; the parts page to nothing.
+  const view = $derived(page.route.id === "/atlas" ? "atlas" : page.route.id === "/study" || app.exercise ? "study" : page.route.id === "/parts" ? "" : "notes");
   const inNote = $derived(page.route.id === "/n/[...id]" || page.route.id === "/draft/[id]");
   // Iso's request as the map shows it: running, or how it ended until the map lets it go.
   const run = $derived(app.atlas && !app.atlas.pick ? app.iso : null);
@@ -30,7 +30,7 @@
 <div class="shell">
   <header class="bar">
     <button class="home" class:in-note={inNote} type="button" aria-label="isorite: settings" aria-haspopup="dialog" aria-expanded={menu} onclick={() => (menu = !menu)}><Logo /></button>
-    {#if inNote && app.session}<a class="back" href={resolve("/notes")}>‹ {app.session.name}</a>{/if}
+    {#if inNote && app.session}{#if app.exercise}<a class="back" href={resolve("/study")}>‹ study</a>{:else}<a class="back" href={resolve("/notes")}>‹ {app.session.name}</a>{/if}{/if}
     <span class="path" class:in-note={inNote}>
       {#if app.session}
         <a href={resolve("/notes")}>{app.session.name}</a>{#if inNote && app.here}<span class="faint sep">/</span>{app.here}{/if}
@@ -39,6 +39,14 @@
     <span class="grow"></span>
     {#if app.atlas?.here}<span class="where soft">{app.atlas.here}</span><button class="btn out" type="button" onclick={app.atlas.out}>↑ out</button>{/if}
     {#if running}<button class="btn stop" type="button" onclick={stop}>stop</button>{/if}
+    {#if app.exercise}
+      {@const x = app.exercise}
+      <!-- An exercise (Study-Written): its kind, Iso's read of you as six squares, wind back, and the next if it names one. -->
+      <span class="label kind">{x.kind}</span><span class="faint dot">·</span><span class="label read">Iso's read of you</span>
+      {#key x.flash}<button class="squares" class:flash={x.flash > 0} type="button" aria-label="understanding {x.squares} of 6{x.due ? ', due' : ''}: why" onclick={x.why}>{#each [0, 1, 2, 3, 4, 5] as k (k)}<i class="pip" class:lv={k < x.squares}></i>{/each}</button>{/key}
+      <button class="link wind" type="button" onclick={x.windBack}>[ wind back ]</button>
+      {#if x.next}<a class="next" href={resolve("/n/[...id]", { id: x.next })}>next</a>{/if}
+    {/if}
     {#if !app.error}<ContextCount />{/if}
     <nav class="switch" aria-label="Views">
       {#each VIEWS as [name, href] (name)}
@@ -61,6 +69,7 @@
     {#if app.session}
       <span>{app.session.study ? "study" : "project: no journal is kept"}</span>
       {#if inNote && app.saving}<span class:bad={app.saving.bad} role="status">{app.saving.text}</span>{/if}
+      {#if inNote && app.hint && !run}<span class="grow"></span><span class="hint">{app.hint}</span>{/if}
       {#if run && (running || !app.atlas?.chosen)}
         <span class="grow"></span>
         {#if running}
@@ -101,5 +110,12 @@
   /* In a folder, a phone's header names the folder, not the base (Mobile-Atlas). */
   @media (max-width: 600px) { .bar:has(.where) .path { display: none; } }
   .bad { color: var(--rose); }
+  .squares { display: inline-flex; gap: 4px; background: none; border: 0; padding: 6px 2px; cursor: pointer; }
+  .squares.flash { animation: flash 900ms ease-out; }
+  @keyframes flash { 0% { box-shadow: 0 0 0 0 var(--malachite); background: var(--malachite-soft); } 100% { box-shadow: 0 0 0 10px transparent; background: none; } }
+  .bar .kind, .bar .read, .bar .dot { white-space: nowrap; }
+  .bar .next { white-space: nowrap; }
+  /* On a phone an exercise's header is its kind and the squares (Mobile-Study): wind back is in the squares' panel. */
+  @media (max-width: 600px) { .bar .read, .bar .dot, .bar .wind, .bar:has(.squares) :global(.count), .bar:has(.squares) .path { display: none; } }
   .stopped { padding: var(--space-12) var(--space-4); text-align: center; color: var(--rose); }
 </style>

@@ -7,13 +7,16 @@
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { createEditor, setText, type Where } from "$lib/editor/codemirror.ts";
   import { setMarks, setOverlays, type Inline, type Mark, type Overlay } from "$lib/editor/overlays.ts";
+  import type { ExerciseState } from "$lib/exercise.svelte.ts";
   import type { NoteIso } from "$lib/iso.svelte.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
   import IsoBlock from "./IsoBlock.svelte";
   import IsoChange from "./IsoChange.svelte";
+  import ExerciseTag from "./ExerciseTag.svelte";
 
   // Without `iso` (a note written for Iso) there is no prompt line and nothing is laid over the text.
-  let { note, iso, source }: { note: NoteSession; iso?: NoteIso; source: boolean } = $props();
+  // With `exercise`, the question, the working's heading, the answer and Iso's marks are drawn over the text too.
+  let { note, iso, exercise, source }: { note: NoteSession; iso?: NoteIso; exercise?: ExerciseState; source: boolean } = $props();
 
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
@@ -26,10 +29,33 @@
   const laid = $derived.by((): { blocks: Overlay[]; marks: Mark[]; inline: Inline[] } => {
     if (!iso) return { blocks: [], marks: [], inline: [] };
     const within = (kind: Mark["kind"]) => (s: { from: number; to: number }): Mark => ({ kind, from: s.from - head.chars, to: s.to - head.chars });
+    const ex: Mark[] = [], tags: Inline[] = [];
+    if (exercise?.is && !source) {
+      const text = note.text;
+      // The working's heading, and above it the question, from the end of the frontmatter.
+      const h = /^##[ \t]+Working[ \t]*$/m.exec(text.slice(head.chars));
+      const hFrom = h ? head.chars + h.index : text.length;
+      const q = text.slice(head.chars, hFrom);
+      const qFrom = head.chars + (q.length - q.trimStart().length), qTo = head.chars + q.trimEnd().length;
+      if (qTo > qFrom) ex.push(within("question")({ from: qFrom, to: qTo }));
+      if (h) {
+        const end = hFrom + h[0].length;
+        ex.push(within("working")({ from: text.indexOf("Working", hFrom), to: end }));
+        tags.push({ key: "x:head", at: end - head.chars });
+      }
+      for (const [k, m] of exercise.marks.entries()) {
+        ex.push(within(m.mark)(m));
+        if (m.mark === "wrong") tags.push({ key: `x:wrong:${k}`, at: m.to - head.chars });
+      }
+      // Once a marking covers the answer, its mark is what shows (Mobile-Study); "your answer" still says which it is.
+      const a = exercise.answerAt, covered = a && exercise.marks.some((m) => m.from <= a.from && a.to <= m.to);
+      if (a && !covered) ex.push(within("answer")(a));
+      if (a) tags.push({ key: "x:answer", at: a.to - head.chars });
+    }
     return {
       blocks: iso.layout.blocks.map((b) => ({ key: b.key, line: Math.max(0, b.line - head.lines) })).sort((a, b) => a.line - b.line),
-      marks: [...iso.layout.picked.map(within("picked")), ...iso.layout.old.map(within("old"))].filter((m) => m.to > 0),
-      inline: iso.layout.inline.map((i) => ({ key: i.key, at: i.at - head.chars })).filter((i) => i.at >= 0),
+      marks: [...iso.layout.picked.map(within("picked")), ...iso.layout.old.map(within("old")), ...ex].filter((m) => m.to > 0),
+      inline: [...iso.layout.inline.map((i) => ({ key: i.key, at: i.at - head.chars })), ...tags].filter((i) => i.at >= 0),
     };
   });
 
@@ -52,7 +78,9 @@
         onPick: (ranges: { from: number; to: number }[]) => iso.pick(ranges.map((r) => ({ from: r.from + head.chars, to: r.to + head.chars }))),
         onUnpick: (at: number) => iso.unpick(at + head.chars),
         mountOverlay: (el: HTMLElement, key: string) => {
-          const piece = mount(key.startsWith("r:") ? IsoChange : IsoBlock, { target: el, props: { iso, key } }); // "r:…" is one change of a rewrite
+          // "x:…" is a label of the exercise's; "r:…" one change of a rewrite.
+          if (key.startsWith("x:") && exercise) { const tag = mount(ExerciseTag, { target: el, props: { exercise, key } }); return () => { void unmount(tag); }; }
+          const piece = mount(key.startsWith("r:") ? IsoChange : IsoBlock, { target: el, props: { iso, key } });
           return () => { void unmount(piece); };
         },
       } : { placeholder: "Write what you understand, what you do not, and what you want from Iso. [[ links a note it should rest on." }),
