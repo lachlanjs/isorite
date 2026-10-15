@@ -115,10 +115,12 @@ export class NoteIso {
     }
     if (e.type === "note-changed" || e.type === "record" || e.note !== this.note.id) return;
     if (e.type === "iso-start") {
+      // A marking is shown by the exercise's own page, not as Iso's text in the note.
+      if (e.place.form === "mark" || e.place.form === "exercise") return;
       // Sent from here: the block is up already and now learns its request's id. Sent from another tab: it is put up.
       if (this.asking && !this.asking.request) { this.asking = { ...this.asking, request: e.request }; return; }
       let line = this.foot;
-      if (e.place.form !== "note") {
+      if (e.place.form === "insert" || e.place.form === "rewrite") {
         const at = locate(this.note.text, { form: "insert", after: e.place.after, before: e.place.before } as Proposal);
         if (at?.form === "insert") line = at.line;
       }

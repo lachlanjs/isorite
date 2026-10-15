@@ -326,3 +326,158 @@ export function replyText(reply: string): string {
   if (fenced) text = fenced[1]!;
   return text.trim();
 }
+
+// ------------------------------------------------------------ exercises
+
+/** The marks round the answer in a working sent for marking. Not part of the exercise. */
+export const ANSWER_OPEN = "⟦answer⟧", ANSWER_CLOSE = "⟦/answer⟧";
+
+const WHO_STUDY = `You are Iso, the companion in isorite, an app for understanding a subject by
+writing it down. The person keeps a knowledge base of Markdown notes, and
+beside it a study base of exercises on those notes.`;
+
+const MARK = `# What to do
+
+They have attempted an exercise and sent it for marking. Their working is
+below; the part they chose as their answer is between ${ANSWER_OPEN} and ${ANSWER_CLOSE}.
+
+Reply with one JSON object and nothing else:
+
+{"result": "right",
+ "marks": [{"quote": "exact words from the working", "mark": "right"},
+           {"quote": "exact words from the working", "mark": "wrong"}],
+ "moves": {"the/note-id": {"by": 0.5, "why": "one plain sentence"}}}
+
+- "result" is "right", "partly" or "wrong": whether the answer answers the
+  question, read in the light of the working.
+- "marks": passages of the working, each quoted exactly, word for word, and
+  marked "right" or "wrong". Mark what decides the attempt: every step that
+  is wrong, and the steps that are right and carry the argument. Quote a
+  whole step: a sentence, an equation, a line of working. Never quote the
+  question, the answer marks themselves, or anything outside the working.
+  Leave unmarked what neither helps nor harms. There may be no marks.
+- "moves": one for each note under "What it tests", by the note's id as
+  given there, and for no other note. "by" is how far this attempt is
+  evidence that their understanding of that note differs from what their
+  squares show, in squares out of six: one of -1, -0.5, 0, 0.5, 1.
+  - 1: clear evidence, unaided, of understanding past their squares.
+  - 0.5: some evidence of it: right, but with help, or on a point the note
+    only partly turns on.
+  - 0: no change. Also for a right answer at a level their squares already
+    show, and for one reached only with a great deal of help.
+  - -0.5 and -1: evidence they understand it less well than their squares
+    show.
+  Weigh three things: how accurate the attempt is; how much help it needed
+  (the prompts they asked in this exercise, and your answers, are under
+  "Help they asked for"); and how closely the note bears on the exercise. A
+  note the exercise only touches moves less than the one it is about.
+  "why" is one plain sentence, to them, saying what decided the move.
+- Say nothing else: no comment, no hint, no correction beyond the marks.
+  They will ask in the exercise if they want more.`;
+
+const EXERCISE = `# What to write
+
+They want an exercise, a written response: one question that they answer by
+working it out in writing, in the exercise itself, and then choose part of
+their working as the answer.
+
+Reply with the exercise and nothing else:
+
+# a short title, in lower case, as a note's title is written
+
+The question, as a paragraph or a few.
+
+- Test the notes under "What it is to test", as their notes have it: their
+  notation, their level, their terms. The base is theirs and may be small;
+  where it does not cover what a good question needs, stay close to it.
+- One question, with one answer that can be judged right or wrong. A few
+  lines to a page of working; ten to thirty minutes.
+- Do not give the answer, hints, the working or a model solution.
+- Do not repeat an exercise already listed under "Exercises already there".
+- Maths is LaTeX between dollar signs, as in their notes. No HTML.
+- If they say what they want, follow it.`;
+
+/** The help asked for in an exercise since it was last marked: each prompt, what Iso wrote, and what became of it. */
+export function helpSince(entries: readonly Entry[]): { text: string; count: number } {
+  const since = entries.filter((e) => e.kind === "marks").at(-1)?.id ?? "";
+  const open = new Set(pending(entries).map((p) => p.id));
+  const fate = new Map(moments(entries).filter((m) => m.asked !== undefined).map((m) => [m.ids[0]!, m.what]));
+  const out: string[] = [];
+  for (const e of entries) {
+    if (e.kind !== "proposal" || e.id <= since) continue;
+    const text = e.form === "insert" ? e.text : e.regions.map((r) => `${r.old.text.trim()}\n→ ${r.new.trim() || "(taken out)"}`).join("\n\n");
+    const became = open.has(e.id) ? "Not kept yet." : fate.get(e.id) === "kept" ? "They kept it in the exercise." : "They removed it.";
+    out.push(`They asked: ${e.asked}\n\nYou wrote:\n\n${text}\n\n${became}`);
+  }
+  return { text: out.join("\n\n---\n\n"), count: out.length };
+}
+
+/** A note an exercise tests, as it is sent: whole, with its squares now. */
+export interface Tested { id: string; title: string; text: string; squares: number }
+
+const testedText = (tested: readonly Tested[]): string =>
+  tested.map((t) => `## ${t.title} (id: ${t.id}; their squares now: ${t.squares} of 6)\n\n${t.text}`).join("\n\n");
+
+export interface AskedMark {
+  title: string;
+  question: string;
+  /** The working, with the answer between its marks (or without them, to count what would be sent). */
+  working: string;
+  tested: Tested[];
+  help: { text: string; count: number };
+}
+
+/** The messages for marking an exercise. No tools: what is sent is all Iso has. */
+export function markMessages(a: AskedMark): { messages: Message[]; parts: Part[] } {
+  const system = [WHO_STUDY, MARK].join("\n\n");
+  const tested = `# What it tests\n\n${testedText(a.tested)}`;
+  const help = `# Help they asked for in this exercise since it was last marked\n\n${a.help.text || "None."}`;
+  const exercise = `# The exercise: ${a.title}\n\n${a.question}\n\n# Their working\n\n${a.working.trim() || "(empty)"}`;
+  return {
+    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [tested, help, exercise].join("\n\n") }],
+    parts: [
+      { name: "instructions and tools", detail: "no tools", tokens: estimate(system) },
+      { name: "study record", detail: `${a.tested.length} ${a.tested.length === 1 ? "note's" : "notes'"} squares`, tokens: 0 },
+      { name: "your prompts and Iso's answers", detail: a.help.count ? `${a.help.count} in this exercise` : "", tokens: a.help.count ? estimate(help) : 0 },
+      { name: "this note", detail: a.title, tokens: estimate(exercise) },
+      { name: "linked notes", detail: `${a.tested.length} tested, sent whole`, tokens: estimate(tested) },
+    ],
+  };
+}
+
+export interface AskedExercise {
+  /** What they wrote they want, or "". */
+  asked: string;
+  folder: string;
+  tested: Tested[];
+  /** Exercises already in the folder on the same notes: title and question. */
+  existing: { title: string; question: string }[];
+  /** The exercise this one is to follow, if any. */
+  after: { title: string; question: string } | null;
+}
+
+/** The messages for writing an exercise. No tools. */
+export function exerciseMessages(a: AskedExercise): { messages: Message[]; parts: Part[] } {
+  const system = [WHO_STUDY, EXERCISE].join("\n\n");
+  const tested = `# What it is to test\n\n${testedText(a.tested)}`;
+  const there = a.existing.length ? `# Exercises already there\n\n${a.existing.map((e) => `## ${e.title}\n\n${e.question}`).join("\n\n")}` : "";
+  const after = a.after ? `# The exercise it follows\n\nIt comes next after this one, so it may build on it.\n\n## ${a.after.title}\n\n${a.after.question}` : "";
+  const request = `# What they ask\n\n${a.asked.trim() || `An exercise on ${a.tested.map((t) => t.title).join(" and ")}.`}`;
+  return {
+    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [tested, there, after, request].filter(Boolean).join("\n\n") }],
+    parts: [
+      { name: "instructions and tools", detail: "no tools", tokens: estimate(system) },
+      { name: "study record", detail: `${a.tested.length} ${a.tested.length === 1 ? "note's" : "notes'"} squares`, tokens: 0 },
+      { name: "your prompts and Iso's answers", detail: "", tokens: 0 },
+      { name: "this note", detail: a.folder || "the base", tokens: estimate(there) + estimate(after) + estimate(request) },
+      { name: "linked notes", detail: `${a.tested.length} to test, sent whole`, tokens: estimate(tested) },
+    ],
+  };
+}
+
+/** An exercise as Iso wrote it: its title line taken off, and the question. */
+export function exerciseReply(reply: string): { title: string; question: string } {
+  const text = replyText(reply);
+  const m = /^#\s+(.+)\n+/.exec(text);
+  return m ? { title: m[1]!.trim(), question: text.slice(m[0].length).trim() } : { title: "", question: text };
+}

@@ -37,7 +37,10 @@ const Ask = z.discriminatedUnion("form", [
   z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
   z.object({ note: z.string(), form: z.literal("rewrite"), regions: z.array(Anchor).min(1).max(40), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
   z.object({ note: z.string(), form: z.literal("note"), tier: Tier }).strict(),
+  z.object({ note: z.string(), form: z.literal("mark"), answer: Anchor, tier: Tier }).strict(),
+  z.object({ note: z.string(), form: z.literal("exercise"), tier: Tier }).strict(),
 ]);
+const ExerciseAsk = z.object({ folder: z.string().max(400), tests: z.array(z.string().max(400)).min(1).max(20), after: z.string().max(400).nullable().optional() }).strict();
 const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
 const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
 const Key = z.object({ key: z.string().nullable() }).strict();
@@ -124,6 +127,10 @@ export function createApp({ api, token, loopback, web, allowHosts = [] }: Server
   post("/api/drafts", z.object({}).strict(), () => api.createDraft());
   post("/api/draft/keep", z.object({ proposal: z.string().max(64), folder: z.string().max(400) }).strict(), (c, b) => api.keepDraft(id(c), b.proposal, b.folder));
   post("/api/draft/discard", z.object({}).strict(), (c) => api.discardDraft(id(c)));
+  app.get("/api/study", (c) => answer(c, () => api.study()));
+  post("/api/exercise/draft", ExerciseAsk, (_c, b) => api.createExerciseDraft(b.folder, b.tests, b.after ?? null));
+  post("/api/exercise/keep", z.object({ proposal: z.string().max(64) }).strict(), (c, b) => api.keepExercise(id(c), b.proposal));
+  post("/api/exercise/wind-back", z.object({}).strict(), (c) => api.windBack(id(c)));
   app.get("/api/context", (c) => answer(c, () => api.context(c.req.query("id") || undefined)));
   post("/api/context/clear", z.object({}).strict(), () => api.clearConversation());
   // The key goes in and never comes out: settings say only whether one is held.
