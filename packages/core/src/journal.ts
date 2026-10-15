@@ -106,7 +106,20 @@ export interface Discard extends Stamp {
   /** For a rewrite: the one region removed. Without it, all that are still open. */
   region?: number;
 }
-export type Entry = Change | Proposal | Revise | Discard;
+/** Iso's marking of an exercise's working: passages marked right or wrong, laid over the working until they are
+ *  edited away. Never written into the file. The `attempt` event in the study record names it by id, and holds what
+ *  the marking moves (understanding.ts). */
+export interface Marks extends Stamp {
+  kind: "marks";
+  /** The passage marked as the answer when it was sent. */
+  answer: Passage;
+  result: "right" | "partly" | "wrong";
+  marks: { passage: Passage; mark: "right" | "wrong" }[];
+  /** Passages Iso quoted that were not in the working. */
+  dropped?: number;
+  cost?: Cost;
+}
+export type Entry = Change | Proposal | Revise | Discard | Marks;
 
 export const SNAPSHOT_EVERY = 40;
 export const SESSION_GAP_MS = 30 * 60 * 1000;
@@ -296,7 +309,7 @@ export interface Moment {
   at: string;
   session: string;
   who: Who;
-  what: "wrote" | "found" | "edited" | "kept" | "offered" | "discarded" | "restored" | "changed elsewhere";
+  what: "wrote" | "found" | "edited" | "kept" | "offered" | "discarded" | "restored" | "changed elsewhere" | "marked";
   /** What was asked, where the moment came from a proposal. */
   asked?: string;
 }
@@ -311,6 +324,8 @@ export function moments(entries: readonly Entry[]): Moment[] {
       const m: Moment = { ...base, what: "offered", asked: e.asked };
       offered.set(e.id, m); asked.set(e.id, e.asked);
       out.push(m);
+    } else if (e.kind === "marks") {
+      out.push({ ...base, what: "marked" });
     } else if (e.kind === "discard") {
       const m = offered.get(e.proposal);
       if (m) { m.what = "discarded"; m.ids.push(e.id); }
