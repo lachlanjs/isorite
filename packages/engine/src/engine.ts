@@ -157,10 +157,14 @@ export class Engine implements Api {
   async map(): Promise<MapReport> {
     const study = this.opts.study;
     const exercises = study ? Bundle.fromFiles(await walk(study, STUDY_DIR)) : null;
-    const read = understanding(await this.records(), this.opts.clock.now());
+    const events = await this.records();
+    const read = understanding(events, this.opts.clock.now());
+    // Each exercise's last result: one last marked right is passed, and grows its folder's mark.
+    const last = new Map<string, unknown>();
+    for (const e of events) if (e.event === "attempt" && typeof e.exercise === "string") last.set(e.exercise, e.result);
     const notes: MapReport["notes"] = {};
     for (const c of this.bundle.concepts.values()) notes[c.id] = { title: c.title, step: read.get(c.id)?.step ?? 0, tokens: estimate(c.body.trim()) };
-    for (const c of exercises?.concepts.values() ?? []) notes[studyId(c.id)] = { title: c.title, step: 0, kind: plain(c.meta.kind ?? "") || "note" };
+    for (const c of exercises?.concepts.values() ?? []) notes[studyId(c.id)] = { title: c.title, step: 0, kind: plain(c.meta.kind ?? "") || "note", ...(last.get(c.id) === "right" ? { passed: true as const } : {}) };
     return { model: mapModel(this.bundle, exercises), notes };
   }
 

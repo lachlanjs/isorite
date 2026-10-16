@@ -89,6 +89,11 @@ test("an exercise: mark a selection as the answer, send it for marking, see the 
   await expect(page.locator(".cm-iso-right")).toHaveCount(0);
   await expect(page.locator(".cm-iso-answer")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "mark it again" })).toBeDisabled();
+
+  // On the Atlas: the note's edge is back to not reached, and the study folder's mark has grown from the pass.
+  await page.goto("#/atlas");
+  await expect(page.locator(`[data-note="${note}"]`)).toHaveClass(/\bs0\b/);
+  await expect(page.locator('[data-folder="@study/basics"] svg')).not.toHaveAttribute("data-passes", "0");
 });
 
 test("a wrong answer is marked wrong in rose and lowers nothing below nothing", async ({ page }) => {

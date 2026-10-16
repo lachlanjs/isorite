@@ -53,6 +53,8 @@ export interface MapReport {
     step: 0 | 1 | 2 | 3;
     /** A study note's kind, as its top edge says it. */
     kind?: string;
+    /** An exercise whose last attempt was marked right. */
+    passed?: true;
     /** A note of the knowledge base: the size of its text, as an estimate in tokens (what linking it to a note for Iso adds). */
     tokens?: number;
   }>;

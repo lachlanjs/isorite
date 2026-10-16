@@ -73,6 +73,7 @@ test("marking: one call with no tools, sent the exercise, the notes it tests who
 test("understanding follows Iso's moves, the study list and the squares read them, and wind back lowers every note tested", async () => {
   const right = marking({ result: "right", marks: [], moves: { "basics/entropy": { by: 1, why: "Unaided and exact." }, "basics/surprise": { by: 0.5, why: "Used, not tested." } } });
   const { engine, ended, answer, record } = await open([right]);
+  expect((await engine.map()).notes["@study/basics/a-fair-coin"]!.passed).toBeUndefined();
   await ended((await engine.ask({ note: "@study/basics/a-fair-coin", form: "mark", answer: answer(), tier: "mid" })).request);
   let s = await engine.study();
   expect(s.notes["basics/entropy"]).toMatchObject({ level: 1, squares: 1, evidence: [{ event: "attempt", by: 1, why: "Unaided and exact.", exercise: "@study/basics/a-fair-coin", result: "right" }] });
@@ -80,6 +81,8 @@ test("understanding follows Iso's moves, the study list and the squares read the
   expect(s.exercises).toEqual([{ id: "@study/basics/a-fair-coin", title: "A fair coin", kind: "written", tests: ["basics/entropy", "basics/surprise"], next: null, result: "right", last: "2026-10-15T09:00:00.000Z", squares: 0, due: false }]);
   expect(s.folders).toEqual(["", "basics"]);
   expect((await engine.map()).notes["basics/entropy"]!.step).toBe(1);
+  // Its last attempt right, it is passed: the study folder's mark grows from it.
+  expect((await engine.map()).notes["@study/basics/a-fair-coin"]!.passed).toBe(true);
 
   await engine.windBack("@study/basics/a-fair-coin");
   expect(record().filter((e) => e.event === "wind-back").map((e) => e.note)).toEqual(["basics/entropy", "basics/surprise"]);
