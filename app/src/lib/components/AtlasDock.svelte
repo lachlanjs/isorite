@@ -1,10 +1,11 @@
 <script lang="ts">
   // The dock at the foot of the Atlas while notes are picked for a note for Iso (the Mobile-Pick board): the
   // note they are for, what is linked and how large each is, and the way back to it. What is picked is what
-  // Iso is sent, so the sizes are said here.
+  // Iso is sent, so the sizes are said here. For a request for an exercise, what is picked is what it tests: those
+  // are sent whole, so there is no budget to be over.
   import { short } from "$lib/atlas/picks.ts";
 
-  let { title, picked, budget, href, notice = "" }: {
+  let { title, picked, budget, href, notice = "", tests = false }: {
     title: string;
     /** The notes linked, in the order they are sent. */
     picked: { id: string; title: string; tokens: number }[];
@@ -12,13 +13,16 @@
     budget: number;
     href: string;
     notice?: string;
+    /** Picking what a request for an exercise tests. */
+    tests?: boolean;
   } = $props();
 
   const total = $derived(picked.reduce((n, p) => n + p.tokens, 0));
-  const says = $derived([`${picked.length} linked`, picked.length ? `${short(total)} tokens` : "", total > budget ? `over ${short(budget)}` : "", notice].filter(Boolean).join(" · "));
+  const over = $derived(!tests && total > budget);
+  const says = $derived([tests ? `${picked.length} to test` : `${picked.length} linked`, picked.length ? `${short(total)} tokens` : "", over ? `over ${short(budget)}` : "", notice].filter(Boolean).join(" · "));
 </script>
 
-<div class="dock" role="region" aria-label="Notes linked to the note for Iso">
+<div class="dock" role="region" aria-label={tests ? "Notes the exercise tests" : "Notes linked to the note for Iso"}>
   <i class="dia open" aria-hidden="true"></i>
   <div class="what">
     <span class="name">{title || "a new note"}</span>
@@ -27,7 +31,7 @@
   <ol class="grow">
     {#each picked as p, k (p.id)}<li><b class="num">{k + 1}</b><span class="t">{p.title}</span><span class="faint">{short(p.tokens)}</span></li>{/each}
   </ol>
-  {#if total > budget}<span class="label over">over {short(budget)}: the last are cut short, or left for Iso to read itself</span>{/if}
+  {#if over}<span class="label over">over {short(budget)}: the last are cut short, or left for Iso to read itself</span>{/if}
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved -->
   <a class="btn primary tall" {href}>back to it</a>
 </div>

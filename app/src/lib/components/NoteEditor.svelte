@@ -16,7 +16,7 @@
 
   // Without `iso` (a note written for Iso) there is no prompt line and nothing is laid over the text.
   // With `exercise`, the question, the working's heading, the answer and Iso's marks are drawn over the text too.
-  let { note, iso, exercise, source }: { note: NoteSession; iso?: NoteIso; exercise?: ExerciseState; source: boolean } = $props();
+  let { note, iso, exercise, source, placeholder }: { note: NoteSession; iso?: NoteIso; exercise?: ExerciseState; source: boolean; placeholder?: string } = $props();
 
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
@@ -83,7 +83,7 @@
           const piece = mount(key.startsWith("r:") ? IsoChange : IsoBlock, { target: el, props: { iso, key } });
           return () => { void unmount(piece); };
         },
-      } : { placeholder: "Write what you understand, what you do not, and what you want from Iso. [[ links a note it should rest on." }),
+      } : { placeholder: untrack(() => placeholder) ?? "Write what you understand, what you do not, and what you want from Iso. [[ links a note it should rest on." }),
     });
     view = made;
     return () => made.destroy();

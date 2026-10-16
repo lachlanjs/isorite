@@ -3,7 +3,9 @@
   // A note, open for writing: its title, its details when they are wanted, and its text. Saving is the
   // session's business (note.svelte.ts); this shows how it stands and offers the choice when a save is refused.
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { isStudyId } from "@isorite/core";
+  import type { StudyReport } from "@isorite/engine";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { ExerciseState, moveText } from "$lib/exercise.svelte.ts";
   import { NoteIso } from "$lib/iso.svelte.ts";
@@ -24,6 +26,23 @@
   const KINDS: Record<string, string> = { written: "written response" };
   const titleOf = (n: string): string => app.listing.notes.find((x) => x.id === n)?.title ?? n.split("/").at(-1)!;
 
+  // A note of the base, in study (Study-Fit): its squares in the margin, the exercises that test it, and the way to
+  // ask for one. Project mode shows none of this.
+  // svelte-ignore state_referenced_locally
+  const studied = !id.startsWith("@") && Boolean(app.session?.study);
+  let report = $state.raw<StudyReport | null>(null);
+  let marginProblem = $state("");
+  const reading = $derived(report?.notes[id]);
+  const testing = $derived(report?.exercises.filter((x) => x.tests.includes(id)).length ?? 0);
+  const STEPS = ["not reached", "opened", "worked through", "understood"];
+  async function readStudy() { try { report = await app.api.study(); } catch { /* the next event asks again */ } }
+  async function askExercise() {
+    try {
+      const made = await app.api.createExerciseDraft(app.listing.notes.find((n) => n.id === id)?.dir ?? id.split("/").slice(0, -1).join("/"), [id]);
+      await goto(resolve("/draft/[id]", { id: made.id.slice("@draft/".length) }));
+    } catch (e) { marginProblem = (e as Error).message; }
+  }
+
   const remembered = (key: string): boolean => { try { return localStorage.getItem(key) === "1"; } catch { return false; } };
   const remember = (key: string, on: boolean) => { try { localStorage.setItem(key, on ? "1" : "0"); } catch { /* not kept */ } };
   let details = $state(remembered("isorite.details"));
@@ -35,11 +54,14 @@
     app.open = id;
     void note.open().then(() => iso.open());
     void exercise?.open();
+    const unhear = studied ? app.on((e) => { if (e.type === "record" || (e.type === "note-changed" && e.id.startsWith("@study/"))) void readStudy(); }) : null;
+    if (studied) void readStudy();
     const leaving = () => { void note.save(); };
     addEventListener("pagehide", leaving);
     document.addEventListener("visibilitychange", leaving);
     return () => {
       removeEventListener("pagehide", leaving);
+      unhear?.();
       document.removeEventListener("visibilitychange", leaving);
       iso.close();
       exercise?.close();
@@ -130,9 +152,23 @@
       {:else}
         <span class="grow faint">{id}.md{note.meta === null ? ": the frontmatter cannot be read, so the file is shown as it is" : ""}</span>
       {/if}
+      <div class="side">
       <div class="tools">
         {#if !asSource}<button class="btn quiet" type="button" aria-pressed={details} onclick={() => { details = !details; remember("isorite.details", details); }}>details</button>{/if}
         <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => (source = !source)}>source</button>
+      </div>
+      {#if studied && !asSource && report}
+        <div class="margin" role="group" aria-label="Iso's read of you">
+          <span class="squares" aria-label="{reading?.squares ?? 0} of 6">{#each [0, 1, 2, 3, 4, 5] as k (k)}<i class="pip" class:lv={k < (reading?.squares ?? 0)}></i>{/each}</span>
+          {#if testing}
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, with the note to narrow to -->
+            <a href={`${resolve("/study")}?note=${encodeURIComponent(id)}`}>{testing} {testing === 1 ? "exercise" : "exercises"}</a>
+          {/if}
+          <span class="label">{STEPS[reading?.step ?? 0]}{reading?.due ? " · due" : ""}</span>
+          <button class="link" type="button" onclick={askExercise}>[ + an exercise ]</button>
+          {#if marginProblem}<span class="bad" role="alert">{marginProblem}</span>{/if}
+        </div>
+      {/if}
       </div>
     </div>
     {/if}
@@ -179,12 +215,18 @@
 </article>
 
 <style>
-  .note { max-width: calc(var(--measure) + 2 * var(--space-4)); margin: 0 auto; padding: 40px var(--space-4) 0; display: flex; flex-direction: column; gap: var(--space-2); }
+  .note { position: relative; max-width: calc(var(--measure) + 2 * var(--space-4)); margin: 0 auto; padding: 40px var(--space-4) 0; display: flex; flex-direction: column; gap: var(--space-2); }
   .head { display: flex; align-items: flex-start; gap: var(--space-3); }
   .title { flex: 1 1 auto; min-width: 0; font-size: 34px; line-height: 1.2; font-weight: 700; background: none; border: 0; padding: 0 2px; color: var(--text); resize: none; field-sizing: content; overflow: hidden; }
   .title::placeholder { color: var(--text-faint); }
   .title:focus-visible { outline: none; }
   .tools { display: flex; flex: none; padding-top: 6px; }
+  .side { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); flex: none; }
+  .margin { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: 12px; padding-top: 2px; }
+  .margin .link { font-size: 12px; padding: 0; }
+  /* Where the window leaves room, the margin is the page's own, beside the text (Study-Fit), and the text starts
+     under the title as in any note. */
+  @media (min-width: 1100px) { .margin { position: absolute; top: 96px; left: calc(100% + 8px); align-items: flex-start; width: 150px; } }
   .tools .btn { height: 28px; font-size: 12px; }
   .tools .btn[aria-pressed="true"] { color: var(--text); --fill: var(--ground-3); }
   .choice { padding: var(--space-6) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); --edge: var(--rose); }
@@ -212,6 +254,8 @@
     .foot .tall { flex: 1 1 100%; justify-content: center; }
     .head { flex-direction: column-reverse; gap: var(--space-1); }
     .tools { align-self: flex-end; padding-top: 0; }
+    .side { align-self: stretch; flex-direction: row-reverse; justify-content: space-between; align-items: flex-start; }
+    .margin { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
     .title { font-size: 30px; width: 100%; }
   }
 </style>

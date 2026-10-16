@@ -119,7 +119,11 @@ export class NoteSession {
       const v = value.trim();
       out[key] = key === "tags" ? (v ? v.split(",").map((t) => t.trim()).filter(Boolean) : null) : v || null;
     }
-    try { this.setText(spliceText(this.text, out, null)); } catch { /* unparseable frontmatter: edited as source */ }
+    this.setMeta(out);
+  }
+  /** Change frontmatter fields to these values as they are (null removes one). Only those fields' lines change. */
+  setMeta(changes: Record<string, unknown>): void {
+    try { this.setText(spliceText(this.text, changes, null)); } catch { /* unparseable frontmatter: edited as source */ }
   }
 
   private changed(): void {

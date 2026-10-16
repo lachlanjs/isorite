@@ -106,7 +106,19 @@ test("a folder is zoomed to, open ground steps out, and the map is dragged and z
   const whole = await cell(page), box = (await page.locator(".atlas").boundingBox())!;
   await folder(page, "coding").getByRole("button", { name: "coding", exact: true }).click();
   await expect.poll(() => cell(page)).toBeGreaterThan(whole);
-  await page.mouse.click(box.x + 4, box.y + 4);
+  // Open ground: a corner of the map outside the folder zoomed to, and on nothing (the base grows as the tests run,
+  // so where the folder lies changes).
+  const open = await page.evaluate(({ x, y, w, h }) => {
+    const inside = document.querySelector('[data-folder="coding"]')!.getBoundingClientRect();
+    for (const [px, py] of [[x + 4, y + 4], [x + w - 4, y + 4], [x + 4, y + h - 4], [x + w - 4, y + h - 4]] as const) {
+      const out = px < inside.left || px > inside.right || py < inside.top || py > inside.bottom;
+      const on = document.elementFromPoint(px, py);
+      if (out && on && !on.closest("[data-folder], [data-note], button, a")) return { px, py };
+    }
+    return null;
+  }, { x: box.x, y: box.y, w: box.width, h: box.height });
+  expect(open, "a corner of open ground").not.toBeNull();
+  await page.mouse.click(open!.px, open!.py);
   await expect.poll(() => cell(page)).toBeCloseTo(whole, 3);
 
   // A drag moves the map and chooses nothing, even when it ends on a note.

@@ -202,6 +202,7 @@ a.btn:hover { text-decoration: none; color: var(--text); }
 .pip.lv { border-color: var(--lattice); background: var(--lattice); }
 .pip.ok { border-color: var(--malachite); background: var(--malachite); }
 .pip.no { border-color: var(--rose); background: var(--rose); }
+.pip.part { border-color: var(--malachite); background: linear-gradient(90deg, var(--malachite) 50%, var(--ground-0) 50%); }
 .dots { background-image: radial-gradient(var(--line) 1px, transparent 1.2px); background-size: 24px 24px; }
 
 /* ------------------------------------------------------------ prose (rendered blocks in the editor) */

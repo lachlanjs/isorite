@@ -16,7 +16,7 @@
 
   const VIEWS = [["atlas", resolve("/atlas")], ["notes", resolve("/notes")], ["study", resolve("/study")]] as const;
   // A note belongs to notes, an exercise to study; the parts page to nothing.
-  const view = $derived(page.route.id === "/atlas" ? "atlas" : page.route.id === "/study" || app.exercise ? "study" : page.route.id === "/parts" ? "" : "notes");
+  const view = $derived(page.route.id === "/atlas" ? "atlas" : page.route.id === "/study" || app.exercise || app.studying ? "study" : page.route.id === "/parts" ? "" : "notes");
   const inNote = $derived(page.route.id === "/n/[...id]" || page.route.id === "/draft/[id]");
   // Iso's request as the map shows it: running, or how it ended until the map lets it go.
   const run = $derived(app.atlas && !app.atlas.pick ? app.iso : null);
@@ -30,7 +30,7 @@
 <div class="shell">
   <header class="bar">
     <button class="home" class:in-note={inNote} type="button" aria-label="isorite: settings" aria-haspopup="dialog" aria-expanded={menu} onclick={() => (menu = !menu)}><Logo /></button>
-    {#if inNote && app.session}{#if app.exercise}<a class="back" href={resolve("/study")}>‹ study</a>{:else}<a class="back" href={resolve("/notes")}>‹ {app.session.name}</a>{/if}{/if}
+    {#if inNote && app.session}{#if app.exercise || app.studying}<a class="back" href={resolve("/study")}>‹ study</a>{:else}<a class="back" href={resolve("/notes")}>‹ {app.session.name}</a>{/if}{/if}
     <span class="path" class:in-note={inNote}>
       {#if app.session}
         <a href={resolve("/notes")}>{app.session.name}</a>{#if inNote && app.here}<span class="faint sep">/</span>{app.here}{/if}

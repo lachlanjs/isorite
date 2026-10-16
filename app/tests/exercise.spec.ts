@@ -104,3 +104,61 @@ test("a wrong answer is marked wrong in rose and lowers nothing below nothing", 
   if (!phone()) await expect(page.locator(".bar").getByRole("button", { name: "[ wind back ]" })).toBeVisible();
   await look(page, "exercise-wrong");
 });
+
+test("an exercise asked for from a note's margin, after another: kept, it follows that one, and the study page lists both", async ({ page }) => {
+  const name = `ask-${test.info().project.name}`, note = `basics/${name}`, first = `basics/first-${name}`;
+  await page.goto("#/notes");
+  await api(page, "POST", `note?id=${encodeURIComponent(note)}`, { text: `---\ntype: Concept\ntitle: Dice ${name}\n---\n\nA fair die has six equally likely faces.\n` });
+  await api(page, "POST", `note?id=${encodeURIComponent("@study/" + first)}`, { text: `---\ntype: Exercise\nkind: written\ntitle: The first ${name}\ntests: [${note}]\n---\n\nHow many faces?\n\n## Working\n\n` });
+
+  // The note's margin: its squares, the one exercise on it, and the way to ask for another.
+  await page.goto(`#/n/${note}`);
+  const margin = page.locator(".margin");
+  await expect(margin.locator(".pip")).toHaveCount(6);
+  await expect(margin.getByRole("link")).toHaveText("1 exercise");
+  await look(page, "note-margin");
+  await margin.getByRole("button", { name: "[ + an exercise ]" }).click();
+
+  // The request: what it tests (this note), where it goes, what it comes after.
+  await expect(page.locator(".draft")).toContainText("for Iso · an exercise");
+  await expect(page.locator(".draft h1")).toHaveText(`An exercise on Dice ${name}`);
+  await expect(page.locator(".deck .chip")).toHaveText(new RegExp(`Dice ${name}`));
+  await page.getByRole("combobox", { name: "Comes after" }).selectOption(first);
+  await expect(page.getByRole("combobox", { name: "Folder" })).toHaveValue("basics");
+  await look(page, "exercise-request");
+  await page.getByRole("button", { name: "send to Iso" }).click();
+
+  // Iso's exercise, to keep: its title, its question.
+  await expect(page.locator(".extitle")).toHaveText("a scripted exercise");
+  await expect(page.locator(".question")).toContainText("What is the entropy of a fair coin, in bits?");
+  await look(page, "exercise-proposed");
+  await page.getByRole("button", { name: "keep the exercise" }).click();
+
+  // Kept: the exercise opens, its question in place, the working to write; the first now leads to it.
+  await expect(page.locator(".cm-iso-question")).toContainText("What is the entropy of a fair coin, in bits?");
+  await expect(page.locator(".cm-iso-working")).toBeVisible();
+  const kept = decodeURIComponent(page.url().split("#/n/")[1]!);
+  expect(kept).toMatch(/^@study\/basics\/a-scripted-exercise(-\d+)?$/); // each size and ground keeps one more
+  await expect(page.locator(".bar").getByRole("link", { name: "next" })).toHaveCount(0);
+  await page.goto(`#/n/@study/${first}`);
+  const next = page.locator(".bar").getByRole("link", { name: "next" });
+  if (!phone()) {
+    await expect(next).toBeVisible();
+    await next.click();
+    await expect(page).toHaveURL(new RegExp(`#/n/${kept.replace(/[/@]/g, "\\$&")}$`));
+  }
+
+  // The study page: both, the never-tried before the one tried; and narrowed to the note, only those two.
+  await page.goto(`#/study?note=${encodeURIComponent(note)}`);
+  await expect(page.locator(".list .sr")).toHaveCount(2);
+  await expect(page.locator(".list .sr").first()).toContainText("written");
+  await expect(page.locator(".list .sr").first()).toContainText(`tests Dice ${name}`);
+  await page.goto("#/study");
+  await expect(page.locator(".list .frame-title")).toHaveText("study · next for you");
+  await expect(page.locator(".list .sr .t").filter({ hasText: "Build a prefix code" })).toBeVisible();
+  const titles = await page.locator(".list .sr .t").allTextContents();
+  // The seeded prefix code, tried three times, comes after every exercise never tried.
+  expect(titles.indexOf("Build a prefix code")).toBeGreaterThan(titles.indexOf(`The first ${name}`));
+  await expect(page.locator(".folders")).toContainText("basics");
+  await look(page, "study");
+});

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { linkedIn, short, titleIn, withLink, withoutLink } from "./picks.ts";
+import { linkedIn, short, testsIn, titleIn, withLink, withoutLink, withTest } from "./picks.ts";
 
 const head = `---\ntype: Concept\ntitle: "Self-consistency, in my words"\n---\n\n`;
 
@@ -26,5 +26,19 @@ describe("the notes a note for Iso is linked to", () => {
     expect(titleIn(head)).toBe("Self-consistency, in my words");
     expect(titleIn(`---\ntype: Concept\ntitle: ""\n---\n\ntitle: not this\n`)).toBe("");
     expect([940, 1234, 14_400].map(short)).toEqual(["940", "1.2k", "14k"]);
+  });
+});
+
+describe("picking what a request for an exercise tests", () => {
+  const request = "---\ntype: Exercise\nfolder: basics\ntests: [basics/surprise]\n---\n\nA calculation, please.\n";
+  test("its tests are read from the frontmatter; another draft has none", () => {
+    expect(testsIn(request)).toEqual(["basics/surprise"]);
+    expect(testsIn("---\ntype: Concept\ntitle: x\n---\n\n[a](/a.md)\n")).toBeNull();
+  });
+  test("a pick adds a note to them and a second takes it out; what was written is left alone", () => {
+    const added = withTest(request, "basics/bit");
+    expect(testsIn(added)).toEqual(["basics/surprise", "basics/bit"]);
+    expect(added.endsWith("A calculation, please.\n")).toBe(true);
+    expect(testsIn(withTest(added, "basics/surprise"))).toEqual(["basics/bit"]);
   });
 });
