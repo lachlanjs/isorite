@@ -92,5 +92,9 @@ test("another provider and other models are read from the configuration", () => 
   const path = join(root, "other.toml");
   writeFileSync(path, 'device = "abcd1234"\n\n[provider]\nname = "local"\nurl = "http://localhost:11434/v1"\n\n[tiers]\nmid = "llama3"\n\n[prices]\nllama3 = [0, 0]\n');
   expect(providerConfig(path)).toMatchObject({ name: "local", url: "http://localhost:11434/v1", cacheMarks: false, tiers: { mid: "llama3", low: "anthropic/claude-haiku-4.5" }, prices: { llama3: [0, 0] } });
-  expect(providerConfig(join(root, "none.toml"))).toMatchObject({ name: "openrouter" });
+  expect(providerConfig(path).auth).toBeUndefined();
+  expect(providerConfig(join(root, "none.toml"))).toMatchObject({ name: "openrouter", auth: "https://openrouter.ai/auth" });
+  // A provider that makes keys as OpenRouter does names its sign-in page.
+  writeFileSync(path, '[provider]\nname = "other"\nurl = "http://127.0.0.1:9/v1"\nauth = "http://127.0.0.1:9/auth"\n');
+  expect(providerConfig(path).auth).toBe("http://127.0.0.1:9/auth");
 });

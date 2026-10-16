@@ -136,6 +136,10 @@ export function createApp({ api, token, loopback, web, allowHosts = [] }: Server
   // The key goes in and never comes out: settings say only whether one is held.
   app.get("/api/settings", (c) => answer(c, () => api.settings()));
   post("/api/settings/key", Key, (_c, b) => api.setKey(b.key), "put");
+  // Or made by signing in at the provider: the page to go to, and the code it comes back with, which the engine
+  // exchanges for the key itself. The page never holds the key.
+  post("/api/settings/connect", z.object({ callback: z.string().max(2000) }).strict(), (_c, b) => api.connect(b.callback));
+  post("/api/settings/connected", z.object({ code: z.string().min(1).max(2000), state: z.string().min(1).max(200) }).strict(), (_c, b) => api.connected(b.code, b.state));
 
   // Everything the engine does, as it happens. A comment every 25 seconds keeps the connection open.
   app.get("/api/events", (c) => streamSSE(c, async (stream) => {

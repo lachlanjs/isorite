@@ -11,11 +11,14 @@ import { ANSWER_CLOSE, ANSWER_OPEN, CLOSE, HERE, LINKED_BUDGET, OPEN, conversati
 import { rounds } from "./loop.ts";
 import { Lookup, type Similar } from "./lookup.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
-import { KEY, OPENROUTER, TIERS, type Message, type ProviderConfig } from "./provider.ts";
+import { KEY, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
 
 /** The largest note taken. */
 export const MAX_NOTE_BYTES = 2_000_000;
+
+/** How long a sign-in at the provider may take: its codes last ten minutes. */
+const SIGN_IN_MS = 10 * 60_000;
 
 export interface EngineOptions {
   /** The knowledge base's folder. */
@@ -240,7 +243,7 @@ export class Engine implements Api {
   private get provider(): ProviderConfig { return this.opts.provider ?? OPENROUTER; }
 
   async settings(): Promise<Settings> {
-    return { provider: this.provider.name, key: Boolean(await this.opts.secrets?.get(KEY)), tiers: this.provider.tiers };
+    return { provider: this.provider.name, key: Boolean(await this.opts.secrets?.get(KEY)), connect: Boolean(this.provider.auth && this.opts.secrets), tiers: this.provider.tiers };
   }
 
   async setKey(key: string | null): Promise<Settings> {
@@ -249,6 +252,43 @@ export class Engine implements Api {
     if (clean && (clean.length > 400 || /\s/.test(clean))) throw new EngineError("that does not look like a key");
     await this.opts.secrets.set(KEY, clean);
     return this.settings();
+  }
+
+  /** Sign-ins begun and not yet back, by their state: the verifier that goes with each. */
+  private signIns = new Map<string, { verifier: string; at: number }>();
+
+  async connect(callback: string): Promise<{ url: string }> {
+    const { auth, name } = this.provider;
+    if (!this.opts.secrets) throw new EngineError("keys cannot be kept here", 409);
+    if (!auth) throw new EngineError(`${name} cannot make a key from here: paste one`, 409);
+    let back: URL;
+    try { back = new URL(callback); } catch { throw new EngineError("the page to come back to is not a URL"); }
+    if (back.protocol !== "http:" && back.protocol !== "https:") throw new EngineError("the page to come back to is not a web page");
+    const now = this.opts.clock.now();
+    for (const [state, s] of this.signIns) if (now - s.at > SIGN_IN_MS || this.signIns.size > 8) this.signIns.delete(state);
+    const { verifier, challenge } = await pkce(), state = randomToken(16);
+    this.signIns.set(state, { verifier, at: now });
+    const url = new URL(auth);
+    for (const [k, v] of Object.entries({ callback_url: back.href, code_challenge: challenge, code_challenge_method: "S256", state, key_label: "isorite" })) url.searchParams.set(k, v);
+    return { url: url.href };
+  }
+
+  async connected(code: string, state: string): Promise<Settings> {
+    const signIn = this.signIns.get(state);
+    this.signIns.delete(state);
+    if (!signIn || this.opts.clock.now() - signIn.at > SIGN_IN_MS) throw new EngineError("This sign-in was not begun here, or took too long: begin it again.", 409);
+    const { name, url } = this.provider, http = this.opts.http;
+    if (!http) throw new EngineError("nothing can be sent from here", 409);
+    let res: Response;
+    try {
+      res = await http.fetch(`${url}/auth/keys`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, code_verifier: signIn.verifier, code_challenge_method: "S256" }) });
+    } catch { throw new EngineError(`${name} is not answering: try again in a moment.`, 502); }
+    const body = await res.json().catch(() => ({})) as { key?: unknown; error?: { message?: string } | string };
+    if (!res.ok || typeof body.key !== "string") {
+      const said = typeof body.error === "string" ? body.error : body.error?.message ?? res.statusText;
+      throw new EngineError(`${name} did not make the key (${res.status}${said ? `: ${said}` : ""}). Begin again.`, 502);
+    }
+    return this.setKey(body.key);
   }
 
   async ask(req: AskRequest): Promise<{ request: string }> {

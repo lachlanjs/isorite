@@ -16,14 +16,23 @@
   $effect(() => { void app.api.settings().then((s) => (settings = s), (e) => (problem = (e as Error).message)); });
   $effect(() => { panel.focus(); });
 
+  /** Close, and let go of what the last sign-in said. */
+  function done() { app.signIn = null; close(); }
+
   async function setKey(value: string | null) {
     problem = "";
+    app.signIn = null;
     try { settings = await app.api.setKey(value); key = ""; } catch (e) { problem = (e as Error).message; }
+  }
+  async function signIn() {
+    problem = "";
+    app.signIn = null;
+    try { await app.startSignIn(); } catch (e) { problem = (e as Error).message; }
   }
 </script>
 
-<svelte:window onkeydown={(e) => { if (e.key === "Escape") close(); }} />
-<button class="shade" type="button" aria-label="Close settings" onclick={close}></button>
+<svelte:window onkeydown={(e) => { if (e.key === "Escape") done(); }} />
+<button class="shade" type="button" aria-label="Close settings" onclick={done}></button>
 
 <div class="frame menu" role="dialog" aria-label="Settings" tabindex="-1" bind:this={panel}>
   <span class="frame-title">settings</span>
@@ -47,6 +56,14 @@
         <button class="btn primary" type="submit" disabled={!key.trim()}>hold it</button>
         {#if settings.key}<button class="btn" type="button" onclick={() => setKey(null)}>forget it</button>{/if}
       </form>
+      {#if settings.connect}
+        <div class="row">
+          <span class="faint">or</span>
+          <button class="btn" type="button" onclick={signIn}>sign in at {settings.provider} for a new key</button>
+        </div>
+        <p class="faint">You sign in there, and the key it makes comes straight here. A spending limit for it is set on the provider's page of keys.</p>
+      {/if}
+      {#if app.signIn}<p class={app.signIn.ok ? "soft" : "bad"} role="status">{app.signIn.message}</p>{/if}
       <p class="faint">The key is kept in this device's configuration, never in a base, and is not shown again.</p>
       <dl class="tiers">
         {#each ["low", "mid", "max"] as const as t (t)}<dt>{t}</dt><dd class="faint">{settings.tiers[t]}</dd>{/each}
@@ -56,9 +73,9 @@
   </section>
 
   <div class="row foot">
-    <a href={resolve("/parts")} onclick={close}>the parts</a>
+    <a href={resolve("/parts")} onclick={done}>the parts</a>
     <span class="grow"></span>
-    <button class="btn quiet" type="button" onclick={close}>close</button>
+    <button class="btn quiet" type="button" onclick={done}>close</button>
   </div>
 </div>
 

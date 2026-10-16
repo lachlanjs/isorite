@@ -12,7 +12,8 @@
   import Menu from "$lib/components/Menu.svelte";
 
   let { children }: { children: Snippet } = $props();
-  let menu = $state(false);
+  // Back from signing in at the provider: the settings open to say how it went.
+  let menu = $state(app.signIn !== null);
 
   const VIEWS = [["atlas", resolve("/atlas")], ["notes", resolve("/notes")], ["study", resolve("/study")]] as const;
   // A note belongs to notes, an exercise to study; the parts page to nothing.

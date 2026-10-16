@@ -111,6 +111,8 @@ export interface Settings {
   provider: string;
   /** Whether a key is held. */
   key: boolean;
+  /** Whether the provider can make a key by signing in there (connect). */
+  connect: boolean;
   tiers: Record<Tier, string>;
 }
 
@@ -181,6 +183,10 @@ export interface Api {
   settings(): Promise<Settings>;
   /** Hold a provider key (null forgets it). */
   setKey(key: string | null): Promise<Settings>;
+  /** Begin making a key by signing in at the provider: the page to go to, which comes back to `callback` with a code. */
+  connect(callback: string): Promise<{ url: string }>;
+  /** Back from the provider with a code: exchange it for a key, and hold that key. */
+  connected(code: string, state: string): Promise<Settings>;
   /** Listen to everything the engine does, until the returned function is called. */
   events(listener: (event: EngineEvent) => void): () => void;
 }

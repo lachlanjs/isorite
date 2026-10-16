@@ -57,11 +57,12 @@ export class ConfigSecrets implements Secrets {
   }
 }
 
-/** The provider, as the configuration has it: OpenRouter unless `[provider] url` names another, and `[tiers]` for the models. */
+/** The provider, as the configuration has it: OpenRouter unless `[provider] url` names another (and `auth` its
+ *  sign-in page, if it makes keys as OpenRouter does), and `[tiers]` for the models. */
 export function providerConfig(path = configPath()): ProviderConfig {
   const config = readConfig(path), p = table(config.provider), tiers = table(config.tiers), prices = table(config.prices);
   const custom = typeof p.url === "string" && p.url !== "";
-  const base: ProviderConfig = custom ? { name: typeof p.name === "string" && p.name ? p.name : "custom", url: p.url as string, cacheMarks: p.cache_marks === true, tiers: { ...OPENROUTER.tiers }, prices: {} } : OPENROUTER;
+  const base: ProviderConfig = custom ? { name: typeof p.name === "string" && p.name ? p.name : "custom", url: p.url as string, cacheMarks: p.cache_marks === true, tiers: { ...OPENROUTER.tiers }, prices: {}, ...(typeof p.auth === "string" && p.auth ? { auth: p.auth } : {}) } : OPENROUTER;
   if (!custom && !Object.keys(tiers).length) return OPENROUTER;
   const out: ProviderConfig = { ...base, tiers: { ...base.tiers }, prices: { ...base.prices } };
   for (const tier of TIERS) if (typeof tiers[tier] === "string" && tiers[tier]) out.tiers[tier] = tiers[tier] as string;

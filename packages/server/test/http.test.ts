@@ -101,6 +101,18 @@ test("each write that should be refused is", async () => {
   }
   expect((await fetch(url + "/api/note?id=no/such")).status).toBe(404);
   expect((await fetch(url + "/api/nothing")).status).toBe(404);
+  // Signing in at the provider is a write like any other: another site cannot begin one, nor finish one.
+  expect(await refused(write("/api/settings/connect", { callback: "http://evil.example/" }, { method: "POST", headers: { Origin: "http://evil.example" } }))).toEqual([403, "cross-origin request refused"]);
+  expect(await refused(write("/api/settings/connected", { code: "c", state: "s" }, { method: "POST", headers: { [TOKEN_HEADER]: "wrong" } }))).toEqual([403, "bad token"]);
+  expect((await write("/api/settings/connected", { code: "c", state: "s" }, { method: "POST" })).status).toBe(409);
+});
+
+test("signing in at the provider begins with its page, PKCE and all", async () => {
+  const res = await write("/api/settings/connect", { callback: url + "/" }, { method: "POST" });
+  const sent = new URL(((await res.json()) as { url: string }).url);
+  expect(sent.origin + sent.pathname).toBe("https://openrouter.ai/auth");
+  expect(Object.fromEntries(sent.searchParams)).toMatchObject({ callback_url: url + "/", code_challenge_method: "S256", key_label: "isorite" });
+  expect(await (await fetch(url + "/api/settings")).json()).toMatchObject({ connect: true, key: false });
 });
 
 test("a name that is not this machine's is not answered", async () => {

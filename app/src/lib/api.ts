@@ -58,6 +58,8 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     clearConversation: async () => { await write("POST", "context/clear", {}); },
     settings: () => ask("settings"),
     setKey: (key) => write("PUT", "settings/key", { key }),
+    connect: (callback) => write("POST", "settings/connect", { callback }),
+    connected: (code, state) => write("POST", "settings/connected", { code, state }),
     events(listener) {
       const source = new EventSource(root + "events");
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
