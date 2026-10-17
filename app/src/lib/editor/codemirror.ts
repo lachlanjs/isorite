@@ -16,7 +16,7 @@ import { linkCompletion, type LinkTarget } from "./links.ts";
 import { livePreview, livePreviewTheme } from "./livePreview.ts";
 import { mathsSyntax } from "./maths.ts";
 import { noteOf } from "./noteOf.ts";
-import { overlays, type Mount } from "./overlays.ts";
+import { overlays, touchedLines, type Mount } from "./overlays.ts";
 
 export type { Format, LinkTarget };
 
@@ -46,6 +46,8 @@ export interface EditorOptions {
   onUnpick?: (at: number) => void;
   /** Draws what is laid over the text (overlays.ts). */
   mountOverlay?: Mount;
+  /** Shown, not written in: a version of the note from its timeline. */
+  readOnly?: boolean;
 }
 
 // Plain source is set in the monospaced face; the live preview in the reading one.
@@ -102,6 +104,8 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       // Only brackets: closing quotes would get in the way of apostrophes in prose.
       EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["(", "["] } }]),
       ...(opts.mountOverlay ? [overlays(opts.mountOverlay)] : []),
+      touchedLines,
+      ...(opts.readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []),
       linkCompletion(opts.notes),
       placeholder(opts.placeholder ?? "Write the note here. # for a heading, [[ to link to another note, $x$ for maths."),
       EditorView.contentAttributes.of({ "aria-label": opts.label, spellcheck: "true", autocapitalize: "sentences", autocorrect: "on" }),

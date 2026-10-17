@@ -6,7 +6,7 @@
   import type { EditorView } from "@codemirror/view";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { createEditor, setText, type Where } from "$lib/editor/codemirror.ts";
-  import { setMarks, setOverlays, type Inline, type Mark, type Overlay } from "$lib/editor/overlays.ts";
+  import { setMarks, setOverlays, setTouched, type Inline, type Mark, type Overlay, type Touched } from "$lib/editor/overlays.ts";
   import type { ExerciseState } from "$lib/exercise.svelte.ts";
   import type { NoteIso } from "$lib/iso.svelte.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
@@ -16,7 +16,8 @@
 
   // Without `iso` (a note written for Iso) there is no prompt line and nothing is laid over the text.
   // With `exercise`, the question, the working's heading, the answer and Iso's marks are drawn over the text too.
-  let { note, iso, exercise, source, placeholder }: { note: NoteSession; iso?: NoteIso; exercise?: ExerciseState; source: boolean; placeholder?: string } = $props();
+  // `touched` is what a moment of the timeline changed, by line of the whole file, while it is pointed at.
+  let { note, iso, exercise, source, placeholder, touched = null }: { note: NoteSession; iso?: NoteIso; exercise?: ExerciseState; source: boolean; placeholder?: string; touched?: Touched | null } = $props();
 
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
@@ -93,6 +94,12 @@
   $effect(() => {
     void note.revision;
     untrack(() => { if (view) setText(view, source ? note.text : note.body); });
+  });
+
+  // What a moment of the timeline changed, in the lines the editor shows.
+  $effect(() => {
+    const t = touched, lines = head.lines;
+    if (view) view.dispatch({ effects: setTouched.of(t ? { who: t.who, lines: t.lines.map((l) => l - lines) } : null) });
   });
 
   // The blocks are placed again whenever the note or what Iso has in it changes.

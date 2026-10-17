@@ -92,6 +92,14 @@ export class NoteSession {
   /** The note was written by the engine on your say (a proposal kept): this is its text now. */
   adopt(note: NoteSource): void { this.take(note); }
 
+  /** Write the note back as it was just after an entry of its journal: anything unsaved is saved first, so it is in
+   *  the journal too, and the restore is an entry of its own. */
+  async restore(entry: string): Promise<void> {
+    if (this.saving !== "saved") await this.save();
+    if (this.saving !== "saved") throw new Error(this.message || "the note could not be saved first");
+    this.take(await app.api.restore(this.id, entry, this.base));
+  }
+
   private take(note: NoteSource): void {
     this.text = this.saved = note.text;
     this.base = note.version;
