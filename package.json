@@ -16,6 +16,8 @@
     "fixtures": "node fixtures/expected.ts",
     "bench:atlas": "node bench/atlas_layout.mjs",
     "build": "npm run build -w @isorite/app",
+    "build:tutorial": "npm run build:tutorial -w @isorite/app",
+    "test:tutorial": "npm run test:tutorial -w @isorite/app",
     "serve": "node packages/server/src/main.ts serve",
     "test:browser": "npm run test:browser -w @isorite/app",
     "model": "node packages/server/scripts/embed-model.ts",

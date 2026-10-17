@@ -11,6 +11,7 @@
 import { blocks, dumpStudyConfig, CONFIG_FILE, GITATTRIBUTES, type Anchor, type Passage } from "@isorite/core";
 import { Engine, MemoryFiles, MemorySecrets, KEY, type Clock, type EngineEvent, type Similar } from "@isorite/engine";
 import { scriptedHttp, type Reply } from "./scripted.ts";
+import { TUTORIAL_MEANING } from "./tutorial.ts";
 
 export const NAME = "dmft-notes", DEVICE = "laptop1";
 const DAY = 86_400_000, MIN = 60_000;
@@ -172,7 +173,7 @@ const MEANING: Record<string, { note: string; heading: string; score: number }[]
 };
 export const similar: Similar = async (text) => ({
   ready: true,
-  hits: (MEANING[text] ?? []).map((h) => ({ note: h.note, heading: h.heading, body: "", score: h.score })),
+  hits: (MEANING[text] ?? TUTORIAL_MEANING[text]?.map((h) => ({ ...h, heading: "" })) ?? []).map((h) => ({ note: h.note, heading: h.heading, body: "", score: h.score })),
 });
 
 // ------------------------------------------------------------ making it
