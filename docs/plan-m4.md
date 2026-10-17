@@ -176,3 +176,48 @@ Each step ends with its tests passing and a commit.
 - A review queue and the recall curve's reviews (the slice plan, section 6). "Due" is shown, from the rule already in `understanding.ts`.
 - Iso's teaching notes, and Iso ordering the study list.
 - The timeline (milestone 5), which will show the `marks` entries and the attempts.
+
+## 10. What was built (2026-10-17)
+
+All six steps of section 6, on the branch `m4-study`. One thing was added at Lachlan's asking while step 6 waited on an expired key: a key can be made by signing in at OpenRouter, beside pasting one (below).
+
+**What you can do:**
+
+- **Open the study page** from the header: every exercise in order (due first, then never tried, then the fewest squares), each with its kind, title, "tests …" and the square of its last result (half malachite for partly). Below the list, the requests not kept yet, then `[ + an exercise ]` on every folder of the study base. `/study?note=` lists only what tests one note.
+- **Ask Iso for an exercise** from a folder, or from a note's margin with that note chosen. The request page chooses the notes to test (from the folder, or picked on the Atlas), the folder, and the exercise it comes after. `send to Iso` is one round with no tools; the reply shows its title and question. `keep the exercise` writes `study/<folder>/<name>.md` and sets `next` on the one it follows.
+- **Attempt it** in the editor: the tests row, the question at 23 px (18 px on a phone), "your working". Select any part of it and `[ mark as answer ]`; the selection is soft blue with "your answer", and is kept in this browser until sent.
+- **Send it for marking.** Iso's marks lie over the passages it quotes (a double malachite line for right, rose with "× wrong" for wrong), with the chips beside "your working", "moves:" with each note's move, and the tier and cost. A right result flashes the squares. Editing a marked passage drops its mark.
+- **Read the squares** in the header (the lower reading of the notes tested), with `[ wind back ]`; clicking them shows each attempt's reason. A knowledge-base note's margin shows the same squares, "N exercises", its step and "due".
+- **On the Atlas,** a tested note's block takes its new edge after a marking, and a study folder's grown mark deepens with each exercise passed (it starts at two steps, as one looks like a bare shoot).
+- **Make a key by signing in** at OpenRouter from the settings (OAuth with PKCE). The engine holds the verifier and exchanges the code that comes back, so the page never holds the key; the page reopens where the sign-in began. A sign-in lasts ten minutes and a code is good once. Lachlan signed in this way on 2026-10-17 and the real-model run below used that key.
+
+**Checked:**
+
+- 436 unit tests pass: 312 core, 57 engine, 21 server, 46 app. The type checks are clean, and every changed `.svelte` file passes the Svelte tool apart from its known false positives.
+- 138 browser tests pass, 2 skipped, at two widths on both grounds against a scripted provider. New in this milestone: the whole of section 7's list, the margin → request → comes after → send → keep → `next` → study order path, the Atlas edge and grown mark after a marking and after wind back, and the sign-in (the scripted provider stands in for OpenRouter's page and checks the verifier against the challenge).
+- **A real model,** on the mid tier (`anthropic/claude-sonnet-5.5`), on a temporary copy of information theory. Nothing of Lachlan's was written. **The four requests cost $0.045,** inside the $0.03–$0.07 estimated:
+
+  | Request | Tokens in / out | Cost |
+  |---|---|---|
+  | An exercise on Entropy | 1128 / 152 | $0.0038 |
+  | Marking a wrong working | 2130 / 1127 | $0.0159 |
+  | A hint, asked in the working | 2704 / 392 | $0.0103 |
+  | Marking the corrected working | 2457 / 1136 (824 cached) | $0.0147 |
+
+  - The exercise, "entropy of a loaded die" (face 6 at ½, the rest equal), keeps to the note: H(X), the gap below log₂ 6, and why.
+  - The wrong working used ln 10 for log₂ 10. Iso marked it **partly**, each of five passages right or wrong; the two wrong ones were exactly the slip and the gap that came from it. "log₂ 10 is about 3.32, not 2.30, so your value and the gap are off." Entropy moved +½.
+  - The hint named the step and gave a check (2³ = 8, 2⁴ = 16) without the answer.
+  - The corrected working was marked **right**, and Entropy moved only +½: "the log value needed a hint, and that slip was arithmetic rather than about entropy". **The move accounts for the help,** which is what this run was to show.
+  - **The header's estimate was low:** 725 tokens shown for the first request, 1128 counted. Four characters a token undercounts notes heavy in maths.
+  - **A marking's output is about 1,100 tokens,** most of it the model's reasoning; it is about $0.01 of each marking.
+- **Against the boards,** at the boards' sizes (1440 × 900 and 390 × 844) on both grounds, measured:
+  - `Study-Written`: the 680 px column, the question in Charter at 23 px and 1.4, the 12 px labels, the answer in soft lattice with its 2 px lattice line, `send for marking` 44 px tall at the foot, the 44 px bar, the 28 px status line, and the six 8 px squares match. **Fixed:** the label beside "your working" sat 9 px above it; now on its row. **Different:** the tests row is 44 px tall (it holds details and source), so the question sits 12 px lower than the board's. The header also carries the context count and cost (milestone 2), and the status line says "only what you mark is your answer", as the answer is any selection.
+  - `Mobile-Study`: the wrong line's 2 px rose underline, the right lines' 3 px double malachite, the 22 px chips, the working at 18 px and 1.55, `mark it again` across the width and "moves:" match. **Fixed:** the question was 23 px; it is 18 px on a phone, as the board's. **Different:** the tests row and details/source are shown (the board has none); "× wrong" wraps under a passage too long to share its line, beside "your answer"; the tier and cost sit under "moves:" rather than at the right of the text; the prompt field and status line (milestone 2) sit between the button and the tabs. Iso's unasked paragraph is not built, as the boards' notes at the top of this plan say.
+  - `Study-Fit`: rows 36 px, the kind in 7ch at 12 px, the 8 px square, the frame's padding (24, 22, 14), the margin's squares, "N exercises" at 12 px and the step label match. **Fixed:** titles in the list were in the reading face, the board's are in the interface face; the margin sat 44 px below the title, now level with it, 8 px down. **Different:** on a phone the "tests …" label wraps under the title (rows 51 px). From 1100 px the margin sits in the page's own gutter, left-aligned, where the board's is right-aligned inside the frame beside the text. Squares on blocks are not built (choice 4), nor the other kinds.
+
+**Not checked or not built:**
+
+- **The token estimate** stays at four characters a token. Counting better would make the header honest; it would trim nothing.
+- **Only the written kind,** and only Iso marks. A recall queue, Iso's teaching notes and goals are later parts (section 9).
+- **The sign-in to other providers.** `[provider] auth` names a sign-in page for a provider that makes keys as OpenRouter does; none other was tried.
+- **One real run,** of four requests, as planned. Marking quality and the judging of moves are what the week of use is for.

@@ -185,11 +185,13 @@ study base bundle ─────┴─► mapModel (core) ─► gridLayout (co
 
 ## 8. Study
 
-- **An exercise is a note** in the study base's `study/` folder, of `type: Exercise`, naming the notes it tests. It is edited in the same editor as any note. **Slice:** written response only.
-- **Marking.** "Send for marking" is an Iso request of its own form. The reply marks lines of the working right or wrong and gives a result (right, partly, wrong). It says nothing else. The marks are a proposal-like entry in the exercise's journal, laid over the working. An `attempt` event is appended to the study record.
+- **An exercise is a note** in the study base's `study/` folder, of `type: Exercise`, naming the notes it tests (`tests:`) and, if it has one, the exercise after it (`next:`). It is edited in the same editor as any note: the question is the text before `## Working`, the working what follows. **Built** (milestone 4): written response only.
+- **Asking for one** is a request of its own form (`exercise`): a draft in the study base names the folder, the notes to test and the exercise it comes after; Iso is sent those notes whole, in one round with no tools, and writes a title and a question. Kept, it is `study/<folder>/<name>.md`, and `next` is set on the one it follows. **Built.**
+- **Marking.** "Send for marking" is a request of the `mark` form: the exercise, the answer's anchor (any selection, held in the browser until sent), the notes tested, and the prompts asked in the exercise since its last marking with Iso's kept answers, so the help given can be weighed. One round, no tools. The reply quotes passages of the working and marks each right or wrong, gives a result (right, partly, wrong), and for each note tested a move of −1 to +1 squares in halves with a one-line reason. It says nothing else. The marks are a `marks` entry in the exercise's journal, laid over the working as decorations; an `attempt` event with the moves, the answer and the working as it was is appended to the study record. A reply not in that shape records nothing but its cost. **Built.**
 - **Iso speaks only when asked.** After marking, anything further is a prompt the person writes in the exercise, as in any note.
-- **Understanding is a number derived from the record,** by one function in the core (**built**). The six squares, the Atlas's four steps and "due" all come from that one function. Winding back is an event, not an edit to a number.
-- **Later:** the other five kinds; a recall queue; Iso's own teaching notes (`iso/` in the study base: its picture of the person, each claim citing record events); goals.
+- **Understanding is a number derived from the record,** by one function in the core. An attempt moves each note by the move Iso judged for it, not by a fixed step for its result; `wind-back` is one square down, an event, never an edit to a number. The six squares, the Atlas's four steps and edges, a note's margin, "due" and the study list's order (due, never tried, fewest squares, oldest) all come from it. **Built.**
+- **Measured once** (milestone 4, on the mid tier): an exercise about $0.004, a marking about $0.015, of which about $0.01 is the model's reasoning.
+- **Later:** the other five kinds; marking it yourself (offline, or without spending); a recall queue; Iso's own teaching notes (`iso/` in the study base: its picture of the person, each claim citing record events); goals.
 
 ## 9. Events
 
@@ -210,6 +212,7 @@ The interface plays sound (later) by listening to this same stream and to its ow
 - **One interface from the first line:** `complete(request, signal) → stream of text, tool calls and usage`. Adapters: OpenRouter, any OpenAI-compatible endpoint (which covers Ollama, vLLM, LM Studio and LiteLLM), an organisation's gateway. Carried over from rdstudio.
 - **Three tiers** (low, mid, max), chosen by the person per request. Tier to model is configuration.
 - **Keys are never in either repository and never sent to the browser.** Desktop: `~/.config/isorite/config.toml`, readable by the user only. Tauri: the system keychain behind the `Secrets` port.
+- **A key is pasted, or made by signing in** at a provider that offers it (OpenRouter's OAuth with PKCE; `auth` in `ProviderConfig`, `[provider] auth` for another). The engine makes the verifier and keeps it, by the sign-in's state, for ten minutes; the page is sent to the provider and comes back with a code, which the engine exchanges for the key and holds as a pasted one. The page never holds the key. **Built** (2026-10-17).
 - **On a phone** Iso goes through OpenRouter or a self-hosted gateway (decided). With the engine in the webview this is the same code with a different base URL.
 
 ## 11. Later parts, and what the slice must not break
