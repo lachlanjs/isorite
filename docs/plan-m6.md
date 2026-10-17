@@ -1,6 +1,6 @@
 # Milestone 6: the terminal, on OpenCode 2 (scope)
 
-Written 2026-10-18 as a scope, at Lachlan's asking. It is not yet a plan to approve. Step 0 below is a short spike, and the plan proper is written from what the spike finds. Branch, when it opens: `m6-terminal`.
+Written 2026-10-18 as a scope, at Lachlan's asking, and revised the same day after reading OpenCode 2's source. It is not yet a plan to approve. Step 0 below is a short spike, and the plan proper is written from what the spike finds. Branch, when it opens: `m6-terminal`.
 
 ## 1. What the terminal is for
 
@@ -29,25 +29,45 @@ So OpenCode already provides the coding agent: tools, diffs, permissions, subage
 4. the one-note Atlas;
 5. the browser following the agent.
 
-## 3. What OpenCode 2 offers (as of 2026-10-18)
+## 3. What OpenCode 2 offers (read from its source, 2026-10-18)
 
-From the 2.0 announcement (anoma.ly/notes/opencode-2-0), OpenCode's documentation, and community plugins:
-- **One local server for every window.** The TUI, the web interface and the desktop app all connect to the same background process. `@opencode/client` finds it automatically, and the server API was rebuilt for 2.0. isorite can therefore talk to a running session from outside: the browser's "send to agent" can reach the terminal through it.
-- **TUI plugins are stable** and built on OpenTUI. The announcement says nearly every feature is now an internal plugin, more than 80 of them, all hot-reloaded. A community plugin adds to the sidebar's context section, so sidebar slots exist.
-- **Server plugins** (JS/TS, run in Bun):
-  - events (`message.part.updated`, `file.edited`, `permission.asked`, `session.idle`, `tui.prompt.append`, …);
-  - `tool.execute.before` and `tool.execute.after`, which can change a call's arguments or block it;
-  - custom tools with Zod schemas;
-  - a compaction hook.
-- **MCP servers run in "code mode" by default**: the agent writes a short script that chains several tool calls in one round trip.
-- **Breaking:** plugins written for 1.0 do not run on 2.0. The config format changed. Upgrading is explicit: `opencode upgrade --major`.
+From the 2.0 announcement, and from OpenCode's own source (`anomalyco/opencode` at `8f7b012`, 2026-10-17), mainly `packages/plugin/src/tui/context.ts` and `packages/plugin/src/promise/`:
 
-**Not yet known, and the reason for step 0:**
-- The TUI plugin API is barely documented. Community issues from June 2026 still ask where it is written down.
-- Whether a plugin can add a **full-screen view** (the note view), a **side panel** beside the chat (the one-note Atlas), a **start screen** (the splash), and **keybindings**, or only slots in the sidebar, header and footer.
-- Whether a tool's result can be **drawn by the plugin** (the tree of notes found), or only as text.
+**The setup**
+- **One local server for every window.** The TUI, the web interface and the desktop app all connect to it, and `@opencode/client` reaches it from outside. The isorite server can therefore talk to a running session, so "send to agent" from the browser can reach the terminal.
+- **Plugins.** Each is a JS or TS module with `define({ id, setup(ctx) })`, run in Bun and hot-reloaded. There are two kinds: server plugins (`@opencode/plugin`) and TUI plugins (`@opencode/plugin/tui`), with Solid components drawn by OpenTUI. Plugins written for 1.0 do not run on 2.0.
 
-**Installed here:** OpenCode 1.19.3 (`~/.local/bin/opencode`), and Pi. Neither Bun nor OpenCode 2 is installed. `~/rdstudio` has an `opencode.json` of its own, which a major upgrade could break.
+**What a TUI plugin can do, against the boards**
+
+| Need | API | Covers |
+|---|---|---|
+| A whole screen of isorite's own | `ui.router.register({ name, render })` and `ui.router.navigate({ type: "plugin", name, data })` | The note view (`Terminal-Note`), and the splash if `home` cannot be replaced |
+| A panel beside the chat | the `session.panel` slot with `ui.panel.open(name, { presentation: "panel" or "fullscreen" })`; the panel is told its width and whether it has focus | The one-note Atlas (`Terminal-Atlas`) |
+| The sidebar | the `sidebar.content` and `sidebar.footer` slots | Notes in play, and from you (`Terminal`) |
+| The status line | the `prompt.footer.status` and `home.footer.status` slots | "atlas following", the base's name, the key hints |
+| Above the prompt | the `session.composer.top` slot | `[y] accept` style choices for a note's proposal |
+| Replacing the start screen | the `app` slot (`replace`, `prepend` or `append`) | The splash (`Terminal-Splash`) |
+| Keys | `keymap.layer({ commands: [{ id, bind, run, slash, palette }] })`, with modes that can be pushed | `[t]`, `[/]`, `[a]`, `[b]`, `[k]`, `[e]`, `[r]`, and `/note`, `/atlas` |
+| Drawing inside answers | `markdown.registerCodeBlockRenderer(language, render)` | The tree of notes found, and the citations (`Terminal-Chat`): a tool returns a fenced block in an `isorite` language and the plugin draws it |
+| Dialogs and notices | `ui.dialog.select`, `confirm` and `prompt`; `ui.toast` | Choosing a note; "draft a note from this" |
+| State | `storage.store` (on disk, synced across windows) and `storage.memory` | What is in play, and what was sent from you |
+| Session data | `data.on(event)`, and `data.session.message`, `cost` and `status` | Following the agent's tool calls, and the session's cost |
+| The theme | `ctx.theme`, plus theme files (`packages/theme`) | Lapis and quartz |
+
+**What a server plugin can do**
+- `ctx.tool.transform`: add tools (`name`, `description`, Effect `Schema` for input and output, `execute`), or change and remove existing ones.
+- `ctx.tool.hook("execute.before")` and `("execute.after")`: see every tool call, change its input, or stop it. This is how an edit to a note becomes a proposal that waits to be kept.
+- `ctx.permission.hook("evaluate")`: decide whether to allow, ask or deny an action.
+- `ctx.session.hook("context")`: change the tools and descriptions a request is sent with. This is how the agent is told about the base.
+- `ctx.agent.transform`, `ctx.command.transform` and `ctx.skill.transform`: an isorite agent and commands of its own.
+- MCP servers run in "code mode" by default.
+
+**Still to confirm in step 0**
+- Whether a tool's result is drawn as Markdown in the transcript, which the code-block renderer needs. If it is not, the tree of notes found goes in the sidebar instead.
+- Whether the `app` slot can draw a splash before the home screen.
+- How much the boards' look survives OpenTUI: box characters, a half-block logo, two colour grounds.
+
+**Installed here:** OpenCode 1.19.3 (`~/.local/bin/opencode`) and Pi. Bun is not installed. Lachlan has approved installing what M6 needs (2026-10-18). OpenCode 2 and Bun go in a folder of their own, so that 1.19.3 and `~/rdstudio`'s `opencode.json` are untouched.
 
 ## 4. The proposed shape
 
@@ -68,7 +88,7 @@ browser (Atlas)  ◄── events ──  isorite server (Hono, engine)  ◄─�
 
 ## 5. Steps
 
-0. **Spike, one or two days. Needs Lachlan's go-ahead to install OpenCode 2.**
+0. **Spike, about a day.** Most of the questions are already answered by section 3.
    - Install OpenCode 2 and Bun in a folder of their own (not `~/.local/bin`), so 1.19.3 and rdstudio's setup are untouched.
    - Read OpenCode 2's TUI plugin source.
    - Build throwaway plugins:
@@ -101,10 +121,15 @@ browser (Atlas)  ◄── events ──  isorite server (Hono, engine)  ◄─�
 - The note view and the one-note Atlas work in the terminal.
 - The same tools work from Claude Code through MCP.
 
-## 7. Questions for Lachlan
+## 7. Lachlan's answers (2026-10-18)
 
-1. **May I install OpenCode 2 and Bun** in a separate folder for the spike, leaving 1.19.3 where it is?
-2. **Which model and provider should OpenCode use** in testing: your OpenRouter key through OpenCode's own provider config, or something else? This milestone's real-model checks will cost more than Iso's, because coding sessions are long.
-3. **Is Pi dropped,** or kept as the fallback if OpenCode's TUI plugins cannot draw the note view?
-4. **When should it come:** after the week of use (the slice plan's order), or straight after M5?
-5. Should agent edits to **files that are not notes** keep OpenCode's own accept and reject, as `decisions.md` says?
+| # | Question | Answer |
+|---|---|---|
+| 1 | Install OpenCode 2 and Bun | Yes: install what is needed. Read the documentation and the codebase first, to see what can be customised. |
+| 2 | How far to go | To the level shown in the terminal boards. |
+| 3 | Pi | Kept as the fallback. |
+| 4 | When | Straight after M5. Lachlan may move to a Claude Code cloud session before asking for it to start. |
+
+Still to settle with the plan proper: which model and provider OpenCode uses for real-model checks, and their budget; and whether an agent's edits to files that are not notes keep OpenCode's own accept and reject (as `decisions.md` says).
+
+**For a cloud session:** start from this file, `architecture.md` §the terminal, the six `Terminal-*` boards in the design artifact, and OpenCode's `packages/plugin/src/tui/context.ts`. rdstudio's MCP server is not in the repository: its tools are listed in §4, and the server is carried over from `~/rdstudio` only where that folder exists.

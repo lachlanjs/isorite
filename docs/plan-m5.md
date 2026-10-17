@@ -1,8 +1,8 @@
-# Milestone 5: the timeline, an example base, and the tour
+# Milestone 5: the timeline, and a tutorial over an example base
 
-Written 2026-10-18 for approval. Branch: `m5-timeline`. Nothing is built until Lachlan approves this.
+Written 2026-10-18, revised the same day with Lachlan's answers (section 4). Branch: `m5-timeline`. Nothing is built until Lachlan approves this.
 
-M5 is the last milestone of the first slice (`plan-first-slice.md` §5). On 2026-10-18 Lachlan also asked for two more things. The first is an example base that is halfway through. The second is a tutorial, so that Lachlan can keep track of what isorite does as it is built. Both are in this plan because they depend on each other. The timeline needs a history to step through. The example base supplies one, and the tour is given over the example base.
+M5 is the last milestone of the first slice (`plan-first-slice.md` §5). It also delivers the tutorial Lachlan asked for on 2026-10-18. The tutorial is a walk through every feature of isorite, done over an example knowledge base that a person is partway through building. Iso's replies are scripted into it. It is published as a static site on the project's GitHub Pages, so it needs no server, no key and no cost.
 
 ## 0. Where isorite stands
 
@@ -13,129 +13,137 @@ M5 is the last milestone of the first slice (`plan-first-slice.md` §5). On 2026
 | M2 | Iso in a note (a prompt, then keep, edit or remove), notes for Iso, search by meaning, the header's tokens and cost, the key | merged |
 | M3 | The Atlas: both bases, what a note rests on, Iso's path drawn live, starting notes for Iso on the map | merged |
 | M4 | Study: written exercises, Iso's marking and judged moves, the squares, the study page, signing in for a key | merged |
-| **M5** | **The timeline; an example base; the tour** | **this plan** |
+| **M5** | **The timeline; the example base; the tutorial** | **this plan** |
+| M6 | The terminal on OpenCode 2 (`plan-m6.md`) | straight after M5, possibly in a cloud session |
 | then | A week of use on information theory | Lachlan |
-| M6 | The terminal (OpenCode 2), scoped in `plan-m6.md` | after the week, or before it if Lachlan prefers |
 
 **Done when:**
-- Every entry made in M1 to M4 appears on the timeline and can be stepped through: your edits, Iso's proposals (kept, removed or still waiting), changes made outside isorite, markings and restores.
-- `isorite example <folder>` makes the example base and its study base, partway through, in a folder you choose.
-- The tour runs over the example base and shows each part that has been built.
+- Every entry made in M1 to M4 appears on the timeline and can be stepped through. That covers your edits, Iso's text whether kept, removed or not yet settled, changes made outside isorite, markings and restores.
+- The tutorial, built as a static site, walks through every feature over the example base, with Iso's scripted replies, both offline and in a local preview of the Pages build.
 
 ## 1. The boards followed
 
 | Board | What it settles |
 |---|---|
-| `Desktop-Editor` | The note's timeline in the left margin, at `left: 72px; top: 64px; width: 250px`, level with the title. One row per moment: a blue square for yours ("you wrote the note", "you edited"); a gold diamond for Iso's, followed by what was asked in quotation marks, filled once kept and outlined while waiting. Pointing at a moment marks the paragraphs it changed with a soft background and a 3 px bar on the left: lattice for yours, growth for Iso's. With nothing pointed at, the latest Iso moment is marked. |
-| `Atlas-Timeline` | On the Atlas, at the right: "this session · N moments". Each row has its mark, what happened, and the note's title on the right. Pointing at a row draws a 2.5 px outline round the block it touched, in lattice or growth. The status line says "point at a moment to see the note it touched". |
-| `Mobile-Timeline` | On a phone, the timeline is a 150 px column on the `g1` ground beside the note, with rows 56 px tall, "swipe back to close", and "tap a moment to see the note as it was". |
-| `Tour-1` … `Tour-6` | The tour. A coach card 340 px wide: growth edge, "a short tour" with six segments, a serif heading at 23 px, one or two sentences, `next` and `[ skip the tour ]`. The part being shown is lit and everything else is dimmed to 80%. Steps: the Atlas; hold to start a note; Iso in a note; the timeline; an exercise; a few keys. |
-| `Decisions-Design` | The timeline is in the note's margin on desktop, swiped in on a phone, and on the Atlas. Pointing at a moment shows what it changed. There are no key hints on desktop or phone, so the keys are listed once, in the tour's last step. |
-| `ISORITE_DOC.md` §The timeline | Moments are evenly spaced, because the order matters and the time between them does not. Selecting one shows the note as it was after it, with the change marked and what was asked. From there you can step forward or back, or restore the note to that point; a restore is itself a new entry. Another agent's moment is a diamond with its name. |
-
-Not followed: the session tour from `ISORITE_DOC.md` ("what you did in the last session", with Iso's account of each step written by a cheap model). It costs money for every change and was left out of the slice on purpose. The tour here is the first-run tour on the `Tour-*` boards.
+| `Desktop-Editor` | The note's timeline in the left margin, level with the title, one row per moment. A blue square marks your changes. A gold diamond marks Iso's: filled once kept, outlined while not yet settled. Pointing at a moment marks the paragraphs it changed with a soft background and a 3 px bar on the left, lattice for yours and growth for Iso's. **Not followed:** the board's words beside each mark ("you edited", "Iso · …"). Lachlan wants the symbols only, so the timeline takes as little room as possible (section 4, answer 3). |
+| `Atlas-Timeline` | On the Atlas: this session's moments, and pointing at one draws a 2.5 px outline round the block it touched, in lattice or growth. The status line says "point at a moment to see the note it touched". **Not followed:** each row's words and note title. The marks stand alone here too. |
+| `Mobile-Timeline` | On a phone, the timeline is a narrow column on the `g1` ground beside the note. With symbols only, it is about 44 px wide rather than 150 px. |
+| `Tour-1` … `Tour-6` | The tutorial's look. A coach card 340 px wide: growth edge, "a short tour" with step segments, a serif heading at 23 px, one or two sentences, `next` and a way out. The part being shown is lit and everything else is dimmed to 80%. The boards' six steps are where the tutorial starts. It goes further, as section 2 lists. |
+| `Decisions-Design` | The timeline is in the note's margin on desktop, at the side on a phone, and on the Atlas. There are no key hints on desktop or phone: the tutorial names the keys once, as `Tour-6` does. |
+| `ISORITE_DOC.md` §The timeline | Moments are evenly spaced, because order matters and the time between them does not. Selecting one shows the note as it was after it, with the change marked and what was asked. From there you can step forward or back, or restore the note to that point. A restore is itself a new entry. Another agent's moment is a diamond. |
 
 ## 2. What you will be able to do
 
 **The timeline in a note**
-1. Show or hide the timeline beside any note. On desktop it sits in the left margin. Whether it is shown is remembered on this device. It starts hidden, as `ISORITE_DOC.md` says ("off by default").
-2. Point at a moment to see what it changed: the paragraphs it touched are marked in today's text. A paragraph that has since been deleted is not marked, and the row says "since removed".
-3. Click a moment to see the note as it was just after it. The text is read-only, the change is marked, and what was asked appears above it. ← and → (or `[ earlier ]` and `[ later ]`) step through the moments. `[ restore to here ]` writes that text back as a new entry. `[ back to now ]` returns to the note as it is.
-4. On an exercise, markings also appear as moments: "Iso marked: partly".
+1. A small icon button opens or closes the timeline. It has no words. It sits faint at the top of the left margin, beside the title, and grows clear on hover, much like the editor's other quiet controls. The icon is a short vertical line with three marks on it, drawn in the same strokes as the logo. Whether the timeline is open is remembered on this device. It starts closed.
+2. The timeline is a column of marks only: squares for your changes and diamonds for Iso's, evenly spaced, oldest at the top.
+3. Pointing at a mark marks the paragraphs it changed in today's text. For one of Iso's marks, what was asked also shows in a small label beside it while you point. That label is the only text, and it goes when you stop pointing. A paragraph deleted since then is not marked.
+4. Clicking a mark shows the note as it was just after that moment. The text is read-only, the change is marked, and for Iso's moments what was asked is shown above. ← and → step through the moments. Two icon buttons in the same quiet style sit at the top of the note: restore to here, and back to now. Their names show on hover and are given to screen readers. A restore writes that text back as a new entry.
+5. On an exercise, markings appear as moments too, with their own mark: the square of the result, as the study page draws it.
 
 **The timeline on the Atlas**
+6. The Atlas shows this session's moments, across every note, as a column of marks at the right. Pointing at one outlines the block it touched and shows the note's title in the status line. Clicking it opens the note at that moment.
 
-5. The Atlas shows this session's moments across every note at the right, as on `Atlas-Timeline`. Pointing at a row outlines the note's block, and clicking it opens the note at that moment.
+**The tutorial**
+7. The tutorial is a static build of the app, `npm run build:tutorial`, written to `site/`. It is meant for the project's GitHub Pages. It runs the real engine in the browser, over the example base held in memory, with a scripted provider in place of a model. Nothing is sent anywhere, and a reload starts it over.
+8. It walks through using every feature, one step at a time, each in a coach card as on the `Tour-*` boards. Each step asks you to do the thing, rather than only showing it, and moves on when you have done it.
+   1. The Atlas: blocks, their edges, folders, the study folders beside them.
+   2. Selecting a note: what it requires and what builds on it.
+   3. A note: reading it, its maths and links, following a link.
+   4. Writing in a note: an edit is saved.
+   5. Asking Iso in a note. The prompt is filled in for you. Iso's scripted reply arrives between the dotted rules, then you keep it, edit it or remove it.
+   6. A rewrite: choose passages, Iso rewrites them, keep one region.
+   7. The header's tokens and cost, opened.
+   8. Holding on the Atlas to start a note for Iso, picking the notes it rests on from the map, and watching Iso's path while it reads.
+   9. Reviewing that note and keeping it.
+   10. The timeline: point at moments, step back, restore, and back to now.
+   11. An exercise: write working, mark the answer, send it for marking, and see the marks, the squares and the Atlas's edge move.
+   12. Winding back, and the reason for each move.
+   13. The study page, and asking Iso for an exercise from a note's margin.
+   14. A few keys (`Tour-6`).
+9. If you type a prompt the script does not know, Iso answers once that in the tutorial it only answers the prompts it walks you through. Nothing breaks.
+10. You can leave the tutorial at any step and keep using the example base freely, with the scripted Iso.
 
 **The example base**
-
-6. `isorite example ~/somewhere` writes `dmft-notes/` and `dmft-notes-study/`. The base is 22 notes on dynamical mean-field theory in four folders, the same notes and folders as on the boards, so screenshots can be compared with them directly. Its study base is halfway through:
-   - two weeks of sessions;
-   - your edits;
-   - Iso's proposals, some kept, some removed and one still waiting;
-   - a change made outside isorite;
-   - a restore;
-   - five exercises with attempts, marked right, partly and wrong;
-   - understanding at every level from "not reached" to "understood", matching the board's block edges.
-7. `isorite serve ~/somewhere/dmft-notes` opens it like any base. It is yours to change, and running the command again into a new folder gives a fresh copy.
-
-**The tour**
-
-8. The first time isorite opens on a base, it offers "a short tour". You can also start it at any time from the logo menu ("take the tour"). It has six steps, as on the boards. Each one opens the screen it describes on the base that is open, and lights the part it names. `[ skip the tour ]` ends it, and that choice is remembered on this device.
-9. A seventh step, "where isorite stands", lists what each milestone has built and what has not been built yet, from a list kept in the repository (`app/src/lib/tour/built.ts`). From now on, **every milestone adds its own tour step, or updates one, and adds whatever the example base needs to show it.** The tour and the example then keep up with the build, and opening them is how you catch up.
+11. The base is 22 notes on dynamical mean-field theory, in four folders, the same notes and folders as on the boards. It is written to look like a person's base partway through being built. Some notes are full, some thin, one is a stub with a question in it, and one is a note for Iso not yet sent. The study base has the history that would give that: two weeks of sessions, your edits, Iso's text kept and removed, one reply not yet settled, a change made outside isorite, a restore, five exercises with attempts marked right, partly and wrong, and understanding at every level, matching the boards' block edges.
+12. The same base can be written to disk with `isorite example <folder>` and served locally like any base. That is useful for trying things by hand, and it is how its history is checked.
 
 ## 3. What is built
 
 ### In the core
 - `moments()` already exists (`packages/core/src/journal.ts`). It gains:
   - `who` for another agent;
-  - `since removed`;
-  - the result of a marking.
-- `touched(entries, moment)`: the line ranges a moment changed, carried forward through later hunks into today's text, so pointing at a moment can mark today's paragraphs. A line deleted later drops out.
-- `sessionMoments(journals, now)`: the moments of the current session across many notes, oldest first. A session is a run of changes with no gap longer than 30 minutes (`ISORITE_DOC.md`). Journal entries already carry a session id, which is used where it is present.
-- `example.ts`: the example's history written as entries, with time stamps relative to the moment it is made. It produces no files: the server writes them.
+  - "since removed";
+  - a marking's result.
+- `touched(entries, moment)` gives the line ranges a moment changed, carried forward through later hunks into today's text. A line deleted later drops out.
+- `sessionMoments(journals)` gives the current session's moments across many notes, oldest first. A session is a run of changes with no gap longer than 30 minutes (`ISORITE_DOC.md`). Where entries already carry a session id, it is used.
+- `examples/dmft/` holds the notes, plus `history.ts`: the example's history as entries, with times relative to when it is built. It is pure data and functions, so both the server and the browser can make the base from it.
 
 ### In the engine and the server
-- `Api.version(id, entry)`: the note's text just after an entry. This is `replay(entries, upTo)`, which already exists.
-- `Api.restore(id, entry, base)`: write that text to the note as a `change` with `why: restore` and `to: entry` (`format.md` already defines both fields). Like a save, it refuses with a conflict if the note has moved on since `base`. Proposals still waiting stay waiting, placed by their text as always.
-- `Api.timeline()`: the current session's moments across the base and the study base, for the Atlas. It reads only the journals changed in the last day, so it stays cheap.
-- `isorite example <folder>`: copies `examples/dmft-notes/` (plain Markdown, committed in the repository), creates the study base, and writes the journals and the record from `example.ts`. It refuses if the folder already holds something.
+- `Api.version(id, entry)`: the note's text just after an entry. This uses `replay(entries, upTo)`, which already exists.
+- `Api.restore(id, entry, base)`: writes that text as a `change` with `why: restore` and `to: entry`, both already in `format.md`. Like a save, it refuses with a conflict if the note has moved on.
+- `Api.timeline()`: the current session's moments, for the Atlas.
+- `isorite example <folder>`.
+
+### The tutorial build
+- `memoryFiles()`: the engine's `Files` port over a map in memory.
+- `scriptedHttp(script)`: the engine's `Http` port, answering requests to the provider from the tutorial's script. A script entry is a prompt the tutorial fills in, plus Iso's reply as it streams, its tool calls (so the path draws on the Atlas), its tokens and its cost. Marking and exercise replies are scripted the same way.
+- Search by meaning in the browser: the embedding model, about 34 MB, is too heavy for Pages. The tutorial's Iso uses keyword search and scripted "meaning" steps whose results were worked out when the site was built. The tutorial says so in one line at that step.
+- `localApi(engine)`: the app's `Api` called in-process instead of over HTTP. The app already talks only to `Api`, so no screen changes for the tutorial.
+- `tutorial/`: the coach card, the dimming, and the steps as data (`steps.ts`). Each step names the part to light by a `data-tour` attribute, what you are asked to do, and the event that ends the step.
+- `npm run build:tutorial` uses SvelteKit's static adapter with a base path for Pages, and writes to `site/`.
+- A GitHub Actions workflow to publish `site/` to Pages, **written but not pushed**. Lachlan pushes it, or says I may, when ready.
 
 ### In the app
-- `Timeline.svelte`: the margin. It has the rows, pointing at a moment, the selected moment, stepping, restore and back to now. On a phone it is a column beside the note, opened from the note's header.
-- `NoteEditor`: a read-only mode for showing a version, and a mark layer for touched paragraphs (`overlays.ts` already lays marks over text).
-- `AtlasTimeline.svelte`: the session list on the Atlas, and the outline on the block being pointed at.
-- `tour/`: the coach card, the dimming and the steps (one file of data, `steps.ts`). The tour moves between screens with the router, waits for the part to be drawn, then lights it.
-- The logo menu gains "take the tour".
+- `Timeline.svelte`: the margin, its marks, pointing, selecting, stepping, restore and back to now, for desktop and phone.
+- The icon buttons: the timeline, restore and back to now. They are faint until pointed at, with `aria-label` and a hover title, and no bracketed text.
+- `NoteEditor`: a read-only mode for showing a version, and the marks for touched paragraphs.
+- `AtlasTimeline.svelte`: the session's marks on the Atlas, and the outline.
 
-### The example's notes
-- 22 notes, as on the boards:
-  - dmft: infinite dimensions, local self-energy, cavity construction, lattice to impurity map, Weiss field, self-consistency condition, the DMFT loop;
-  - lattice models: tight binding, Hubbard model, density of states, Mott transition;
-  - impurity problems: Anderson impurity model, hybridisation function, impurity solver;
-  - many-body basics: second quantisation, Green's function, Matsubara frequencies, self-energy, spectral function, Dyson equation, quasiparticle weight.
-- Short, correct and linked by `requires`, as the boards' routes show.
-- I write them. Lachlan should glance over the physics, since a wrong example is worse than none.
+## 4. Lachlan's answers (2026-10-18)
 
-## 4. Choices for Lachlan
-
-| # | Choice | I recommend |
+| # | Question | Answer |
 |---|---|---|
-| 1 | The example's subject | **DMFT, as on the boards**, so every screen can be compared with its board as it stands. The alternative, a second information theory base, would be confused with your own. |
-| 2 | How the timeline is opened on desktop | A `[ timeline ]` item in the status line, plus `t` when the cursor is not in the text (the key `Tour-6` names). `t` cannot work while you are typing in a note. |
-| 3 | Swiping on a phone | **A button in the note's header** for now. A swipe from the left edge clashes with the browser's own "back" gesture, so I would try it on a real phone before committing to it. |
-| 4 | When the tour is offered | **The first time a base is opened on a device**, and from the logo menu at any time. |
-| 5 | "Where isorite stands" in the tour | **Yes**, kept up to date by each milestone. |
-| 6 | Restoring a version while a proposal is waiting | **Restore, and leave the proposal waiting.** If its place has gone, it is shown as unplaced, as already happens. |
+| 1 | The example's subject | DMFT, as on the boards (as proposed). |
+| 2 | How the timeline is opened on desktop | An icon button, with no `[ … ]` text. |
+| 3 | On a phone | The same, and unobtrusive. |
+| 4 | The marks | Symbols only, with no words beside each moment, so the timeline takes little room. |
+| 5 | The tour | No general tour inside the app. Instead, a tutorial as on the boards that walks through using every feature over an example base being built by a person, with Iso's prompts and replies scripted, served on GitHub Pages. |
+| 6 | Restoring while Iso's text is not settled | Explained below; the proposal stands unless Lachlan says otherwise. |
+
+On 6: Iso's reply sits between the dotted rules until you keep it or remove it. Until then it is in the journal, not in the note's file. What happens to such a reply if you restore the note to an earlier version? **Proposed:** it stays between its rules, where it was, and you can still keep or remove it. If the paragraph it sat beside is gone in the restored text, it shows at the note's foot, as already happens when its place disappears.
 
 ## 5. Order of work
 
-1. **The example base.** The notes, `example.ts`, `isorite example`, and tests that the history replays, every journal's hashes match its file, and the squares come out as intended. Everything after this is tested against it.
-2. **The core and the engine.** `touched`, `sessionMoments`, `version`, `restore` and `timeline`, with tests. A restore is checked to be an entry, to be undoable by restoring again, and to refuse when the note has moved on.
-3. **The timeline in a note**, desktop and phone, with browser tests: every kind of moment from M1 to M4 appears and can be stepped through.
+1. **The example base.** The notes, `history.ts` and `isorite example`, with tests that the history replays, that every journal's hashes match its file, and that the squares come out as intended.
+2. **The core and the engine.** `touched`, `sessionMoments`, `version`, `restore` and `timeline`, with tests.
+3. **The timeline in a note**, desktop and phone, with browser tests over the example base: every kind of moment appears and can be stepped through.
 4. **The timeline on the Atlas**, with browser tests.
-5. **The tour**, with a browser test that walks all seven steps over the example base.
-6. **The boards and the write-up.** Screenshots beside `Desktop-Editor`, `Atlas-Timeline`, `Mobile-Timeline` and `Tour-1` to `Tour-6` at their sizes on both grounds, measured, with the differences fixed or listed. Section 10, `architecture.md`, and the memory file updated. Lachlan approves the merge.
+5. **The engine in the browser.** `memoryFiles`, `scriptedHttp`, `localApi`, and the static build. A browser test runs the app on the example base with no server.
+6. **The tutorial.** The steps, the script of Iso's replies, and a browser test that walks every step of the built site.
+7. **The boards and the write-up.** Screenshots beside `Desktop-Editor`, `Atlas-Timeline`, `Mobile-Timeline` and `Tour-1` to `Tour-6` at their sizes on both grounds, with the differences fixed or listed. Section 10, `architecture.md` and the memory file updated. Lachlan approves the merge.
 
 ## 6. How it is checked
 
 - Unit tests:
-  - `touched` (including later edits, deletions and moves);
+  - `touched` (later edits, deletions, moves);
   - session boundaries;
-  - restore (as an entry, again, and on conflict);
-  - the example's history replaying cleanly.
-- Browser tests over the example base, at desktop and phone sizes, on both grounds.
-- **No real-model calls.** Nothing in M5 asks Iso, so it costs nothing on your key.
+  - restore (an entry, undone by restoring again, refusing on conflict);
+  - the example's history;
+  - the memory and scripted ports.
+- Browser tests over the example base at desktop and phone sizes, and the whole tutorial on the static build.
+- **No real-model calls.** It costs nothing on your key.
 
 ## 7. Risks
 
-- **Marking today's text from an old moment.** Hunks are line-based, so a paragraph rewritten in place since then is marked as a whole. That is honest, but coarse.
-- **The tour depends on screens drawn by other code.** It finds each part by an attribute (`data-tour="…"`), not by a CSS class, so it does not break when styling changes.
-- **The example's history ages.** It is written relative to the moment it is made, so "this session" on the Atlas has something in it for a day. After that the base looks like a base you have come back to, which is also worth seeing.
+- **Marking today's text from an old moment.** Hunks are line-based, so a paragraph rewritten since then is marked as a whole: coarse, but honest.
+- **The engine in the browser.** It was written for this (against ports), but it has never been run there. Search by meaning cannot come along at its real size, so the tutorial scripts it.
+- **The tutorial depends on screens drawn by other code.** It finds parts by `data-tour` attributes, not by CSS classes. Its browser test walks every step, so a later milestone that breaks a step is caught.
+- **GitHub Pages needs the remote.** The site is built and previewed locally. Publishing waits for Lachlan.
 
 ## 8. Not in this milestone
 
 - The session tour with Iso's account of each change.
-- "What changed while I was away" (for teams).
-- The timeline on the phone's Atlas (still open on `Decisions-Design`).
+- "What changed while I was away".
+- The timeline on the phone's Atlas.
 - The terminal (`plan-m6.md`).
