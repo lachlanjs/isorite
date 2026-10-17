@@ -21,8 +21,9 @@ export interface Overlay {
   /** The line (from 0) it sits before; the number of lines puts it after the last. */
   line: number;
 }
-/** A stretch of the text, by character, marked for what Iso is doing with it. */
-export interface Mark { from: number; to: number; kind: "picked" | "old" }
+/** A stretch of the text, by character, marked for what Iso is doing with it; in an exercise, also its question,
+ *  the working's heading, the answer, and Iso's marks. */
+export interface Mark { from: number; to: number; kind: "picked" | "old" | "question" | "working" | "answer" | "right" | "wrong" }
 /** A piece set in the line at a character. */
 export interface Inline { key: string; at: number }
 
@@ -100,5 +101,17 @@ export function overlays(mount: Mount): Extension {
     ".cm-iso-old": { textDecoration: "line-through", textDecorationColor: "var(--text-faint)", color: "var(--text-faint)" },
     ".cm-iso-old *": { color: "var(--text-faint) !important" },
     ".cm-iso-change": { cursor: "default" },
+    // An exercise (Study-Written, Mobile-Study): the question in the reading face at 23 px; the working's heading as
+    // its label; the answer in soft lattice, yours; Iso's right in a double malachite line, its wrong in rose.
+    ".cm-iso-question": { fontFamily: "var(--font-text)", fontSize: "23px", lineHeight: "1.4" },
+    // On a phone, the reading face's size, as the working is (Mobile-Study).
+    "@media (max-width: 600px)": { ".cm-iso-question": { fontSize: "18px", lineHeight: "1.55" } },
+    ".cm-line:has(.cm-iso-working)": { paddingTop: "12px" },
+    ".cm-iso-working": { fontFamily: "var(--font-ui)", fontSize: "12px", fontWeight: "400", color: "var(--text-faint)", textTransform: "lowercase", letterSpacing: "0" },
+    ".cm-iso-working::before": { content: "'your '" },
+    ".cm-iso-working *": { fontSize: "12px !important", color: "var(--text-faint) !important", fontWeight: "400 !important" },
+    ".cm-iso-answer": { background: "var(--lattice-soft)", boxShadow: "0 0 0 4px var(--lattice-soft)", borderBottom: "2px solid var(--lattice)" },
+    ".cm-iso-right": { borderBottom: "3px double var(--malachite)" },
+    ".cm-iso-wrong": { borderBottom: "2px solid var(--rose)" },
   })];
 }

@@ -31,7 +31,8 @@ function remembered(): Tier {
 
 export class NoteIso {
   private readonly note: NoteSession;
-  private entries = $state.raw<Entry[]>([]);
+  /** The note's journal, oldest first, as it grows. */
+  entries = $state.raw<Entry[]>([]);
   prompt = $state.raw<Prompt | null>(null);
   asking = $state.raw<Asking | null>(null);
   /** Why the last request came to nothing. */
@@ -115,10 +116,12 @@ export class NoteIso {
     }
     if (e.type === "note-changed" || e.type === "record" || e.note !== this.note.id) return;
     if (e.type === "iso-start") {
+      // A marking is shown by the exercise's own page, not as Iso's text in the note.
+      if (e.place.form === "mark") return;
       // Sent from here: the block is up already and now learns its request's id. Sent from another tab: it is put up.
       if (this.asking && !this.asking.request) { this.asking = { ...this.asking, request: e.request }; return; }
       let line = this.foot;
-      if (e.place.form !== "note") {
+      if (e.place.form === "insert" || e.place.form === "rewrite") {
         const at = locate(this.note.text, { form: "insert", after: e.place.after, before: e.place.before } as Proposal);
         if (at?.form === "insert") line = at.line;
       }
@@ -219,15 +222,15 @@ export class NoteIso {
     }
   }
 
-  /** Send a note written for Iso, whole. The reply is a note to keep in its place. Returns the request, or "" when
-   *  it was not sent. */
-  async send(): Promise<string> {
+  /** Send a note written for Iso, whole. The reply is a note to keep in its place, or for a request for an exercise,
+   *  the exercise. Returns the request, or "" when it was not sent. */
+  async send(form: "note" | "exercise" = "note"): Promise<string> {
     if (this.asking) return "";
     this.failed = null;
     this.asking = { request: "", asked: "", line: this.foot, regions: [], text: "", steps: [] };
     try {
       await this.note.save();
-      const { request } = await app.api.ask({ note: this.note.id, form: "note", tier: this.tier });
+      const { request } = await app.api.ask({ note: this.note.id, form, tier: this.tier });
       if (this.asking && !this.asking.request) this.asking = { ...this.asking, request };
       return request;
     } catch (e) {

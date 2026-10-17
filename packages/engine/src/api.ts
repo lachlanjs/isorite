@@ -2,7 +2,7 @@
 // interface and nothing else, so it does not know whether the engine is
 // behind HTTP (the server) or in the same process (a webview, later).
 
-import type { Anchor, Cost, Entry, MapModel, Passage } from "@isorite/core";
+import type { Anchor, Cost, Entry, MapModel, Passage, Result } from "@isorite/core";
 import type { Part } from "./iso.ts";
 import type { Step } from "./lookup.ts";
 import type { Tier } from "./provider.ts";
@@ -53,6 +53,8 @@ export interface MapReport {
     step: 0 | 1 | 2 | 3;
     /** A study note's kind, as its top edge says it. */
     kind?: string;
+    /** An exercise whose last attempt was marked right. */
+    passed?: true;
     /** A note of the knowledge base: the size of its text, as an estimate in tokens (what linking it to a note for Iso adds). */
     tokens?: number;
   }>;
@@ -71,10 +73,28 @@ export type AskRequest =
   /** These passages rewritten, and nothing else. What Iso says of the changes goes between `after` and `before`. */
   | { note: string; form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier }
   /** A note written for Iso (a draft, `@draft/…`): the draft is what is asked, and the reply is a note to keep in its place. */
-  | { note: string; form: "note"; tier: Tier };
+  | { note: string; form: "note"; tier: Tier }
+  /** An exercise (`@study/…`) sent for marking, with the passage of its working that is the answer. One round, no tools. */
+  | { note: string; form: "mark"; answer: Passage; tier: Tier }
+  /** A request for an exercise (a draft made by `createExerciseDraft`): the reply is an exercise to keep. One round, no tools. */
+  | { note: string; form: "exercise"; tier: Tier };
 
-/** A note for Iso that is not in the base yet. */
-export interface DraftSummary { id: string; title: string }
+/** A note for Iso that is not in the base yet. `exercise` marks a request for an exercise. */
+export interface DraftSummary { id: string; title: string; exercise?: true }
+
+/** One thing that moved a note's understanding: an attempt, with what Iso judged and why, or your wind back. */
+/** `marks` names the marking's entry in the exercise's journal. */
+export interface Evidence { id: string; at: string; event: "attempt" | "wind-back"; by: number; why?: string; exercise?: string; result?: Result; marks?: string }
+
+/** What the study page and the squares read. */
+export interface StudyReport {
+  /** Every exercise, in the order the study page lists them. Ids are as the app names them (`@study/…`). */
+  exercises: { id: string; title: string; kind: string; tests: string[]; next: string | null; result: Result | null; last: string | null; squares: number; due: boolean }[];
+  /** Every note the record bears on: its reading, and the evidence for it, oldest first. */
+  notes: Record<string, { level: number; squares: number; step: 0 | 1 | 2 | 3; due: boolean; evidence: Evidence[] }>;
+  /** The base's folders, the root as "", for asking for an exercise in one. */
+  folders: string[];
+}
 
 /** What a request to Iso would be sent now, part by part, and what the session has cost. Sizes are estimates
  *  (four characters a token) until a provider's own count replaces them. */
@@ -91,6 +111,8 @@ export interface Settings {
   provider: string;
   /** Whether a key is held. */
   key: boolean;
+  /** Whether the provider can make a key by signing in there (connect). */
+  connect: boolean;
   tiers: Record<Tier, string>;
 }
 
@@ -102,13 +124,14 @@ export type EngineEvent =
   /** An event was added to the study record. */
   | { type: "record"; event: string }
   /** Iso was asked. Every request ends in exactly one of iso-done, iso-stopped, iso-failed. */
-  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null } | { form: "note" } }
+  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null } | { form: "note" } | { form: "mark"; answer: Passage } | { form: "exercise" } }
   /** Iso looked something up. */
   | { type: "iso-step"; request: string; note: string; step: Step }
   /** A piece of its reply. `again`: what came before was not the reply; start over. */
   | { type: "iso-text"; request: string; note: string; delta: string; again: boolean }
-  /** `proposal` is what it offers; for a rewrite that says something of its changes, `said` is that, a proposal of its own. */
-  | { type: "iso-done"; request: string; note: string; proposal: string; said?: string; cost: Cost }
+  /** `proposal` is what it offers; for a rewrite that says something of its changes, `said` is that, a proposal of its own.
+   *  For a marking, `proposal` is the `marks` entry and `attempt` the event in the study record. */
+  | { type: "iso-done"; request: string; note: string; proposal: string; said?: string; attempt?: string; cost: Cost }
   | { type: "iso-stopped"; request: string; note: string }
   | { type: "iso-failed"; request: string; note: string; message: string };
 
@@ -144,6 +167,15 @@ export interface Api {
   keepDraft(draft: string, proposal: string, folder: string): Promise<Saved>;
   /** Throw a draft away. Its journal stays. */
   discardDraft(draft: string): Promise<void>;
+  /** Start a request for an exercise in a folder of the base, testing these notes; `after` is an exercise (`@study/…`)
+   *  that the new one follows in teaching order. What you want from it is the draft's text, and may be empty. */
+  createExerciseDraft(folder: string, tests: string[], after?: string | null): Promise<NoteSource>;
+  /** Keep Iso's exercise as `study/<folder>/<name>.md`, and set `next` on the exercise it follows. The draft is then gone. */
+  keepExercise(draft: string, proposal: string): Promise<Saved>;
+  /** The exercises, in order, and what the record says of each note. */
+  study(): Promise<StudyReport>;
+  /** You think Iso rates you too highly: one square down for every note this exercise tests. */
+  windBack(exercise: string): Promise<void>;
   /** What Iso would be sent if asked now, in this note (or in none). */
   context(note?: string): Promise<ContextReport>;
   /** Leave the session's earlier exchanges out of what Iso is sent from now on. Nothing is deleted. */
@@ -151,6 +183,10 @@ export interface Api {
   settings(): Promise<Settings>;
   /** Hold a provider key (null forgets it). */
   setKey(key: string | null): Promise<Settings>;
+  /** Begin making a key by signing in at the provider: the page to go to, which comes back to `callback` with a code. */
+  connect(callback: string): Promise<{ url: string }>;
+  /** Back from the provider with a code: exchange it for a key, and hold that key. */
+  connected(code: string, state: string): Promise<Settings>;
   /** Listen to everything the engine does, until the returned function is called. */
   events(listener: (event: EngineEvent) => void): () => void;
 }

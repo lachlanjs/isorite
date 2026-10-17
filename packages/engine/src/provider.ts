@@ -22,6 +22,9 @@ export interface ProviderConfig {
   prices: Record<string, [number, number]>;
   /** The most tokens its models take at once; 200,000 unless said. */
   context?: number;
+  /** Where the person signs in for the provider to make a key and hand it here (OAuth with PKCE); its codes are
+   *  exchanged at `url` + /auth/keys. Without it, a key can only be pasted. */
+  auth?: string;
 }
 
 export const OPENROUTER: ProviderConfig = {
@@ -30,10 +33,22 @@ export const OPENROUTER: ProviderConfig = {
   cacheMarks: true,
   tiers: { low: "anthropic/claude-haiku-4.5", mid: "anthropic/claude-sonnet-5.5", max: "anthropic/claude-opus-5.5" },
   prices: {},
+  auth: "https://openrouter.ai/auth",
 };
 
 /** The name a provider's key is kept under. */
 export const KEY = "provider.key";
+
+const base64url = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+/** A random string of `n` bytes, URL-safe. */
+export const randomToken = (n = 32): string => base64url(crypto.getRandomValues(new Uint8Array(n)));
+
+/** A PKCE verifier and its S256 challenge: the challenge goes out with the sign-in, the verifier only with the exchange. */
+export async function pkce(): Promise<{ verifier: string; challenge: string }> {
+  const verifier = randomToken(32);
+  return { verifier, challenge: base64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)))) };
+}
 
 export interface Message {
   role: "system" | "user" | "assistant" | "tool";

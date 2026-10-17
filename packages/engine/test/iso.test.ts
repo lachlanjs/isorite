@@ -175,11 +175,57 @@ test("a second request in the session is told what was asked before and what bec
 
 test("the key is held and forgotten, and never given back", async () => {
   const { engine } = await open([], { key: null });
-  expect(await engine.settings()).toEqual({ provider: "openrouter", key: false, tiers: { low: "anthropic/claude-haiku-4.5", mid: "anthropic/claude-sonnet-5.5", max: "anthropic/claude-opus-5.5" } });
+  expect(await engine.settings()).toEqual({ provider: "openrouter", key: false, connect: true, tiers: { low: "anthropic/claude-haiku-4.5", mid: "anthropic/claude-sonnet-5.5", max: "anthropic/claude-opus-5.5" } });
   expect(JSON.stringify(await engine.setKey("  sk-or-abc  "))).not.toContain("sk-or");
   expect((await engine.settings()).key).toBe(true);
   await expect(engine.setKey("two words")).rejects.toMatchObject({ status: 400 });
   expect((await engine.setKey(null)).key).toBe(false);
+});
+
+test("a key is made by signing in at the provider: PKCE, the code exchanged by the engine, the key held and never given back", async () => {
+  const clock = { t: Date.parse("2026-10-13T09:00:00Z"), now() { return this.t; } };
+  const secrets = new MemorySecrets({}), exchanged: { url: string; body: Record<string, string> }[] = [];
+  let answer: () => Response = () => new Response(JSON.stringify({ key: "sk-or-made" }), { status: 200 });
+  const fetch = (async (url: string, init?: RequestInit) => { exchanged.push({ url, body: JSON.parse(String(init?.body)) as Record<string, string> }); return answer(); }) as typeof globalThis.fetch;
+  const engine = await Engine.open({ notes: new MemoryFiles({}), study: new MemoryFiles(), clock, device: "laptop1", name: "b", http: { fetch }, secrets });
+  await expect(engine.connect("javascript:alert(1)")).rejects.toMatchObject({ status: 400 });
+
+  const url = new URL((await engine.connect("http://localhost:4767/")).url);
+  expect(url.origin + url.pathname).toBe("https://openrouter.ai/auth");
+  const q = Object.fromEntries(url.searchParams);
+  expect(q).toMatchObject({ callback_url: "http://localhost:4767/", code_challenge_method: "S256", key_label: "isorite" });
+  // An unknown state is refused before anything is sent.
+  await expect(engine.connected("code1", "not-ours")).rejects.toMatchObject({ status: 409 });
+  expect(exchanged).toEqual([]);
+
+  const settings = await engine.connected("code1", q.state!);
+  expect(settings.key).toBe(true);
+  expect(JSON.stringify(settings)).not.toContain("sk-or");
+  expect(await secrets.get(KEY)).toBe("sk-or-made");
+  const [x] = exchanged;
+  expect(x!.url).toBe("https://openrouter.ai/api/v1/auth/keys");
+  expect(x!.body).toMatchObject({ code: "code1", code_challenge_method: "S256" });
+  // The verifier sent is the one the challenge was made from.
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(x!.body.code_verifier)));
+  expect(Buffer.from(digest).toString("base64url")).toBe(q.code_challenge);
+  // A state is good once.
+  await expect(engine.connected("code1", q.state!)).rejects.toMatchObject({ status: 409 });
+
+  // Too late: the provider's codes last ten minutes.
+  const late = new URL((await engine.connect("http://localhost:4767/")).url).searchParams.get("state")!;
+  clock.t += 11 * 60_000;
+  await expect(engine.connected("code2", late)).rejects.toMatchObject({ status: 409 });
+  // The provider's refusal is told, and the key held is left as it was.
+  answer = () => new Response(JSON.stringify({ error: { message: "Invalid code or code_verifier" } }), { status: 403 });
+  const refused = new URL((await engine.connect("http://localhost:4767/")).url).searchParams.get("state")!;
+  await expect(engine.connected("bad", refused)).rejects.toMatchObject({ status: 502, message: expect.stringContaining("Invalid code or code_verifier") });
+  expect(await secrets.get(KEY)).toBe("sk-or-made");
+});
+
+test("a provider without a sign-in page can only be given a key by pasting it", async () => {
+  const engine = await Engine.open({ notes: new MemoryFiles({}), study: new MemoryFiles(), clock: { now: () => 0 }, device: "laptop1", name: "b", secrets: new MemorySecrets({}), provider: { name: "custom", url: "http://x/v1", cacheMarks: false, tiers: { low: "a", mid: "b", max: "c" }, prices: {} } });
+  expect((await engine.settings()).connect).toBe(false);
+  await expect(engine.connect("http://localhost:4767/")).rejects.toMatchObject({ status: 409 });
 });
 
 test("a prompt sent twice is one request: a note is asked one thing at a time", async () => {

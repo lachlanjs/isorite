@@ -2,6 +2,8 @@
 // own at the foot of what was written, so it can be taken away again without touching the prose. And where a
 // draft's block sits on the map, which is remembered in this browser only.
 
+import { spliceText, splitFrontmatter, testsOf } from "@isorite/core";
+
 const LINK = /\]\(\/([^)\s#]+)\.md(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/g;
 const escaped = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const address = (id: string): string => id.split("/").map(encodeURIComponent).join("/");
@@ -28,6 +30,18 @@ export function withoutLink(text: string, id: string): string | null {
   const lines = text.split("\n"), kept = lines.filter((l) => !new RegExp(`^${one}$`).test(l.trim()));
   if (kept.length === lines.length || linkedIn(kept.join("\n")).includes(id)) return null;
   return kept.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "") + "\n";
+}
+
+/** For a request for an exercise, the notes it tests, in order; null for any other draft. Picking on the map adds
+ *  to these instead of linking. */
+export function testsIn(text: string): string[] | null {
+  try { const [meta] = splitFrontmatter(text); return meta?.type === "Exercise" ? testsOf(meta) : null; } catch { return null; }
+}
+
+/** The request with a note added to its tests, or taken out if it was there. */
+export function withTest(text: string, id: string): string {
+  const tests = testsIn(text) ?? [];
+  return spliceText(text, { tests: tests.includes(id) ? tests.filter((t) => t !== id) : [...tests, id] }, null);
 }
 
 /** A draft's title, from the head of its file. */

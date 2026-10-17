@@ -70,6 +70,20 @@ test("a note is made, once", async () => {
   expect((await write("/api/note?id=channels/capacity", { text: "x" }, { method: "POST" })).status).toBe(409);
 });
 
+test("exercises: a request for one is made on disk, the study page is read, and wind back is a write", async () => {
+  const made = await write("/api/exercise/draft", { folder: "basics", tests: ["basics/entropy"] }, { method: "POST" });
+  expect(made.status).toBe(200);
+  const draft = await made.json() as { id: string; text: string };
+  expect(draft.id).toMatch(/^@draft\//);
+  expect(readFileSync(join(study, "drafts", draft.id.slice("@draft/".length) + ".md"), "utf8")).toContain("type: Exercise");
+  expect((await write("/api/exercise/draft", { folder: "basics", tests: [] }, { method: "POST" })).status).toBe(400);
+  mkdirSync(join(study, "study", "basics"), { recursive: true });
+  writeFileSync(join(study, "study", "basics", "coin.md"), "---\ntype: Exercise\ntitle: A coin\ntests: [basics/entropy]\n---\n\nQ.\n\n## Working\n\n");
+  expect(await (await fetch(url + "/api/study")).json()).toMatchObject({ exercises: [{ id: "@study/basics/coin", title: "A coin", result: null }], folders: expect.arrayContaining(["", "basics"]) });
+  expect((await write("/api/exercise/wind-back?id=@study/basics/coin", {}, { method: "POST" })).status).toBe(200);
+  expect(readFileSync(join(study, "record", "testdev1.jsonl"), "utf8")).toContain('"event":"wind-back","note":"basics/entropy"');
+});
+
 test("each write that should be refused is", async () => {
   const good = { base: "x", text: "x" };
   const refused = async (res: Promise<Response>) => [(await res).status, ((await (await res).json()) as { error: string }).error];
@@ -87,6 +101,18 @@ test("each write that should be refused is", async () => {
   }
   expect((await fetch(url + "/api/note?id=no/such")).status).toBe(404);
   expect((await fetch(url + "/api/nothing")).status).toBe(404);
+  // Signing in at the provider is a write like any other: another site cannot begin one, nor finish one.
+  expect(await refused(write("/api/settings/connect", { callback: "http://evil.example/" }, { method: "POST", headers: { Origin: "http://evil.example" } }))).toEqual([403, "cross-origin request refused"]);
+  expect(await refused(write("/api/settings/connected", { code: "c", state: "s" }, { method: "POST", headers: { [TOKEN_HEADER]: "wrong" } }))).toEqual([403, "bad token"]);
+  expect((await write("/api/settings/connected", { code: "c", state: "s" }, { method: "POST" })).status).toBe(409);
+});
+
+test("signing in at the provider begins with its page, PKCE and all", async () => {
+  const res = await write("/api/settings/connect", { callback: url + "/" }, { method: "POST" });
+  const sent = new URL(((await res.json()) as { url: string }).url);
+  expect(sent.origin + sent.pathname).toBe("https://openrouter.ai/auth");
+  expect(Object.fromEntries(sent.searchParams)).toMatchObject({ callback_url: url + "/", code_challenge_method: "S256", key_label: "isorite" });
+  expect(await (await fetch(url + "/api/settings")).json()).toMatchObject({ connect: true, key: false });
 });
 
 test("a name that is not this machine's is not answered", async () => {

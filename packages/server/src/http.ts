@@ -37,7 +37,10 @@ const Ask = z.discriminatedUnion("form", [
   z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
   z.object({ note: z.string(), form: z.literal("rewrite"), regions: z.array(Anchor).min(1).max(40), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
   z.object({ note: z.string(), form: z.literal("note"), tier: Tier }).strict(),
+  z.object({ note: z.string(), form: z.literal("mark"), answer: Anchor, tier: Tier }).strict(),
+  z.object({ note: z.string(), form: z.literal("exercise"), tier: Tier }).strict(),
 ]);
+const ExerciseAsk = z.object({ folder: z.string().max(400), tests: z.array(z.string().max(400)).min(1).max(20), after: z.string().max(400).nullable().optional() }).strict();
 const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
 const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
 const Key = z.object({ key: z.string().nullable() }).strict();
@@ -124,11 +127,19 @@ export function createApp({ api, token, loopback, web, allowHosts = [] }: Server
   post("/api/drafts", z.object({}).strict(), () => api.createDraft());
   post("/api/draft/keep", z.object({ proposal: z.string().max(64), folder: z.string().max(400) }).strict(), (c, b) => api.keepDraft(id(c), b.proposal, b.folder));
   post("/api/draft/discard", z.object({}).strict(), (c) => api.discardDraft(id(c)));
+  app.get("/api/study", (c) => answer(c, () => api.study()));
+  post("/api/exercise/draft", ExerciseAsk, (_c, b) => api.createExerciseDraft(b.folder, b.tests, b.after ?? null));
+  post("/api/exercise/keep", z.object({ proposal: z.string().max(64) }).strict(), (c, b) => api.keepExercise(id(c), b.proposal));
+  post("/api/exercise/wind-back", z.object({}).strict(), (c) => api.windBack(id(c)));
   app.get("/api/context", (c) => answer(c, () => api.context(c.req.query("id") || undefined)));
   post("/api/context/clear", z.object({}).strict(), () => api.clearConversation());
   // The key goes in and never comes out: settings say only whether one is held.
   app.get("/api/settings", (c) => answer(c, () => api.settings()));
   post("/api/settings/key", Key, (_c, b) => api.setKey(b.key), "put");
+  // Or made by signing in at the provider: the page to go to, and the code it comes back with, which the engine
+  // exchanges for the key itself. The page never holds the key.
+  post("/api/settings/connect", z.object({ callback: z.string().max(2000) }).strict(), (_c, b) => api.connect(b.callback));
+  post("/api/settings/connected", z.object({ code: z.string().min(1).max(2000), state: z.string().min(1).max(200) }).strict(), (_c, b) => api.connected(b.code, b.state));
 
   // Everything the engine does, as it happens. A comment every 25 seconds keeps the connection open.
   app.get("/api/events", (c) => streamSSE(c, async (stream) => {

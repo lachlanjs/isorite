@@ -19,6 +19,15 @@ class AppState {
   saving = $state<{ text: string; bad: boolean } | null>(null);
   /** The Atlas, while it is the page: how many study items it shows, for the status line. */
   atlas = $state.raw<{ items: number; chosen: string; steps: number; chain: boolean; whole: () => void; pick: boolean; here: string; out: () => void } | null>(null);
+  /** An exercise, while one is open: what the header shows of it (Study-Written): its kind, the squares for what it
+   *  tests, whether they flash, and the two things done from there. */
+  exercise = $state.raw<{ kind: string; squares: number; due: boolean; flash: number; windBack: () => void; why: () => void; next: string | null } | null>(null);
+  /** A page of study that is not an exercise (a request for one): the view switch shows study. */
+  studying = $state(false);
+  /** Back from signing in at the provider for a key: how it went, for the settings to say. */
+  signIn = $state.raw<{ ok: boolean; message: string } | null>(null);
+  /** A hint for the status line from the page, when it has one. */
+  hint = $state("");
   /** Iso's latest request, from any page or tab, as the Atlas draws its path: the note asking, each step, and how
    *  it ended. It stays until the next request, or until the Atlas lets it go. */
   iso = $state.raw<IsoRun | null>(null);
@@ -35,6 +44,7 @@ class AppState {
       this.error = (e as Error).message;
       return;
     }
+    await this.signedIn();
     api.events((event) => {
       this.follow(event);
       for (const listener of this.listeners) listener(event);
@@ -43,6 +53,44 @@ class AppState {
       if (this.relist) clearTimeout(this.relist);
       this.relist = setTimeout(() => { void this.refresh(); }, 300);
     });
+  }
+
+  /** Go to the provider to sign in and make a key. It comes back to this page, with a code, and to the place it was. */
+  async startSignIn(): Promise<void> {
+    const { url } = await this.api.connect(location.origin + location.pathname);
+    try { sessionStorage.setItem(SIGN_IN_BACK, location.hash); } catch { /* back to the start instead */ }
+    location.assign(url);
+  }
+
+  /** Back from the provider: the code in the address is exchanged for the key (by the engine; the key is never seen
+   *  here), at the address the sign-in was begun from. */
+  private async signedIn(): Promise<void> {
+    // The router keeps the address it started on, so the code is put aside and the page opened again at the clean
+    // address it left from; the code is exchanged there.
+    const q = new URLSearchParams(location.search);
+    let code: string | null, state: string | null;
+    try {
+      if (q.has("code") || q.has("state") || q.has("error")) {
+        const back = sessionStorage.getItem(SIGN_IN_BACK) ?? location.hash;
+        sessionStorage.removeItem(SIGN_IN_BACK);
+        sessionStorage.setItem(SIGN_IN_CODE, JSON.stringify({ code: q.get("code"), state: q.get("state") }));
+        location.replace(location.pathname + back);
+        return new Promise(() => undefined); // nothing is drawn of the page being left
+      }
+      const kept = sessionStorage.getItem(SIGN_IN_CODE);
+      if (kept === null) return;
+      sessionStorage.removeItem(SIGN_IN_CODE);
+      ({ code, state } = JSON.parse(kept) as { code: string | null; state: string | null });
+    } catch {
+      // No storage: exchange it here, and the address keeps the code.
+      ({ code, state } = { code: q.get("code"), state: q.get("state") });
+      if (!code && !state) return;
+    }
+    if (!code || !state) { this.signIn = { ok: false, message: "No key was made: the sign-in was left or refused." }; return; }
+    try {
+      const s = await this.api.connected(code, state);
+      this.signIn = { ok: true, message: `Signed in at ${s.provider}: a key was made for isorite, and is held on this device.` };
+    } catch (e) { this.signIn = { ok: false, message: (e as Error).message }; }
   }
 
   async refresh(): Promise<void> {
@@ -69,6 +117,8 @@ class AppState {
 
 /** One request to Iso as it goes: `reading` while it looks things up, `writing` once its text comes. */
 export interface IsoRun { request: string; note: string; state: "reading" | "writing" | "done" | "stopped" | "failed"; steps: Step[]; message: string }
+
+const SIGN_IN_BACK = "isorite.sign-in.back", SIGN_IN_CODE = "isorite.sign-in.code";
 
 export const app = new AppState();
 

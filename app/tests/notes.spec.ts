@@ -150,7 +150,7 @@ test("what is typed and not yet saved survives the tab closing", async ({ page, 
   expect(await file(again, "basics/surprise")).toContain(`Kept for ${name}.`);
 });
 
-test("the parts, the pages not built yet, and a note that is not there", async ({ page }) => {
+test("the parts, the atlas and study pages, and a note that is not there", async ({ page }) => {
   await page.goto("#/parts");
   await expect(page.getByRole("button", { name: "keep" })).toBeVisible();
   await look(page, "parts");
@@ -159,7 +159,7 @@ test("the parts, the pages not built yet, and a note that is not there", async (
   await expect(page.getByRole("navigation", { name: "Views" }).getByRole("link", { name: "atlas" })).toHaveAttribute("aria-current", "page");
   await look(page, "atlas");
   await page.goto("#/study");
-  await expect(page.getByText("It comes in milestone 4.")).toBeVisible();
+  await expect(page.getByText("study · next for you")).toBeVisible();
   await page.goto("#/n/no/such-note");
   await expect(page.getByText("There is no note at")).toBeVisible();
 });

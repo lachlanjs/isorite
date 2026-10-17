@@ -7,7 +7,7 @@
   import { reach } from "@isorite/core";
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
   import type { How, MapReport, NoteSource } from "@isorite/engine";
-  import { linkedIn, place, placeOf, titleIn, withLink, withoutLink } from "$lib/atlas/picks.ts";
+  import { linkedIn, place, placeOf, testsIn, titleIn, withLink, withoutLink, withTest } from "$lib/atlas/picks.ts";
   import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { CELL, LABELS_AT, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
@@ -292,13 +292,14 @@
     app.api.readNote(pick).then((d) => { if (!stale) draft = d; }, () => { if (!stale) notice = "that note for Iso is not here any more"; });
     return () => { stale = true; };
   });
-  const picked = $derived(draft ? linkedIn(draft.text).filter((id) => report?.notes[id] && !id.startsWith("@")) : []);
+  const picked = $derived(draft ? (testsIn(draft.text) ?? linkedIn(draft.text)).filter((id) => report?.notes[id] && !id.startsWith("@")) : []);
   let writing: Promise<void> = Promise.resolve();
   /** Link a note to the draft, or take away a link picked here. One at a time, each on the file as the last left it. */
   function toggle(ref: string): void {
     writing = writing.then(async () => {
       if (!draft || ref.startsWith("@")) return;
-      const change = (text: string): string | null => (linkedIn(text).includes(ref) ? withoutLink(text, ref) : withLink(text, ref, title(ref)));
+      // A request for an exercise is picked for what it tests; any other note for Iso, for what it links.
+      const change = (text: string): string | null => (testsIn(text) ? withTest(text, ref) : linkedIn(text).includes(ref) ? withoutLink(text, ref) : withLink(text, ref, title(ref)));
       const next = change(draft.text);
       if (next === null) { notice = "linked in what you wrote: take it out there"; return; }
       notice = "";
@@ -506,7 +507,7 @@
     <div class="atlas-world" class:labels data-open={open} style="transform: translate({view.x}px, {view.y}px); --u: {(L?.cell ?? 7) * view.k}px; --k: {view.k}; --fs: {(10.5 * Math.min(1.5, Math.max(0.8, view.k))).toFixed(2)}px; --lines: {view.k < 0.9 ? 1 : 2}">
       {#each folders as f (f.item.id)}
         {#if f.item.ref.startsWith("@study")}
-          <AtlasStudyFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} onpick={() => enter(f.i)} />
+          <AtlasStudyFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} passes={L.items.filter((x) => x.parent === f.i && report?.notes[x.ref]?.passed).length} onpick={() => enter(f.i)} />
         {:else}
           <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * view.k >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} onpick={() => enter(f.i)} />
         {/if}
@@ -545,7 +546,7 @@
       {/if}
     </div>
     {#if pick}
-      <AtlasDock title={draft ? titleIn(draft.text) : ""} picked={picked.map((id) => ({ id, title: title(id), tokens: report!.notes[id]?.tokens ?? 0 }))} budget={LINKED_BUDGET} {notice}
+      <AtlasDock title={draft ? (testsIn(draft.text) ? "an exercise" : titleIn(draft.text)) : ""} tests={draft ? testsIn(draft.text) !== null : false} picked={picked.map((id) => ({ id, title: title(id), tokens: report!.notes[id]?.tokens ?? 0 }))} budget={LINKED_BUDGET} {notice}
         href={resolve("/draft/[id]", { id: pick.slice("@draft/".length) })} />
     {:else if notice}
       <p class="notice" role="alert">{notice}</p>

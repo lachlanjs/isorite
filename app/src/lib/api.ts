@@ -50,10 +50,16 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     createDraft: () => write("POST", "drafts", {}),
     keepDraft: (draft, proposal, folder) => write("POST", "draft/keep" + q(draft), { proposal, folder }),
     discardDraft: async (draft) => { await write("POST", "draft/discard" + q(draft), {}); },
+    createExerciseDraft: (folder, tests, after) => write("POST", "exercise/draft", { folder, tests, after: after ?? null }),
+    keepExercise: (draft, proposal) => write("POST", "exercise/keep" + q(draft), { proposal }),
+    study: () => ask("study"),
+    windBack: async (exercise) => { await write("POST", "exercise/wind-back" + q(exercise), {}); },
     context: (note) => ask("context" + (note ? q(note) : "")),
     clearConversation: async () => { await write("POST", "context/clear", {}); },
     settings: () => ask("settings"),
     setKey: (key) => write("PUT", "settings/key", { key }),
+    connect: (callback) => write("POST", "settings/connect", { callback }),
+    connected: (code, state) => write("POST", "settings/connected", { code, state }),
     events(listener) {
       const source = new EventSource(root + "events");
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };

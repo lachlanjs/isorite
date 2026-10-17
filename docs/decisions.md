@@ -45,7 +45,7 @@ Transcribed on 2026-10-13 from the two decisions boards in the design artifact (
 | decided | one scale for understanding, or two | A block's edge on the Atlas has four states; the new row has six squares. I would make them one scale: the squares are the fine reading, the edge its four coarse steps. |
 | decided | what the squares belong to | A note, not an exercise. An exercise that tests two notes shows the lower of the two. |
 | my call | winding back | One square per press, recorded as an event in your study record so the recall curve can use it. |
-| my call | squares on Atlas blocks | They now mean "one per exercise, passed or wrong". With the level on the edge I would drop the red ones and keep a plain count. |
+| changed | squares on Atlas blocks | None (2026-10-15): a block shows the four tiers of understanding and nothing else. See the milestone 4 table below. |
 | decided | cost and context | In the header, kept minimal: the context's token count and the session cost. Clicking the count opens a breakdown of what the context holds. Drawn on its own board in this row. |
 | my call | streaks, daily goals | None. |
 | open | kinds inside a study folder | "note", "goal", "explain" and "open" are my labels. Use will show which are real. |
@@ -179,3 +179,16 @@ The Atlas's layout and routing, rebuilt after Lachlan found rdstudio's router's 
 | line style | Back to `Atlas-Nested`'s values: 1.5 px at rest at 0.6, highways between folders 3 px, lit lines 3 px whatever they carry, dashed 7 and 5. A count beside each highway between folders, once, on its longest straight stretch. |
 | stability | Not wanted at the cost of readability: the layout may reshuffle when notes change. |
 | the Atlas's keys (2026-10-15) | Kept: `l`, each note's line to its folder's wall at rest, and `c`, the grid fine, coarse or coarser (a third, 18-unit cell, added). Removed with their code: `b` (layers for folders of folders), `r` (gated routes, the layout's trunks) and `g` (the router's grid). M3 closed. |
+
+## Decided on 2026-10-15, for milestone 4
+
+Lachlan's answers to `plan-m4.md`. They replace the fixed steps in the rows on the squares above and the "my call" row on squares on Atlas blocks.
+
+| What | Decision |
+|---|---|
+| how understanding moves | Not stepped up or down by a fixed amount for a pass or a fail. At each marking Iso judges whether the attempt is a real change in understanding of each note it tests, weighing the accuracy, the guidance it needed, and how closely the note bears on the exercise. A move is −1, −½, 0, +½ or +1 squares, with a one-line reason, kept in the `attempt` event. |
+| squares on Atlas blocks | None. A block shows the four tiers of understanding and nothing else. |
+| winding back | Your own correction when Iso rates you too highly: one square down per press, for every note the exercise tests. Iso does not judge it. A failed attempt moves understanding only by Iso's judgement. |
+| the answer | Any selection of the working, a general highlighted selection. Held in the browser until sent; then in the `attempt` event. The file stays plain Markdown. |
+| `next` | A link in an exercise's frontmatter to the exercise that follows it in teaching order. Many have none. On a phone, a swipe, built when phones are. |
+| marking it yourself | Later: for working offline or without spending on the API. |

@@ -7,9 +7,11 @@
 // days, after which the note is due, and after twice that it has lapsed and
 // shows one square fewer until it is tested again.
 //
-//   attempt, right            one level up (half, if you marked it yourself)
-//   attempt, partly           holds its level, and counts as seen today
-//   attempt, wrong            one level down
+//   attempt                   each note it tests moves by what Iso judged when it
+//                             marked it (−1, −½, 0, +½ or +1), and counts as tested
+//                             today. The result (right, partly, wrong) moves nothing:
+//                             Iso weighs how accurate the attempt was, how much help
+//                             it needed, and how closely the note bears on it.
 //   wind-back                 one level down: you told Iso it rated you too highly
 //
 // An exercise that tests several notes moves each of them, and shows the lowest.
@@ -23,13 +25,22 @@ const DAY = 86_400_000;
 
 export type Result = "right" | "partly" | "wrong";
 
-/** An exercise attempted and marked. `tests` are the notes it bears on; `by` is who marked it. */
+/** How an attempt moves one note it tests, as Iso judged it, and why in a line. */
+export interface Move { by: number; why: string }
+
+/** An exercise attempted and marked. `tests` are the notes it bears on; `by` is who marked it; `moves` what it does
+ *  to each tested note. `answer` is the passage marked as the answer, `working` the working as sent, and `marks` the
+ *  entry in the exercise's journal holding the marks. */
 export interface AttemptEvent extends LearnerEvent {
   event: "attempt";
   exercise: string;
   tests: string[];
   result: Result;
   by: string;
+  moves?: Record<string, Move>;
+  answer?: { text: string; nth: number };
+  working?: string;
+  marks?: string;
 }
 export interface WindBackEvent extends LearnerEvent {
   event: "wind-back";
@@ -62,10 +73,10 @@ export function understanding(events: readonly LearnerEvent[], now = Date.now())
     const when = Date.parse(String(e.at));
     if (Number.isNaN(when) || when > now) continue;
     if (e.event === "attempt" && Array.isArray(e.tests)) {
-      const a = e as AttemptEvent, own = a.by === "you";
+      const a = e as AttemptEvent;
       for (const note of a.tests) {
-        const s = at(note);
-        s.level = clamp(s.level + (a.result === "right" ? (own ? 0.5 : 1) : a.result === "wrong" ? -1 : 0));
+        const s = at(note), by = a.moves?.[note]?.by;
+        s.level = clamp(s.level + (typeof by === "number" && Number.isFinite(by) ? Math.max(-1, Math.min(1, by)) : 0));
         s.last = when; s.evidence.push(e.id);
       }
     } else if (e.event === "wind-back" && typeof e.note === "string") {

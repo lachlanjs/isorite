@@ -154,6 +154,27 @@ test("settings are behind the logo: the ground, and a key that goes in and is no
   await expect(menu).toHaveCount(0);
 });
 
+test("a key is made by signing in at the provider, and comes back to where you were", async ({ page }) => {
+  await page.goto("#/atlas");
+  await page.getByRole("button", { name: "isorite: settings" }).click();
+  const menu = page.getByRole("dialog", { name: "Settings" });
+  await menu.getByRole("button", { name: "sign in at scripted for a new key" }).click();
+  // The scripted sign-in sends you straight back with a code; the engine exchanges it for the key.
+  await expect(menu).toContainText("Signed in at scripted: a key was made for isorite");
+  await expect(menu).toContainText("A key is held on this device.");
+  await look(page, "settings-signed-in");
+  expect(page.url()).not.toContain("code=");
+  expect(new URL(page.url()).hash).toBe("#/atlas");
+  expect(await page.content()).not.toContain("sk-scripted-made");
+  expect(readFileSync(join(ROOT, "config", "isorite", "config.toml"), "utf8")).toContain("sk-scripted-made");
+  // A code that is not ours, or used twice, is refused, and said so.
+  await page.goto("/?code=code-x&state=not-ours#/notes");
+  await expect(page.getByRole("dialog", { name: "Settings" })).toContainText("This sign-in was not begun here");
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "forget it" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Settings" })).toHaveCount(0);
+});
+
 test("a prompt sent twice in a hurry is asked once", async ({ page }) => {
   const { id } = await open(page, "twice");
   await editor(page).getByText("The average surprise of a source.").click();

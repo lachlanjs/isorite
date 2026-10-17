@@ -22,6 +22,8 @@ export interface Run {
   /** Each piece of the reply as it is written. What was written before a lookup is not the reply: `again` says to start over. */
   onText: (piece: string, again: boolean) => void;
   onStep: (step: Step) => void;
+  /** How many rounds of looking up it may have, in place of the tier's. 0: one call, with no tools offered. */
+  most?: number;
 }
 
 export interface Ran {
@@ -34,12 +36,12 @@ export interface Ran {
 }
 
 export async function rounds(o: Run): Promise<Ran> {
-  const messages = [...o.messages], most = ROUNDS[o.tier], model = o.provider.tiers[o.tier];
+  const messages = [...o.messages], most = o.most ?? ROUNDS[o.tier], model = o.provider.tiers[o.tier];
   const usage: Usage = { model, tokensIn: 0, tokensOut: 0, tokensCached: 0, usd: 0 };
   for (let round = 0, calls = 1; ; round++, calls++) {
     let first = true;
     const r = await complete(o.http, o.provider, o.key, {
-      model, messages, maxTokens: o.maxTokens, tools: o.lookup.defs(), toolChoice: round < most ? "auto" : "none", signal: o.signal,
+      model, messages, maxTokens: o.maxTokens, tools: most ? o.lookup.defs() : [], toolChoice: round < most ? "auto" : "none", signal: o.signal,
       onText: (piece) => { o.onText(piece, first && round > 0); first = false; },
     });
     usage.tokensIn += r.usage.tokensIn; usage.tokensOut += r.usage.tokensOut; usage.tokensCached += r.usage.tokensCached; usage.usd += r.usage.usd;

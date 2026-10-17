@@ -14,13 +14,33 @@ export const STUDY = NOTES + "-study";
 export const PROVIDER_PORT = 4798;
 export const REPLY = "It is measured in **bits**, as [Surprise](/basics/surprise.md) is.\n\n$$\nH(X) \\le \\log_2 n\n$$";
 
-/** A provider that speaks the chat completions protocol and says what the prompt's words call for:
+/** A provider that speaks the chat completions protocol (and makes keys by signing in) and says what the prompt's words call for:
  *  "look" looks a note up first, "slow" never finishes, "fail" refuses; anything else is answered with REPLY. */
 async function provider(): Promise<void> {
   const { createServer } = await import("node:http");
+  const { createHash } = await import("node:crypto");
+  const codes = new Map<string, string>();
   createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
+    // Signing in for a key, as OpenRouter's OAuth with PKCE does: the sign-in page sends you straight back with a
+    // code, which is exchanged for a key only with the verifier its challenge was made from.
+    const at = new URL(req.url ?? "/", `http://127.0.0.1:${PROVIDER_PORT}`);
+    if (at.pathname === "/auth") {
+      const code = `code-${codes.size + 1}`, back = new URL(at.searchParams.get("callback_url")!);
+      codes.set(code, at.searchParams.get("code_challenge")!);
+      back.searchParams.set("code", code);
+      back.searchParams.set("state", at.searchParams.get("state")!);
+      res.writeHead(302, { location: back.href }).end();
+      return;
+    }
+    if (at.pathname === "/v1/auth/keys") {
+      const { code, code_verifier } = JSON.parse(body) as { code: string; code_verifier: string };
+      const ok = codes.get(code) === createHash("sha256").update(code_verifier).digest("base64url");
+      codes.delete(code);
+      res.writeHead(ok ? 200 : 403, { "content-type": "application/json" }).end(JSON.stringify(ok ? { key: `sk-scripted-made-${code}` } : { error: { message: "Invalid code or code_verifier" } }));
+      return;
+    }
     const sent = JSON.parse(body) as { messages: { role: string; content: unknown }[] };
     const user = String(sent.messages.find((m) => m.role === "user")?.content ?? "");
     const asked = user.split("# What they ask now").at(-1) ?? "";
@@ -29,7 +49,18 @@ async function provider(): Promise<void> {
     res.writeHead(200, { "content-type": "text/event-stream" });
     const data = (o: unknown) => res.write(`data: ${JSON.stringify(o)}\n\n`);
     const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-    if (user.includes("⟦1⟧")) {
+    if (user.includes("⟦answer⟧") || user.includes("# What it is to test")) {
+      // Marking: the answer is marked right if it says "right", wrong otherwise, and each note tested moves by a
+      // square either way. Writing an exercise: a title and a question.
+      let reply: string;
+      if (user.includes("# What it is to test")) reply = "# a scripted exercise\n\nWhat is the entropy of a fair coin, in bits?";
+      else {
+        const answer = /⟦answer⟧([\s\S]*?)⟦\/answer⟧/.exec(user)![1]!, right = answer.includes("right");
+        const notes = [...user.matchAll(/\(id: ([^;]+);/g)].map((m) => m[1]!);
+        reply = JSON.stringify({ result: right ? "right" : "wrong", marks: [{ quote: answer, mark: right ? "right" : "wrong" }], moves: Object.fromEntries(notes.map((n) => [n, { by: right ? 1 : -1, why: right ? "Exact, and unaided." : "The answer is wrong." }])) });
+      }
+      data({ choices: [{ delta: { content: reply } }] });
+    } else if (user.includes("⟦1⟧")) {
       // A rewrite: each chosen passage comes back as "rewritten k" ("drop" takes the second out), with a remark
       // outside the marks that must be dropped, and a word on the changes ("quiet" says nothing).
       const count = new Set(user.match(/⟦\d+⟧/g)).size;
@@ -68,7 +99,7 @@ if (process.argv[1] === import.meta.filename) {
   process.env.XDG_CACHE_HOME = join(ROOT, "cache");
   process.env.ISORITE_EMBED = "off"; // the browser tests are about the pages; the model has its own tests
   mkdirSync(join(ROOT, "config", "isorite"), { recursive: true });
-  writeFileSync(join(ROOT, "config", "isorite", "config.toml"), `device = "browser01"\n\n[provider]\nname = "scripted"\nurl = "http://127.0.0.1:${PROVIDER_PORT}/v1"\n\n[tiers]\nlow = "scripted-low"\nmid = "scripted-mid"\nmax = "scripted-max"\n`);
+  writeFileSync(join(ROOT, "config", "isorite", "config.toml"), `device = "browser01"\n\n[provider]\nname = "scripted"\nurl = "http://127.0.0.1:${PROVIDER_PORT}/v1"\nauth = "http://127.0.0.1:${PROVIDER_PORT}/auth"\n\n[tiers]\nlow = "scripted-low"\nmid = "scripted-mid"\nmax = "scripted-max"\n`);
   await provider();
   const { initStudyBase } = await import("../../packages/server/src/studybase.ts");
   const { serve } = await import("../../packages/server/src/serve.ts");
@@ -77,6 +108,6 @@ if (process.argv[1] === import.meta.filename) {
   mkdirSync(join(STUDY, "study", "coding"), { recursive: true });
   writeFileSync(join(STUDY, "study", "coding", "a-prefix-code.md"), "---\ntype: Exercise\nkind: written\ntitle: Build a prefix code\ntests: [coding/huffman-codes]\n---\n\nFor four symbols.\n");
   mkdirSync(join(STUDY, "record"), { recursive: true });
-  writeFileSync(join(STUDY, "record", "browser01.jsonl"), [1, 2, 3].map((n) => JSON.stringify({ id: `01K7B00000000000000000000${n}`, at: `2026-10-12T09:00:0${n}Z`, device: "browser01", event: "attempt", exercise: "@study/coding/a-prefix-code", tests: ["coding/source-coding"], result: "right", by: "iso:scripted" }) + "\n").join(""));
+  writeFileSync(join(STUDY, "record", "browser01.jsonl"), [1, 2, 3].map((n) => JSON.stringify({ id: `01K7B00000000000000000000${n}`, at: `2026-10-12T09:00:0${n}Z`, device: "browser01", event: "attempt", exercise: "coding/a-prefix-code", tests: ["coding/source-coding"], result: "right", by: "iso:scripted", moves: { "coding/source-coding": { by: 1, why: "" } } }) + "\n").join(""));
   await serve(NOTES, { port: PORT });
 }
