@@ -210,3 +210,20 @@ test("a note is shown as it was after any entry, and restored to it as a new ent
   await expect(engine.version("basics/entropy", "01NOTANENTRY0000000000000")).rejects.toMatchObject({ status: 404 });
   expect(journal("basics/entropy").map((e) => e.why)).toEqual(["start", "edit", "restore", "restore"]);
 });
+
+test("the timeline is the last session's moments across notes, kept current, and the session before it once it ends", async () => {
+  const { engine, clock } = await open({ "basics/entropy.md": NOTE, "basics/bit.md": "---\ntype: Concept\ntitle: Bit\n---\n\nOne toss.\n" });
+  expect(await engine.timeline()).toEqual([]);
+  const e = await engine.readNote("basics/entropy");
+  clock.t += 60_000;
+  await engine.saveNote("basics/entropy", { base: e.version, text: NOTE + "\nMore.\n" });
+  clock.t += 60_000;
+  await engine.readNote("basics/bit");
+  expect((await engine.timeline()).map((m) => [m.note, m.what])).toEqual([["basics/entropy", "found"], ["basics/entropy", "edited"], ["basics/bit", "found"]]);
+  // An hour on, nothing new: the session just ended is still the one shown; the next entry starts another.
+  clock.t += SESSION_GAP_MS + 60_000;
+  expect(await engine.timeline()).toHaveLength(3);
+  const b = await engine.readNote("basics/bit");
+  await engine.saveNote("basics/bit", { base: b.version, text: b.text + "\nTwo outcomes.\n" });
+  expect((await engine.timeline()).map((m) => [m.note, m.what])).toEqual([["basics/bit", "edited"]]);
+});

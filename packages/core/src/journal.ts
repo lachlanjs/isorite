@@ -312,6 +312,8 @@ export interface Moment {
   what: "wrote" | "found" | "edited" | "kept" | "offered" | "discarded" | "restored" | "changed elsewhere" | "marked";
   /** What was asked, where the moment came from a proposal. */
   asked?: string;
+  /** How a marking came out. */
+  result?: "right" | "partly" | "wrong";
 }
 
 /** The journal as the timeline shows it. Your own edits in a row within a session are one moment; a proposal is
@@ -325,7 +327,7 @@ export function moments(entries: readonly Entry[]): Moment[] {
       offered.set(e.id, m); asked.set(e.id, e.asked);
       out.push(m);
     } else if (e.kind === "marks") {
-      out.push({ ...base, what: "marked" });
+      out.push({ ...base, what: "marked", result: e.result });
     } else if (e.kind === "discard") {
       const m = offered.get(e.proposal);
       if (m) { m.what = "discarded"; m.ids.push(e.id); }
@@ -339,4 +341,60 @@ export function moments(entries: readonly Entry[]): Moment[] {
     }
   }
   return out;
+}
+
+/** Where a line of the version before a change is in the version after it, or null if the change took it out. */
+function carried(hunks: readonly Hunk[], line: number): number | null {
+  let shift = 0;
+  for (const h of hunks) {
+    if (line < h.at) break;
+    if (line < h.at + h.del.length) return null;
+    shift += h.ins.length - h.del.length;
+  }
+  return line + shift;
+}
+
+/** The lines of the version after a change that the change put there. */
+function putIn(c: Change): number[] {
+  if (c.why === "start" || (!c.hunks.length && c.before === null)) return (c.text ?? "").split("\n").map((_, k) => k);
+  const out: number[] = [];
+  let shift = 0;
+  for (const h of c.hunks) {
+    for (let k = 0; k < h.ins.length; k++) out.push(h.at + shift + k);
+    shift += h.ins.length - h.del.length;
+  }
+  return out;
+}
+
+/** The lines of the note as the journal has it now that a moment put there and that are still there, as runs of
+ *  lines (from 0, through the whole file, `to` exclusive). `removed` when it put lines in and none are left. A
+ *  moment that changed nothing in the file (Iso's text not kept, a marking) touches nothing. */
+export function touched(entries: readonly Entry[], ids: readonly string[]): { runs: { from: number; to: number }[]; removed: boolean } {
+  const mine = new Set(ids);
+  let lines = new Set<number>(), put = false;
+  for (const e of entries) {
+    if (!isChange(e)) continue;
+    const next = new Set<number>();
+    for (const l of lines) { const at = carried(e.hunks, l); if (at !== null) next.add(at); }
+    lines = next;
+    if (mine.has(e.id)) for (const l of putIn(e)) { lines.add(l); put = true; }
+  }
+  const sorted = [...lines].sort((a, b) => a - b), runs: { from: number; to: number }[] = [];
+  for (const l of sorted) {
+    const last = runs[runs.length - 1];
+    if (last && last.to === l) last.to = l + 1;
+    else runs.push({ from: l, to: l + 1 });
+  }
+  return { runs, removed: put && !runs.length };
+}
+
+/** A moment of the session, with the note it was in. */
+export interface SessionMoment extends Moment { note: string }
+
+/** The moments of one session across notes, in the order they began. `journals` holds each note's entries of that
+ *  session only. */
+export function sessionMoments(journals: ReadonlyMap<string, readonly Entry[]>): SessionMoment[] {
+  const out: SessionMoment[] = [];
+  for (const [note, entries] of journals) for (const m of moments(entries)) out.push({ ...m, note });
+  return out.sort((a, b) => (a.ids[0]! < b.ids[0]! ? -1 : 1));
 }

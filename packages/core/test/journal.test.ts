@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "vitest";
 import {
-  applyHunks, blocks, change, diffLines, hashText, insertAt, journalLine, locate, findPassage, moments, passageOf, pending, readJournal, reconcile, replay, stamp, textAt, written,
+  applyHunks, blocks, change, diffLines, hashText, insertAt, journalLine, locate, findPassage, moments, passageOf, pending, readJournal, reconcile, replay, sessionMoments, stamp, textAt, touched, written,
   SNAPSHOT_EVERY, type Entry, type Insert, type Rewrite, type Stamp,
 } from "../src/index.ts";
 
@@ -243,5 +243,40 @@ describe("the timeline", () => {
   test("a note the journal first meets already written is found, not written", () => {
     const found = reconcile([], NOTE, at("external"))!;
     expect(moments([found])[0]).toMatchObject({ what: "found", who: "external" });
+  });
+});
+
+describe("what a moment touched", () => {
+  test("the lines a moment put in, carried through later changes into today's text", () => {
+    const e: Entry[] = [];
+    const push = (text: string, who = "you", why: "edit" | "keep" = "edit") => { const c = change(e, text, at(who, e.at(-1) ?? null), why)!; e.push(c); return c; };
+    const v0 = "a\nb\nc\n", start = push(v0);
+    const add = push("a\nb\nNEW1\nNEW2\nc\n");                     // two lines in after b
+    const top = push("TOP\na\nb\nNEW1\nNEW2\nc\n");               // a line at the top moves them down
+    push("TOP\na\nb\nNEW1\nc\n");                                   // one of them taken out later
+    expect(touched(e, [add.id])).toEqual({ runs: [{ from: 3, to: 4 }], removed: false });
+    expect(touched(e, [top.id])).toEqual({ runs: [{ from: 0, to: 1 }], removed: false });
+    // The first entry put every line in; those still there are its own.
+    expect(touched(e, [start.id]).runs).toEqual([{ from: 1, to: 3 }, { from: 4, to: 6 }]);
+    // A moment whose lines are all gone says so.
+    const gone = push("TOP\na\nb\nNEW1\nc\nLATE\n");
+    push("TOP\na\nb\nNEW1\nc\n");
+    expect(touched(e, [gone.id])).toEqual({ runs: [], removed: true });
+    // A run of edits folded into one moment touches what any of them put in.
+    expect(touched(e, [add.id, top.id]).runs).toEqual([{ from: 0, to: 1 }, { from: 3, to: 4 }]);
+  });
+
+  test("Iso's text not kept touches nothing", () => {
+    const e: Entry[] = [change([], NOTE, at("you"), "edit")!];
+    const p = insert(NOTE, 6, "More.", at("iso:m", e[0]!));
+    e.push(p);
+    expect(touched(e, [p.id])).toEqual({ runs: [], removed: false });
+  });
+
+  test("a session's moments across notes, in the order they began", () => {
+    const a = [change([], "a\n", at("you"), "edit")!], b = [change([], "b\n", at("you", a[0]!), "edit")!];
+    a.push(change(a, "a\nmore\n", at("you", b[0]!), "edit")!);
+    const all = sessionMoments(new Map([["n/a", a], ["n/b", b]]));
+    expect(all.map((m) => [m.note, m.what])).toEqual([["n/a", "wrote"], ["n/b", "wrote"], ["n/a", "edited"]]);
   });
 });

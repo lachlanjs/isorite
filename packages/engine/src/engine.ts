@@ -3,8 +3,8 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
-  type Cost, type Entry, type FileEntry, type Insert, type LearnerEvent, type Marks, type Passage, type Proposal, type Stamp, type Understanding,
+  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
+  type Cost, type Entry, type FileEntry, type Insert, type LearnerEvent, type Marks, type Passage, type Proposal, type SessionMoment, type Stamp, type Understanding,
 } from "@isorite/core";
 import { Conflict, EngineError, type Api, type AskRequest, type ContextReport, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport } from "./api.ts";
 import { ANSWER_CLOSE, ANSWER_OPEN, CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, exerciseMessages, exerciseReply, fitted, helpSince, insertMessages, markMessages, noteMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part, type Tested } from "./iso.ts";
@@ -503,8 +503,8 @@ export class Engine implements Api {
   /** Every journal's entries of the current session, by note. Read from the study base once a session, then kept
    *  current as entries are made. */
   private sessionLog: { session: string; notes: Map<string, Entry[]> } | null = null;
-  private async sessionEntries(): Promise<Map<string, Entry[]>> {
-    const session = await this.sessionNow();
+  private async sessionEntries(session?: string): Promise<Map<string, Entry[]>> {
+    session ??= await this.sessionNow();
     if (this.sessionLog?.session === session) return this.sessionLog.notes;
     const notes = new Map<string, Entry[]>(), study = this.opts.study;
     const visit = async (dir: string): Promise<void> => {
@@ -520,6 +520,12 @@ export class Engine implements Api {
     await visit("journal");
     this.sessionLog = { session, notes };
     return notes;
+  }
+
+  /** The moments of the last session, across every note: the one going on, or the one most recently ended. */
+  async timeline(): Promise<SessionMoment[]> {
+    if (this.last === undefined) this.last = await this.newest();
+    return this.last ? sessionMoments(await this.sessionEntries(this.last.session)) : [];
   }
 
   /** The id of the last event that cleared the conversation, or "": exchanges before it are not sent. */

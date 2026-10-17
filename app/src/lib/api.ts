@@ -42,6 +42,7 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     version: async (id, entry) => (await ask<{ text: string }>("version" + q(id) + "&entry=" + encodeURIComponent(entry))).text,
     restore: (id, entry, base) => write("POST", "note/restore" + q(id), { entry, base }),
     map: () => ask("map"),
+    timeline: () => ask("timeline"),
     search: (query) => ask(`search?q=${encodeURIComponent(query)}`),
     ask: (request) => write("POST", "iso/ask", request),
     stop: async (request) => { await write("POST", "iso/stop", { request }); },
