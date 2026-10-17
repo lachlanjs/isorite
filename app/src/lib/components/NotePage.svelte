@@ -83,6 +83,15 @@
       : undefined;
     return { text, touched: { who: isos(at) ? "iso" : "you", lines: lines(touchedBy(upTo, at.ids).runs) } as Touched, asked: at.asked, offered };
   });
+  // Opened from a moment chosen elsewhere (the Atlas's timeline): `?at=<entry>` shows the note as it was then.
+  let wanted = new URLSearchParams(location.hash.split("?")[1] ?? "").get("at");
+  $effect(() => {
+    if (!wanted) return;
+    const m = all.find((x) => x.ids.includes(wanted!));
+    if (!m) return;
+    wanted = null;
+    timeline = true; at = m;
+  });
   function toggleTimeline() { timeline = !timeline; remember("isorite.timeline", timeline); if (!timeline) { at = null; pointed = null; } }
   function pick(m: Moment) { restoreProblem = ""; at = at === m ? null : m; }
   function step(by: number) {

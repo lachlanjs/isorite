@@ -3,7 +3,7 @@
   // understood); what is lit round it is an outline. It knows nothing of the layout or of Iso.
   import type { LayoutItem } from "@isorite/core/atlas";
 
-  let { item, title, step, mark = "", far = 0, num = 0, iso = "", linked = false, dim = false, href, onpick, onpoint }: {
+  let { item, title, step, mark = "", far = 0, num = 0, iso = "", linked = false, dim = false, moment = "", href, onpick, onpoint }: {
     item: LayoutItem;
     title: string;
     step: 0 | 1 | 2 | 3;
@@ -18,6 +18,8 @@
     /** Linked from the note for Iso being answered: what it was sent with. */
     linked?: boolean;
     dim?: boolean;
+    /** The note a moment of the timeline touched, while it is pointed at (Atlas-Timeline): yours or Iso's. */
+    moment?: "" | "you" | "iso";
     href: string;
     onpick: (event: MouseEvent) => void;
     onpoint: (on: boolean) => void;
@@ -25,7 +27,7 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a class="n s{step} {iso ? `p-${iso}` : ''} {mark}" class:linked class:dim={dim && !num && !iso && !linked} class:far={far > 1} class:pick={num > 0} {href} aria-label={num ? `${title}: linked, number ${num}` : title} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%"
+<a class="n s{step} {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark}" class:linked class:dim={dim && !num && !iso && !linked} class:far={far > 1} class:pick={num > 0} {href} aria-label={num ? `${title}: linked, number ${num}` : title} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
@@ -61,4 +63,6 @@
   .pick { outline: 2px solid var(--lattice); outline-offset: 3px; color: var(--text); overflow: visible; }
   .num { position: absolute; top: -10px; right: -10px; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; background: var(--lattice); color: var(--ground-0); font-size: 11px; font-weight: 700; z-index: 1; }
   .n:focus-visible { outline: 2px solid var(--lattice); outline-offset: 2px; }
+  .mo-you { outline: 2.5px solid var(--lattice); outline-offset: 3px; z-index: 3; }
+  .mo-iso { outline: 2.5px solid var(--growth); outline-offset: 3px; z-index: 3; }
 </style>

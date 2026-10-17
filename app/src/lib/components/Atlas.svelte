@@ -18,9 +18,11 @@
   import AtlasStudyFolder from "./AtlasStudyFolder.svelte";
   import AtlasStudyItem from "./AtlasStudyItem.svelte";
 
-  let { pick = "" }: {
+  let { pick = "", moment = null }: {
     /** A note for Iso (`@draft/…`) that notes are being picked for: a click then links a note to it. */
     pick?: string;
+    /** The note a moment of the session's timeline touched, while it is pointed at: outlined. */
+    moment?: { note: string; who: "you" | "iso" } | null;
   } = $props();
 
   /** The most of the linked notes that is sent with a note for Iso (the engine's LINKED_BUDGET). */
@@ -522,10 +524,10 @@
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
         {#if n.item.ref.startsWith("@study")}
-          <AtlasStudyItem item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? "note"} {mark} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+          <AtlasStudyItem item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? "note"} {mark} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {:else}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} step={report.notes[n.item.ref]?.step ?? 0} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} step={report.notes[n.item.ref]?.step ?? 0} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {/if}
       {/each}

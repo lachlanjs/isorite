@@ -6,8 +6,13 @@
   import { describe, ago, momentKey } from "$lib/timeline.ts";
   import MomentMark from "./MomentMark.svelte";
 
-  let { moments, at, pointed, point, pick }: {
+  let { moments, at, pointed, point, pick, label = (m) => (m.asked === undefined ? undefined : `“${m.asked}”`), name = "The note's timeline", leftward = false }: {
     moments: Moment[];
+    /** What shows beside a moment while it is pointed at: by default, what was asked of Iso. */
+    label?: (m: Moment) => string | undefined;
+    name?: string;
+    /** The label always to the left of the marks, as at the right edge of the Atlas. */
+    leftward?: boolean;
     /** The chosen moment's key, or null for the note as it is. */
     at: string | null;
     pointed: Moment | null;
@@ -16,7 +21,7 @@
   } = $props();
 </script>
 
-<ol class="timeline" aria-label="The note's timeline">
+<ol class="timeline" class:leftward aria-label={name}>
   {#each moments as m (m.ids[0])}
     <li>
       <button class="moment" class:at={at === momentKey(m)} type="button" aria-current={at === momentKey(m) ? "step" : undefined}
@@ -25,7 +30,7 @@
         onclick={() => pick(m)}>
         <MomentMark moment={m} />
       </button>
-      {#if pointed === m && m.asked !== undefined}<span class="asked" aria-hidden="true">“{m.asked}”</span>{/if}
+      {#if pointed === m && label(m) !== undefined}<span class="asked" aria-hidden="true">{label(m)}</span>{/if}
     </li>
   {/each}
 </ol>
@@ -45,5 +50,5 @@
     padding: 3px 7px; text-align: right; pointer-events: none;
     display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   }
-  @media (max-width: 1099px) { .asked { right: auto; left: calc(100% + 4px); text-align: left; max-width: 220px; } }
+  @media (max-width: 1099px) { .timeline:not(.leftward) .asked { right: auto; left: calc(100% + 4px); text-align: left; max-width: 220px; } }
 </style>

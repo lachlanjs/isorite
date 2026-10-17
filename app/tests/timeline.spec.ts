@@ -22,10 +22,10 @@ async function ask(page: Page, asked: string) {
   await expect(page.locator(".between[data-proposal]")).toBeVisible();
 }
 
-test.beforeAll(() => { mkdirSync(join(NOTES, "timeline"), { recursive: true }); });
+test.beforeAll(() => { mkdirSync(join(NOTES, "iso"), { recursive: true }); });
 
 test("the timeline: marks only, pointing marks what each changed, a version shown and stepped through, restored as a new entry", async ({ page }) => {
-  const id = `timeline/entropy-${test.info().project.name}`;
+  const id = `iso/timeline-${test.info().project.name}`;
   const text = "---\ntype: Concept\ntitle: Entropy on a timeline\n---\n\nThe average surprise of a source.\n\nIt is largest when every symbol is equally likely.\n";
   writeFileSync(join(NOTES, `${id}.md`), text);
   await page.goto(`#/n/${id}`);
@@ -111,4 +111,28 @@ test("the timeline: marks only, pointing marks what each changed, a version show
   await button.click();
   await expect(page.locator(".timeline")).toHaveCount(0);
   await expect(page.locator(".cm-line.cm-touched-iso")).toHaveCount(0);
+});
+
+test("the Atlas's timeline: this session's moments as marks; pointing outlines the note touched, choosing opens it at that moment", async ({ page }) => {
+  test.skip(phone(), "the session's timeline on a phone's Atlas is still open on the boards");
+  const id = `iso/on-the-map-${test.info().project.name}`;
+  writeFileSync(join(NOTES, `${id}.md`), "---\ntype: Concept\ntitle: On the map\n---\n\nThe average surprise of a source.\n");
+  await page.goto(`#/n/${id}`);
+  await editor(page).getByText("The average surprise").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Measured in bits.");
+  await expect(page.getByRole("status")).toHaveText("saved");
+
+  await page.goto("#/atlas");
+  await page.getByRole("button", { name: "timeline", exact: true }).click();
+  const marks = page.getByRole("list", { name: "This session's timeline" }).locator(".moment");
+  await expect(marks.last()).toHaveAccessibleName(/you edited/);
+  await marks.last().hover();
+  await expect(page.locator(`[data-note="${id}"]`)).toHaveClass(/\bmo-you\b/);
+  await expect(page.locator(".timeline .asked")).toHaveText("On the map");
+  await look(page, "atlas-timeline");
+  await marks.last().click();
+  await expect(page).toHaveURL(new RegExp(`#/n/${id.replace(/\//g, "\\/")}\\?at=`));
+  await expect(page.locator(".atbar")).toContainText("you edited");
+  await expect(page.getByRole("textbox", { name: "The note as it was" })).toContainText("Measured in bits.");
 });
