@@ -147,3 +147,50 @@ On 6: Iso's reply sits between the dotted rules until you keep it or remove it. 
 - "What changed while I was away".
 - The timeline on the phone's Atlas.
 - The terminal (`plan-m6.md`).
+
+## 10. What was built (2026-10-18)
+
+All seven steps, on `m5-timeline`. No real model was asked: M5 cost nothing on the key.
+
+**The example base** (`packages/example`):
+- **The notes:** 21 on DMFT in four folders, as plain Markdown in `notes/`. The boards draw 21 blocks; their status line's "22 notes" is a slip.
+- **The history:** six weeks of it is made by driving the engine itself over files in memory, with a clock set to each moment and a scripted Iso (`history.ts`). Every hash, journal and record event is therefore the engine's own.
+- **What it holds:** your edits; Iso's text kept, revised, removed, and one reply still waiting; a rewrite with one region kept; a change made outside isorite; a restore; a note for Iso kept as a note, and another not yet sent; 11 exercises (the boards' 4, 2, 2 and 3) with 26 markings; a wind back.
+- **Understanding:** the moves are set so each note's edge is as `Atlas-Timeline` draws it, and the unit test checks all 21. Today's session is the board's five moments.
+- **On disk:** `isorite example <folder>` writes both bases.
+
+**The timeline:**
+- **The core:** `touched()` and `sessionMoments()`; a marking's result on its moment.
+- **The engine:** `version`, `restore` and `timeline`, with routes and client.
+- **In a note:** a column of marks in the left margin, opened by an icon button and remembered on the device. Pointing at a mark marks the lines it changed (lattice for yours, growth for Iso's) and shows what was asked beside one of Iso's. With nothing pointed at, Iso's latest kept text is marked, as on the board.
+- **A version:** clicking a mark shows the note as it was, read only, with what was asked and any text Iso offered that was not kept. ← and → step, and Escape comes back. Two icon buttons restore and come back to now; the restore saves anything unsaved first.
+- **On a phone:** a narrow column at the note's left.
+- **On the Atlas:** the session's marks at the right. Pointing at one outlines the block (2.5 px, offset 3 px, as on the board) and names the note beside the mark. Clicking one opens the note at that moment (`?at=`).
+
+**The tutorial:**
+- **The build:** `npm run build:tutorial` writes `site/`, the app with the engine in the page over the example base made at load. Iso is scripted in `packages/example/src/tutorial.ts`, with search by meaning scripted too. Nothing is sent anywhere.
+- **The walk:** 23 steps in seven parts, in the coach card of the `Tour-*` boards. Each step opens its screen, lights the part it names, and fills in Iso's prompts. It moves on when the engine reports, or the page shows, what it asked for.
+- **Publishing:** `.github/workflows/tutorial.yml` publishes `site/` to Pages on a push to main. It is committed and **not pushed**: Pages has to be set to deploy from Actions in the repository's settings when it is.
+
+**Beside the boards** (measured at 1440 × 900 and 390 × 844):
+- **Coach card:** 340 px, padding 20/22/18, a 23 px Charter heading, 13 px text, 16 × 2 px segments, the rest dimmed to 80% with a dotted growth outline. All as on `Tour-1`.
+- **Timeline marks:** 8 px squares and diamonds, in lattice and growth, as on `Desktop-Editor`.
+- **Atlas outline:** 2.5 px at a 3 px offset, as on `Atlas-Timeline`.
+
+**Differs from the boards, on purpose:**
+- **No words beside the marks,** in the note, on a phone or on the Atlas (Lachlan's answer). The column is about 28 px wide instead of 250, and sits just left of the text rather than at the window's edge.
+- **No "this session · N moments" label** on the Atlas.
+- **The coach card's place:** always at the bottom right, where the boards move it about. Its buttons are "next", "skip" and "leave", with no brackets.
+- **More steps than the boards:** the tutorial has 23 in seven parts, so its segments count parts, not steps.
+
+**Not done, or done differently:**
+- **A displayed equation cannot be marked** as changed. The live preview draws it as a widget, which takes no line mark.
+- **No swipe on a phone:** the timeline opens by its button there too, as answered.
+- **The session's timeline on a phone's Atlas** is hidden, as §8 says.
+- **The tutorial is desktop first.** It works at phone width, but the hold and the Ctrl+Enter steps read best with a mouse and keys.
+
+**Tests:**
+- 315 core, 59 engine, 8 example, 21 server and 46 app unit tests.
+- 144 browser tests passed, 4 skipped. These include the timeline in a note at both sizes on both grounds, and the Atlas's timeline.
+- The tutorial walk passes on both grounds against the built site.
+- Check and build are clean.
