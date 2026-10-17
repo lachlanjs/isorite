@@ -3,7 +3,7 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
+  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
   type Cost, type Entry, type FileEntry, type Insert, type LearnerEvent, type Marks, type Passage, type Proposal, type Stamp, type Understanding,
 } from "@isorite/core";
 import { Conflict, EngineError, type Api, type AskRequest, type ContextReport, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport } from "./api.ts";
@@ -213,7 +213,21 @@ export class Engine implements Api {
     return { files: this.opts.notes, path: `${checkNoteId(id)}.md` };
   }
 
-  private async put(id: string, text: string, base: string | null): Promise<Saved> {
+  /** The note's text just after one of its journal's entries. */
+  async version(id: string, entry: string): Promise<string> {
+    const entries = await this.journal(id);
+    if (!entries.some((e) => e.id === entry)) throw new EngineError(`no such entry in ${id}'s journal`, 404);
+    const at = replay(entries, entry);
+    if (!at) throw new EngineError(`${id}'s journal does not reach that entry`, 404);
+    return at.text;
+  }
+
+  /** Write the note back as it was just after an entry: a change of its own, `why: restore`. */
+  restore(id: string, entry: string, base: string): Promise<Saved> {
+    return this.one(async () => this.put(id, await this.version(id, entry), base, "restore", { to: entry }));
+  }
+
+  private async put(id: string, text: string, base: string | null, why: "edit" | "restore" = "edit", extra: { to?: string } = {}): Promise<Saved> {
     const { files, path } = this.where(id);
     if (text.length > MAX_NOTE_BYTES) throw new EngineError("note too large", 413);
     const now = await files.read(path);
@@ -227,7 +241,7 @@ export class Engine implements Api {
     if (now === text) return { id, text, version: hashText(text), changed: false };
 
     await files.write(path, text);
-    await this.enter(id, entries, change(entries, text, await this.stamp("you"), "edit"));
+    await this.enter(id, entries, change(entries, text, await this.stamp("you"), why, extra));
     if (inBase(id)) {
       this.files.set(path, { path, text });
       this.built = this.index = null;

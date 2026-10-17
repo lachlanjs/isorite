@@ -186,3 +186,27 @@ test("the map without a study base, and after a note gains a link", async () => 
   await engine.saveNote("b", { base: version, text: NOTE + '\n[a](/a.md "requires")\n' });
   expect((await engine.map()).model.edges).toEqual([["b", "a", 3]]);
 });
+
+test("a note is shown as it was after any entry, and restored to it as a new entry, which can itself be undone", async () => {
+  const { engine, journal, notes, clock } = await open();
+  const first = await engine.readNote("basics/entropy");
+  clock.t += 60_000;
+  const second = await engine.saveNote("basics/entropy", { base: first.version, text: NOTE + "\nIn bits.\n" });
+  const [start, edit] = journal("basics/entropy");
+  expect(await engine.version("basics/entropy", start!.id)).toBe(NOTE);
+  expect(await engine.version("basics/entropy", edit!.id)).toBe(second.text);
+
+  clock.t += 60_000;
+  const back = await engine.restore("basics/entropy", start!.id, second.version);
+  expect(back).toMatchObject({ text: NOTE, changed: true });
+  expect(notes.files.get("basics/entropy.md")).toBe(NOTE);
+  expect(journal("basics/entropy").at(-1)).toMatchObject({ why: "restore", to: start!.id, who: "you" });
+
+  // Restoring to the edit undoes the restore; a stale version is refused; an entry not in the journal is not found.
+  clock.t += 60_000;
+  const again = await engine.restore("basics/entropy", edit!.id, back.version);
+  expect(again.text).toBe(second.text);
+  await expect(engine.restore("basics/entropy", start!.id, back.version)).rejects.toBeInstanceOf(Conflict);
+  await expect(engine.version("basics/entropy", "01NOTANENTRY0000000000000")).rejects.toMatchObject({ status: 404 });
+  expect(journal("basics/entropy").map((e) => e.why)).toEqual(["start", "edit", "restore", "restore"]);
+});

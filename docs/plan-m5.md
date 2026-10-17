@@ -1,6 +1,6 @@
 # Milestone 5: the timeline, and a tutorial over an example base
 
-Written 2026-10-18, revised the same day with Lachlan's answers (section 4). Branch: `m5-timeline`. Nothing is built until Lachlan approves this.
+Approved by Lachlan on 2026-10-18, with the answers in section 4 (on 6, the proposal as written). Branch: `m5-timeline`.
 
 M5 is the last milestone of the first slice (`plan-first-slice.md` §5). It also delivers the tutorial Lachlan asked for on 2026-10-18. The tutorial is a walk through every feature of isorite, done over an example knowledge base that a person is partway through building. Iso's replies are scripted into it. It is published as a static site on the project's GitHub Pages, so it needs no server, no key and no cost.
 
@@ -65,7 +65,7 @@ M5 is the last milestone of the first slice (`plan-first-slice.md` §5). It also
 10. You can leave the tutorial at any step and keep using the example base freely, with the scripted Iso.
 
 **The example base**
-11. The base is 22 notes on dynamical mean-field theory, in four folders, the same notes and folders as on the boards. It is written to look like a person's base partway through being built. Some notes are full, some thin, one is a stub with a question in it, and one is a note for Iso not yet sent. The study base has the history that would give that: two weeks of sessions, your edits, Iso's text kept and removed, one reply not yet settled, a change made outside isorite, a restore, five exercises with attempts marked right, partly and wrong, and understanding at every level, matching the boards' block edges.
+11. The base is 21 notes on dynamical mean-field theory, in four folders, the same notes and folders as on the boards. It is written to look like a person's base partway through being built. Some notes are full, some thin, one is a stub with a question in it, and one is a note for Iso not yet sent. The study base has the history that would give that: two weeks of sessions, your edits, Iso's text kept and removed, one reply not yet settled, a change made outside isorite, a restore, five exercises with attempts marked right, partly and wrong, and understanding at every level, matching the boards' block edges.
 12. The same base can be written to disk with `isorite example <folder>` and served locally like any base. That is useful for trying things by hand, and it is how its history is checked.
 
 ## 3. What is built

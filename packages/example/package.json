@@ -1,0 +1,24 @@
+{
+  "name": "@isorite/example",
+  "version": "0.1.0",
+  "description": "An example base on dynamical mean-field theory, partway through being built, and its history made by driving the engine with a scripted Iso. Used by `isorite example` and by the tutorial.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "check": "tsc -p ."
+  },
+  "dependencies": {
+    "@isorite/core": "*",
+    "@isorite/engine": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.2"
+  }
+}

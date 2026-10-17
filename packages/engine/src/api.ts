@@ -145,6 +145,10 @@ export interface Api {
   createNote(id: string, text: string): Promise<Saved>;
   /** The note's journal, oldest first. Empty with no study base. */
   journal(id: string): Promise<Entry[]>;
+  /** The note's text just after one of its journal's entries. */
+  version(id: string, entry: string): Promise<string>;
+  /** Write the note back as it was just after an entry, as a new entry of its own. `base` as for saveNote. */
+  restore(id: string, entry: string, base: string): Promise<Saved>;
   search(query: string): Promise<SearchHit[]>;
   /** The Atlas's map of the base and, with it, the study base. */
   map(): Promise<MapReport>;

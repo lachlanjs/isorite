@@ -39,6 +39,8 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     saveNote: (id, edit) => write("PUT", "note" + q(id), edit),
     createNote: (id, text) => write("POST", "note" + q(id), { text }),
     journal: (id) => ask("journal" + q(id)),
+    version: async (id, entry) => (await ask<{ text: string }>("version" + q(id) + "&entry=" + encodeURIComponent(entry))).text,
+    restore: (id, entry, base) => write("POST", "note/restore" + q(id), { entry, base }),
     map: () => ask("map"),
     search: (query) => ask(`search?q=${encodeURIComponent(query)}`),
     ask: (request) => write("POST", "iso/ask", request),
