@@ -104,6 +104,8 @@ export function overlays(mount: Mount): Extension {
     // An exercise (Study-Written, Mobile-Study): the question in the reading face at 23 px; the working's heading as
     // its label; the answer in soft lattice, yours; Iso's right in a double malachite line, its wrong in rose.
     ".cm-iso-question": { fontFamily: "var(--font-text)", fontSize: "23px", lineHeight: "1.4" },
+    // On a phone, the reading face's size, as the working is (Mobile-Study).
+    "@media (max-width: 600px)": { ".cm-iso-question": { fontSize: "18px", lineHeight: "1.55" } },
     ".cm-line:has(.cm-iso-working)": { paddingTop: "12px" },
     ".cm-iso-working": { fontFamily: "var(--font-ui)", fontSize: "12px", fontWeight: "400", color: "var(--text-faint)", textTransform: "lowercase", letterSpacing: "0" },
     ".cm-iso-working::before": { content: "'your '" },

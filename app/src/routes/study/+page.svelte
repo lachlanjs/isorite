@@ -47,7 +47,7 @@
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves -->
         <a class="sr" href={noteHref(x.id)}>
           <span class="faint kind">{KINDS[x.kind] ?? x.kind}</span>
-          <span class="grow serif t">{x.title}</span>
+          <span class="grow t">{x.title}</span>
           <span class="label tests">tests {x.tests.map(titleOf).join(", ")}</span>
           <i class="pip" class:ok={x.result === "right"} class:part={x.result === "partly"} class:no={x.result === "wrong"} title={x.result ? `last: ${x.result}` : "not tried"}></i>
         </a>

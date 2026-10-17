@@ -224,9 +224,9 @@
   .side { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); flex: none; }
   .margin { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: 12px; padding-top: 2px; }
   .margin .link { font-size: 12px; padding: 0; }
-  /* Where the window leaves room, the margin is the page's own, beside the text (Study-Fit), and the text starts
-     under the title as in any note. */
-  @media (min-width: 1100px) { .margin { position: absolute; top: 96px; left: calc(100% + 8px); align-items: flex-start; width: 150px; } }
+  /* Where the window leaves room, the margin is the page's own, beside the text and level with the title, 8 px down
+     (Study-Fit), and the text starts under the title as in any note. */
+  @media (min-width: 1100px) { .margin { position: absolute; top: 46px; left: calc(100% + 8px); align-items: flex-start; width: 150px; } }
   .tools .btn { height: 28px; font-size: 12px; }
   .tools .btn[aria-pressed="true"] { color: var(--text); --fill: var(--ground-3); }
   .choice { padding: var(--space-6) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); --edge: var(--rose); }

@@ -24,8 +24,10 @@
 {/if}
 
 <style>
-  .head { float: right; display: inline-flex; gap: 6px; align-items: center; font: 400 12px/1.5 var(--font-ui); text-transform: none; }
-  .head .label { white-space: nowrap; }
+  /* On the heading's row (Study-Written): the heading is 12 px text in a line of the 18 px reading face, so the
+     chips are brought down to its middle and the label, smaller, to its baseline. */
+  .head { float: right; display: inline-flex; gap: 6px; align-items: center; margin-top: 6px; font: 400 12px/1.5 var(--font-ui); text-transform: none; }
+  .head .label { white-space: nowrap; position: relative; top: 3px; }
   @media (max-width: 600px) { .head .label { display: none; } }
   .head .label::before { content: none; }
   .tag { margin-left: 14px; font-family: var(--font-ui); font-size: 12px; white-space: nowrap; }
