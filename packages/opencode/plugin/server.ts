@@ -8,6 +8,7 @@
 import { Plugin } from "@opencode/plugin";
 import * as Isorite from "./isorite.ts";
 import { noteOf } from "./notes.ts";
+import { CITING } from "./sources.ts";
 
 const SETTLE = 500;
 
@@ -41,7 +42,7 @@ export default Plugin.define({
       await ctx.session.hook("context", (request) => {
         request.system.push({
           type: "text",
-          text: `The person's knowledge base is the folder ${notes}: notes in Markdown with YAML frontmatter, linked to each other. Look things up in it with brief_base, search_notes, outline_note and read_note rather than reading its files. Never edit or write its files: change a note with propose_note_edit or propose_note_write, which wait for the person to keep the change. Your edits to code and other files are yours to make as usual.`,
+          text: `The person's knowledge base is the folder ${notes}: notes in Markdown with YAML frontmatter, linked to each other. Look things up in it with brief_base, search_notes, outline_note and read_note rather than reading its files. Never edit or write its files: change a note with propose_note_edit or propose_note_write, which wait for the person to keep the change. Your edits to code and other files are yours to make as usual.\n\n${CITING}`,
         });
       });
       // A write or an edit to a note anyway is made a proposal of the same change.

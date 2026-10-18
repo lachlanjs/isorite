@@ -89,7 +89,7 @@ describe.skipIf(!ready)("isorite term", () => {
       }
       if (!lastAsked(request).includes("my notes")) return { text: `You asked: ${lastAsked(request)}. Mixing keeps part of the old bath.` };
       const looked = request.messages.slice(request.messages.findLastIndex((m) => m.role === "user")).filter((m) => m.role === "tool").length;
-      return LOOKS[looked] ?? { text: "Your note on the loop says to mix: keep part of the old self-energy." };
+      return LOOKS[looked] ?? { text: "Your note on the loop says to mix `[1]`: keep part of the old self-energy.\n\n```isorite\n[1] dmft/the-dmft-loop § Mixing\n```" };
     });
     port = await freePort();
     pane = new Pane([process.execPath, MAIN, "term", base.study, "--port", String(port)], {
@@ -170,7 +170,10 @@ describe.skipIf(!ready)("isorite term", () => {
     expect(steps[2]).toMatchObject({ how: "link", opened: "dmft/self-consistency-condition", from: "dmft/the-dmft-loop" });
     // The sidebar has the notes in play: the one found, and the one reached along its link.
     const shown = await pane.waitFor("notes in play");
-    expect(shown).toMatch(/the dmft loop\s+read/);
+    // The answer's source is drawn as the board draws a citation, and the note it names is used.
+    expect(shown).toContain("says to mix [1]: keep");
+    expect(shown).toContain("[1] the dmft loop § mixing");
+    expect(await pane.waitFor(/the dmft loop\s+◆ used/)).toBeTruthy();
     // A long title wraps in the narrow sidebar; its state stays on its first line.
     expect(shown).toMatch(/requires › self-\s*read/);
     expect(shown).toContain("consistency condition");

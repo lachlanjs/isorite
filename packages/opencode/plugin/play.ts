@@ -60,12 +60,14 @@ export class Play {
     this.notes.set(step.opened, { ...reached, state: this.higher(reached.state, step.tool === "outline_note" ? "looked at" : "read") });
   }
 
-  /** The notes an answer cites are used. */
-  cite(ids: Iterable<string>): void {
+  /** The notes an answer cites are used. Whether any was not used before. */
+  cite(ids: Iterable<string>): boolean {
+    let changed = false;
     for (const id of ids) {
       const known = this.notes.get(id);
-      if (known) this.notes.set(id, { ...known, state: "used" });
+      if (known && known.state !== "used") { this.notes.set(id, { ...known, state: "used" }); changed = true; }
     }
+    return changed;
   }
 
   get size(): number { return this.notes.size; }

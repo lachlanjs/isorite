@@ -3,12 +3,14 @@
 // notes in play: what the agent found in the knowledge base and how far each got (`Terminal`, `Terminal-Chat`).
 
 import { spawn } from "node:child_process";
+import { fg, StyledText, TextRenderable, type TextChunk } from "@opentui/core";
 import { Plugin } from "@opencode/plugin/tui";
 import { createResource, createSignal, For, Show } from "solid-js";
 import * as Isorite from "./isorite.ts";
 import * as Logo from "./logo.ts";
 import { lapis, quartz } from "./palette.ts";
 import { Play, type Step } from "./play.ts";
+import { parseSources } from "./sources.ts";
 
 const SPLASH = "isorite-splash";
 
@@ -48,6 +50,25 @@ export default Plugin.define({
       play.add(data.step as Step);
       hear((n) => n + 1);
     }, stop.signal);
+
+    // The sources an answer ends with, drawn as the board draws a citation; the notes they name are used.
+    ctx.markdown.registerCodeBlockRenderer("isorite", (token) => {
+      const sources = parseSources(token.text);
+      if (!sources.length) return null;
+      const chunks: TextChunk[] = [];
+      sources.forEach((s, k) => {
+        const title = (titles().get(s.note) ?? s.note.split("/").at(-1)!).toLowerCase();
+        chunks.push(fg(ground().growth)(`${k ? "\n" : ""}[${s.n}]`), fg(ground().text)(` ${title}`));
+        if (s.section) chunks.push(fg(ground().faint)(` § ${s.section.toLowerCase()}`));
+      });
+      // Drawing happens in the session on screen: its notes in play are the ones to mark.
+      queueMicrotask(() => {
+        const route = ctx.ui.router.current();
+        const play = route.type === "session" ? plays.get(route.sessionID) : undefined;
+        if (play?.cite(sources.map((s) => s.note))) hear((n) => n + 1);
+      });
+      return new TextRenderable(ctx.renderer, { content: new StyledText(chunks) });
+    });
 
     ctx.ui.slot({
       append: "sidebar.content",
