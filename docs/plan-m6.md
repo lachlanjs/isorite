@@ -301,7 +301,7 @@ Steps 1 to 7, on `m6-terminal`. Nothing was asked of a real model: every check r
 
 **Tests:**
 - 319 core (2 Atlas timing tests fail, as on main), 77 engine, 8 example, 24 server (1 skipped), 46 app and 39 opencode unit tests. The opencode ones include 10 end-to-end tests that drive OpenCode 2.0.32 in tmux against the scripted gateway: splash, home and wordmark, status line, look-ups and sources, the atlas, proposals, from you, the note view (keep, ask, remove, edit, timeline, `[s]`), and the server stopping with the TUI.
-- Browser tests: running at the time of writing; their counts follow in the next commit.
+- 154 browser tests passed, 4 skipped. 2 failed: `notes.spec.ts:101` on a phone, both grounds, which fails on main too. The agent's path on the Atlas, its change kept in a note, and send to agent pass at both widths on both grounds.
 - Check is clean.
 
 **For Lachlan:**
