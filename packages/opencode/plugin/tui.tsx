@@ -1,12 +1,14 @@
 /** @jsxImportSource @opentui/solid */
-// isorite's TUI half: the views OpenCode does not have. For now, the splash (`Terminal-Splash`).
+// isorite's TUI half: the views OpenCode does not have. The splash (`Terminal-Splash`), and in the sidebar the
+// notes in play: what the agent found in the knowledge base and how far each got (`Terminal`, `Terminal-Chat`).
 
 import { spawn } from "node:child_process";
 import { Plugin } from "@opencode/plugin/tui";
-import { createResource, For } from "solid-js";
+import { createResource, createSignal, For, Show } from "solid-js";
 import * as Isorite from "./isorite.ts";
 import * as Logo from "./logo.ts";
 import { lapis, quartz } from "./palette.ts";
+import { Play, type Step } from "./play.ts";
 
 const SPLASH = "isorite-splash";
 
@@ -30,6 +32,52 @@ export default Plugin.define({
   setup(ctx) {
     const ground = () => (ctx.themeMode === "light" ? quartz : lapis);
     const style = (process.env.ISORITE_LOGO ?? "quadrant") as Logo.Style;
+
+    // The notes in play, by session, from the server's events; titles from its listing, asked again when notes change.
+    const plays = new Map<string, Play>();
+    const [heard, hear] = createSignal(0);
+    const [titles, setTitles] = createSignal(new Map<string, string>());
+    const listTitles = () => Isorite.get<Isorite.Listing>("/api/notes").then((l) => setTitles(new Map(l.notes.map((n) => [n.id, n.title]))), () => undefined);
+    void listTitles();
+    const stop = new AbortController();
+    Isorite.listen((type, data) => {
+      if (type === "note-changed") void listTitles();
+      if (type !== "agent-step" || data.agent !== Isorite.AGENT || typeof data.session !== "string") return;
+      const play = plays.get(data.session) ?? new Play();
+      plays.set(data.session, play);
+      play.add(data.step as Step);
+      hear((n) => n + 1);
+    }, stop.signal);
+
+    ctx.ui.slot({
+      append: "sidebar.content",
+      render: (input) => {
+        const play = () => (heard(), plays.get(input.sessionID));
+        const rows = () => play()?.rows((id) => titles().get(id) ?? id.split("/").at(-1)!) ?? [];
+        const summary = () => {
+          const s = play()?.summary();
+          return s ? [`${s.found} found`, s.followed ? `${s.followed} by links` : "", s.used ? `${s.used} used` : ""].filter(Boolean).join(" · ") : "";
+        };
+        const state = (row: { state: string }) => (row.state === "used" ? ground().growth : row.state === "read" ? ground().soft : ground().faint);
+        return (
+          <Show when={rows().length > 0}>
+            <box border borderStyle="rounded" borderColor={ground().ls} title=" notes in play " paddingLeft={1} paddingRight={1} flexDirection="column">
+              <text fg={ground().faint} wrapMode="none">{summary()}</text>
+              <For each={rows()}>
+                {(row) => (
+                  <box flexDirection="row" minWidth={0}>
+                    <text fg={ground().line} wrapMode="none" flexShrink={0}>{row.prefix}</text>
+                    <text fg={ground().text} wrapMode="word" flexShrink={1} minWidth={0}>{row.label}</text>
+                    <box flexGrow={1} minWidth={1} />
+                    <text fg={state(row)} wrapMode="none" flexShrink={0}>{row.state === "used" ? "◆ used" : row.state}</text>
+                  </box>
+                )}
+              </For>
+            </box>
+          </Show>
+        );
+      },
+    });
 
     ctx.ui.router.register({
       name: SPLASH,
@@ -91,5 +139,6 @@ export default Plugin.define({
 
     // The splash is shown once, when the TUI starts.
     setTimeout(() => ctx.ui.router.navigate({ type: "plugin", name: SPLASH, data: {} }), 0);
+    return () => stop.abort();
   },
 });

@@ -22,6 +22,11 @@ export interface Step {
   section?: string;
   /** The note already in hand that links to the one opened: a step along a chain. */
   from?: string;
+  /** For a step along a link, what the link says of it, when it is rated: requires, see also. */
+  rel?: string;
+  /** For a search, what was searched for; by meaning, how alike each note found was (0 to 1). */
+  query?: string;
+  scores?: Record<string, number>;
   failed?: boolean;
 }
 
@@ -94,6 +99,7 @@ export class Lookup {
     step.how = "keyword";
     const query = String(a.query ?? "").trim();
     if (!query) return this.fail(step, "search_notes needs a query.");
+    step.query = query;
     this.index ??= new SearchIndex(this.b);
     const limit = Math.max(1, Math.min(Number(a.limit) || 8, 15));
     const hits = this.index.search(query, { limit, ...(typeof a.under === "string" && a.under ? { under: a.under.replace(/^\/+|\/+$/g, "") } : {}) });
@@ -108,11 +114,13 @@ export class Lookup {
     step.how = "meaning";
     const text = String(a.text ?? a.query ?? "").trim();
     if (!text) return this.fail(step, "find_similar needs the text to look for.");
+    step.query = text;
     if (!this.similar) return this.fail(step, "Search by meaning is not available here. Use search_notes.");
     const found = await this.similar(text, { limit: Math.max(1, Math.min(Number(a.limit) || 6, 15)), ...(typeof a.under === "string" && a.under ? { under: a.under } : {}) });
     if (!found.ready) return this.fail(step, "Search by meaning is still being prepared for this base. Use search_notes for now.");
     const hits = found.hits.filter((h) => this.b.concepts.has(h.note));
     step.notes = hits.map((h) => h.note);
+    step.scores = Object.fromEntries(hits.map((h) => [h.note, Math.round(h.score * 100) / 100]));
     for (const id of step.notes) if (!this.named.has(id)) this.named.set(id, "meaning");
     step.said = `Looked for notes that mean "${text.length > 70 ? text.slice(0, 70) + "…" : text}": ${hits.length ? `${hits.length} found` : "nothing found"}`;
     if (!hits.length) return "No notes were found.";
@@ -124,7 +132,8 @@ export class Lookup {
   private reached(id: string, step: Step): void {
     for (let k = this.held.length - 1; k >= 0; k--) {
       const h = this.held[k]!;
-      if (h !== id && this.b.concepts.get(h)?.links.some((l) => l.target === id)) { step.from = h; step.how = "link"; break; }
+      const link = h === id ? undefined : this.b.concepts.get(h)?.links.find((l) => l.target === id);
+      if (link) { step.from = h; step.how = "link"; if (link.rel) step.rel = link.rel; break; }
     }
     // Not by a link: if a search was what named it, that is how it was found.
     if (step.how !== "link") step.how = this.named.get(id) ?? "read";

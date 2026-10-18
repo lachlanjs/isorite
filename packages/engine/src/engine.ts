@@ -210,14 +210,14 @@ export class Engine implements Api {
     }
     const turn = this.turns.get(`${agent}/${session}`) ?? this.startTurn(agent, session);
     const { text, step } = await turn.lookup.call(tool, JSON.stringify(args));
-    this.publish({ type: "agent-step", request: turn.request, agent, step });
+    this.publish({ type: "agent-step", request: turn.request, agent, session, step });
     return { text };
   }
 
   async agentStatus(agent: string, session: string, busy: boolean): Promise<void> {
     const key = `${agent}/${session}`, turn = this.turns.get(key);
     if (busy && !turn) this.startTurn(agent, session);
-    if (!busy && turn) { this.turns.delete(key); this.publish({ type: "agent-done", request: turn.request, agent }); }
+    if (!busy && turn) { this.turns.delete(key); this.publish({ type: "agent-done", request: turn.request, agent, session }); }
   }
 
   async agentPropose({ agent, session, note, asked, edit }: AgentProposal): Promise<{ text: string }> {
@@ -252,7 +252,7 @@ export class Engine implements Api {
   private startTurn(agent: string, session: string): { request: string; lookup: Lookup } {
     const turn = { request: `agent:${agent}:${++this.turnCount}`, lookup: new Lookup(this.bundle, "", this.similar) };
     this.turns.set(`${agent}/${session}`, turn);
-    this.publish({ type: "agent-start", request: turn.request, agent });
+    this.publish({ type: "agent-start", request: turn.request, agent, session });
     return turn;
   }
 

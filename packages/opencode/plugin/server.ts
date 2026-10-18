@@ -9,7 +9,6 @@ import { Plugin } from "@opencode/plugin";
 import * as Isorite from "./isorite.ts";
 import { noteOf } from "./notes.ts";
 
-export const AGENT = "opencode";
 const SETTLE = 500;
 
 export default Plugin.define({
@@ -29,7 +28,7 @@ export default Plugin.define({
           input: tool.parameters as never,
           output: undefined,
           execute: async (args, context) => {
-            const { text } = await Isorite.post<{ text: string }>("/api/agent/look", { agent: AGENT, session: context.sessionID, tool: tool.name, args, asked: asked.get(context.sessionID) ?? "" });
+            const { text } = await Isorite.post<{ text: string }>("/api/agent/look", { agent: Isorite.AGENT, session: context.sessionID, tool: tool.name, args, asked: asked.get(context.sessionID) ?? "" });
             return { content: text };
           },
         });
@@ -58,7 +57,7 @@ export default Plugin.define({
     }
 
     const status = (session: string, busy: boolean) =>
-      Isorite.post("/api/agent/status", { agent: AGENT, session, busy }).catch(() => undefined);
+      Isorite.post("/api/agent/status", { agent: Isorite.AGENT, session, busy }).catch(() => undefined);
     await ctx.session.hook("prompt", ({ sessionID, prompt }) => {
       asked.set(sessionID, prompt.text.trim());
       void (async () => {

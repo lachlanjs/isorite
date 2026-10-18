@@ -168,6 +168,12 @@ describe.skipIf(!ready)("isorite term", () => {
     expect(steps[0]!.notes).toContain("dmft/the-dmft-loop");
     expect(steps[1]).toMatchObject({ how: "keyword", opened: "dmft/the-dmft-loop" });
     expect(steps[2]).toMatchObject({ how: "link", opened: "dmft/self-consistency-condition", from: "dmft/the-dmft-loop" });
+    // The sidebar has the notes in play: the one found, and the one reached along its link.
+    const shown = await pane.waitFor("notes in play");
+    expect(shown).toMatch(/the dmft loop\s+read/);
+    // A long title wraps in the narrow sidebar; its state stays on its first line.
+    expect(shown).toMatch(/requires › self-\s*read/);
+    expect(shown).toContain("consistency condition");
     keep("4-lookups");
   }, 90_000);
 

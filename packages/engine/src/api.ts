@@ -136,10 +136,10 @@ export type EngineEvent =
   | { type: "iso-stopped"; request: string; note: string }
   | { type: "iso-failed"; request: string; note: string; message: string }
   /** A terminal agent (`agent` is its name, as `opencode`) began a turn in one of its sessions. Each turn ends in agent-done. */
-  | { type: "agent-start"; request: string; agent: string }
+  | { type: "agent-start"; request: string; agent: string; session: string }
   /** It looked something up in the base, with Iso's own tools. */
-  | { type: "agent-step"; request: string; agent: string; step: Step }
-  | { type: "agent-done"; request: string; agent: string };
+  | { type: "agent-step"; request: string; agent: string; session: string; step: Step }
+  | { type: "agent-done"; request: string; agent: string; session: string };
 
 /** A terminal agent's edit to a note of the base: it waits to be kept, as Iso's text does. `asked` is what the
  *  person asked the agent, as near as the harness can tell. */

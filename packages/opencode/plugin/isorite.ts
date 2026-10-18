@@ -1,6 +1,9 @@
 // The isorite server, as the plugin reaches it: over HTTP, as the browser does.
 // `isorite term` names it in ISORITE_URL.
 
+/** This harness's name as the server knows its agent. */
+export const AGENT = "opencode";
+
 export const url = (process.env.ISORITE_URL ?? "http://127.0.0.1:4767").replace(/\/$/, "");
 
 export interface Session { name: string; study: boolean; device: string; token: string }
@@ -36,4 +39,26 @@ export interface ToolDef { type: "function"; function: { name: string; descripti
 export async function base(): Promise<{ name: string; notes: number; study: boolean }> {
   const [session, listing] = await Promise.all([get<Session>("/api/session"), get<Listing>("/api/notes")]);
   return { name: session.name, notes: listing.notes.length, study: session.study };
+}
+
+/** The server's events, as the browser hears them, until the signal aborts; heard again after a dropped stream. */
+export function listen(on: (type: string, data: Record<string, unknown>) => void, signal: AbortSignal): void {
+  void (async () => {
+    while (!signal.aborted) {
+      try {
+        const response = await fetch(url + "/api/events", { signal });
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
+          buffer += decoder.decode(chunk, { stream: true });
+          for (let end; (end = buffer.indexOf("\n\n")) >= 0; buffer = buffer.slice(end + 2)) {
+            const block = buffer.slice(0, end);
+            const type = block.match(/^event: (.*)$/m)?.[1], data = block.match(/^data: (.*)$/m)?.[1];
+            if (type && data) { try { on(type, JSON.parse(data) as Record<string, unknown>); } catch { /* not ours */ } }
+          }
+        }
+      } catch { /* the server went; try again */ }
+      if (!signal.aborted) await new Promise((r) => setTimeout(r, 2000));
+    }
+  })();
 }

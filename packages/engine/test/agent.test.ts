@@ -49,9 +49,10 @@ test("an agent's look-ups are one turn, from busy to idle, each step published w
   const request = (events[0] as { request: string }).request;
   expect(events.every((e) => "request" in e && e.request === request)).toBe(true);
   const steps = events.flatMap((e) => (e.type === "agent-step" ? [e.step] : []));
-  expect(steps[0]).toMatchObject({ tool: "search_notes", how: "keyword" });
+  expect(steps[0]).toMatchObject({ tool: "search_notes", how: "keyword", query: "average surprise" });
   expect(steps[1]).toMatchObject({ how: "keyword", opened: "basics/entropy", section: "Units" });
-  expect(steps[2]).toMatchObject({ how: "link", opened: "basics/surprise", from: "basics/entropy" });
+  expect(steps[2]).toMatchObject({ how: "link", opened: "basics/surprise", from: "basics/entropy", rel: "requires" });
+  expect(events.every((e) => "session" in e && e.session === "s1")).toBe(true);
 });
 
 test("a look-up outside a turn starts one; sessions and agents keep turns of their own; idle twice ends once", async () => {
@@ -123,4 +124,10 @@ test("proposing through the tools is proposing: what was asked rides along; a re
   await engine.agentLook({ agent: "opencode", session: "s1", tool: "propose_note_edit", asked: "plainer", args: { note: "/basics/surprise.md", oldString: "Minus the logarithm", newString: "The negative logarithm" } });
   expect(pending(await engine.journal("basics/surprise"))[0]).toMatchObject({ who: "agent:opencode", asked: "plainer" });
   await expect(engine.agentLook({ agent: "opencode", session: "s1", tool: "propose_note_edit", args: { note: "basics/surprise" } })).rejects.toThrow(/needs oldString/);
+});
+
+test("a search by meaning keeps how alike each note found was", async () => {
+  const { engine, events } = await open(true);
+  await engine.agentLook({ agent: "opencode", session: "s1", tool: "find_similar", args: { text: "short codes" } });
+  expect(events.at(-1)).toMatchObject({ type: "agent-step", step: { how: "meaning", query: "short codes", scores: { "codes/huffman": 0.8 } } });
 });
