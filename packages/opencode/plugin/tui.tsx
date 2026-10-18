@@ -7,17 +7,19 @@ import { fg, StyledText, TextRenderable, type TextChunk } from "@opentui/core";
 import { Plugin } from "@opencode/plugin/tui";
 import { createEffect, createResource, createSignal, For, Show } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { ago, anchorOf, blocks, describe, momentKey, moments, type Entry } from "@isorite/core";
+import { ago, anchorOf, blocks, describe, isStudyId, momentKey, moments, reach, type Entry, type MapModel } from "@isorite/core";
+import { drawAtlas, runsOf, type Role } from "./oneatlas.ts";
 import { noteView, type ViewChange } from "./noteview.ts";
 import { NotePage, fromWhom, type NoteData } from "./notepage.tsx";
 import * as Isorite from "./isorite.ts";
 import * as Logo from "./logo.ts";
-import { lapis, quartz } from "./palette.ts";
+import { lapis, quartz, routeColours } from "./palette.ts";
 import { Play, type Step } from "./play.ts";
 import { parseSources } from "./sources.ts";
 
 const SPLASH = "isorite-splash";
 const NOTE = "isorite-note";
+const ATLAS = "isorite-atlas";
 
 // Below the keys on the board: rule 90 from a single cell, in the line colour.
 const FIELD = [
@@ -153,6 +155,89 @@ export default Plugin.define({
     const [baseName, setBaseName] = createSignal("");
     void Isorite.get<Isorite.Session>("/api/session").then((s) => setBaseName(s.name), () => undefined);
 
+    // ------------------------------------------------------------ one note's Atlas (Terminal-Atlas), in the session's panel
+    /** The note the agent is reading now, by session, while its turn goes on. */
+    const reading = new Map<string, string>();
+    const [atlasNote, setAtlasNote] = createSignal("");
+    const [mapVersion, bumpMap] = createSignal(0);
+    const [map] = createResource(mapVersion, () => Isorite.get<{ model: MapModel }>("/api/map").then((m) => m.model, () => null));
+    const openAtlas = (id: string) => {
+      setAtlasNote(id);
+      ctx.ui.panel.open(ATLAS, { presentation: "panel" });
+      // The chat keeps the keys; the panel takes them when it is focused (click it, or leader and →).
+      setTimeout(() => ctx.keymap.dispatch("pane.focus.left"), 0);
+    };
+    ctx.ui.slot({
+      append: "session.panel",
+      render: (input) => {
+        const routes = () => (ctx.themeMode === "light" ? routeColours.quartz : routeColours.lapis);
+        const colour = (role: Role) => (role === "req" ? routes().req : role === "bld" ? routes().bld : role === "gold" ? ground().growth : role === "ls" ? ground().ls : role === "faint" ? ground().faint : ground().text);
+        const title = (id: string) => (titles().get(id) ?? id.split("/").at(-1)!).toLowerCase();
+        const play = () => (heard(), plays.get(input.sessionID));
+        const now = () => (heard(), reading.get(input.sessionID));
+        // The note shown: the one chosen, else the one the agent read last, else the first in play.
+        const focal = () => atlasNote() || now() || play()?.rows(title)[0]?.id || "";
+        const near = () => {
+          const model = map(), id = focal();
+          if (!model || !id) return null;
+          const r = reach(model, id), direct = r.requires.filter((n) => r.depth[n] === 1);
+          return { direct, further: r.requires.length - direct.length, builds: r.builds.filter((n) => !isStudyId(n)) };
+        };
+        const grid = () => {
+          const n = near(), id = focal();
+          if (!n) return [];
+          const box = (b: string) => ({ id: b, title: title(b), ...(b === now() ? { gold: true } : {}) });
+          return drawAtlas(box(id), n.direct.map(box), n.builds.map(box), Math.max(46, input.width - 6));
+        };
+        ctx.keymap.layer(() => ({
+          enabled: () => input.focused && input.name === ATLAS,
+          commands: [
+            { id: "isorite.atlas.next", title: "Next note in play", bind: "a", run: () => { const ids = play()?.rows(title).map((r) => r.id) ?? []; if (ids.length) setAtlasNote(ids[(ids.indexOf(focal()) + 1) % ids.length]!); } },
+            { id: "isorite.atlas.open", title: "Open the note", bind: "n", run: () => { if (focal()) openNote(focal()); } },
+            { id: "isorite.atlas.browser", title: "The whole map in the browser", bind: "b", run: () => openInBrowser(`${Isorite.url}/#/atlas`) },
+            { id: "isorite.atlas.close", title: "Close the atlas", bind: "escape", run: () => input.close() },
+          ],
+        }));
+        return (
+          <Show when={input.name === ATLAS}>
+            <box flexDirection="column" paddingLeft={2} paddingRight={1} paddingTop={1} border={["left"]} borderColor={ground().line}>
+              <Show when={focal()} fallback={<text fg={ground().faint} wrapMode="word">No note yet: ask the agent about your notes, or name one with /atlas &lt;words&gt;.</text>}>
+                <box flexDirection="row">
+                  <text fg={ground().faint} wrapMode="none">{"atlas · "}</text>
+                  <text fg={ground().text} wrapMode="none" flexShrink={1} minWidth={0}>{title(focal())}</text>
+                  <box flexGrow={1} />
+                  <text fg={ground().faint} wrapMode="none">{"[a] next note in play"}</text>
+                </box>
+                <text> </text>
+                <Show when={near()}>
+                  {(n) => (
+                    <>
+                      <text wrapMode="none">
+                        <span style={{ fg: routes().req }}>{n().direct.length ? "it requires" : "it requires nothing"}</span>
+                        <span>{" ".repeat(Math.max(1, (grid()[0]?.length ?? 60) - 12 - (n().direct.length ? 11 : 19)))}</span>
+                        <span style={{ fg: routes().bld }}>{n().builds.length ? "builds on it" : ""}</span>
+                      </text>
+                      <For each={grid()}>
+                        {(row) => <text wrapMode="none"><For each={runsOf(row)}>{(r) => <span style={{ fg: colour(r.role), ...(r.bold ? { attributes: 1 } : {}) }}>{r.text}</span>}</For></text>}
+                      </For>
+                      <text> </text>
+                      <box flexDirection="row">
+                        <text fg={ground().faint} wrapMode="none">{n().further ? `${n().further} more ${n().further === 1 ? "is" : "are"} required further back` : ""}</text>
+                        <box flexGrow={1} />
+                        <text fg={ground().faint} wrapMode="none">{"[b] the whole map in the browser"}</text>
+                      </box>
+                    </>
+                  )}
+                </Show>
+                <Show when={now()}>{(id) => <text wrapMode="word"><span style={{ fg: ground().growth }}>{"◆ "}</span><span style={{ fg: ground().soft }}>{"OpenCode is reading "}</span><span style={{ fg: ground().growth }}>{title(id())}</span></text>}</Show>
+                <Show when={input.focused}><text fg={ground().faint}>{"[n] open the note   esc closes"}</text></Show>
+              </Show>
+            </box>
+          </Show>
+        );
+      },
+    });
+
     const stop = new AbortController();
     Isorite.listen((type, data) => {
       if (type === "note-changed") void listTitles();
@@ -167,10 +252,14 @@ export default Plugin.define({
         if (sessionID) void deliver(sessionID);
         return;
       }
+      if (type === "agent-done" && typeof data.session === "string") { reading.delete(data.session); hear((n) => n + 1); }
+      if (type === "note-changed") bumpMap((n) => n + 1);
       if (type !== "agent-step" || data.agent !== Isorite.AGENT || typeof data.session !== "string") return;
       const play = plays.get(data.session) ?? new Play();
       plays.set(data.session, play);
       play.add(data.step as Step);
+      const step = data.step as Step;
+      if (step.opened && !step.failed) reading.set(data.session, step.opened);
       hear((n) => n + 1);
     }, stop.signal);
 
@@ -291,6 +380,7 @@ export default Plugin.define({
             { id: "isorite.note.keep", title: "Keep the change", bind: "k", run: () => { if (!moment()) void settle("keep"); } },
             { id: "isorite.note.edit", title: "Edit the change, then keep it", bind: "e", run: () => { if (!moment()) void edit(); } },
             { id: "isorite.note.remove", title: "Remove the change", bind: "r", run: () => { if (!moment()) void settle("discard"); } },
+            { id: "isorite.note.atlas", title: "Its atlas", bind: "a", run: () => { const id = shownNote(); ctx.ui.router.navigate(back); if (back.type === "session") setTimeout(() => openAtlas(id), 0); else setAtlasNote(id); } },
             { id: "isorite.note.browser", title: "The note in the browser", bind: "b", run: () => openInBrowser(`${Isorite.url}/#/n/${shownNote()}`) },
             { id: "isorite.note.back", title: "Back", bind: "q", run: () => (moment() ? setMoment(null) : ctx.ui.router.navigate(back)) },
             { id: "isorite.note.escape", title: "Back", bind: "escape", run: () => (moment() ? setMoment(null) : ctx.ui.router.navigate(back)) },
@@ -305,6 +395,14 @@ export default Plugin.define({
         ctx.keymap.layer(() => ({
           mode: "global",
           commands: [{
+            id: "isorite.atlas.show", title: "One note's atlas, beside the chat", palette: true, slash: { name: "atlas", arguments: true },
+            run: async (input) => {
+              const words = input?.trim();
+              const id = words ? (await Isorite.get<{ id: string }[]>(`/api/search?q=${encodeURIComponent(words)}`).catch(() => []))[0]?.id : "";
+              if (words && !id) { ctx.ui.toast?.show?.({ message: `no note matches “${words}”`, variant: "warning" }); return; }
+              openAtlas(id ?? "");
+            },
+          }, {
             id: "isorite.note.open", title: "Open a note of the knowledge base", palette: true, slash: { name: "note", arguments: true },
             run: async (input) => {
               const words = input?.trim();

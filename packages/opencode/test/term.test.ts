@@ -185,6 +185,27 @@ describe.skipIf(!ready)("isorite term", () => {
     keep("4-lookups");
   }, 90_000);
 
+  it("shows one note's atlas beside the chat: what it requires, what builds on it; [a] the next note in play; esc closes it", async () => {
+    pane.type("/atlas self-consistency");
+    await new Promise((r) => setTimeout(r, 500));
+    pane.keys("Enter");
+    const shown = await pane.waitFor("atlas · self-consistency condition", 30_000);
+    expect(shown).toContain("it requires");
+    expect(shown).toContain("builds on it");
+    expect(shown).toContain("weiss field");
+    expect(shown).toContain("dyson equation");
+    expect(shown).toContain("the dmft loop");
+    expect(shown).toMatch(/┏━+┓/);
+    keep("4b-atlas");
+    // Focused (leader, then →), its keys are its own: [a] steps to the next note in play, esc closes it.
+    pane.keys("C-x", "Right");
+    await new Promise((r) => setTimeout(r, 300));
+    pane.keys("a");
+    await pane.waitFor((t: string) => /atlas · (?!self-consistency)/.test(t));
+    pane.keys("Escape");
+    await pane.waitFor((t: string) => !t.includes("atlas · "));
+  }, 60_000);
+
   it("proposes changes to notes, which wait to be kept, and writes code as OpenCode does", async () => {
     const loop = join(base.notes, "dmft", "the-dmft-loop.md"), before = readFileSync(loop, "utf8");
     pane.type("fix the loop: mix half the old self-energy, and note Broyden mixing");

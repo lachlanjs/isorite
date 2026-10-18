@@ -16,3 +16,6 @@ export type Swatch = keyof typeof lapis;
 
 /** A ground: a colour for each swatch, lapis's or quartz's. */
 export type Ground = Record<Swatch, string>;
+
+/** The one-note Atlas's routes: what a note requires, and what builds on it (`Terminal-Atlas`). */
+export const routeColours = { lapis: { req: "#B79CFF", bld: "#FF9E64" }, quartz: { req: "#6A3FC0", bld: "#B5521B" } } as const;

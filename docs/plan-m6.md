@@ -245,6 +245,10 @@ Approved by Lachlan on 2026-10-18 with these answers:
    - **Not as the board:** `[o]` from a code diff (OpenCode draws the diff and gives no slot beside it); `[a] its atlas` is step 5. `[e]` edits in a one-line prompt, which suits a sentence better than paragraphs. The board's prompt line at the foot is the dialog `[/]` opens.
    - The note view's keys are in OpenCode's base key mode, not global: in global, letters typed in a dialog it opened (asking Iso) were also taken as its keys.
 5. **The one-note Atlas.** The core's layout for one note drawn in cells in the panel, with its own keys and `esc`.
+   **Built** (2026-10-18):
+   - `/atlas [words]`, or `[a]` in the note view, opens one note's atlas in OpenCode's session panel, beside the chat, as `Terminal-Atlas` draws it: what it requires on the left (purple routes), the note in a heavy box, what builds on it on the right in dashed boxes (orange routes), "N more are required further back", and while a turn goes on the note the agent is reading in gold, with "OpenCode is reading …". The note shown is the one chosen, else the one the agent read last, else the first in play.
+   - **The neighbourhood is the core's `reach`**, as the browser's Atlas lights a chosen note. **The drawing is not the core's layout:** `nestedLayout` places folder blocks and routes at 45°, for the whole map; three columns of boxes with square routes in terminal cells are drawn by the plugin (`oneatlas.ts`), from `reach`. So the terminal has a small layout of its own, against `architecture.md` ("does not have a layout of its own"), because the core's would have drawn the board worse.
+   - After it opens, the chat keeps the keys (`pane.focus.left`); focused (a click, or leader and →), the panel's are `[a]` the next note in play, `[n]` open the note, `[b]` the whole map in the browser, esc to close.
 6. **The splash and status line**, and `[s] send to agent` from the terminal side.
 7. **Screenshots beside the six boards** (rendered from the tmux panes), then the write-up. A run on a real model: the free models if they serve, else the gateway with a key you give.
 
