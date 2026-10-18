@@ -30,7 +30,7 @@ const DOTS = "· ".repeat(38).trim();
 /** The widest a note's column is: its gutter, rail and about 76 characters of text. */
 const MEASURE = 84;
 
-/** A note's path as the boards write it: "dmft / self-consistency condition". */
+/** A note's path as the boards write it: "physics / softening". */
 export function pathOf(id: string, title: string): string {
   return [...id.split("/").slice(0, -1).map((d) => d.replace(/-/g, " ")), title.toLowerCase()].join(" / ");
 }

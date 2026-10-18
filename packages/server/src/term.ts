@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { StudyError } from "@isorite/core";
+import { NAME } from "@isorite/example";
 import { writeExample } from "@isorite/example/node";
 import { defaultHome, findOpenCode, gatewayFrom, startScripted, tutorialScript, writeHome } from "@isorite/opencode";
 import { locate } from "./serve.ts";
@@ -91,7 +92,7 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
  *  on the same folder, it carries on where it was left. */
 export async function tutorialTerm(folder: string | undefined, { port = 4790, env = process.env, out = console.log }: TermOptions & { out?: (line: string) => void } = {}): Promise<number> {
   const root = folder ? resolve(folder) : mkdtempSync(join(tmpdir(), "isorite-tutorial-"));
-  const base = existsSync(join(root, "base")) ? { notes: join(root, "base", "dmft-notes"), study: join(root, "base", "dmft-notes-study") } : await writeExample(join(root, "base"));
+  const base = existsSync(join(root, "base", NAME)) ? { notes: join(root, "base", NAME), study: join(root, "base", `${NAME}-study`) } : await writeExample(join(root, "base"));
   const code = join(root, "code");
   mkdirSync(code, { recursive: true });
   const model = await startScripted(tutorialScript(base.notes));

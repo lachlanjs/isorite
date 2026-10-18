@@ -227,10 +227,10 @@ export async function buildExample(sources: Sources, now = Date.now()): Promise<
   });
 
   // ---- leapfrog, two weeks ago
-  on(14, 0, () => write(LEAP, drop(final(LEAP), "It is second order")));
+  on(14, 0, () => write(LEAP, drop(drop(final(LEAP), "## Why it does not drift"), "It is second order")));
   on(14, 7, async () => {
     const p = await insert(LEAP, "One force calculation", "why does its energy not drift, when Euler's does?", "It is second order, and time-reversible. Its energy error stays bounded.", [{ name: "read_note", arguments: { id: EULER } }, { name: "read_note", arguments: { id: ENERGY } }], { in: 6200, out: 160, usd: 0.0121 });
-    await engine.revise(LEAP, p.proposal, block(final(LEAP), "It is second order"));
+    await engine.revise(LEAP, p.proposal, `${block(final(LEAP), "## Why it does not drift")}\n\n${block(final(LEAP), "It is second order")}`);
     await engine.keep(LEAP, p.proposal);
   });
   // The loop moved to leapfrog in another editor, and found the next time it was opened.

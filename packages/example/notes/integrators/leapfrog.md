@@ -15,4 +15,6 @@ v += 0.5 * dt * a
 
 One force calculation per step, as for Euler, and the last one is reused at the start of the next step.
 
+## Why it does not drift
+
 It is second order, and it is time-reversible: run it with $-\Delta t$ and it retraces its steps exactly. Its energy error oscillates and stays bounded, because it is [symplectic](/integrators/symplectic-integrators.md "uses").
