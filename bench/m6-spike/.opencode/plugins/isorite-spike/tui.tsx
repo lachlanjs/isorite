@@ -2,6 +2,7 @@
 import { Plugin } from "@opencode/plugin/tui"
 import { TextRenderable } from "@opentui/core"
 import { appendFileSync } from "node:fs"
+import * as Logo from "./logo.ts"
 
 const log = (m: string) => appendFileSync("/tmp/isorite-spike.log", m + "\n")
 
@@ -9,11 +10,18 @@ export default Plugin.define({
   id: "isorite.spike",
   setup(ctx) {
     log("tui setup")
+    const gold = () => (ctx.themeMode === "light" ? "#8C6200" : "#F0BE4A")
     ctx.ui.router.register({ name: "isorite-splash", render: () => (
       <box flexDirection="column" alignItems="center" justifyContent="center" width="100%" height="100%">
-        <text fg={ctx.theme.text.base}>  ▄▀▄  </text><text fg={ctx.theme.text.base}>i s o r i t e</text>
-        <text fg={ctx.theme.text.muted}>spike · 1 note</text>
-        <text>[enter] open   [q] quit</text>
+        {Logo.rows(process.env.ISORITE_LOGO === "simple" ? "simple" : "legacy").map((runs) => (
+          <text>{runs.map((run) => <span style={{ fg: run.growth ? gold() : ctx.theme.text.base }}>{run.text}</span>)}</text>
+        ))}
+        <text> </text>
+        <text fg={ctx.theme.text.base}><b>i s o r i t e</b></text>
+        <text> </text>
+        <text fg={ctx.theme.text.muted}>spike · 1 note · no study base</text>
+        <text> </text>
+        <text><span style={{ fg: ctx.theme.text.base }}>[enter] open</span><span style={{ fg: ctx.theme.text.muted }}>   [a] atlas in the browser   [?] keys   [q] quit</span></text>
       </box>
     ) })
     setTimeout(() => ctx.ui.router.navigate({ type: "plugin", name: "isorite-splash", data: {} }), 0)
@@ -40,6 +48,8 @@ export default Plugin.define({
         ctx.keymap.layer(() => ({
           mode: "global",
       commands: [
+        { id: "isorite.splash.open", title: "Open", bind: "return", enabled: () => { const r: any = ctx.ui.router.current(); return r.type === "plugin" && r.name === "isorite-splash" }, run: () => ctx.ui.router.navigate({ type: "home" }) },
+        { id: "isorite.note.back", title: "Back", bind: "q", enabled: () => { const r: any = ctx.ui.router.current(); return r.type === "plugin" && r.name === "isorite-note" }, run: () => ctx.ui.router.navigate({ type: "home" }) },
         { id: "isorite.note", title: "Open a note", palette: true, slash: { name: "note" }, run: () => ctx.ui.router.navigate({ type: "plugin", name: "isorite-note", data: {} }) },
         { id: "isorite.atlas", title: "One-note atlas", palette: true, slash: { name: "atlas" }, run: () => { ctx.ui.panel.open("isorite-atlas", { presentation: "panel" }) } },
       ],

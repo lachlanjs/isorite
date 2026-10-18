@@ -17,3 +17,13 @@ XDG_CONFIG_HOME=$PWD/xdg COLORTERM=truecolor ISORITE_GATEWAY_KEY=test-key ~/oc2/
 ```
 
 The plugins write a trace to `/tmp/isorite-spike.log`.
+
+**Previews.** `preview/ansi2html.mjs` turns a `tmux capture-pane -e` dump into a page of cells, drawing block and diagonal glyphs as shapes, as terminals with built-in box drawing do. Chromium then takes the picture:
+
+```
+tmux capture-pane -p -e -t oc > pane.ans
+node preview/ansi2html.mjs pane.ans pane.html
+/opt/pw-browsers/chromium --headless --no-sandbox --window-size=1300,900 --screenshot=$PWD/pane.png file://$PWD/pane.html
+```
+
+The font is DejaVu Sans Mono, not the boards' Ioskeley Mono. `preview/splash-legacy.png` is the splash with the logo from `packages/opencode/src/logo.ts`; `preview/compare.png` puts it beside the board's SVG.

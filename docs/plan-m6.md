@@ -1,6 +1,6 @@
 # Milestone 6: the terminal, on OpenCode 2 (scope)
 
-Written 2026-10-18 as a scope, at Lachlan's asking, and revised the same day after reading OpenCode 2's source. Step 0, the spike, was run the same day in a Claude Code cloud session: its findings are §8, and the plan proper, **for approval**, is §9. Branch: `m6-terminal`.
+Written 2026-10-18 as a scope, at Lachlan's asking, and revised the same day after reading OpenCode 2's source. Step 0, the spike, was run the same day in a Claude Code cloud session: its findings are §8, and the plan proper, approved the same day, is §9. Branch: `m6-terminal`.
 
 ## 1. What the terminal is for
 
@@ -190,7 +190,18 @@ Run in the cloud container with OpenCode 2.0.32 (`@opencode/cli`; `opencode-ai` 
 
 **Outcome:** a plugin plus a launcher. Nothing needs a fork of OpenCode. Pi stays the fallback that `decisions.md` names.
 
-## 9. The plan proper, for approval
+## 9. The plan proper, approved
+
+Approved by Lachlan on 2026-10-18 with these answers:
+
+| # | On | Answer |
+|---|---|---|
+| 1 | The tree of notes found in the sidebar and above the prompt | Fine, and better. Do not put a thing inline where a component of its own suits it better. |
+| 2 | Edits that wait to be kept | Only edits to the knowledge base, which a person must check. Edits to code, or anything else, go through as OpenCode does them. |
+| 3 | The TUI's settings in a config home of isorite's own | Fine. |
+| 4 | Real models | Script wherever possible. If a real model is needed, Lachlan gives a key. |
+| 5 | Installs | Ask for each; Lachlan approves. |
+| 6 | The splash | Carries the isorite logo as `Terminal-Splash` draws it. |
 
 **The shape** is §4's, changed by §8:
 - `@isorite/opencode` is one OpenCode plugin folder, `server.ts` and `tui.tsx`. `isorite term` copies or links it into a config home of isorite's own, beside `opencode.json`, `cli.json` and the theme. Your own OpenCode config is never read or written.
