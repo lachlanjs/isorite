@@ -5,13 +5,13 @@
 // so the mark is 20 cells by 15 rows. The two top rows are in growth (gold), the
 // rest in the text colour.
 //
-// A corner half across two cells is drawn, by default, as a two-step stair of
-// quarter blocks (`quadrant`). Terminals draw quarter blocks as geometry, xterm.js
-// and so VS Code among them, and nearly every monospace font has them. `legacy`
-// draws the halves with the wedges of Symbols for Legacy Computing, closer to the
-// board where a terminal draws them itself, but xterm.js leaves them to the font.
-// Those wedges split a cell in thirds, so a diagonal bends where its cells meet.
-// `simple` is one triangle and a space.
+// A corner half across two cells is drawn, by default, with the wedges of Symbols
+// for Legacy Computing (`legacy`), as the board draws it: a true 45° edge. Most
+// terminals draw them as geometry (kitty, Ghostty, WezTerm, foot, Windows
+// Terminal); xterm.js, and so VS Code, leaves them to the font. Those wedges split
+// a cell in thirds, so a diagonal bends slightly where its cells meet. `quadrant`
+// draws a half as a two-step stair of quarter blocks, which every terminal draws
+// as geometry; `simple` is one triangle and a space. `ISORITE_LOGO` chooses.
 
 export type Corner = "tl" | "tr" | "bl" | "br";
 
@@ -50,7 +50,7 @@ export const shapes: readonly Shape[] = [
   full(5, 7), full(5, 8), full(5, 9), full(5, 10), full(5, 11), full(5, 12), full(5, 13), full(5, 14),
 ];
 
-const glyphs: Record<Style, Record<Corner | "full", string>> = {
+export const glyphs: Record<Style, Record<Corner | "full", string>> = {
   // Each pair is one square: the left cell, then the right.
   legacy: {
     full: "██",
@@ -64,7 +64,7 @@ const glyphs: Record<Style, Record<Corner | "full", string>> = {
 };
 
 /** The mark's rows, each a list of runs, 20 cells wide. */
-export function rows(style: Style = "quadrant"): Run[][] {
+export function rows(style: Style = "legacy"): Run[][] {
   const grid: (Shape | undefined)[][] = Array.from({ length: height }, () => Array(width).fill(undefined));
   for (const shape of shapes) grid[shape.y]![shape.x] = shape;
   return grid.map((row) => {
@@ -81,6 +81,6 @@ export function rows(style: Style = "quadrant"): Run[][] {
 }
 
 /** The mark as plain lines, for tests and for terminals without colour. */
-export function lines(style: Style = "quadrant"): string[] {
+export function lines(style: Style = "legacy"): string[] {
   return rows(style).map((runs) => runs.map((run) => run.text).join(""));
 }

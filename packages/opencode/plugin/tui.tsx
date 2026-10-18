@@ -41,7 +41,9 @@ export default Plugin.define({
   id: "isorite",
   setup(ctx) {
     const ground = () => (ctx.themeMode === "light" ? quartz : lapis);
-    const style = (process.env.ISORITE_LOGO ?? "quadrant") as Logo.Style;
+    // The mark's corner halves as the board draws them, but in VS Code, whose terminal leaves the wedges to the font,
+    // in quarter blocks.
+    const style = (process.env.ISORITE_LOGO ?? (process.env.TERM_PROGRAM === "vscode" ? "quadrant" : "legacy")) as Logo.Style;
 
     // The notes in play, by session, from the server's events; titles from its listing, asked again when notes change.
     const plays = new Map<string, Play>();
@@ -487,14 +489,14 @@ export default Plugin.define({
       return RGBA.fromValues(x.r + (y.r - x.r) * t, x.g + (y.g - x.g) * t, x.b + (y.b - x.b) * t, 1);
     };
     // The wordmark as the browser draws it, where the home has room for it; else the name in OpenCode's letters.
-    const roomy = () => ctx.renderer.width >= 72 && ctx.renderer.height >= 28;
+    const roomy = () => ctx.renderer.width >= 76 && ctx.renderer.height >= 28;
     const wordmark = () => {
       const g = ground();
       const mark = new BoxRenderable(ctx.renderer, { id: "isorite-wordmark", flexDirection: "column", alignItems: "center" });
       const chunk = (text: string, ink: string, more: Partial<TextChunk> = {}): TextChunk => ({ __isChunk: true, text, fg: RGBA.fromHex(ink), ...more });
       if (roomy()) {
         const colour = { ink: g.text, iso: g.growth, right: g.mal };
-        for (const row of Wordmark.rows()) mark.add(new TextRenderable(ctx.renderer, { content: new StyledText(row.map((run) => chunk(run.text, colour[run.role]))), selectable: false }));
+        for (const row of Wordmark.rows(style)) mark.add(new TextRenderable(ctx.renderer, { content: new StyledText(row.map((run) => chunk(run.text, colour[run.role]))), selectable: false }));
         return mark;
       }
       // As OpenCode's: the first half muted, the second bold, each letter on a shade a quarter of its colour.
