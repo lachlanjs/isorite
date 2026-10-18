@@ -1,6 +1,6 @@
 # Milestone 6: the terminal, on OpenCode 2 (scope)
 
-Written 2026-10-18 as a scope, at Lachlan's asking, and revised the same day after reading OpenCode 2's source. It is not yet a plan to approve. Step 0 below is a short spike, and the plan proper is written from what the spike finds. Branch, when it opens: `m6-terminal`.
+Written 2026-10-18 as a scope, at Lachlan's asking, and revised the same day after reading OpenCode 2's source. Step 0, the spike, was run the same day in a Claude Code cloud session: its findings are §8, and the plan proper, **for approval**, is §9. Branch: `m6-terminal`.
 
 ## 1. What the terminal is for
 
@@ -62,10 +62,7 @@ From the 2.0 announcement, and from OpenCode's own source (`anomalyco/opencode` 
 - `ctx.agent.transform`, `ctx.command.transform` and `ctx.skill.transform`: an isorite agent and commands of its own.
 - MCP servers run in "code mode" by default.
 
-**Still to confirm in step 0**
-- Whether a tool's result is drawn as Markdown in the transcript, which the code-block renderer needs. If it is not, the tree of notes found goes in the sidebar instead.
-- Whether the `app` slot can draw a splash before the home screen.
-- How much the boards' look survives OpenTUI: box characters, a half-block logo, two colour grounds.
+**Confirmed or answered in step 0:** see §8.
 
 **Installed here:** OpenCode 1.19.3 (`~/.local/bin/opencode`) and Pi. Bun is not installed. Lachlan has approved installing what M6 needs (2026-10-18). OpenCode 2 and Bun go in a folder of their own, so that 1.19.3 and `~/rdstudio`'s `opencode.json` are untouched.
 
@@ -132,4 +129,90 @@ browser (Atlas)  ◄── events ──  isorite server (Hono, engine)  ◄─�
 
 Still to settle with the plan proper: which model and provider OpenCode uses for real-model checks, and their budget; and whether an agent's edits to files that are not notes keep OpenCode's own accept and reject (as `decisions.md` says).
 
+Answered later the same day, in the cloud session:
+
+| # | Question | Answer |
+|---|---|---|
+| 5 | Git in a cloud session | The "never push" rule is for Lachlan's own machine. In the cloud, push the milestone branch. `m6-terminal` is the branch. |
+| 6 | Tool results as Markdown | Lachlan understood they work. **They do not in 2.0.32** (§8): the plan works round it. |
+| 7 | The boards | Follow the mood board's six `Terminal-*` boards. |
+| 8 | Models | Use OpenCode's free models where they serve. Otherwise ask for a key, or use scripted replies. The setup must also take a local corporate gateway. |
+| 9 | Installs | Ask before each `npm install` of something new. |
+
 **For a cloud session:** start from this file, `architecture.md` §the terminal, the six `Terminal-*` boards in the design artifact, and OpenCode's `packages/plugin/src/tui/context.ts`. rdstudio's MCP server is not in the repository: its tools are listed in §4, and the server is carried over from `~/rdstudio` only where that folder exists.
+
+## 8. What the spike found (2026-10-18)
+
+Run in the cloud container with OpenCode 2.0.32 (`@opencode/cli`; `opencode-ai` on npm is still 1.19.3) installed in `~/oc2`, against OpenCode's source at `4745089`. The throwaway plugins, theme, config and scripted endpoint are in `bench/m6-spike/`. The TUI was driven in tmux and read back from the pane, colours included.
+
+**Worked as hoped**
+
+| What | How | Seen |
+|---|---|---|
+| Loading | A folder `.opencode/plugins/<name>/` with `server.ts` and `tui.tsx`, found by OpenCode in the project. Solid JSX through OpenTUI; `effect` and `@opencode/plugin` are provided by the host. | Both halves load. |
+| Tools | `ctx.tool.transform` adds them with an Effect `Schema` for input and output. | Offered to the model in every request. |
+| Edits to notes wait | `ctx.tool.hook("execute.before")` may rename the call: a `write` or `edit` inside `notes/` becomes `isorite_propose`. | The file was unchanged; the agent was told its edit waits to be kept. |
+| A gateway | `opencode.json` → `providers.gateway`: `package: "@ai-sdk/openai-compatible"`, `settings.baseURL`, `env: ["ISORITE_GATEWAY_KEY"]`, `models`. | The key arrived as `Bearer`. OpenCode fetched the AI SDK package from npm at run time. |
+| The sidebar | `ui.slot({ append: "sidebar.content" })` | "notes in play" in a rounded box, beside the session. |
+| The status line | `ui.slot({ append: "prompt.footer.status" })` | "◆ atlas following" beside OpenCode's own. |
+| The side panel | `ui.slot({ append: "session.panel" })` and `ui.panel.open`; the panel is told its width. | Drawn beside the chat at 90 columns of 180. |
+| A full screen | `ui.router.register` and `navigate({ type: "plugin" })` | The note page replaces the session. |
+| The splash | The same, navigated to once at start. | Shown before the home screen. No need to replace the `app` slot. |
+| Commands | `keymap.layer` with `mode: "global"`, created inside a component (an `app` slot that draws nothing), as OpenCode's own `/btw` is. Created directly in `setup` the commands do not appear. | `/note` and `/atlas` in the slash list and palette. |
+| The `isorite` code block | `markdown.registerCodeBlockRenderer("isorite", …)` returning an OpenTUI `TextRenderable` | Drawn as a tree **when the block is in the agent's answer**. |
+| The theme | `.opencode/themes/isorite.json`, dark = lapis, light = quartz, from `isorite.css`. Chosen in `cli.json`. | Background `#07101C`, text `#E9EEF5`, faint `#8796AD` in a truecolour terminal. |
+
+**Not as hoped**
+
+1. **A tool's result is not drawn as Markdown.** 2.0.32 has drawers for its own tools only. Any other tool is one line, `✓ isorite_search [query=mixing]`, which opens to plain text when clicked. There is no way to register a drawer for a tool. So the tree of notes found (`Terminal-Chat`) cannot be a tool result. The code-block renderer does work on the agent's own text.
+2. **A renamed write still shows as a write.** The transcript draws the original call: "Wrote notes/the-dmft-loop.md" with the new text, though nothing was written. That misleads.
+3. **The TUI's settings are global only.** Theme, keybinds and TUI plugins are read from `~/.config/opencode/cli.json`. The launcher must give OpenCode a config home of its own (`XDG_CONFIG_HOME`), which the plan meant to do anyway.
+4. **The free models are unreliable from here.** Signed out, OpenCode offers 12 free models. From this container `opencode/big-pickle` answered about half the time and otherwise refused with "OpenCode's free tier can only be used from within OpenCode". `deepseek-v4.1-flash-free` and `glm-5.3-flash-free` refused every time. The refusal is the server's. It was seen through `opencode run`; the TUI was only run against the scripted gateway. It may be the container's address. Not tried from Lachlan's machine.
+5. **A focused panel takes the keys.** After `/atlas`, typing went to the panel and not the prompt. The panel needs its own keys, `esc` among them, to hand focus back.
+6. **Markdown eats `[1]`.** A bare `[1]` in the answer is drawn as `1`.
+
+**Each board element**
+
+| Board | Element | Verdict |
+|---|---|---|
+| `Terminal-Splash` | the logo, the base line, the keys | plugin |
+| `Terminal` | Iso's path as labelled steps | plugin with a workaround: tools named for the steps (`search`, `meaning`, `open`, `follow`), drawn by OpenCode as one line each. `read` and `edit` are OpenCode's own. |
+| | notes in play, from you | plugin (sidebar) |
+| | mode, base, atlas following, cost, `[s]` | plugin (status slot); cost and mode are OpenCode's |
+| `Terminal-Chat` | the tree of notes found, with how each was found and whether used | plugin with a workaround: the tree is kept in the sidebar under "notes in play", which grows to the board's tree; and at the end of a turn the plugin draws it in `session.composer.top`, above the prompt |
+| | the citation `[1] the dmft loop § mixing` | plugin with a workaround: the agent is told to end with an `isorite` sources block, which the renderer draws. How the number appears in the text, since `[1]` is eaten, is settled in step 3. |
+| | a code diff with `[y] [n] [d]` | OpenCode |
+| | `[o] open the note it rests on` | plugin: a command, live while a permission is asked |
+| `Terminal-Chat-Tools` | web, subagents, run, permission | OpenCode |
+| | `[k] draft a note from this` | plugin: a command, through the isorite server to Iso |
+| `Terminal-Note` | the gutter, the marks, maths as source, a proposal with `[k] [e] [r]`, code, `[b]`, the squares, the status keys | plugin (a full-screen page); all drawn by isorite |
+| `Terminal-Atlas` | one note's Atlas beside the chat, "Iso is reading", `[a] [b]` | plugin (the panel), with its own keys |
+
+**Outcome:** a plugin plus a launcher. Nothing needs a fork of OpenCode. Pi stays the fallback that `decisions.md` names.
+
+## 9. The plan proper, for approval
+
+**The shape** is §4's, changed by §8:
+- `@isorite/opencode` is one OpenCode plugin folder, `server.ts` and `tui.tsx`. `isorite term` copies or links it into a config home of isorite's own, beside `opencode.json`, `cli.json` and the theme. Your own OpenCode config is never read or written.
+- The plugin talks to the isorite server over HTTP with the session token. It does not import the engine.
+- **Models.** `isorite term` writes an `opencode.json` with two providers:
+  - OpenCode's free models, as they come, the default;
+  - `gateway`: OpenAI-compatible, from `ISORITE_GATEWAY_URL`, key from `ISORITE_GATEWAY_KEY`, models from `ISORITE_GATEWAY_MODELS`. Set them and the gateway is the default. A corporate gateway is this entry, and so is OpenRouter (`https://openrouter.ai/api/v1`).
+- **Tests** run against `scripted.mjs` grown into a fixture, as the gateway, so they need no network and no key. They drive the TUI in tmux and read the pane, as the spike did.
+- **Edits to notes.** The renamed write misleads (§8, 2), so it is the safety net only. First, `ctx.session.hook("context")` tells the agent that files in the base are notes, and that a change to one is made with `propose`, which waits to be kept. If it still writes to a note, the hook turns the call into a proposal, and the result says so.
+
+**Steps**
+1. **The package and the launcher.** `packages/opencode`: the plugin's two halves, the theme, `isorite term [base]` (starts the server if it is not running; writes the config home; starts OpenCode in it). The scripted gateway as a test fixture, and the tmux test harness.
+2. **Tools and the path.** `brief`, `search`, `meaning`, `outline`, `open`, `follow`, `links`, `record`, `propose`, over the isorite server. Each call sends an `agent-step` event; the Atlas in the browser draws the agent's path as it draws Iso's. The MCP server over the same tools, for Claude Code and Pi.
+3. **Edits wait to be kept; notes in play; from you.** The context hook and the safety net, proposals from `agent:opencode` kept or removed in the browser. The sidebar's notes in play, grown to the tree of notes found, and the same tree above the prompt at a turn's end; the sources block and its citations. "From you": the browser's `[ send to agent ]` reaching the session through OpenCode's server. How a prompt is put into a running session from outside is still to be read from `@opencode/client`.
+4. **The note view.** `/note` and `[o]`: the gutter and marks, a proposal's `[k] [e] [r]`, `[/] ask in place`, `[t] the timeline`, `[b]`.
+5. **The one-note Atlas.** The core's layout for one note drawn in cells in the panel, with its own keys and `esc`.
+6. **The splash and status line**, and `[s] send to agent` from the terminal side.
+7. **Screenshots beside the six boards** (rendered from the tmux panes), then the write-up. A run on a real model: the free models if they serve, else the gateway with a key you give.
+
+**Done when** is §6's, with "through MCP" checked by a script against the MCP server, since Claude Code is not run here.
+
+**For you to settle**
+1. The tree of notes found in the sidebar and above the prompt, not inline in the chat as `Terminal-Chat` draws it. Inline is possible only if the agent copies a block into its answer, which a model may not do.
+2. A real-model run: whether to ask you for an OpenRouter key, or a gateway, if the free models keep refusing.
+3. Installs this needs, each asked before: OpenCode 2.0.32 in `~/oc2` (done, with your yes), and for the package's own tests `@opencode/plugin@2.0.32` and `@opentui/core@0.5.17` as dev dependencies, for types.

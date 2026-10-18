@@ -1,0 +1,233 @@
+{
+ "$schema": "https://opencode.ai/theme.json",
+ "defs": {
+  "lapis-g0": "#07101C",
+  "lapis-g1": "#0C1828",
+  "lapis-g2": "#122238",
+  "lapis-g3": "#1A3150",
+  "lapis-line": "#23395A",
+  "lapis-ls": "#5C7BA6",
+  "lapis-text": "#E9EEF5",
+  "lapis-soft": "#B4C0D2",
+  "lapis-faint": "#8796AD",
+  "lapis-lattice": "#6BA6FF",
+  "lapis-growth": "#F0BE4A",
+  "lapis-mal": "#5FD3A4",
+  "lapis-rose": "#FF8FA6",
+  "quartz-g0": "#F2F0EA",
+  "quartz-g1": "#F8F7F3",
+  "quartz-g2": "#FFFFFF",
+  "quartz-g3": "#E6E4DC",
+  "quartz-line": "#D3D0C5",
+  "quartz-ls": "#7F7D70",
+  "quartz-text": "#0E1726",
+  "quartz-soft": "#3B475B",
+  "quartz-faint": "#5B677A",
+  "quartz-lattice": "#1E4FB8",
+  "quartz-growth": "#8C6200",
+  "quartz-mal": "#0B6B4A",
+  "quartz-rose": "#A81E48"
+ },
+ "theme": {
+  "primary": {
+   "dark": "lapis-lattice",
+   "light": "quartz-lattice"
+  },
+  "secondary": {
+   "dark": "lapis-growth",
+   "light": "quartz-growth"
+  },
+  "accent": {
+   "dark": "lapis-growth",
+   "light": "quartz-growth"
+  },
+  "error": {
+   "dark": "lapis-rose",
+   "light": "quartz-rose"
+  },
+  "warning": {
+   "dark": "lapis-growth",
+   "light": "quartz-growth"
+  },
+  "success": {
+   "dark": "lapis-mal",
+   "light": "quartz-mal"
+  },
+  "info": {
+   "dark": "lapis-lattice",
+   "light": "quartz-lattice"
+  },
+  "text": {
+   "dark": "lapis-text",
+   "light": "quartz-text"
+  },
+  "textMuted": {
+   "dark": "lapis-faint",
+   "light": "quartz-faint"
+  },
+  "background": {
+   "dark": "lapis-g0",
+   "light": "quartz-g0"
+  },
+  "backgroundPanel": {
+   "dark": "lapis-g1",
+   "light": "quartz-g1"
+  },
+  "backgroundElement": {
+   "dark": "lapis-g2",
+   "light": "quartz-g2"
+  },
+  "border": {
+   "dark": "lapis-ls",
+   "light": "quartz-ls"
+  },
+  "borderActive": {
+   "dark": "lapis-lattice",
+   "light": "quartz-lattice"
+  },
+  "borderSubtle": {
+   "dark": "lapis-line",
+   "light": "quartz-line"
+  },
+  "diffAdded": {
+   "dark": "lapis-mal",
+   "light": "quartz-mal"
+  },
+  "diffRemoved": {
+   "dark": "lapis-rose",
+   "light": "quartz-rose"
+  },
+  "diffContext": {
+   "dark": "lapis-soft",
+   "light": "quartz-soft"
+  },
+  "diffHunkHeader": {
+   "dark": "lapis-faint",
+   "light": "quartz-faint"
+  },
+  "diffHighlightAdded": {
+   "dark": "lapis-mal",
+   "light": "quartz-mal"
+  },
+  "diffHighlightRemoved": {
+   "dark": "lapis-rose",
+   "light": "quartz-rose"
+  },
+  "diffAddedBg": {
+   "dark": "lapis-g2",
+   "light": "quartz-g2"
+  },
+  "diffRemovedBg": {
+   "dark": "lapis-g2",
+   "light": "quartz-g2"
+  },
+  "diffContextBg": {
+   "dark": "lapis-g1",
+   "light": "quartz-g1"
+  },
+  "diffLineNumber": {
+   "dark": "lapis-faint",
+   "light": "quartz-faint"
+  },
+  "diffAddedLineNumberBg": {
+   "dark": "lapis-g2",
+   "light": "quartz-g2"
+  },
+  "diffRemovedLineNumberBg": {
+   "dark": "lapis-g2",
+   "light": "quartz-g2"
+  },
+  "markdownText": {
+   "dark": "lapis-text",
+   "light": "quartz-text"
+  },
+  "markdownHeading": {
+   "dark": "lapis-text",
+   "light": "quartz-text"
+  },
+  "markdownLink": {
+   "dark": "lapis-lattice",
+   "light": "quartz-lattice"
+  },
+  "markdownLinkText": {
+   "dark": "lapis-lattice",
+   "light": "quartz-lattice"
+  },
+  "markdownCode": {
+   "dark": "lapis-growth",
+   "light": "quartz-growth"
+  },
+  "markdownBlockQuote": {
+   "dark": "lapis-soft",
+   "light": "quartz-soft"
+  },
+  "markdownEmph": {
+   "dark": "lapis-text",
+   "light": "quartz-text"
+  },
+  "markdownStrong": {
+   "dark": "lapis-text",
+   "light": "quartz-text"
+  },
+  "markdownHorizontalRule": {
+   "dark": "lapis-line",
+   "light": "quartz-line"
+  },
+  "markdownListItem": {
+   "dark": "lapis-soft",
+   "light": "quartz-soft"
+  },
+  "markdownListEnumeration": {
+   "dark": "lapis-faint",
+   "light": "quartz-faint"
+  },
+  "markdownImage": {
+   "dark": "lapis-lattice",
+   "light": "quartz-lattice"
+  },
+  "markdownImageText": {
+   "dark": "lapis-soft",
+   "light": "quartz-soft"
+  },
+  "markdownCodeBlock": {
+   "dark": "lapis-text",
+   "light": "quartz-text"
+  },
+  "syntaxComment": {
+   "dark": "lapis-faint",
+   "light": "quartz-faint"
+  },
+  "syntaxKeyword": {
+   "dark": "lapis-lattice",
+   "light": "quartz-lattice"
+  },
+  "syntaxFunction": {
+   "dark": "lapis-growth",
+   "light": "quartz-growth"
+  },
+  "syntaxVariable": {
+   "dark": "lapis-text",
+   "light": "quartz-text"
+  },
+  "syntaxString": {
+   "dark": "lapis-mal",
+   "light": "quartz-mal"
+  },
+  "syntaxNumber": {
+   "dark": "lapis-growth",
+   "light": "quartz-growth"
+  },
+  "syntaxType": {
+   "dark": "lapis-lattice",
+   "light": "quartz-lattice"
+  },
+  "syntaxOperator": {
+   "dark": "lapis-soft",
+   "light": "quartz-soft"
+  },
+  "syntaxPunctuation": {
+   "dark": "lapis-faint",
+   "light": "quartz-faint"
+  }
+ }
+}
