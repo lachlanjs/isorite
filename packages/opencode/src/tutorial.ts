@@ -1,11 +1,13 @@
 // The tutorial's model: what it answers to each prompt the tour fills in (`plugin/tour.ts`), as the agent in
-// OpenCode and as Iso in the isorite server, both pointed at it. Anything else is answered once, plainly. The code
-// it writes is in `tutorial/`, and runs.
+// OpenCode, and as Iso in the isorite server, both pointed at it. Iso answers as it does in the browser's tutorial
+// (`@isorite/example`), so that both tutorials can be walked on the one base. Anything else is answered once,
+// plainly. The code the agent writes is in `tutorial/`, and runs.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { PROMPTS, QUAD } from "../plugin/tour.ts";
-import { lastAsked, type Reply, type Script } from "./scripted.ts";
+import { tutorialAnswer } from "@isorite/example";
+import { GOAL, PROMPTS } from "../plugin/tour.ts";
+import { lastAsked, type Reply, type Request, type Script } from "./scripted.ts";
 
 export const UNSCRIPTED = "In this tutorial the model is scripted: it answers only what the tour asks. Pointed at a model of your own (ISORITE_GATEWAY_URL), isorite term answers anything.";
 
@@ -21,16 +23,25 @@ export const LOOKS: Reply[] = [
   { tool: "read_note", args: { id: "simulation/initial-conditions" } },
 ];
 
-const QUESTION = "How is a body inserted, and what does each node keep? I don't have this straight yet.";
-const INSERTED = "A body goes down from the root into the square that holds it; a leaf that already has one splits in four, and both go down again. Each node keeps its square, its mass and its centre of mass, counted as bodies pass through it on the way down.";
+// The goal's last line, where the code that answers it now is: the agent's change to a note, which waits.
+const WAS = "That is what [Barnes–Hut](/algorithms/barnes-hut.md \"uses\") is for.";
+const NOW = "That is what [Barnes–Hut](/algorithms/barnes-hut.md \"uses\") is for: `barnes_hut.py` has it, at θ = 0.5.";
+
+/** Iso, in the isorite server: answered as in the browser's tutorial, with only the tools it was offered. */
+function iso(request: Request): Reply {
+  const r = tutorialAnswer({ model: "scripted", messages: request.messages.map((m) => ({ role: m.role, content: m.content })), tools: request.tools.map((name) => ({ function: { name } })) });
+  const calls = (r.calls ?? []).filter((c) => request.tools.includes(c.name));
+  if (calls.length) return { calls, usage: r.usage };
+  return { text: r.text ?? "", usage: r.usage };
+}
 
 /** The script, for the example base whose notes are in `notes`. */
 export function tutorialScript(notes: string): Script {
   return (request) => {
     // OpenCode names the session from its first prompt.
     if (JSON.stringify(request.messages.filter((m) => m.role === "system")).includes("title generator")) return { text: "Two bodies, stepped with leapfrog" };
-    // Iso, asked in place in the note view: its requests carry no edit tool, as OpenCode's do.
-    if (!request.tools.includes("edit")) return { text: "In 3D the same tree has eight children a node: an octree." };
+    // Iso, in the browser or asked in place in the note view: its requests carry no edit tool, as OpenCode's do.
+    if (!request.tools.includes("edit")) return iso(request);
     const asked = lastAsked(request).trim();
     // What the agent has done since the prompt: one tool result a step.
     const done = request.messages.slice(request.messages.findLastIndex((m) => m.role === "user")).filter((m) => m.role === "tool").length;
@@ -41,12 +52,12 @@ export function tutorialScript(notes: string): Script {
     if (asked.includes(PROMPTS.tree)) {
       const steps: Reply[] = [
         { tool: "read_note", args: { id: "algorithms/barnes-hut" } },
-        { tool: "read_note", args: { id: QUAD } },
+        { tool: "read_note", args: { id: "algorithms/the-quadtree" } },
         { tool: "write", args: { path: "barnes_hut.py", content: code("barnes_hut.py") } },
         // OpenCode's own edit, on a note: made a proposal by the plugin.
-        { tool: "edit", args: { path: join(notes, ...QUAD.split("/")) + ".md", oldString: QUESTION, newString: INSERTED } },
+        { tool: "edit", args: { path: join(notes, ...GOAL.split("/")) + ".md", oldString: WAS, newString: NOW } },
       ];
-      return steps[done] ?? { text: "barnes_hut.py builds the quadtree and walks it with θ = 0.5 `[1]`. Your note on the quadtree asked how a body is inserted: my answer waits in it for you to keep or not `[2]`.\n\n```isorite\n[1] algorithms/barnes-hut\n[2] algorithms/the-quadtree\n```" };
+      return steps[done] ?? { text: "barnes_hut.py builds the quadtree and walks it with θ = 0.5 `[1]`. Your note on the goal now says where the code is: that change waits for you to keep or not `[2]`.\n\n```isorite\n[1] algorithms/barnes-hut\n[2] simulation/two-galaxies-colliding\n```" };
     }
     return { text: UNSCRIPTED };
   };

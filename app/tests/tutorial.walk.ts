@@ -4,6 +4,8 @@ import { expect, test, type Page } from "@playwright/test";
 // of parts to its end, by doing what each step asks, at a desktop's width and a phone's.
 
 const phone = () => test.info().project.name.includes("phone");
+// Served by isorite --tutorial (playwright.local.config.ts), beside the terminal's tour, not as the tutorial's site.
+const local = () => test.info().project.name.startsWith("local");
 const card = (page: Page) => page.getByRole("dialog", { name: "The tutorial" });
 const editor = (page: Page) => page.getByRole("textbox", { name: "The note", exact: true });
 const prompt = (page: Page) => page.getByRole("textbox", { name: "Ask Iso" });
@@ -221,6 +223,7 @@ test("D: the two bases, the squares, the study list, an exercise marked wrong th
 });
 
 test("E: the terminal outlined, and the way to its replay", async ({ page }) => {
+  test.skip(local(), "beside the terminal, part E is the terminal's");
   await part(page, "E");
   for (const title of ["isorite in the terminal", "It looks before it codes", "Watched from here", "Its changes to notes wait", "From here to there"]) {
     await at(page, title);
@@ -228,5 +231,23 @@ test("E: the terminal outlined, and the way to its replay", async ({ page }) => 
   }
   await at(page, "Its tour, replayed");
   await expect(card(page).getByRole("link", { name: "isorite in the terminal: its tour, replayed" })).toHaveAttribute("href", "#/terminal");
+  await finish(page, "E");
+});
+
+test("E, beside the terminal: the page follows the agent, and a note is sent to it", async ({ page }) => {
+  test.skip(!local(), "only beside the terminal");
+  await part(page, "E");
+  await at(page, "The terminal beside this page");
+  await next(page);
+  // Waiting on the agent in the terminal, which is not here.
+  await at(page, "Watched from here");
+  await card(page).getByRole("button", { name: "skip" }).click();
+  await at(page, "Its changes to notes wait here too");
+  await next(page);
+  await at(page, "From here to there");
+  await page.locator('[data-tour="send"]').click();
+  await page.getByLabel("What you want of it").fill("use this in the loop");
+  await page.getByRole("group", { name: "Send to the terminal's agent" }).getByRole("button", { name: "send to agent" }).click();
+  await at(page, "On your own notes");
   await finish(page, "E");
 });

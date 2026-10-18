@@ -36,6 +36,8 @@ export async function openEngine({ notes, study }: Opened, device = deviceId(), 
   // The provider is OpenRouter unless the configuration names another. The engine compares against OPENROUTER to know.
   return Engine.open({
     notes: new NodeFiles(notes), study: study ? new NodeFiles(study) : null, clock: systemClock, device, name: basename(notes),
+    // Started by isorite --tutorial: the app walks you through the base.
+    tutorial: process.env.ISORITE_TUTORIAL === "1",
     http, secrets: new ConfigSecrets(config), provider: providerConfig(config),
     // Search by meaning, where the model is installed (npm run model). Its vectors are a cache of this base's
     // notes, kept outside both repositories under a name made from where the notes are.

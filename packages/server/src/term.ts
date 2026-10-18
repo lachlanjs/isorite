@@ -14,7 +14,7 @@ import { StudyError } from "@isorite/core";
 import { NAME } from "@isorite/example";
 import { writeExample } from "@isorite/example/node";
 import { defaultHome, findOpenCode, gatewayFrom, startScripted, tutorialScript, writeHome } from "@isorite/opencode";
-import { locate } from "./serve.ts";
+import { locate, WEB_DIR } from "./serve.ts";
 
 const MAIN = fileURLToPath(new URL("./main.ts", import.meta.url));
 
@@ -25,6 +25,14 @@ export interface TermOptions {
   env?: NodeJS.ProcessEnv;
   /** How long to wait for a server this started, in milliseconds. */
   wait?: number;
+  /** Told the server's address once it answers, before OpenCode starts. */
+  onServer?: (url: string) => void;
+}
+
+/** Open a page in the browser, if this machine has one to open; nothing is said if it has not. */
+export function openBrowser(url: string): void {
+  const [command, ...args] = process.platform === "darwin" ? ["open", url] : process.platform === "win32" ? ["cmd", "/c", "start", "", url] : ["xdg-open", url];
+  try { spawn(command!, args, { stdio: "ignore", detached: true }).on("error", () => undefined).unref(); } catch { /* no browser here */ }
 }
 
 /** The name the server on this URL serves, or null when nothing answers. */
@@ -64,10 +72,11 @@ export async function ensureServer(path: string | undefined, { port = 4767, env 
   return { url, release: () => { server.kill(); } };
 }
 
-export async function term(path: string | undefined, { port = 4767, cwd = process.cwd(), env = process.env, wait = 120_000 }: TermOptions = {}): Promise<number> {
+export async function term(path: string | undefined, { port = 4767, cwd = process.cwd(), env = process.env, wait = 120_000, onServer }: TermOptions = {}): Promise<number> {
   const opencode = findOpenCode(env);
   const gateway = gatewayFrom(env);
   const server = await ensureServer(path, { port, env, wait });
+  onServer?.(server.url);
   const home = writeHome(defaultHome(env), { gateway });
   const child = spawn(opencode.command, ["--standalone"], {
     cwd,
@@ -104,6 +113,11 @@ export async function tutorialTerm(folder: string | undefined, { port = 4790, en
   try {
     return await term(base.study, {
       port, cwd: code,
+      // The browser's half of the tutorial, on the same base: it follows the agent as the terminal's tour goes.
+      onServer: (url) => {
+        out(existsSync(join(WEB_DIR, "index.html")) ? `  the browser's half: ${url}/` : "  the app is not built (npm run build), so the browser's half cannot be shown");
+        if (env.ISORITE_NO_BROWSER !== "1" && existsSync(join(WEB_DIR, "index.html"))) openBrowser(`${url}/`);
+      },
       env: {
         ...env,
         ISORITE_TUTORIAL: "1", ISORITE_GATEWAY_URL: model.url, ISORITE_GATEWAY_MODELS: "scripted", ISORITE_GATEWAY_KEY: "tutorial",

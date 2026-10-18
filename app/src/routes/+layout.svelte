@@ -13,8 +13,9 @@
   import Menu from "$lib/components/Menu.svelte";
 
   let { children }: { children: Snippet } = $props();
-  // The tutorial's build walks through the app with a coach card (lib/tutorial); no other build carries it.
-  const tutorial = import.meta.env.MODE === "tutorial" ? import("$lib/tutorial/Tutorial.svelte") : null;
+  // The tutorial walks through the app with a coach card (lib/tutorial): in the tutorial's own build, and on the base
+  // isorite --tutorial serves, which the session names as the tutorial's. Loaded only then.
+  const tutorial = $derived(import.meta.env.MODE === "tutorial" || app.session?.tutorial ? import("$lib/tutorial/Tutorial.svelte") : null);
   // Back from signing in at the provider: the settings open to say how it went.
   let menu = $state(app.signIn !== null);
 

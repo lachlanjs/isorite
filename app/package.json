@@ -11,7 +11,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test": "vitest run",
     "test:browser": "playwright test",
-    "test:tutorial": "playwright test -c playwright.tutorial.config.ts"
+    "test:tutorial": "playwright test -c playwright.tutorial.config.ts",
+    "test:tutorial:local": "playwright test -c playwright.local.config.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
