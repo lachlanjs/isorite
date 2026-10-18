@@ -12,6 +12,8 @@
   import Menu from "$lib/components/Menu.svelte";
 
   let { children }: { children: Snippet } = $props();
+  // The tutorial's build walks through the app with a coach card (lib/tutorial); no other build carries it.
+  const tutorial = import.meta.env.MODE === "tutorial" ? import("$lib/tutorial/Tutorial.svelte") : null;
   // Back from signing in at the provider: the settings open to say how it went.
   let menu = $state(app.signIn !== null);
 
@@ -65,6 +67,7 @@
       {@render children()}
     {/if}
   </main>
+  {#if tutorial}{#await tutorial then t}<t.default />{/await}{/if}
 
   <footer class="status">
     {#if app.session}

@@ -96,6 +96,13 @@ save(note, text, who)
 - **Two tabs or two devices at once.** A save carries the hash of the text it started from. If the file has moved on, the save is refused and the editor is given the newer text to merge. **Slice:** refuse and reload. **Later:** a three-way merge by block.
 - **Journal entries from two devices** merge as a union of lines. A device that is missing an entry cannot replay past it; the next change it writes carries the whole text, which mends the chain. **Built** and tested.
 
+### The timeline (milestone 5)
+
+- **Worked out from the journal, never stored.** `moments()` folds a note's entries into moments (your edits in a row within a session are one; a proposal is one, whatever became of it; a marking is one, with its result). `touched()` carries the lines a moment put in forward through every later change's hunks, so pointing at a moment marks those lines in today's text. A line deleted since drops out, and a moment whose lines are all gone says so.
+- **A version is replayed in the browser,** from the journal the note page already holds (`textAt`), with no request. **A restore** is the engine's: a `change` with `why: restore` and `to`, refused if the note has moved on, so it is undone the same way.
+- **The Atlas's timeline** is the last session's moments across notes (`Api.timeline`, from the session's entries the engine already keeps for Iso's context): the session going on, or the one most recently ended.
+- **Shown as marks only** (Lachlan's choice, 2026-10-18): what was asked, or a note's title on the Atlas, shows beside a mark only while it is pointed at.
+
 ## 4. Asking Iso
 
 One request, the same from the editor and the Atlas.
@@ -236,6 +243,7 @@ The interface plays sound (later) by listening to this same stream and to its ow
 ### Mobile and desktop application
 
 - Tauri, with the engine in the webview behind the in-process `Api`.
+- **The engine has run in a page** (milestone 5): the tutorial is the app with an `Engine` over `MemoryFiles`, a `MemorySecrets` and a scripted `Http`, handed to the app as its `Api`. No adapter was needed; the app had only ever talked to `Api`.
 - The named risk is git inside Tauri on Android. One day's test before any mobile work.
 - **What the slice must hold to:** no `node:` import in the engine or the core; every screen checked at 390 px as well as 1280; nothing that needs a hover to be reachable.
 
@@ -263,6 +271,8 @@ The interface plays sound (later) by listening to this same stream and to its ow
 | engine | vitest with an in-memory `Files`, a fixed `Clock` and a scripted provider, so Iso's loop and the journal's writer are tested without a model or a disk |
 | server | vitest against the real HTTP routes on a temporary folder |
 | app | `@playwright/test`, selecting by text and role; each streamed state has a name a test can wait on; every screen at 1280 and 390 px on both grounds |
+| example | vitest: the example's history replays to the notes as written, every hash holds, each note's understanding is as the boards draw it, and the tutorial's Iso answers as scripted |
+| tutorial | `@playwright/test` against the built site served as plain files: one test walks every step (`npm run test:tutorial`) |
 
 ## 14. Questions
 

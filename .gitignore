@@ -19,3 +19,4 @@ packages/server/models/
 
 # SvelteKit working files made when a check runs from the root
 .svelte-kit/
+/site/

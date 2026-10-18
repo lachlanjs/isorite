@@ -4,6 +4,7 @@
 //   isorite check <notes>                  lint a folder of notes
 //   isorite study init <notes> [<where>]   make a study base beside a knowledge base
 //   isorite serve <study base | notes>     open it in the browser
+//   isorite example <folder>               write the example base, partway built, into a folder
 
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
@@ -11,6 +12,7 @@ import { StudyError } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { serve } from "./serve.ts";
 import { initStudyBase } from "./studybase.ts";
+import { writeExample } from "@isorite/example/node";
 
 const USAGE = `isorite: an agentic harness for understanding
 
@@ -18,6 +20,8 @@ const USAGE = `isorite: an agentic harness for understanding
   isorite study init <notes> [<where>]   make a study base for it (default: beside its repository)
   isorite serve <study base | notes> [--port <n>] [--allow-host <name>]
                                          open it in the browser, on this machine only
+  isorite example <folder>               write an example base on dynamical mean-field theory, six weeks
+                                         into being built, with its study base, into an empty folder
 `;
 
 export function check(notes: string, out: (line: string) => void = console.log): number {
@@ -44,6 +48,14 @@ export function main(argv: string[]): number | Promise<number> {
         if (e instanceof StudyError) { console.error(e.message); return 2; }
         throw e;
       });
+    }
+    if (command === "example" && rest[0]) {
+      return writeExample(rest[0]).then(({ notes, study }) => {
+        console.log(`the example base is at ${notes}`);
+        console.log(`  its study base is ${study}`);
+        console.log(`  open it with: isorite serve ${study}`);
+        return 0;
+      }, (e: Error) => { console.error(e.message); return 2; });
     }
     if (command === "study" && rest[0] === "init" && rest[1]) {
       const made = initStudyBase(rest[1], rest[2]);

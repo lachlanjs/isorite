@@ -4,7 +4,7 @@
   // session's business (note.svelte.ts); this shows how it stands and offers the choice when a save is refused.
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { isStudyId } from "@isorite/core";
+  import { isStudyId, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
   import type { StudyReport } from "@isorite/engine";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { ExerciseState, moveText } from "$lib/exercise.svelte.ts";
@@ -12,6 +12,10 @@
   import { NoteSession } from "$lib/note.svelte.ts";
   import NoteDetails from "./NoteDetails.svelte";
   import NoteEditor from "./NoteEditor.svelte";
+  import NoteVersion from "./NoteVersion.svelte";
+  import Timeline from "./Timeline.svelte";
+  import { ago, describe, momentKey } from "$lib/timeline.ts";
+  import type { Touched } from "$lib/editor/overlays.ts";
 
   let { id }: { id: string } = $props();
 
@@ -49,6 +53,65 @@
   let source = $state(false);
   // Frontmatter that cannot be read is mended in the source, where all of the file shows.
   const asSource = $derived(source || note.meta === null);
+
+  // The timeline (Desktop-Editor): open or not is remembered on this device. A moment pointed at marks what it
+  // changed; one chosen shows the note as it was just after it, to step from or restore.
+  let timeline = $state(remembered("isorite.timeline"));
+  let pointed = $state.raw<Moment | null>(null);
+  let at = $state.raw<Moment | null>(null);
+  let restoring = $state(false), restoreProblem = $state("");
+  const all = $derived(moments(iso.entries));
+  const isos = (m: Moment) => m.who.startsWith("iso:") || m.who.startsWith("agent:");
+  const lines = (runs: { from: number; to: number }[]) => runs.flatMap((r) => Array.from({ length: r.to - r.from }, (_, k) => r.from + k));
+  // In the note as it is: the moment pointed at, or, with the timeline open and nothing pointed at, Iso's latest kept.
+  const live = $derived.by((): Touched | null => {
+    if (!timeline || at || asSource) return null;
+    const m = pointed ?? all.findLast((x) => isos(x) && x.what === "kept");
+    if (!m) return null;
+    const got = lines(touchedBy(iso.entries, m.ids).runs);
+    return got.length ? { who: isos(m) ? "iso" : "you", lines: got } : null;
+  });
+  // The note as it was after the chosen moment, what that moment changed in it, and what Iso offered if not kept.
+  const version = $derived.by(() => {
+    if (!at) return null;
+    const key = momentKey(at), text = textAt(iso.entries, key);
+    if (text === null) return null;
+    const upTo = iso.entries.filter((e) => e.id <= key);
+    const first = iso.entries.find((e) => e.id === at!.ids[0]);
+    const offered = at.what === "offered" || at.what === "discarded"
+      ? first?.kind === "proposal" ? (first.form === "insert" ? (first as Insert).text : (first as Rewrite).regions.map((r) => r.new).join("\n\n")) : undefined
+      : undefined;
+    return { text, touched: { who: isos(at) ? "iso" : "you", lines: lines(touchedBy(upTo, at.ids).runs) } as Touched, asked: at.asked, offered };
+  });
+  // Opened from a moment chosen elsewhere (the Atlas's timeline): `?at=<entry>` shows the note as it was then.
+  let wanted = new URLSearchParams(location.hash.split("?")[1] ?? "").get("at");
+  $effect(() => {
+    if (!wanted) return;
+    const m = all.find((x) => x.ids.includes(wanted!));
+    if (!m) return;
+    wanted = null;
+    timeline = true; at = m;
+  });
+  function toggleTimeline() { timeline = !timeline; remember("isorite.timeline", timeline); if (!timeline) { at = null; pointed = null; } }
+  function pick(m: Moment) { restoreProblem = ""; at = at === m ? null : m; }
+  function step(by: number) {
+    if (!at) return;
+    const k = all.indexOf(at) + by;
+    if (k >= 0 && k < all.length) at = all[k]!;
+  }
+  async function restore() {
+    if (!at) return;
+    restoring = true; restoreProblem = "";
+    try { await note.restore(momentKey(at)); at = null; } catch (e) { restoreProblem = (e as Error).message; } finally { restoring = false; }
+  }
+  // While a version is shown: ← and → step through the moments, Escape goes back to now.
+  function keys(e: KeyboardEvent) {
+    if (!at || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) return;
+    if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); step(-1); }
+    else if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); step(1); }
+    else if (e.key === "Escape") { e.preventDefault(); at = null; }
+  }
 
   onMount(() => {
     app.open = id;
@@ -89,7 +152,13 @@
   });
 </script>
 
-<article class="note">
+<svelte:window onkeydown={keys} />
+
+{#snippet clockIcon()}
+  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1v14" stroke="currentColor" stroke-width="1.2" fill="none" /><rect x="5.5" y="2" width="5" height="3.2" fill="currentColor" /><path d="M8 6.3l2.3 2.3L8 10.9 5.7 8.6z" fill="currentColor" /><rect x="5.5" y="12" width="5" height="3" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
+{/snippet}
+
+<article class="note" class:timed={timeline && note.loaded === "ready" && !asSource}>
   {#if note.loaded === "loading"}
     <p class="faint">opening…</p>
   {:else if note.loaded === "missing"}
@@ -137,6 +206,7 @@
         {#each ex.ex.tests as t (t)}<a href={noteHref(t)}>{titleOf(t)}</a>{:else}<span class="faint">nothing: name a note in its tests</span>{/each}
         <span class="grow"></span>
         <div class="tools">
+          <button class="icon" type="button" aria-label="timeline" title="timeline" aria-pressed={timeline} onclick={toggleTimeline}>{@render clockIcon()}</button>
           <button class="btn quiet" type="button" aria-pressed={details} onclick={() => { details = !details; remember("isorite.details", details); }}>details</button>
           <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => (source = !source)}>source</button>
         </div>
@@ -154,6 +224,7 @@
       {/if}
       <div class="side">
       <div class="tools">
+        {#if !asSource}<button class="icon" type="button" aria-label="timeline" title="timeline" aria-pressed={timeline} onclick={toggleTimeline}>{@render clockIcon()}</button>{/if}
         {#if !asSource}<button class="btn quiet" type="button" aria-pressed={details} onclick={() => { details = !details; remember("isorite.details", details); }}>details</button>{/if}
         <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => (source = !source)}>source</button>
       </div>
@@ -174,9 +245,30 @@
     {/if}
     {#if details && !asSource}<NoteDetails {note} />{/if}
 
-    {#key asSource}<NoteEditor {note} {iso} exercise={ex ?? undefined} source={asSource} />{/key}
+    {#if timeline && !asSource}
+      <div class="tl-col"><Timeline moments={all} at={at ? momentKey(at) : null} {pointed} point={(m) => (pointed = m)} {pick} /></div>
+    {/if}
 
-    {#if ex && !asSource}
+    {#if at && version}
+      <div class="atbar" role="status">
+        <span class="label">{describe(at)} · {ago(at.at)}</span>
+        <span class="grow"></span>
+        {#if restoreProblem}<span class="bad" role="alert">{restoreProblem}</span>{/if}
+        <button class="icon" type="button" aria-label="restore to here" title="restore to here" disabled={restoring || version.text === note.text} onclick={restore}>
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.2 9.5A5 5 0 1 0 4.6 4.3" stroke="currentColor" stroke-width="1.3" fill="none" /><path d="M3 1.8v3.4h3.4" stroke="currentColor" stroke-width="1.3" fill="none" /></svg>
+        </button>
+        <button class="icon" type="button" aria-label="back to now" title="back to now" onclick={() => (at = null)}>
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 8h9M8 4.8 11.2 8 8 11.2" stroke="currentColor" stroke-width="1.3" fill="none" /><path d="M13.5 3v10" stroke="currentColor" stroke-width="1.3" /></svg>
+        </button>
+      </div>
+      {#key momentKey(at)}<NoteVersion text={version.text} title={note.fields.title} touched={version.touched} asked={version.asked} offered={version.offered} />{/key}
+    {/if}
+
+    <div class="live" hidden={Boolean(at && version)}>
+      {#key asSource}<NoteEditor {note} {iso} exercise={ex ?? undefined} source={asSource} touched={live} />{/key}
+    </div>
+
+    {#if ex && !asSource && !at}
       <!-- The foot of an exercise (Study-Written, Mobile-Study): mark the selection as the answer, send it for marking. -->
       <div class="foot">
         {#if ex.selection && !(ex.answerAt && ex.answerAt.from === ex.selection.from && ex.answerAt.to === ex.selection.to)}
@@ -229,6 +321,24 @@
   @media (min-width: 1100px) { .margin { position: absolute; top: 46px; left: calc(100% + 8px); align-items: flex-start; width: 150px; } }
   .tools .btn { height: 28px; font-size: 12px; }
   .tools .btn[aria-pressed="true"] { color: var(--text); --fill: var(--ground-3); }
+  /* The quiet icon buttons: the timeline's, and with a version shown, restore and back to now. Faint until pointed at. */
+  .icon { width: 28px; height: 28px; display: inline-grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
+  .icon:hover:not(:disabled), .icon:focus-visible { color: var(--text); }
+  .icon[aria-pressed="true"] { color: var(--text-soft); }
+  .icon:disabled { opacity: 0.35; cursor: default; }
+  .tools .icon { margin-right: 4px; }
+  .atbar { display: flex; align-items: center; gap: 6px; min-height: 28px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+  /* The timeline sits in the page's left margin, its button at the top level with the title (Desktop-Editor), its
+     marks under it; where there is no margin, it is a narrow column at the note's left (Mobile-Timeline). */
+  .tl-col { position: absolute; z-index: 4; }
+  @media (min-width: 1100px) {
+    .tools .icon { position: absolute; top: 52px; right: calc(100% + 14px); margin: 0; }
+    .tl-col { top: 92px; right: calc(100% + 14px); }
+  }
+  @media (max-width: 1099px) {
+    .note.timed { padding-left: calc(var(--space-4) + 40px); }
+    .tl-col { top: 40px; left: 8px; }
+  }
   .choice { padding: var(--space-6) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); --edge: var(--rose); }
   .row { display: flex; gap: var(--space-2); }
   .bad { color: var(--rose); }
@@ -249,6 +359,8 @@
     .seed { display: block; position: fixed; left: 0; right: 0; bottom: 84px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--ground-1); z-index: 9; }
     .seed .field { width: 100%; height: 44px; display: flex; align-items: center; gap: 8px; text-align: left; }
     .note { padding: 20px 20px 80px; }
+    .note.timed { padding-left: 56px; }
+    .tl-col { top: 20px; left: 8px; bottom: 0; z-index: 1; padding-right: 2px; border-right: 1px solid var(--line); background: var(--ground-1); }
     .changes { bottom: 156px; flex-wrap: wrap; }
     .foot { bottom: 156px; gap: 12px; padding: 12px 0; }
     .foot .tall { flex: 1 1 100%; justify-content: center; }

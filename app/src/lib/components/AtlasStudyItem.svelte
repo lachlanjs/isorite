@@ -2,12 +2,14 @@
   // An item of a study folder: cut corners, and its kind on its top edge.
   import type { LayoutItem } from "@isorite/core/atlas";
 
-  let { item, title, kind, mark = "", dim = false, href, onpick, onpoint }: {
+  let { item, title, kind, mark = "", dim = false, moment = "", href, onpick, onpoint }: {
     item: LayoutItem;
     title: string;
     kind: string;
     mark?: "" | "at" | "req" | "bld" | "use" | "also";
     dim?: boolean;
+    /** The note a moment of the timeline touched, while it is pointed at (Atlas-Timeline): yours or Iso's. */
+    moment?: "" | "you" | "iso";
     href: string;
     onpick: (event: MouseEvent) => void;
     onpoint: (on: boolean) => void;
@@ -15,7 +17,7 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a class="sn frame {mark}" class:dim {href} aria-label="{kind}: {title}" data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h}"
+<a class="sn frame {mark} {moment ? `mo-${moment}` : ''}" class:dim {href} aria-label="{kind}: {title}" data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h}"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
@@ -41,4 +43,6 @@
   .also { outline: 1px dotted var(--text-faint); outline-offset: 2px; }
   .bld { outline-color: var(--builds); }
   .sn:focus-visible { outline: 2px solid var(--lattice); outline-offset: 2px; }
+  .mo-you { outline: 2.5px solid var(--lattice); outline-offset: 3px; z-index: 3; }
+  .mo-iso { outline: 2.5px solid var(--growth); outline-offset: 3px; z-index: 3; }
 </style>

@@ -94,7 +94,9 @@ export function createApp({ api, token, loopback, web, allowHosts = [] }: Server
   app.get("/api/notes", (c) => answer(c, () => api.notes()));
   app.get("/api/note", (c) => answer(c, () => api.readNote(id(c))));
   app.get("/api/journal", (c) => answer(c, () => api.journal(id(c))));
+  app.get("/api/version", (c) => answer(c, async () => ({ text: await api.version(id(c), c.req.query("entry") ?? "") })));
   app.get("/api/map", (c) => answer(c, () => api.map()));
+  app.get("/api/timeline", (c) => answer(c, () => api.timeline()));
   app.get("/api/search", (c) => answer(c, () => api.search(c.req.query("q") ?? "")));
 
   app.put("/api/note", async (c) => {
@@ -120,6 +122,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [] }: Server
     });
   post("/api/iso/ask", Ask, (_c, b) => api.ask(b));
   post("/api/iso/stop", z.object({ request: z.string().max(64) }).strict(), (_c, b) => api.stop(b.request));
+  post("/api/note/restore", z.object({ entry: z.string().max(64), base: z.string().max(64) }).strict(), (c, b) => api.restore(id(c), b.entry, b.base));
   post("/api/proposal/keep", Named, (c, b) => api.keep(id(c), b.proposal, b.region));
   post("/api/proposal/revise", Revised, (c, b) => api.revise(id(c), b.proposal, b.text));
   post("/api/proposal/discard", Named, (c, b) => api.discard(id(c), b.proposal, b.region));

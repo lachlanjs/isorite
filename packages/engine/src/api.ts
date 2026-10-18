@@ -2,7 +2,7 @@
 // interface and nothing else, so it does not know whether the engine is
 // behind HTTP (the server) or in the same process (a webview, later).
 
-import type { Anchor, Cost, Entry, MapModel, Passage, Result } from "@isorite/core";
+import type { Anchor, Cost, Entry, MapModel, Passage, Result, SessionMoment } from "@isorite/core";
 import type { Part } from "./iso.ts";
 import type { Step } from "./lookup.ts";
 import type { Tier } from "./provider.ts";
@@ -145,6 +145,12 @@ export interface Api {
   createNote(id: string, text: string): Promise<Saved>;
   /** The note's journal, oldest first. Empty with no study base. */
   journal(id: string): Promise<Entry[]>;
+  /** The note's text just after one of its journal's entries. */
+  version(id: string, entry: string): Promise<string>;
+  /** Write the note back as it was just after an entry, as a new entry of its own. `base` as for saveNote. */
+  restore(id: string, entry: string, base: string): Promise<Saved>;
+  /** The moments of the last session across every note, in the order they began: the one going on, or the last ended. */
+  timeline(): Promise<SessionMoment[]>;
   search(query: string): Promise<SearchHit[]>;
   /** The Atlas's map of the base and, with it, the study base. */
   map(): Promise<MapReport>;

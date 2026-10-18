@@ -4,6 +4,9 @@ import { app } from "$lib/app.svelte.ts";
 
 
 export async function load() {
-  await app.load();
+  // The tutorial's build has no server: its engine runs here, over the example base (lib/tutorial).
+  // Once: asked again, it would hear every event twice.
+  if (import.meta.env.MODE === "tutorial") { if (!app.api) await app.load(await (await import("$lib/tutorial/engine.ts")).tutorialEngine()); }
+  else await app.load();
   return {};
 }

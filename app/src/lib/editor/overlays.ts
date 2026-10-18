@@ -31,6 +31,31 @@ export interface Inline { key: string; at: number }
 export type Mount = (el: HTMLElement, key: string) => () => void;
 
 export const setOverlays = StateEffect.define<Overlay[]>();
+/** Lines (from 0) a moment of the timeline changed, marked whole, in lattice for yours and growth for Iso's. */
+export interface Touched { lines: number[]; who: "you" | "iso" }
+export const setTouched = StateEffect.define<Touched | null>();
+
+/** The lines a moment changed, as the timeline points at it (Desktop-Editor): a soft ground and a bar at the left. */
+export const touchedLines: Extension = [
+  StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update(value, tr) {
+      for (const e of tr.effects) {
+        if (!e.is(setTouched)) continue;
+        const doc = tr.state.doc, t = e.value;
+        if (!t) return Decoration.none;
+        const cls = Decoration.line({ class: `cm-touched cm-touched-${t.who}` });
+        return Decoration.set([...new Set(t.lines)].filter((l) => l >= 0 && l < doc.lines && doc.line(l + 1).text.trim() !== "").sort((a, b) => a - b).map((l) => cls.range(doc.line(l + 1).from)));
+      }
+      return tr.docChanged ? value.map(tr.changes) : value;
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  }),
+  EditorView.theme({
+    ".cm-line.cm-touched-you": { background: "var(--lattice-soft)", boxShadow: "-10px 0 0 var(--lattice-soft), -13px 0 0 var(--lattice), 10px 0 0 var(--lattice-soft)" },
+    ".cm-line.cm-touched-iso": { background: "var(--growth-soft)", boxShadow: "-10px 0 0 var(--growth-soft), -13px 0 0 var(--growth), 10px 0 0 var(--growth-soft)" },
+  }),
+];
 export const setMarks = StateEffect.define<{ marks: Mark[]; inline: Inline[] }>();
 
 class Mounted extends WidgetType {
