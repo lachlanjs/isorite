@@ -26,5 +26,5 @@ html,body{margin:0;background:#07101C}#t{padding:16px;display:inline-block}
   term.write(${JSON.stringify(data)}, () => { document.body.dataset.done = "1" })
 })()
 </script>`)
-const w = Math.ceil(Number(cols) * 7.9 + 60), h = Math.ceil(Number(rows) * 15 + 140)
+const w = Math.ceil(Number(cols) * 7.9 + 60), h = Math.ceil(Number(rows) * 17 + 140)
 execFileSync("/opt/pw-browsers/chromium", ["--headless", "--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--hide-scrollbars", "--allow-file-access-from-files", `--window-size=${w},${h}`, "--virtual-time-budget=8000", `--screenshot=${path.resolve(out)}`, "file://" + page], { stdio: "ignore" })

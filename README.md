@@ -26,9 +26,12 @@ npm run serve -- <study base, or folder of notes>     # then open http://localho
 npm run test:browser     # the app in Chromium, at two widths on both grounds
 npm run model            # fetch the 34 MB model for search by meaning (once)
 npm run bench:retrieval -- <folder of notes> <questions.json>
+node packages/server/src/main.ts term <base>          # OpenCode 2 in this folder, with the base beside it
 ```
 
 Iso needs a provider key: set it in the app, behind the logo. It is kept in `~/.config/isorite/config.toml`.
+
+`isorite term` needs OpenCode 2 (`npm i -g @opencode/cli`; an `opencode` that is 1.x is passed over, and `ISORITE_OPENCODE` names another). It keeps OpenCode's config for isorite in `~/.config/isorite/opencode`, apart from yours. OpenCode's free models are used unless a gateway is named: `ISORITE_GATEWAY_URL` (any OpenAI-compatible endpoint: a corporate gateway, or `https://openrouter.ai/api/v1`), `ISORITE_GATEWAY_MODELS` (comma-separated, the first the default) and `ISORITE_GATEWAY_KEY`, which is read from the environment and never written down. Its tests drive it in tmux against a scripted gateway; set `ISORITE_OPENCODE` to run them.
 
 To work on the app with hot reloading, run `npm run serve -- <base>` and, beside it, `npm run dev -w @isorite/app`.
 

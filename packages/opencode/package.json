@@ -5,15 +5,21 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    "./logo": "./src/logo.ts"
+    ".": "./src/index.ts",
+    "./logo": "./plugin/logo.ts"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "check": "tsc -p ."
   },
   "devDependencies": {
+    "@isorite/core": "*",
+    "@isorite/example": "*",
     "@opencode/plugin": "2.0.32",
     "@opentui/core": "0.5.17",
     "@opentui/solid": "0.5.17",
+    "@types/node": "^24.0.0",
+    "isorite": "*",
     "solid-js": "1.9.15",
     "typescript": "^6.0.3",
     "vitest": "^5.0.2"
