@@ -134,8 +134,8 @@ describe.skipIf(!ready)("isorite term", () => {
   it("goes into OpenCode on enter, with the gateway as its model, and isorite's name where OpenCode's is", async () => {
     pane.keys("Enter");
     await pane.waitFor("Gateway");
-    const text = await pane.waitFor(Wordmark.left[1]!);
-    expect(text).toContain(`${Wordmark.left[1]} ${Wordmark.right[1]}`);
+    const text = await pane.waitFor(Wordmark.lines()[5]!.trim());
+    for (const row of Wordmark.lines()) expect(text).toContain(row.trim());
     expect(text).not.toContain("█▀▀█ █▀▀█ █▀▀█ █▀▀▄");
     keep("2-home");
   }, 30_000);

@@ -470,8 +470,8 @@ export default Plugin.define({
     });
 
     // OpenCode's home draws its name in its own letters, and no slot reaches it: its box is found among the renderables
-    // by the rows it draws, hidden, and isorite's name drawn in the same letters beside it. Should OpenCode draw it
-    // otherwise, nothing is found, and its own stays.
+    // by the rows it draws, hidden, and isorite's wordmark drawn beside it. Should OpenCode draw it otherwise, nothing
+    // is found, and its own stays.
     const OPEN = ["█▀▀█ █▀▀█ █▀▀█ █▀▀▄", "▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀▀▀▀"];
     const textOf = (r: Renderable): string => (r instanceof TextRenderable ? r.plainText : r.getChildren().map((c) => textOf(c as Renderable)).join(""));
     const findLogo = (r: Renderable): Renderable | undefined => {
@@ -486,13 +486,20 @@ export default Plugin.define({
       const [x, y] = [RGBA.fromHex(a), RGBA.fromHex(b)];
       return RGBA.fromValues(x.r + (y.r - x.r) * t, x.g + (y.g - x.g) * t, x.b + (y.b - x.b) * t, 1);
     };
+    // The wordmark as the browser draws it, where the home has room for it; else the name in OpenCode's letters.
+    const roomy = () => ctx.renderer.width >= 72 && ctx.renderer.height >= 28;
     const wordmark = () => {
       const g = ground();
-      const mark = new BoxRenderable(ctx.renderer, { id: "isorite-wordmark", flexDirection: "column" });
+      const mark = new BoxRenderable(ctx.renderer, { id: "isorite-wordmark", flexDirection: "column", alignItems: "center" });
+      const chunk = (text: string, ink: string, more: Partial<TextChunk> = {}): TextChunk => ({ __isChunk: true, text, fg: RGBA.fromHex(ink), ...more });
+      if (roomy()) {
+        const colour = { ink: g.text, iso: g.growth, right: g.mal };
+        for (const row of Wordmark.rows()) mark.add(new TextRenderable(ctx.renderer, { content: new StyledText(row.map((run) => chunk(run.text, colour[run.role]))), selectable: false }));
+        return mark;
+      }
       // As OpenCode's: the first half muted, the second bold, each letter on a shade a quarter of its colour.
-      const half = (row: string, ink: string, bold: boolean): TextChunk[] => Wordmark.runs(row).map((run) => ({
-        __isChunk: true, text: run.text, fg: RGBA.fromHex(ink), ...(run.shaded ? { bg: mix(g.g0, ink, 0.25) } : {}), ...(bold ? { attributes: TextAttributes.BOLD } : {}),
-      }));
+      const half = (row: string, ink: string, bold: boolean): TextChunk[] => Wordmark.runs(row).map((run) =>
+        chunk(run.text, ink, { ...(run.shaded ? { bg: mix(g.g0, ink, 0.25) } : {}), ...(bold ? { attributes: TextAttributes.BOLD } : {}) }));
       Wordmark.left.forEach((row, k) => mark.add(new TextRenderable(ctx.renderer, {
         content: new StyledText([...half(row, g.faint, false), { __isChunk: true, text: " " }, ...half(Wordmark.right[k]!, g.text, true)]), selectable: false,
       })));
@@ -505,10 +512,11 @@ export default Plugin.define({
       if (!logo || !parent) return;
       logo.visible = false;
       const mine = parent.getChildren().find((c) => c.id === "isorite-wordmark");
-      if (mine && drawnFor === ctx.themeMode) return;
+      const drawing = `${ctx.themeMode} ${roomy()}`;
+      if (mine && drawnFor === drawing) return;
       if (mine) { parent.remove(mine); mine.destroy(); }
       parent.add(wordmark());
-      drawnFor = ctx.themeMode;
+      drawnFor = drawing;
     };
 
     // The splash is shown once, when the TUI starts.
