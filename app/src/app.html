@@ -17,6 +17,11 @@
     } catch (e) { /* storage unavailable: the system's */ }
   })();
 </script>
+<script>
+  // Served from a folder (the tutorial, on GitHub Pages at /isorite/), links come out as /isorite#/…: the folder
+  // without its slash, which the router takes for another page, and reloads. Without it here too, they are this page.
+  if (location.pathname.length > 1 && location.pathname.endsWith("/")) history.replaceState(history.state, "", location.pathname.slice(0, -1) + location.search + location.hash);
+</script>
 %sveltekit.head%
 </head>
 <body>

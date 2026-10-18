@@ -60,9 +60,9 @@ test("isorite mcp: the base's tools over stdio, each look-up a step on the Atlas
   }).catch(() => undefined);
   await new Promise((r) => setTimeout(r, 200));
 
-  const found = (await call("tools/call", { name: "search_notes", arguments: { query: "mixing" } })).result as { content: { text: string }[]; isError?: boolean };
+  const found = (await call("tools/call", { name: "search_notes", arguments: { query: "leapfrog" } })).result as { content: { text: string }[]; isError?: boolean };
   expect(found.isError).toBeUndefined();
-  expect(found.content[0]!.text).toContain("/dmft/the-dmft-loop.md");
+  expect(found.content[0]!.text).toContain("/integrators/leapfrog.md");
   const missing = (await call("tools/call", { name: "read_note", arguments: { id: "no/such" } })).result as { content: { text: string }[] };
   expect(missing.content[0]!.text).toMatch(/There is no note no\/such/);
   expect((await call("no/such/method")).error?.code).toBe(-32601);

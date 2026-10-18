@@ -1,22 +1,23 @@
-// The example's history: six weeks of a person building a base on dynamical mean-field theory, with Iso. It is
-// made by driving the engine itself, over files in memory, with a clock set to each moment and a scripted Iso, so
-// every journal, hash and event is the engine's own. Times are counted back from `now`, so the last session is
-// always the one just ended.
+// The example's history: three weeks of a developer writing an N-body simulation, and a base of notes beside it,
+// with Iso. It is made by driving the engine itself, over files in memory, with a clock set to each moment and a
+// scripted Iso, so every journal, hash and event is the engine's own. Times are counted back from `now`, so the
+// last session is always the one just ended.
 //
-// What it leaves (the boards' Atlas): the many-body basics understood, the lattice models and impurity problems
-// worked through or opened, DMFT itself begun. Today's session is the board's five moments; Iso's Bethe lattice
-// form waits in the self-consistency condition; a note for Iso is written and not sent; the Bethe lattice exercise
-// has working and no marking yet.
+// What it leaves: the physics understood or worked through, the integrators worked through or opened, the
+// algorithms begun (Barnes–Hut has a TODO, the quadtree is a stub with a question in it), the simulation's goal
+// written down. Today's session is five moments; Iso's answer on how big ε should be waits in the note on
+// softening; a note for Iso about close encounters is written and not sent; the exercise on the cost of direct
+// summation has working, wrong, and no marking yet.
 
 import { blocks, dumpStudyConfig, CONFIG_FILE, GITATTRIBUTES, type Anchor, type Passage } from "@isorite/core";
 import { Engine, MemoryFiles, MemorySecrets, KEY, type Clock, type EngineEvent, type Similar } from "@isorite/engine";
 import { scriptedHttp, type Reply } from "./scripted.ts";
 import { TUTORIAL_MEANING } from "./tutorial.ts";
 
-export const NAME = "dmft-notes", DEVICE = "laptop1";
+export const NAME = "nbody-notes", DEVICE = "laptop1";
 const DAY = 86_400_000, MIN = 60_000;
 
-/** The notes as they stand today: `dmft/weiss-field.md` and so on. */
+/** The notes as they stand today: `physics/softening.md` and so on. */
 export type Sources = Record<string, string>;
 
 /** Every file of the two bases, by path within each. */
@@ -67,109 +68,81 @@ interface Exercise {
   unsent?: string;
 }
 
-const B = "many-body-basics", L = "lattice-models", I = "impurity-problems", D = "dmft";
+const P = "physics", I = "integrators", A = "algorithms", S = "simulation";
 const n = (folder: string, name: string) => `${folder}/${name}`;
-const SQ = n(B, "second-quantisation"), GF = n(B, "greens-function"), MATS = n(B, "matsubara-frequencies"), SE = n(B, "self-energy"),
-  DYSON = n(B, "dyson-equation"), SPEC = n(B, "spectral-function"), QP = n(B, "quasiparticle-weight"),
-  TB = n(L, "tight-binding"), DOS = n(L, "density-of-states"), HUB = n(L, "hubbard-model"), MOTT = n(L, "mott-transition"),
-  AIM = n(I, "anderson-impurity-model"), HYB = n(I, "hybridisation-function"), SOLVER = n(I, "impurity-solver"),
-  INF = n(D, "infinite-dimensions"), LSE = n(D, "local-self-energy"), CAVITY = n(D, "cavity-construction"), MAP = n(D, "lattice-to-impurity-map"),
-  WEISS = n(D, "weiss-field"), SC = n(D, "self-consistency-condition"), LOOP = n(D, "the-dmft-loop");
+export const LAW = n(P, "newtons-law-of-gravitation"), NBODY = n(P, "the-n-body-problem"), UNITS = n(P, "units"), ENERGY = n(P, "energy-conservation"), SOFT = n(P, "softening"),
+  EULER = n(I, "eulers-method"), LEAP = n(I, "leapfrog"), SYMP = n(I, "symplectic-integrators"), DT = n(I, "choosing-the-timestep"),
+  DIRECT = n(A, "direct-summation"), COM = n(A, "centre-of-mass"), QUAD = n(A, "the-quadtree"), BH = n(A, "barnes-hut"), COST = n(A, "cost-and-accuracy"),
+  LOOP = n(S, "the-main-loop"), INIT = n(S, "initial-conditions"), DIAG = n(S, "diagnostics"), GALAXY = n(S, "two-galaxies-colliding");
 
 const exact = "Exact, and unaided.";
-const pauli = "$\\{c^\\dagger_\\sigma, c^\\dagger_\\sigma\\} = 2 (c^\\dagger_\\sigma)^2 = 0$.\n\n$n^2 = c^\\dagger c\\, c^\\dagger c = c^\\dagger (1 - c^\\dagger c)\\, c = c^\\dagger c = n$, using the first result.\n\nSo $n^2 = n$, and $n$ is 0 or 1.";
-const level = (last: string) => `$c(\\tau) = e^{-\\varepsilon\\tau} c$, since $[H, c] = -\\varepsilon c$.\n\n$G(\\tau) = -\\langle c(\\tau)\\, c^\\dagger \\rangle = -e^{-\\varepsilon\\tau} (1 - n_F(\\varepsilon))$ for $0 < \\tau < \\beta$.\n\n${last}`;
-const sigma = "Dyson: $\\Sigma = G_0^{-1} - G^{-1}$.\n\n$= (i\\omega_n - \\varepsilon) - (i\\omega_n - \\varepsilon - a/i\\omega_n)$.\n\nSo $\\Sigma(i\\omega_n) = a / i\\omega_n$.";
-const zWrong = "$\\partial_\\omega \\operatorname{Re}\\Sigma = -\\alpha$.\n\nSo $Z = 1 - \\alpha$.";
-const zRight = "$\\partial_\\omega \\operatorname{Re}\\Sigma = -\\alpha$.\n\n$Z = (1 - (-\\alpha))^{-1}$.\n\nSo $Z = 1/(1+\\alpha)$ and $m^*/m = 1 + \\alpha$.";
-const band = "Each cosine runs from $-1$ to $1$, so $\\varepsilon_k$ runs from $-4t$ to $4t$.\n\nThe bandwidth is $W = 8t$.\n\nThe density of states diverges logarithmically at $\\varepsilon = 0$: the van Hove singularity, from the saddle points at $(\\pi, 0)$ and $(0, \\pi)$.";
-const atomWrong = "One electron per site. Moving one makes a doubly occupied site and an empty one.\n\nThe cost is $U/2$.";
-const atomRight = "One electron per site. Moving one makes a doubly occupied site and an empty one.\n\nThe cost is $U$: the doubly occupied site costs $U$, the empty one nothing.\n\nSo for $U \\gg W$ there is a charge gap of about $U - W$: an insulator.";
-const isolatedPartly = "With no bath the site is an atom. Its poles are at $\\pm U/2$.\n\nSo $G(i\\omega_n) = 1/(i\\omega_n - U/2)$.";
-const isolatedRight = "With no bath the site is an atom. Its poles are at $\\pm U/2$, each with weight $1/2$ at half filling.\n\nSo $G(i\\omega_n) = \\frac{1/2}{i\\omega_n - U/2} + \\frac{1/2}{i\\omega_n + U/2}$.";
-const oneLevel = "$\\Delta(i\\omega_n) = \\dfrac{V^2}{i\\omega_n - \\epsilon_1}$.\n\nAs $\\epsilon_1 \\to \\infty$, $\\Delta \\to 0$: the bath decouples and the site is an atom.";
-const zWalkPartly = "The kinetic energy per site is a sum over $z$ neighbours.\n\nWith $t \\sim 1/z$ it stays finite.";
-const zWalk = "The kinetic energy per site is a sum over $z$ neighbours.\n\nThe band's width grows as $\\sqrt{z}\\, t$: the hopping amplitudes add like the steps of a random walk.\n\nWith $t \\sim 1/\\sqrt{z}$ the bandwidth stays finite; with $t \\sim 1/z$ the electrons would stop moving.";
-const local = "No: $Z$ comes from $\\partial_\\omega \\Sigma$, which is the same at every $k$.\n\nThe impurity is one site, so it can only give a $\\Sigma$ that depends on frequency alone.";
+const pull = "$F = G m_1 m_2 / d^2 = 1 \\cdot \\tfrac12 \\cdot \\tfrac12 / 1 = \\tfrac14$.\n\nEach accelerates at $a = F/m = \\tfrac14 / \\tfrac12$.\n\nSo each accelerates at $\\tfrac12$, towards the other.";
+const energyWrong = "$K = \\tfrac12 \\cdot \\tfrac12 \\cdot (\\tfrac12)^2 = \\tfrac1{16}$.\n\n$U = -G m_1 m_2 / d = -\\tfrac14$.\n\nSo $E = \\tfrac1{16} - \\tfrac14 = -\\tfrac3{16}$.";
+const energyRight = "$K = 2 \\times \\tfrac12 \\cdot \\tfrac12 \\cdot (\\tfrac12)^2 = \\tfrac18$, both bodies moving.\n\n$U = -G m_1 m_2 / d = -\\tfrac14$.\n\nSo $E = \\tfrac18 - \\tfrac14 = -\\tfrac18$.";
+const spiralWrong = "After the step, $\\mathbf{r}' = \\mathbf{R} + \\mathbf{v}\\,\\Delta t$.\n\nSo $|\\mathbf{r}'| = R + v\\,\\Delta t$.";
+const spiralRight = "After the step, $\\mathbf{r}' = \\mathbf{R} + \\mathbf{v}\\,\\Delta t$, with $\\mathbf{v}$ at right angles to $\\mathbf{R}$.\n\nSo $|\\mathbf{r}'|^2 = R^2 + v^2 \\Delta t^2$.\n\nSo $|\\mathbf{r}'| \\approx R\\,(1 + v^2 \\Delta t^2 / 2R^2)$: larger, every step, whatever the sign of $\\Delta t$.";
+const kdkPartly = "Kick: $\\mathbf{v} \\mathrel{+}= \\Delta t\\, \\mathbf{a}$.\n\nDrift: $\\mathbf{r} \\mathrel{+}= \\Delta t\\, \\mathbf{v}$.\n\nKick: $\\mathbf{v} \\mathrel{+}= \\Delta t\\, \\mathbf{a}$, with the new $\\mathbf{a}$.";
+const kdk = "Kick: $\\mathbf{v} \\mathrel{+}= \\tfrac12 \\Delta t\\, \\mathbf{a}$.\n\nDrift: $\\mathbf{r} \\mathrel{+}= \\Delta t\\, \\mathbf{v}$.\n\nKick: $\\mathbf{v} \\mathrel{+}= \\tfrac12 \\Delta t\\, \\mathbf{a}$, with the new $\\mathbf{a}$: two half kicks make one whole.";
+const symplectic = "Leapfrog keeps a nearby energy $\\tilde H = H + O(\\Delta t^2)$ exactly.\n\nSo $H$ can only wobble around $\\tilde H$, never drift.\n\nRK4 keeps no such quantity, so its small errors add up.";
+const com = "$M = 1 + 2 + 1 = 4$.\n\n$\\mathbf{R} = (1 \\cdot (0,0) + 2 \\cdot (3,0) + 1 \\cdot (0,4)) / 4 = (6, 4)/4$.\n\nSo $\\mathbf{R} = (1.5, 1)$, with $M = 4$.";
+const step = "The drift falls as $\\Delta t^2$; at $T/100$ it is a few parts in a million.\n\nSo $\\Delta t = 2\\pi/100 \\approx 0.06$ is enough.\n\nCheck: record $E$ every 100 steps and plot the drift; halve $\\Delta t$ and it should fall by four.";
+/** The working on the cost of direct summation as it waits, unsent: each pair counted twice. */
+export const COST_WORKING = "Each body feels the other $N - 1$.\n\nSo there are $N(N-1)$ pairs: $2000 \\times 1999 \\approx 4 \\times 10^6$.\n\nAt 20 ns a pair, a step takes 0.08 s.";
 
 export const EXERCISES: Exercise[] = [
-  { folder: B, name: "pauli-from-the-anticommutators", title: "Pauli exclusion from the anticommutators", tests: [SQ], made: 41, next: "one-level",
-    question: "Using only the anticommutation relations, show that $(c^\\dagger_\\sigma)^2 = 0$ and that $n_\\sigma = c^\\dagger_\\sigma c_\\sigma$ can only be 0 or 1.",
-    attempts: [
-      { day: 40, working: pauli, answer: "So $n^2 = n$, and $n$ is 0 or 1.", result: "right", marks: [["$\\{c", "right"], ["$n^2 = c", "right"], ["So $n^2", "right"]], moves: { [SQ]: [1, exact] } },
-      { day: 29, working: pauli, answer: "So $n^2 = n$, and $n$ is 0 or 1.", result: "right", marks: [["So $n^2", "right"]], moves: { [SQ]: [1, "Exact again, three weeks on."] } },
-      { day: 18, working: pauli, answer: "So $n^2 = n$, and $n$ is 0 or 1.", result: "right", marks: [["So $n^2", "right"]], moves: { [SQ]: [1, exact] } },
-    ] },
-  { folder: B, name: "one-level", title: "The Green's function of one level", tests: [GF, MATS, SQ], made: 38, next: "sigma-from-g",
-    question: "A single level, $H = \\varepsilon\\, c^\\dagger c$, at temperature $T$. Find $G(i\\omega_n)$.",
-    attempts: [
-      { day: 38, working: level("So $G(i\\omega_n) = 1/(i\\omega_n + \\varepsilon)$."), answer: "So $G(i\\omega_n) = 1/(i\\omega_n + \\varepsilon)$.", result: "partly", marks: [["$c(\\tau)", "right"], ["$G(\\tau)", "right"], ["So $G", "wrong"]], moves: { [GF]: [0.5, "The time dependence is right; the sign of ε is lost in the transform."], [MATS]: [0.5, "Uses the antiperiodic interval correctly, but the transform goes wrong."], [SQ]: [0, "Bears on it only in passing."] } },
-      { day: 37, working: level("So $G(i\\omega_n) = 1/(i\\omega_n - \\varepsilon)$."), answer: "So $G(i\\omega_n) = 1/(i\\omega_n - \\varepsilon)$.", result: "right", marks: [["So $G", "right"]], moves: { [GF]: [1, exact], [MATS]: [1, "The transform over the fermionic frequencies done right."], [SQ]: [1, "The commutator with H is used correctly."] } },
-      { day: 28, working: level("So $G(i\\omega_n) = 1/(i\\omega_n - \\varepsilon)$."), answer: "So $G(i\\omega_n) = 1/(i\\omega_n - \\varepsilon)$.", result: "right", marks: [["So $G", "right"]], moves: { [GF]: [1, exact], [MATS]: [1, exact], [SQ]: [1, exact] } },
-      { day: 21, working: level("So $G(i\\omega_n) = 1/(i\\omega_n - \\varepsilon)$."), answer: "So $G(i\\omega_n) = 1/(i\\omega_n - \\varepsilon)$.", result: "right", marks: [["So $G", "right"]], moves: { [GF]: [1, exact], [MATS]: [1, exact], [SQ]: [1, exact] } },
-    ] },
-  { folder: B, name: "sigma-from-g", title: "The self-energy from G", tests: [SE, DYSON, GF], made: 35, next: "z-for-a-linear-self-energy",
-    question: "Given $G_0(i\\omega_n) = 1/(i\\omega_n - \\varepsilon)$ and an interacting $G(i\\omega_n) = 1/(i\\omega_n - \\varepsilon - a/i\\omega_n)$, find $\\Sigma(i\\omega_n)$.",
-    attempts: [35, 33, 25, 17, 10].map((day, k): Attempt => ({ day, working: sigma, answer: "So $\\Sigma(i\\omega_n) = a / i\\omega_n$.", result: "right", marks: [["Dyson", "right"], ["So $\\Sigma", "right"]],
-      moves: { [SE]: [1, exact], [DYSON]: [1, k ? exact : "Inverted the right way round, unaided."], [GF]: [k === 4 ? 0.5 : 1, "Reads the pole structure off G."] } })),
+  { folder: P, name: "the-pull-between-two-bodies", title: "The pull between two bodies", tests: [LAW, UNITS], made: 20, next: "the-energy-of-the-orbit",
+    question: "In units with $G = 1$, two bodies of mass $\\tfrac12$ are 1 apart. How fast does each accelerate, and which way?",
+    attempts: [20, 17, 12, 5, 2].map((day, k): Attempt => ({ day, working: pull, answer: "So each accelerates at $\\tfrac12$, towards the other.", result: "right", marks: [["$F = G", "right"], ["So each", "right"]],
+      moves: { [LAW]: [1, k ? exact : "The law, with its direction, unaided."], [UNITS]: [k < 2 ? 1 : 0.5, "Uses G = 1 without a slip."] } })),
   },
-  { folder: B, name: "z-for-a-linear-self-energy", title: "Z for a linear self-energy", tests: [QP, SPEC, SE], made: 31,
-    question: "Near the Fermi level $\\operatorname{Re}\\Sigma(\\omega) \\approx -\\alpha\\,\\omega$, with $\\alpha > 0$. What are $Z$ and $m^*/m$?",
+  { folder: P, name: "the-energy-of-the-orbit", title: "The energy of the two-body orbit", tests: [ENERGY, LAW], made: 16,
+    question: "For the two-body orbit of the notes (masses $\\tfrac12$, 1 apart, each moving at $\\tfrac12$), find $K$, $U$ and $E$.",
     attempts: [
-      { day: 31, working: zWrong, answer: "So $Z = 1 - \\alpha$.", result: "wrong", marks: [["$\\partial", "right"], ["So $Z", "wrong"]], moves: { [QP]: [0, "The derivative is right; Z is its first-order expansion, not Z."], [SPEC]: [0, "Not reached."], [SE]: [-0.5, "Treats the derivative of Σ as if it were Z."] } },
-      { day: 30, working: zRight, answer: "So $Z = 1/(1+\\alpha)$ and $m^*/m = 1 + \\alpha$.", result: "right", marks: [["$Z = (1", "right"], ["So $Z", "right"]], moves: { [QP]: [1, exact], [SPEC]: [1, "Knows what the peak's weight is."], [SE]: [0.5, "Corrected after the last marking."] } },
-      { day: 20, working: zRight, answer: "So $Z = 1/(1+\\alpha)$ and $m^*/m = 1 + \\alpha$.", result: "right", marks: [["So $Z", "right"]], moves: { [QP]: [1, exact], [SPEC]: [1, exact], [SE]: [0, "Nothing new about Σ here."] } },
-      { day: 8, working: zRight, answer: "So $Z = 1/(1+\\alpha)$ and $m^*/m = 1 + \\alpha$.", result: "right", marks: [["So $Z", "right"]], moves: { [QP]: [1, exact], [SPEC]: [1, exact], [SE]: [0, "Nothing new about Σ here."] } },
+      { day: 16, working: energyWrong, answer: "So $E = \\tfrac1{16} - \\tfrac14 = -\\tfrac3{16}$.", result: "partly", marks: [["$K = ", "wrong"], ["$U = ", "right"]], moves: { [ENERGY]: [0.5, "U is right; K counts one body of the two."], [LAW]: [0, "Bears on it only in passing."] } },
+      { day: 14, working: energyRight, answer: "So $E = \\tfrac18 - \\tfrac14 = -\\tfrac18$.", result: "right", marks: [["$K = 2", "right"], ["So $E", "right"]], moves: { [ENERGY]: [1, "Both bodies counted, unaided."], [LAW]: [0, "Bears on it only in passing."] } },
+      { day: 9, working: energyRight, answer: "So $E = \\tfrac18 - \\tfrac14 = -\\tfrac18$.", result: "right", marks: [["So $E", "right"]], moves: { [ENERGY]: [1, exact], [LAW]: [0, "Bears on it only in passing."] } },
+      { day: 3, working: energyRight, answer: "So $E = \\tfrac18 - \\tfrac14 = -\\tfrac18$.", result: "right", marks: [["So $E", "right"]], moves: { [ENERGY]: [0.5, "The same working as a week ago."], [LAW]: [0, "Bears on it only in passing."] } },
     ] },
-  { folder: L, name: "bandwidth-of-the-square-lattice", title: "The bandwidth of the square lattice", tests: [TB, DOS], made: 26, next: "the-atomic-limit",
-    question: "For $\\varepsilon_k = -2t(\\cos k_x + \\cos k_y)$, find the bandwidth, and say where the density of states diverges.",
-    attempts: [26, 23, 19, 12, 6, 3].map((day, k): Attempt => ({ day, working: band, answer: "The bandwidth is $W = 8t$.", result: "right", marks: [["Each cosine", "right"], ["The bandwidth", "right"], ["The density", "right"]],
-      moves: { [TB]: [1, exact], [DOS]: [k === 4 ? 0.5 : k === 5 ? 0 : 1, k === 5 ? "Nothing new about the density of states." : "Places the van Hove singularity."] } })),
+  { folder: I, name: "why-eulers-orbit-spirals-out", title: "Why Euler's orbit spirals out", tests: [EULER, ENERGY], made: 15, next: "one-leapfrog-step",
+    question: "A body on a circular orbit of radius $R$ takes one Euler step. Show that its distance from the centre grows, and by how much, to leading order in $\\Delta t$.",
+    attempts: [
+      { day: 15, working: spiralWrong, answer: "So $|\\mathbf{r}'| = R + v\\,\\Delta t$.", result: "partly", marks: [["After the step", "right"], ["So $|", "wrong"]], moves: { [EULER]: [0.5, "The step is right; v is at right angles to R, so the lengths do not add."], [ENERGY]: [0, "Not reached."] } },
+      { day: 13, working: spiralRight, answer: "So $|\\mathbf{r}'| \\approx R\\,(1 + v^2 \\Delta t^2 / 2R^2)$: larger, every step, whatever the sign of $\\Delta t$.", result: "right", marks: [["So $|\\mathbf{r}'|^2", "right"], ["So $|\\mathbf{r}'| \\approx", "right"]], moves: { [EULER]: [1, exact], [ENERGY]: [0.5, "Ties the growing radius to energy gained."] } },
+      { day: 6, working: spiralRight, answer: "So $|\\mathbf{r}'| \\approx R\\,(1 + v^2 \\Delta t^2 / 2R^2)$: larger, every step, whatever the sign of $\\Delta t$.", result: "right", marks: [["So $|\\mathbf{r}'| \\approx", "right"]], moves: { [EULER]: [1, exact], [ENERGY]: [0, "Nothing new about energy."] } },
+      { day: 3, working: spiralRight, answer: "So $|\\mathbf{r}'| \\approx R\\,(1 + v^2 \\Delta t^2 / 2R^2)$: larger, every step, whatever the sign of $\\Delta t$.", result: "right", marks: [["So $|\\mathbf{r}'| \\approx", "right"]], moves: { [EULER]: [1, exact], [ENERGY]: [0, "Nothing new about energy."] } },
+    ] },
+  { folder: I, name: "one-leapfrog-step", title: "One leapfrog step", tests: [LEAP], made: 12, next: "why-leapfrog-does-not-drift",
+    question: "Write one leapfrog step as kick, drift and kick, and say how many times the accelerations are computed.",
+    attempts: [
+      { day: 12, working: kdkPartly, answer: "Kick: $\\mathbf{v} \\mathrel{+}= \\Delta t\\, \\mathbf{a}$, with the new $\\mathbf{a}$.", result: "partly", marks: [["Drift", "right"], ["Kick: $\\mathbf{v} \\mathrel{+}= \\Delta t", "wrong"]], moves: { [LEAP]: [0.5, "The order is right; each kick is half a step, not a whole one."] } },
+      { day: 8, working: kdk, answer: "Kick: $\\mathbf{v} \\mathrel{+}= \\tfrac12 \\Delta t\\, \\mathbf{a}$, with the new $\\mathbf{a}$: two half kicks make one whole.", result: "right", marks: [["Kick: $\\mathbf{v} \\mathrel{+}= \\tfrac12", "right"], ["Drift", "right"]], moves: { [LEAP]: [1, exact] } },
+      { day: 3, working: kdk, answer: "Kick: $\\mathbf{v} \\mathrel{+}= \\tfrac12 \\Delta t\\, \\mathbf{a}$, with the new $\\mathbf{a}$: two half kicks make one whole.", result: "right", marks: [["Drift", "right"]], moves: { [LEAP]: [1, exact] } },
+    ] },
+  { folder: I, name: "why-leapfrog-does-not-drift", title: "Why leapfrog does not drift", tests: [SYMP, LEAP], made: 10, byIso: { day: 10, after: "one-leapfrog-step", usage: { in: 1310, out: 150, usd: 0.0042 } },
+    question: "RK4 is more accurate than leapfrog over one step. Why, then, does its energy drift over a long run while leapfrog's does not?",
+    attempts: [
+      { day: 10, working: symplectic, answer: "RK4 keeps no such quantity, so its small errors add up.", result: "right", marks: [["Leapfrog keeps", "right"], ["RK4 keeps", "right"]], moves: { [SYMP]: [1, exact], [LEAP]: [0, "Bears on it only in passing."] } },
+      { day: 1, working: symplectic, answer: "RK4 keeps no such quantity, so its small errors add up.", result: "right", marks: [["RK4 keeps", "right"]], moves: { [SYMP]: [0.5, "The same working as last week."], [LEAP]: [0, "Bears on it only in passing."] } },
+    ] },
+  { folder: A, name: "the-centre-of-mass-of-a-node", title: "The centre of mass of a node", tests: [COM], made: 6,
+    question: "A node holds bodies of mass 1 at $(0,0)$, 2 at $(3,0)$ and 1 at $(0,4)$. What is its total mass, and where is its centre of mass?",
+    attempts: [6, 4, 2, 1].map((day): Attempt => ({ day, working: com, answer: "So $\\mathbf{R} = (1.5, 1)$, with $M = 4$.", result: "right", marks: [["$M = 1", "right"], ["So $\\mathbf{R}", "right"]], moves: { [COM]: [1, exact] } })),
   },
-  { folder: L, name: "the-atomic-limit", title: "The atomic limit at half filling", tests: [HUB, MOTT], made: 15,
-    question: "Set $t = 0$ in the Hubbard model at half filling. What does it cost to move one electron to a neighbouring site, and what does that say about $U \\gg W$?",
-    attempts: [
-      { day: 15, working: atomWrong, answer: "The cost is $U/2$.", result: "partly", marks: [["One electron", "right"], ["The cost", "wrong"]], moves: { [HUB]: [0.5, "The picture is right; the energy is counted once too few."], [MOTT]: [0.5, "On the way to the gap."] } },
-      { day: 11, working: atomRight, answer: "So for $U \\gg W$ there is a charge gap of about $U - W$: an insulator.", result: "right", marks: [["The cost", "right"], ["So for", "right"]], moves: { [HUB]: [1, exact], [MOTT]: [1, "The gap, and why it is of order U − W."] } },
-      { day: 9, working: atomRight, answer: "So for $U \\gg W$ there is a charge gap of about $U - W$: an insulator.", result: "right", marks: [["So for", "right"]], moves: { [HUB]: [1, exact], [MOTT]: [0, "Says nothing yet of the metal's side."] } },
-      { day: 4, working: atomRight, answer: "So for $U \\gg W$ there is a charge gap of about $U - W$: an insulator.", result: "right", marks: [["So for", "right"]], moves: { [HUB]: [1, exact], [MOTT]: [0.5, "Still only the insulating side."] } },
-    ] },
-  { folder: I, name: "the-isolated-impurity", title: "The isolated impurity", tests: [AIM, GF], made: 14,
-    question: "Set $V_k = 0$ in the Anderson model. Find the impurity's Green's function at half filling, $\\varepsilon_d = -U/2$.",
-    attempts: [
-      { day: 14, working: isolatedPartly, answer: "So $G(i\\omega_n) = 1/(i\\omega_n - U/2)$.", result: "partly", marks: [["With no bath", "right"], ["So $G", "wrong"]], moves: { [AIM]: [0.5, "Both poles found, but only one kept."], [GF]: [0, "Bears on it only in passing."] } },
-      { day: 11, working: isolatedRight, answer: "So $G(i\\omega_n) = \\frac{1/2}{i\\omega_n - U/2} + \\frac{1/2}{i\\omega_n + U/2}$.", result: "right", marks: [["With no bath", "right"], ["So $G", "right"]], moves: { [AIM]: [1, exact], [GF]: [1, "Weights of the poles read correctly."] } },
-      { day: 5, working: isolatedRight, answer: "So $G(i\\omega_n) = \\frac{1/2}{i\\omega_n - U/2} + \\frac{1/2}{i\\omega_n + U/2}$.", result: "right", marks: [["So $G", "right"]], moves: { [AIM]: [1, exact], [GF]: [0.5, exact] } },
-    ] },
-  { folder: I, name: "one-bath-level", title: "One bath level", tests: [HYB, AIM, MATS], made: 13, byIso: { day: 13, after: "the-isolated-impurity", usage: { in: 1240, out: 160, usd: 0.0041 } },
-    question: "Take a bath of one level at energy $\\epsilon_1$, with hybridisation $V$. Write $\\Delta(i\\omega_n)$, and say what happens to it as $\\epsilon_1 \\to \\infty$.",
-    attempts: [
-      { day: 13, working: oneLevel, answer: "As $\\epsilon_1 \\to \\infty$, $\\Delta \\to 0$: the bath decouples and the site is an atom.", result: "right", marks: [["$\\Delta", "right"], ["As $", "right"]], moves: { [HYB]: [1, exact], [AIM]: [0.5, "The limit back to the isolated site."], [MATS]: [1, exact] } },
-      { day: 1, working: oneLevel, answer: "As $\\epsilon_1 \\to \\infty$, $\\Delta \\to 0$: the bath decouples and the site is an atom.", result: "right", marks: [["As $", "right"]], moves: { [HYB]: [1, exact], [AIM]: [0.5, exact], [MATS]: [0.5, exact] } },
-    ] },
-  { folder: D, name: "why-one-over-root-z", title: "Why 1/√z", tests: [INF], made: 7, next: "what-a-local-self-energy-cannot-do",
-    question: "Why must the hopping scale as $t^*/\\sqrt{z}$, and not as $t^*/z$, as $z \\to \\infty$?",
-    attempts: [
-      { day: 7, working: zWalkPartly, answer: "With $t \\sim 1/z$ it stays finite.", result: "partly", marks: [["The kinetic", "right"], ["With $t", "wrong"]], moves: { [INF]: [0.5, "Sees that the sum over neighbours matters; not why the amplitudes add as they do."] } },
-      { day: 4, working: zWalk, answer: "With $t \\sim 1/\\sqrt{z}$ the bandwidth stays finite; with $t \\sim 1/z$ the electrons would stop moving.", result: "right", marks: [["The band", "right"], ["With $t", "right"]], moves: { [INF]: [1, exact] } },
-      { day: 2, working: zWalk, answer: "With $t \\sim 1/\\sqrt{z}$ the bandwidth stays finite; with $t \\sim 1/z$ the electrons would stop moving.", result: "right", marks: [["With $t", "right"]], moves: { [INF]: [0.5, "The same working as two days ago."] } },
-    ] },
-  { folder: D, name: "what-a-local-self-energy-cannot-do", title: "What a local self-energy cannot do", tests: [LSE, MAP], made: 5,
-    question: "If $\\Sigma(k,\\omega) = \\Sigma(\\omega)$, can the quasiparticle weight differ between two points of the Fermi surface? Why does the map to an impurity need this?",
-    attempts: [
-      { day: 1, working: local, answer: "The impurity is one site, so it can only give a $\\Sigma$ that depends on frequency alone.", result: "right", marks: [["No: $Z$", "right"], ["The impurity", "right"]], moves: { [LSE]: [1, exact], [MAP]: [1, "Ties the map to the locality of Σ."] } },
-    ] },
-  { folder: D, name: "the-bethe-lattice", title: "The Bethe lattice", tests: [SC], made: 1, byIso: { day: 1, after: "what-a-local-self-energy-cannot-do", usage: { in: 1380, out: 140, usd: 0.0043 } },
-    question: "Show that on the Bethe lattice the self-consistency condition reduces to $\\Delta = t^2 G$.",
-    attempts: [],
-    unsent: "Start from the semicircular density of states.\n\nThen $G = 1/(\\zeta - t^2 G)$, with $\\zeta = i\\omega + \\mu - \\Sigma$.\n\nSo $\\Delta = t^2/G$." },
+  { folder: A, name: "the-cost-of-direct-summation", title: "The cost of direct summation", tests: [DIRECT], made: 1,
+    question: "Using Newton's third law, how many pairs does direct summation compute each step for $N$ bodies? At 20 ns a pair, how long is a step at $N = 2000$?",
+    attempts: [], unsent: COST_WORKING },
+  { folder: S, name: "a-timestep-for-the-orbit", title: "A timestep for the orbit", tests: [DT, DIAG], made: 11,
+    question: "For the two-body orbit (period $2\\pi$), choose $\\Delta t$ for leapfrog so that the energy drift stays below $10^{-5}$, and say how you would check it.",
+    attempts: [11, 7].map((day): Attempt => ({ day, working: step, answer: "So $\\Delta t = 2\\pi/100 \\approx 0.06$ is enough.", result: "right", marks: [["The drift falls", "right"], ["So $\\Delta t", "right"], ["Check:", "right"]],
+      moves: { [DT]: [1, exact], [DIAG]: [1, "Knows what to measure, and what halving the step should do."] } })),
+  },
 ];
 
 // ------------------------------------------------------------ the scripted search by meaning
 
 /** What search by meaning finds for the questions the example's Iso asks it. */
 const MEANING: Record<string, { note: string; heading: string; score: number }[]> = {
-  "the loop oscillates between metal and insulator": [{ note: MOTT, heading: "", score: 0.81 }, { note: QP, heading: "", score: 0.74 }],
+  "where the loop spends its time": [{ note: DIRECT, heading: "", score: 0.82 }, { note: COST, heading: "", score: 0.76 }],
 };
 export const similar: Similar = async (text) => ({
   ready: true,
@@ -223,98 +196,91 @@ export async function buildExample(sources: Sources, now = Date.now()): Promise<
   // Every moment, as [days ago, minutes into that day's session, what happens], done in time order.
   const ops: [number, number, () => Promise<unknown>][] = [];
   const on = (day: number, minute: number, act: () => Promise<unknown>) => ops.push([day, minute, act]);
+  /** The note as it stood before the blocks from the one beginning `prefix` on were written. */
+  const upTo = (text: string, prefix: string) => text.slice(0, text.indexOf(block(text, prefix))).trimEnd() + "\n";
 
-  // ---- many-body basics, six weeks ago
-  on(41, 0, () => write(SQ, final(SQ)));
-  on(40, 0, () => write(GF, drop(final(GF), "Why it matters:")));
-  on(40, 6, async () => {
-    const p = await insert(GF, "$$\nG_{ij}(t)", "why does this matter?", "This matters because the Green's function contains all single-particle information: its poles give the excitation energies.", [{ name: "read_note", arguments: { id: SQ } }], { in: 5200, out: 180, usd: 0.0112 });
-    await engine.revise(GF, p.proposal, block(final(GF), "Why it matters:"));
-    await engine.keep(GF, p.proposal);
+  // ---- the physics, three weeks ago
+  on(21, 0, () => write(LAW, final(LAW)));
+  on(21, 8, () => write(NBODY, final(NBODY)));
+  on(21, 4, () => write(UNITS, final(UNITS)));
+  on(19, 0, () => write(ENERGY, drop(final(ENERGY), "A numerical integration")));
+  on(19, 6, async () => {
+    const p = await insert(ENERGY, "$E = K + U$ is constant", "why is energy a good check on a run?", block(final(ENERGY), "A numerical integration"), [{ name: "read_note", arguments: { id: LAW } }], { in: 4800, out: 120, usd: 0.0094 });
+    await engine.keep(ENERGY, p.proposal);
   });
-  on(40, 9, () => write(GF, final(GF)));
-  on(39, 0, () => write(MATS, final(MATS)));
-  on(37, 0, () => write(SE, final(SE)));
-  on(36, 0, () => write(DYSON, drop(final(DYSON), "This last form")));
-  on(36, 5, async () => {
-    const p = await insert(DYSON, "$$\nG^{-1}", "how is this used in practice?", block(final(DYSON), "This last form"), [{ name: "outline_note", arguments: { id: SE } }], { in: 6100, out: 120, usd: 0.0109 });
-    await engine.keep(DYSON, p.proposal);
+  on(18, 10, async () => {
+    const p = await insert(UNITS, "Converting back", "add the SI conversions", "With $M = 10^{11} M_\\odot$ and $L = 10$ kpc, the unit of time is about 47 million years and of speed about 207 km/s.", [], { in: 3900, out: 90, usd: 0.0071 });
+    await engine.discard(UNITS, p.proposal);
   });
-  on(34, 0, () => write(SPEC, final(SPEC)));
-  on(34, 7, async () => {
-    const p = await insert(SPEC, "Free electrons:", "add an ARPES example", "In ARPES on a cuprate, the quasiparticle band near the nodal direction is a sharp peak that broadens away from the Fermi level, with a kink near 70 meV.", [{ name: "search_notes", arguments: { query: "photoemission" } }], { in: 6800, out: 210, usd: 0.0131 });
-    await engine.discard(SPEC, p.proposal);
-  });
-  on(32, 0, () => write(QP, drop(final(QP), "$Z \\to 0$")));
-  on(8, 20, () => write(QP, final(QP)));
 
-  // ---- lattice models, a month ago
-  on(27, 0, () => write(TB, final(TB)));
-  on(26, -60, () => write(DOS, final(DOS)));
-  on(24, 0, () => write(HUB, final(HUB)));
-  on(22, 0, () => write(MOTT, drop(final(MOTT), "TODO:")));
-  // Edited in another editor (on the phone, say): found the next time it was opened.
-  on(21, 0, async () => { await notes.write(`${MOTT}.md`, final(MOTT)); await engine.readNote(MOTT); });
+  // ---- the first program: Euler, and a two-body orbit
+  const loopEuler = "---\ntype: Concept\ntitle: The main loop\ndescription: \"The program's heart: step, and now and then measure.\"\n---\n\n```python\nr, v, m = initial_conditions()\nfor step in range(steps):\n    a = accelerations(r, m)\n    r += dt * v\n    v += dt * a\n    if step % 100 == 0:\n        record(step * dt, energy(r, v, m))\n```\n\nAll the time is in `accelerations`.\n";
+  on(17, 0, () => write(EULER, final(EULER)));
+  on(17, 10, () => write(INIT, upTo(final(INIT), "**A Plummer sphere**")));
+  on(17, 20, () => write(LOOP, loopEuler));
+  on(16, 0, () => write(DIAG, final(DIAG)));
   // A list deleted by mistake, and the note restored to before it.
-  on(19, 30, () => write(DOS, drop(final(DOS), "Two I use:")));
-  on(19, 32, async () => {
-    const journal = await engine.journal(DOS), before = journal.filter((e) => e.kind === "change").at(-2)!;
-    await engine.restore(DOS, before.id, (await engine.readNote(DOS)).version);
-  });
-  on(20, 30, () => engine.windBack(`@study/${L}/bandwidth-of-the-square-lattice`));
-
-  // ---- impurity problems, two weeks ago
-  on(16, 0, () => write(AIM, final(AIM)));
-  const plain = "So the bath only matters through $\\Delta$.";
-  const hybFree = " The impurity's free Green's function is then $\\mathcal{G}_0^{-1}(i\\omega_n) = i\\omega_n - \\varepsilon_d - \\Delta(i\\omega_n)$.";
-  on(15, 0, () => write(HYB, final(HYB).replace(hybFree, "").replace(block(final(HYB), "So two baths"), plain)));
-  on(14, 40, async () => {
-    const p = await iso({ note: HYB, form: "rewrite", regions: [{ text: plain, nth: 0 } as Passage], after: null, before: null, asked: "say why that is enough for DMFT", tier: "mid" },
-      { text: `⟦1⟧${block(final(HYB), "So two baths")}⟦/1⟧\n⟦note⟧I said what follows from it: the bath itself is never needed.⟦/note⟧`, usage: { in: 7400, out: 240, usd: 0.0158 } });
-    await engine.keep(HYB, p.proposal);
-    if (p.said) await engine.discard(HYB, p.said);
+  on(15, 30, () => write(DIAG, drop(final(DIAG), "- **Energy drift**")));
+  on(15, 32, async () => {
+    const journal = await engine.journal(DIAG), before = journal.filter((e) => e.kind === "change").at(-2)!;
+    await engine.restore(DIAG, before.id, (await engine.readNote(DIAG)).version);
   });
 
-  // ---- DMFT, the last nine days
-  on(9, 0, () => write(INF, drop(final(INF), "The payoff:")));
-  on(9, 6, async () => { const p = await insert(INF, "With that scaling", "what does the limit buy us?", block(final(INF), "The payoff:"), [], { in: 4300, out: 60, usd: 0.0079 }); await engine.keep(INF, p.proposal); });
-  on(8, 0, () => write(LSE, final(LSE)));
-  // A note for Iso: asked from the Atlas, kept as a note, then given its description.
-  on(6, 0, async () => {
+  // ---- leapfrog, two weeks ago
+  on(14, 0, () => write(LEAP, drop(drop(final(LEAP), "## Why it does not drift"), "It is second order")));
+  on(14, 7, async () => {
+    const p = await insert(LEAP, "One force calculation", "why does its energy not drift, when Euler's does?", "It is second order, and time-reversible. Its energy error stays bounded.", [{ name: "read_note", arguments: { id: EULER } }, { name: "read_note", arguments: { id: ENERGY } }], { in: 6200, out: 160, usd: 0.0121 });
+    await engine.revise(LEAP, p.proposal, `${block(final(LEAP), "## Why it does not drift")}\n\n${block(final(LEAP), "It is second order")}`);
+    await engine.keep(LEAP, p.proposal);
+  });
+  // The loop moved to leapfrog in another editor, and found the next time it was opened.
+  on(13, 0, async () => { await notes.write(`${LOOP}.md`, drop(final(LOOP), "Rests on")); await engine.readNote(LOOP); });
+  // A note for Iso: asked from the Atlas, kept as a note.
+  on(12, 0, async () => {
     const draft = await engine.createDraft();
-    await engine.saveNote(draft.id, { base: draft.version, text: "---\ntype: Concept\ntitle: Cavity construction\n---\n\nHow is the single-site action got by removing one site from the lattice? What survives in infinite dimensions, and why? Rest it on [infinite dimensions](/dmft/infinite-dimensions.md) and the [local self-energy](/dmft/local-self-energy.md).\n" });
-    const body = final(CAVITY).replace(/^---\n[\s\S]*?\n---\n\n/, "").trimEnd();
+    await engine.saveNote(draft.id, { base: draft.version, text: "---\ntype: Concept\ntitle: Symplectic integrators\n---\n\nWhat makes leapfrog keep its energy over thousands of orbits, when RK4, which is more accurate per step, does not? Rest it on [leapfrog](/integrators/leapfrog.md) and [energy](/physics/energy-conservation.md).\n" });
+    const body = final(SYMP).replace(/^---\n[\s\S]*?\n---\n\n/, "").trimEnd();
     const p = await iso({ note: draft.id, form: "note", tier: "mid" },
-      { calls: [{ name: "read_note", arguments: { id: INF } }, { name: "read_note", arguments: { id: LSE } }], usage: { in: 5600, out: 50, usd: 0.0061 } },
-      { calls: [{ name: "search_notes", arguments: { query: "anderson impurity bath" } }], usage: { in: 8100, out: 30, usd: 0.0052 } },
-      { text: body, usage: { in: 9400, out: 420, usd: 0.0214 } });
-    await engine.keepDraft(draft.id, p.proposal, D);
+      { calls: [{ name: "read_note", arguments: { id: LEAP } }, { name: "read_note", arguments: { id: ENERGY } }], usage: { in: 5400, out: 50, usd: 0.0060 } },
+      { text: body, usage: { in: 8800, out: 380, usd: 0.0198 } });
+    await engine.keepDraft(draft.id, p.proposal, I);
   });
-  on(6, 8, () => write(CAVITY, final(CAVITY)));
-  on(5, 0, () => write(MAP, final(MAP)));
-  const weissThen = drop(drop(final(WEISS), "It is not known"), "By analogy");
-  on(4, 0, () => write(WEISS, weissThen));
-  on(3, 0, async () => { const p = await insert(WEISS, "$$\n\\mathcal{G}_0^{-1}", "why field, if it is a function?", block(final(WEISS), "By analogy"), [{ name: "search_notes", arguments: { query: "mean field" } }], { in: 5900, out: 70, usd: 0.0098 }); await engine.keep(WEISS, p.proposal); });
-  on(2, 0, () => write(SC, final(SC)));
-  on(1, 0, () => write(LOOP, drop(final(LOOP), "Rests on the")));
+  on(12, 8, () => write(SYMP, final(SYMP)));
+  on(12, 20, () => write(DT, final(DT)));
+  on(10, 0, () => write(SOFT, final(SOFT)));
+
+  // ---- the algorithms, this last week
+  on(7, 0, () => write(DIRECT, final(DIRECT)));
+  const comPlain = "Far away, the group acts like one body.";
+  on(7, 10, () => write(COM, final(COM).replace(block(final(COM), "Seen from a distance"), comPlain)));
+  on(5, 20, async () => {
+    const p = await iso({ note: COM, form: "rewrite", regions: [{ text: comPlain, nth: 0 } as Passage], after: null, before: null, asked: "say how far is far enough", tier: "mid" },
+      { text: `⟦1⟧${block(final(COM), "Seen from a distance")}⟦/1⟧\n⟦note⟧I gave the condition and the size of the error.⟦/note⟧`, usage: { in: 6900, out: 210, usd: 0.0141 } });
+    await engine.keep(COM, p.proposal);
+    if (p.said) await engine.discard(COM, p.said);
+  });
+  on(5, 0, () => write(INIT, final(INIT)));
+  on(4, 0, () => write(BH, drop(final(BH), "With $\\theta = 0$")));
+  on(4, 15, () => write(COST, final(COST)));
+  on(3, 0, () => write(GALAXY, drop(final(GALAXY), "At $N = 2000$")));
   // A note for Iso, written and not yet sent.
   on(1, 30, async () => {
     const draft = await engine.createDraft();
-    await engine.saveNote(draft.id, { base: draft.version, text: "---\ntype: Concept\ntitle: Why DMFT is exact only in infinite dimensions\n---\n\nIn three dimensions, what exactly is lost? Only the momentum dependence of the self-energy, or vertex corrections too? Rest it on the [local self-energy](/dmft/local-self-energy.md) and [infinite dimensions](/dmft/infinite-dimensions.md).\n" });
+    await engine.saveNote(draft.id, { base: draft.version, text: "---\ntype: Concept\ntitle: Close encounters\n---\n\nIn the cluster run, two bodies pass very close and the energy jumps by a percent in one step. What is happening, and what can I do about it? Rest it on [softening](/physics/softening.md), [choosing the timestep](/integrators/choosing-the-timestep.md) and [energy](/physics/energy-conservation.md).\n" });
   });
 
-  // ---- today's session: the board's five moments, the last a few minutes ago
-  on(0, -28, () => write(SOLVER, final(SOLVER)));
-  on(0, -22, () => write(WEISS, final(WEISS)));
+  // ---- today's session: five moments, the last a few minutes ago
+  on(0, -28, () => write(QUAD, final(QUAD)));
+  on(0, -22, () => write(BH, final(BH)));
   on(0, -16, async () => {
-    const p = await insert(LOOP, null, "link what this rests on", block(final(LOOP), "Rests on the"),
-      [{ name: "search_notes", arguments: { query: "self-consistency" } }, { name: "read_note", arguments: { id: SC } }, { name: "find_similar", arguments: { text: "the loop oscillates between metal and insulator" } }, { name: "outline_note", arguments: { id: SOLVER } }],
-      { in: 11200, out: 140, cached: 6100, usd: 0.0186 });
+    const p = await insert(LOOP, null, "link what this rests on", block(final(LOOP), "Rests on"),
+      [{ name: "search_notes", arguments: { query: "leapfrog" } }, { name: "read_note", arguments: { id: LEAP } }, { name: "find_similar", arguments: { text: "where the loop spends its time" } }, { name: "outline_note", arguments: { id: DT } }],
+      { in: 10400, out: 130, cached: 5800, usd: 0.0172 });
     await engine.keep(LOOP, p.proposal);
   });
-  on(0, -10, () => write(HYB, final(HYB)));
-  on(0, -4, () => insert(SC, "The sum over $k$", "give the Bethe lattice form", "On the Bethe lattice, with half-bandwidth $D$, the condition closes in one line: $\\Delta(i\\omega_n) = (D/2)^2\\, G(i\\omega_n)$. No sum over momenta is left.",
-    [{ name: "read_note", arguments: { id: DOS } }, { name: "read_note", arguments: { id: WEISS } }], { in: 9800, out: 160, cached: 7200, usd: 0.0147 }));
+  on(0, -10, () => write(GALAXY, final(GALAXY)));
+  on(0, -4, () => insert(SOFT, "Beyond a few", "how big should ε be?", "A common choice is a few hundredths of the mean distance between neighbouring bodies: for $N$ bodies in a sphere of size 1, $\\varepsilon \\approx 0.05\\, N^{-1/3}$. Smaller, and close passes still jump; larger, and the galaxy's core is blurred.",
+    [{ name: "read_note", arguments: { id: DT } }, { name: "read_note", arguments: { id: UNITS } }], { in: 8700, out: 150, cached: 6200, usd: 0.0139 }));
 
   // ---- the exercises: made, then each attempt sent for marking
   for (const x of EXERCISES) {

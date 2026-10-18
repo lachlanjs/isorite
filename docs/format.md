@@ -70,12 +70,13 @@ Every entry has:
 
 | Field | |
 |---|---|
-| `why` | `start` (the note's first entry), `edit`, `keep`, `restore`, `external` |
+| `why` | `start` (the note's first entry), `edit`, `keep`, `restore`, `external`, `move` |
 | `before`, `after` | the first 16 hex digits of the SHA-256 of the whole file; `before` is null on `start` |
 | `hunks` | line differences from the version before: at line `at` (from 0), remove `del`, add `ins` |
 | `text` | the whole file after the change. Present on the first entry, on every 40th change, and whenever the chain before it is broken |
 | `proposal` | on `keep`: the proposal that was kept |
 | `to` | on `restore`: the entry restored to |
+| `from` | on `move`: the note's id before. The file is unchanged (`before` = `after`, no hunks); the journal file was moved with the note, from `journal/<from>.jsonl` |
 
 Any earlier version is rebuilt by starting from the nearest `text` before it and applying hunks. A change whose `before` does not match is skipped and reported, never applied.
 
@@ -127,6 +128,7 @@ One file per device, so two devices never write the same file. One JSON event pe
 |---|---|---|
 | `attempt` | `exercise` (its id in the study base), `tests` (note ids), `result` (`right`, `partly`, `wrong`), `by` (`iso:<model>` or `you`), `moves`, `answer`, `working`, `marks` | an exercise was marked (below) |
 | `wind-back` | `note` | the person lowered Iso's reading of them by one |
+| `moved` | `from`, `to` | a note was moved: what the events before it say of `from` is said of `to` |
 | `context-cleared` | | Iso is no longer sent this session's exchanges from before this event. Nothing is deleted. |
 | `iso-unused` | `note`, `session`, `model`, `usd` | a reply that was paid for and offered nothing (a rewrite that changed nothing, an empty reply): counted in what the session cost |
 

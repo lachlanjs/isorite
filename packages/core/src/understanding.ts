@@ -79,6 +79,10 @@ export function understanding(events: readonly LearnerEvent[], now = Date.now())
         s.level = clamp(s.level + (typeof by === "number" && Number.isFinite(by) ? Math.max(-1, Math.min(1, by)) : 0));
         s.last = when; s.evidence.push(e.id);
       }
+    } else if (e.event === "moved" && typeof e.from === "string" && typeof e.to === "string") {
+      // The note was moved: what was known of it goes with it.
+      const s = state.get(e.from);
+      if (s) { state.delete(e.from); state.set(e.to, s); }
     } else if (e.event === "wind-back" && typeof e.note === "string") {
       const s = at(e.note);
       s.level = clamp(s.level - 1); s.evidence.push(e.id);

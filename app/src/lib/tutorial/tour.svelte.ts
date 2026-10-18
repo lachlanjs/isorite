@@ -1,3 +1,4 @@
-// Where the tutorial is: the step, whether it has begun, and whether it was left. For the page's life.
+// Where the tutorial is: the part (-1 while the parts are listed), the step within it, the parts done, and whether
+// it was left. For the page's life.
 
-export const tour = $state({ at: 0, started: false, left: false });
+export const tour = $state({ part: -1, at: 0, left: false, done: [] as number[] });

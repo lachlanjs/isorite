@@ -234,7 +234,7 @@
         {#if !asSource}<button class="icon" type="button" aria-label="timeline" title="timeline" aria-pressed={timeline} onclick={toggleTimeline}>{@render clockIcon()}</button>{/if}
         {#if !asSource}<button class="btn quiet" type="button" aria-pressed={details} onclick={() => { details = !details; remember("isorite.details", details); }}>details</button>{/if}
         <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => (source = !source)}>source</button>
-        {#if !asSource}<button class="btn quiet" type="button" aria-pressed={sending} onclick={() => (sending = !sending)}>send to agent</button>{/if}
+        {#if !asSource}<button class="btn quiet" type="button" data-tour="send" aria-pressed={sending} onclick={() => (sending = !sending)}>send to agent</button>{/if}
       </div>
       {#if studied && !asSource && report}
         <div class="margin" role="group" aria-label="Iso's read of you">

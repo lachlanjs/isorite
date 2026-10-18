@@ -31,7 +31,7 @@ export interface Stamp {
   who: Who;
 }
 
-export type Why = "start" | "edit" | "keep" | "restore" | "external";
+export type Why = "start" | "edit" | "keep" | "restore" | "external" | "move";
 
 /** A change to the note's file. */
 export interface Change extends Stamp {
@@ -44,10 +44,11 @@ export interface Change extends Stamp {
   /** The whole file after the change: on the first entry, at intervals, and wherever the chain was broken. */
   text?: string;
   /** For `keep`: the proposal kept, and for a rewrite the one region kept (without it, all that were still open).
-   *  For `restore`: the entry restored to. */
+   *  For `restore`: the entry restored to. For `move`: the note's id before (the file is unchanged). */
   proposal?: string;
   region?: number;
   to?: string;
+  from?: string;
 }
 
 export interface Cost {
@@ -338,7 +339,7 @@ export interface Moment {
   at: string;
   session: string;
   who: Who;
-  what: "wrote" | "found" | "edited" | "kept" | "offered" | "discarded" | "restored" | "changed elsewhere" | "marked";
+  what: "wrote" | "found" | "edited" | "kept" | "offered" | "discarded" | "restored" | "moved" | "changed elsewhere" | "marked";
   /** What was asked, where the moment came from a proposal. */
   asked?: string;
   /** How a marking came out. */
@@ -365,7 +366,7 @@ export function moments(entries: readonly Entry[]): Moment[] {
       if (e.why === "keep" && m) { m.what = "kept"; m.ids.push(e.id); m.at = e.at; continue; }
       const last = out[out.length - 1];
       if (e.why === "edit" && last && last.what === "edited" && last.who === e.who && last.session === e.session) { last.ids.push(e.id); last.at = e.at; continue; }
-      const what = e.why === "start" ? (e.who === "external" ? "found" : "wrote") : e.why === "edit" ? "edited" : e.why === "restore" ? "restored" : e.why === "keep" ? "kept" : "changed elsewhere";
+      const what = e.why === "start" ? (e.who === "external" ? "found" : "wrote") : e.why === "edit" ? "edited" : e.why === "restore" ? "restored" : e.why === "keep" ? "kept" : e.why === "move" ? "moved" : "changed elsewhere";
       out.push({ ...base, what });
     }
   }

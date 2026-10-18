@@ -95,9 +95,28 @@ export class NoteSession {
   /** Write the note back as it was just after an entry of its journal: anything unsaved is saved first, so it is in
    *  the journal too, and the restore is an entry of its own. */
   async restore(entry: string): Promise<void> {
+    await this.settle();
+    this.take(await app.api.restore(this.id, entry, this.base));
+  }
+
+  /** Move the note to another id (a new name, or another folder), anything unsaved saved first. Its new id. */
+  async move(to: string): Promise<string> {
+    await this.settle();
+    const moved = await app.api.moveNote(this.id, to, this.base);
+    this.stop?.();
+    return moved.id;
+  }
+
+  /** Delete the note, anything unsaved saved first, so that its journal has the last of it. */
+  async remove(): Promise<void> {
+    await this.settle();
+    await app.api.deleteNote(this.id, this.base);
+    this.stop?.();
+  }
+
+  private async settle(): Promise<void> {
     if (this.saving !== "saved") await this.save();
     if (this.saving !== "saved") throw new Error(this.message || "the note could not be saved first");
-    this.take(await app.api.restore(this.id, entry, this.base));
   }
 
   private take(note: NoteSource): void {

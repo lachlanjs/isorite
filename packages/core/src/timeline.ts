@@ -6,7 +6,7 @@ import type { Moment } from "./journal.ts";
 
 const WHAT: Record<Moment["what"], string> = {
   wrote: "wrote the note", found: "found", edited: "edited", kept: "kept", offered: "offered", discarded: "removed",
-  restored: "restored an earlier version", "changed elsewhere": "changed elsewhere", marked: "marked",
+  restored: "restored an earlier version", moved: "moved the note", "changed elsewhere": "changed elsewhere", marked: "marked",
 };
 
 /** Who did what: "you edited", "Iso · “give the Bethe lattice form” · kept", "Iso marked: partly". */
