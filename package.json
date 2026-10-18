@@ -21,7 +21,8 @@
     "serve": "node packages/server/src/main.ts serve",
     "test:browser": "npm run test:browser -w @isorite/app",
     "model": "node packages/server/scripts/embed-model.ts",
-    "bench:retrieval": "node bench/retrieval.ts"
+    "bench:retrieval": "node bench/retrieval.ts",
+    "package": "node scripts/package.ts"
   },
   "overrides": {
     "typescript": "$typescript"

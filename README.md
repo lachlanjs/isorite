@@ -6,14 +6,10 @@ Milestones 1 and 2: a base can be opened in the browser and notes written in it,
 
 ## Starting out
 
-isorite is not published yet: it runs from this repository. You need Node 24 or later and git; for the terminal, OpenCode 2 (`npm i -g @opencode/cli`).
+Node 24 or later; for the terminal, OpenCode 2 (`npm i -g @opencode/cli`).
 
 ```sh
-git clone https://github.com/lachlanjs/isorite && cd isorite
-npm install
-npm run build                       # the app the server serves
-npm install -g ./packages/server    # puts `isorite` on your PATH, linked to this folder
-
+npm install -g isorite
 isorite --tutorial                  # the tutorial: the terminal's tour, and the browser's opened beside it
 ```
 
@@ -23,8 +19,10 @@ On your own project, with a folder of Markdown notes (it can be empty, and is be
 isorite study init <notes>          # the study base beside it: journals, your record, exercises
 isorite serve <notes>               # the browser, at http://localhost:4767/; set Iso's provider key behind the logo
 cd <your code> && isorite term <notes>   # OpenCode here, with the notes beside it (starts the server if needed)
-npm run model                       # optional, in this repository: search by meaning (34 MB, once)
+isorite model                       # optional: search by meaning (34 MB, once)
 ```
+
+From a checkout instead: `npm install && npm run build`, then `node packages/server/src/main.ts …` as below. `npm run package` builds the npm package into `.npm/isorite` (the command bundled to JavaScript, with the app, the example notes and the OpenCode plugin beside it); `npm pack` or `npm publish` is run there.
 
 | | |
 |---|---|

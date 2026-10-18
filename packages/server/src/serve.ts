@@ -14,8 +14,9 @@ import { LOOPBACK, createApp } from "./http.ts";
 import { NodeFiles } from "./nodefiles.ts";
 import { defaultStudyPath, openStudyBase } from "./studybase.ts";
 
-/** The built app, when it has been built (npm run build). */
-export const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "app", "build");
+/** The built app: in a checkout, where npm run build puts it; installed from npm, in the package's web/. */
+export const WEB_DIR = [join(dirname(fileURLToPath(import.meta.url)), "..", "web"), join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "app", "build")]
+  .find((dir) => existsSync(join(dir, "index.html"))) ?? join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "app", "build");
 
 export interface Opened { notes: string; study: string | null }
 
@@ -57,7 +58,7 @@ export async function serve(path: string, { host = "127.0.0.1", port = 4767, all
   });
   console.log(`isorite: ${opened.notes}`);
   console.log(opened.study ? `  study base ${opened.study}` : "  no study base beside it: no journal is kept (isorite study init)");
-  console.log(api.meaning ? "  search by meaning: on" : "  search by meaning: off (npm run model fetches its model)");
+  console.log(api.meaning ? "  search by meaning: on" : "  search by meaning: off (isorite model fetches its model)");
   console.log(web ? `  http://localhost:${port}/` : `  the app is not built (npm run build); the engine alone is at http://localhost:${port}/api/`);
   const stop = () => { server.close(); process.exit(0); };
   process.on("SIGINT", stop);

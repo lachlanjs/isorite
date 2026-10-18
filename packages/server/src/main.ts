@@ -19,6 +19,11 @@ import { initStudyBase } from "./studybase.ts";
 import { mcp } from "./mcp.ts";
 import { term, tutorialTerm } from "./term.ts";
 import { writeExample } from "@isorite/example/node";
+import { fetchModel, userModelDir } from "./model.ts";
+
+// The version: written into the bundle when it is built for npm (scripts/package.ts), else this checkout's.
+declare const ISORITE_VERSION: string | undefined;
+const VERSION = typeof ISORITE_VERSION === "string" ? ISORITE_VERSION : "0.1.0 (checkout)";
 
 const USAGE = `isorite: an agentic harness for understanding
 
@@ -34,6 +39,7 @@ const USAGE = `isorite: an agentic harness for understanding
   isorite mcp [<study base | notes>] [--port <n>] [--agent <name>]
                                          the knowledge base's tools over MCP, on stdio, for Claude Code or Pi:
                                          claude mcp add isorite -- isorite mcp <base> --agent claude-code
+  isorite model                          fetch the model for search by meaning (34 MB, once)
   isorite --tutorial [<folder>] [--port <n>]
                                          the tutorial, on the example base, with a scripted model (no key,
                                          nothing sent anywhere): the terminal's tour in OpenCode 2, and the
@@ -83,6 +89,8 @@ export function main(argv: string[]): number | Promise<number> {
       const run = command === "term" ? term(path, port === undefined ? {} : { port }) : mcp(path, { ...(port === undefined ? {} : { port }), ...(agent ? { agent } : {}) });
       return run.catch((e: Error) => { console.error(e.message); return 2; });
     }
+    if (command === "model") return fetchModel(userModelDir()).then(() => 0, (e: Error) => { console.error(e.message); return 1; });
+    if (command === "--version" || command === "-v") { console.log(VERSION); return 0; }
     if (command === "example" && rest[0]) {
       return writeExample(rest[0]).then(({ notes, study }) => {
         console.log(`the example base is at ${notes}`);
