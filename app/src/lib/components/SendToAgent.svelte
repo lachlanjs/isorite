@@ -2,7 +2,7 @@
   // Send this note, or the passage chosen in it, to the terminal's agent, with what you want of it ("from you" on
   // the Terminal board). Whichever agent is listening takes it into its session on screen, to be read with the next
   // message there, and says so; if none does, that is said.
-  import { agentName } from "$lib/agents.ts";
+  import { agentName } from "@isorite/core";
   import { app } from "$lib/app.svelte.ts";
 
   let { note, passage, onclose }: { note: string; passage: string; onclose: () => void } = $props();

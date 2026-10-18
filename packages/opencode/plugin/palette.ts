@@ -13,3 +13,6 @@ export const quartz = {
 } as const;
 
 export type Swatch = keyof typeof lapis;
+
+/** A ground: a colour for each swatch, lapis's or quartz's. */
+export type Ground = Record<Swatch, string>;

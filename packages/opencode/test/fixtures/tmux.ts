@@ -52,11 +52,11 @@ export class Pane {
   }
 
   /** Waits until the pane shows what is looked for; the pane's text is in the error if it never does. */
-  async waitFor(look: RegExp | string, timeout = 30_000): Promise<string> {
+  async waitFor(look: RegExp | string | ((text: string) => boolean), timeout = 30_000): Promise<string> {
     const started = Date.now();
     for (;;) {
       const text = this.text();
-      if (typeof look === "string" ? text.includes(look) : look.test(text)) return text;
+      if (typeof look === "string" ? text.includes(look) : typeof look === "function" ? look(text) : look.test(text)) return text;
       if (Date.now() - started > timeout) throw new Error(`the pane never showed ${look}; it shows:\n${text}`);
       await new Promise((r) => setTimeout(r, 200));
     }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import SendToAgent from "./SendToAgent.svelte";
-  import { agentName } from "$lib/agents.ts";
+  import { agentName } from "@isorite/core";
   import { resolve } from "$app/paths";
   // A note, open for writing: its title, its details when they are wanted, and its text. Saving is the
   // session's business (note.svelte.ts); this shows how it stands and offers the choice when a save is refused.

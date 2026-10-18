@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { agentName } from "$lib/agents.ts";
+  import { agentName } from "@isorite/core";
   import { resolve } from "$app/paths";
   // The shell: the header (the name, where you are, the atlas / notes / study switch), the page, and the
   // status line.

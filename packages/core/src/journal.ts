@@ -169,6 +169,35 @@ export function replay(entries: readonly Entry[], upTo?: string): { text: string
   return text === null ? null : { text, hash: hashText(text), broken };
 }
 
+/** Who last wrote each line of the note as the journal last has it: `you`, `iso:…`, `agent:…` or `external`. Text
+ *  kept from a proposal is its proposer's. Null when the journal's chain is broken, as nothing can then be said. */
+export function authors(entries: readonly Entry[]): string[] | null {
+  const proposers = new Map<string, string>();
+  let owners: string[] | null = null, text: string[] | null = null;
+  for (const e of entries) {
+    if (e.kind === "proposal") proposers.set(e.id, e.who);
+    if (!isChange(e)) continue;
+    const who = e.why === "keep" && e.proposal ? (proposers.get(e.proposal) ?? e.who) : e.who;
+    if (owners === null || text === null) {
+      if (e.text === undefined) return null;
+      text = e.text.split("\n");
+      owners = text.map(() => who);
+      continue;
+    }
+    if (hashText(text.join("\n")) !== e.before) return null;
+    const next: string[] = [];
+    let at = 0;
+    for (const h of e.hunks) {
+      next.push(...owners.slice(at, h.at), ...h.ins.map(() => who));
+      at = h.at + h.del.length;
+    }
+    next.push(...owners.slice(at));
+    owners = next;
+    text = applyHunks(text, e.hunks);
+  }
+  return owners;
+}
+
 /** The note as it was after an entry. */
 export const textAt = (entries: readonly Entry[], id?: string): string | null => replay(entries, id)?.text ?? null;
 

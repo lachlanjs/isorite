@@ -6,6 +6,10 @@ import { spawn } from "node:child_process";
 import { fg, StyledText, TextRenderable, type TextChunk } from "@opentui/core";
 import { Plugin } from "@opencode/plugin/tui";
 import { createEffect, createResource, createSignal, For, Show } from "solid-js";
+import type { ScrollBoxRenderable } from "@opentui/core";
+import type { Entry } from "@isorite/core";
+import { noteView, type ViewChange } from "./noteview.ts";
+import { NotePage, fromWhom, type NoteData } from "./notepage.tsx";
 import * as Isorite from "./isorite.ts";
 import * as Logo from "./logo.ts";
 import { lapis, quartz } from "./palette.ts";
@@ -13,6 +17,7 @@ import { Play, type Step } from "./play.ts";
 import { parseSources } from "./sources.ts";
 
 const SPLASH = "isorite-splash";
+const NOTE = "isorite-note";
 
 // Below the keys on the board: rule 90 from a single cell, in the line colour.
 const FIELD = [
@@ -60,9 +65,64 @@ export default Plugin.define({
     };
     const onScreen = () => { const route = ctx.ui.router.current(); return route.type === "session" ? route.sessionID : null; };
 
+    // ------------------------------------------------------------ the note view (Terminal-Note)
+    const [shownNote, setShownNote] = createSignal("");
+    const [noteVersion, bumpNote] = createSignal(0);
+    const [current, setCurrent] = createSignal("");
+    let back: Parameters<typeof ctx.ui.router.navigate>[0] = { type: "home" };
+    let scroll: ScrollBoxRenderable | undefined;
+    const openNote = (id: string) => {
+      const route = ctx.ui.router.current();
+      // A copy: the router changes its route in place as it goes.
+      if (!(route.type === "plugin" && route.name === NOTE))
+        back = route.type === "plugin" ? { type: "plugin", name: route.name, data: { ...route.data } } : route.type === "session" ? { type: "session", sessionID: route.sessionID } : { type: "home" };
+      setCurrent("");
+      setShownNote(id);
+      ctx.ui.router.navigate({ type: "plugin", name: NOTE, data: { id } });
+    };
+    const loadNote = async (id: string): Promise<NoteData> => {
+      const q = `?id=${encodeURIComponent(id)}`;
+      const [note, entries, study] = await Promise.all([
+        Isorite.get<{ text: string }>(`/api/note${q}`), Isorite.get<Entry[]>(`/api/journal${q}`),
+        Isorite.get<{ notes: Record<string, { step: number; squares: number }> }>("/api/study").catch(() => null),
+      ]);
+      const reading = study?.notes[id];
+      return { id, title: titles().get(id) ?? id.split("/").at(-1)!, items: noteView(note.text, entries), entries, step: reading?.step ?? 0, squares: reading?.squares ?? 0 };
+    };
+    const [note] = createResource(() => (shownNote() ? { id: shownNote(), v: noteVersion() } : null), ({ id }) => loadNote(id));
+    const changes = () => (note()?.items.filter((i): i is ViewChange => i.type === "change") ?? []);
+    // The current change: the one chosen, while it waits; else the first.
+    const chosen = () => changes().find((c) => c.key === current()) ?? changes()[0];
+    const settle = async (how: "keep" | "discard") => {
+      const c = chosen(), id = shownNote();
+      if (!c) return;
+      await Isorite.post(`/api/proposal/${how}?id=${encodeURIComponent(id)}`, { proposal: c.proposal, ...(c.region === undefined ? {} : { region: c.region }) })
+        .catch((e: Error) => ctx.ui.toast?.show?.({ message: e.message, variant: "error" }));
+    };
+    const edit = async () => {
+      const c = chosen(), id = shownNote();
+      if (!c) return;
+      const text = await ctx.ui.dialog.prompt({ title: `Edit ${fromWhom(c.who)}'s change, then keep it`, value: c.text });
+      if (text === undefined) return;
+      // A rewrite is revised whole: this region's new text, the rest as they are.
+      const entry = note()?.entries.find((e) => e.id === c.proposal) as { regions?: { new: string }[] } | undefined;
+      const revised = c.region === undefined ? text : (entry?.regions ?? []).map((r, k) => (k === c.region ? text : r.new));
+      try {
+        await Isorite.post(`/api/proposal/revise?id=${encodeURIComponent(id)}`, { proposal: c.proposal, text: revised });
+        await settle("keep");
+      } catch (e) { ctx.ui.toast?.show?.({ message: (e as Error).message, variant: "error" }); }
+    };
+    ctx.ui.router.register({
+      name: NOTE,
+      render: () => <NotePage note={note} current={() => chosen()?.key ?? ""} ground={ground} base={baseName()} scroll={(s) => { scroll = s; }} />,
+    });
+    const [baseName, setBaseName] = createSignal("");
+    void Isorite.get<Isorite.Session>("/api/session").then((s) => setBaseName(s.name), () => undefined);
+
     const stop = new AbortController();
     Isorite.listen((type, data) => {
       if (type === "note-changed") void listTitles();
+      if ((type === "journal" || type === "note-changed") && data.id === shownNote()) bumpNote((n) => n + 1);
       if (type === "agent-sent") {
         waiting.push({ id: String(data.id), note: String(data.note), title: String(data.title), said: String(data.said ?? ""), text: String(data.text) });
         const sessionID = onScreen();
@@ -113,7 +173,7 @@ export default Plugin.define({
               <text fg={ground().faint} wrapMode="none">{summary()}</text>
               <For each={rows()}>
                 {(row) => (
-                  <box flexDirection="row" minWidth={0}>
+                  <box flexDirection="row" minWidth={0} onMouseUp={() => openNote(row.id)}>
                     <text fg={ground().line} wrapMode="none" flexShrink={0}>{row.prefix}</text>
                     <text fg={ground().text} wrapMode="word" flexShrink={1} minWidth={0}>{row.label}</text>
                     <box flexGrow={1} minWidth={1} />
@@ -184,6 +244,45 @@ export default Plugin.define({
           const route = ctx.ui.router.current();
           return route.type === "plugin" && route.name === SPLASH;
         };
+        const onNote = () => { const route = ctx.ui.router.current(); return route.type === "plugin" && route.name === NOTE; };
+        ctx.keymap.layer(() => ({
+          mode: "global",
+          enabled: onNote,
+          commands: [
+            { id: "isorite.note.next", title: "Next change", bind: "n", run: () => { const all = changes(), k = all.findIndex((c) => c.key === chosen()?.key); if (all.length) setCurrent(all[(k + 1) % all.length]!.key); } },
+            { id: "isorite.note.keep", title: "Keep the change", bind: "k", run: () => void settle("keep") },
+            { id: "isorite.note.edit", title: "Edit the change, then keep it", bind: "e", run: () => void edit() },
+            { id: "isorite.note.remove", title: "Remove the change", bind: "r", run: () => void settle("discard") },
+            { id: "isorite.note.browser", title: "The note in the browser", bind: "b", run: () => openInBrowser(`${Isorite.url}/#/n/${shownNote()}`) },
+            { id: "isorite.note.back", title: "Back", bind: "q", run: () => ctx.ui.router.navigate(back) },
+            { id: "isorite.note.escape", title: "Back", bind: "escape", run: () => ctx.ui.router.navigate(back) },
+            { id: "isorite.note.down", title: "Scroll down", bind: "down", run: () => scroll?.scrollBy(1) },
+            { id: "isorite.note.up", title: "Scroll up", bind: "up", run: () => scroll?.scrollBy(-1) },
+            { id: "isorite.note.pagedown", title: "Page down", bind: "pagedown", run: () => scroll?.scrollBy(0.8 * (scroll?.height ?? 20)) },
+            { id: "isorite.note.pageup", title: "Page up", bind: "pageup", run: () => scroll?.scrollBy(-0.8 * (scroll?.height ?? 20)) },
+          ],
+        }));
+        ctx.keymap.layer(() => ({
+          mode: "global",
+          commands: [{
+            id: "isorite.note.open", title: "Open a note of the knowledge base", palette: true, slash: { name: "note", arguments: true },
+            run: async (input) => {
+              const words = input?.trim();
+              if (words) {
+                const hits = await Isorite.get<{ id: string }[]>(`/api/search?q=${encodeURIComponent(words)}`).catch(() => []);
+                const exact = titles().has(words.replace(/^\/+|\.md$/g, "")) ? words.replace(/^\/+|\.md$/g, "") : undefined;
+                const id = exact ?? hits[0]?.id;
+                if (id) openNote(id); else ctx.ui.toast?.show?.({ message: `no note matches “${words}”`, variant: "warning" });
+                return;
+              }
+              const id = await ctx.ui.dialog.select({
+                title: "Open a note", placeholder: "its title",
+                options: [...titles()].map(([value, title]) => ({ title, value, description: value.split("/").slice(0, -1).join(" / ") })),
+              });
+              if (id) openNote(id);
+            },
+          }],
+        }));
         // Anything sent while no session was on screen goes to the first one opened.
         createEffect(() => { const sessionID = onScreen(); if (sessionID && waiting.length) void deliver(sessionID); });
         ctx.keymap.layer(() => ({

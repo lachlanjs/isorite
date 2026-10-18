@@ -3,7 +3,7 @@
   // struck through in the note. A change within a line is set in that line straight after the passage; one of
   // several lines is a block under it, so that code keeps its lines and its indentation. The text is shown as it
   // would be written into the file.
-  import { agentName } from "$lib/agents.ts";
+  import { agentName } from "@isorite/core";
   import type { NoteIso } from "$lib/iso.svelte.ts";
 
   let { iso, key }: { iso: NoteIso; key: string } = $props();

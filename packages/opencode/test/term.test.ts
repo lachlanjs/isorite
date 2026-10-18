@@ -204,6 +204,25 @@ describe.skipIf(!ready)("isorite term", () => {
     expect(system).toContain("propose_note_edit");
   }, 120_000);
 
+  it("opens a note in the terminal: its gutter, its code, the agent's change waiting with its keys; [k] keeps it", async () => {
+    const loop = join(base.notes, "dmft", "the-dmft-loop.md");
+    pane.type("/note dmft loop");
+    await new Promise((r) => setTimeout(r, 500));
+    pane.keys("Enter");
+    const shown = await pane.waitFor("dmft / the dmft loop", 30_000);
+    expect(shown).toContain("python");
+    expect(shown).toMatch(/◆ OpenCode · not kept yet/);
+    expect(shown).toContain("[k] keep  [e] edit  [r] remove");
+    expect(shown).toContain("Keep part of the old self-energy, half of it to begin with:");
+    keep("7-note");
+    pane.keys("k");
+    for (let waited = 0; !readFileSync(loop, "utf8").includes("half of it to begin with") && waited < 10_000; waited += 100) await new Promise((r) => setTimeout(r, 100));
+    expect(readFileSync(loop, "utf8")).toContain("Keep part of the old self-energy, half of it to begin with:");
+    await pane.waitFor((t: string) => !t.includes("not kept yet"));
+    pane.keys("q");
+    await pane.waitFor("fix the loop: mix half the old self-energy", 10_000);
+  }, 90_000);
+
   it("takes a note sent from the browser into the session on screen, shows it under from you, and the agent reads it next", async () => {
     const heard = listen(port);
     await new Promise((r) => setTimeout(r, 300));

@@ -13,7 +13,6 @@
     "check": "tsc -p ."
   },
   "devDependencies": {
-    "@isorite/core": "*",
     "@isorite/example": "*",
     "@opencode/plugin": "2.0.32",
     "@opentui/core": "0.5.17",
@@ -23,5 +22,8 @@
     "solid-js": "1.9.15",
     "typescript": "^6.0.3",
     "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "@isorite/core": "*"
   }
 }
