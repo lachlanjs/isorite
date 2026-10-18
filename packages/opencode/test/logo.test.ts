@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { height, lines, rows, shapes, width } from "../plugin/logo.ts";
 
@@ -31,5 +32,18 @@ describe("the mark", () => {
 
   it("draws the trunk as whole blocks in the middle column", () => {
     for (const line of lines().slice(12)) expect(line).toBe("          ██        ");
+  });
+});
+
+describe("the mark and the wordmark as images", () => {
+  // A PNG's width and height are at bytes 16 and 20.
+  const size = (name: string) => { const png = readFileSync(new URL(`../plugin/assets/${name}.png`, import.meta.url)); return [png.readUInt32BE(16), png.readUInt32BE(20)]; };
+
+  it("are drawn on both grounds, at the mark's proportions and the browser wordmark's", () => {
+    for (const ground of ["lapis", "quartz"]) {
+      const [mw, mh] = size(`mark-${ground}`), [ww, wh] = size(`wordmark-${ground}`);
+      expect(mw! / mh!).toBeCloseTo(width / height, 2);
+      expect(ww! / wh!).toBeCloseTo(32.4 / 9.9, 2);
+    }
   });
 });

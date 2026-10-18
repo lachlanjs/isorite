@@ -3,7 +3,7 @@
 // notes in play: what the agent found in the knowledge base and how far each got (`Terminal`, `Terminal-Chat`).
 
 import { spawn } from "node:child_process";
-import { BoxRenderable, fg, RGBA, StyledText, TextAttributes, TextRenderable, type Renderable, type TextChunk } from "@opentui/core";
+import { BoxRenderable, fg, ImageRenderable, RGBA, StyledText, TextAttributes, TextRenderable, type Renderable, type TextChunk } from "@opentui/core";
 import { Plugin } from "@opencode/plugin/tui";
 import { createEffect, createResource, createSignal, For, onCleanup, Show } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
@@ -41,9 +41,23 @@ export default Plugin.define({
   id: "isorite",
   setup(ctx) {
     const ground = () => (ctx.themeMode === "light" ? quartz : lapis);
-    // The mark's corner halves as the board draws them, but in VS Code, whose terminal leaves the wedges to the font,
-    // in quarter blocks.
-    const style = (process.env.ISORITE_LOGO ?? (process.env.TERM_PROGRAM === "vscode" ? "quadrant" : "legacy")) as Logo.Style;
+    // The mark and the wordmark as images where the terminal shows images (kitty's graphics protocol, or sixel): their
+    // edges straight, as the board and the browser draw them. Elsewhere in characters: the mark's corner halves as
+    // wedges, but in VS Code, whose terminal leaves the wedges to the font, in quarter blocks. ISORITE_LOGO chooses
+    // a style of characters, or "image".
+    const logoChoice = process.env.ISORITE_LOGO;
+    const style = (logoChoice && logoChoice !== "image" ? logoChoice : process.env.TERM_PROGRAM === "vscode" ? "quadrant" : "legacy") as Logo.Style;
+    const [capabilities, setCapabilities] = createSignal(ctx.renderer.capabilities);
+    ctx.renderer.on("capabilities", () => setCapabilities(ctx.renderer.capabilities));
+    const protocol = (): "kitty" | "sixel" | null => {
+      if (logoChoice && logoChoice !== "image") return null;
+      const caps = capabilities();
+      return caps?.kitty_graphics ? "kitty" : caps?.sixel && ctx.renderer.resolution ? "sixel" : null;
+    };
+    const ASSETS = new URL("./assets/", import.meta.url);
+    /** The mark or the wordmark as an image, `width` by `height` cells, for the ground in use. */
+    const picture = (name: "mark" | "wordmark", width: number, height: number) =>
+      new ImageRenderable(ctx.renderer, { source: new URL(`${name}-${ctx.themeMode === "light" ? "quartz" : "lapis"}.png`, ASSETS), width, height, fit: "fit", protocol: protocol()! });
 
     // The notes in play, by session, from the server's events; titles from its listing, asked again when notes change.
     const plays = new Map<string, Play>();
@@ -365,13 +379,17 @@ export default Plugin.define({
         };
         return (
           <box flexDirection="column" alignItems="center" justifyContent="center" width="100%" height="100%">
-            <For each={Logo.rows(style)}>
-              {(runs) => (
-                <text>
-                  <For each={runs}>{(run) => <span style={{ fg: run.growth ? ground().growth : ground().text }}>{run.text}</span>}</For>
-                </text>
-              )}
-            </For>
+            <Show when={protocol()} keyed fallback={
+              <For each={Logo.rows(style)}>
+                {(runs) => (
+                  <text>
+                    <For each={runs}>{(run) => <span style={{ fg: run.growth ? ground().growth : ground().text }}>{run.text}</span>}</For>
+                  </text>
+                )}
+              </For>
+            }>
+              {(_: string) => <box width={Logo.width * 2} height={Logo.height} ref={(b) => b.add(picture("mark", Logo.width * 2, Logo.height))} />}
+            </Show>
             <text> </text>
             <text fg={ground().text}><b>{"  i s o r i t e"}</b></text>
             <text> </text>
@@ -494,6 +512,10 @@ export default Plugin.define({
       const g = ground();
       const mark = new BoxRenderable(ctx.renderer, { id: "isorite-wordmark", flexDirection: "column", alignItems: "center" });
       const chunk = (text: string, ink: string, more: Partial<TextChunk> = {}): TextChunk => ({ __isChunk: true, text, fg: RGBA.fromHex(ink), ...more });
+      if (roomy() && protocol()) {
+        mark.add(picture("wordmark", 70, 10));
+        return mark;
+      }
       if (roomy()) {
         const colour = { ink: g.text, iso: g.growth, right: g.mal };
         for (const row of Wordmark.rows(style)) mark.add(new TextRenderable(ctx.renderer, { content: new StyledText(row.map((run) => chunk(run.text, colour[run.role]))), selectable: false }));
@@ -514,7 +536,7 @@ export default Plugin.define({
       if (!logo || !parent) return;
       logo.visible = false;
       const mine = parent.getChildren().find((c) => c.id === "isorite-wordmark");
-      const drawing = `${ctx.themeMode} ${roomy()}`;
+      const drawing = `${ctx.themeMode} ${roomy()} ${protocol()}`;
       if (mine && drawnFor === drawing) return;
       if (mine) { parent.remove(mine); mine.destroy(); }
       parent.add(wordmark());
