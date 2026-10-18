@@ -68,7 +68,7 @@ for (const pkg of ["packages/server", "packages/core", "packages/engine", "packa
   const p = json(at(pkg, "package.json"));
   Object.assign(ranges, p.devDependencies ?? {}, p.dependencies ?? {});
 }
-const PLUGIN = ["@opencode/plugin", "@opentui/core", "@opentui/solid", "solid-js"];
+const PLUGIN = ["@opentui/core", "@opentui/solid", "solid-js"];
 const dependencies = Object.fromEntries([...used, ...PLUGIN].filter((d) => !d.startsWith("@isorite/")).sort().map((d) => {
   if (!ranges[d]) throw new Error(`${d} is imported but no package.json here asks for it`);
   return [d, ranges[d]!];
