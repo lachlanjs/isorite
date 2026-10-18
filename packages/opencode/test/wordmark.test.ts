@@ -4,7 +4,7 @@ import { lines, rows, word } from "../plugin/wordmark.ts";
 
 describe("the wordmark", () => {
   it("has every row as wide, so that centred it stays aligned, in every style", () => {
-    for (const style of ["legacy", "quadrant", "simple"] as const) {
+    for (const style of ["legacy", "quadrant", "simple", "triangle"] as const) {
       const widths = rows(style).map((runs) => [...runs.map((r) => r.text).join("")].length);
       expect(new Set(widths).size).toBe(1);
     }

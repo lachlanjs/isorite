@@ -6,7 +6,7 @@
 // Where the home is too small for that, the name in the letters of OpenCode's own logo, as it draws "open" and
 // "code": "iso" muted and "rite" bold.
 
-import { glyphs, type Corner, type Style } from "./logo.ts";
+import { blank, glyphs, type Corner, type Style } from "./logo.ts";
 
 export type Role = "ink" | "iso" | "right";
 export interface Run { text: string; role: Role }
@@ -30,14 +30,14 @@ const GAP = 1;
 
 /** The wordmark's rows, as runs in one colour each, every row as wide (so that centred they stay aligned). */
 export function rows(style: Style = "legacy"): Run[][] {
-  const draw = (squares: string) => [...squares].map((q) => (q === "." ? "  " : glyphs[style][SQUARE[q]!])).join("");
-  const gap = "  ".repeat(GAP);
+  const draw = (squares: string) => [...squares].map((q) => (q === "." ? blank(style) : glyphs[style][SQUARE[q]!])).join("");
+  const gap = blank(style).repeat(GAP);
   const letters = [0, 1, 2, 3, 4, 5, 6].map((r): Run[] => [{ text: [...WORD].map((ch) => draw(LETTERS[ch]![r]!)).join(gap), role: "ink" }]);
   const dots = DOT.map((line): Run[] => {
     let i = 0;
     return [...WORD].flatMap((ch, k): Run[] => {
       const lead = k ? [{ text: gap, role: "ink" as Role }] : [];
-      if (ch !== "i") return [...lead, { text: "  ".repeat(LETTERS[ch]![0]!.length), role: "ink" }];
+      if (ch !== "i") return [...lead, { text: blank(style).repeat(LETTERS[ch]![0]!.length), role: "ink" }];
       return [...lead, { text: draw(line), role: i++ ? "right" : "iso" }];
     });
   });

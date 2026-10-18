@@ -23,7 +23,7 @@ export interface Shape {
   readonly growth?: boolean;
 }
 
-export type Style = "legacy" | "quadrant" | "simple";
+export type Style = "legacy" | "quadrant" | "simple" | "triangle";
 
 /** One run of cells in one colour. */
 export interface Run {
@@ -61,19 +61,26 @@ export const glyphs: Record<Style, Record<Corner | "full", string>> = {
   },
   quadrant: { full: "██", tl: "▗▟", tr: "▙▖", bl: "▝▜", br: "▛▘" },
   simple: { full: "██", tl: " ◢", tr: "◣ ", bl: " ◥", br: "◤ " },
+  // A square one cell: its halves straight from corner to corner, steeper than 45° as a cell is taller than wide.
+  triangle: { full: "█", tl: "◢", tr: "◣", bl: "◥", br: "◤" },
 };
 
-/** The mark's rows, each a list of runs, 20 cells wide. */
+/** A square of the style left empty: as many spaces as it is cells wide. */
+export function blank(style: Style): string {
+  return " ".repeat([...glyphs[style].full].length);
+}
+
+/** The mark's rows, each a list of runs, 20 cells wide (10 in `triangle`). */
 export function rows(style: Style = "legacy"): Run[][] {
   const grid: (Shape | undefined)[][] = Array.from({ length: height }, () => Array(width).fill(undefined));
   for (const shape of shapes) grid[shape.y]![shape.x] = shape;
   return grid.map((row) => {
     const runs: Run[] = [];
     for (const shape of row) {
-      const text = shape ? glyphs[style][shape.empty ?? "full"] : "  ";
+      const text = shape ? glyphs[style][shape.empty ?? "full"] : blank(style);
       const growth = shape?.growth ?? false;
       const last = runs.at(-1);
-      if (last && (last.growth === growth || text === "  ")) runs[runs.length - 1] = { text: last.text + text, growth: last.growth };
+      if (last && (last.growth === growth || !text.trim())) runs[runs.length - 1] = { text: last.text + text, growth: last.growth };
       else runs.push({ text, growth });
     }
     return runs;

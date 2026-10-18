@@ -14,11 +14,11 @@ describe("the mark", () => {
     }
   });
 
-  it("is 20 cells by 15 rows in every style", () => {
-    for (const style of ["legacy", "quadrant", "simple"] as const) {
+  it("is 20 cells by 15 rows in every style, a square two cells, and 10 by 15 in triangles, a square one cell", () => {
+    for (const style of ["legacy", "quadrant", "simple", "triangle"] as const) {
       const drawn = lines(style);
       expect(drawn).toHaveLength(15);
-      for (const line of drawn) expect([...line]).toHaveLength(20);
+      for (const line of drawn) expect([...line]).toHaveLength(style === "triangle" ? 10 : 20);
     }
   });
 
