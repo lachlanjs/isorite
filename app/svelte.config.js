@@ -12,6 +12,8 @@ export default {
   kit: {
     adapter: adapter({ pages: out, assets: out, strict: false }),
     router: { type: "hash" },
-    paths: { relative: true },
+    // The tutorial is one page that SvelteKit serves as its fallback, whose links are absolute however `relative` is
+    // set: on GitHub Pages it is served under the repository's name (/isorite/), which BASE_PATH gives.
+    paths: { relative: true, base: process.env.ISORITE_TUTORIAL ? (process.env.BASE_PATH ?? "") : "" },
   },
 };
