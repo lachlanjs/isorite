@@ -5,7 +5,7 @@
 // started for the base, its output kept in a log so that it does not draw over the TUI,
 // and stopped when OpenCode exits.
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
 import { openSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -35,38 +35,42 @@ export async function serving(url: string): Promise<string | null> {
   }
 }
 
-export async function term(path: string | undefined, { port = 4767, cwd = process.cwd(), env = process.env, wait = 120_000 }: TermOptions = {}): Promise<number> {
-  const opencode = findOpenCode(env);
-  const gateway = gatewayFrom(env);
+/** The isorite server on the port, and how to let it go: one already running for this base (or for any, when
+ *  no base is named), or one started for the base, its output kept in a log, stopped when let go. */
+export async function ensureServer(path: string | undefined, { port = 4767, env = process.env, wait = 120_000 } = {}): Promise<{ url: string; release: () => void }> {
   const url = `http://127.0.0.1:${port}`;
   const opened = path === undefined ? null : locate(path);
   const name = await serving(url);
-
-  let server: ChildProcess | null = null;
   if (name !== null) {
     if (opened && name !== basename(opened.notes))
-      throw new StudyError(`port ${port} is serving ${name}, not ${basename(opened.notes)}: stop it, or start this one on another (isorite term <base> --port <n>)`);
-  } else {
-    if (!opened) throw new StudyError(`nothing is serving on port ${port}: name a base (isorite term <base>)`);
-    const log = join(tmpdir(), `isorite-term-${port}.log`);
-    const out = openSync(log, "w");
-    server = spawn(process.execPath, [MAIN, "serve", path!, "--port", String(port)], { stdio: ["ignore", out, out], env });
-    const exited = new Promise<void>((done) => server!.once("exit", () => done()));
-    const started = Date.now();
-    while ((await serving(url)) === null) {
-      if (server.exitCode !== null || Date.now() - started > wait) {
-        server.kill();
-        throw new StudyError(`the isorite server did not start; its output is in ${log}`);
-      }
-      await Promise.race([exited, new Promise((r) => setTimeout(r, 250))]);
-    }
+      throw new StudyError(`port ${port} is serving ${name}, not ${basename(opened.notes)}: stop it, or use another port (--port <n>)`);
+    return { url, release: () => undefined };
   }
+  if (!opened) throw new StudyError(`nothing is serving on port ${port}: name a base`);
+  const log = join(tmpdir(), `isorite-term-${port}.log`);
+  const out = openSync(log, "w");
+  const server = spawn(process.execPath, [MAIN, "serve", path!, "--port", String(port)], { stdio: ["ignore", out, out], env });
+  const exited = new Promise<void>((done) => server.once("exit", () => done()));
+  const started = Date.now();
+  while ((await serving(url)) === null) {
+    if (server.exitCode !== null || Date.now() - started > wait) {
+      server.kill();
+      throw new StudyError(`the isorite server did not start; its output is in ${log}`);
+    }
+    await Promise.race([exited, new Promise((r) => setTimeout(r, 250))]);
+  }
+  return { url, release: () => { server.kill(); } };
+}
 
+export async function term(path: string | undefined, { port = 4767, cwd = process.cwd(), env = process.env, wait = 120_000 }: TermOptions = {}): Promise<number> {
+  const opencode = findOpenCode(env);
+  const gateway = gatewayFrom(env);
+  const server = await ensureServer(path, { port, env, wait });
   const home = writeHome(defaultHome(env), { gateway });
   const child = spawn(opencode.command, ["--standalone"], {
     cwd,
     stdio: "inherit",
-    env: { ...env, OPENCODE_CONFIG_DIR: home, ISORITE_URL: url },
+    env: { ...env, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url },
   });
   const forward = (signal: NodeJS.Signals) => () => child.kill(signal);
   const handlers = (["SIGTERM", "SIGHUP"] as const).map((signal) => [signal, forward(signal)] as const);
@@ -76,6 +80,6 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
     child.once("exit", (exit) => done(exit ?? 1));
   });
   for (const [signal, handler] of handlers) process.off(signal, handler);
-  server?.kill();
+  server.release();
   return code;
 }

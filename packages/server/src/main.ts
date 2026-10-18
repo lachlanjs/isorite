@@ -6,6 +6,7 @@
 //   isorite serve <study base | notes>     open it in the browser
 //   isorite example <folder>               write the example base, partway built, into a folder
 //   isorite term [<study base | notes>]    OpenCode, with isorite's plugin, beside a knowledge base
+//   isorite mcp [<study base | notes>]     the knowledge base's tools over MCP, on stdio, for another harness
 
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
@@ -13,6 +14,7 @@ import { StudyError } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { serve } from "./serve.ts";
 import { initStudyBase } from "./studybase.ts";
+import { mcp } from "./mcp.ts";
 import { term } from "./term.ts";
 import { writeExample } from "@isorite/example/node";
 
@@ -27,6 +29,9 @@ const USAGE = `isorite: an agentic harness for understanding
   isorite term [<study base | notes>] [--port <n>]
                                          OpenCode 2 here, with the knowledge base beside it: its server is
                                          started if none is running on the port
+  isorite mcp [<study base | notes>] [--port <n>] [--agent <name>]
+                                         the knowledge base's tools over MCP, on stdio, for Claude Code or Pi:
+                                         claude mcp add isorite -- isorite mcp <base> --agent claude-code
 `;
 
 export function check(notes: string, out: (line: string) => void = console.log): number {
@@ -54,11 +59,14 @@ export function main(argv: string[]): number | Promise<number> {
         throw e;
       });
     }
-    if (command === "term") {
-      const at = rest.indexOf("--port"), port = at < 0 ? undefined : Number(rest[at + 1]);
+    if (command === "term" || command === "mcp") {
+      const flag = (name: string) => { const at = rest.indexOf(name); return at < 0 ? undefined : rest[at + 1]; };
+      const port = flag("--port") === undefined ? undefined : Number(flag("--port")), agent = flag("--agent");
       if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
-      const path = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port");
-      return term(path, port === undefined ? {} : { port }).catch((e: Error) => { console.error(e.message); return 2; });
+      if (agent !== undefined && !/^[a-z0-9][a-z0-9-]{0,39}$/.test(agent)) { console.error("--agent takes a name in small letters, digits and dashes"); return 2; }
+      const path = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port" && rest[i - 1] !== "--agent");
+      const run = command === "term" ? term(path, port === undefined ? {} : { port }) : mcp(path, { ...(port === undefined ? {} : { port }), ...(agent ? { agent } : {}) });
+      return run.catch((e: Error) => { console.error(e.message); return 2; });
     }
     if (command === "example" && rest[0]) {
       return writeExample(rest[0]).then(({ notes, study }) => {

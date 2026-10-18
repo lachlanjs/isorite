@@ -27,6 +27,7 @@ npm run test:browser     # the app in Chromium, at two widths on both grounds
 npm run model            # fetch the 34 MB model for search by meaning (once)
 npm run bench:retrieval -- <folder of notes> <questions.json>
 node packages/server/src/main.ts term <base>          # OpenCode 2 in this folder, with the base beside it
+node packages/server/src/main.ts mcp <base> --agent claude-code   # the base's tools over MCP, for another harness
 ```
 
 Iso needs a provider key: set it in the app, behind the logo. It is kept in `~/.config/isorite/config.toml`.

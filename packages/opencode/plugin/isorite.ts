@@ -14,6 +14,24 @@ export async function get<T>(path: string): Promise<T> {
   return body;
 }
 
+let token: Promise<string> | null = null;
+
+/** A POST to the server, made as its own page makes one: from its origin, with the token it hands out. */
+export async function post<T>(path: string, body: unknown): Promise<T> {
+  token ??= get<Session>("/api/session").then((s) => s.token, (e: Error) => { token = null; throw e; });
+  const response = await fetch(url + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-isorite-token": await token, Origin: new URL(url).origin },
+    body: JSON.stringify(body),
+  });
+  const answer = (await response.json().catch(() => ({}))) as T & { error?: string };
+  if (!response.ok) throw new Error(answer.error ?? `${response.status} from ${url + path}`);
+  return answer;
+}
+
+/** A tool the server offers an agent, as OpenAI's API describes one. */
+export interface ToolDef { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } }
+
 /** What the splash says of the base: its name, how many notes, whether it has a study base. */
 export async function base(): Promise<{ name: string; notes: number; study: boolean }> {
   const [session, listing] = await Promise.all([get<Session>("/api/session"), get<Listing>("/api/notes")]);

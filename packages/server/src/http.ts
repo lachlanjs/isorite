@@ -44,6 +44,9 @@ const ExerciseAsk = z.object({ folder: z.string().max(400), tests: z.array(z.str
 const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
 const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
 const Key = z.object({ key: z.string().nullable() }).strict();
+const AgentName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/);
+const AgentLook = z.object({ agent: AgentName, session: z.string().min(1).max(200), tool: z.string().max(64), args: z.record(z.string(), z.unknown()) }).strict();
+const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
 export function createApp({ api, token, loopback, web, allowHosts = [] }: ServerOptions): Hono {
   const app = new Hono();
@@ -143,6 +146,12 @@ export function createApp({ api, token, loopback, web, allowHosts = [] }: Server
   // exchanges for the key itself. The page never holds the key.
   post("/api/settings/connect", z.object({ callback: z.string().max(2000) }).strict(), (_c, b) => api.connect(b.callback));
   post("/api/settings/connected", z.object({ code: z.string().min(1).max(2000), state: z.string().min(1).max(200) }).strict(), (_c, b) => api.connected(b.code, b.state));
+
+  // A terminal agent (isorite term, or another harness through MCP) looks things up with Iso's tools; the Atlas
+  // draws its steps. It is a process on this machine, and asks as the page does: the Origin and the token.
+  app.get("/api/agent/tools", (c) => answer(c, () => api.agentTools()));
+  post("/api/agent/look", AgentLook, (_c, b) => api.agentLook(b));
+  post("/api/agent/status", AgentStatus, (_c, b) => api.agentStatus(b.agent, b.session, b.busy));
 
   // Everything the engine does, as it happens. A comment every 25 seconds keeps the connection open.
   app.get("/api/events", (c) => streamSSE(c, async (stream) => {

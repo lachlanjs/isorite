@@ -26,6 +26,13 @@
   const running = $derived(run?.state === "reading" || run?.state === "writing");
   const runTitle = $derived(run ? (app.listing.notes.find((n) => n.id === run.note)?.title ?? "your note") : "");
   const stop = (): void => { if (run) void app.api.stop(run.request); };
+  // A terminal agent's turn: who it is, and the note it has opened last.
+  const AGENTS: Record<string, string> = { opencode: "OpenCode", "claude-code": "Claude Code", pi: "Pi" };
+  const agentName = $derived(run?.agent ? (AGENTS[run.agent] ?? run.agent) : "");
+  const agentReading = $derived.by(() => {
+    const id = run?.steps.findLast((s) => s.opened && !s.failed)?.opened;
+    return id ? (app.listing.notes.find((n) => n.id === id)?.title ?? id) : "";
+  });
 </script>
 
 <svelte:head><title>{inNote && app.here ? `${app.here} · isorite` : "isorite"}</title></svelte:head>
@@ -41,7 +48,7 @@
     </span>
     <span class="grow"></span>
     {#if app.atlas?.here}<span class="where soft">{app.atlas.here}</span><button class="btn out" type="button" onclick={app.atlas.out}>↑ out</button>{/if}
-    {#if running}<button class="btn stop" type="button" onclick={stop}>stop</button>{/if}
+    {#if running && !run?.agent}<button class="btn stop" type="button" onclick={stop}>stop</button>{/if}
     {#if app.exercise}
       {@const x = app.exercise}
       <!-- An exercise (Study-Written): its kind, Iso's read of you as six squares, wind back, and the next if it names one. -->
@@ -76,7 +83,9 @@
       {#if inNote && app.hint && !run}<span class="grow"></span><span class="hint">{app.hint}</span>{/if}
       {#if run && (running || !app.atlas?.chosen)}
         <span class="grow"></span>
-        {#if running}
+        {#if run.agent}
+          <span class="hint">{running ? `${agentName} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentName}'s turn is done · click open ground to let its path go`}</span>
+        {:else if running}
           <span class="hint">{run.note.startsWith("@draft/") ? "your note opens when Iso is done" : `Iso is answering in ${runTitle}`}</span>
           <button class="link" type="button" onclick={stop}>[ stop ]</button>
         {:else}

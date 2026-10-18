@@ -6,12 +6,12 @@ import {
   Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
   type Cost, type Entry, type FileEntry, type Insert, type LearnerEvent, type Marks, type Passage, type Proposal, type SessionMoment, type Stamp, type Understanding,
 } from "@isorite/core";
-import { Conflict, EngineError, type Api, type AskRequest, type ContextReport, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport } from "./api.ts";
+import { Conflict, EngineError, type AgentLook, type Api, type AskRequest, type ContextReport, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport } from "./api.ts";
 import { ANSWER_CLOSE, ANSWER_OPEN, CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, exerciseMessages, exerciseReply, fitted, helpSince, insertMessages, markMessages, noteMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part, type Tested } from "./iso.ts";
 import { rounds } from "./loop.ts";
-import { Lookup, type Similar } from "./lookup.ts";
+import { FIND_SIMILAR, Lookup, TOOLS, type Similar } from "./lookup.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
-import { KEY, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig } from "./provider.ts";
+import { KEY, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
 
 /** The largest note taken. */
@@ -80,6 +80,9 @@ async function walk(files: Files, root: string): Promise<FileEntry[]> {
   return out;
 }
 
+/** The brief of the base, a terminal agent's first look. */
+const BRIEF: ToolDef = { type: "function", function: { name: "brief_base", description: "What this knowledge base holds: its folders, how many notes each, and how to look things up in it. Call it first, once.", parameters: { type: "object", properties: {}, additionalProperties: false } } };
+
 export class Engine implements Api {
   private readonly opts: EngineOptions;
   private files = new Map<string, FileEntry>();
@@ -92,6 +95,9 @@ export class Engine implements Api {
   /** Requests to Iso that are running, by id, and the note each is for: a note is asked one thing at a time. */
   private readonly running = new Map<string, AbortController>();
   private readonly asking = new Map<string, string>();
+  /** Terminal agents' turns that are going on, by agent and session: each looks up through a Lookup of its own. */
+  private readonly turns = new Map<string, { request: string; lookup: Lookup }>();
+  private turnCount = 0;
 
   /** Search by meaning, when the device has the model. */
   readonly meaning: Meaning | null;
@@ -180,6 +186,47 @@ export class Engine implements Api {
   async search(query: string): Promise<SearchHit[]> {
     this.index ??= new SearchIndex(this.bundle);
     return this.index.search(query, { limit: 30 }).map((h) => ({ id: h.concept.id, title: h.concept.title, snippet: h.snippet }));
+  }
+
+  // ------------------------------------------------------------ terminal agents
+
+  async agentTools(): Promise<ToolDef[]> {
+    return [BRIEF, TOOLS[0]!, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1)];
+  }
+
+  async agentLook({ agent, session, tool, args }: AgentLook): Promise<{ text: string }> {
+    if (tool === BRIEF.function.name) return { text: this.brief() };
+    const turn = this.turns.get(`${agent}/${session}`) ?? this.startTurn(agent, session);
+    const { text, step } = await turn.lookup.call(tool, JSON.stringify(args));
+    this.publish({ type: "agent-step", request: turn.request, agent, step });
+    return { text };
+  }
+
+  async agentStatus(agent: string, session: string, busy: boolean): Promise<void> {
+    const key = `${agent}/${session}`, turn = this.turns.get(key);
+    if (busy && !turn) this.startTurn(agent, session);
+    if (!busy && turn) { this.turns.delete(key); this.publish({ type: "agent-done", request: turn.request, agent }); }
+  }
+
+  /** A turn is looked up in the base as it is when the turn begins, as Iso's requests are. */
+  private startTurn(agent: string, session: string): { request: string; lookup: Lookup } {
+    const turn = { request: `agent:${agent}:${++this.turnCount}`, lookup: new Lookup(this.bundle, "", this.similar) };
+    this.turns.set(`${agent}/${session}`, turn);
+    this.publish({ type: "agent-start", request: turn.request, agent });
+    return turn;
+  }
+
+  /** The base in brief, for an agent that has not seen it: its folders, how many notes each, and how to look. */
+  private brief(): string {
+    const b = this.bundle, counts = new Map<string, number>();
+    for (const c of b.concepts.values()) counts.set(c.directory, (counts.get(c.directory) ?? 0) + 1);
+    const dirs = [...b.directories.keys()].sort();
+    const lines = dirs.slice(0, 60).map((d) => `${"  ".repeat(d ? d.split("/").length - 1 : 0)}- ${d ? d.split("/").at(-1) : "(the top)"} (${counts.get(d) ?? 0})`);
+    return [
+      `# ${this.opts.name}: a knowledge base of ${b.concepts.size} notes in ${dirs.filter(Boolean).length} folders`,
+      `Folders, with the notes directly in each:\n${lines.join("\n")}${dirs.length > 60 ? `\n(and ${dirs.length - 60} more)` : ""}`,
+      `To look: search_notes by the words a note would use${this.similar ? ", find_similar by meaning when the words are unknown" : ""}; outline_note to see a note's headings and links; read_note for one section. Follow a note's links to what it rests on before searching again. Cite a note by its title and section.`,
+    ].join("\n\n");
   }
 
   events(listener: (event: EngineEvent) => void): () => void {

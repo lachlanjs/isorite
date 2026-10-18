@@ -98,12 +98,18 @@ class AppState {
   }
 
   private follow(e: EngineEvent): void {
-    if (e.type === "iso-start") { this.iso = { request: e.request, note: e.note, state: "reading", steps: [], message: "" }; return; }
+    if (e.type === "iso-start") { this.iso = { request: e.request, note: e.note, agent: null, state: "reading", steps: [], message: "" }; return; }
+    // A terminal agent's turn is drawn as Iso's request is, but does not take the map from Iso while it answers.
+    // A page that opens during a turn learns of it from its next step.
+    if ((e.type === "agent-start" || e.type === "agent-step") && this.iso?.request !== e.request) {
+      if (this.iso && !this.iso.agent && (this.iso.state === "reading" || this.iso.state === "writing")) return;
+      this.iso = { request: e.request, note: "", agent: e.agent, state: "reading", steps: [], message: "" };
+    }
     const run = this.iso;
     if (!run || !("request" in e) || e.request !== run.request) return;
-    if (e.type === "iso-step") this.iso = { ...run, state: "reading", steps: [...run.steps, e.step] };
+    if (e.type === "iso-step" || e.type === "agent-step") this.iso = { ...run, state: "reading", steps: [...run.steps, e.step] };
     else if (e.type === "iso-text" && run.state !== "writing") this.iso = { ...run, state: "writing" };
-    else if (e.type === "iso-done") this.iso = { ...run, state: "done" };
+    else if (e.type === "iso-done" || e.type === "agent-done") this.iso = { ...run, state: "done" };
     else if (e.type === "iso-stopped") this.iso = { ...run, state: "stopped" };
     else if (e.type === "iso-failed") this.iso = { ...run, state: "failed", message: e.message };
   }
@@ -115,8 +121,9 @@ class AppState {
   }
 }
 
-/** One request to Iso as it goes: `reading` while it looks things up, `writing` once its text comes. */
-export interface IsoRun { request: string; note: string; state: "reading" | "writing" | "done" | "stopped" | "failed"; steps: Step[]; message: string }
+/** One request to Iso as it goes: `reading` while it looks things up, `writing` once its text comes. Or a terminal
+ *  agent's turn (`agent` names it; `note` is empty): `reading` until the turn ends. */
+export interface IsoRun { request: string; note: string; agent: string | null; state: "reading" | "writing" | "done" | "stopped" | "failed"; steps: Step[]; message: string }
 
 const SIGN_IN_BACK = "isorite.sign-in.back", SIGN_IN_CODE = "isorite.sign-in.code";
 

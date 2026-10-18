@@ -174,3 +174,16 @@ test("the device id is made once and kept, readable by its owner only", () => {
   expect(deviceId(path)).toBe(id);
   expect(statSync(path).mode & 0o777).toBe(0o600);
 });
+
+test("a terminal agent is offered the tools and looks up as the page writes: from the origin, with the token", async () => {
+  const tools = await (await fetch(url + "/api/agent/tools")).json() as { function: { name: string } }[];
+  expect(tools.map((t) => t.function.name)).toEqual(["brief_base", "search_notes", "outline_note", "read_note"]);
+  const look = { agent: "opencode", session: "ses_1", tool: "search_notes", args: { query: "surprise" } };
+  const found = await write("/api/agent/look", look, { method: "POST" });
+  expect(found.status).toBe(200);
+  expect(((await found.json()) as { text: string }).text).toContain("Entropy (/basics/entropy.md)");
+  expect((await write("/api/agent/look", look, { method: "POST", headers: { [TOKEN_HEADER]: "wrong" } })).status).toBe(403);
+  expect((await fetch(url + "/api/agent/look", { method: "POST", headers: { "Content-Type": "application/json", [TOKEN_HEADER]: TOKEN }, body: JSON.stringify(look) })).status).toBe(403);
+  expect((await write("/api/agent/look", { ...look, agent: "Not A Name" }, { method: "POST" })).status).toBe(400);
+  expect((await write("/api/agent/status", { agent: "opencode", session: "ses_1", busy: false }, { method: "POST" })).status).toBe(200);
+});

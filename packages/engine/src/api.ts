@@ -5,7 +5,7 @@
 import type { Anchor, Cost, Entry, MapModel, Passage, Result, SessionMoment } from "@isorite/core";
 import type { Part } from "./iso.ts";
 import type { Step } from "./lookup.ts";
-import type { Tier } from "./provider.ts";
+import type { Tier, ToolDef } from "./provider.ts";
 
 /** What is open. */
 export interface Session {
@@ -133,7 +133,20 @@ export type EngineEvent =
    *  For a marking, `proposal` is the `marks` entry and `attempt` the event in the study record. */
   | { type: "iso-done"; request: string; note: string; proposal: string; said?: string; attempt?: string; cost: Cost }
   | { type: "iso-stopped"; request: string; note: string }
-  | { type: "iso-failed"; request: string; note: string; message: string };
+  | { type: "iso-failed"; request: string; note: string; message: string }
+  /** A terminal agent (`agent` is its name, as `opencode`) began a turn in one of its sessions. Each turn ends in agent-done. */
+  | { type: "agent-start"; request: string; agent: string }
+  /** It looked something up in the base, with Iso's own tools. */
+  | { type: "agent-step"; request: string; agent: string; step: Step }
+  | { type: "agent-done"; request: string; agent: string };
+
+/** One look-up by a terminal agent: which agent, which of its sessions, which tool, with what. */
+export interface AgentLook {
+  agent: string;
+  session: string;
+  tool: string;
+  args: Record<string, unknown>;
+}
 
 export interface Api {
   session(): Promise<Session>;
@@ -193,6 +206,12 @@ export interface Api {
   connect(callback: string): Promise<{ url: string }>;
   /** Back from the provider with a code: exchange it for a key, and hold that key. */
   connected(code: string, state: string): Promise<Settings>;
+  /** The tools a terminal agent is offered over the base: Iso's own look-ups, and a brief of the base. */
+  agentTools(): Promise<ToolDef[]>;
+  /** Run one of them for an agent. What it looked up is published as an agent-step, for the Atlas. */
+  agentLook(look: AgentLook): Promise<{ text: string }>;
+  /** An agent's session became busy (a turn begins) or idle (it ends). */
+  agentStatus(agent: string, session: string, busy: boolean): Promise<void>;
   /** Listen to everything the engine does, until the returned function is called. */
   events(listener: (event: EngineEvent) => void): () => void;
 }
