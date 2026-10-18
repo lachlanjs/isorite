@@ -69,7 +69,9 @@ for (const line of text.split("\n")) {
   html += `<div class="r">${row || " "}</div>`
 }
 writeFileSync(out, `<!doctype html><meta charset="utf-8"><title>${title}</title><style>
+@font-face{font-family:"Ioskeley Mono";src:url("fonts/7a3139777c365d35902d15c1dd39dd6c.woff2") format("woff2");font-weight:400}
+@font-face{font-family:"Ioskeley Mono";src:url("fonts/7047de9ddc5a2739808071cdb92f6575.woff2") format("woff2");font-weight:700}
 body{margin:0;background:#07101C;color:#E9EEF5}
-.t{font:13px/18px "DejaVu Sans Mono",monospace;padding:12px;white-space:pre;display:inline-block}
-.r{height:18px}\n.g{display:inline-block;width:1ch;height:18px;vertical-align:top;margin-right:-0.5px;padding-right:0.5px}\n.g svg{display:block;width:100%;height:100%}
+.t{font:13px/15px "Ioskeley Mono","DejaVu Sans Mono",monospace;padding:12px;white-space:pre;display:inline-block}
+.r{height:15px;overflow:visible}\n.g{display:inline-block;width:1ch;height:15px;vertical-align:top;position:relative;z-index:1}\n.g svg{display:block;width:calc(100% + 1px);height:calc(100% + 1px);overflow:visible}
 </style><div class="t">${html}</div>`)

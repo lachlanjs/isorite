@@ -13,7 +13,7 @@ export default Plugin.define({
     const gold = () => (ctx.themeMode === "light" ? "#8C6200" : "#F0BE4A")
     ctx.ui.router.register({ name: "isorite-splash", render: () => (
       <box flexDirection="column" alignItems="center" justifyContent="center" width="100%" height="100%">
-        {Logo.rows(process.env.ISORITE_LOGO === "simple" ? "simple" : "legacy").map((runs) => (
+        {Logo.rows(((process.env.ISORITE_LOGO ?? "legacy") as Logo.Style)).map((runs) => (
           <text>{runs.map((run) => <span style={{ fg: run.growth ? gold() : ctx.theme.text.base }}>{run.text}</span>)}</text>
         ))}
         <text> </text>

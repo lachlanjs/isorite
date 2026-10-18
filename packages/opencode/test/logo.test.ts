@@ -14,8 +14,8 @@ describe("the mark", () => {
     }
   })
 
-  it("is 20 cells by 15 rows in both styles", () => {
-    for (const style of ["legacy", "simple"] as const) {
+  it("is 20 cells by 15 rows in every style", () => {
+    for (const style of ["legacy", "quadrant", "simple"] as const) {
       const drawn = lines(style)
       expect(drawn).toHaveLength(15)
       for (const line of drawn) expect([...line]).toHaveLength(20)

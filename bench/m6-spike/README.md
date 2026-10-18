@@ -18,12 +18,9 @@ XDG_CONFIG_HOME=$PWD/xdg COLORTERM=truecolor ISORITE_GATEWAY_KEY=test-key ~/oc2/
 
 The plugins write a trace to `/tmp/isorite-spike.log`.
 
-**Previews.** `preview/ansi2html.mjs` turns a `tmux capture-pane -e` dump into a page of cells, drawing block and diagonal glyphs as shapes, as terminals with built-in box drawing do. Chromium then takes the picture:
+**Previews.** Two renderers, both from a `tmux capture-pane -e` dump, both in the boards' Ioskeley Mono (download the two `font/woff2` assets of the mood board into `preview/fonts/`, named by their ids):
 
-```
-tmux capture-pane -p -e -t oc > pane.ans
-node preview/ansi2html.mjs pane.ans pane.html
-/opt/pw-browsers/chromium --headless --no-sandbox --window-size=1300,900 --screenshot=$PWD/pane.png file://$PWD/pane.html
-```
+- `preview/render.mjs pane.ans out.png`: through xterm.js 6 with WebGL, as VS Code's terminal draws it. Needs `@xterm/xterm@6.0.0` and `@xterm/addon-webgl@0.19.0` installed beside it. xterm.js draws box drawing, blocks and quadrants as geometry, and takes everything else, the wedges of Symbols for Legacy Computing and `◢◣◤◥` among them, from the font.
+- `preview/ansi2html.mjs pane.ans out.html`, then Chromium's `--screenshot`: draws blocks, quadrants and the wedges as shapes, as kitty, WezTerm, Ghostty and foot are said to.
 
-The font is DejaVu Sans Mono, not the boards' Ioskeley Mono. `preview/splash-legacy.png` is the splash with the logo from `packages/opencode/src/logo.ts`; `preview/compare.png` puts it beside the board's SVG.
+`preview/splash-xterm-styles.png` is the splash's three logo styles in xterm.js; `preview/splash-geometric.png` is `legacy` where the wedges are drawn as shapes; `preview/compare.png` is that beside the board's SVG.

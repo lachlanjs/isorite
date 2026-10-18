@@ -8,7 +8,11 @@
 // A corner half across two cells is drawn with Symbols for Legacy Computing. They
 // split a cell in thirds, not halves, so the diagonal bends where the two cells
 // meet: it crosses the middle a third of the way from the corner it rises to.
-// Terminals that lack those symbols can use `simple`, one triangle and one space.
+// Few terminals draw those symbols themselves: kitty, WezTerm, Ghostty and foot are
+// said to; xterm.js (so VS Code) does not, and leaves them to the font. `quadrant`
+// draws each half as a two-step stair of quarter blocks, which xterm.js and most
+// terminals draw as geometry and nearly every monospace font has. `simple` is one
+// triangle and a space.
 
 export type Corner = "tl" | "tr" | "bl" | "br"
 
@@ -20,7 +24,7 @@ export interface Shape {
   readonly growth?: boolean
 }
 
-export type Style = "legacy" | "simple"
+export type Style = "legacy" | "quadrant" | "simple"
 
 /** One run of cells in one colour. */
 export interface Run {
@@ -56,6 +60,7 @@ const glyphs: Record<Style, Record<Corner | "full", string>> = {
     bl: "\u{1FB63}\u{1FB55}", // upper right block, from the upper left to the lower right
     br: "\u{1FB60}\u{1FB58}", // upper left block, from the lower left to the upper right
   },
+  quadrant: { full: "██", tl: "▗▟", tr: "▙▖", bl: "▝▜", br: "▛▘" },
   simple: { full: "██", tl: " ◢", tr: "◣ ", bl: " ◥", br: "◤ " },
 }
 
