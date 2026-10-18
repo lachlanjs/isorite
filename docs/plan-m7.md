@@ -166,3 +166,54 @@ The GitHub Pages part E is the replay of these screens, re-recorded, and a line 
 2. **Exercises:** teach the one kind, `written`.
 3. **The DMFT base is retired everywhere:** the tutorial, the terminal tour, the replay and the tests move to `nbody-notes`.
 4. **Skills and phone links:** teach what exists. The tools and commands are the terminal's skills, and on a phone the Atlas is the way between notes.
+
+## 9. What was built (2026-10-18)
+
+All seven steps are built, on branch `ccr-077f1863-dguc6x`.
+
+1. **Moving and deleting a note.**
+   - The engine has `moveNote` and `deleteNote`; the server and the app's Api carry them.
+   - In "details", the note's path moves it, and "delete" first says who links to it.
+   - A move:
+     - keeps the journal, with a `move` entry;
+     - keeps the record, with a `moved` event, so the note's squares follow it;
+     - rewrites links to the note, and the `tests:` of exercises that name it, as your own edits.
+   - A delete keeps the journal, and links to the note are left broken.
+   - Both additions are in `format.md`.
+2. **The example base, `nbody-notes`.**
+   - 18 notes in physics, integrators, algorithms and simulation, plus 8 exercises.
+   - Every step of understanding is used (understood, worked through, opened, not reached), and three notes are due.
+   - Left open on purpose:
+     - the quadtree's question;
+     - Barnes–Hut's TODO;
+     - Iso's waiting answer on softening;
+     - an unsent note for Iso on close encounters;
+     - the cost-of-direct-summation exercise with wrong working.
+   - The numbers in the notes were checked by running them: Euler against leapfrog on the two-body orbit, and direct summation timed.
+   - The DMFT base is gone. The example tests, the `isorite term` end-to-end test and the MCP test use `nbody-notes`.
+3. **The scripted Iso and the scripted agent** answer the tutorial's prompts. The agent's code (`packages/opencode/src/tutorial/*.py`) runs. Barnes–Hut's force error at θ = 0.5 was measured at about 1%, and Iso's text says so.
+4. **The tutorial's frame.**
+   - A list of the five parts, taken in any order, each with its own steps.
+   - Steps say what differs on a phone.
+   - On a phone the card stands above the controls at the foot of the screen, and folds to its title.
+5. **Parts A–D:**
+   - **A** has 11 steps, **B** 13, **C** 9 and **D** 9.
+   - Each is walked end to end by Playwright, doing what each step asks.
+   - The walks run at 1440×900 and 390×844, on both grounds: 24 tests with the replay, all passing.
+6. **Part E.**
+   - `isorite --tutorial` has 12 steps.
+   - The agent comes first: it writes `sim.py` from the notes (looking them up, then citing them), and then Barnes–Hut, answering the quadtree note's question as a proposal.
+   - Then isorite's tools and commands, `/atlas`, `/note`, keep, Iso in place, the timeline and send to agent.
+   - Walked end to end in tmux, and recorded for the replay. The browser's part E outlines it and links to the replay.
+7. **This write-up**, and README and `architecture.md`.
+
+**Seen while walking it, and left for Lachlan's refinement:**
+- At a phone's width, the Atlas drew a study folder over a block (top left, at the first view).
+- A note for Iso's page shows what you wrote as raw Markdown, cut short: "Rest it on [softening]…".
+- The terminal's one-note atlas shows titles lower-cased, and "Barnes–Hut" reads "barnes-hut".
+- The new-note form's placeholder is still "Entropy", from an older example.
+- Holding on the Atlas makes an empty note for Iso. In parts B and C it stays in the drafts list after the waiting one is used.
+- The parts share one base in the page. A part done once has used up what it acts on (Barnes–Hut's TODO, for one), so doing it again needs a reload; "skip" moves past such a step.
+- Pure unit-test fixtures in `packages/opencode/test` (sources, play, oneatlas, notes, noteview) still use DMFT strings. They do not use the example base and were left.
+- `atlas.spec.ts:104` (phone) failed once in a full browser run, and passed six times on its own.
+- `notes.spec.ts:101` (phone) fails as it does on `main`.
