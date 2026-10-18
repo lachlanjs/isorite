@@ -41,11 +41,11 @@ export default Plugin.define({
   id: "isorite",
   setup(ctx) {
     const ground = () => (ctx.themeMode === "light" ? quartz : lapis);
-    // The mark and the wordmark in characters the terminal draws itself, straight but steeper than 45° (`logo.ts`).
+    // The mark and the wordmark in quarter blocks, which every terminal draws itself, the wordmark with its shadow.
     // ISORITE_LOGO chooses another style of characters, or "image": images, in a terminal that shows them (kitty's
     // graphics protocol, or sixel), their edges at 45° as the board and the browser draw them.
     const logoChoice = process.env.ISORITE_LOGO;
-    const style = (logoChoice && logoChoice !== "image" ? logoChoice : "triangle") as Logo.Style;
+    const style = (logoChoice && logoChoice !== "image" ? logoChoice : "quadrant") as Logo.Style;
     const [capabilities, setCapabilities] = createSignal(ctx.renderer.capabilities);
     ctx.renderer.on("capabilities", () => setCapabilities(ctx.renderer.capabilities));
     const protocol = (): "kitty" | "sixel" | null => {
@@ -517,8 +517,8 @@ export default Plugin.define({
         return mark;
       }
       if (roomy()) {
-        const colour = { ink: g.text, iso: g.growth, right: g.mal };
-        for (const row of Wordmark.rows(style)) mark.add(new TextRenderable(ctx.renderer, { content: new StyledText(row.map((run) => chunk(run.text, colour[run.role]))), selectable: false }));
+        const colour = { ink: g.text, iso: g.growth, right: g.mal, shadow: g.g3 };
+        for (const row of Wordmark.rows(style)) mark.add(new TextRenderable(ctx.renderer, { content: new StyledText(row.map((run) => chunk(run.text, colour[run.role], run.bg ? { bg: RGBA.fromHex(colour[run.bg]) } : {}))), selectable: false }));
         return mark;
       }
       // As OpenCode's: the first half muted, the second bold, each letter on a shade a quarter of its colour.

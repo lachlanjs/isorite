@@ -1,15 +1,17 @@
 // isorite's name where OpenCode's home draws its own, as the browser draws it (`Logo.svelte`): seven letters of
 // strokes at 45°, the i's each a stem that branches, with a gold diamond for Iso over the first i and a malachite one,
-// for what you got right, over the second. Drawn as the mark is (`logo.ts`): every shape a full square or a corner
-// half, in the same style; the i is the mark made small, and its diamond is the mark's.
+// for what you got right, over the second. By default (`quadrant`) the browser's own path drawn in quarter blocks,
+// with a drop shadow a cell down and to the right (Lachlan's choice of the variants). In the other styles, drawn as
+// the mark is (`logo.ts`): every shape a full square or a corner half; the i is the mark made small.
 //
 // Where the home is too small for that, the name in the letters of OpenCode's own logo, as it draws "open" and
 // "code": "iso" muted and "rite" bold.
 
 import { blank, glyphs, type Corner, type Style } from "./logo.ts";
 
-export type Role = "ink" | "iso" | "right";
-export interface Run { text: string; role: Role }
+export type Role = "ink" | "iso" | "right" | "shadow";
+/** A run of one colour, on the colour of another where a cell holds both. */
+export interface Run { text: string; role: Role; bg?: Role }
 
 // A letter, a row a string, a square a character: `F` full, and a corner half by the corner it leaves empty, `a` the
 // top left (◢), `b` the bottom right (◤), `c` the bottom left (◥), `d` the top right (◣).
@@ -48,7 +50,8 @@ const IN_CELLS = {
 const WORD = "isorite";
 
 /** The wordmark's rows, as runs in one colour each, every row as wide (so that centred they stay aligned). */
-export function rows(style: Style = "triangle"): Run[][] {
+export function rows(style: Style = "quadrant"): Run[][] {
+  if (style === "quadrant") return drawn();
   const { letters: LETTERS, dot } = [...glyphs[style].full].length === 1 ? IN_CELLS : IN_SQUARES;
   const draw = (squares: string) => [...squares].map((q) => (q === "." ? blank(style) : glyphs[style][SQUARE[q]!])).join("");
   const gap = blank(style);
@@ -64,8 +67,82 @@ export function rows(style: Style = "triangle"): Run[][] {
   return [...dots, ...letters].filter((row) => row.some((run) => run.text.trim()) || row === dots[2]);
 }
 
+// ------------------------------------------------------------ in quarter blocks, with its shadow
+
+/** The browser's wordmark, `Logo.svelte`'s first path: the letters, from the baseline (0) up. */
+export const PATH =
+  "M2 0L2 -2L0 -4M2 -2L2 -4L4 -6M5.6 0L6.6 0L7.6 -1L5.6 -3L6.6 -4L7.6 -4M11.2 0L13.2 -2L11.2 -4L9.2 -2ZM14.8 0L14.8 -2L15.8 -3L16.8 -4M14.8 -2L14.8 -4M20.4 0L20.4 -2L18.4 -4M20.4 -2L20.4 -4L22.4 -6M26 0L25 -1L25 -4L24 -4M25 -4L26 -4M25 -4L25 -5M30.6 0L29.6 0L27.6 -2L29.6 -4L31.6 -2L27.6 -2";
+/** Where its i's stand: the diamonds go over them. */
+const STEMS = [2, 20.4];
+
+type Point = [number, number];
+function segments(path: string): [Point, Point][] {
+  const out: [Point, Point][] = [];
+  let at: Point = [0, 0], start: Point = [0, 0];
+  for (const [, cmd, x, y] of path.matchAll(/([MLZ])\s*(-?[\d.]+)?\s*(-?[\d.]+)?/g)) {
+    if (cmd === "Z") { out.push([at, start]); at = start; continue; }
+    const p: Point = [Number(x), Number(y)];
+    if (cmd === "M") at = start = p;
+    else { out.push([at, p]); at = p; }
+  }
+  return out;
+}
+
+// A cell is two quarter blocks across and two down; a unit of the path is four across and two down, so its 45°
+// strokes stay 45°. The pen is two quarters wide: a stem is a cell. Three rows above the letters hold the diamonds.
+const QUARTERS = " ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█";
+const DIAMOND = [" ▄█▄ ", "█████", " ▀█▀ "];
+const ABOVE = 6, HEIGHT = 6;
+
+/** The wordmark's quarter blocks, by colour. */
+function pixels(): Record<"ink" | "iso" | "right", Set<string>> {
+  const ink = new Set<string>(), iso = new Set<string>(), right = new Set<string>();
+  for (const [[x0, y0], [x1, y1]] of segments(PATH)) {
+    for (let k = 0; k <= 400; k++) {
+      const t = k / 400, x = Math.round((x0 + (x1 - x0) * t) * 4 + 0.4), y = Math.round((y0 + (y1 - y0) * t) * 2) + HEIGHT * 2 + 1 + ABOVE;
+      ink.add(`${x},${y}`).add(`${x + 1},${y}`);
+    }
+  }
+  STEMS.forEach((at, k) => {
+    const from = Math.floor(Math.round(at * 4 + 0.4) / 2) - 2;
+    DIAMOND.forEach((line, r) => [...line].forEach((ch, c) => {
+      const bits = QUARTERS.indexOf(ch);
+      [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([dx, dy], q) => { if (bits >> q & 1) (k ? right : iso).add(`${2 * (from + c) + dx!},${2 * r + dy!}`); });
+    }));
+  });
+  return { ink, iso, right };
+}
+
+/** The wordmark in quarter blocks, its shadow a cell down and to the right. A cell has two colours: where a letter
+ * and its shadow share one, the shadow is its background if it fills the rest of the cell, and is left out if not. */
+function drawn(): Run[][] {
+  const { ink, iso, right } = pixels();
+  const all = new Set([...ink, ...iso, ...right]);
+  const shadow = new Set([...all].map((p) => { const [x, y] = p.split(",").map(Number); return `${x! + 2},${y! + 2}`; }).filter((p) => !all.has(p)));
+  const layers: [Role, Set<string>][] = [["iso", iso], ["right", right], ["ink", ink], ["shadow", shadow]];
+  const xs = [...all, ...shadow].map((p) => Number(p.split(",")[0])), ys = [...all, ...shadow].map((p) => Number(p.split(",")[1]));
+  const cols = Math.ceil((Math.max(...xs) + 1) / 2), rows = Math.ceil((Math.max(...ys) + 1) / 2);
+  const mask = (set: Set<string>, c: number, r: number) =>
+    [[0, 0], [1, 0], [0, 1], [1, 1]].reduce((m, [dx, dy], q) => m | (set.has(`${2 * c + dx!},${2 * r + dy!}`) ? 1 << q : 0), 0);
+  const out: Run[][] = [];
+  for (let r = 0; r < rows; r++) {
+    const line: Run[] = [];
+    for (let c = 0; c < cols; c++) {
+      const masks = layers.map(([role, set]) => [role, mask(set, c, r)] as const).filter(([, m]) => m);
+      const [top, under] = masks;
+      const cell: Run = !top ? { text: " ", role: "ink" }
+        : { text: QUARTERS[top[1]]!, role: top[0], ...(under && (top[1] | under[1]) === 15 ? { bg: under[0] } : {}) };
+      const last = line.at(-1);
+      if (last && last.role === cell.role && last.bg === cell.bg) last.text += cell.text;
+      else line.push(cell);
+    }
+    out.push(line);
+  }
+  return out;
+}
+
 /** The wordmark as plain lines. */
-export function lines(style: Style = "triangle"): string[] {
+export function lines(style: Style = "quadrant"): string[] {
   return rows(style).map((runs) => runs.map((r) => r.text).join("").trimEnd());
 }
 

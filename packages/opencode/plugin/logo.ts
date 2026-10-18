@@ -77,7 +77,7 @@ export function blank(style: Style): string {
 }
 
 /** The mark's rows, each a list of runs, 10 cells wide in `triangle`, 20 in the others. */
-export function rows(style: Style = "triangle"): Run[][] {
+export function rows(style: Style = "quadrant"): Run[][] {
   const grid: (Shape | undefined)[][] = Array.from({ length: height }, () => Array(width).fill(undefined));
   for (const shape of shapes) grid[shape.y]![shape.x] = shape;
   return grid.map((row) => {
@@ -94,6 +94,6 @@ export function rows(style: Style = "triangle"): Run[][] {
 }
 
 /** The mark as plain lines, for tests and for terminals without colour. */
-export function lines(style: Style = "triangle"): string[] {
+export function lines(style: Style = "quadrant"): string[] {
   return rows(style).map((runs) => runs.map((run) => run.text).join(""));
 }

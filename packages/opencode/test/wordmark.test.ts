@@ -1,8 +1,14 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { glyphs } from "../plugin/logo.ts";
-import { lines, rows, word } from "../plugin/wordmark.ts";
+import { lines, PATH, rows, word } from "../plugin/wordmark.ts";
 
 describe("the wordmark", () => {
+  it("is drawn, by default, from the browser's own path", () => {
+    const svelte = readFileSync(new URL("../../../app/src/lib/components/Logo.svelte", import.meta.url), "utf8");
+    expect(/<path d="([^"]+)"/.exec(svelte)?.[1]).toBe(PATH);
+  });
+
   it("has every row as wide, so that centred it stays aligned, in every style", () => {
     for (const style of ["legacy", "quadrant", "simple", "triangle"] as const) {
       const widths = rows(style).map((runs) => [...runs.map((r) => r.text).join("")].length);
@@ -10,17 +16,20 @@ describe("the wordmark", () => {
     }
   });
 
-  it("puts Iso's diamond over the first i and the malachite one over the second, each on its stem", () => {
-    const drawn = lines("quadrant"), stem = glyphs.quadrant.full;
-    const [dot] = drawn, foot = drawn.at(-1)!;
-    const centres = [...dot!.matchAll(new RegExp(stem, "g"))].map((m) => m.index);
-    expect(centres).toHaveLength(2);
-    for (const k of centres) expect(foot.slice(k, k + 2)).toBe(stem);
-    expect(rows()[0]!.filter((r) => r.role !== "ink").map((r) => r.role)).toEqual(["iso", "right"]);
+  it("has Iso's diamond, then the malachite one, and a shadow behind the letters", () => {
+    for (const row of rows().slice(0, 3)) {
+      const diamonds = row.map((r) => r.role).filter((r) => r === "iso" || r === "right");
+      expect(diamonds.filter((r, k) => r !== diamonds[k - 1])).toEqual(["iso", "right"]);
+    }
+    const runs = rows().flat();
+    expect(runs.map((r) => r.role)).toContain("shadow");
+    // A shadow under a letter in the same cell fills the rest of it.
+    expect(runs.some((r) => r.role === "ink" && r.bg === "shadow")).toBe(true);
   });
 
-  it("is drawn with the mark's own pieces: whole squares and the corner halves of the style", () => {
-    for (const style of ["legacy", "quadrant", "triangle"] as const) {
+  it("is drawn with quarter blocks by default, and with the mark's own pieces in the other styles", () => {
+    for (const ch of lines().join("")) expect(" ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█").toContain(ch);
+    for (const style of ["legacy", "triangle"] as const) {
       const pieces = new Set(Object.values(glyphs[style]).flatMap((g) => [...g]));
       for (const line of lines(style)) for (const ch of line) if (ch !== " ") expect(pieces).toContain(ch);
     }
