@@ -1,7 +1,7 @@
 ---
 type: Concept
 title: Two galaxies colliding
-description: The goal: two Plummer spheres on a close pass, with tidal tails, at N = 5000.
+description: "The goal: two Plummer spheres on a close pass, with tidal tails, at N = 5000."
 ---
 
 Two [Plummer spheres](/simulation/initial-conditions.md "requires") of 1000 bodies each, set on a parabolic approach and stepped with [the main loop](/simulation/the-main-loop.md "requires"). After the first pass, long tails of stars are pulled out of each: the tidal tails that are seen in the sky.

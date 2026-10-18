@@ -1,7 +1,7 @@
 ---
 type: Concept
 title: Barnes–Hut
-description: Use a far node's centre of mass instead of its bodies: O(N log N), with an error set by θ.
+description: "Use a far node's centre of mass instead of its bodies: O(N log N), with an error set by θ."
 ---
 
 Build [the quadtree](/algorithms/the-quadtree.md "requires"). For each body, walk the tree from the root. At each node, with $s$ its side and $d$ the distance to its [centre of mass](/algorithms/centre-of-mass.md "requires"):

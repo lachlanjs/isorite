@@ -214,7 +214,7 @@ export async function buildExample(sources: Sources, now = Date.now()): Promise<
   });
 
   // ---- the first program: Euler, and a two-body orbit
-  const loopEuler = "---\ntype: Concept\ntitle: The main loop\ndescription: The program's heart: step, and now and then measure.\n---\n\n```python\nr, v, m = initial_conditions()\nfor step in range(steps):\n    a = accelerations(r, m)\n    r += dt * v\n    v += dt * a\n    if step % 100 == 0:\n        record(step * dt, energy(r, v, m))\n```\n\nAll the time is in `accelerations`.\n";
+  const loopEuler = "---\ntype: Concept\ntitle: The main loop\ndescription: \"The program's heart: step, and now and then measure.\"\n---\n\n```python\nr, v, m = initial_conditions()\nfor step in range(steps):\n    a = accelerations(r, m)\n    r += dt * v\n    v += dt * a\n    if step % 100 == 0:\n        record(step * dt, energy(r, v, m))\n```\n\nAll the time is in `accelerations`.\n";
   on(17, 0, () => write(EULER, final(EULER)));
   on(17, 10, () => write(INIT, upTo(final(INIT), "**A Plummer sphere**")));
   on(17, 20, () => write(LOOP, loopEuler));

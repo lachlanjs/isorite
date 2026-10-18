@@ -1,7 +1,7 @@
 ---
 type: Concept
 title: Leapfrog
-description: Half a kick, a whole drift, half a kick: second order, and its energy error does not grow.
+description: "Half a kick, a whole drift, half a kick: second order, and its energy error does not grow."
 ---
 
 Like [Euler's method](/integrators/eulers-method.md "see also") it steps [the N-body problem](/physics/the-n-body-problem.md "requires"), but in three parts (kick, drift, kick):

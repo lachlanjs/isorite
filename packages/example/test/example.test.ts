@@ -1,11 +1,15 @@
 import { expect, test } from "vitest";
-import { hashText, readJournal, replay, understanding, readRecord, moments, pending } from "@isorite/core";
+import { hashText, readJournal, replay, understanding, readRecord, moments, pending, splitFrontmatter } from "@isorite/core";
 import { buildExample, COST_WORKING, EXERCISES } from "../src/index.ts";
 import { loadSources } from "../src/node.ts";
 
 const sources = loadSources();
 const NOW = Date.parse("2026-10-18T10:00:00Z");
 const built = await buildExample(sources, NOW);
+
+test("every note's frontmatter reads, with its type and title", () => {
+  for (const [path, text] of Object.entries(sources)) expect(splitFrontmatter(text)[0], path).toMatchObject({ type: "Concept", title: expect.any(String) });
+});
 
 test("the notes come out as they stand in the package, every one of them journalled", () => {
   expect(Object.keys(built.notes).sort()).toEqual(Object.keys(sources).sort());

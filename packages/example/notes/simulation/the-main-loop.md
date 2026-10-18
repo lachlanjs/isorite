@@ -1,7 +1,7 @@
 ---
 type: Concept
 title: The main loop
-description: The program's heart: step, and now and then measure.
+description: "The program's heart: step, and now and then measure."
 ---
 
 Rests on [leapfrog](/integrators/leapfrog.md "requires") for the step and [direct summation](/algorithms/direct-summation.md "requires") for the forces, with [the timestep](/integrators/choosing-the-timestep.md "uses") fixed.

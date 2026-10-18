@@ -1,7 +1,7 @@
 ---
 type: Concept
 title: Initial conditions
-description: Where the bodies start: a two-body orbit to test, then a Plummer sphere for a galaxy.
+description: "Where the bodies start: a two-body orbit to test, then a Plummer sphere for a galaxy."
 ---
 
 **A two-body orbit**, to test the integrator: two masses of $\tfrac12$ a distance 1 apart, each moving at right angles to the line between them at

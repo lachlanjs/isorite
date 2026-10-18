@@ -1,7 +1,7 @@
 ---
 type: Concept
 title: Direct summation
-description: Every pair, every step: exact, and O(N²).
+description: "Every pair, every step: exact, and O(N²)."
 ---
 
 The accelerations from [Newton's law](/physics/newtons-law-of-gravitation.md "requires"), pair by pair, with [softening](/physics/softening.md "uses"):

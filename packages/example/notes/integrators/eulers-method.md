@@ -1,7 +1,7 @@
 ---
 type: Concept
 title: Euler's method
-description: The simplest step: move each body along its velocity, then change the velocity by the acceleration.
+description: "The simplest step: move each body along its velocity, then change the velocity by the acceleration."
 ---
 
 Steps [the N-body problem](/physics/the-n-body-problem.md "requires") forward by $\Delta t$:

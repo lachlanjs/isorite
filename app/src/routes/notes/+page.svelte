@@ -71,7 +71,7 @@
     <label class="hidden-label" for="filter">Find a note</label>
     <!-- svelte-ignore a11y_autofocus -->
     <input id="filter" class="field grow" type="search" placeholder="find a note" bind:value={query} autocomplete="off" autofocus />
-    <button class="btn primary" type="button" onclick={() => start()}>new note</button>
+    <button class="btn primary" type="button" data-tour="new-note" onclick={() => start()}>new note</button>
   </div>
 
   <!-- Notes for Iso: written to it, not in the base until its reply is kept (the Desktop-Ask board). -->

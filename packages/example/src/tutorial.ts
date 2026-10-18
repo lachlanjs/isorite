@@ -66,7 +66,7 @@ export function tutorialAnswer(r: Request): Reply {
     const tests = [...all.matchAll(/\(id: ([^;)]+)[;)]/g)].map((m) => m[1]!.trim());
     const marks = right
       ? [{ quote: answer, mark: "right" }]
-      : [{ quote: "Each body feels the other $N - 1$.", mark: "right" }, { quote: answer, mark: "wrong" }];
+      : [{ quote: "Each body feels the other $N - 1$.", mark: "right" }, { quote: "So there are $N(N-1)$ pairs: $2000 \\times 1999 \\approx 4 \\times 10^6$.", mark: "wrong" }, { quote: answer, mark: "wrong" }];
     const why = right ? "Each pair once, by the third law, unaided." : "Each pair is counted twice: the third law halves it.";
     return {
       text: JSON.stringify({ result: right ? "right" : "wrong", marks, moves: Object.fromEntries(tests.map((t) => [t, { by: right ? 1 : 0, why }])) }),

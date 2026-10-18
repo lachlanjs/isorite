@@ -7,7 +7,7 @@ test("the cost of direct summation is marked wrong as first written, and right o
   const last = COST_WORKING.split("\n\n").at(-2)!;
   const wrong = JSON.parse(tutorialAnswer(user(`(id: algorithms/direct-summation; …)\n⟦answer⟧${last}⟦/answer⟧`)).text!);
   expect(wrong).toMatchObject({ result: "wrong", moves: { "algorithms/direct-summation": { by: 0 } } });
-  expect(wrong.marks.map((m: { mark: string }) => m.mark)).toEqual(["right", "wrong"]);
+  expect(wrong.marks.map((m: { mark: string }) => m.mark)).toEqual(["right", "wrong", "wrong"]);
   for (const fixed of ["So there are $N(N-1)/2$ pairs: $2 \\times 10^6$.", "At 20 ns a pair, a step takes 0.04 s."]) {
     const right = JSON.parse(tutorialAnswer(user(`(id: algorithms/direct-summation; …)\n⟦answer⟧${fixed}⟦/answer⟧`)).text!);
     expect(right, fixed).toMatchObject({ result: "right", moves: { "algorithms/direct-summation": { by: 1 } } });
