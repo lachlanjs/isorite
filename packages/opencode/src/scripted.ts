@@ -1,6 +1,7 @@
-// A scripted OpenAI-compatible endpoint: what `isorite term` is pointed at as its gateway in
-// tests, so they need no network and no key. Each request is answered by the script with the
-// conversation so far; it replies with text or with a tool call, streamed as the API streams.
+// A scripted OpenAI-compatible endpoint: what `isorite term` is pointed at as its gateway in the
+// tests and in the tutorial, so they need no network and no key. Each request is answered by the
+// script with the conversation so far; it replies with text or with a tool call, streamed as the
+// API streams.
 
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -10,7 +11,7 @@ export interface Request { messages: Message[]; tools: string[]; authorization: 
 export type Reply = { text: string } | { tool: string; args: object };
 export type Script = (request: Request) => Reply;
 
-export interface Gateway {
+export interface Scripted {
   /** The base URL, as ISORITE_GATEWAY_URL takes it. */
   url: string;
   requests: Request[];
@@ -25,7 +26,7 @@ export function lastAsked(request: Request): string {
   return "";
 }
 
-export async function startGateway(script: Script): Promise<Gateway> {
+export async function startScripted(script: Script): Promise<Scripted> {
   const requests: Request[] = [];
   const server = createServer((req, res) => {
     let body = "";

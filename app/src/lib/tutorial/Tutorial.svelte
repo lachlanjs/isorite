@@ -60,6 +60,8 @@
     </div>
     <h2>{step.title}</h2>
     <p>{step.text}</p>
+    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- an address within the app, by its hash -->
+    {#if step.link}<p><a href={step.link.href}>{step.link.text}</a></p>{/if}
     <div class="row actions">
       {#if waits}
         <span class="label waiting">waiting for you</span><span class="grow"></span>

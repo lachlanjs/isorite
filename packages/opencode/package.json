@@ -10,6 +10,7 @@
   },
   "scripts": {
     "test": "vitest run",
+    "record:tour": "ISORITE_RECORD=../../app/src/lib/terminal/replay.json vitest run test/tutorial.test.ts",
     "check": "tsc -p ."
   },
   "devDependencies": {

@@ -15,7 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { lines } from "../plugin/logo.ts";
 import { findOpenCode, type Found } from "../src/opencode.ts";
 import * as Wordmark from "../plugin/wordmark.ts";
-import { startGateway, lastAsked, type Gateway } from "./fixtures/gateway.ts";
+import { lastAsked, startScripted, type Scripted } from "../src/scripted.ts";
 import { hasTmux, Pane } from "./fixtures/tmux.ts";
 
 const MAIN = fileURLToPath(new URL("../../server/src/main.ts", import.meta.url));
@@ -66,7 +66,7 @@ async function serving(port: number): Promise<boolean> {
 }
 
 describe.skipIf(!ready)("isorite term", () => {
-  let root: string, base: { notes: string; study: string }, gateway: Gateway, pane: Pane, port: number;
+  let root: string, base: { notes: string; study: string }, gateway: Scripted, pane: Pane, port: number;
   const keep = (name: string) => {
     const dir = process.env.ISORITE_PREVIEW;
     if (dir) { mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, `${name}.ans`), pane.ansi()); }
@@ -76,7 +76,7 @@ describe.skipIf(!ready)("isorite term", () => {
     root = mkdtempSync(join(tmpdir(), "isorite-term-"));
     base = await writeExample(join(root, "base"));
     mkdirSync(join(root, "code"));
-    gateway = await startGateway((request) => {
+    gateway = await startScripted((request) => {
       // Iso, asked in place from the note view: its requests carry no edit tool, as OpenCode's do.
       if (!request.tools.includes("edit")) return { text: "Near the transition the bath swings, so the step is halved." };
       if (lastAsked(request).includes("fix the loop")) {

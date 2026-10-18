@@ -74,7 +74,8 @@
       {@render children()}
     {/if}
   </main>
-  {#if tutorial}{#await tutorial then t}<t.default />{/await}{/if}
+  <!-- Not over the terminal's replay, which has a card of its own. -->
+  {#if tutorial && page.route.id !== "/terminal"}{#await tutorial then t}<t.default />{/await}{/if}
 
   <footer class="status">
     {#if app.session}

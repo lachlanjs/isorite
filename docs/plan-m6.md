@@ -257,7 +257,12 @@ Approved by Lachlan on 2026-10-18 with these answers:
 7. **Screenshots beside the six boards** (rendered from the tmux panes), then the write-up. A run on a real model: the free models if they serve, else the gateway with a key you give.
    **Built** (2026-10-18): the six boards rendered from the design artifact at 1200 × 844 beside the end-to-end test's panes (160 × 44, through xterm.js), in an artifact of its own (`https://claude.ai/artifact/KV9zFsvwNVcyCQE5WHB1FX`). Fixed on the way: the note view's text in a column of reading width (84 cells with its gutter), `[a] its atlas` in its status line, a blank line after a waiting change, and the atlas panel on the page's ground rather than OpenCode's panel colour. What still differs is §10. No real model was run: no key was given.
 
-8. **A tutorial of the terminal (proposed 2026-10-18, not yet agreed).** OpenCode cannot run in a browser, so the GitHub Pages tutorial cannot run the real TUI. Proposed: `isorite tutorial term`, the real OpenCode on the example base against the scripted gateway, as the end-to-end test drives it (interactive, no key, needs OpenCode 2); and on Pages, the end-to-end test's screens replayed in xterm.js a key at a time, made by the tests so that they cannot drift.
+8. **A tutorial of the terminal.** Agreed by Lachlan on 2026-10-18 ("go ahead with step 8").
+   **Built** (2026-10-18):
+   - `isorite tutorial term [<folder>] [--port <n>]` writes the example base into the folder (a new one in the temporary folder by default), starts the tutorial's model (`src/tutorial.ts`: a scripted OpenAI-compatible endpoint, the tests' gateway made a module, `src/scripted.ts`), points both OpenCode and Iso at it, and runs `isorite term` there. OpenCode's and isorite's settings are kept in the folder too, so nothing of the person's is used or changed; run again on the same folder, it carries on. No key, nothing sent anywhere; it needs OpenCode 2.
+   - The tour (`plugin/tour.ts`): eleven steps in a card at the bottom right, each moving on when the person does what it asks, read from what the plugin already knows (the page shown, the agent's turns, the notes in play, the atlas panel, the note's waiting changes, Iso's answers, a note sent): the splash; asking about the notes, its prompt filled in; notes in play and citations; one note's atlas; a change to a note (the prompt filled in), OpenCode asking before it writes code; the note view; keeping the change; asking Iso in place; the timeline; sending to the agent; the end. `/next` moves on, `/tour` hides the card. The prompt is filled in through the focused editor (`renderer.currentFocusedEditor`), as OpenCode fills its own.
+   - **On GitHub Pages**, `#/terminal` replays the tour: each step's real screen, recorded by the tour's end-to-end test (`npm run record:tour -w @isorite/opencode`, into `app/src/lib/terminal/replay.json`), drawn on a canvas a cell at a time with block, box-drawing and Powerline characters as shapes, beside the step's card; ← and → step. Not xterm.js, as proposed: drawing the recorded screens needs no terminal, and no new dependency. A unit test fails when the tour's words change and the replay has not been recorded again. The browser's tour ends with a link to it.
+   - **Not as proposed:** the replay steps a screen per step, not a key at a time.
 
 **Done when** is §6's, with "through MCP" checked by a script against the MCP server, since Claude Code is not run here.
 
@@ -300,8 +305,9 @@ Steps 1 to 7, on `m6-terminal`. Nothing was asked of a real model: every check r
 - MCP agents' steps reach the Atlas but not the terminal panel's "is reading", which is OpenCode's.
 
 **Tests:**
-- 319 core (2 Atlas timing tests fail, as on main), 77 engine, 8 example, 24 server (1 skipped), 46 app and 39 opencode unit tests. The opencode ones include 10 end-to-end tests that drive OpenCode 2.0.32 in tmux against the scripted gateway: splash, home and wordmark, status line, look-ups and sources, the atlas, proposals, from you, the note view (keep, ask, remove, edit, timeline, `[s]`), and the server stopping with the TUI.
+- 319 core (2 Atlas timing tests fail, as on main), 77 engine, 8 example, 24 server (1 skipped), 46 app and 48 opencode tests. The opencode ones include the tour walked end to end (`test/tutorial.test.ts`), and 10 end-to-end tests that drive OpenCode 2.0.32 in tmux against the scripted gateway: splash, home and wordmark, status line, look-ups and sources, the atlas, proposals, from you, the note view (keep, ask, remove, edit, timeline, `[s]`), and the server stopping with the TUI.
 - 154 browser tests passed, 4 skipped. 2 failed: `notes.spec.ts:101` on a phone, both grounds, which fails on main too. The agent's path on the Atlas, its change kept in a note, and send to agent pass at both widths on both grounds.
+- The tutorial site's walks pass on both grounds: the browser's tour, and the terminal's replayed.
 - Check is clean.
 
 **For Lachlan:**
@@ -309,4 +315,3 @@ Steps 1 to 7, on `m6-terminal`. Nothing was asked of a real model: every check r
 2. The session header with the small plant: OpenCode has no slot at a session's top; the space above the prompt is the nearest. Build it there?
 3. The steps' names: keep the tools' names, or name them for the board's steps?
 4. A real-model run before the merge needs a key.
-5. Step 8, the terminal tutorial, is still a proposal.

@@ -6,12 +6,13 @@
 // and stopped when OpenCode exits.
 
 import { spawn } from "node:child_process";
-import { openSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { StudyError } from "@isorite/core";
-import { defaultHome, findOpenCode, gatewayFrom, writeHome } from "@isorite/opencode";
+import { writeExample } from "@isorite/example/node";
+import { defaultHome, findOpenCode, gatewayFrom, startScripted, tutorialScript, writeHome } from "@isorite/opencode";
 import { locate } from "./serve.ts";
 
 const MAIN = fileURLToPath(new URL("./main.ts", import.meta.url));
@@ -82,4 +83,33 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
   for (const [signal, handler] of handlers) process.off(signal, handler);
   server.release();
   return code;
+}
+
+/** `isorite tutorial term`: the example base, a scripted model in place of a provider, and `isorite term` on them,
+ *  its tour shown. Everything is kept in `folder` (by default a new one in the temporary folder): the base, the
+ *  code it opens in, and OpenCode's and isorite's settings, so that nothing of yours is used or changed. Run again
+ *  on the same folder, it carries on where it was left. */
+export async function tutorialTerm(folder: string | undefined, { port = 4790, env = process.env, out = console.log }: TermOptions & { out?: (line: string) => void } = {}): Promise<number> {
+  const root = folder ? resolve(folder) : mkdtempSync(join(tmpdir(), "isorite-tutorial-"));
+  const base = existsSync(join(root, "base")) ? { notes: join(root, "base", "dmft-notes"), study: join(root, "base", "dmft-notes-study") } : await writeExample(join(root, "base"));
+  const code = join(root, "code");
+  mkdirSync(code, { recursive: true });
+  const model = await startScripted(tutorialScript(base.notes));
+  // Iso, in the isorite server, is answered by the same script.
+  mkdirSync(join(root, "config", "isorite"), { recursive: true });
+  writeFileSync(join(root, "config", "isorite", "config.toml"), `[provider]\nname = "tutorial"\nurl = "${model.url}"\nkey = "tutorial"\n`);
+  out(`isorite tutorial: the example base and everything the tour changes are in ${root}`);
+  out("  the model is scripted: nothing is sent anywhere, and no key is needed");
+  try {
+    return await term(base.study, {
+      port, cwd: code,
+      env: {
+        ...env,
+        ISORITE_TUTORIAL: "1", ISORITE_GATEWAY_URL: model.url, ISORITE_GATEWAY_MODELS: "scripted", ISORITE_GATEWAY_KEY: "tutorial",
+        XDG_CONFIG_HOME: join(root, "config"), XDG_DATA_HOME: join(root, "data"), XDG_STATE_HOME: join(root, "state"),
+      },
+    });
+  } finally {
+    await model.close();
+  }
 }
