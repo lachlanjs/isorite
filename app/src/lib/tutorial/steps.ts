@@ -20,6 +20,8 @@ export interface Step {
   until?: (e: EngineEvent) => boolean;
   /** Or when this holds, looked at a few times a second. */
   check?: () => boolean;
+  /** A place to go on to, after the text. */
+  link?: { href: string; text: string };
 }
 
 export const SECTIONS = ["the atlas", "Iso in a note", "a note for Iso", "the timeline", "an exercise", "study", "keys"];
@@ -80,5 +82,6 @@ export const STEPS: Step[] = [
   { section: 6, title: "A few keys",
     text: "Nothing on screen names them, so here they are once. In a note: Ctrl+Enter asks Iso where the cursor is; Ctrl+S saves. On the Atlas: Escape lets a choice go, + and − zoom, 0 shows the whole map, c changes the grid, w draws the whole chain. With the timeline open: ← and → step, Escape comes back to now." },
   { section: 6, title: "That is isorite, so far",
-    text: "The base is yours to try anything on; a reload starts it again. Outside the tutorial, isorite runs on your own notes, with Iso on your own provider key." },
+    text: "The base is yours to try anything on; a reload starts it again. Outside the tutorial, isorite runs on your own notes, with Iso on your own provider key.",
+    link: { href: "#/terminal", text: "isorite in the terminal: its tour, replayed" } },
 ];

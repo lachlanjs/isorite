@@ -21,6 +21,8 @@ export interface ServerOptions {
   web: string | null;
   /** Other names this server may be reached by (isorite serve --allow-host). */
   allowHosts?: Iterable<string>;
+  /** Where the knowledge base is on disk, for a terminal agent's harness to tell its notes from code. */
+  notes?: string;
 }
 
 const TYPES: Record<string, string> = {
@@ -44,8 +46,16 @@ const ExerciseAsk = z.object({ folder: z.string().max(400), tests: z.array(z.str
 const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
 const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
 const Key = z.object({ key: z.string().nullable() }).strict();
+const AgentName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/);
+const AgentLook = z.object({ agent: AgentName, session: z.string().min(1).max(200), tool: z.string().max(64), args: z.record(z.string(), z.unknown()), asked: z.string().max(4000).optional() }).strict();
+const AgentEdit = z.union([
+  z.object({ oldString: z.string(), newString: z.string(), replaceAll: z.boolean().optional() }).strict(),
+  z.object({ content: z.string() }).strict(),
+]);
+const AgentProposal = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
+const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [] }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes }: ServerOptions): Hono {
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -144,12 +154,33 @@ export function createApp({ api, token, loopback, web, allowHosts = [] }: Server
   post("/api/settings/connect", z.object({ callback: z.string().max(2000) }).strict(), (_c, b) => api.connect(b.callback));
   post("/api/settings/connected", z.object({ code: z.string().min(1).max(2000), state: z.string().min(1).max(200) }).strict(), (_c, b) => api.connected(b.code, b.state));
 
+  // A terminal agent (isorite term, or another harness through MCP) looks things up with Iso's tools; the Atlas
+  // draws its steps. It is a process on this machine, and asks as the page does: the Origin and the token.
+  app.get("/api/agent/tools", (c) => answer(c, () => api.agentTools()));
+  post("/api/agent/look", AgentLook, (_c, b) => api.agentLook(b));
+  app.get("/api/agent/base", (c) => answer(c, async () => ({ notes: notes ?? null })));
+  post("/api/agent/propose", AgentProposal, (_c, b) => api.agentPropose(b));
+  post("/api/agent/send", z.object({ note: z.string().max(400), passage: z.string().max(10_000).optional(), said: z.string().max(4000) }).strict(), (_c, b) => api.agentSend(b));
+  post("/api/agent/received", z.object({ id: z.string().max(64), agent: AgentName }).strict(), (_c, b) => api.agentReceived(b.id, b.agent));
+  post("/api/agent/status", AgentStatus, (_c, b) => api.agentStatus(b.agent, b.session, b.busy));
+
   // Everything the engine does, as it happens. A comment every 25 seconds keeps the connection open.
+  // Every stream is told how many browser pages are listening (a harness's plugin listens with ?agent=<name>, and
+  // is not counted): the terminal says the Atlas is following only when one is.
+  const streams = new Map<{ writeSSE: (m: { event: string; data: string }) => Promise<void> }, boolean>();
+  const watchers = () => {
+    const browsers = [...streams.values()].filter(Boolean).length;
+    for (const s of streams.keys()) void s.writeSSE({ event: "watchers", data: JSON.stringify({ type: "watchers", browsers }) }).catch(() => undefined);
+  };
   app.get("/api/events", (c) => streamSSE(c, async (stream) => {
     const stop = api.events((event) => { void stream.writeSSE({ event: event.type, data: JSON.stringify(event) }); });
     const beat = setInterval(() => { void stream.write(": still here\n\n"); }, 25_000);
     await stream.writeSSE({ event: "open", data: "{}" });
+    streams.set(stream, c.req.query("agent") === undefined);
+    watchers();
     await new Promise<void>((done) => stream.onAbort(done));
+    streams.delete(stream);
+    watchers();
     clearInterval(beat);
     stop();
   }));

@@ -20,7 +20,7 @@ export { anchorOf, blocks, findAnchor } from "./blocks.ts";
 export type { Anchor, Block } from "./blocks.ts";
 export { DiffError, applyHunks, diffLines } from "./diff.ts";
 export type { Hunk } from "./diff.ts";
-export { SESSION_GAP_MS, SNAPSHOT_EVERY, change, hashText, insertAt, journalLine, locate, moments, passageOf, findPassage, pending, readJournal, reconcile, replay, sessionMoments, stamp, textAt, touched, written } from "./journal.ts";
+export { SESSION_GAP_MS, SNAPSHOT_EVERY, authors, change, hashText, insertAt, journalLine, locate, moments, passageOf, findPassage, pending, readJournal, reconcile, replay, sessionMoments, stamp, textAt, touched, written } from "./journal.ts";
 export type { Change, Cost, Discard, Entry, Insert, Marks, Moment, Passage, Placement, Proposal, Revise, Rewrite, SessionMoment, Stamp, Who, Why } from "./journal.ts";
 export { CONFIG_FILE, GITATTRIBUTES, STUDY_DIR, STUDY_FORMAT, STUDY_PREFIX, StudyError, dumpStudyConfig, isStudyId, journalPath, mapModel, parseStudyConfig, reach, recordPath, studyId, testsOf } from "./study.ts";
 export { sprout, type Plant } from "./growth.ts";
@@ -29,3 +29,5 @@ export { INTERVALS, LEVELS, lowest, stepOf, understanding } from "./understandin
 export type { AttemptEvent, Move, Result, Understanding, WindBackEvent } from "./understanding.ts";
 export { ExerciseError, MAX_WHY, WORKING, exercise, exerciseText, markingReply, placeMarks, studyList, withNext } from "./exercise.ts";
 export type { Exercise, Listed, Mark, MarkedPassage, Marking } from "./exercise.ts";
+export { agentName } from "./agents.ts";
+export { ago, describe, momentKey } from "./timeline.ts";

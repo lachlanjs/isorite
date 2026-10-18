@@ -4,8 +4,9 @@
 
 import type { Anchor, Cost, Entry, MapModel, Passage, Result, SessionMoment } from "@isorite/core";
 import type { Part } from "./iso.ts";
+import type { AgentEdit } from "./agent.ts";
 import type { Step } from "./lookup.ts";
-import type { Tier } from "./provider.ts";
+import type { Tier, ToolDef } from "./provider.ts";
 
 /** What is open. */
 export interface Session {
@@ -133,7 +134,36 @@ export type EngineEvent =
    *  For a marking, `proposal` is the `marks` entry and `attempt` the event in the study record. */
   | { type: "iso-done"; request: string; note: string; proposal: string; said?: string; attempt?: string; cost: Cost }
   | { type: "iso-stopped"; request: string; note: string }
-  | { type: "iso-failed"; request: string; note: string; message: string };
+  | { type: "iso-failed"; request: string; note: string; message: string }
+  /** A terminal agent (`agent` is its name, as `opencode`) began a turn in one of its sessions. Each turn ends in agent-done. */
+  | { type: "agent-start"; request: string; agent: string; session: string }
+  /** It looked something up in the base, with Iso's own tools. */
+  | { type: "agent-step"; request: string; agent: string; session: string; step: Step }
+  | { type: "agent-done"; request: string; agent: string; session: string }
+  /** The person sent a note, or a passage of one, to whichever terminal agent is listening; `text` is what it is told. */
+  | { type: "agent-sent"; id: string; note: string; title: string; passage?: string; said: string; text: string }
+  /** An agent took what was sent into one of its sessions. */
+  | { type: "agent-received"; id: string; agent: string };
+
+/** A terminal agent's edit to a note of the base: it waits to be kept, as Iso's text does. `asked` is what the
+ *  person asked the agent, as near as the harness can tell. */
+export interface AgentProposal {
+  agent: string;
+  session: string;
+  note: string;
+  asked: string;
+  edit: AgentEdit;
+}
+
+/** One look-up by a terminal agent: which agent, which of its sessions, which tool, with what. */
+export interface AgentLook {
+  agent: string;
+  session: string;
+  tool: string;
+  args: Record<string, unknown>;
+  /** What the person asked the agent, for a proposal's journal entry. */
+  asked?: string;
+}
 
 export interface Api {
   session(): Promise<Session>;
@@ -193,6 +223,21 @@ export interface Api {
   connect(callback: string): Promise<{ url: string }>;
   /** Back from the provider with a code: exchange it for a key, and hold that key. */
   connected(code: string, state: string): Promise<Settings>;
+  /** The tools a terminal agent is offered over the base: a brief of it, Iso's own look-ups, and proposing a
+   *  change to a note, which waits to be kept. */
+  agentTools(): Promise<ToolDef[]>;
+  /** Run one of them for an agent. What it looked up is published as an agent-step, for the Atlas; a proposal is
+   *  entered as agentPropose enters it, and refused as it refuses. */
+  agentLook(look: AgentLook): Promise<{ text: string }>;
+  /** Enter an agent's edit to a note as a proposal in its journal; the note is not written. A new note is a note
+   *  for review (a draft), kept into a folder as a note for Iso is. What comes back is said to the agent. */
+  agentPropose(proposal: AgentProposal): Promise<{ text: string }>;
+  /** Send a note, or a passage of it, with what the person says of it, to a terminal agent's session. */
+  agentSend(sent: { note: string; passage?: string; said: string }): Promise<{ id: string }>;
+  /** A terminal agent took what was sent. */
+  agentReceived(id: string, agent: string): Promise<void>;
+  /** An agent's session became busy (a turn begins) or idle (it ends). */
+  agentStatus(agent: string, session: string, busy: boolean): Promise<void>;
   /** Listen to everything the engine does, until the returned function is called. */
   events(listener: (event: EngineEvent) => void): () => void;
 }

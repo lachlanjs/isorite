@@ -17,6 +17,7 @@
     "@isorite/core": "*",
     "@isorite/engine": "^0.1.0",
     "@isorite/example": "*",
+    "@isorite/opencode": "*",
     "hono": "^4.13.13",
     "onnxruntime-web": "^1.30.0",
     "smol-toml": "^1.9.1",

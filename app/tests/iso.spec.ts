@@ -391,3 +391,25 @@ test("a note for Iso can be taken back to be rewritten, or discarded", async ({ 
   await expect(page.getByRole("searchbox", { name: "Find a note" })).toBeVisible();
   await expect(page.getByText(`Thrown away ${test.info().project.name}`)).toHaveCount(0);
 });
+
+test("a terminal agent's edit to a note waits in it as Iso's changes do, says whose it is, and is kept the same way", async ({ page, baseURL }) => {
+  const { id, text } = await open(page, "agent");
+  const { token } = await (await page.request.get("api/session")).json() as { token: string };
+  const proposed = await page.request.post("api/agent/propose", {
+    headers: { Origin: new URL(baseURL!).origin, "x-isorite-token": token },
+    data: { agent: "opencode", session: `ses-${test.info().project.name}`, note: `${id}.md`, asked: "say it plainly", edit: { oldString: "The average surprise", newString: "How surprised you are, on average," } },
+  });
+  expect(proposed.ok()).toBe(true);
+  const change = page.locator("[data-change]");
+  await expect(change).toHaveCount(1);
+  await expect(change.locator(".new")).toHaveText("How surprised you are, on average,");
+  await expect(page.locator(".cm-iso-old")).toHaveText("The average surprise");
+  await expect(change.locator(".who")).toHaveText("OpenCode");
+  await expect(change.locator(".who")).toHaveAttribute("title", "say it plainly");
+  await expect(page.getByText("1 change from OpenCode waiting")).toBeVisible();
+  expect(onDisk(id)).toBe(text);
+  await look(page, "agent-change");
+  await change.getByRole("button", { name: "Keep this change" }).click();
+  await expect(change).toHaveCount(0);
+  expect(onDisk(id)).toBe(text.replace("The average surprise", "How surprised you are, on average,"));
+});

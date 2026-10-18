@@ -1,0 +1,30 @@
+{
+  "name": "@isorite/opencode",
+  "version": "0.1.0",
+  "description": "isorite in the terminal: an OpenCode 2 plugin (tools, hooks and views over the isorite server), its theme, and the launcher, isorite term.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./logo": "./plugin/logo.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "record:tour": "ISORITE_RECORD=../../app/src/lib/terminal/replay.json vitest run test/tutorial.test.ts",
+    "check": "tsc -p ."
+  },
+  "devDependencies": {
+    "@isorite/example": "*",
+    "@opencode/plugin": "2.0.32",
+    "@opentui/core": "0.5.17",
+    "@opentui/solid": "0.5.17",
+    "@types/node": "^24.0.0",
+    "isorite": "*",
+    "solid-js": "1.9.15",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "@isorite/core": "*"
+  }
+}

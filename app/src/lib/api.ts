@@ -63,10 +63,16 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     setKey: (key) => write("PUT", "settings/key", { key }),
     connect: (callback) => write("POST", "settings/connect", { callback }),
     connected: (code, state) => write("POST", "settings/connected", { code, state }),
+    agentTools: () => ask("agent/tools"),
+    agentLook: (look) => write("POST", "agent/look", look),
+    agentPropose: (proposal) => write("POST", "agent/propose", proposal),
+    agentSend: (sent) => write("POST", "agent/send", sent),
+    agentReceived: async (id, agent) => { await write("POST", "agent/received", { id, agent }); },
+    agentStatus: async (agent, session, busy) => { await write("POST", "agent/status", { agent, session, busy }); },
     events(listener) {
       const source = new EventSource(root + "events");
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
-      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-done", "iso-stopped", "iso-failed"] satisfies EngineEvent["type"][];
+      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-done", "iso-stopped", "iso-failed", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received"] satisfies EngineEvent["type"][];
       for (const type of types) source.addEventListener(type, on);
       return () => source.close();
     },

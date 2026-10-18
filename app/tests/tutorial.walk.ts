@@ -113,6 +113,7 @@ test("the tutorial walks through every part of isorite on the example base, with
   await at(page, "A few keys");
   await card(page).getByRole("button", { name: "next" }).click();
   await at(page, "That is isorite, so far");
+  await expect(card(page).getByRole("link", { name: "isorite in the terminal: its tour, replayed" })).toHaveAttribute("href", "#/terminal");
   await card(page).getByRole("button", { name: "done" }).click();
   await expect(card(page)).toHaveCount(0);
   expect(failures).toEqual([]);

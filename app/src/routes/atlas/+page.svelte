@@ -5,7 +5,7 @@
   import Atlas from "$lib/components/Atlas.svelte";
   import Timeline from "$lib/components/Timeline.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
-  import { momentKey } from "$lib/timeline.ts";
+  import { momentKey } from "@isorite/core";
 
   // `?pick=<a note for Iso>`: the map is then for linking notes to it.
   // With hash routing the question mark is inside the fragment.

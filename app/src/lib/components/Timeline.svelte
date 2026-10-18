@@ -3,7 +3,7 @@
   // top. Pointing at one marks what it changed in the note; for one of Iso's, what was asked shows beside it while
   // pointed at. Choosing one shows the note as it was.
   import type { Moment } from "@isorite/core";
-  import { describe, ago, momentKey } from "$lib/timeline.ts";
+  import { describe, ago, momentKey } from "@isorite/core";
   import MomentMark from "./MomentMark.svelte";
 
   let { moments, at, pointed, point, pick, label = (m) => (m.asked === undefined ? undefined : `“${m.asked}”`), name = "The note's timeline", leftward = false }: {

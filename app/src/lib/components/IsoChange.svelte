@@ -3,6 +3,7 @@
   // struck through in the note. A change within a line is set in that line straight after the passage; one of
   // several lines is a block under it, so that code keeps its lines and its indentation. The text is shown as it
   // would be written into the file.
+  import { agentName } from "@isorite/core";
   import type { NoteIso } from "$lib/iso.svelte.ts";
 
   let { iso, key }: { iso: NoteIso; key: string } = $props();
@@ -10,9 +11,12 @@
   const change = $derived(iso.changes.find((c) => c.key === key));
   const text = $derived(change ? change.proposal.regions[change.k]!.new : "");
   const waiting = $derived(iso.busy === key || iso.busy === "all");
+  // A terminal agent's change says whose it is, and what it was asked, on pointing.
+  const agent = $derived(change ? agentName(change.proposal.who) : "");
 </script>
 
 {#snippet act()}
+  {#if agent}<span class="label who" title={change?.proposal.asked}>{agent}</span>{/if}
   <span class="act">
     <button class="keep" type="button" disabled={waiting} onclick={() => change && iso.keepChange(change)} aria-label="Keep this change">keep</button><button class="remove" type="button" disabled={waiting} onclick={() => change && iso.discardChange(change)} aria-label="Remove this change">remove</button>
   </span>
@@ -48,4 +52,5 @@
   .foot { display: flex; align-items: center; gap: 10px; font: 12px/1.5 var(--font-ui); padding-right: 8px; }
   .foot .dia { margin: 0 3px; }
   .foot .act { vertical-align: 0; }
+  .who { margin-left: .4em; font: 11px/20px var(--font-ui); color: var(--text-faint); }
 </style>

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "providers": {
+    "gateway": {
+      "name": "Corporate gateway (scripted here)",
+      "package": "@ai-sdk/openai-compatible",
+      "env": [
+        "ISORITE_GATEWAY_KEY"
+      ],
+      "settings": {
+        "baseURL": "http://127.0.0.1:4599/v1"
+      },
+      "models": {
+        "scripted": {
+          "name": "scripted",
+          "limit": {
+            "context": 128000,
+            "output": 8000
+          }
+        }
+      }
+    }
+  },
+  "model": "gateway/scripted"
+}

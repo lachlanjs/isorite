@@ -300,3 +300,31 @@ test("the grid is fine, coarse or coarser (key c), and the map draws on each", a
     await expect(page.locator(".routes path.base").first()).toBeAttached();
   }
 });
+
+test("a terminal agent's look-ups are drawn as Iso's are: what it searched, what it reached along a link, what it reads; its turn ends idle", async ({ page, request, baseURL }) => {
+  await atlas(page);
+  // As isorite term's plugin asks: from the server's origin, with the token it hands out.
+  const { token } = await (await request.get("api/session")).json() as { token: string };
+  const headers = { Origin: new URL(baseURL!).origin, "x-isorite-token": token };
+  const session = `ses-${test.info().project.name}`;
+  const status = (busy: boolean) => request.post("api/agent/status", { headers, data: { agent: "opencode", session, busy } });
+  const lookup = (tool: string, args: object) => request.post("api/agent/look", { headers, data: { agent: "opencode", session, tool, args } });
+
+  expect((await status(true)).ok()).toBe(true);
+  expect((await lookup("search_notes", { query: "kraft" })).ok()).toBe(true);
+  await lookup("read_note", { id: "coding/kraft-inequality" });
+  await lookup("read_note", { id: "/coding/source-coding.md" }); // the note it rests on, along its link
+  await expect(page.getByText("OpenCode is reading Source coding in the terminal")).toBeAttached();
+  await expect(note(page, "coding/source-coding")).toHaveClass(/\bp-used\b/);
+  await expect(note(page, "coding/kraft-inequality")).toHaveClass(/\bp-key\b/);
+  await expect(page.locator(".routes path.iso")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "[ stop ]" })).toHaveCount(0); // the browser cannot stop the terminal's agent
+  await look(page, "atlas-agent");
+
+  await status(false);
+  await expect(page.getByText(/OpenCode's turn is done/)).toBeAttached();
+  await expect(note(page, "coding/source-coding")).toHaveClass(/\bp-link\b/);
+  const box = (await page.locator(".atlas").boundingBox())!;
+  await page.mouse.click(box.x + 4, box.y + 4);
+  await expect(note(page, "coding/source-coding")).not.toHaveClass(/\bp-/);
+});

@@ -1,7 +1,8 @@
 // The timeline's words, for what is read out and for the one line shown with a chosen moment. The timeline itself
 // shows marks only.
 
-import type { Moment } from "@isorite/core";
+import { agentName } from "./agents.ts";
+import type { Moment } from "./journal.ts";
 
 const WHAT: Record<Moment["what"], string> = {
   wrote: "wrote the note", found: "found", edited: "edited", kept: "kept", offered: "offered", discarded: "removed",
@@ -10,7 +11,7 @@ const WHAT: Record<Moment["what"], string> = {
 
 /** Who did what: "you edited", "Iso · “give the Bethe lattice form” · kept", "Iso marked: partly". */
 export function describe(m: Moment): string {
-  const who = m.who === "you" ? "you" : m.who === "external" ? "outside isorite" : m.who.startsWith("agent:") ? m.who.slice("agent:".length) : "Iso";
+  const who = m.who === "you" ? "you" : m.who === "external" ? "outside isorite" : m.who.startsWith("agent:") ? agentName(m.who) : "Iso";
   if (m.what === "marked") return `Iso marked: ${m.result ?? "done"}`;
   if (m.asked !== undefined) return `${who} · “${m.asked.length > 80 ? m.asked.slice(0, 80) + "…" : m.asked}” · ${m.what === "offered" ? "not kept yet" : WHAT[m.what]}`;
   if (m.who === "external") return m.what === "found" ? "found as it was, outside isorite" : "changed outside isorite";

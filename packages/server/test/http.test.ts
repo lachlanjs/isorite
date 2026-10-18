@@ -174,3 +174,33 @@ test("the device id is made once and kept, readable by its owner only", () => {
   expect(deviceId(path)).toBe(id);
   expect(statSync(path).mode & 0o777).toBe(0o600);
 });
+
+test("a terminal agent is offered the tools and looks up as the page writes: from the origin, with the token", async () => {
+  const tools = await (await fetch(url + "/api/agent/tools")).json() as { function: { name: string } }[];
+  expect(tools.map((t) => t.function.name)).toEqual(["brief_base", "search_notes", "outline_note", "read_note", "propose_note_edit", "propose_note_write"]);
+  const look = { agent: "opencode", session: "ses_1", tool: "search_notes", args: { query: "surprise" } };
+  const found = await write("/api/agent/look", look, { method: "POST" });
+  expect(found.status).toBe(200);
+  expect(((await found.json()) as { text: string }).text).toContain("Entropy (/basics/entropy.md)");
+  expect((await write("/api/agent/look", look, { method: "POST", headers: { [TOKEN_HEADER]: "wrong" } })).status).toBe(403);
+  expect((await fetch(url + "/api/agent/look", { method: "POST", headers: { "Content-Type": "application/json", [TOKEN_HEADER]: TOKEN }, body: JSON.stringify(look) })).status).toBe(403);
+  expect((await write("/api/agent/look", { ...look, agent: "Not A Name" }, { method: "POST" })).status).toBe(400);
+  expect((await write("/api/agent/status", { agent: "opencode", session: "ses_1", busy: false }, { method: "POST" })).status).toBe(200);
+});
+
+test("every stream is told how many browser pages listen; a harness's plugin, listening as an agent, is not one", async () => {
+  const read = async (path: string, until: (text: string) => boolean) => {
+    const abort = new AbortController(), response = await fetch(url + path, { signal: abort.signal });
+    let text = "";
+    const reading = (async () => { for await (const chunk of response.body!) { text += new TextDecoder().decode(chunk as Uint8Array); if (until(text)) break; } })().catch(() => undefined);
+    return { abort, reading, text: () => text };
+  };
+  const agent = await read("/api/events?agent=opencode", () => false);
+  const page = await read("/api/events", () => false);
+  for (let waited = 0; !agent.text().includes('"browsers":1') && waited < 3000; waited += 50) await new Promise((r) => setTimeout(r, 50));
+  expect(agent.text()).toContain('"browsers":1');
+  page.abort.abort();
+  for (let waited = 0; !agent.text().includes('"browsers":0', agent.text().indexOf('"browsers":1')) && waited < 3000; waited += 50) await new Promise((r) => setTimeout(r, 50));
+  expect(agent.text().lastIndexOf('"browsers":0')).toBeGreaterThan(agent.text().indexOf('"browsers":1'));
+  agent.abort.abort();
+});
