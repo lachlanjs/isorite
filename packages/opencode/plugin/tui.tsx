@@ -3,9 +3,9 @@
 // notes in play: what the agent found in the knowledge base and how far each got (`Terminal`, `Terminal-Chat`).
 
 import { spawn } from "node:child_process";
-import { fg, StyledText, TextRenderable, type TextChunk } from "@opentui/core";
+import { BoxRenderable, fg, RGBA, StyledText, TextAttributes, TextRenderable, type Renderable, type TextChunk } from "@opentui/core";
 import { Plugin } from "@opencode/plugin/tui";
-import { createEffect, createResource, createSignal, For, Show } from "solid-js";
+import { createEffect, createResource, createSignal, For, onCleanup, Show } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { ago, anchorOf, blocks, describe, isStudyId, momentKey, moments, reach, type Entry, type MapModel } from "@isorite/core";
 import { drawAtlas, runsOf, type Role } from "./oneatlas.ts";
@@ -16,6 +16,7 @@ import * as Logo from "./logo.ts";
 import { lapis, quartz, routeColours } from "./palette.ts";
 import { Play, type Step } from "./play.ts";
 import { parseSources } from "./sources.ts";
+import * as Wordmark from "./wordmark.ts";
 
 const SPLASH = "isorite-splash";
 const NOTE = "isorite-note";
@@ -445,6 +446,13 @@ export default Plugin.define({
             },
           }],
         }));
+        // On OpenCode's home, isorite's name where its own is.
+        createEffect(() => {
+          if (ctx.ui.router.current().type !== "home") return;
+          const timer = setInterval(swapLogo, 200);
+          swapLogo();
+          onCleanup(() => clearInterval(timer));
+        });
         // Anything sent while no session was on screen goes to the first one opened.
         createEffect(() => { const sessionID = onScreen(); if (sessionID && waiting.length) void deliver(sessionID); });
         ctx.keymap.layer(() => ({
@@ -460,6 +468,48 @@ export default Plugin.define({
         return null;
       },
     });
+
+    // OpenCode's home draws its name in its own letters, and no slot reaches it: its box is found among the renderables
+    // by the rows it draws, hidden, and isorite's name drawn in the same letters beside it. Should OpenCode draw it
+    // otherwise, nothing is found, and its own stays.
+    const OPEN = ["█▀▀█ █▀▀█ █▀▀█ █▀▀▄", "▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀▀▀▀"];
+    const textOf = (r: Renderable): string => (r instanceof TextRenderable ? r.plainText : r.getChildren().map((c) => textOf(c as Renderable)).join(""));
+    const findLogo = (r: Renderable): Renderable | undefined => {
+      for (const child of r.getChildren() as Renderable[]) {
+        const found = findLogo(child);
+        if (found) return found;
+      }
+      const text = textOf(r);
+      return !(r instanceof TextRenderable) && OPEN.every((row) => text.includes(row)) ? r : undefined;
+    };
+    const mix = (a: string, b: string, t: number) => {
+      const [x, y] = [RGBA.fromHex(a), RGBA.fromHex(b)];
+      return RGBA.fromValues(x.r + (y.r - x.r) * t, x.g + (y.g - x.g) * t, x.b + (y.b - x.b) * t, 1);
+    };
+    const wordmark = () => {
+      const g = ground();
+      const mark = new BoxRenderable(ctx.renderer, { id: "isorite-wordmark", flexDirection: "column" });
+      // As OpenCode's: the first half muted, the second bold, each letter on a shade a quarter of its colour.
+      const half = (row: string, ink: string, bold: boolean): TextChunk[] => Wordmark.runs(row).map((run) => ({
+        __isChunk: true, text: run.text, fg: RGBA.fromHex(ink), ...(run.shaded ? { bg: mix(g.g0, ink, 0.25) } : {}), ...(bold ? { attributes: TextAttributes.BOLD } : {}),
+      }));
+      Wordmark.left.forEach((row, k) => mark.add(new TextRenderable(ctx.renderer, {
+        content: new StyledText([...half(row, g.faint, false), { __isChunk: true, text: " " }, ...half(Wordmark.right[k]!, g.text, true)]), selectable: false,
+      })));
+      return mark;
+    };
+    let drawnFor = "";
+    const swapLogo = () => {
+      const logo = findLogo(ctx.renderer.root);
+      const parent = logo?.parent;
+      if (!logo || !parent) return;
+      logo.visible = false;
+      const mine = parent.getChildren().find((c) => c.id === "isorite-wordmark");
+      if (mine && drawnFor === ctx.themeMode) return;
+      if (mine) { parent.remove(mine); mine.destroy(); }
+      parent.add(wordmark());
+      drawnFor = ctx.themeMode;
+    };
 
     // The splash is shown once, when the TUI starts.
     setTimeout(() => ctx.ui.router.navigate({ type: "plugin", name: SPLASH, data: {} }), 0);

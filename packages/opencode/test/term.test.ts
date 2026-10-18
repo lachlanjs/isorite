@@ -14,6 +14,7 @@ import { writeExample } from "@isorite/example/node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { lines } from "../plugin/logo.ts";
 import { findOpenCode, type Found } from "../src/opencode.ts";
+import * as Wordmark from "../plugin/wordmark.ts";
 import { startGateway, lastAsked, type Gateway } from "./fixtures/gateway.ts";
 import { hasTmux, Pane } from "./fixtures/tmux.ts";
 
@@ -130,9 +131,12 @@ describe.skipIf(!ready)("isorite term", () => {
     keep("1-splash");
   }, 120_000);
 
-  it("goes into OpenCode on enter, with the gateway as its model", async () => {
+  it("goes into OpenCode on enter, with the gateway as its model, and isorite's name where OpenCode's is", async () => {
     pane.keys("Enter");
     await pane.waitFor("Gateway");
+    const text = await pane.waitFor(Wordmark.left[1]!);
+    expect(text).toContain(`${Wordmark.left[1]} ${Wordmark.right[1]}`);
+    expect(text).not.toContain("█▀▀█ █▀▀█ █▀▀█ █▀▀▄");
     keep("2-home");
   }, 30_000);
 
