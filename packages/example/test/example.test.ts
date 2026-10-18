@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { hashText, readJournal, replay, understanding, readRecord, moments, pending } from "@isorite/core";
-import { buildExample, EXERCISES } from "../src/index.ts";
+import { buildExample, COST_WORKING, EXERCISES } from "../src/index.ts";
 import { loadSources } from "../src/node.ts";
 
 const sources = loadSources();
@@ -19,30 +19,30 @@ test("the notes come out as they stand in the package, every one of them journal
   }
 });
 
-test("each note's understanding is as the boards' Atlas draws it", () => {
+test("each note's understanding is spread over the Atlas's four steps", () => {
   const events = readRecord(built.study["record/laptop1.jsonl"] ?? "");
   const read = understanding(events, NOW);
   const step = (id: string) => read.get(id)?.step ?? 0;
   const want: Record<string, number> = {
-    "many-body-basics/second-quantisation": 3, "many-body-basics/greens-function": 3, "many-body-basics/matsubara-frequencies": 3, "many-body-basics/self-energy": 3,
-    "many-body-basics/dyson-equation": 3, "many-body-basics/spectral-function": 2, "many-body-basics/quasiparticle-weight": 2,
-    "lattice-models/tight-binding": 3, "lattice-models/density-of-states": 2, "lattice-models/hubbard-model": 2, "lattice-models/mott-transition": 1,
-    "impurity-problems/anderson-impurity-model": 2, "impurity-problems/hybridisation-function": 1, "impurity-problems/impurity-solver": 0,
-    "dmft/infinite-dimensions": 1, "dmft/local-self-energy": 1, "dmft/cavity-construction": 0, "dmft/lattice-to-impurity-map": 1,
-    "dmft/weiss-field": 0, "dmft/self-consistency-condition": 0, "dmft/the-dmft-loop": 0,
+    "physics/newtons-law-of-gravitation": 3, "physics/units": 2, "physics/energy-conservation": 2, "physics/the-n-body-problem": 0, "physics/softening": 0,
+    "integrators/eulers-method": 2, "integrators/leapfrog": 1, "integrators/symplectic-integrators": 1, "integrators/choosing-the-timestep": 1,
+    "algorithms/direct-summation": 0, "algorithms/centre-of-mass": 2, "algorithms/the-quadtree": 0, "algorithms/barnes-hut": 0, "algorithms/cost-and-accuracy": 0,
+    "simulation/the-main-loop": 0, "simulation/initial-conditions": 0, "simulation/diagnostics": 1, "simulation/two-galaxies-colliding": 0,
   };
   const got = Object.fromEntries(Object.keys(want).map((id) => [id, step(id)]));
   expect(got).toEqual(want);
+  // Some are due again, for the study list.
+  expect([...read].filter(([, u]) => u.due).map(([id]) => id).sort()).toEqual(["integrators/choosing-the-timestep", "integrators/symplectic-integrators", "simulation/diagnostics"]);
   expect(events.filter((e) => e.event === "attempt")).toHaveLength(EXERCISES.reduce((n, x) => n + x.attempts.length, 0));
 });
 
-test("today's session is the board's five moments, and Iso's Bethe lattice form waits", () => {
+test("today's session is five moments, and Iso's answer on softening waits", () => {
   const journals = Object.entries(built.study).filter(([p]) => p.startsWith("journal/") && !p.includes("@"));
   const today = journals.flatMap(([p, text]) => moments(readJournal(text)).filter((m) => Date.parse(m.at) > NOW - 3600_000).map((m) => ({ note: p, what: m.what, asked: m.asked })));
   expect(today.map((m) => m.what)).toEqual(expect.arrayContaining(["wrote", "edited", "kept", "edited", "offered"]));
   expect(today).toHaveLength(5);
-  const sc = readJournal(built.study["journal/dmft/self-consistency-condition.jsonl"]!);
-  expect(pending(sc).map((p) => p.asked)).toEqual(["give the Bethe lattice form"]);
+  const soft = readJournal(built.study["journal/physics/softening.jsonl"]!);
+  expect(pending(soft).map((p) => p.asked)).toEqual(["how big should ε be?"]);
 });
 
 test("the history has every kind of moment the timeline shows", () => {
@@ -50,9 +50,10 @@ test("the history has every kind of moment the timeline shows", () => {
   for (const what of ["wrote", "edited", "kept", "offered", "discarded", "restored", "changed elsewhere", "marked"]) expect(all, what).toContain(what);
 });
 
-test("a note for Iso waits unsent, and the Bethe lattice exercise has working and no marking", () => {
+test("a note for Iso waits unsent, and the cost of direct summation has working, wrong, and no marking", () => {
   const drafts = Object.keys(built.study).filter((p) => p.startsWith("drafts/"));
   expect(drafts).toHaveLength(1);
-  expect(built.study[drafts[0]!]).toContain("Why DMFT is exact only in infinite dimensions");
-  expect(built.study["study/dmft/the-bethe-lattice.md"]).toContain("So $\\Delta = t^2/G$.");
+  expect(built.study[drafts[0]!]).toContain("Close encounters");
+  expect(built.study["study/algorithms/the-cost-of-direct-summation.md"]).toContain(COST_WORKING);
+  expect(built.notes["algorithms/barnes-hut.md"]).toContain("TODO:");
 });
