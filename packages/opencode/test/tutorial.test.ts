@@ -2,7 +2,7 @@
 // each step moving on when its card asks. With ISORITE_RECORD set to a file, each step's screen is kept there for
 // the replay on the tutorial's site. Skipped without OpenCode 2 or tmux.
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -54,52 +54,67 @@ describe.skipIf(opencode === null || !hasTmux())("isorite --tutorial", () => {
   });
 
   it("walks every step of the tour, each moving on when its card asks", async () => {
+    /** Until the agent's answer says `done`: OpenCode asks before it writes a file, and each is allowed. */
+    const allowUntil = async (done: string) => {
+      for (;;) {
+        const t = await pane.waitFor((t) => t.includes(done) || /Allow|allow/.test(t), 90_000);
+        if (t.includes(done)) return;
+        pane.keys("Enter");
+        await pane.waitFor((t) => t.includes(done) || !/Allow|allow/.test(t), 30_000);
+      }
+    };
     await at(0, "press enter");
     pane.keys("Enter");
 
-    await at(1, "press enter", (t) => t.includes(PROMPTS.ask));
+    await at(1, "press enter, and allow the write", (t) => t.includes(PROMPTS.code.slice(0, 40)));
     pane.keys("Enter");
+    await allowUntil("[2] initial conditions");
 
-    await at(2, "type /next", (t) => /the dmft loop\s+◆ used/.test(t));
+    await at(2, "type /next", (t) => /leapfrog\s+◆ used/.test(t));
     await command("/next");
 
-    await at(3, "type /atlas the dmft loop");
-    await command("/atlas the dmft loop");
-
-    await at(4, "press enter, and allow the write", (t) => t.includes(PROMPTS.fix));
+    await at(3, "press enter, and allow the write", (t) => t.includes(PROMPTS.tree.slice(0, 40)));
     pane.keys("Enter");
-    const asked = await pane.waitFor(/Done\. The change|Allow|allow/, 60_000);
-    if (!asked.includes("Done.")) pane.keys("Enter");
+    await allowUntil("[2] the quadtree");
 
-    await at(5, "type /note the dmft loop");
-    await command("/note the dmft loop");
+    await at(4, "type /next");
+    await command("/next");
 
-    await at(6, "press k", (t) => t.includes("not kept yet"));
+    await at(5, "type /atlas barnes hut");
+    await command("/atlas barnes hut");
+
+    await at(6, "type /note the quadtree", (t) => t.includes("atlas · barnes"));
+    await command("/note the quadtree");
+
+    await at(7, "press k", (t) => t.includes("not kept yet"));
     pane.keys("k");
 
-    await at(7, "press /, ask, press enter");
+    await at(8, "press /, ask, press enter");
     pane.keys("/");
     await pane.waitFor("Ask Iso here", 10_000);
-    pane.type("say why it swings");
+    pane.type("say what changes in 3D");
     pane.keys("Enter");
 
-    await at(8, "press t, choose a moment", (t) => t.includes("◆ Iso · not kept yet"));
+    await at(9, "press t, choose a moment", (t) => t.includes("◆ Iso · not kept yet"));
     pane.keys("t");
     await pane.waitFor("The note's timeline");
     pane.keys("Down", "Enter");
 
-    await at(9, "press q, then s, and say what you want", (t) => t.includes("as it was"));
+    await at(10, "press q, then s, and say what you want", (t) => t.includes("as it was"));
     pane.keys("q");
     await pane.waitFor((t) => !t.includes("as it was"));
     pane.keys("s");
     await pane.waitFor("Send to the agent");
-    pane.type("is this the loop you meant?");
+    pane.type("use this in barnes_hut.py");
     pane.keys("Enter");
 
-    await at(10, "press q, then type /next");
+    await at(11, "press q, then type /next");
     pane.keys("q");
     await command("/next");
     await pane.waitFor((t) => !t.includes("tour · "));
     expect(frames.map((f) => f.step)).toEqual(TOUR.map((_, k) => k));
+    // The code it wrote is there, and the note's change was kept.
+    expect(readFileSync(join(root, "tour", "code", "sim.py"), "utf8")).toContain("v += 0.5 * dt * a");
+    expect(readFileSync(join(root, "tour", "code", "barnes_hut.py"), "utf8")).toContain("THETA = 0.5");
   }, 600_000);
 });

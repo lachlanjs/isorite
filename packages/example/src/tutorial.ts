@@ -30,7 +30,7 @@ const INSERT = `To insert a body, start at the root and walk down: at each node,
 
 On the way down, every node passed adds the body to its total mass $M$ and to $M\\mathbf{R}$, so that each keeps its mass and centre of mass with no second pass. A node keeps its square (centre and side $s$), its mass, its centre of mass, and its four children or its one body.`;
 
-const THETA = `With $\\theta = 0.5$ the force error is of order a tenth of a percent to a percent for most bodies, and larger for a few near dense nodes. The error of a node used whole is of order $(s/d)^2$, the [centre of mass](/algorithms/centre-of-mass.md "uses")'s quadrupole, and $s/d < \\theta$ bounds it.
+const THETA = `With $\\theta = 0.5$ the force error is about a percent for most bodies, and several percent for a few near dense nodes; it falls quickly as $\\theta$ shrinks. The error of a node used whole is of order $(s/d)^2$, the [centre of mass](/algorithms/centre-of-mass.md "uses")'s quadrupole, and $s/d < \\theta$ bounds it.
 
 The cost: a body opens nodes only near it. Around it, each level of the tree adds a ring of about the same number of nodes used whole, and there are $\\log_4 N$ levels, so each body visits $O(\\log N)$ nodes, and all of them $O(N \\log N)$.`;
 

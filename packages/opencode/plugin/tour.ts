@@ -1,11 +1,12 @@
 // The tour of isorite in the terminal (`isorite --tutorial`): what each step says, the prompt it fills in for
 // you, and what you do that moves it on, read from what the plugin already knows. A step with no `until` waits
-// for /next. As the browser's tutorial does (`app/src/lib/tutorial/steps.ts`), on the example base about DMFT.
+// for /next. On the example base, as the browser's tutorial is (`app/src/lib/tutorial/steps.ts`): the agent
+// writing code from your notes first, then what the terminal shares with the browser.
 
 /** The prompts the tour fills in, word for word: the tutorial's model answers these. */
 export const PROMPTS = {
-  ask: "why does my loop not converge? check it against my notes",
-  fix: "fix the loop: mix half the old self-energy, and note Broyden mixing",
+  code: "write sim.py: two bodies on a circular orbit, stepped with leapfrog, as my notes say",
+  tree: "add Barnes–Hut to the code, as my notes describe it, and fill in what my notes lack",
 } as const;
 
 /** What the plugin knows that a step can wait on. */
@@ -34,29 +35,32 @@ export interface TourStep {
   until?: (now: TourState, began: TourState) => boolean;
 }
 
-export const LOOP = "dmft/the-dmft-loop";
+export const QUAD = "algorithms/the-quadtree";
 
 export const TOUR: TourStep[] = [
   { title: "isorite in the terminal",
-    text: "OpenCode, with your knowledge base beside it. This tour uses an example base on DMFT and a scripted model: nothing is sent anywhere. Press enter to open.",
+    text: "OpenCode, an agent that writes code, with your notes beside it: a developer's notes on an N-body simulation, and an empty folder for the code. The model is scripted, so nothing is sent anywhere. Press enter to open.",
     until: (s) => s.page !== "splash" },
-  { title: "Ask about your notes", fill: PROMPTS.ask,
-    text: "The prompt is filled in. Press enter, and watch the agent look your notes up: by words, by meaning, and along their links.",
+  { title: "Ask for code", fill: PROMPTS.code,
+    text: "The prompt is filled in. Press enter. Before it writes, the agent looks in your notes: by words, by meaning, and along their links. OpenCode asks before it writes a file: allow it.",
     until: (s, b) => s.turns > b.turns && s.inPlay > 0 },
   { title: "Notes in play",
-    text: "On the right: what it found, what it reached from there, and what it used, in gold. Its answer cites your notes, [1] and its section. Type /next.",
+    text: "On the right: what it found, what it reached from there, and what it used, in gold. Its answer cites your notes, [1] and the section. In the browser, the Atlas draws the same path as it goes. Type /next.",
+  },
+  { title: "More, from your notes", fill: PROMPTS.tree,
+    text: "Press enter. It reads your notes on Barnes–Hut and the quadtree, writes the code, and answers the question your note on the quadtree left open. The code is OpenCode's, as always; what it would change in a note waits for you.",
+    until: (s, b) => s.turns > b.turns },
+  { title: "isorite's tools",
+    text: "What it used are isorite's: brief_base, search_notes, find_similar, outline_note and read_note to look, propose_note_edit and propose_note_write to suggest. And two commands: /atlas and /note. Type /next.",
   },
   { title: "One note's atlas",
-    text: "Type /atlas the dmft loop. Beside the chat: what the note requires, on the left, and what builds on it, on the right. In the browser, the whole map follows the agent.",
+    text: "Type /atlas barnes hut. Beside the chat: what the note requires, on the left, and what builds on it, on the right.",
     until: (s) => s.atlasOpen },
-  { title: "Changes to notes wait", fill: PROMPTS.fix,
-    text: "Ask it to change your notes. Edits to code are OpenCode's, and it asks before it writes a file: allow it. Edits to notes wait for you to keep them.",
-    until: (s, b) => s.turns > b.turns },
   { title: "Open the note",
-    text: "Type /note the dmft loop. A note in the terminal: who wrote each paragraph in the gutter, maths as source, links underlined.",
-    until: (s) => s.page === "note" && s.note === LOOP },
+    text: "Type /note the quadtree. A note in the terminal: who wrote each paragraph in the gutter, maths as source, links underlined.",
+    until: (s) => s.page === "note" && s.note === QUAD },
   { title: "Keep it, or not",
-    text: "The agent's change waits between dotted lines. [k] keeps it, [e] edits it first, [r] removes it; [n] goes to the next.",
+    text: "The agent's answer to your question waits between dotted lines. [k] keeps it, [e] edits it first, [r] removes it; [n] goes to the next.",
     until: (s) => s.page === "note" && s.waiting === 0 },
   { title: "Ask Iso here",
     text: "↑ and ↓ choose a paragraph; [/] asks Iso, isorite's own agent, to write after it. Its answer waits for you the same way.",
