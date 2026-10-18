@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { agentName } from "$lib/agents.ts";
   import { resolve } from "$app/paths";
   // The shell: the header (the name, where you are, the atlas / notes / study switch), the page, and the
   // status line.
@@ -27,8 +28,7 @@
   const runTitle = $derived(run ? (app.listing.notes.find((n) => n.id === run.note)?.title ?? "your note") : "");
   const stop = (): void => { if (run) void app.api.stop(run.request); };
   // A terminal agent's turn: who it is, and the note it has opened last.
-  const AGENTS: Record<string, string> = { opencode: "OpenCode", "claude-code": "Claude Code", pi: "Pi" };
-  const agentName = $derived(run?.agent ? (AGENTS[run.agent] ?? run.agent) : "");
+  const agentNamed = $derived(agentName(run?.agent));
   const agentReading = $derived.by(() => {
     const id = run?.steps.findLast((s) => s.opened && !s.failed)?.opened;
     return id ? (app.listing.notes.find((n) => n.id === id)?.title ?? id) : "";
@@ -84,7 +84,7 @@
       {#if run && (running || !app.atlas?.chosen)}
         <span class="grow"></span>
         {#if run.agent}
-          <span class="hint">{running ? `${agentName} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentName}'s turn is done · click open ground to let its path go`}</span>
+          <span class="hint">{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentNamed}'s turn is done · click open ground to let its path go`}</span>
         {:else if running}
           <span class="hint">{run.note.startsWith("@draft/") ? "your note opens when Iso is done" : `Iso is answering in ${runTitle}`}</span>
           <button class="link" type="button" onclick={stop}>[ stop ]</button>

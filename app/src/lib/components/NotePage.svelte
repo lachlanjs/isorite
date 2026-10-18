@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { agentName } from "$lib/agents.ts";
   import { resolve } from "$app/paths";
   // A note, open for writing: its title, its details when they are wanted, and its text. Saving is the
   // session's business (note.svelte.ts); this shows how it stands and offers the choice when a save is refused.
@@ -150,6 +151,8 @@
       ? { text: note.saving === "failed" ? `not saved: ${note.message}` : SAYS[note.saving], bad: note.saving === "failed" || note.saving === "conflict" }
       : null;
   });
+  // Whose changes wait: Iso's, an agent's, or both.
+  const changesFrom = $derived([...new Set(iso.changes.map((c) => agentName(c.proposal.who) || "Iso"))].join(" and "));
 </script>
 
 <svelte:window onkeydown={keys} />
@@ -292,7 +295,7 @@
     {#if iso.changes.length}
       <div class="changes" role="status">
         <i class="dia" aria-hidden="true"></i>
-        <span class="soft">{iso.changes.length} {iso.changes.length === 1 ? "change" : "changes"} from Iso waiting</span>
+        <span class="soft">{iso.changes.length} {iso.changes.length === 1 ? "change" : "changes"} from {changesFrom} waiting</span>
         <span class="grow"></span>
         <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(true)}>[ keep all ]</button>
         <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(false)}>[ remove all ]</button>

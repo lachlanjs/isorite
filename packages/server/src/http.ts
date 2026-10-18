@@ -21,6 +21,8 @@ export interface ServerOptions {
   web: string | null;
   /** Other names this server may be reached by (isorite serve --allow-host). */
   allowHosts?: Iterable<string>;
+  /** Where the knowledge base is on disk, for a terminal agent's harness to tell its notes from code. */
+  notes?: string;
 }
 
 const TYPES: Record<string, string> = {
@@ -45,10 +47,15 @@ const Named = z.object({ proposal: z.string().max(64), region: z.number().int().
 const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
 const Key = z.object({ key: z.string().nullable() }).strict();
 const AgentName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/);
-const AgentLook = z.object({ agent: AgentName, session: z.string().min(1).max(200), tool: z.string().max(64), args: z.record(z.string(), z.unknown()) }).strict();
+const AgentLook = z.object({ agent: AgentName, session: z.string().min(1).max(200), tool: z.string().max(64), args: z.record(z.string(), z.unknown()), asked: z.string().max(4000).optional() }).strict();
+const AgentEdit = z.union([
+  z.object({ oldString: z.string(), newString: z.string(), replaceAll: z.boolean().optional() }).strict(),
+  z.object({ content: z.string() }).strict(),
+]);
+const AgentProposal = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [] }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes }: ServerOptions): Hono {
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -151,6 +158,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [] }: Server
   // draws its steps. It is a process on this machine, and asks as the page does: the Origin and the token.
   app.get("/api/agent/tools", (c) => answer(c, () => api.agentTools()));
   post("/api/agent/look", AgentLook, (_c, b) => api.agentLook(b));
+  app.get("/api/agent/base", (c) => answer(c, async () => ({ notes: notes ?? null })));
+  post("/api/agent/propose", AgentProposal, (_c, b) => api.agentPropose(b));
   post("/api/agent/status", AgentStatus, (_c, b) => api.agentStatus(b.agent, b.session, b.busy));
 
   // Everything the engine does, as it happens. A comment every 25 seconds keeps the connection open.

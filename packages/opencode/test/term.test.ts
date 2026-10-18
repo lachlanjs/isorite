@@ -3,11 +3,12 @@
 // ISORITE_OPENCODE names the OpenCode to use; ISORITE_PREVIEW names a folder to keep each
 // screen in, with its colours, for pictures.
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { pending, readJournal } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { writeExample } from "@isorite/example/node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -75,6 +76,17 @@ describe.skipIf(!ready)("isorite term", () => {
     base = await writeExample(join(root, "base"));
     mkdirSync(join(root, "code"));
     gateway = await startGateway((request) => {
+      if (lastAsked(request).includes("fix the loop")) {
+        const done = request.messages.slice(request.messages.findLastIndex((m) => m.role === "user")).filter((m) => m.role === "tool").length;
+        const edits = [
+          // OpenCode's own edit, on a note: made a proposal by the plugin.
+          { tool: "edit", args: { path: join(base.notes, "dmft", "the-dmft-loop.md"), oldString: "Keep part of the old self-energy:", newString: "Keep part of the old self-energy, half of it to begin with:" } },
+          { tool: "propose_note_write", args: { note: "dmft/broyden-mixing.md", content: "---\ntype: Concept\ntitle: Broyden mixing\n---\n\nAdapts the mixing weight each pass.\n" } },
+          // And a file of code, which is OpenCode's own business.
+          { tool: "write", args: { path: "mixing.py", content: "MIX = 0.5\n" } },
+        ];
+        return edits[done] ?? { text: "Done: the note's change waits for you, and mixing.py is written." };
+      }
       if (!lastAsked(request).includes("my notes")) return { text: `You asked: ${lastAsked(request)}. Mixing keeps part of the old bath.` };
       const looked = request.messages.slice(request.messages.findLastIndex((m) => m.role === "user")).filter((m) => m.role === "tool").length;
       return LOOKS[looked] ?? { text: "Your note on the loop says to mix: keep part of the old self-energy." };
@@ -158,6 +170,30 @@ describe.skipIf(!ready)("isorite term", () => {
     expect(steps[2]).toMatchObject({ how: "link", opened: "dmft/self-consistency-condition", from: "dmft/the-dmft-loop" });
     keep("4-lookups");
   }, 90_000);
+
+  it("proposes changes to notes, which wait to be kept, and writes code as OpenCode does", async () => {
+    const loop = join(base.notes, "dmft", "the-dmft-loop.md"), before = readFileSync(loop, "utf8");
+    pane.type("fix the loop: mix half the old self-energy, and note Broyden mixing");
+    pane.keys("Enter");
+    // OpenCode asks before writing a file of code; a note's proposal is not a write, and asks nothing.
+    const asked = await pane.waitFor(/Done: the note's change waits|Allow|allow/, 60_000);
+    if (!asked.includes("Done:")) { pane.keys("Enter"); await pane.waitFor("Done: the note's change waits", 60_000); }
+    keep("5-proposals");
+    expect(readFileSync(loop, "utf8")).toBe(before);
+    expect(readFileSync(join(root, "code", "mixing.py"), "utf8")).toBe("MIX = 0.5\n");
+    const journal = readJournal(readFileSync(join(base.study, "journal", "dmft", "the-dmft-loop.jsonl"), "utf8"));
+    expect(pending(journal).at(-1)).toMatchObject({
+      who: "agent:opencode", form: "rewrite", asked: "fix the loop: mix half the old self-energy, and note Broyden mixing",
+      regions: [{ old: { text: "Keep part of the old self-energy:" }, new: "Keep part of the old self-energy, half of it to begin with:" }],
+    });
+    // The new note waits as a note for review.
+    const drafts = (await (await fetch(`http://127.0.0.1:${port}/api/drafts`)).json()) as { title: string }[];
+    expect(drafts.map((d) => d.title)).toContain("Broyden mixing");
+    // The agent was told where the notes are and how they change.
+    const system = JSON.stringify(gateway.requests.at(-1)?.messages.filter((m) => m.role === "system"));
+    expect(system).toContain(base.notes);
+    expect(system).toContain("propose_note_edit");
+  }, 120_000);
 
   it("stops the server it started when OpenCode exits", async () => {
     expect(await serving(port)).toBe(true);

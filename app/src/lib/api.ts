@@ -65,6 +65,7 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     connected: (code, state) => write("POST", "settings/connected", { code, state }),
     agentTools: () => ask("agent/tools"),
     agentLook: (look) => write("POST", "agent/look", look),
+    agentPropose: (proposal) => write("POST", "agent/propose", proposal),
     agentStatus: async (agent, session, busy) => { await write("POST", "agent/status", { agent, session, busy }); },
     events(listener) {
       const source = new EventSource(root + "events");

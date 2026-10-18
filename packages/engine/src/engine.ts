@@ -6,10 +6,11 @@ import {
   Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
   type Cost, type Entry, type FileEntry, type Insert, type LearnerEvent, type Marks, type Passage, type Proposal, type SessionMoment, type Stamp, type Understanding,
 } from "@isorite/core";
-import { Conflict, EngineError, type AgentLook, type Api, type AskRequest, type ContextReport, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport } from "./api.ts";
+import { Conflict, EngineError, type AgentLook, type AgentProposal, type Api, type AskRequest, type ContextReport, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport } from "./api.ts";
 import { ANSWER_CLOSE, ANSWER_OPEN, CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, exerciseMessages, exerciseReply, fitted, helpSince, insertMessages, markMessages, noteMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part, type Tested } from "./iso.ts";
 import { rounds } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, type Similar } from "./lookup.ts";
+import { regionsOf } from "./agent.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
 import { KEY, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
@@ -82,6 +83,11 @@ async function walk(files: Files, root: string): Promise<FileEntry[]> {
 
 /** The brief of the base, a terminal agent's first look. */
 const BRIEF: ToolDef = { type: "function", function: { name: "brief_base", description: "What this knowledge base holds: its folders, how many notes each, and how to look things up in it. Call it first, once.", parameters: { type: "object", properties: {}, additionalProperties: false } } };
+
+const NOTE_ARG = { type: "string", description: "The note's id or path in the knowledge base: dmft/the-dmft-loop or /dmft/the-dmft-loop.md." };
+const WAITS = "Notes are checked by the person: the change waits for them to keep it, in the browser or the terminal, and the note's file is unchanged until they do. Use this, never edit or write, for any note of the knowledge base.";
+const PROPOSE_EDIT: ToolDef = { type: "function", function: { name: "propose_note_edit", description: `Propose a change to a note of the knowledge base: oldString replaced by newString, as the edit tool does. ${WAITS}`, parameters: { type: "object", properties: { note: NOTE_ARG, oldString: { type: "string", description: "The text to replace, exactly as it is in the note." }, newString: { type: "string" }, replaceAll: { type: "boolean", description: "Replace every place oldString is." } }, required: ["note", "oldString", "newString"], additionalProperties: false } } };
+const PROPOSE_WRITE: ToolDef = { type: "function", function: { name: "propose_note_write", description: `Propose a whole note: a new note of the knowledge base, with its frontmatter (type, title), or one written anew. A new note waits as a note for review, and the person chooses its folder. ${WAITS}`, parameters: { type: "object", properties: { note: NOTE_ARG, content: { type: "string", description: "The whole note, frontmatter included." } }, required: ["note", "content"], additionalProperties: false } } };
 
 export class Engine implements Api {
   private readonly opts: EngineOptions;
@@ -191,11 +197,17 @@ export class Engine implements Api {
   // ------------------------------------------------------------ terminal agents
 
   async agentTools(): Promise<ToolDef[]> {
-    return [BRIEF, TOOLS[0]!, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1)];
+    return [BRIEF, TOOLS[0]!, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1), PROPOSE_EDIT, PROPOSE_WRITE];
   }
 
-  async agentLook({ agent, session, tool, args }: AgentLook): Promise<{ text: string }> {
+  async agentLook({ agent, session, tool, args, asked = "" }: AgentLook): Promise<{ text: string }> {
     if (tool === BRIEF.function.name) return { text: this.brief() };
+    if (tool === PROPOSE_EDIT.function.name || tool === PROPOSE_WRITE.function.name) {
+      const str = (v: unknown, name: string) => { if (typeof v !== "string") throw new EngineError(`${tool} needs ${name}, as text`, 400); return v; };
+      const edit = tool === PROPOSE_WRITE.function.name ? { content: str(args.content, "content") }
+        : { oldString: str(args.oldString, "oldString"), newString: str(args.newString, "newString"), replaceAll: args.replaceAll === true };
+      return this.agentPropose({ agent, session, note: str(args.note, "note"), asked, edit });
+    }
     const turn = this.turns.get(`${agent}/${session}`) ?? this.startTurn(agent, session);
     const { text, step } = await turn.lookup.call(tool, JSON.stringify(args));
     this.publish({ type: "agent-step", request: turn.request, agent, step });
@@ -206,6 +218,34 @@ export class Engine implements Api {
     const key = `${agent}/${session}`, turn = this.turns.get(key);
     if (busy && !turn) this.startTurn(agent, session);
     if (!busy && turn) { this.turns.delete(key); this.publish({ type: "agent-done", request: turn.request, agent }); }
+  }
+
+  async agentPropose({ agent, session, note, asked, edit }: AgentProposal): Promise<{ text: string }> {
+    if (!this.opts.study) throw new EngineError("there is no study base, so an edit to a note cannot wait to be kept: show the person the change instead", 409);
+    const id = checkNoteId(note.replace(/^\/+/, "").replace(/\.md$/i, ""));
+    const who = `agent:${agent}`, read = this.turns.get(`${agent}/${session}`)?.lookup.read() ?? [];
+    const { files, path } = this.where(id);
+    if ((await files.read(path)) === null) {
+      if (!("content" in edit)) throw new EngineError(`there is no note ${id}: to propose a new note, write the whole of it`, 404);
+      // A new note waits as a note for review, as a reply to a note for Iso does: its title, and the text offered.
+      let meta: Record<string, unknown> | null = null, body = edit.content;
+      try { [meta, body] = splitFrontmatter(edit.content); } catch { /* all of it is the body */ }
+      const title = typeof meta?.title === "string" && meta.title ? meta.title : id.split("/").at(-1)!;
+      const draft = DRAFT_PREFIX + newId(this.opts.clock.now()).toLowerCase();
+      await this.createNote(draft, `---\ntype: ${typeof meta?.type === "string" ? meta.type : "Concept"}\ntitle: ${JSON.stringify(title)}\n---\n`);
+      await this.one(async () => this.enter(draft, await this.journal(draft), {
+        ...(await this.stamp(who)), kind: "proposal", form: "insert", after: null, before: null, text: body.replace(/^\n+/, ""),
+        asked: asked || `a new note at ${id}`, read,
+      }));
+      return { text: `The new note "${title}" waits for the person to review in the browser, as a note for review; they choose its folder when they keep it (you meant ${id.split("/").slice(0, -1).join("/") || "the top"}). Nothing was written to the knowledge base. Do not write it again.` };
+    }
+    const current = (await this.readNote(id)).text;
+    const regions = regionsOf(current, edit);
+    if (!regions.length) return { text: `That leaves ${this.titleOf(id, current)} as it is: nothing was proposed.` };
+    await this.one(async () => this.enter(id, await this.journal(id), {
+      ...(await this.stamp(who)), kind: "proposal", form: "rewrite", regions, asked: asked || "an edit", read,
+    }));
+    return { text: `Your edit to ${this.titleOf(id, current)} (${regions.length} ${regions.length === 1 ? "passage" : "passages"}) waits for the person to keep it, in the browser or the terminal's note view. The file is unchanged until they do. Do not write it again; go on as if it may not be kept.` };
   }
 
   /** A turn is looked up in the base as it is when the turn begins, as Iso's requests are. */
