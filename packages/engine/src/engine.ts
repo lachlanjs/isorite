@@ -81,6 +81,9 @@ async function walk(files: Files, root: string): Promise<FileEntry[]> {
   return out;
 }
 
+/** The most of a note sent to an agent at once, as a passage. */
+const MAX_SENT = 8000;
+
 /** The brief of the base, a terminal agent's first look. */
 const BRIEF: ToolDef = { type: "function", function: { name: "brief_base", description: "What this knowledge base holds: its folders, how many notes each, and how to look things up in it. Call it first, once.", parameters: { type: "object", properties: {}, additionalProperties: false } } };
 
@@ -246,6 +249,23 @@ export class Engine implements Api {
       ...(await this.stamp(who)), kind: "proposal", form: "rewrite", regions, asked: asked || "an edit", read,
     }));
     return { text: `Your edit to ${this.titleOf(id, current)} (${regions.length} ${regions.length === 1 ? "passage" : "passages"}) waits for the person to keep it, in the browser or the terminal's note view. The file is unchanged until they do. Do not write it again; go on as if it may not be kept.` };
+  }
+
+  async agentSend({ note, passage, said }: { note: string; passage?: string; said: string }): Promise<{ id: string }> {
+    const id = checkNoteId(note), concept = this.bundle.concepts.get(id);
+    if (!concept) throw new EngineError(`no such note: ${id}`, 404);
+    if (passage !== undefined && passage.length > MAX_SENT) throw new EngineError("that passage is too long to send at once", 413);
+    const sent = newId(this.opts.clock.now()), title = concept.title, words = said.trim();
+    const text = [
+      `The person sent you, from the browser, ${passage?.trim() ? `this passage of their note "${title}" (/${id}.md):\n\n${passage.trim()}` : `their note "${title}" (/${id}.md). Read it with read_note if you need it.`}`,
+      words ? `They said: ${words}` : "",
+    ].filter(Boolean).join("\n\n");
+    this.publish({ type: "agent-sent", id: sent, note: id, title, ...(passage?.trim() ? { passage: passage.trim() } : {}), said: words, text });
+    return { id: sent };
+  }
+
+  async agentReceived(id: string, agent: string): Promise<void> {
+    this.publish({ type: "agent-received", id, agent });
   }
 
   /** A turn is looked up in the base as it is when the turn begins, as Iso's requests are. */

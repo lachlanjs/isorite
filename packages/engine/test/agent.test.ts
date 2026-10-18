@@ -131,3 +131,17 @@ test("a search by meaning keeps how alike each note found was", async () => {
   await engine.agentLook({ agent: "opencode", session: "s1", tool: "find_similar", args: { text: "short codes" } });
   expect(events.at(-1)).toMatchObject({ type: "agent-step", step: { how: "meaning", query: "short codes", scores: { "codes/huffman": 0.8 } } });
 });
+
+test("a note or a passage sent from the browser is published with what the agent is told; its taking is published too", async () => {
+  const { engine, events } = await open();
+  const { id } = await engine.agentSend({ note: "basics/entropy", passage: "  Bits, with logarithms to base two.  ", said: "check my units" });
+  expect(events.at(-1)).toMatchObject({ type: "agent-sent", id, note: "basics/entropy", title: "Entropy", passage: "Bits, with logarithms to base two.", said: "check my units" });
+  const told = (events.at(-1) as { text: string }).text;
+  expect(told).toContain('this passage of their note "Entropy" (/basics/entropy.md):\n\nBits, with logarithms to base two.');
+  expect(told).toContain("They said: check my units");
+  await engine.agentSend({ note: "basics/surprise", said: "" });
+  expect((events.at(-1) as { text: string }).text).toBe('The person sent you, from the browser, their note "Surprise" (/basics/surprise.md). Read it with read_note if you need it.');
+  await engine.agentReceived(id, "opencode");
+  expect(events.at(-1)).toEqual({ type: "agent-received", id, agent: "opencode" });
+  await expect(engine.agentSend({ note: "no/such", said: "" })).rejects.toThrow(/no such note/);
+});

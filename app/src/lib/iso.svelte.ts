@@ -114,7 +114,7 @@ export class NoteIso {
       if (settled && this.editing?.id === settled) this.editing = null;
       return;
     }
-    if (e.type === "note-changed" || e.type === "record" || !("note" in e) || e.note !== this.note.id) return;
+    if (e.type === "note-changed" || e.type === "record" || e.type === "agent-sent" || !("note" in e) || e.note !== this.note.id) return;
     if (e.type === "iso-start") {
       // A marking is shown by the exercise's own page, not as Iso's text in the note.
       if (e.place.form === "mark") return;

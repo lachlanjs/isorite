@@ -5,7 +5,7 @@
 import { spawn } from "node:child_process";
 import { fg, StyledText, TextRenderable, type TextChunk } from "@opentui/core";
 import { Plugin } from "@opencode/plugin/tui";
-import { createResource, createSignal, For, Show } from "solid-js";
+import { createEffect, createResource, createSignal, For, Show } from "solid-js";
 import * as Isorite from "./isorite.ts";
 import * as Logo from "./logo.ts";
 import { lapis, quartz } from "./palette.ts";
@@ -41,9 +41,34 @@ export default Plugin.define({
     const [titles, setTitles] = createSignal(new Map<string, string>());
     const listTitles = () => Isorite.get<Isorite.Listing>("/api/notes").then((l) => setTitles(new Map(l.notes.map((n) => [n.id, n.title]))), () => undefined);
     void listTitles();
+    // What the person sends from the browser goes into the session on screen, to be read with the next message there
+    // (resume: false), and is kept under "from you". With no session on screen it waits for one.
+    interface Sent { id: string; note: string; title: string; said: string; text: string }
+    const fromYou = new Map<string, Sent[]>();
+    const waiting: Sent[] = [];
+    const deliver = async (sessionID: string) => {
+      while (waiting.length) {
+        const sent = waiting[0]!;
+        try {
+          await ctx.client.session.synthetic({ sessionID, text: sent.text, description: `from you: ${sent.title}`, resume: false });
+        } catch { return; }
+        waiting.shift();
+        fromYou.set(sessionID, [...(fromYou.get(sessionID) ?? []), sent]);
+        hear((n) => n + 1);
+        await Isorite.post("/api/agent/received", { id: sent.id, agent: Isorite.AGENT }).catch(() => undefined);
+      }
+    };
+    const onScreen = () => { const route = ctx.ui.router.current(); return route.type === "session" ? route.sessionID : null; };
+
     const stop = new AbortController();
     Isorite.listen((type, data) => {
       if (type === "note-changed") void listTitles();
+      if (type === "agent-sent") {
+        waiting.push({ id: String(data.id), note: String(data.note), title: String(data.title), said: String(data.said ?? ""), text: String(data.text) });
+        const sessionID = onScreen();
+        if (sessionID) void deliver(sessionID);
+        return;
+      }
       if (type !== "agent-step" || data.agent !== Isorite.AGENT || typeof data.session !== "string") return;
       const play = plays.get(data.session) ?? new Play();
       plays.set(data.session, play);
@@ -80,7 +105,9 @@ export default Plugin.define({
           return s ? [`${s.found} found`, s.followed ? `${s.followed} by links` : "", s.used ? `${s.used} used` : ""].filter(Boolean).join(" · ") : "";
         };
         const state = (row: { state: string }) => (row.state === "used" ? ground().growth : row.state === "read" ? ground().soft : ground().faint);
+        const sent = () => (heard(), fromYou.get(input.sessionID) ?? []);
         return (
+          <box flexDirection="column">
           <Show when={rows().length > 0}>
             <box border borderStyle="rounded" borderColor={ground().ls} title=" notes in play " paddingLeft={1} paddingRight={1} flexDirection="column">
               <text fg={ground().faint} wrapMode="none">{summary()}</text>
@@ -96,6 +123,19 @@ export default Plugin.define({
               </For>
             </box>
           </Show>
+          <Show when={sent().length > 0}>
+            <box border borderStyle="rounded" borderColor={ground().ls} title=" from you " paddingLeft={1} paddingRight={1} flexDirection="column">
+              <For each={sent()}>
+                {(s) => (
+                  <box flexDirection="column">
+                    <text fg={ground().text} wrapMode="word">{s.note.replace(/-/g, " ").replace(/\//g, " / ")}</text>
+                    <Show when={s.said}><text fg={ground().faint} wrapMode="word">{`“${s.said}”`}</text></Show>
+                  </box>
+                )}
+              </For>
+            </box>
+          </Show>
+          </box>
         );
       },
     });
@@ -144,6 +184,8 @@ export default Plugin.define({
           const route = ctx.ui.router.current();
           return route.type === "plugin" && route.name === SPLASH;
         };
+        // Anything sent while no session was on screen goes to the first one opened.
+        createEffect(() => { const sessionID = onScreen(); if (sessionID && waiting.length) void deliver(sessionID); });
         ctx.keymap.layer(() => ({
           mode: "global",
           enabled: onSplash,

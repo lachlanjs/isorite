@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SendToAgent from "./SendToAgent.svelte";
   import { agentName } from "$lib/agents.ts";
   import { resolve } from "$app/paths";
   // A note, open for writing: its title, its details when they are wanted, and its text. Saving is the
@@ -153,6 +154,9 @@
   });
   // Whose changes wait: Iso's, an agent's, or both.
   const changesFrom = $derived([...new Set(iso.changes.map((c) => agentName(c.proposal.who) || "Iso"))].join(" and "));
+  // Sending the note, or the passage chosen in it, to the terminal's agent.
+  let sending = $state(false);
+  const chosen = $derived(iso.cursor && iso.cursor.to > iso.cursor.from ? note.text.slice(iso.cursor.from, iso.cursor.to).trim() : "");
 </script>
 
 <svelte:window onkeydown={keys} />
@@ -230,6 +234,7 @@
         {#if !asSource}<button class="icon" type="button" aria-label="timeline" title="timeline" aria-pressed={timeline} onclick={toggleTimeline}>{@render clockIcon()}</button>{/if}
         {#if !asSource}<button class="btn quiet" type="button" aria-pressed={details} onclick={() => { details = !details; remember("isorite.details", details); }}>details</button>{/if}
         <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => (source = !source)}>source</button>
+        {#if !asSource}<button class="btn quiet" type="button" aria-pressed={sending} onclick={() => (sending = !sending)}>send to agent</button>{/if}
       </div>
       {#if studied && !asSource && report}
         <div class="margin" role="group" aria-label="Iso's read of you">
@@ -246,6 +251,7 @@
       </div>
     </div>
     {/if}
+    {#if sending && !asSource}<SendToAgent note={id} passage={chosen} onclose={() => (sending = false)} />{/if}
     {#if details && !asSource}<NoteDetails {note} />{/if}
 
     {#if timeline && !asSource}
@@ -369,7 +375,7 @@
     .foot .tall { flex: 1 1 100%; justify-content: center; }
     .head { flex-direction: column-reverse; gap: var(--space-1); }
     .tools { align-self: flex-end; padding-top: 0; }
-    .side { align-self: stretch; flex-direction: row-reverse; justify-content: space-between; align-items: flex-start; }
+    .side { align-self: stretch; flex-direction: row-reverse; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; }
     .margin { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
     .title { font-size: 30px; width: 100%; }
   }

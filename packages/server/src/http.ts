@@ -160,6 +160,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes }:
   post("/api/agent/look", AgentLook, (_c, b) => api.agentLook(b));
   app.get("/api/agent/base", (c) => answer(c, async () => ({ notes: notes ?? null })));
   post("/api/agent/propose", AgentProposal, (_c, b) => api.agentPropose(b));
+  post("/api/agent/send", z.object({ note: z.string().max(400), passage: z.string().max(10_000).optional(), said: z.string().max(4000) }).strict(), (_c, b) => api.agentSend(b));
+  post("/api/agent/received", z.object({ id: z.string().max(64), agent: AgentName }).strict(), (_c, b) => api.agentReceived(b.id, b.agent));
   post("/api/agent/status", AgentStatus, (_c, b) => api.agentStatus(b.agent, b.session, b.busy));
 
   // Everything the engine does, as it happens. A comment every 25 seconds keeps the connection open.

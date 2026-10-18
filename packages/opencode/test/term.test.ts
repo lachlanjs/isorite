@@ -204,6 +204,32 @@ describe.skipIf(!ready)("isorite term", () => {
     expect(system).toContain("propose_note_edit");
   }, 120_000);
 
+  it("takes a note sent from the browser into the session on screen, shows it under from you, and the agent reads it next", async () => {
+    const heard = listen(port);
+    await new Promise((r) => setTimeout(r, 300));
+    const url = `http://127.0.0.1:${port}`;
+    const { token } = (await (await fetch(`${url}/api/session`)).json()) as { token: string };
+    const sent = await fetch(`${url}/api/agent/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-isorite-token": token, Origin: url },
+      body: JSON.stringify({ note: "lattice-models/mott-transition", said: "check this against my note" }),
+    });
+    const { id } = (await sent.json()) as { id: string };
+    const started = Date.now();
+    while (!heard.events.some((e) => e.type === "agent-received" && e.data.id === id) && Date.now() - started < 10_000) await new Promise((r) => setTimeout(r, 100));
+    heard.stop();
+    expect(heard.events.find((e) => e.type === "agent-received")?.data).toEqual({ type: "agent-received", id, agent: "opencode" });
+    const shown = await pane.waitFor("from you");
+    expect(shown).toContain("lattice models / mott transition");
+    expect(shown).toContain("“check this against my note”");
+    keep("6-from-you");
+    // It waits in the session, and goes to the model with the next message.
+    pane.type("what did I just send you?");
+    pane.keys("Enter");
+    await pane.waitFor("You asked: what did I just send you?", 60_000);
+    expect(JSON.stringify(gateway.requests.at(-1)?.messages)).toContain('their note \\"Mott transition\\" (/lattice-models/mott-transition.md)');
+  }, 90_000);
+
   it("stops the server it started when OpenCode exits", async () => {
     expect(await serving(port)).toBe(true);
     pane.keys("C-c");

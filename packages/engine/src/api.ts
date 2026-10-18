@@ -139,7 +139,11 @@ export type EngineEvent =
   | { type: "agent-start"; request: string; agent: string; session: string }
   /** It looked something up in the base, with Iso's own tools. */
   | { type: "agent-step"; request: string; agent: string; session: string; step: Step }
-  | { type: "agent-done"; request: string; agent: string; session: string };
+  | { type: "agent-done"; request: string; agent: string; session: string }
+  /** The person sent a note, or a passage of one, to whichever terminal agent is listening; `text` is what it is told. */
+  | { type: "agent-sent"; id: string; note: string; title: string; passage?: string; said: string; text: string }
+  /** An agent took what was sent into one of its sessions. */
+  | { type: "agent-received"; id: string; agent: string };
 
 /** A terminal agent's edit to a note of the base: it waits to be kept, as Iso's text does. `asked` is what the
  *  person asked the agent, as near as the harness can tell. */
@@ -228,6 +232,10 @@ export interface Api {
   /** Enter an agent's edit to a note as a proposal in its journal; the note is not written. A new note is a note
    *  for review (a draft), kept into a folder as a note for Iso is. What comes back is said to the agent. */
   agentPropose(proposal: AgentProposal): Promise<{ text: string }>;
+  /** Send a note, or a passage of it, with what the person says of it, to a terminal agent's session. */
+  agentSend(sent: { note: string; passage?: string; said: string }): Promise<{ id: string }>;
+  /** A terminal agent took what was sent. */
+  agentReceived(id: string, agent: string): Promise<void>;
   /** An agent's session became busy (a turn begins) or idle (it ends). */
   agentStatus(agent: string, session: string, busy: boolean): Promise<void>;
   /** Listen to everything the engine does, until the returned function is called. */
