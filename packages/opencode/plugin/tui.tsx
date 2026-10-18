@@ -41,15 +41,15 @@ export default Plugin.define({
   id: "isorite",
   setup(ctx) {
     const ground = () => (ctx.themeMode === "light" ? quartz : lapis);
-    // The mark and the wordmark as images where the terminal shows images (kitty's graphics protocol, or sixel): their
-    // edges straight at 45°, as the board and the browser draw them. Elsewhere in characters the terminal draws itself,
-    // straight but steeper (`logo.ts`). ISORITE_LOGO chooses a style of characters, or "image".
+    // The mark and the wordmark in characters the terminal draws itself, straight but steeper than 45° (`logo.ts`).
+    // ISORITE_LOGO chooses another style of characters, or "image": images, in a terminal that shows them (kitty's
+    // graphics protocol, or sixel), their edges at 45° as the board and the browser draw them.
     const logoChoice = process.env.ISORITE_LOGO;
     const style = (logoChoice && logoChoice !== "image" ? logoChoice : "triangle") as Logo.Style;
     const [capabilities, setCapabilities] = createSignal(ctx.renderer.capabilities);
     ctx.renderer.on("capabilities", () => setCapabilities(ctx.renderer.capabilities));
     const protocol = (): "kitty" | "sixel" | null => {
-      if (logoChoice && logoChoice !== "image") return null;
+      if (logoChoice !== "image") return null;
       const caps = capabilities();
       return caps?.kitty_graphics ? "kitty" : caps?.sixel && ctx.renderer.resolution ? "sixel" : null;
     };

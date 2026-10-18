@@ -11,17 +11,18 @@ import { blank, glyphs, type Corner, type Style } from "./logo.ts";
 export type Role = "ink" | "iso" | "right";
 export interface Run { text: string; role: Role }
 
-// A letter, a row a string, a square a character: `F` full, and a corner half by the corner it leaves empty, `a` the
-// top left (◢), `b` the bottom right (◤), `c` the bottom left (◥), `d` the top right (◣). Rows 0 and 1 are for what
-// rises above the letters, row 6 the baseline.
-const SQUARE: Record<string, Corner | "full"> = { F: "full", a: "tl", b: "br", c: "bl", d: "tr" };
+// A letter, a row a string, a square a character: `F` full, `T` its upper half and `B` its lower (a bar as thick as
+// a stem is wide, a cell being twice as tall), and a corner half by the corner it leaves empty, `a` the top left (◢),
+// `b` the bottom right (◤), `c` the bottom left (◥), `d` the top right (◣). Rows 0 and 1 are for what rises above
+// the letters, row 6 the baseline.
+const SQUARE: Record<string, Corner | "full" | "top" | "bottom"> = { F: "full", T: "top", B: "bottom", a: "tl", b: "br", c: "bl", d: "tr" };
 const LETTERS: Record<string, string[]> = {
   i: ["...ab", "..ab.", "cdF..", ".cF..", "..F..", "..F..", "..F.."],
-  s: ["...", "...", "aFF", "cd.", ".cd", ".ab", "FF."],
-  o: [".....", ".....", ".aFd.", "ab.cd", "F...F", "cd.ab", ".cFb."],
+  s: ["...", "...", ".aT", "ab.", "cd.", ".cd", "BBb"],
+  o: [".....", ".....", ".aTd.", "ab.cd", "F...F", "cd.ab", ".cBb."],
   r: ["...", "...", "Fab", "Fb.", "F..", "F..", "F.."],
-  t: ["...", ".F.", "FFF", ".F.", ".F.", ".F.", ".cd"],
-  e: [".....", ".....", ".aFd.", "ab.cd", "FFFFF", "cd...", ".cFF."],
+  t: ["...", ".F.", "TFT", ".F.", ".F.", ".F.", ".cd"],
+  e: [".....", ".....", ".aTd.", "ab.cd", "FTTTT", "cd...", ".cBB."],
 };
 /** The mark's diamond, over an i's stem, and the row left clear beneath it. */
 const DOT = [".aFd.", ".cFb.", "....."];
