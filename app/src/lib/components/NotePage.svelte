@@ -16,7 +16,7 @@
   import NoteEditor from "./NoteEditor.svelte";
   import NoteVersion from "./NoteVersion.svelte";
   import Timeline from "./Timeline.svelte";
-  import { ago, describe, momentKey } from "$lib/timeline.ts";
+  import { ago, describe, momentKey } from "@isorite/core";
   import type { Touched } from "$lib/editor/overlays.ts";
 
   let { id }: { id: string } = $props();

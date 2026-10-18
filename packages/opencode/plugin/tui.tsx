@@ -7,7 +7,7 @@ import { fg, StyledText, TextRenderable, type TextChunk } from "@opentui/core";
 import { Plugin } from "@opencode/plugin/tui";
 import { createEffect, createResource, createSignal, For, Show } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
-import type { Entry } from "@isorite/core";
+import { ago, anchorOf, blocks, describe, momentKey, moments, type Entry } from "@isorite/core";
 import { noteView, type ViewChange } from "./noteview.ts";
 import { NotePage, fromWhom, type NoteData } from "./notepage.tsx";
 import * as Isorite from "./isorite.ts";
@@ -69,6 +69,10 @@ export default Plugin.define({
     const [shownNote, setShownNote] = createSignal("");
     const [noteVersion, bumpNote] = createSignal(0);
     const [current, setCurrent] = createSignal("");
+    // The block the cursor is on, where [/] asks; the moment of the timeline shown, if any; Iso writing here.
+    const [cursor, setCursor] = createSignal(0);
+    const [moment, setMoment] = createSignal<{ key: string; said: string; ago: string } | null>(null);
+    const [asking, setAsking] = createSignal(false);
     let back: Parameters<typeof ctx.ui.router.navigate>[0] = { type: "home" };
     let scroll: ScrollBoxRenderable | undefined;
     const openNote = (id: string) => {
@@ -77,19 +81,49 @@ export default Plugin.define({
       if (!(route.type === "plugin" && route.name === NOTE))
         back = route.type === "plugin" ? { type: "plugin", name: route.name, data: { ...route.data } } : route.type === "session" ? { type: "session", sessionID: route.sessionID } : { type: "home" };
       setCurrent("");
+      setCursor(0);
+      setMoment(null);
       setShownNote(id);
       ctx.ui.router.navigate({ type: "plugin", name: NOTE, data: { id } });
     };
-    const loadNote = async (id: string): Promise<NoteData> => {
+    const loadNote = async (id: string, at: { key: string; said: string; ago: string } | null): Promise<NoteData> => {
       const q = `?id=${encodeURIComponent(id)}`;
       const [note, entries, study] = await Promise.all([
         Isorite.get<{ text: string }>(`/api/note${q}`), Isorite.get<Entry[]>(`/api/journal${q}`),
         Isorite.get<{ notes: Record<string, { step: number; squares: number }> }>("/api/study").catch(() => null),
       ]);
-      const reading = study?.notes[id];
-      return { id, title: titles().get(id) ?? id.split("/").at(-1)!, items: noteView(note.text, entries), entries, step: reading?.step ?? 0, squares: reading?.squares ?? 0 };
+      const reading = study?.notes[id], title = titles().get(id) ?? id.split("/").at(-1)!;
+      const common = { id, title, entries, step: reading?.step ?? 0, squares: reading?.squares ?? 0 };
+      if (!at) return { ...common, text: note.text, items: noteView(note.text, entries) };
+      // At a moment of the timeline: the note as it was then, read only, its changes then waiting left out.
+      const then = await Isorite.get<{ text: string }>(`/api/version${q}&entry=${encodeURIComponent(at.key)}`);
+      const upTo = entries.filter((e) => e.id <= at.key);
+      return { ...common, text: then.text, at: { said: at.said, ago: at.ago }, items: noteView(then.text, upTo).filter((i) => i.type === "block") };
     };
-    const [note] = createResource(() => (shownNote() ? { id: shownNote(), v: noteVersion() } : null), ({ id }) => loadNote(id));
+    const [note] = createResource(() => (shownNote() ? { id: shownNote(), v: noteVersion(), at: moment() } : null), ({ id, at }) => loadNote(id, at));
+    const blockCount = () => note()?.items.filter((i) => i.type === "block").length ?? 0;
+    const moveCursor = (by: number) => {
+      const next = Math.max(0, Math.min(blockCount() - 1, cursor() + by));
+      setCursor(next);
+      scroll?.scrollChildIntoView(`block-${next}`);
+    };
+    const askHere = async () => {
+      const shown = note(), id = shownNote();
+      if (!shown || shown.at) return;
+      const all = blocks(shown.text), k = Math.min(cursor(), all.length - 1);
+      const asked = await ctx.ui.dialog.prompt({ title: "Ask Iso here", description: k >= 0 ? `after “${all[k]!.text.split("\n")[0]!.slice(0, 60)}”` : "at the top", placeholder: "what you want written here" });
+      if (!asked?.trim()) return;
+      await Isorite.post("/api/iso/ask", { note: id, form: "insert", after: k >= 0 ? anchorOf(all, k) : null, before: k + 1 < all.length ? anchorOf(all, k + 1) : null, asked: asked.trim(), tier: "mid" })
+        .catch((e: Error) => ctx.ui.toast?.show?.({ message: e.message, variant: "error" }));
+    };
+    const showTimeline = async () => {
+      const shown = note();
+      if (!shown) return;
+      const all = moments(shown.entries).reverse();
+      const key = await ctx.ui.dialog.select({ title: "The note's timeline", options: all.map((m) => ({ title: describe(m), value: momentKey(m), description: ago(m.at) })) });
+      const chosen = all.find((m) => momentKey(m) === key);
+      if (chosen) setMoment({ key: momentKey(chosen), said: describe(chosen), ago: ago(chosen.at) });
+    };
     const changes = () => (note()?.items.filter((i): i is ViewChange => i.type === "change") ?? []);
     // The current change: the one chosen, while it waits; else the first.
     const chosen = () => changes().find((c) => c.key === current()) ?? changes()[0];
@@ -114,7 +148,7 @@ export default Plugin.define({
     };
     ctx.ui.router.register({
       name: NOTE,
-      render: () => <NotePage note={note} current={() => chosen()?.key ?? ""} ground={ground} base={baseName()} scroll={(s) => { scroll = s; }} />,
+      render: () => <NotePage note={note} current={() => (note()?.at ? "" : (chosen()?.key ?? ""))} cursor={cursor} asking={asking} ground={ground} base={baseName()} scroll={(s) => { scroll = s; }} />,
     });
     const [baseName, setBaseName] = createSignal("");
     void Isorite.get<Isorite.Session>("/api/session").then((s) => setBaseName(s.name), () => undefined);
@@ -123,6 +157,10 @@ export default Plugin.define({
     Isorite.listen((type, data) => {
       if (type === "note-changed") void listTitles();
       if ((type === "journal" || type === "note-changed") && data.id === shownNote()) bumpNote((n) => n + 1);
+      if (type.startsWith("iso-") && data.note === shownNote()) {
+        setAsking(type === "iso-start" || type === "iso-step" || type === "iso-text");
+        if (type === "iso-failed") ctx.ui.toast?.show?.({ message: `Iso could not answer: ${String(data.message)}`, variant: "error" });
+      }
       if (type === "agent-sent") {
         waiting.push({ id: String(data.id), note: String(data.note), title: String(data.title), said: String(data.said ?? ""), text: String(data.text) });
         const sessionID = onScreen();
@@ -245,19 +283,21 @@ export default Plugin.define({
           return route.type === "plugin" && route.name === SPLASH;
         };
         const onNote = () => { const route = ctx.ui.router.current(); return route.type === "plugin" && route.name === NOTE; };
+        // The base mode, not global: a dialog opened from the note (asking Iso, the timeline) takes the keys typed in it.
         ctx.keymap.layer(() => ({
-          mode: "global",
           enabled: onNote,
           commands: [
             { id: "isorite.note.next", title: "Next change", bind: "n", run: () => { const all = changes(), k = all.findIndex((c) => c.key === chosen()?.key); if (all.length) setCurrent(all[(k + 1) % all.length]!.key); } },
-            { id: "isorite.note.keep", title: "Keep the change", bind: "k", run: () => void settle("keep") },
-            { id: "isorite.note.edit", title: "Edit the change, then keep it", bind: "e", run: () => void edit() },
-            { id: "isorite.note.remove", title: "Remove the change", bind: "r", run: () => void settle("discard") },
+            { id: "isorite.note.keep", title: "Keep the change", bind: "k", run: () => { if (!moment()) void settle("keep"); } },
+            { id: "isorite.note.edit", title: "Edit the change, then keep it", bind: "e", run: () => { if (!moment()) void edit(); } },
+            { id: "isorite.note.remove", title: "Remove the change", bind: "r", run: () => { if (!moment()) void settle("discard"); } },
             { id: "isorite.note.browser", title: "The note in the browser", bind: "b", run: () => openInBrowser(`${Isorite.url}/#/n/${shownNote()}`) },
-            { id: "isorite.note.back", title: "Back", bind: "q", run: () => ctx.ui.router.navigate(back) },
-            { id: "isorite.note.escape", title: "Back", bind: "escape", run: () => ctx.ui.router.navigate(back) },
-            { id: "isorite.note.down", title: "Scroll down", bind: "down", run: () => scroll?.scrollBy(1) },
-            { id: "isorite.note.up", title: "Scroll up", bind: "up", run: () => scroll?.scrollBy(-1) },
+            { id: "isorite.note.back", title: "Back", bind: "q", run: () => (moment() ? setMoment(null) : ctx.ui.router.navigate(back)) },
+            { id: "isorite.note.escape", title: "Back", bind: "escape", run: () => (moment() ? setMoment(null) : ctx.ui.router.navigate(back)) },
+            { id: "isorite.note.down", title: "Next block", bind: "down", run: () => moveCursor(1) },
+            { id: "isorite.note.up", title: "Block before", bind: "up", run: () => moveCursor(-1) },
+            { id: "isorite.note.ask", title: "Ask Iso here", bind: "/", run: () => void askHere() },
+            { id: "isorite.note.timeline", title: "The note's timeline", bind: "t", run: () => void showTimeline() },
             { id: "isorite.note.pagedown", title: "Page down", bind: "pagedown", run: () => scroll?.scrollBy(0.8 * (scroll?.height ?? 20)) },
             { id: "isorite.note.pageup", title: "Page up", bind: "pageup", run: () => scroll?.scrollBy(-0.8 * (scroll?.height ?? 20)) },
           ],

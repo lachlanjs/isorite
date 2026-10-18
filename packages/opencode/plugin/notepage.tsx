@@ -8,13 +8,17 @@ import type { Entry } from "@isorite/core";
 import { For, Show, type Accessor } from "solid-js";
 import { agentName } from "@isorite/core";
 import type { Ground } from "./palette.ts";
-import type { Item, Mark, ViewChange } from "./noteview.ts";
+import type { Item, Mark, ViewBlock, ViewChange } from "./noteview.ts";
 
 
 export interface NoteData {
   id: string;
   title: string;
+  /** The note's text, as it is (or was, at a moment of its timeline). */
+  text: string;
   items: Item[];
+  /** At a moment of the timeline: what it was, and how long ago. Read only. */
+  at?: { said: string; ago: string };
   entries: Entry[];
   /** What the study record says of it: 0 not reached … 3 understood, and its squares of 6. */
   step: number;
@@ -47,17 +51,17 @@ function runs(line: string): { text: string; link: boolean }[] {
   return out.length ? out : [{ text: line || " ", link: false }];
 }
 
-export function NotePage(props: { note: Accessor<NoteData | undefined>; current: Accessor<string>; ground: Accessor<Ground>; base: string; scroll: (s: ScrollBoxRenderable) => void }) {
+export function NotePage(props: { note: Accessor<NoteData | undefined>; current: Accessor<string>; cursor: Accessor<number>; asking: Accessor<boolean>; ground: Accessor<Ground>; base: string; scroll: (s: ScrollBoxRenderable) => void }) {
   const g = () => props.ground();
   const glyph = (mark: Mark | "waiting") =>
     mark === "you" ? { c: "■", fg: g().lattice } : mark === "outside" ? { c: "□", fg: g().lattice } : mark === "iso" ? { c: "◆", fg: g().growth }
       : mark === "agent" ? { c: "◆", fg: g().faint } : mark === "waiting" ? { c: "◇", fg: g().growth } : { c: " ", fg: g().faint };
 
-  /** One row: the gutter, the rail, and what is on it. */
-  const Row = (p: { mark?: Mark | "waiting"; children: unknown }) => (
+  /** One row: the gutter, the rail (blue beside the block the cursor is on), and what is on it. */
+  const Row = (p: { mark?: Mark | "waiting"; at?: boolean; children: unknown }) => (
     <box flexDirection="row" minWidth={0}>
       <text width={4} flexShrink={0} fg={glyph(p.mark ?? "").fg}>{` ${glyph(p.mark ?? "").c}  `}</text>
-      <box width={2} flexShrink={0} border={["left"]} borderColor={g().line} />
+      <box width={2} flexShrink={0} border={["left"]} borderColor={p.at ? g().lattice : g().line} />
       <box flexGrow={1} minWidth={0} paddingLeft={1} flexDirection="column">{p.children as never}</box>
     </box>
   );
@@ -94,6 +98,8 @@ export function NotePage(props: { note: Accessor<NoteData | undefined>; current:
     );
   };
 
+  const blockIndex = (item: Item) => props.note()?.items.filter((i) => i.type === "block").indexOf(item as ViewBlock) ?? -1;
+
   return (
     <box flexDirection="column" width="100%" height="100%" backgroundColor={g().g0}>
       <Show when={props.note()} fallback={<text fg={g().faint} paddingLeft={4} paddingTop={1}>opening the note…</text>}>
@@ -101,6 +107,7 @@ export function NotePage(props: { note: Accessor<NoteData | undefined>; current:
           <>
             <box flexDirection="row" paddingLeft={4} paddingRight={4} paddingTop={1} flexShrink={0}>
               <text fg={g().text} wrapMode="none" flexShrink={1} minWidth={0}>{pathOf(note().id, note().title)}</text>
+              <Show when={note().at}>{(at) => <text fg={g().growth} wrapMode="none" flexShrink={1} minWidth={0}>{`   as it was ${at().ago}: ${at().said}`}</text>}</Show>
               <box flexGrow={1} />
               <text fg={g().soft} wrapMode="none" flexShrink={0}>{`${STEPS[note().step] ?? ""}   `}</text>
               <text wrapMode="none" flexShrink={0}>
@@ -110,9 +117,9 @@ export function NotePage(props: { note: Accessor<NoteData | undefined>; current:
             <scrollbox ref={props.scroll} flexGrow={1} paddingLeft={4} paddingRight={4} paddingTop={1} scrollbarOptions={{ visible: false }}>
               <For each={note().items}>
                 {(item) => item.type === "change" ? <Change c={item} /> : (
-                  <box flexDirection="column">
+                  <box flexDirection="column" id={`block-${blockIndex(item)}`}>
                     <Show when={item.kind === "code"} fallback={
-                      <Row mark={item.mark}>
+                      <Row mark={item.mark} at={blockIndex(item) === props.cursor()}>
                         <Show when={item.kind === "figure"} fallback={
                           <Show when={item.kind === "math"} fallback={<Prose text={item.text} bold={item.kind === "heading"} />}>
                             <For each={item.text.split("\n")}>{(line) => <text wrapMode="word" fg={/^\$\$\s*$/.test(line) ? g().soft : g().text}>{line}</text>}</For>
@@ -125,7 +132,7 @@ export function NotePage(props: { note: Accessor<NoteData | undefined>; current:
                         </Show>
                       </Row>
                     }>
-                      <Row mark={item.mark}>
+                      <Row mark={item.mark} at={blockIndex(item) === props.cursor()}>
                         <box backgroundColor={g().g1} flexDirection="column" paddingLeft={1}>
                           <text fg={g().faint}>{/^(```|~~~)\s*(\S*)/.exec(item.text)?.[2] || "code"}</text>
                           <For each={item.text.split("\n").slice(1, -1)}>{(line) => <text fg={g().text} wrapMode="none">{line || " "}</text>}</For>
@@ -143,10 +150,15 @@ export function NotePage(props: { note: Accessor<NoteData | undefined>; current:
       <box flexDirection="row" height={1} flexShrink={0} paddingLeft={4} paddingRight={4} backgroundColor={g().g1} gap={3}>
         <text fg={g().g0} bg={g().text}> note </text>
         <text fg={g().faint}>{props.base}</text>
+        <Show when={props.asking()}><text fg={g().growth}>◆ Iso is writing here</text></Show>
         <box flexGrow={1} />
         <Show when={props.note()?.items.some((i) => i.type === "change")}><text fg={g().faint}>[n] next change</text></Show>
-        <text fg={g().faint}>[b] browser</text>
-        <text fg={g().faint}>[q] back</text>
+        <Show when={!props.note()?.at} fallback={<text fg={g().faint}>[q] back to now</text>}>
+          <text fg={g().faint}>[t] timeline</text>
+          <text fg={g().faint}>[/] ask in place</text>
+          <text fg={g().faint}>[b] browser</text>
+          <text fg={g().faint}>[q] back</text>
+        </Show>
       </box>
     </box>
   );

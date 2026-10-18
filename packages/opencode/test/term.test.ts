@@ -76,6 +76,8 @@ describe.skipIf(!ready)("isorite term", () => {
     base = await writeExample(join(root, "base"));
     mkdirSync(join(root, "code"));
     gateway = await startGateway((request) => {
+      // Iso, asked in place from the note view: its requests carry no edit tool, as OpenCode's do.
+      if (!request.tools.includes("edit")) return { text: "Near the transition the bath swings, so the step is halved." };
       if (lastAsked(request).includes("fix the loop")) {
         const done = request.messages.slice(request.messages.findLastIndex((m) => m.role === "user")).filter((m) => m.role === "tool").length;
         const edits = [
@@ -92,6 +94,9 @@ describe.skipIf(!ready)("isorite term", () => {
       return LOOKS[looked] ?? { text: "Your note on the loop says to mix `[1]`: keep part of the old self-energy.\n\n```isorite\n[1] dmft/the-dmft-loop § Mixing\n```" };
     });
     port = await freePort();
+    // Iso, in the isorite server, is pointed at the scripted gateway too.
+    mkdirSync(join(root, "config", "isorite"), { recursive: true });
+    writeFileSync(join(root, "config", "isorite", "config.toml"), `[provider]\nname = "scripted"\nurl = "${gateway.url}"\nkey = "iso-key"\n`);
     pane = new Pane([process.execPath, MAIN, "term", base.study, "--port", String(port)], {
       cwd: join(root, "code"),
       env: {
@@ -219,6 +224,40 @@ describe.skipIf(!ready)("isorite term", () => {
     for (let waited = 0; !readFileSync(loop, "utf8").includes("half of it to begin with") && waited < 10_000; waited += 100) await new Promise((r) => setTimeout(r, 100));
     expect(readFileSync(loop, "utf8")).toContain("Keep part of the old self-energy, half of it to begin with:");
     await pane.waitFor((t: string) => !t.includes("not kept yet"));
+
+    // [/] asks Iso here; its text waits as a change of its own, and [r] removes it.
+    pane.keys("/");
+    await pane.waitFor("Ask Iso here");
+    pane.type("say why it swings");
+    pane.keys("Enter");
+    const asked = await pane.waitFor("◆ Iso · not kept yet", 60_000);
+    expect(asked).toContain("Near the transition the bath swings, so the step is halved.");
+    keep("8-asked");
+    pane.keys("r");
+    await pane.waitFor((t: string) => !t.includes("◆ Iso · not kept yet"));
+    // Asked again: [e] edits Iso's text, and keeps it as edited.
+    pane.keys("/");
+    await pane.waitFor("Ask Iso here");
+    pane.type("say it again");
+    pane.keys("Enter");
+    await pane.waitFor("◆ Iso · not kept yet", 60_000);
+    pane.keys("e");
+    await pane.waitFor("Edit Iso's change, then keep it");
+    pane.keys("End");
+    pane.type(" Mostly.");
+    pane.keys("Enter");
+    for (let waited = 0; !readFileSync(loop, "utf8").includes("so the step is halved. Mostly.") && waited < 10_000; waited += 100) await new Promise((r) => setTimeout(r, 100));
+    expect(readFileSync(loop, "utf8")).toContain("Near the transition the bath swings, so the step is halved. Mostly.");
+
+    // [t] is the note's timeline; a moment chosen shows the note as it was, and q comes back to it as it is.
+    pane.keys("t");
+    const timeline = await pane.waitFor("The note's timeline");
+    expect(timeline).toMatch(/OpenCode · “fix the loop/);
+    pane.keys("Down", "Enter");
+    await pane.waitFor("as it was");
+    keep("9-timeline");
+    pane.keys("q");
+    await pane.waitFor((t: string) => !t.includes("as it was") && t.includes("dmft / the dmft loop"));
     pane.keys("q");
     await pane.waitFor("fix the loop: mix half the old self-energy", 10_000);
   }, 90_000);

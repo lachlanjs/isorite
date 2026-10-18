@@ -238,9 +238,17 @@ Approved by Lachlan on 2026-10-18 with these answers:
    - **From you.** `send to agent` beside a note's `details` and `source` sends the note, or the passage chosen in it, with what you want of it. The server publishes it; the plugin puts it in the session on screen as a synthetic message that waits for the next turn (`resume: false`), shows it under "from you", and says it has it; the browser says "OpenCode has it, in the terminal", or that no terminal agent took it. Nothing is sent while no session is on screen: it waits for one.
    - **Not done:** an agent's edit to an exercise (a note of the study base) is not caught; the transcript shows a safety-net edit as "Edit" without its diff.
 4. **The note view.** `/note` and `[o]`: the gutter and marks, a proposal's `[k] [e] [r]`, `[/] ask in place`, `[t] the timeline`, `[b]`.
+   **Built** (2026-10-18):
+   - `/note <words>` opens the note that best matches (a list to choose from without words); so does choosing a note in the sidebar's notes in play. Drawn as `Terminal-Note`: folder / title, the step and squares; a gutter of who wrote most of each block (your square, an open square for a change made outside isorite, Iso's diamond, an agent's grey diamond: `authors` in the core replays the journal, text kept from a proposal its proposer's), the rail, links underlined, maths as source, code on its own ground, a figure offered in the browser.
+   - Waiting changes after their block, between dotted rules (a rewrite's passage struck through), from whom and what was asked: `[n]` the next, `[k]` keep, `[e]` edit then keep, `[r]` remove.
+   - ↑ ↓ move a cursor from block to block (the rail turns blue); `[/]` asks Iso for text after it, which arrives as a waiting change while the status line says Iso is writing. `[t]` lists the note's moments, worded as the browser's timeline (now in the core); one chosen shows the note as it was, read only, until `[q]`. `[b]` opens the note in the browser; `[q]` or esc goes back.
+   - **Not as the board:** `[o]` from a code diff (OpenCode draws the diff and gives no slot beside it); `[a] its atlas` is step 5. `[e]` edits in a one-line prompt, which suits a sentence better than paragraphs. The board's prompt line at the foot is the dialog `[/]` opens.
+   - The note view's keys are in OpenCode's base key mode, not global: in global, letters typed in a dialog it opened (asking Iso) were also taken as its keys.
 5. **The one-note Atlas.** The core's layout for one note drawn in cells in the panel, with its own keys and `esc`.
 6. **The splash and status line**, and `[s] send to agent` from the terminal side.
 7. **Screenshots beside the six boards** (rendered from the tmux panes), then the write-up. A run on a real model: the free models if they serve, else the gateway with a key you give.
+
+8. **A tutorial of the terminal (proposed 2026-10-18, not yet agreed).** OpenCode cannot run in a browser, so the GitHub Pages tutorial cannot run the real TUI. Proposed: `isorite tutorial term`, the real OpenCode on the example base against the scripted gateway, as the end-to-end test drives it (interactive, no key, needs OpenCode 2); and on Pages, the end-to-end test's screens replayed in xterm.js a key at a time, made by the tests so that they cannot drift.
 
 **Done when** is §6's, with "through MCP" checked by a script against the MCP server, since Claude Code is not run here.
 

@@ -30,3 +30,4 @@ export type { AttemptEvent, Move, Result, Understanding, WindBackEvent } from ".
 export { ExerciseError, MAX_WHY, WORKING, exercise, exerciseText, markingReply, placeMarks, studyList, withNext } from "./exercise.ts";
 export type { Exercise, Listed, Mark, MarkedPassage, Marking } from "./exercise.ts";
 export { agentName } from "./agents.ts";
+export { ago, describe, momentKey } from "./timeline.ts";
