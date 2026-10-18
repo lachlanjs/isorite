@@ -194,6 +194,7 @@ export default Plugin.define({
           commands: [
             { id: "isorite.atlas.next", title: "Next note in play", bind: "a", run: () => { const ids = play()?.rows(title).map((r) => r.id) ?? []; if (ids.length) setAtlasNote(ids[(ids.indexOf(focal()) + 1) % ids.length]!); } },
             { id: "isorite.atlas.open", title: "Open the note", bind: "n", run: () => { if (focal()) openNote(focal()); } },
+            { id: "isorite.atlas.send", title: "Send the note to the agent", bind: "s", run: () => void sendToAgent(focal()) },
             { id: "isorite.atlas.browser", title: "The whole map in the browser", bind: "b", run: () => openInBrowser(`${Isorite.url}/#/atlas`) },
             { id: "isorite.atlas.close", title: "Close the atlas", bind: "escape", run: () => input.close() },
           ],
@@ -230,7 +231,7 @@ export default Plugin.define({
                   )}
                 </Show>
                 <Show when={now()}>{(id) => <text wrapMode="word"><span style={{ fg: ground().growth }}>{"◆ "}</span><span style={{ fg: ground().soft }}>{"OpenCode is reading "}</span><span style={{ fg: ground().growth }}>{title(id())}</span></text>}</Show>
-                <Show when={input.focused}><text fg={ground().faint}>{"[n] open the note   esc closes"}</text></Show>
+                <Show when={input.focused}><text fg={ground().faint}>{"[n] open the note   [s] send to agent   esc closes"}</text></Show>
               </Show>
             </box>
           </Show>
@@ -238,9 +239,31 @@ export default Plugin.define({
       },
     });
 
+    // ------------------------------------------------------------ the status line, and sending from the terminal
+    /** How many browser pages have isorite open: the Atlas follows the agent only where one does. */
+    const [browsers, setBrowsers] = createSignal(0);
+    ctx.ui.slot({
+      append: "prompt.footer.status",
+      render: () => (
+        <text wrapMode="none">
+          <span style={{ fg: ground().faint }}>{baseName()}</span>
+          <Show when={browsers() > 0}><span style={{ fg: ground().growth }}>{"  ◆ "}</span><span style={{ fg: ground().faint }}>{"atlas following"}</span></Show>
+        </text>
+      ),
+    });
+    /** [s]: a note, or a passage of it, sent to the agent from the terminal, as from the browser: under "from you". */
+    const sendToAgent = async (note: string, passage?: string) => {
+      if (!note) return;
+      const said = await ctx.ui.dialog.prompt({ title: "Send to the agent", description: passage ? "the passage the cursor is on" : `the note “${(titles().get(note) ?? note).toLowerCase()}”`, placeholder: "what you want of it (optional)" });
+      if (said === undefined) return;
+      await Isorite.post("/api/agent/send", { note, ...(passage ? { passage } : {}), said: said.trim() })
+        .catch((e: Error) => ctx.ui.toast?.show?.({ message: e.message, variant: "error" }));
+    };
+
     const stop = new AbortController();
     Isorite.listen((type, data) => {
       if (type === "note-changed") void listTitles();
+      if (type === "watchers") setBrowsers(Number(data.browsers) || 0);
       if ((type === "journal" || type === "note-changed") && data.id === shownNote()) bumpNote((n) => n + 1);
       if (type.startsWith("iso-") && data.note === shownNote()) {
         setAsking(type === "iso-start" || type === "iso-step" || type === "iso-text");
@@ -380,6 +403,7 @@ export default Plugin.define({
             { id: "isorite.note.keep", title: "Keep the change", bind: "k", run: () => { if (!moment()) void settle("keep"); } },
             { id: "isorite.note.edit", title: "Edit the change, then keep it", bind: "e", run: () => { if (!moment()) void edit(); } },
             { id: "isorite.note.remove", title: "Remove the change", bind: "r", run: () => { if (!moment()) void settle("discard"); } },
+            { id: "isorite.note.send", title: "Send the paragraph to the agent", bind: "s", run: () => { const shown = note(); if (shown && !shown.at) { const b = blocks(shown.text)[cursor()]; void sendToAgent(shown.id, b?.text); } } },
             { id: "isorite.note.atlas", title: "Its atlas", bind: "a", run: () => { const id = shownNote(); ctx.ui.router.navigate(back); if (back.type === "session") setTimeout(() => openAtlas(id), 0); else setAtlasNote(id); } },
             { id: "isorite.note.browser", title: "The note in the browser", bind: "b", run: () => openInBrowser(`${Isorite.url}/#/n/${shownNote()}`) },
             { id: "isorite.note.back", title: "Back", bind: "q", run: () => (moment() ? setMoment(null) : ctx.ui.router.navigate(back)) },

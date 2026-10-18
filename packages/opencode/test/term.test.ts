@@ -136,6 +136,19 @@ describe.skipIf(!ready)("isorite term", () => {
     keep("2-home");
   }, 30_000);
 
+  it("says in the status line which base it is, and that the Atlas follows only while a browser has it open", async () => {
+    const footer = () => pane.text();
+    await pane.waitFor(() => footer().includes("dmft-notes"));
+    expect(footer()).not.toContain("atlas following");
+    // A page of the browser: the server counts it, and the status line says the Atlas follows.
+    const page = new AbortController();
+    void fetch(`http://127.0.0.1:${port}/api/events`, { signal: page.signal }).then(async (r) => { for await (const _ of r.body!) { /* listening */ } }).catch(() => undefined);
+    await pane.waitFor(() => footer().includes("◆ atlas following"));
+    keep("2b-status");
+    page.abort();
+    await pane.waitFor(() => !footer().includes("atlas following"));
+  }, 30_000);
+
   it("sends a prompt to the gateway, with the key, and shows the reply", async () => {
     pane.type("why does my loop not converge?");
     pane.keys("Enter");
@@ -279,8 +292,14 @@ describe.skipIf(!ready)("isorite term", () => {
     keep("9-timeline");
     pane.keys("q");
     await pane.waitFor((t: string) => !t.includes("as it was") && t.includes("dmft / the dmft loop"));
+    // [s] sends the paragraph the cursor is on to the agent; it is in the session, under from you, once back there.
+    pane.keys("s");
+    await pane.waitFor("Send to the agent");
+    pane.type("is this the loop you meant?");
+    pane.keys("Enter");
     pane.keys("q");
     await pane.waitFor("fix the loop: mix half the old self-energy", 10_000);
+    await pane.waitFor("“is this the loop you meant?”", 10_000);
   }, 90_000);
 
   it("takes a note sent from the browser into the session on screen, shows it under from you, and the agent reads it next", async () => {

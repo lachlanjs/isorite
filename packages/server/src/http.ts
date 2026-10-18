@@ -165,11 +165,22 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes }:
   post("/api/agent/status", AgentStatus, (_c, b) => api.agentStatus(b.agent, b.session, b.busy));
 
   // Everything the engine does, as it happens. A comment every 25 seconds keeps the connection open.
+  // Every stream is told how many browser pages are listening (a harness's plugin listens with ?agent=<name>, and
+  // is not counted): the terminal says the Atlas is following only when one is.
+  const streams = new Map<{ writeSSE: (m: { event: string; data: string }) => Promise<void> }, boolean>();
+  const watchers = () => {
+    const browsers = [...streams.values()].filter(Boolean).length;
+    for (const s of streams.keys()) void s.writeSSE({ event: "watchers", data: JSON.stringify({ type: "watchers", browsers }) }).catch(() => undefined);
+  };
   app.get("/api/events", (c) => streamSSE(c, async (stream) => {
     const stop = api.events((event) => { void stream.writeSSE({ event: event.type, data: JSON.stringify(event) }); });
     const beat = setInterval(() => { void stream.write(": still here\n\n"); }, 25_000);
     await stream.writeSSE({ event: "open", data: "{}" });
+    streams.set(stream, c.req.query("agent") === undefined);
+    watchers();
     await new Promise<void>((done) => stream.onAbort(done));
+    streams.delete(stream);
+    watchers();
     clearInterval(beat);
     stop();
   }));

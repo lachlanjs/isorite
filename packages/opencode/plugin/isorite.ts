@@ -46,7 +46,8 @@ export function listen(on: (type: string, data: Record<string, unknown>) => void
   void (async () => {
     while (!signal.aborted) {
       try {
-        const response = await fetch(url + "/api/events", { signal });
+        // As an agent: the server counts only browser pages as watching.
+        const response = await fetch(`${url}/api/events?agent=${AGENT}`, { signal });
         const decoder = new TextDecoder();
         let buffer = "";
         for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {

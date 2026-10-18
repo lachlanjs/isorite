@@ -156,6 +156,7 @@ export function NotePage(props: { note: Accessor<NoteData | undefined>; current:
         <Show when={!props.note()?.at} fallback={<text fg={g().faint}>[q] back to now</text>}>
           <text fg={g().faint}>[t] timeline</text>
           <text fg={g().faint}>[/] ask in place</text>
+          <text fg={g().faint}>[s] send to agent</text>
           <text fg={g().faint}>[b] browser</text>
           <text fg={g().faint}>[q] back</text>
         </Show>
