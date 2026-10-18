@@ -29,6 +29,8 @@ export interface EngineOptions {
   clock: Clock;
   device: string;
   name: string;
+  /** The base is the tutorial's: the session says so, and the app walks you through it. */
+  tutorial?: boolean;
   /** For Iso: the network, where the key is kept, and which provider. Without `http`, Iso cannot be asked. */
   http?: Http;
   secrets?: Secrets;
@@ -151,7 +153,7 @@ export class Engine implements Api {
   // ------------------------------------------------------------ reading
 
   async session(): Promise<Session> {
-    return { name: this.opts.name, study: this.opts.study !== null, device: this.opts.device };
+    return { name: this.opts.name, study: this.opts.study !== null, device: this.opts.device, ...(this.opts.tutorial ? { tutorial: true } : {}) };
   }
 
   async notes(): Promise<Listing> {

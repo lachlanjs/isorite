@@ -5,9 +5,13 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { app } from "$lib/app.svelte.ts";
-  import { PARTS, remember, type Step } from "./steps.ts";
+  import { PARTS as ALL, remember, type Step } from "./steps.ts";
   import { tour } from "./tour.svelte.ts";
 
+  // Beside the terminal's tour (isorite --tutorial, on a server), not the tutorial's own site: some parts read
+  // differently there.
+  const local = import.meta.env.MODE !== "tutorial" && Boolean(app.session?.tutorial);
+  const PARTS = ALL.map((p) => (local && p.local ? { ...p, ...p.local } : p));
   // Where the tutorial is lives outside the card, so it carries on if the card is drawn again.
   const left = $derived(tour.left);
   const part = $derived(tour.part >= 0 ? PARTS[tour.part]! : null);
@@ -86,7 +90,7 @@
   <div class="coach frame parts" role="dialog" aria-label="The tutorial" aria-live="polite">
     <div class="row"><i class="dia" aria-hidden="true"></i><span class="label">the tutorial</span></div>
     <h2>{tour.done.length ? "Another part?" : "isorite, on a small project"}</h2>
-    <p>The base here is a developer's notes on an N-body simulation: bodies under gravity, stepped in time, made fast with Barnes–Hut. Each part stands on its own. Iso is scripted, and nothing leaves this page; a reload starts it all again.</p>
+    <p>The base here is a developer's notes on an N-body simulation: bodies under gravity, stepped in time, made fast with Barnes–Hut. Each part stands on its own. {#if local}Iso and the agent are scripted, and nothing leaves your machine; what you change is kept in the tutorial's folder.{:else}Iso is scripted, and nothing leaves this page; a reload starts it all again.{/if}</p>
     <ol class="list">
       {#each PARTS as p, k (p.key)}
         <li><button type="button" class:done={tour.done.includes(k)} onclick={() => begin(k)} aria-label="part {p.key}: {p.title}{tour.done.includes(k) ? ', done' : ''}">

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { PROMPTS, QUAD, TOUR, type TourState } from "../plugin/tour.ts";
+import { GOAL, PROMPTS, TOUR, type TourState } from "../plugin/tour.ts";
 import { tutorialScript, UNSCRIPTED } from "../src/tutorial.ts";
 import type { Request } from "../src/scripted.ts";
 
@@ -16,9 +16,9 @@ describe("the terminal's tour", () => {
 
   it("moves on from a note's changes only once the note is read and has none left", () => {
     const keep = TOUR.find((s) => s.title === "Keep it, or not")!;
-    expect(keep.until!(state({ page: "note", note: QUAD, waiting: -1 }), state())).toBe(false);
-    expect(keep.until!(state({ page: "note", note: QUAD, waiting: 1 }), state())).toBe(false);
-    expect(keep.until!(state({ page: "note", note: QUAD, waiting: 0 }), state())).toBe(true);
+    expect(keep.until!(state({ page: "note", note: GOAL, waiting: -1 }), state())).toBe(false);
+    expect(keep.until!(state({ page: "note", note: GOAL, waiting: 1 }), state())).toBe(false);
+    expect(keep.until!(state({ page: "note", note: GOAL, waiting: 0 }), state())).toBe(true);
   });
 
   it("waits for a turn of the agent's that ends after the step began", () => {
@@ -40,9 +40,16 @@ describe("the tutorial's model", () => {
     expect(script(asked(PROMPTS.code, undefined, tool(6)))).toMatchObject({ text: expect.stringContaining("[1] integrators/leapfrog § Why it does not drift") });
   });
 
-  it("writes Barnes–Hut, and answers the quadtree's question as OpenCode edits a file: on the base's own note", () => {
+  it("writes Barnes–Hut, and notes where it is as OpenCode edits a file: on the base's own note", () => {
     expect(script(asked(PROMPTS.tree, undefined, tool(2)))).toMatchObject({ tool: "write", args: { path: "barnes_hut.py" } });
-    expect(script(asked(PROMPTS.tree, undefined, tool(3)))).toMatchObject({ tool: "edit", args: { path: "/base/nbody-notes/algorithms/the-quadtree.md" } });
+    expect(script(asked(PROMPTS.tree, undefined, tool(3)))).toMatchObject({ tool: "edit", args: { path: "/base/nbody-notes/simulation/two-galaxies-colliding.md" } });
+  });
+
+  it("answers Iso as the browser's tutorial does, with only the tools Iso was offered, at once and with what it cost", () => {
+    const question = "# What they ask now\n\nhow is a body inserted, and what does each node keep?";
+    expect(script(asked(question, ["search_notes", "read_note"]))).toMatchObject({ calls: [{ name: "search_notes" }, { name: "read_note" }], usage: { usd: expect.any(Number) } });
+    const close = "# What they wrote for you\n\nClose encounters";
+    expect(script(asked(close, ["read_note", "search_notes"]))).toMatchObject({ calls: [{ name: "read_note" }, { name: "read_note" }] });
   });
 
   it("names the session, answers Iso, and says what it is to anything else", () => {

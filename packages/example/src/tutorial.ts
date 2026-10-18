@@ -98,6 +98,8 @@ export function tutorialAnswer(r: Request): Reply {
     if (!looked(r)) return { calls: [{ name: "search_notes", arguments: { query: "quadtree" } }, { name: "read_note", arguments: { id: "algorithms/centre-of-mass" } }], usage: { in: 5100, out: 50, usd: 0.0059 } };
     return { text: INSERT, usage: { in: 8400, out: 310, cached: 4800, usd: 0.0163 } };
   }
+  // Asked in place in the terminal's note view.
+  if (/\b3d\b|three dimensions/.test(q)) return { text: "In 3D the same tree has eight children a node: an octree.", usage: { in: 4200, out: 30, usd: 0.0051 } };
   if (q.includes("faster")) {
     if (!looked(r)) return { calls: [{ name: "read_note", arguments: { id: "algorithms/direct-summation" } }, { name: "read_note", arguments: { id: "algorithms/barnes-hut" } }], usage: { in: 5300, out: 50, usd: 0.0060 } };
     return { text: SPEED, usage: { in: 8800, out: 260, cached: 5000, usd: 0.0158 } };

@@ -15,6 +15,8 @@ export interface Session {
   /** Whether there is a study base, and so a journal. */
   study: boolean;
   device: string;
+  /** The base is the tutorial's (`isorite --tutorial`): the app walks you through it. */
+  tutorial?: boolean;
 }
 
 export interface NoteSummary {

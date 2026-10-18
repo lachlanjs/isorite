@@ -1,7 +1,8 @@
 // The tutorial's parts and their steps, over the example base (nbody-notes: a developer's notes on an N-body
 // simulation, three weeks in): what each step says, where it opens, what it lights, the prompt it fills in for you,
 // and what you do that moves it on. A step with neither `until` nor `check` waits for "next". Each part stands on
-// its own, so they can be taken in any order; a step that reads differently on a phone says so in `phone`.
+// its own, so they can be taken in any order; a step that reads differently on a phone says so in `phone`. Served
+// by isorite --tutorial, beside the terminal's tour, a part may read differently again (`local`).
 
 import type { EngineEvent } from "@isorite/engine";
 import { BH, COST, DIRECT, GALAXY, LAW, LEAP, LOOP, PROMPTS, QUAD, SOFT, SYMP } from "@isorite/example";
@@ -32,6 +33,8 @@ export interface Part {
   /** One line, on the list of parts. */
   about: string;
   steps: Step[];
+  /** As it is beside the terminal, served by isorite --tutorial, where that differs. */
+  local?: Pick<Part, "about" | "steps">;
 }
 
 const EXERCISE = "@study/algorithms/the-cost-of-direct-summation";
@@ -186,5 +189,20 @@ export const PARTS: Part[] = [
       { title: "Its tour, replayed", link: { href: "#/terminal", text: "isorite in the terminal: its tour, replayed" },
         text: "Every screen of the terminal's tour, as OpenCode drew it." },
     ],
+    local: {
+      about: "The agent in OpenCode, in the terminal beside this page, with your notes as its tools; this page follows it.",
+      steps: [
+        { title: "The terminal beside this page",
+          text: "The terminal you ran isorite --tutorial in is this part: its own card leads, a step at a time. This page follows it. Keep the Atlas open where you can see both." },
+        { go: "/atlas", target: ".atlas-world", until: (e) => e.type === "agent-done", title: "Watched from here",
+          text: "In the terminal, ask the agent for code, as its card says. It looks in your notes first: watch its path drawn here as it reads, found by words, by meaning, or along a link." },
+        { go: `/n/${GALAXY}`, title: "Its changes to notes wait here too",
+          text: "When the agent would change a note, the change waits in the note, here as in the terminal, under its name. Keep it in either; the other sees it." },
+        { go: `/n/${LOOP}`, target: '[data-tour="send"]', until: (e) => e.type === "agent-sent", title: "From here to there",
+          text: "send to agent puts this note, or a passage of it, in the agent's next prompt. Send it, and look for it in the terminal under from you." },
+        { title: "On your own notes",
+          text: "In your project's folder: isorite term <your base>, and the browser at the address it gives. isorite serve <your base> opens the browser alone." },
+      ],
+    },
   },
 ];

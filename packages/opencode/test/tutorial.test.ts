@@ -43,7 +43,7 @@ describe.skipIf(opencode === null || !hasTmux())("isorite --tutorial", () => {
       cwd: root,
       // At home in the tour's folder, so that OpenCode shows its paths short (~/tour/code); the cache, which holds the
       // AI SDK package OpenCode fetches, is the real one.
-      env: { PATH: process.env.PATH ?? "", HOME: root, XDG_CACHE_HOME: process.env.XDG_CACHE_HOME ?? join(process.env.HOME ?? root, ".cache"), ISORITE_OPENCODE: opencode!.command },
+      env: { PATH: process.env.PATH ?? "", HOME: root, ISORITE_NO_BROWSER: "1", XDG_CACHE_HOME: process.env.XDG_CACHE_HOME ?? join(process.env.HOME ?? root, ".cache"), ISORITE_OPENCODE: opencode!.command },
     });
   }, 60_000);
 
@@ -75,7 +75,7 @@ describe.skipIf(opencode === null || !hasTmux())("isorite --tutorial", () => {
 
     await at(3, "press enter, and allow the write", (t) => t.includes(PROMPTS.tree.slice(0, 40)));
     pane.keys("Enter");
-    await allowUntil("[2] the quadtree");
+    await allowUntil("[2] two galaxies colliding");
 
     await at(4, "type /next");
     await command("/next");
@@ -83,8 +83,8 @@ describe.skipIf(opencode === null || !hasTmux())("isorite --tutorial", () => {
     await at(5, "type /atlas barnes hut");
     await command("/atlas barnes hut");
 
-    await at(6, "type /note the quadtree", (t) => t.includes("atlas · barnes"));
-    await command("/note the quadtree");
+    await at(6, "type /note two galaxies", (t) => t.includes("atlas · barnes"));
+    await command("/note two galaxies");
 
     await at(7, "press k", (t) => t.includes("not kept yet"));
     pane.keys("k");

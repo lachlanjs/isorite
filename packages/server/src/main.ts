@@ -7,10 +7,11 @@
 //   isorite example <folder>               write the example base, partway built, into a folder
 //   isorite term [<study base | notes>]    OpenCode, with isorite's plugin, beside a knowledge base
 //   isorite mcp [<study base | notes>]     the knowledge base's tools over MCP, on stdio, for another harness
-//   isorite --tutorial [<folder>]          a tour of isorite term, on the example base, with a scripted model
+//   isorite --tutorial [<folder>]          the tutorial: the terminal's tour, and the browser's beside it
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { StudyError } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { serve } from "./serve.ts";
@@ -25,8 +26,8 @@ const USAGE = `isorite: an agentic harness for understanding
   isorite study init <notes> [<where>]   make a study base for it (default: beside its repository)
   isorite serve <study base | notes> [--port <n>] [--allow-host <name>]
                                          open it in the browser, on this machine only
-  isorite example <folder>               write an example base on dynamical mean-field theory, six weeks
-                                         into being built, with its study base, into an empty folder
+  isorite example <folder>               write the example base (notes on an N-body simulation, three weeks
+                                         into being built) with its study base, into an empty folder
   isorite term [<study base | notes>] [--port <n>]
                                          OpenCode 2 here, with the knowledge base beside it: its server is
                                          started if none is running on the port
@@ -34,9 +35,10 @@ const USAGE = `isorite: an agentic harness for understanding
                                          the knowledge base's tools over MCP, on stdio, for Claude Code or Pi:
                                          claude mcp add isorite -- isorite mcp <base> --agent claude-code
   isorite --tutorial [<folder>] [--port <n>]
-                                         a tour of isorite in the terminal (OpenCode 2), on the example base,
-                                         with a scripted model: no key, nothing sent anywhere; kept in the
-                                         folder, to carry on later (also: isorite tutorial term)
+                                         the tutorial, on the example base, with a scripted model (no key,
+                                         nothing sent anywhere): the terminal's tour in OpenCode 2, and the
+                                         browser's opened beside it on the same base; kept in the folder, to
+                                         carry on later (also: isorite tutorial term)
 `;
 
 export function check(notes: string, out: (line: string) => void = console.log): number {
@@ -104,4 +106,5 @@ export function main(argv: string[]): number | Promise<number> {
   return command && command !== "help" && command !== "--help" ? 2 : 0;
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href) process.exit(await main(process.argv.slice(2)));
+// Run as the command, however it is reached: npm installs it as a link, so the path it was run by is resolved first.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) process.exit(await main(process.argv.slice(2)));

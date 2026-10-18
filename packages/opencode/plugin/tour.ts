@@ -6,7 +6,7 @@
 /** The prompts the tour fills in, word for word: the tutorial's model answers these. */
 export const PROMPTS = {
   code: "write sim.py: two bodies on a circular orbit, stepped with leapfrog, as my notes say",
-  tree: "add Barnes–Hut to the code, as my notes describe it, and fill in what my notes lack",
+  tree: "add Barnes–Hut to the code, as my notes describe it, and note where it is",
 } as const;
 
 /** What the plugin knows that a step can wait on. */
@@ -35,11 +35,11 @@ export interface TourStep {
   until?: (now: TourState, began: TourState) => boolean;
 }
 
-export const QUAD = "algorithms/the-quadtree";
+export const GOAL = "simulation/two-galaxies-colliding";
 
 export const TOUR: TourStep[] = [
   { title: "isorite in the terminal",
-    text: "OpenCode, an agent that writes code, with your notes beside it: a developer's notes on an N-body simulation, and an empty folder for the code. The model is scripted, so nothing is sent anywhere. Press enter to open.",
+    text: "OpenCode, an agent that writes code, with your notes beside it: a developer's notes on an N-body simulation, and an empty folder for the code. The browser that opened is the other half, on the same notes. The model is scripted. Press enter to open.",
     until: (s) => s.page !== "splash" },
   { title: "Ask for code", fill: PROMPTS.code,
     text: "The prompt is filled in. Press enter. Before it writes, the agent looks in your notes: by words, by meaning, and along their links. OpenCode asks before it writes a file: allow it.",
@@ -48,7 +48,7 @@ export const TOUR: TourStep[] = [
     text: "On the right: what it found, what it reached from there, and what it used, in gold. Its answer cites your notes, [1] and the section. In the browser, the Atlas draws the same path as it goes. Type /next.",
   },
   { title: "More, from your notes", fill: PROMPTS.tree,
-    text: "Press enter. It reads your notes on Barnes–Hut and the quadtree, writes the code, and answers the question your note on the quadtree left open. The code is OpenCode's, as always; what it would change in a note waits for you.",
+    text: "Press enter. It reads your notes on Barnes–Hut and the quadtree, writes the code, and adds to your note on the goal where the code now is. The code is OpenCode's, as always; what it would change in a note waits for you.",
     until: (s, b) => s.turns > b.turns },
   { title: "isorite's tools",
     text: "What it used are isorite's: brief_base, search_notes, find_similar, outline_note and read_note to look, propose_note_edit and propose_note_write to suggest. And two commands: /atlas and /note. Type /next.",
@@ -57,10 +57,10 @@ export const TOUR: TourStep[] = [
     text: "Type /atlas barnes hut. Beside the chat: what the note requires, on the left, and what builds on it, on the right.",
     until: (s) => s.atlasOpen },
   { title: "Open the note",
-    text: "Type /note the quadtree. A note in the terminal: who wrote each paragraph in the gutter, maths as source, links underlined.",
-    until: (s) => s.page === "note" && s.note === QUAD },
+    text: "Type /note two galaxies. A note in the terminal: who wrote each paragraph in the gutter, maths as source, links underlined.",
+    until: (s) => s.page === "note" && s.note === GOAL },
   { title: "Keep it, or not",
-    text: "The agent's answer to your question waits between dotted lines. [k] keeps it, [e] edits it first, [r] removes it; [n] goes to the next.",
+    text: "The agent's change waits between dotted lines. [k] keeps it, [e] edits it first, [r] removes it; [n] goes to the next.",
     until: (s) => s.page === "note" && s.waiting === 0 },
   { title: "Ask Iso here",
     text: "↑ and ↓ choose a paragraph; [/] asks Iso, isorite's own agent, to write after it. Its answer waits for you the same way.",
