@@ -1,5 +1,5 @@
 // A terminal's screen, as `tmux capture-pane -e` keeps it, drawn on a canvas a cell at a time: the replay of the
-// terminal's tour (`isorite tutorial term`) on the tutorial's site. Block, shade, box-drawing and Powerline
+// terminal's tour (`isorite --tutorial`) on the tutorial's site. Block, shade, box-drawing and Powerline
 // characters are drawn as shapes, as terminals draw them, so that they meet from cell to cell whatever the font.
 
 export interface Cell {

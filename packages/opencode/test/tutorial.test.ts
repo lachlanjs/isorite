@@ -1,4 +1,4 @@
-// The tour of isorite in the terminal, end to end: `isorite tutorial term` in tmux, walked as a person walks it,
+// The tour of isorite in the terminal, end to end: `isorite --tutorial` in tmux, walked as a person walks it,
 // each step moving on when its card asks. With ISORITE_RECORD set to a file, each step's screen is kept there for
 // the replay on the tutorial's site. Skipped without OpenCode 2 or tmux.
 
@@ -27,7 +27,7 @@ async function freePort(): Promise<number> {
 /** One step of the replay: the card's words, what the person does next, and the screen as it was. */
 interface Frame { step: number; title: string; text: string; does: string; screen: string }
 
-describe.skipIf(opencode === null || !hasTmux())("isorite tutorial term", () => {
+describe.skipIf(opencode === null || !hasTmux())("isorite --tutorial", () => {
   let root: string, pane: Pane;
   const frames: Frame[] = [];
   /** Waits for step k's card, keeps its screen, and says what is done next. */
@@ -39,7 +39,7 @@ describe.skipIf(opencode === null || !hasTmux())("isorite tutorial term", () => 
 
   beforeAll(async () => {
     root = mkdtempSync(join(tmpdir(), "isorite-tour-"));
-    pane = new Pane([process.execPath, MAIN, "tutorial", "term", join(root, "tour"), "--port", String(await freePort())], {
+    pane = new Pane([process.execPath, MAIN, "--tutorial", join(root, "tour"), "--port", String(await freePort())], {
       cwd: root,
       // At home in the tour's folder, so that OpenCode shows its paths short (~/tour/code); the cache, which holds the
       // AI SDK package OpenCode fetches, is the real one.

@@ -1,4 +1,4 @@
-// The tour of isorite in the terminal (`isorite tutorial term`): what each step says, the prompt it fills in for
+// The tour of isorite in the terminal (`isorite --tutorial`): what each step says, the prompt it fills in for
 // you, and what you do that moves it on, read from what the plugin already knows. A step with no `until` waits
 // for /next. As the browser's tutorial does (`app/src/lib/tutorial/steps.ts`), on the example base about DMFT.
 

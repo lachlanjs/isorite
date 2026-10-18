@@ -268,7 +268,7 @@ export default Plugin.define({
         </text>
       ),
     });
-    // What the tour (isorite tutorial term) waits on that nothing else counts: the agent's turns ended, Iso's answers,
+    // What the tour (isorite --tutorial) waits on that nothing else counts: the agent's turns ended, Iso's answers,
     // and notes sent from here.
     const [turns, setTurns] = createSignal(0), [isoAnswers, setIsoAnswers] = createSignal(0), [sent, setSent] = createSignal(0);
 
@@ -327,7 +327,7 @@ export default Plugin.define({
       return new TextRenderable(ctx.renderer, { content: new StyledText(chunks) });
     });
 
-    // ------------------------------------------------------------ the tour (isorite tutorial term)
+    // ------------------------------------------------------------ the tour (isorite --tutorial)
     const TUTORIAL = process.env.ISORITE_TUTORIAL === "1";
     const [stepAt, setStepAt] = createSignal(TUTORIAL ? 0 : TOUR.length);
     const [cardShown, setCardShown] = createSignal(true);

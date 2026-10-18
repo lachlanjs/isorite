@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The terminal's tour, replayed: each step of `isorite tutorial term` as the real OpenCode drew it, with the
+  // The terminal's tour, replayed: each step of `isorite --tutorial` as the real OpenCode drew it, with the
   // step's card beside it. The screens are recorded by the tour's end-to-end test
   // (packages/opencode/test/tutorial.test.ts, with ISORITE_RECORD), so they are the plugin's own, not drawings.
   import { onMount } from "svelte";
@@ -38,7 +38,7 @@
 <div class="terminal">
   <header>
     <h1>isorite in the terminal</h1>
-    <p>A replay of the terminal's tour: OpenCode, with isorite's plugin, on the example base, its model scripted. Every screen is the real one. To walk it yourself, with OpenCode 2 installed: <code>isorite tutorial term</code>.</p>
+    <p>A replay of the terminal's tour: OpenCode, with isorite's plugin, on the example base, its model scripted. Every screen is the real one. To walk it yourself, with OpenCode 2 installed: <code>isorite --tutorial</code>.</p>
   </header>
   <div class="stage">
     <figure class="screen">

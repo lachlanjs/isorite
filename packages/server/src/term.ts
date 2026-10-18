@@ -85,7 +85,7 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
   return code;
 }
 
-/** `isorite tutorial term`: the example base, a scripted model in place of a provider, and `isorite term` on them,
+/** `isorite --tutorial` (or `isorite tutorial term`): the example base, a scripted model in place of a provider, and `isorite term` on them,
  *  its tour shown. Everything is kept in `folder` (by default a new one in the temporary folder): the base, the
  *  code it opens in, and OpenCode's and isorite's settings, so that nothing of yours is used or changed. Run again
  *  on the same folder, it carries on where it was left. */
