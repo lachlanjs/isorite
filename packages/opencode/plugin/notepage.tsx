@@ -26,7 +26,9 @@ export interface NoteData {
 }
 
 export const STEPS = ["not reached", "opened", "worked through", "understood"];
-const DOTS = "· ".repeat(40).trim();
+const DOTS = "· ".repeat(38).trim();
+/** The widest a note's column is: its gutter, rail and about 76 characters of text. */
+const MEASURE = 84;
 
 /** A note's path as the boards write it: "dmft / self-consistency condition". */
 export function pathOf(id: string, title: string): string {
@@ -94,6 +96,7 @@ export function NotePage(props: { note: Accessor<NoteData | undefined>; current:
         </Row>
         <Show when={p.c.asked}><Row><text fg={g().faint} wrapMode="word">{`“${p.c.asked}”`}</text></Row></Show>
         <Row mark="waiting"><text fg={g().growth} wrapMode="none">{DOTS}</text></Row>
+        <Row><text> </text></Row>
       </box>
     );
   };
@@ -115,34 +118,37 @@ export function NotePage(props: { note: Accessor<NoteData | undefined>; current:
               </text>
             </box>
             <scrollbox ref={props.scroll} flexGrow={1} paddingLeft={4} paddingRight={4} paddingTop={1} scrollbarOptions={{ visible: false }}>
-              <For each={note().items}>
-                {(item) => item.type === "change" ? <Change c={item} /> : (
-                  <box flexDirection="column" id={`block-${blockIndex(item)}`}>
-                    <Show when={item.kind === "code"} fallback={
-                      <Row mark={item.mark} at={blockIndex(item) === props.cursor()}>
-                        <Show when={item.kind === "figure"} fallback={
-                          <Show when={item.kind === "math"} fallback={<Prose text={item.text} bold={item.kind === "heading"} />}>
-                            <For each={item.text.split("\n")}>{(line) => <text wrapMode="word" fg={/^\$\$\s*$/.test(line) ? g().soft : g().text}>{line}</text>}</For>
+              {/* As the board: the text in a column of reading width, not the terminal's. */}
+              <box flexDirection="column" maxWidth={MEASURE}>
+                <For each={note().items}>
+                  {(item) => item.type === "change" ? <Change c={item} /> : (
+                    <box flexDirection="column" id={`block-${blockIndex(item)}`}>
+                      <Show when={item.kind === "code"} fallback={
+                        <Row mark={item.mark} at={blockIndex(item) === props.cursor()}>
+                          <Show when={item.kind === "figure"} fallback={
+                            <Show when={item.kind === "math"} fallback={<Prose text={item.text} bold={item.kind === "heading"} />}>
+                              <For each={item.text.split("\n")}>{(line) => <text wrapMode="word" fg={/^\$\$\s*$/.test(line) ? g().soft : g().text}>{line}</text>}</For>
+                            </Show>
+                          }>
+                            <text wrapMode="word">
+                              <span style={{ fg: g().faint }}>{`[ figure: ${/^!\[([^\]]*)\]/.exec(item.text)?.[1] || "untitled"} ]  `}</span>
+                              <span style={{ fg: g().lattice, attributes: TextAttributes.UNDERLINE }}>{"[b] see it in the browser"}</span>
+                            </text>
                           </Show>
-                        }>
-                          <text wrapMode="word">
-                            <span style={{ fg: g().faint }}>{`[ figure: ${/^!\[([^\]]*)\]/.exec(item.text)?.[1] || "untitled"} ]  `}</span>
-                            <span style={{ fg: g().lattice, attributes: TextAttributes.UNDERLINE }}>{"[b] see it in the browser"}</span>
-                          </text>
-                        </Show>
-                      </Row>
-                    }>
-                      <Row mark={item.mark} at={blockIndex(item) === props.cursor()}>
-                        <box backgroundColor={g().g1} flexDirection="column" paddingLeft={1}>
-                          <text fg={g().faint}>{/^(```|~~~)\s*(\S*)/.exec(item.text)?.[2] || "code"}</text>
-                          <For each={item.text.split("\n").slice(1, -1)}>{(line) => <text fg={g().text} wrapMode="none">{line || " "}</text>}</For>
-                        </box>
-                      </Row>
-                    </Show>
-                    <Row><text> </text></Row>
-                  </box>
-                )}
-              </For>
+                        </Row>
+                      }>
+                        <Row mark={item.mark} at={blockIndex(item) === props.cursor()}>
+                          <box backgroundColor={g().g1} flexDirection="column" paddingLeft={1}>
+                            <text fg={g().faint}>{/^(```|~~~)\s*(\S*)/.exec(item.text)?.[2] || "code"}</text>
+                            <For each={item.text.split("\n").slice(1, -1)}>{(line) => <text fg={g().text} wrapMode="none">{line || " "}</text>}</For>
+                          </box>
+                        </Row>
+                      </Show>
+                      <Row><text> </text></Row>
+                    </box>
+                  )}
+                </For>
+              </box>
             </scrollbox>
           </>
         )}
@@ -156,6 +162,7 @@ export function NotePage(props: { note: Accessor<NoteData | undefined>; current:
         <Show when={!props.note()?.at} fallback={<text fg={g().faint}>[q] back to now</text>}>
           <text fg={g().faint}>[t] timeline</text>
           <text fg={g().faint}>[/] ask in place</text>
+          <text fg={g().faint}>[a] its atlas</text>
           <text fg={g().faint}>[s] send to agent</text>
           <text fg={g().faint}>[b] browser</text>
           <text fg={g().faint}>[q] back</text>

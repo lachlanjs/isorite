@@ -202,7 +202,7 @@ export default Plugin.define({
         }));
         return (
           <Show when={input.name === ATLAS}>
-            <box flexDirection="column" paddingLeft={2} paddingRight={1} paddingTop={1} border={["left"]} borderColor={ground().line}>
+            <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={1} paddingTop={1} border={["left"]} borderColor={ground().line} backgroundColor={ground().g0}>
               <Show when={focal()} fallback={<text fg={ground().faint} wrapMode="word">No note yet: ask the agent about your notes, or name one with /atlas &lt;words&gt;.</text>}>
                 <box flexDirection="row">
                   <text fg={ground().faint} wrapMode="none">{"atlas · "}</text>

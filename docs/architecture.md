@@ -238,8 +238,9 @@ The interface plays sound (later) by listening to this same stream and to its ow
 - **A terminal agent's edit to a note is a proposal** (`who: agent:<name>`) in the same journal, kept or removed in the same way. Its edits to code are the harness's own business. **Built** (M6 step 3): `propose_note_edit` and `propose_note_write` among the agent's tools, `agentPropose` in the engine (a replacement as its passages; a whole note diffed by line into passages; a new note as a draft), and in OpenCode a write to a note made a proposal.
 - **From the browser to the agent:** `agentSend` publishes `agent-sent` with what the agent is told; a harness that takes it says so (`agent-received`). In OpenCode it is a synthetic message in the session on screen, read with the next turn. **Built.**
 - Its lookups are `agent-step` events, drawn on the Atlas with Iso's drawing, and its name and the note it reads in the status line. An agent's turn does not take the map from Iso while Iso is answering. **Built.**
-- The one-note Atlas in a terminal calls the core's layout. It does not have a layout of its own.
-- First, the experiment scoped in rdstudio and never run: what a plugin, a launcher and a custom TUI can each deliver on OpenCode and Pi.
+- The one-note Atlas in a terminal takes its notes from the core's `reach`, as the browser lights a chosen note. **Built** (M6 step 5), with one deviation: it is drawn as three columns of boxes in terminal cells by the plugin (`oneatlas.ts`), not from the core's layout, which places folder blocks for the whole map and would have drawn the board worse.
+- **In OpenCode** (M6): the plugin's pages are the splash and the note view; the one-note Atlas is OpenCode's session panel; notes in play and from you are the sidebar; the base and "atlas following" (the server's `watchers` count of browser pages) are the prompt's status line; sources are a code-block renderer. The home's logo, which no slot reaches, is replaced by finding its renderable.
+- The experiment scoped in rdstudio was run for OpenCode as M6's step 0 (`plan-m6.md` §8): a plugin and a launcher deliver the boards without a fork. Pi stays the fallback, not tried.
 - **What the slice must hold to:** proposals carry `who`; the engine has no notion of "the browser" as the only client.
 
 ### Mobile and desktop application

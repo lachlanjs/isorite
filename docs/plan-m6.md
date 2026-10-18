@@ -255,6 +255,7 @@ Approved by Lachlan on 2026-10-18 with these answers:
    - `[s]` in the note view sends the paragraph the cursor is on, and in the atlas panel the note shown, to the agent, with what you want of it: it reaches the session as from the browser, under "from you".
    - The splash (step 1) is as the board, without its status line ("any key skips"), since only its four keys act. After it, OpenCode's home shows isorite's wordmark where it drew "opencode": the browser's (`Logo.svelte`), drawn from its own path in quarter blocks, the i's stems that branch with Iso's gold diamond and the malachite one over them, 10 rows by 63 columns. Where the terminal is smaller than 72 by 28, it is "isorite" in OpenCode's own letters instead ("iso" muted, "rite" bold, as "open" and "code"). No slot reaches that logo: the plugin finds its box among OpenCode's renderables by the rows it draws, hides it, and adds the wordmark beside it (`plugin/wordmark.ts`). If a later OpenCode draws its logo otherwise, nothing is found and OpenCode's stays.
 7. **Screenshots beside the six boards** (rendered from the tmux panes), then the write-up. A run on a real model: the free models if they serve, else the gateway with a key you give.
+   **Built** (2026-10-18): the six boards rendered from the design artifact at 1200 × 844 beside the end-to-end test's panes (160 × 44, through xterm.js), in an artifact of its own (`https://claude.ai/artifact/KV9zFsvwNVcyCQE5WHB1FX`). Fixed on the way: the note view's text in a column of reading width (84 cells with its gutter), `[a] its atlas` in its status line, a blank line after a waiting change, and the atlas panel on the page's ground rather than OpenCode's panel colour. What still differs is §10. No real model was run: no key was given.
 
 8. **A tutorial of the terminal (proposed 2026-10-18, not yet agreed).** OpenCode cannot run in a browser, so the GitHub Pages tutorial cannot run the real TUI. Proposed: `isorite tutorial term`, the real OpenCode on the example base against the scripted gateway, as the end-to-end test drives it (interactive, no key, needs OpenCode 2); and on Pages, the end-to-end test's screens replayed in xterm.js a key at a time, made by the tests so that they cannot drift.
 
@@ -264,3 +265,48 @@ Approved by Lachlan on 2026-10-18 with these answers:
 1. The tree of notes found in the sidebar and above the prompt, not inline in the chat as `Terminal-Chat` draws it. Inline is possible only if the agent copies a block into its answer, which a model may not do.
 2. A real-model run: whether to ask you for an OpenRouter key, or a gateway, if the free models keep refusing.
 3. Installs this needs, each asked before: OpenCode 2.0.32 in `~/oc2` (done, with your yes), and for the package's own tests `@opencode/plugin@2.0.32` and `@opentui/core@0.5.17` as dev dependencies, for types.
+
+## 10. What was built (2026-10-18)
+
+Steps 1 to 7, on `m6-terminal`. Nothing was asked of a real model: every check ran against the scripted gateway.
+
+**Running it:** `isorite term [<base>]` starts the isorite server if none answers, writes OpenCode's home (`~/.config/isorite/opencode`: the theme, the gateway, the plugin), and runs OpenCode 2 there. `ISORITE_GATEWAY_URL` and `ISORITE_GATEWAY_MODELS`, with the key in `ISORITE_GATEWAY_KEY`, point it at an OpenAI-compatible gateway, a corporate one included. `isorite mcp` gives any MCP harness the same tools.
+
+**What each board became** (beside the boards: the artifact named in step 7):
+
+| Board | Verdict | What differs |
+|---|---|---|
+| `Terminal-Splash` | As the board | No status line. After it, OpenCode's home shows the browser's wordmark in place of "opencode". |
+| `Terminal` | Close | The steps are the tools' names; OpenCode draws the transcript, cost and context. The session header with the small plant and the sidebar's cellular field are not built. |
+| `Terminal-Chat` | Close, as agreed | The tree is in the sidebar, without how each root was found. `[o]` beside a diff is not built: no slot beside OpenCode's diff. |
+| `Terminal-Chat-Tools` | OpenCode's | Web, subagents, run and permission are OpenCode's own. `[k] draft a note from this` is not built. |
+| `Terminal-Note` | As the board | Two more keys, `[n]` and `[s]`; the foot's prompt is `[/]`'s dialog. |
+| `Terminal-Atlas` | As the board | In OpenCode's session panel, with keys while focused; drawn from `reach`, not the core's layout. |
+
+**The six things wanted on 2026-10-10** (`ISORITE_CONTEXT.md`):
+- **Edits seen live in the browser:** yes. An agent's change to a note waits there, named "OpenCode", and is kept or removed as Iso's are.
+- **Notes brought into context and paths found, shown:** yes, on the Atlas live and in the sidebar's notes in play.
+- **A referenced note opened in the browser from the terminal:** by `[b]` in the note view and the atlas, not by clicking a citation.
+- **Isorite's own actions as buttons, starting it among them:** `isorite term` starts the server; the actions are keys and slash commands (`/note`, `/atlas`), not buttons.
+- **Branding, with ASCII L-system trees and a splash:** the splash and the home's wordmark, in block characters. No ASCII form and no tree in the session.
+- **The notes in play listed:** yes, as a tree.
+
+**Not done, or done differently:**
+- `[k] draft a note from this` and `[o] open the note it rests on` (above).
+- The session header and the sidebar's cellular field (`Terminal`).
+- A safety-net edit to a note shows in the transcript as OpenCode's "Edit" without a diff; an edit to an exercise is not caught.
+- A turn ends half a second after the prompt, once the session has settled (`session.wait`): a plugin's events carry no session status.
+- The home's wordmark is found among OpenCode's renderables by the rows of its logo; a later OpenCode that draws its logo otherwise keeps its own.
+- MCP agents' steps reach the Atlas but not the terminal panel's "is reading", which is OpenCode's.
+
+**Tests:**
+- 319 core (2 Atlas timing tests fail, as on main), 77 engine, 8 example, 24 server (1 skipped), 46 app and 39 opencode unit tests. The opencode ones include 10 end-to-end tests that drive OpenCode 2.0.32 in tmux against the scripted gateway: splash, home and wordmark, status line, look-ups and sources, the atlas, proposals, from you, the note view (keep, ask, remove, edit, timeline, `[s]`), and the server stopping with the TUI.
+- Browser tests: running at the time of writing; their counts follow in the next commit.
+- Check is clean.
+
+**For Lachlan:**
+1. `[k] draft a note from this`: in this milestone or later?
+2. The session header with the small plant: OpenCode has no slot at a session's top; the space above the prompt is the nearest. Build it there?
+3. The steps' names: keep the tools' names, or name them for the board's steps?
+4. A real-model run before the merge needs a key.
+5. Step 8, the terminal tutorial, is still a proposal.
