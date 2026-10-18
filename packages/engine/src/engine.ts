@@ -61,6 +61,8 @@ export function checkNoteId(id: string): string {
   return id;
 }
 
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 async function walk(files: Files, root: string): Promise<FileEntry[]> {
   const out: FileEntry[] = [];
   const at = (path: string): string => (root && path ? `${root}/${path}` : root || path);
@@ -302,6 +304,75 @@ export class Engine implements Api {
 
   createNote(id: string, text: string): Promise<Saved> {
     return this.one(() => this.put(id, text, null));
+  }
+
+  async moveNote(id: string, to: string, base: string): Promise<Saved> {
+    to = to.trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/, "");
+    if (!inBase(id) || !inBase(to)) throw new EngineError("only a note of the base is moved, and only within it");
+    checkNoteId(to);
+    if (to === id) throw new EngineError("the note is there already");
+    const notes = this.opts.notes, study = this.opts.study, from = `${checkNoteId(id)}.md`, path = `${to}.md`;
+    // Who links to it, read before it moves: they are changed after.
+    const linking = this.bundle.backlinks(id).filter((c) => c !== id);
+    const text = await this.one(async () => {
+      const now = await notes.read(from);
+      if (now === null) throw new Conflict(`${id} is gone`, null);
+      if (await notes.read(path) !== null) throw new EngineError(`there is already a note at ${to}`, 409);
+      const entries = await this.journal(id);
+      await this.enter(id, entries, reconcile(entries, now, await this.stamp("external")));
+      if (base !== hashText(now)) throw new Conflict(`${id} was changed since you opened it`, { id, text: now, version: hashText(now) });
+      await notes.write(path, now);
+      await notes.remove(from);
+      if (study) {
+        // The journal moves with the note, and says so; the record is told, so what is known of the note follows it.
+        const journal = await study.read(journalPath(id));
+        if (journal !== null) { await study.write(journalPath(to), journal); await study.remove(journalPath(id)); }
+        const hash = hashText(now);
+        await this.enter(to, entries, { ...(await this.stamp("you")), kind: "change", why: "move", before: hash, after: hash, hunks: [], from: id });
+        await this.record({ event: "moved", from: id, to });
+      }
+      this.files.delete(from);
+      this.files.set(path, { path, text: now });
+      this.built = this.index = null;
+      this.embedSoon();
+      this.publish({ type: "note-changed", id, version: null, who: "you" });
+      this.publish({ type: "note-changed", id: to, version: hashText(now), who: "you" });
+      return now;
+    });
+    // Links to it, in the form the base writes them (absolute, `/folder/note.md`), and its own links to itself.
+    const old = new RegExp(`\\]\\(/${escapeRe(id)}\\.md(?=[#\\s)])`, "g");
+    for (const c of linking) {
+      const source = await this.readNote(c);
+      const changed = source.text.replace(old, `](/${to}.md`);
+      if (changed !== source.text) await this.saveNote(c, { base: source.version, text: changed });
+    }
+    // Exercises that test it.
+    if (study) {
+      for (const ex of Bundle.fromFiles(await walk(study, STUDY_DIR)).concepts.values()) {
+        if (!testsOf(ex.meta).includes(id)) continue;
+        const sid = studyId(ex.id), source = await this.readNote(sid);
+        const changed = source.text.replace(/^(tests:.*)$/m, (line) => line.replace(new RegExp(`(?<=[\\[,\\s])${escapeRe(id)}(?=[\\],\\s]|$)`, "g"), to));
+        if (changed !== source.text) await this.saveNote(sid, { base: source.version, text: changed });
+      }
+    }
+    return { id: to, text, version: hashText(text), changed: true };
+  }
+
+  async deleteNote(id: string, base: string): Promise<void> {
+    if (!inBase(id)) throw new EngineError("only a note of the base is deleted here");
+    const notes = this.opts.notes, path = `${checkNoteId(id)}.md`;
+    await this.one(async () => {
+      const now = await notes.read(path);
+      if (now === null) throw new Conflict(`${id} is gone`, null);
+      const entries = await this.journal(id);
+      await this.enter(id, entries, reconcile(entries, now, await this.stamp("external")));
+      if (base !== hashText(now)) throw new Conflict(`${id} was changed since you opened it`, { id, text: now, version: hashText(now) });
+      await notes.remove(path);
+      this.files.delete(path);
+      this.built = this.index = null;
+      this.embedSoon();
+    });
+    this.publish({ type: "note-changed", id, version: null, who: "you" });
   }
 
   /** Writes happen one at a time, in the order asked. */

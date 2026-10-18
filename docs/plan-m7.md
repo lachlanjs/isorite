@@ -156,3 +156,13 @@ The GitHub Pages part E is the replay of these screens, re-recorded, and a line 
 3. **The DMFT base:** retire it everywhere (tutorial, terminal tour, tests), or keep it for the engine's tests and add the N-body base beside it?
 4. **Following a link on a phone:** there is no way to do it in the editor. Should the tutorial show the Atlas as the way, or is this a gap to fix?
 5. **"Skills" in part E:** the plugin adds tools and commands, not OpenCode skill files. Teach those, or ship a skill (for example "check this code against my notes") as part of this?
+
+## 8. Lachlan's answers (2026-10-18)
+
+1. **Moving, renaming and deleting: add the smallest version.** A note's "details" gets a path, which moves or renames the note, and a way to delete it. Folders follow from paths: a folder exists while a note is in it.
+   - **Links:** moving a note rewrites the links to it in other notes. That counts as your own change, journalled like any other.
+   - **Delete:** before deleting, you are told which notes link to the note. Those links are left as they are, and the Atlas shows them as broken, as it does any broken link.
+   - **Its history:** the note's journal stays in the study base. Deleting removes the file, and git keeps it.
+2. **Exercises:** teach the one kind, `written`.
+3. **The DMFT base is retired everywhere:** the tutorial, the terminal tour, the replay and the tests move to `nbody-notes`.
+4. **Skills and phone links:** teach what exists. The tools and commands are the terminal's skills, and on a phone the Atlas is the way between notes.

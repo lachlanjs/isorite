@@ -173,6 +173,12 @@ export interface Api {
   saveNote(id: string, edit: { base: string; text: string }): Promise<Saved>;
   /** Make a note. Refuses when there is one already. */
   createNote(id: string, text: string): Promise<Saved>;
+  /** Move a note of the base to another id: a new name, or another folder (made if need be). Its journal and what
+   *  the record knows of it go with it; links to it, and exercises that test it, are changed to match, as your
+   *  own edits. `base` as for saveNote. */
+  moveNote(id: string, to: string, base: string): Promise<Saved>;
+  /** Delete a note of the base. Its journal stays, and links to it are left, broken. `base` as for saveNote. */
+  deleteNote(id: string, base: string): Promise<void>;
   /** The note's journal, oldest first. Empty with no study base. */
   journal(id: string): Promise<Entry[]>;
   /** The note's text just after one of its journal's entries. */
