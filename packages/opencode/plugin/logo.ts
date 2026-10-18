@@ -54,21 +54,21 @@ export const shapes: readonly Shape[] = [
   full(5, 7), full(5, 8), full(5, 9), full(5, 10), full(5, 11), full(5, 12), full(5, 13), full(5, 14),
 ];
 
-export const glyphs: Record<Style, Record<Corner | "full" | "top" | "bottom", string>> = {
+export const glyphs: Record<Style, Record<Corner | "full", string>> = {
   // Each pair is one square: the left cell, then the right.
   legacy: {
-    full: "██", top: "▀▀", bottom: "▄▄",
+    full: "██",
     tl: "\u{1FB4A}\u{1FB42}", // lower right block, from the lower left to the upper right
     tr: "\u{1FB4D}\u{1FB3F}", // lower left block, from the upper left to the lower right
     bl: "\u{1FB63}\u{1FB55}", // upper right block, from the upper left to the lower right
     br: "\u{1FB60}\u{1FB58}", // upper left block, from the lower left to the upper right
   },
-  quadrant: { full: "██", top: "▀▀", bottom: "▄▄", tl: "▗▟", tr: "▙▖", bl: "▝▜", br: "▛▘" },
-  simple: { full: "██", top: "▀▀", bottom: "▄▄", tl: " ◢", tr: "◣ ", bl: " ◥", br: "◤ " },
+  quadrant: { full: "██", tl: "▗▟", tr: "▙▖", bl: "▝▜", br: "▛▘" },
+  simple: { full: "██", tl: " ◢", tr: "◣ ", bl: " ◥", br: "◤ " },
   // A square one cell: its halves straight from corner to corner, steeper than 45° as a cell is taller than wide.
   // Powerline's triangles, which terminals draw themselves, edge to edge (xterm.js and so VS Code, Windows
   // Terminal, kitty, Ghostty, WezTerm): ◢ ◣ ◥ ◤ are left to the font, which draws them inside the cell.
-  triangle: { full: "█", top: "▀", bottom: "▄", tl: "\u{E0BA}", tr: "\u{E0B8}", bl: "\u{E0BE}", br: "\u{E0BC}" },
+  triangle: { full: "█", tl: "\u{E0BA}", tr: "\u{E0B8}", bl: "\u{E0BE}", br: "\u{E0BC}" },
 };
 
 /** A square of the style left empty: as many spaces as it is cells wide. */

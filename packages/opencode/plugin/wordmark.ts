@@ -11,30 +11,49 @@ import { blank, glyphs, type Corner, type Style } from "./logo.ts";
 export type Role = "ink" | "iso" | "right";
 export interface Run { text: string; role: Role }
 
-// A letter, a row a string, a square a character: `F` full, `T` its upper half and `B` its lower (a bar as thick as
-// a stem is wide, a cell being twice as tall), and a corner half by the corner it leaves empty, `a` the top left (◢),
-// `b` the bottom right (◤), `c` the bottom left (◥), `d` the top right (◣). Rows 0 and 1 are for what rises above
-// the letters, row 6 the baseline.
-const SQUARE: Record<string, Corner | "full" | "top" | "bottom"> = { F: "full", T: "top", B: "bottom", a: "tl", b: "br", c: "bl", d: "tr" };
-const LETTERS: Record<string, string[]> = {
-  i: ["...ab", "..ab.", "cdF..", ".cF..", "..F..", "..F..", "..F.."],
-  s: ["...", "...", ".aT", "ab.", "cd.", ".cd", "BBb"],
-  o: [".....", ".....", ".aTd.", "ab.cd", "F...F", "cd.ab", ".cBb."],
-  r: ["...", "...", "Fab", "Fb.", "F..", "F..", "F.."],
-  t: ["...", ".F.", "TFT", ".F.", ".F.", ".F.", ".cd"],
-  e: [".....", ".....", ".aTd.", "ab.cd", "FTTTT", "cd...", ".cBB."],
+// A letter, a row a string, a square a character: `F` full, and a corner half by the corner it leaves empty, `a` the
+// top left (◢), `b` the bottom right (◤), `c` the bottom left (◥), `d` the top right (◣).
+const SQUARE: Record<string, Corner | "full"> = { F: "full", a: "tl", b: "br", c: "bl", d: "tr" };
+
+// In squares two cells wide (`legacy`, `quadrant`, `simple`): strokes a square thick, at 45°. Rows 0 and 1 are for
+// what rises above the letters, row 6 the baseline.
+const IN_SQUARES = {
+  letters: {
+    i: ["...ab", "..ab.", "cdF..", ".cF..", "..F..", "..F..", "..F.."],
+    s: ["...", "...", "aFF", "cd.", ".cd", ".ab", "FF."],
+    o: [".....", ".....", ".aFd.", "ab.cd", "F...F", "cd.ab", ".cFb."],
+    r: ["...", "...", "Fab", "Fb.", "F..", "F..", "F.."],
+    t: ["...", ".F.", "FFF", ".F.", ".F.", ".F.", ".cd"],
+    e: [".....", ".....", ".aFd.", "ab.cd", "FFFFF", "cd...", ".cFF."],
+  } as Record<string, string[]>,
+  /** The mark's diamond, over an i's stem, and the row left clear beneath it. */
+  dot: [".aFd.", ".cFb.", "....."],
 };
-/** The mark's diamond, over an i's stem, and the row left clear beneath it. */
-const DOT = [".aFd.", ".cFb.", "....."];
+
+// In cells (`triangle`): a cell is about twice as tall as it is wide, so a stroke is two cells wide and a row tall,
+// every way alike, and a diagonal (◢█◤) as steep as a cell. A triangle meets a whole block along a whole edge, so
+// nothing steps; a bar of half blocks would meet a triangle half a row short. Rows 0 and 1 are for what rises above
+// the letters, row 8 the baseline.
+const IN_CELLS = {
+  letters: {
+    i: ["....aFb", "cFdaFb.", ".cFFF..", "...FF..", "...FF..", "...FF..", "...FF..", "...FF..", "...FF.."],
+    s: [".....", ".....", ".aFFF", "aFb..", "cFd..", ".cFd.", "..cFd", "..aFb", "FFFb."],
+    o: ["......", "......", ".aFFd.", "aFbcFd", "FF..FF", "FF..FF", "FF..FF", "cFdaFb", ".cFFb."],
+    r: [".....", ".....", "FFaFb", "FFFb.", "FF...", "FF...", "FF...", "FF...", "FF..."],
+    t: ["......", "..FF..", "FFFFFF", "..FF..", "..FF..", "..FF..", "..FF..", "..FF..", "..cFd."],
+    e: ["......", "......", ".aFFd.", "aFbcFd", "FFFFFF", "FF....", "FF....", "cFd...", ".cFFFF"],
+  } as Record<string, string[]>,
+  dot: ["...ad..", "...cb..", "......."],
+};
 const WORD = "isorite";
-const GAP = 1;
 
 /** The wordmark's rows, as runs in one colour each, every row as wide (so that centred they stay aligned). */
 export function rows(style: Style = "triangle"): Run[][] {
+  const { letters: LETTERS, dot } = [...glyphs[style].full].length === 1 ? IN_CELLS : IN_SQUARES;
   const draw = (squares: string) => [...squares].map((q) => (q === "." ? blank(style) : glyphs[style][SQUARE[q]!])).join("");
-  const gap = blank(style).repeat(GAP);
-  const letters = [0, 1, 2, 3, 4, 5, 6].map((r): Run[] => [{ text: [...WORD].map((ch) => draw(LETTERS[ch]![r]!)).join(gap), role: "ink" }]);
-  const dots = DOT.map((line): Run[] => {
+  const gap = blank(style);
+  const letters = LETTERS.i!.map((_, r): Run[] => [{ text: [...WORD].map((ch) => draw(LETTERS[ch]![r]!)).join(gap), role: "ink" }]);
+  const dots = dot.map((line): Run[] => {
     let i = 0;
     return [...WORD].flatMap((ch, k): Run[] => {
       const lead = k ? [{ text: gap, role: "ink" as Role }] : [];
