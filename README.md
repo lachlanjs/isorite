@@ -22,7 +22,7 @@ cd <your code> && isorite term <notes>   # OpenCode here, with the notes beside 
 isorite model                       # optional: search by meaning (34 MB, once)
 ```
 
-From a checkout instead: `npm install && npm run build`, then `node packages/server/src/main.ts …` as below. `npm run package` builds the npm package into `.npm/isorite` (the command bundled to JavaScript, with the app, the example notes and the OpenCode plugin beside it); `npm pack` or `npm publish` is run there.
+From a checkout instead: `npm install && npm run build`, then `node packages/server/src/main.ts …` as below. `npm run package` builds the npm package into `.npm/isorite` (the command bundled to JavaScript, with the app, the example notes and the OpenCode plugin beside it); `npm pack` or `npm publish` is run there. Releases go through GitHub Actions on a version tag: `docs/release.md`.
 
 | | |
 |---|---|
