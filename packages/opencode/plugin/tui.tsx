@@ -42,11 +42,10 @@ export default Plugin.define({
   setup(ctx) {
     const ground = () => (ctx.themeMode === "light" ? quartz : lapis);
     // The mark and the wordmark as images where the terminal shows images (kitty's graphics protocol, or sixel): their
-    // edges straight, as the board and the browser draw them. Elsewhere in characters: the mark's corner halves as
-    // wedges, but in VS Code, whose terminal leaves the wedges to the font, in quarter blocks. ISORITE_LOGO chooses
-    // a style of characters, or "image".
+    // edges straight at 45°, as the board and the browser draw them. Elsewhere in characters the terminal draws itself,
+    // straight but steeper (`logo.ts`). ISORITE_LOGO chooses a style of characters, or "image".
     const logoChoice = process.env.ISORITE_LOGO;
-    const style = (logoChoice && logoChoice !== "image" ? logoChoice : process.env.TERM_PROGRAM === "vscode" ? "quadrant" : "legacy") as Logo.Style;
+    const style = (logoChoice && logoChoice !== "image" ? logoChoice : "triangle") as Logo.Style;
     const [capabilities, setCapabilities] = createSignal(ctx.renderer.capabilities);
     ctx.renderer.on("capabilities", () => setCapabilities(ctx.renderer.capabilities));
     const protocol = (): "kitty" | "sixel" | null => {
@@ -507,7 +506,8 @@ export default Plugin.define({
       return RGBA.fromValues(x.r + (y.r - x.r) * t, x.g + (y.g - x.g) * t, x.b + (y.b - x.b) * t, 1);
     };
     // The wordmark as the browser draws it, where the home has room for it; else the name in OpenCode's letters.
-    const roomy = () => ctx.renderer.width >= 76 && ctx.renderer.height >= 28;
+    const wide = [...Wordmark.rows(style)[0]!.map((run) => run.text).join("")].length;
+    const roomy = () => ctx.renderer.width >= (protocol() ? 76 : wide + 6) && ctx.renderer.height >= 28;
     const wordmark = () => {
       const g = ground();
       const mark = new BoxRenderable(ctx.renderer, { id: "isorite-wordmark", flexDirection: "column", alignItems: "center" });

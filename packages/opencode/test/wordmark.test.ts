@@ -20,8 +20,10 @@ describe("the wordmark", () => {
   });
 
   it("is drawn with the mark's own pieces: whole squares and the corner halves of the style", () => {
-    const pieces = new Set(Object.values(glyphs.legacy).flatMap((g) => [...g]));
-    for (const line of lines()) for (const ch of line) if (ch !== " ") expect(pieces).toContain(ch);
+    for (const style of ["legacy", "quadrant", "triangle"] as const) {
+      const pieces = new Set(Object.values(glyphs[style]).flatMap((g) => [...g]));
+      for (const line of lines(style)) for (const ch of line) if (ch !== " ") expect(pieces).toContain(ch);
+    }
   });
 
   it("in OpenCode's letters, has the i one cell wide and the others four", () => {

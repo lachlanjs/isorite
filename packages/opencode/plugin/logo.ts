@@ -5,13 +5,17 @@
 // so the mark is 20 cells by 15 rows. The two top rows are in growth (gold), the
 // rest in the text colour.
 //
-// A corner half across two cells is drawn, by default, with the wedges of Symbols
-// for Legacy Computing (`legacy`), as the board draws it: a true 45° edge. Most
-// terminals draw them as geometry (kitty, Ghostty, WezTerm, foot, Windows
-// Terminal); xterm.js, and so VS Code, leaves them to the font. Those wedges split
-// a cell in thirds, so a diagonal bends slightly where its cells meet. `quadrant`
-// draws a half as a two-step stair of quarter blocks, which every terminal draws
-// as geometry; `simple` is one triangle and a space. `ISORITE_LOGO` chooses.
+// A corner half is drawn, by default, as one of Powerline's triangles in a square one
+// cell wide (`triangle`): terminals draw those themselves, from corner to corner and
+// meeting the full blocks (xterm.js and so VS Code, Windows Terminal, kitty, Ghostty,
+// WezTerm), where they leave ◢ ◣ ◤ ◥ to the font, which draws them inside the cell.
+// Its edges are straight, but as steep as a cell is tall (about 63°), not 45°: no
+// character a terminal draws itself makes a 45° edge. The other styles keep the
+// board's two-cell square: `legacy` draws a half with the wedges of Symbols for
+// Legacy Computing (45°, but the wedges split a cell in thirds, so an edge bends
+// where its cells meet, and xterm.js leaves them to the font); `quadrant` as a stair
+// of quarter blocks; `simple` as one font triangle and a space. `ISORITE_LOGO`
+// chooses.
 
 export type Corner = "tl" | "tr" | "bl" | "br";
 
@@ -62,7 +66,9 @@ export const glyphs: Record<Style, Record<Corner | "full", string>> = {
   quadrant: { full: "██", tl: "▗▟", tr: "▙▖", bl: "▝▜", br: "▛▘" },
   simple: { full: "██", tl: " ◢", tr: "◣ ", bl: " ◥", br: "◤ " },
   // A square one cell: its halves straight from corner to corner, steeper than 45° as a cell is taller than wide.
-  triangle: { full: "█", tl: "◢", tr: "◣", bl: "◥", br: "◤" },
+  // Powerline's triangles, which terminals draw themselves, edge to edge (xterm.js and so VS Code, Windows
+  // Terminal, kitty, Ghostty, WezTerm): ◢ ◣ ◥ ◤ are left to the font, which draws them inside the cell.
+  triangle: { full: "█", tl: "\u{E0BA}", tr: "\u{E0B8}", bl: "\u{E0BE}", br: "\u{E0BC}" },
 };
 
 /** A square of the style left empty: as many spaces as it is cells wide. */
@@ -70,8 +76,8 @@ export function blank(style: Style): string {
   return " ".repeat([...glyphs[style].full].length);
 }
 
-/** The mark's rows, each a list of runs, 20 cells wide (10 in `triangle`). */
-export function rows(style: Style = "legacy"): Run[][] {
+/** The mark's rows, each a list of runs, 10 cells wide in `triangle`, 20 in the others. */
+export function rows(style: Style = "triangle"): Run[][] {
   const grid: (Shape | undefined)[][] = Array.from({ length: height }, () => Array(width).fill(undefined));
   for (const shape of shapes) grid[shape.y]![shape.x] = shape;
   return grid.map((row) => {
@@ -88,6 +94,6 @@ export function rows(style: Style = "legacy"): Run[][] {
 }
 
 /** The mark as plain lines, for tests and for terminals without colour. */
-export function lines(style: Style = "legacy"): string[] {
+export function lines(style: Style = "triangle"): string[] {
   return rows(style).map((runs) => runs.map((run) => run.text).join(""));
 }

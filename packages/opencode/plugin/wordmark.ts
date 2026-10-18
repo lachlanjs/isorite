@@ -1,7 +1,7 @@
 // isorite's name where OpenCode's home draws its own, as the browser draws it (`Logo.svelte`): seven letters of
 // strokes at 45°, the i's each a stem that branches, with a gold diamond for Iso over the first i and a malachite one,
 // for what you got right, over the second. Drawn as the mark is (`logo.ts`): every shape a full square or a corner
-// half, two cells wide, in the same style; the i is the mark made small, and its diamond is the mark's.
+// half, in the same style; the i is the mark made small, and its diamond is the mark's.
 //
 // Where the home is too small for that, the name in the letters of OpenCode's own logo, as it draws "open" and
 // "code": "iso" muted and "rite" bold.
@@ -29,7 +29,7 @@ const WORD = "isorite";
 const GAP = 1;
 
 /** The wordmark's rows, as runs in one colour each, every row as wide (so that centred they stay aligned). */
-export function rows(style: Style = "legacy"): Run[][] {
+export function rows(style: Style = "triangle"): Run[][] {
   const draw = (squares: string) => [...squares].map((q) => (q === "." ? blank(style) : glyphs[style][SQUARE[q]!])).join("");
   const gap = blank(style).repeat(GAP);
   const letters = [0, 1, 2, 3, 4, 5, 6].map((r): Run[] => [{ text: [...WORD].map((ch) => draw(LETTERS[ch]![r]!)).join(gap), role: "ink" }]);
@@ -45,7 +45,7 @@ export function rows(style: Style = "legacy"): Run[][] {
 }
 
 /** The wordmark as plain lines. */
-export function lines(style: Style = "legacy"): string[] {
+export function lines(style: Style = "triangle"): string[] {
   return rows(style).map((runs) => runs.map((r) => r.text).join("").trimEnd());
 }
 

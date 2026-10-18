@@ -31,7 +31,8 @@ describe("the mark", () => {
   });
 
   it("draws the trunk as whole blocks in the middle column", () => {
-    for (const line of lines().slice(12)) expect(line).toBe("          ██        ");
+    for (const line of lines("legacy").slice(12)) expect(line).toBe("          ██        ");
+    for (const line of lines().slice(12)) expect(line).toBe("     █    ");
   });
 });
 
