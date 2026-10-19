@@ -6,7 +6,7 @@
   // carries: the count says how many. A lit line is 3 px however many links run along it, as on the boards; one
   // whose links run both ways stands still. Iso's steps along links are gold, as its lines on Desktop-Think, and a
   // note for Iso has a blue line to each note it links to.
-  let { k, rest, hot, counts, sent = [] }: {
+  let { k, rest, hot, counts, sent = [], grown = [] }: {
     /** The zoom: paths are given at zoom 1. */
     k: number;
     /** `strong`: a "requires" runs along it. A route of weaker links only is drawn lighter. `trunk`: between two folders. */
@@ -16,6 +16,8 @@
     counts: { requires: number; builds: number; uses: number };
     /** A note for Iso's lines to the notes it links to. */
     sent?: { key: string; d: string }[];
+    /** Links just made, drawn growing from one end to the other, then gone (K3). */
+    grown?: { key: string; d: string }[];
   } = $props();
 </script>
 
@@ -24,6 +26,8 @@
     {#each rest as r (r.key)}<path class={r.study ? "study" : r.strong ? "base" : "base weak"} class:trunk={r.trunk && !r.study} d={r.d} />{/each}
     {#each sent as r (r.key)}<path class="sent" d={r.d} />{/each}
     {#each hot as r (r.key)}<path class="lit {r.kind}" class:still={r.still} d={r.d} />{/each}
+    <!-- Measured along its own length (pathLength), so drawn in the map's units: its width is set by the zoom. -->
+    {#each grown as r (r.key)}<path class="grown" pathLength="1" d={r.d} style:stroke-width="{3 / k}px" />{/each}
   </g>
 </svg>
 
@@ -42,6 +46,9 @@
   .sent { stroke: var(--lattice); stroke-width: 2px; } /* as the boards' .me */
   .uses { stroke: var(--text-soft); stroke-width: 1.5px; stroke-dasharray: none; animation: none; }
   @keyframes run { to { stroke-dashoffset: -12; } }
+  /* Slow enough to follow (Lachlan, 2026-10-20): a moment's wait, 1.8 s to grow, 2 s to stand, then it fades. */
+  .grown { vector-effect: none; stroke: var(--growth); stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: grow 5.5s ease-in-out forwards; }
+  @keyframes grow { 0% { stroke-dashoffset: 1; opacity: 1; } 9% { stroke-dashoffset: 1; } 42% { stroke-dashoffset: 0; opacity: 1; } 78% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
   .still { animation: none; }
-  @media (prefers-reduced-motion: reduce) { .lit { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .lit { animation: none; } .grown { animation: none; stroke-dashoffset: 0; opacity: .6; } }
 </style>

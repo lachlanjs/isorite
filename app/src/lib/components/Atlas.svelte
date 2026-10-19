@@ -8,8 +8,10 @@
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
   import type { How, MapReport, NoteSource } from "@isorite/engine";
   import { linkedIn, place, placeOf, testsIn, titleIn, withLink, withoutLink, withTest } from "$lib/atlas/picks.ts";
+  import { tick } from "svelte";
   import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
+  import { views } from "$lib/views.svelte.ts";
   import { CELL, LABELS_AT, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
@@ -30,6 +32,8 @@
 
   let report = $state.raw<MapReport | null>(null);
   let laid = $state.raw<{ key: string; layout: Layout } | null>(null);
+  /** The way and grid `laid` was made on: a changed base starts from it only on the same (V5). */
+  let laidOn = "";
   let failed = $state("");
   let view = $state.raw<View>({ x: 0, y: 0, k: 1 });
   let size = $state.raw({ w: 0, h: 0 });
@@ -38,8 +42,6 @@
   let pointed = $state("");
   let walk = $state.raw<string[]>([]);
   const chosen = $derived(walk.at(-1) ?? "");
-  /** Every link down the chain of what the note requires is drawn, not only its own. */
-  let chain = $state(false);
   let viewport = $state<HTMLDivElement>();
   /** The grid the map is laid on (key c): fine, coarse or coarser. A bigger cell gives a route fewer places to bend. */
   const GRAINS: Grain[] = ["fine", "coarse", "coarser"];
@@ -66,9 +68,15 @@
   async function load(): Promise<void> {
     try {
       const next = await app.api.map();
-      const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true });
+      // A changed base is laid out from where things stood (V5), on the same grid and the same way.
+      const on = `${flow}|${grain}`, from = laid && laidOn === on ? laid.layout.orders ?? null : null;
+      const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from });
+      laidOn = on;
+      const changed = !!laid && laid.key !== next_laid.key;
+      const was = laid && L ? { refs: new Set(L.items.map((n) => n.ref)), edges: new Set(report!.model.edges.map(([a, b]) => `${a}>${b}`)) } : null;
       const first = !laid || (laid.key !== next_laid.key && !moved);
       report = next; laid = next_laid; failed = "";
+      if (was && changed) void arrive(was);
       if (first && size.w) view = whole();
     } catch (e) { failed = (e as Error).message; }
   }
@@ -97,13 +105,46 @@
     return fit(box, size.w, size.h, 1, L?.cell);
   };
 
-  // The viewport's size; the first time it is known, the whole map is framed.
+  // A changed base, seen happen (K3): the blocks move to the new layout, then what is new fades in where it now
+  // stands, and a new link is drawn as a line growing from the note that has it to the note it links to.
+  let shifting = $state(false);
+  let grown = $state.raw<{ key: string; d: string }[]>([]);
+  async function arrive(was: { refs: Set<string>; edges: Set<string> }): Promise<void> {
+    shifting = true;
+    setTimeout(() => (shifting = false), 700);
+    await tick();
+    if (!L || !idx || !report) return;
+    const quiet = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    for (const item of L.items) {
+      if (was.refs.has(item.ref) || item.ref.startsWith("@")) continue;
+      const el = viewport?.querySelector(item.kind === "folder" ? `[data-folder="${CSS.escape(item.ref)}"]` : `[data-note="${CSS.escape(item.ref)}"]`);
+      el?.animate([{ opacity: 0 }, { opacity: 0, offset: quiet ? 0 : 0.45 }, { opacity: 1 }], { duration: quiet ? 200 : 1000, easing: "ease-out" });
+    }
+    const fresh = report.model.edges.filter(([a, b]) => !was.edges.has(`${a}>${b}`) && !a.startsWith("@") && !b.startsWith("@") && was.refs.has(a) && was.refs.has(b));
+    grown = fresh.flatMap(([a, b]) => {
+      const i = idx!.at.get(a), j = idx!.at.get(b);
+      if (i === undefined || j === undefined) return [];
+      return [{ key: `${a}>${b}`, d: between(L!.items[shownAs(idx!, open, i)]!, L!.items[shownAs(idx!, open, j)]!) }];
+    });
+    if (grown.length) setTimeout(() => (grown = []), 5600);
+  }
+  /** A straight way from one block's side to another's, as a note for Iso's lines are drawn. */
+  function between(o: { gx: number; gy: number; w: number; h: number }, n: { gx: number; gy: number; w: number; h: number }): string {
+    const dx = n.gx + n.w / 2 - (o.gx + o.w / 2), dy = n.gy + n.h / 2 - (o.gy + o.h / 2), across = Math.abs(dx) * (5 / 18) >= Math.abs(dy);
+    const p: [number, number] = across ? [dx < 0 ? o.gx : o.gx + o.w, o.gy + o.h / 2] : [o.gx + o.w / 2, dy < 0 ? o.gy : o.gy + o.h];
+    const q: [number, number] = across ? [dx < 0 ? n.gx + n.w : n.gx, n.gy + n.h / 2] : [n.gx + n.w / 2, dy < 0 ? n.gy + n.h : n.gy];
+    return linePath(directLine(p, q, across), 0, L!.cell);
+  }
+
+  // The viewport's size; the first time it is known, the whole map is framed. After that, as a note opens beside the
+  // Atlas or the divider moves (V1), what was in the middle stays in the middle.
   $effect(() => {
     if (!viewport) return;
     const ro = new ResizeObserver(([entry]) => {
-      const { width: w, height: h } = entry!.contentRect, first = !size.w;
+      const { width: w, height: h } = entry!.contentRect, first = !size.w, was = size;
       size = { w, h };
       if (first && L) view = whole();
+      else if (!first && w && h) view = { ...view, x: view.x + (w - was.w) / 2, y: view.y + (h - was.h) / 2 };
     });
     ro.observe(viewport);
     return () => ro.disconnect();
@@ -150,7 +191,7 @@
   const links = $derived.by(() => {
     if (!lit) return [];
     const walked = walk.slice(1).map((to, k) => ({ from: walk[k]!, to, kind: "requires" as const })), last = walk.at(-2);
-    return [...walked, ...lit.links.filter((l) => (l.kind === "requires" ? (chain ? !l.spare : l.from === at) : !(l.kind === "builds" && l.from === last)))];
+    return [...walked, ...lit.links.filter((l) => (l.kind === "requires" ? l.from === at : !(l.kind === "builds" && l.from === last)))];
   });
   // A folder apart from the chosen note's own stands for the notes in it: how many of them it requires, and
   // how many build on it.
@@ -253,11 +294,7 @@
     return sent.flatMap((id) => {
       const i = idx.at.get(id);
       if (i === undefined) return [];
-      const n = L.items[shownAs(idx, open, i)]!, o = origin;
-      const dx = n.gx + n.w / 2 - (o.gx + o.w / 2), dy = n.gy + n.h / 2 - (o.gy + o.h / 2), across = Math.abs(dx) * (5 / 18) >= Math.abs(dy);
-      const p: [number, number] = across ? [dx < 0 ? o.gx : o.gx + o.w, o.gy + o.h / 2] : [o.gx + o.w / 2, dy < 0 ? o.gy : o.gy + o.h];
-      const q: [number, number] = across ? [dx < 0 ? n.gx + n.w : n.gx, n.gy + n.h / 2] : [n.gx + n.w / 2, dy < 0 ? n.gy + n.h : n.gy];
-      return [{ key: id, d: linePath(directLine(p, q, across), 0, L.cell) }];
+      return [{ key: id, d: between(origin!, L!.items[shownAs(idx!, open, i)]!) }];
     });
   });
   /** How a note is outlined for Iso's path: by keyword, by meaning, along a link (or named outright), or being read now. */
@@ -426,8 +463,8 @@
     e.stopPropagation();
     if (dragged) return;
     if (pick) { toggle(ref); return; }
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
-    if (chosen === ref) { void goto(noteHref(ref)); return; }
+    // Chosen already: open it, beside the Atlas on a desktop (V1).
+    if (chosen === ref) { void views.openFromAtlas(ref); return; }
     const back: string[] = [];
     if (lit && at === chosen && lit.depth[ref]) for (let r: string | undefined = ref; r && r !== chosen; r = lit.via[r]) back.unshift(r);
     walk = walk.includes(ref) ? walk.slice(0, walk.indexOf(ref) + 1) : back.length ? [...walk, ...back] : [ref];
@@ -452,7 +489,6 @@
   }
   function key(e: KeyboardEvent): void {
     if (e.key === "Escape") { walk = []; pointed = ""; return; }
-    if (e.key === "w" && chosen && !e.metaKey && !e.ctrlKey && !e.altKey) { chain = !chain; return; }
     if (e.key === "c" && !e.metaKey && !e.ctrlKey && !e.altKey) { nextGrain(); return; }
     if (e.key === "l" && !e.metaKey && !e.ctrlKey && !e.altKey) { useLeaves(!leaves); return; }
     if (e.target !== viewport) return;
@@ -492,7 +528,7 @@
   const labels = $derived(view.k >= LABELS_AT);
   const count = $derived(L ? L.items.filter((n) => n.kind === "note" && n.ref.startsWith("@study")).length : 0);
   $effect(() => {
-    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", steps: walk.length - 1, chain, whole: () => { chain = !chain; }, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out };
+    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", chosenId: chosen, steps: walk.length - 1, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out };
     return () => { app.atlas = null; };
   });
 </script>
@@ -506,7 +542,7 @@
     <p class="said">The map could not be drawn: {failed}</p>
   {:else if L && report}
     {#if !L.items.length}<p class="said faint">There are no notes yet. The map draws itself as you write them.</p>{/if}
-    <div class="atlas-world" class:labels data-open={open} style="transform: translate({view.x}px, {view.y}px); --u: {(L?.cell ?? 7) * view.k}px; --k: {view.k}; --fs: {(10.5 * Math.min(1.5, Math.max(0.8, view.k))).toFixed(2)}px; --lines: {view.k < 0.9 ? 1 : 2}">
+    <div class="atlas-world" class:labels class:shifting data-open={open} style="transform: translate({view.x}px, {view.y}px); --u: {(L?.cell ?? 7) * view.k}px; --k: {view.k}; --fs: {(10.5 * Math.min(1.5, Math.max(0.8, view.k))).toFixed(2)}px; --lines: {view.k < 0.9 ? 1 : 2}">
       {#each folders as f (f.item.id)}
         {#if f.item.ref.startsWith("@study")}
           <AtlasStudyFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} passes={L.items.filter((x) => x.parent === f.i && report?.notes[x.ref]?.passed).length} onpick={() => enter(f.i)} />
@@ -514,7 +550,7 @@
           <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * view.k >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} onpick={() => enter(f.i)} />
         {/if}
       {/each}
-      <AtlasRoutes k={view.k} {rest} hot={[...isoHot, ...hot]} counts={litCount} sent={sentLines} />
+      <AtlasRoutes k={view.k} {rest} hot={[...isoHot, ...hot]} counts={litCount} sent={sentLines} {grown} />
       {#if labels}
         {#each rest as r (r.key)}
           {#if r.label}<span class="count {r.side}" style="--x:{r.mid[0]};--y:{r.mid[1]}">{r.count}</span>{/if}
@@ -560,6 +596,9 @@
   .atlas { position: relative; height: 100%; overflow: hidden; touch-action: none; user-select: none; cursor: grab; outline-offset: -2px; }
   .atlas:active { cursor: grabbing; }
   .atlas-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+  /* Only while a changed base settles (K3): at any other time, a zoom changes the same places and must not ease. */
+  .shifting :global(:is(.n, .sn, .folder)) { transition: left 0.45s ease, top 0.45s ease, width 0.45s ease, height 0.45s ease; }
+  @media (prefers-reduced-motion: reduce) { .shifting :global(:is(.n, .sn, .folder)) { transition: none; } }
   .said { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-4); text-align: center; }
   /* What is held, until its note is made: a gold box whose dots march (Desktop-Atlas). */
   .grasp { position: absolute; left: calc(var(--x) * var(--u) - 4px); top: calc(var(--y) * var(--u) - 4px); width: calc(var(--w) * var(--u) + 8px); height: calc(var(--h) * var(--u) + 8px); display: flex; align-items: center; padding: 0 12px; gap: 8px; font-size: 11px; pointer-events: none; z-index: 1; }

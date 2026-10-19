@@ -35,12 +35,17 @@ export interface Layout {
   feeders: Feeder[];
   /** The highways (highways.js): a way between each pair of items the trunks join, and feeders to them. */
   highways: { trunks: LayoutTrunk[]; feeders: Feeder[] };
+  /** Each floorplanned folder's arrangement, for the next layout to start from. */
+  orders?: Orders;
 }
 /** How big a cell is: "fine" (7 units), "coarse" (14) or "coarser" (18). The bigger, the fewer places a route
  *  can bend, and the further apart folders stand in cells' terms. */
 export type Grain = "fine" | "coarse" | "coarser";
-/** `blocks`: a folder holding folders placed as blocks (floorplan.js), not in layers. */
-export interface LayoutOptions { gridFlow?: "up" | "right"; grain?: Grain; blocks?: boolean }
+/** `blocks`: a folder holding folders placed as blocks (floorplan.js), not in layers. `from`: the `orders` of a
+ *  layout made before, for a changed base, so the search starts from where things stood (V5). Not part of the key. */
+export interface LayoutOptions { gridFlow?: "up" | "right"; grain?: Grain; blocks?: boolean; from?: Orders | null }
+/** A floorplanned folder's arrangement (its sequence pair), by the items' refs, by the folder's ref ("" the top). */
+export type Orders = Record<string, [string[], string[]]>;
 
 export const LAYOUT_VERSION: number;
 export const HIGHWAY_COSTS: Record<string, number>;

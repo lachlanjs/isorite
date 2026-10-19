@@ -120,6 +120,34 @@ describe("the layout", () => {
   }, 90000);
 });
 
+describe("a changed base (V5)", () => {
+  // The share of pairs of top-level folders standing the same way round (left of or above each other) in both.
+  const kept = (A, B) => {
+    const tops = (L) => new Map(L.items.filter((n) => n.parent === -1 && n.kind === "folder").map((n) => [n.ref, n]));
+    const a = tops(A), b = tops(B), refs = [...a.keys()].filter((r) => b.has(r));
+    const way = (m, p, q) => [Math.sign(m.get(p).gx - m.get(q).gx), Math.sign(m.get(p).gy - m.get(q).gy)].join();
+    let same = 0, all = 0;
+    for (const p of refs) for (const q of refs) if (p < q) { all++; if (way(a, p, q) === way(b, p, q)) same++; }
+    return same / all;
+  };
+  it("starts from where things stood: a note added keeps the folders as they were, and costs the layout little", () => {
+    const before = model(9, 6), was = gridLayout(before, { blocks: true });
+    const after = structuredClone(before), f4 = after.root.children.find((c) => c.ref === "f4");
+    f4.children.push({ kind: "concept", id: "c:f4/new", ref: "f4/new", weight: 1, rank: 0 });
+    after.edges.push(["f4/n1", "f4/new", 2], ["f5/n2", "f4/new", 1]);
+    const fresh = gridLayout(after, { blocks: true }), warm = gridLayout(after, { blocks: true, from: was.orders });
+    console.log(`folders kept the same way round: ${kept(was, warm).toFixed(2)} from the layout before, ${kept(was, fresh).toFixed(2)} afresh; area ${warm.W * warm.H} against ${fresh.W * fresh.H}`);
+    expect(kept(was, warm)).toBeGreaterThanOrEqual(0.9);
+    expect(kept(was, warm)).toBeGreaterThanOrEqual(kept(was, fresh));
+    expect(warm.W * warm.H).toBeLessThanOrEqual(fresh.W * fresh.H * 1.25);
+    expect(warm.items.some((n) => n.ref === "f4/new")).toBe(true);
+  });
+  it("is the same as before when nothing changed", () => {
+    const m = model(6, 5), was = gridLayout(m, { blocks: true });
+    expect(kept(was, gridLayout(m, { blocks: true, from: was.orders }))).toBe(1);
+  });
+});
+
 describe("the cells", () => {
   const L = gridLayout(model(6, 9), {}), C = buildCells(L);
   it("know their height, their folder and what blocks them", () => {

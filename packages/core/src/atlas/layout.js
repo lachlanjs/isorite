@@ -31,7 +31,7 @@ export function plainModel(model, flat = false) {
 // is the top level's direction, "up" or "right"; `grain`, the cell's size ("fine", "coarse" or "coarser");
 // `blocks`, a folder holding folders placed as blocks (floorplan.js) and not in layers.
 export function gridLayout(model, o) {
-  const opts = { flow: o.gridFlow === "right" ? "right" : "up", grain: grainOf(o), plan: !!o.blocks };
+  const opts = { flow: o.gridFlow === "right" ? "right" : "up", grain: grainOf(o), plan: !!o.blocks, from: o.from ?? null };
   let layout = nestedLayout(model, opts);
   // Blocks: laid out once, the highways found, and packed again as they were with each busy gutter widened.
   if (o.blocks) {

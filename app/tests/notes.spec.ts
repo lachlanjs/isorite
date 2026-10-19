@@ -54,7 +54,8 @@ test("a note with maths and a typed link is written, saved, and there when reope
   // The header says where you are; the link in the list leads back here.
   if (name.startsWith("phone")) await expect(page.getByRole("link", { name: "‹ information-theory" })).toBeVisible();
   else await expect(page.locator("header .path")).toHaveText(`information-theory/Entropy ${name}`);
-  await page.getByRole("navigation", { name: "Views" }).getByRole("link", { name: "notes" }).click();
+  // The base's name opens the list (V2).
+  await page.getByRole("link", { name: name.startsWith("phone") ? "‹ information-theory" : "information-theory", exact: true }).click();
   await page.getByRole("link", { name: `Entropy ${name}` }).click();
   await expect(page.getByLabel("Title")).toHaveValue(`Entropy ${name}`);
 });
@@ -156,7 +157,7 @@ test("the parts, the atlas and study pages, and a note that is not there", async
   await look(page, "parts");
   await page.goto("#/atlas");
   await expect(page.getByRole("application", { name: "The atlas: the map of the base" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Views" }).getByRole("link", { name: "atlas" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "atlas", exact: true })).toHaveAttribute("aria-pressed", "true");
   await look(page, "atlas");
   await page.goto("#/study");
   await expect(page.getByText("study · next for you")).toBeVisible();

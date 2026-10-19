@@ -18,7 +18,8 @@
 //
 // The search is seeded from the blocks and joins, so the same folder is always placed the same way. Given `pair`
 // (the two orders a search found), the blocks are packed in that arrangement again without searching: with
-// other room between them, say.
+// other room between them, say. Given `start` (the arrangement a layout before this one found, say), the search
+// begins there and cools from a low temperature: it improves on it, but does not wander far from it.
 
 export const PLAN_COSTS = { bend: 4, flow: 1, area: 0.01, aspect: 1, shape: 1.4, effort: 1000, seed: 0, cross: 20 };
 
@@ -82,11 +83,12 @@ export function floorplan(sizes, joins, space, way, o = {}) {
   B.splice(0, n, ...A);
   if (way === "up") A.reverse(); // later first in the first order and last in the second: later above
   if (o.pair) { A.splice(0, n, ...o.pair[0]); B.splice(0, n, ...o.pair[1]); pack(); return { x: [...x], y: [...y], w: W, h: H, pair: o.pair }; } // packed again as it was
+  if (o.start) { A.splice(0, n, ...o.start[0]); B.splice(0, n, ...o.start[1]); }
   let now = cost(), best = now, bestA = [...A], bestB = [...B];
   if (n < 2) { pack(); return { x: [...x], y: [...y], w: W, h: H, pair: [[...A], [...B]] }; }
 
   const random = mulberry(seed(sizes, joins) ^ salt), steps = effort * n;
-  let T = Math.max(1, now * 0.05);
+  let T = o.start ? Math.max(0.5, now * 0.002) : Math.max(1, now * 0.05);
   const cool = Math.pow(0.001, 1 / steps); // to a thousandth of the start
   for (let s = 0; s < steps; s++, T *= cool) {
     const i = Math.floor(random() * n), j = (i + 1 + Math.floor(random() * (n - 1))) % n, move = random();

@@ -325,9 +325,9 @@
   .side { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); flex: none; }
   .margin { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: 12px; padding-top: 2px; }
   .margin .link { font-size: 12px; padding: 0; }
-  /* Where the window leaves room, the margin is the page's own, beside the text and level with the title, 8 px down
+  /* Where the pane leaves room (a container query: the note may stand beside the Atlas), the margin is the page's own, beside the text and level with the title, 8 px down
      (Study-Fit), and the text starts under the title as in any note. */
-  @media (min-width: 1100px) { .margin { position: absolute; top: 46px; left: calc(100% + 8px); align-items: flex-start; width: 150px; } }
+  @container page (min-width: 1100px) { .margin { position: absolute; top: 46px; left: calc(100% + 8px); align-items: flex-start; width: 150px; } }
   .tools .btn { height: 28px; font-size: 12px; }
   .tools .btn[aria-pressed="true"] { color: var(--text); --fill: var(--ground-3); }
   /* The quiet icon buttons: the timeline's, and with a version shown, restore and back to now. Faint until pointed at. */
@@ -340,11 +340,11 @@
   /* The timeline sits in the page's left margin, its button at the top level with the title (Desktop-Editor), its
      marks under it; where there is no margin, it is a narrow column at the note's left (Mobile-Timeline). */
   .tl-col { position: absolute; z-index: 4; }
-  @media (min-width: 1100px) {
+  @container page (min-width: 1100px) {
     .tools .icon { position: absolute; top: 52px; right: calc(100% + 14px); margin: 0; }
     .tl-col { top: 92px; right: calc(100% + 14px); }
   }
-  @media (max-width: 1099px) {
+  @container page (max-width: 1099px) {
     .note.timed { padding-left: calc(var(--space-4) + 40px); }
     .tl-col { top: 40px; left: 8px; }
   }
