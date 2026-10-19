@@ -50,5 +50,5 @@
     padding: 3px 7px; text-align: right; pointer-events: none;
     display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   }
-  @media (max-width: 1099px) { .timeline:not(.leftward) .asked { right: auto; left: calc(100% + 4px); text-align: left; max-width: 220px; } }
+  @container page (max-width: 1099px) { .timeline:not(.leftward) .asked { right: auto; left: calc(100% + 4px); text-align: left; max-width: 220px; } }
 </style>

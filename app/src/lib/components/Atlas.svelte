@@ -10,6 +10,7 @@
   import { linkedIn, place, placeOf, testsIn, titleIn, withLink, withoutLink, withTest } from "$lib/atlas/picks.ts";
   import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
+  import { views } from "$lib/views.svelte.ts";
   import { CELL, LABELS_AT, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
@@ -95,13 +96,15 @@
     return fit(box, size.w, size.h, 1, L?.cell);
   };
 
-  // The viewport's size; the first time it is known, the whole map is framed.
+  // The viewport's size; the first time it is known, the whole map is framed. After that, as a note opens beside the
+  // Atlas or the divider moves (V1), what was in the middle stays in the middle.
   $effect(() => {
     if (!viewport) return;
     const ro = new ResizeObserver(([entry]) => {
-      const { width: w, height: h } = entry!.contentRect, first = !size.w;
+      const { width: w, height: h } = entry!.contentRect, first = !size.w, was = size;
       size = { w, h };
       if (first && L) view = whole();
+      else if (!first && w && h) view = { ...view, x: view.x + (w - was.w) / 2, y: view.y + (h - was.h) / 2 };
     });
     ro.observe(viewport);
     return () => ro.disconnect();
@@ -424,8 +427,8 @@
     e.stopPropagation();
     if (dragged) return;
     if (pick) { toggle(ref); return; }
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
-    if (chosen === ref) { void goto(noteHref(ref)); return; }
+    // Chosen already: open it, beside the Atlas on a desktop (V1).
+    if (chosen === ref) { void views.openFromAtlas(ref); return; }
     const back: string[] = [];
     if (lit && at === chosen && lit.depth[ref]) for (let r: string | undefined = ref; r && r !== chosen; r = lit.via[r]) back.unshift(r);
     walk = walk.includes(ref) ? walk.slice(0, walk.indexOf(ref) + 1) : back.length ? [...walk, ...back] : [ref];
@@ -489,7 +492,7 @@
   const labels = $derived(view.k >= LABELS_AT);
   const count = $derived(L ? L.items.filter((n) => n.kind === "note" && n.ref.startsWith("@study")).length : 0);
   $effect(() => {
-    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", steps: walk.length - 1, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out };
+    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", chosenId: chosen, steps: walk.length - 1, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out };
     return () => { app.atlas = null; };
   });
 </script>
