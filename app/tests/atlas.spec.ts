@@ -53,7 +53,7 @@ test("choosing a note outlines what it requires, all the way back, and what buil
   await expect(page.getByLabel("Title")).toHaveValue("Kraft inequality");
 });
 
-test("the chain is walked a step at a time, the way kept; the whole of it is drawn when asked for", async ({ page }) => {
+test("the chain is walked a step at a time, the way kept", async ({ page }) => {
   await atlas(page);
   // Links are counted on the layer: where their lines overlap they are drawn as one.
   const lines = page.locator(".routes");
@@ -85,13 +85,6 @@ test("the chain is walked a step at a time, the way kept; the whole of it is dra
   await expect(page.getByText("1 step back")).toBeVisible();
   await expect(lines).toHaveAttribute("data-requires", "2");
 
-  await page.keyboard.press("Escape");
-  await note(page, "coding/huffman-codes").click();
-  await page.getByRole("button", { name: "[ whole chain ]" }).click();
-  await expect(lines).toHaveAttribute("data-requires", "3");
-  await look(page, "atlas-whole-chain");
-  await page.getByRole("button", { name: "[ one step ]" }).click();
-  await expect(lines).toHaveAttribute("data-requires", "1");
 });
 
 test("a study item lights the note it tests and what that requires", async ({ page }) => {

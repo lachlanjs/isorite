@@ -6,6 +6,7 @@
   import { resolve } from "$app/paths";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
+  import FolderField from "./FolderField.svelte";
 
   let { note }: { note: NoteSession } = $props();
 
@@ -15,15 +16,22 @@
   let problem = $state("");
   let asking = $state<string[] | null>(null);
 
-  async function move(input: HTMLInputElement): Promise<void> {
-    const to = input.value.trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/, "");
-    if (!to || to === note.id) { input.value = note.id; return; }
+  // Where the note is: its folder (with suggestions, K2) and its name. Changing either moves it.
+  const dirOf = (id: string) => id.split("/").slice(0, -1).join("/");
+  const nameOf = (id: string) => id.split("/").at(-1)!;
+  // Typed into, and back to where the note is when it moves or a move is let go.
+  let folder = $derived(dirOf(note.id));
+  async function move(dir: string, name: string): Promise<void> {
+    const clean = (s: string) => s.trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/, "");
+    const to = [clean(dir), clean(name)].filter(Boolean).join("/");
+    if (!clean(name) || to === note.id) { folder = dirOf(note.id); return; }
     problem = "";
     try {
       const id = await note.move(to);
       await app.refresh();
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
       await goto(noteHref(id), { replaceState: true });
-    } catch (e) { problem = (e as Error).message; input.value = note.id; }
+    } catch (e) { problem = (e as Error).message; folder = dirOf(note.id); }
   }
 
   /** Before deleting, who links here: their links will be left broken. */
@@ -49,8 +57,12 @@
   <label class="wide"><span>tags</span><input value={note.fields.tags} onchange={(e) => note.setFields({ tags: e.currentTarget.value })} placeholder="none" autocomplete="off" /></label>
   <label class="full"><span>description</span><input value={note.fields.description} oninput={(e) => note.setFields({ description: e.currentTarget.value })} placeholder="one line on what this note says" autocomplete="off" /></label>
   {#if inBase}
-    <label class="wide"><span>path</span><input class="mono" value={note.id} list="dirs" spellcheck="false" autocomplete="off" aria-label="path: change it to move the note"
-      onchange={(e) => void move(e.currentTarget)} onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); else if (e.key === "Escape") { e.currentTarget.value = note.id; e.currentTarget.blur(); } }} /></label>
+    <label class="wide" for="note-folder"><span>folder</span></label>
+    <span class="wide"><FolderField id="note-folder" quiet label="folder: change it to move the note" bind:value={folder} placeholder="the top of the base"
+      onpick={(d) => void move(d, nameOf(note.id))} onkeydown={(e) => { if (e.key === "Escape") { folder = dirOf(note.id); (e.currentTarget as HTMLElement).blur(); } }} /></span>
+    <label><span>name</span><input class="mono" value={nameOf(note.id)} spellcheck="false" autocomplete="off" aria-label="name: change it to rename the file"
+      size={Math.max(8, nameOf(note.id).length)} onchange={(e) => void move(folder, e.currentTarget.value)}
+      onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); else if (e.key === "Escape") { e.currentTarget.value = nameOf(note.id); e.currentTarget.blur(); } }} /></label>
     {#if asking === null}<button class="link" type="button" onclick={() => void askDelete()}>delete</button>{/if}
   {/if}
   {#if asking !== null}
@@ -62,7 +74,6 @@
   {/if}
   {#if problem}<p class="full problem" role="alert">{problem}</p>{/if}
   <datalist id="types">{#each types as t (t)}<option value={t}></option>{/each}</datalist>
-  <datalist id="dirs">{#each app.listing.dirs as d (d)}<option value={`${d}/${note.id.split("/").at(-1)}`}></option>{/each}</datalist>
 </div>
 
 <style>

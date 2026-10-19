@@ -5,6 +5,7 @@
   import { resolve } from "$app/paths";
   import type { DraftSummary, NoteSummary, SearchHit } from "@isorite/engine";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
+  import FolderField from "$lib/components/FolderField.svelte";
 
   let query = $state("");
   let hits = $state.raw<SearchHit[]>([]);
@@ -92,9 +93,8 @@
       <label><span class="label">title</span>
         <!-- svelte-ignore a11y_autofocus -->
         <input class="field" bind:value={title} placeholder="Entropy" autocomplete="off" autofocus /></label>
-      <label><span class="label">folder</span>
-        <input class="field" bind:value={folder} placeholder="none: the top of the base" list="folders" autocomplete="off" /></label>
-      <datalist id="folders">{#each app.listing.dirs as dir (dir)}<option value={dir}></option>{/each}</datalist>
+      <label for="new-folder"><span class="label">folder</span></label>
+      <FolderField id="new-folder" label="folder" bind:value={folder} placeholder="none: the top of the base" />
       <p class="faint path">{id ? `${id}.md` : " "}</p>
       {#if problem}<p class="problem" role="alert">{problem}</p>{/if}
       <div class="row"><button class="btn primary" type="submit">make it</button><button class="btn quiet" type="button" onclick={() => (making = false)}>cancel</button></div>

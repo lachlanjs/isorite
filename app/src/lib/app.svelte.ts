@@ -18,7 +18,7 @@ class AppState {
   /** How the open note's saving stands, for the status line. */
   saving = $state<{ text: string; bad: boolean } | null>(null);
   /** The Atlas, while it is the page: how many study items it shows, for the status line. */
-  atlas = $state.raw<{ items: number; chosen: string; steps: number; chain: boolean; whole: () => void; pick: boolean; here: string; out: () => void } | null>(null);
+  atlas = $state.raw<{ items: number; chosen: string; steps: number; pick: boolean; here: string; out: () => void } | null>(null);
   /** An exercise, while one is open: what the header shows of it (Study-Written): its kind, the squares for what it
    *  tests, whether they flash, and the two things done from there. */
   exercise = $state.raw<{ kind: string; squares: number; due: boolean; flash: number; windBack: () => void; why: () => void; next: string | null } | null>(null);

@@ -134,8 +134,8 @@ export const PARTS: Part[] = [
     steps: [
       { go: `/n/${GALAXY}`, target: ".cm-content", title: "The goal",
         text: "Two galaxies colliding, at N = 5000: where the tidal tails start to look right, and where direct summation is too slow. This evening's work is to get there with Barnes–Hut." },
-      { go: "/atlas", target: `[data-note="${GALAXY}"]`, check: () => chosen(GALAXY)() && Boolean(app.atlas?.chain), title: "What it rests on",
-        text: "Choose Two galaxies colliding, then [ whole chain ] in the status line: everything it rests on, back to Newton's law. That is the reading list for tonight." },
+      { go: "/atlas", target: `[data-note="${GALAXY}"]`, check: chosen(GALAXY), title: "What it rests on",
+        text: "Choose Two galaxies colliding: what it requires is lit, and a click on one of those steps back to it, and on, back to Newton's law. That is the reading list for tonight." },
       { go: `/n/${COST}`, target: ".cm-content", fill: PROMPTS.speed, until: done(COST), title: "How much faster?",
         text: "In Cost and accuracy, put the cursor after the last paragraph and press Ctrl+Enter. The prompt is filled in: send it.",
         phone: { text: "In Cost and accuracy, tap after the last paragraph, then ask Iso here. The prompt is filled in: send it." } },

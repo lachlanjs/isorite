@@ -100,7 +100,6 @@
         {#if app.atlas.steps}<span>{app.atlas.steps} {app.atlas.steps === 1 ? "step" : "steps"} back</span>{/if}
         <span class="grow"></span>
         <span class="hint">click a note it requires to step back to it, the note again to open it</span>
-        <button class="link" type="button" aria-pressed={app.atlas.chain} onclick={app.atlas.whole}>{app.atlas.chain ? "[ one step ]" : "[ whole chain ]"}</button>
       {:else if app.atlas}
         <span>{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span>
         {#if app.atlas.items}<span>{app.atlas.items} study {app.atlas.items === 1 ? "item" : "items"}</span>{/if}

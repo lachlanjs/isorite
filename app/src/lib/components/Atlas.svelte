@@ -38,8 +38,6 @@
   let pointed = $state("");
   let walk = $state.raw<string[]>([]);
   const chosen = $derived(walk.at(-1) ?? "");
-  /** Every link down the chain of what the note requires is drawn, not only its own. */
-  let chain = $state(false);
   let viewport = $state<HTMLDivElement>();
   /** The grid the map is laid on (key c): fine, coarse or coarser. A bigger cell gives a route fewer places to bend. */
   const GRAINS: Grain[] = ["fine", "coarse", "coarser"];
@@ -150,7 +148,7 @@
   const links = $derived.by(() => {
     if (!lit) return [];
     const walked = walk.slice(1).map((to, k) => ({ from: walk[k]!, to, kind: "requires" as const })), last = walk.at(-2);
-    return [...walked, ...lit.links.filter((l) => (l.kind === "requires" ? (chain ? !l.spare : l.from === at) : !(l.kind === "builds" && l.from === last)))];
+    return [...walked, ...lit.links.filter((l) => (l.kind === "requires" ? l.from === at : !(l.kind === "builds" && l.from === last)))];
   });
   // A folder apart from the chosen note's own stands for the notes in it: how many of them it requires, and
   // how many build on it.
@@ -452,7 +450,6 @@
   }
   function key(e: KeyboardEvent): void {
     if (e.key === "Escape") { walk = []; pointed = ""; return; }
-    if (e.key === "w" && chosen && !e.metaKey && !e.ctrlKey && !e.altKey) { chain = !chain; return; }
     if (e.key === "c" && !e.metaKey && !e.ctrlKey && !e.altKey) { nextGrain(); return; }
     if (e.key === "l" && !e.metaKey && !e.ctrlKey && !e.altKey) { useLeaves(!leaves); return; }
     if (e.target !== viewport) return;
@@ -492,7 +489,7 @@
   const labels = $derived(view.k >= LABELS_AT);
   const count = $derived(L ? L.items.filter((n) => n.kind === "note" && n.ref.startsWith("@study")).length : 0);
   $effect(() => {
-    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", steps: walk.length - 1, chain, whole: () => { chain = !chain; }, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out };
+    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", steps: walk.length - 1, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out };
     return () => { app.atlas = null; };
   });
 </script>
