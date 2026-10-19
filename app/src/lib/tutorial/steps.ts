@@ -13,14 +13,17 @@ export interface Step {
   text: string;
   /** Opened on entering the step: an address in the app (after the #), or a way to find one. */
   go?: string | (() => Promise<string>);
-  /** What is lit, everything else dimmed. */
-  target?: string;
+  /** What is lit, everything else dimmed: every element the selector matches, or the function returns, lit as one
+   *  (a chosen note, its links and the notes at their ends; a form and what it is about). */
+  target?: string | (() => Element[]);
   /** Put in Iso's prompt when it opens empty. */
   fill?: string;
   /** Moves on when the engine says this. */
   until?: (e: EngineEvent) => boolean;
   /** Or when this holds, looked at a few times a second. */
   check?: () => boolean;
+  /** A wrong move the step watches for, looked at as `check` is: what the step wanted, in a line, or null. */
+  wrong?: () => string | null;
   /** A place to go on to, after the text. */
   link?: { href: string; text: string };
   /** What differs on a phone, where there are no keys and no pointer to hover. */
@@ -30,9 +33,11 @@ export interface Step {
 export interface Part {
   key: string;
   title: string;
-  /** One line, on the list of parts. */
+  /** What the section is for, on the list of sections. */
   about: string;
   steps: Step[];
+  /** An earlier version, until the section is rewritten: shown as such on the list. */
+  earlier?: boolean;
   /** As it is beside the terminal, served by isorite --tutorial, where that differs. */
   local?: Pick<Part, "about" | "steps">;
 }
@@ -48,7 +53,7 @@ const has = (selector: string) => () => document.querySelector(selector) !== nul
 const chosen = (note: string) => () => document.querySelector(`[data-note="${note}"]`)?.classList.contains("at") ?? false;
 const titled = (pattern: RegExp) => app.listing.notes.find((n) => pattern.test(n.title));
 
-// The note you make in part A, as it is moved and then deleted: whatever was not there when the tutorial began.
+// The note you make in L1, as it is moved and then deleted: whatever was not there when the tutorial began.
 const ORIGINAL = new Set<string>();
 /** Note what the base holds, once, before anything is made in it. */
 export function remember(): void { if (!ORIGINAL.size) for (const n of app.listing.notes) ORIGINAL.add(n.id); }
@@ -56,7 +61,7 @@ const yours = () => app.listing.notes.filter((n) => ORIGINAL.size && !ORIGINAL.h
 
 export const PARTS: Part[] = [
   {
-    key: "A", title: "Your notes", about: "The base as a bundle of linked Markdown notes: the Atlas, writing, links, frontmatter, and new, moved and deleted notes.",
+    key: "L1", title: "The isorite knowledge base", about: "Understand the basics of using an isorite knowledge base, editing Markdown, and linking notes together.",
     steps: [
       { go: "/atlas", target: ".atlas-world", title: "This is the Atlas",
         text: "nbody-notes: a developer's notes on an N-body simulation, three weeks in. Each block is a note, in its folder: physics, integrators, algorithms, the simulation itself. The lines are links between them." },
@@ -83,11 +88,11 @@ export const PARTS: Part[] = [
       { check: () => ORIGINAL.size > 0 && yours().length === 0 && app.listing.notes.length === BASE, title: "Delete it",
         text: "In details, delete. You are told first which notes link to it, since their links would be left broken. Its history is kept." },
       { title: "That is the base",
-        text: "nbody-notes is a folder of Markdown files in git: any editor opens it, and isorite notices what changed outside it. Next, Iso, in part B." },
+        text: "nbody-notes is a folder of Markdown files in git: any editor opens it, and isorite notices what changed outside it. Next, Iso, in L2." },
     ],
   },
   {
-    key: "B", title: "Iso, in your notes", about: "Asking in place, rewriting a selection, keeping or not, the timeline, what Iso is sent, and a note for Iso.",
+    key: "L2", title: "Iso", earlier: true, about: "Iso is an agent who is aware of your isorite knowledge base. Learn how to work with Iso to explore and edit it.",
     steps: [
       { go: `/n/${QUAD}`, target: ".cm-content", fill: PROMPTS.insert, until: done(QUAD), title: "Ask Iso in place",
         text: "The quadtree is a stub with a question in it. Click at the end of the question and press Ctrl+Enter. The prompt is filled in: press Enter, and watch what Iso looks up.",
@@ -121,11 +126,11 @@ export const PARTS: Part[] = [
       { check: () => titled(/^Close encounters/) !== undefined, title: "Keep it as a note",
         text: "When Iso is done, open the note, read the answer, and keep it in physics. It is a note of your base now, linked to what it rests on: found again by you, by Iso, and by the agent in the terminal, as an answer in a chat is not." },
       { title: "Iso, in short",
-        text: "Iso writes only where you ask, and only what you keep goes in. It reads your notes to answer, and you can see what it read and what it costs. Part C puts this to work on the project." },
+        text: "Iso writes only where you ask, and only what you keep goes in. It reads your notes to answer, and you can see what it read and what it costs. E1 puts this to work on the project." },
     ],
   },
   {
-    key: "C", title: "An evening on the project", about: "Parts A and B together: from the goal back to what it rests on, a question answered, a plan written with Iso and linked in.",
+    key: "E1", title: "Knowledge work with isorite", earlier: true, about: "isorite provides a home for structured project knowledge work. This walkthrough shows how isorite can be used in an example knowledge base on an N-body simulation.",
     steps: [
       { go: `/n/${GALAXY}`, target: ".cm-content", title: "The goal",
         text: "Two galaxies colliding, at N = 5000: where the tidal tails start to look right, and where direct summation is too slow. This evening's work is to get there with Barnes–Hut." },
@@ -146,11 +151,11 @@ export const PARTS: Part[] = [
       { go: `/n/${LOOP}`, target: ".cm-content", check: () => /octree/i.test(document.querySelector(".cm-content")?.textContent ?? ""), title: "Link it in",
         text: "The main loop is where it will be used. At the end of the first paragraph, type [[oct and choose the octree." },
       { go: async () => { const n = titled(/octree/i); return n ? noteHref(n.id).split("#").at(-1)! : `/n/${LOOP}`; }, target: '[data-tour="send"]', title: "Hand it on",
-        text: "The code is the agent's work, in the terminal. send to agent puts this note in its next prompt: part E." },
+        text: "The code is the agent's work, in the terminal. send to agent puts this note in its next prompt: L4." },
     ],
   },
   {
-    key: "D", title: "Study", about: "The study base, how understanding is shown, an exercise marked, Iso's read of you, and what to study next.",
+    key: "L3", title: "The study base", earlier: true, about: "Designed to help you pay back cognitive debt, isorite comes equipped with didactic tools. Learn how to work with Iso to build understanding of your knowledge base through targeted exercises.",
     steps: [
       { go: "/atlas", target: ".atlas-world", title: "Two bases",
         text: "Beside each folder of notes stands a dark-headed folder of exercises. They are the study base: a repository of its own. Your notes are yours to share or publish; what you know, and what you got wrong, stays with you." },
@@ -173,8 +178,10 @@ export const PARTS: Part[] = [
         text: "An answer right moves the notes it tests up; leave them, and they fall due, and then slip a square. The list says what is due. That is the whole of studying here." },
     ],
   },
+  { key: "E2", title: "Learning with isorite", steps: [],
+    about: "How isorite gets you up to speed quickly, on the same N-body simulation project." },
   {
-    key: "E", title: "In the terminal", about: "The agent in OpenCode, with your notes as its tools. Outlined here; walked through with isorite --tutorial.",
+    key: "L4", title: "The terminal interface", earlier: true, about: "Iso shares a common substrate of understanding with you as you build together. Extending the familiar OpenCode 2, learn to use isorite's terminal and web interfaces jointly.",
     steps: [
       { title: "isorite in the terminal",
         text: "For work that needs more than notes: code. isorite term runs OpenCode, an agent that edits code, with your base beside it. To walk through it on your machine, with OpenCode 2 installed: isorite --tutorial." },
@@ -205,4 +212,6 @@ export const PARTS: Part[] = [
       ],
     },
   },
+  { key: "E3", title: "Building with isorite", steps: [],
+    about: "Putting it all together: rewrite the N-body simulation to use the Barnes–Hut algorithm, with structured agentic awareness of the project." },
 ];
