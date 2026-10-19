@@ -84,7 +84,7 @@ function useRoom(r) {
 
 /** @param model { root, edges }: the map's plain model (layout.js `plainModel`) @param flow "up" or "right": the top level's direction
  *  @param plan a folder holding folders placed as blocks (floorplan.js), not in layers; `planCosts` its weights */
-export function nestedLayout(model, { flow = "up", grain = "fine", plan = false, planCosts = {}, planned: again = null } = {}) {
+export function nestedLayout(model, { flow = "up", grain = "fine", plan = false, planCosts = {}, planned: again = null, from = null } = {}) {
   const room = ROOMS[grain] ?? FINE;
   useRoom(room);
   const isDir = (n) => n.kind === "dir";
@@ -115,6 +115,7 @@ export function nestedLayout(model, { flow = "up", grain = "fine", plan = false,
 
   const box = new Map(); // node -> { w, h, x, y (in its folder's contents) }
   const pairs = new Map(); // a floorplanned folder's ref -> the arrangement found for it (floorplan.js `pair`)
+  const orders = {}; // the same arrangements by the items' refs, for the next layout to start from (`from`)
   const trunksIn = new Map(); // folder -> [{ p, q, count, back, implied, pts (in its contents) }]
   const other = (f) => (f === "up" ? "right" : "up");
   const arrange = (folder, way) => {
@@ -165,8 +166,17 @@ export function nestedLayout(model, { flow = "up", grain = "fine", plan = false,
     const sizes = kids.map((c) => [box.get(c).w, box.get(c).h]);
     // The whole map takes the screen's shape: wide where the top level runs right, tall where it runs up (a phone).
     const shape = folder === model.root && way === "up" ? 1 / PLAN_COSTS.shape : PLAN_COSTS.shape;
-    const r = floorplan(sizes, all.map((j) => [index.get(j.p), index.get(j.q), j.count]), gap, way, { shape, ...planCosts, pair: before?.pair });
+    // `from` (the arrangements of the layout before this one, by ref): the search starts from where this folder's
+    // items stood then, any new ones last, and keeps what it can of it (V5).
+    let start;
+    const was = !before && from?.[name];
+    if (was) {
+      const at = new Map(kids.map((c, i) => [c.ref, i])), fresh = kids.map((c, i) => i).filter((i) => !was[0].includes(kids[i].ref));
+      start = was.map((order) => [...order.filter((ref) => at.has(ref)).map((ref) => at.get(ref)), ...fresh]);
+    }
+    const r = floorplan(sizes, all.map((j) => [index.get(j.p), index.get(j.q), j.count]), gap, way, { shape, ...planCosts, pair: before?.pair, start });
     pairs.set(name, r.pair);
+    orders[name] = r.pair.map((order) => order.map((i) => kids[i].ref));
     kids.forEach((c, i) => Object.assign(box.get(c), { x: r.x[i], y: r.y[i] }));
     // A join is back where what is required stands past what requires it; implied, between notes, where a
     // longer way joins them.
@@ -517,7 +527,7 @@ export function nestedLayout(model, { flow = "up", grain = "fine", plan = false,
   const under = (i, level) => { while (items[i].parent !== level) i = items[i].parent; return i; };
   for (const l of links) l.placed = l.s >= 2 && !backward.has(under(l.a, l.level) + "|" + under(l.b, l.level));
   const root = box.get(model.root);
-  return { W: root.w + 2 * MARGIN, H: root.h + 2 * MARGIN, flow, cell: room.cell, keep: room.keep, margin: MARGIN, items, links, trunks, pairs };
+  return { W: root.w + 2 * MARGIN, H: root.h + 2 * MARGIN, flow, cell: room.cell, keep: room.keep, margin: MARGIN, items, links, trunks, pairs, orders };
 }
 
 // The layout's links: each with the lowest folder that holds both its ends.
