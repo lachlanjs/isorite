@@ -170,7 +170,7 @@
     <div class="row actions" class:hidden={small}>
       {#if tour.at > 0}<button class="btn quiet" type="button" onclick={back} aria-label="back a step">‹ back</button>{/if}
       {#if waits}
-        {#if met}<span class="label done">{@render tickMark()} done</span>{:else}<span class="label waiting">waiting for you</span>{/if}
+        {#if met}<span class="label done">{@render tickMark()} done</span>{/if}
       {/if}
       <span class="grow"></span>
       {#if waits}<button class="btn quiet" type="button" onclick={redo} disabled={redoing} title="put the base back as this step found it">{redoing ? "redoing…" : "redo"}</button>{/if}
@@ -193,7 +193,9 @@
     display: flex; flex-direction: column; gap: 12px; --fill: var(--ground-2); --edge: var(--growth); --behind: var(--ground-2);
   }
   .coach.left { right: auto; left: 24px; }
-  .coach.parts { width: 420px; max-height: calc(100vh - 96px); overflow-y: auto; }
+  /* The sections scroll inside the frame, never the frame itself: its edge is drawn behind the card (T1). */
+  .coach.parts { width: 440px; max-height: calc(100vh - 96px); }
+  .coach.parts .list { overflow-y: auto; min-height: 0; flex: 1 1 auto; margin-right: -8px; padding-right: 8px; }
   .row { display: flex; align-items: center; gap: 8px; }
   .coach h2 { font-family: var(--font-text); font-size: 23px; line-height: 1.25; font-weight: 400; margin: 0; color: var(--text); }
   .coach p { color: var(--text-soft); font-size: 13px; line-height: 1.55; margin: 0; }
@@ -227,7 +229,6 @@
   .actions .btn { height: 30px; font-size: 12px; }
   .link { background: none; border: 0; padding: 2px 0; color: var(--text-faint); font-size: 11px; cursor: pointer; }
   .link:hover, .link:focus-visible { color: var(--text); }
-  .waiting { color: var(--growth); white-space: nowrap; }
   .done { color: var(--growth); white-space: nowrap; display: inline-flex; gap: 4px; align-items: center; }
   .fold { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
   .fold::after { content: " ▾"; color: var(--text-faint); font-size: 0.7em; }
@@ -238,6 +239,7 @@
   @media (max-width: 600px) {
     .coach, .coach.parts { left: 8px; right: 8px; bottom: calc(84px + env(safe-area-inset-bottom)); width: auto; padding: 14px 16px 10px; gap: 8px; }
     .coach.parts { max-height: calc(100dvh - 160px); }
+    .coach.parts .list { margin-right: 0; padding-right: 0; }
     .coach h2 { font-size: 19px; }
     .seg i { width: 7px; }
     .actions { gap: 8px; }

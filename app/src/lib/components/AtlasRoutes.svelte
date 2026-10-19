@@ -46,8 +46,9 @@
   .sent { stroke: var(--lattice); stroke-width: 2px; } /* as the boards' .me */
   .uses { stroke: var(--text-soft); stroke-width: 1.5px; stroke-dasharray: none; animation: none; }
   @keyframes run { to { stroke-dashoffset: -12; } }
-  .grown { vector-effect: none; stroke: var(--growth); stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: grow 2.2s ease-out forwards; }
-  @keyframes grow { 0% { stroke-dashoffset: 1; opacity: 1; } 20% { stroke-dashoffset: 1; } 50% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+  /* Slow enough to follow (Lachlan, 2026-10-20): a moment's wait, 1.8 s to grow, 2 s to stand, then it fades. */
+  .grown { vector-effect: none; stroke: var(--growth); stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: grow 5.5s ease-in-out forwards; }
+  @keyframes grow { 0% { stroke-dashoffset: 1; opacity: 1; } 9% { stroke-dashoffset: 1; } 42% { stroke-dashoffset: 0; opacity: 1; } 78% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
   .still { animation: none; }
   @media (prefers-reduced-motion: reduce) { .lit { animation: none; } .grown { animation: none; stroke-dashoffset: 0; opacity: .6; } }
 </style>

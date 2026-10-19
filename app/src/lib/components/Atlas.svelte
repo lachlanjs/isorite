@@ -126,7 +126,7 @@
       if (i === undefined || j === undefined) return [];
       return [{ key: `${a}>${b}`, d: between(L!.items[shownAs(idx!, open, i)]!, L!.items[shownAs(idx!, open, j)]!) }];
     });
-    if (grown.length) setTimeout(() => (grown = []), 2200);
+    if (grown.length) setTimeout(() => (grown = []), 5600);
   }
   /** A straight way from one block's side to another's, as a note for Iso's lines are drawn. */
   function between(o: { gx: number; gy: number; w: number; h: number }, n: { gx: number; gy: number; w: number; h: number }): string {
