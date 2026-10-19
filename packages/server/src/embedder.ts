@@ -9,14 +9,17 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import type { Embedder } from "@isorite/engine";
+import { userModelDir } from "./model.ts";
 
 export const MODEL = "bge-small-en-v1.5-q8";
 export const DIM = 384;
 
-/** Where the model's files are (npm run model), or null when they are not there. */
+/** Where the model's files are (npm run model in a checkout, isorite model when installed), or null when they are
+ *  not there. */
 export function modelDir(env: NodeJS.ProcessEnv = process.env): string | null {
-  const dir = env.ISORITE_EMBED_DIR || join(dirname(fileURLToPath(import.meta.url)), "..", "models", "bge-small-en-v1.5");
-  return env.ISORITE_EMBED !== "off" && existsSync(join(dir, "model.onnx")) && existsSync(join(dir, "tokenizer.json")) ? dir : null;
+  if (env.ISORITE_EMBED === "off") return null;
+  const dirs = env.ISORITE_EMBED_DIR ? [env.ISORITE_EMBED_DIR] : [join(dirname(fileURLToPath(import.meta.url)), "..", "models", "bge-small-en-v1.5"), userModelDir(env)];
+  return dirs.find((dir) => existsSync(join(dir, "model.onnx")) && existsSync(join(dir, "tokenizer.json"))) ?? null;
 }
 
 /** The folder caches are kept in: outside both repositories, rebuilt from the notes whenever it is lost. */
@@ -26,7 +29,8 @@ export function nodeEmbedder(dir: string): Embedder & { close(): Promise<void> }
   let worker: Worker | null = null, next = 0;
   const waiting = new Map<number, { done: (v: Float32Array) => void; fail: (e: Error) => void }>();
   const start = (): Worker => {
-    const w = new Worker(new URL("./embed-worker.ts", import.meta.url), { workerData: { dir, dim: DIM } });
+    // Beside this file: embed-worker.ts in a checkout, embed-worker.js as built for npm.
+    const w = new Worker(new URL(`./embed-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`, import.meta.url), { workerData: { dir, dim: DIM } });
     w.on("message", (m: { id: number; vector?: Float32Array; error?: string }) => {
       const asked = waiting.get(m.id);
       waiting.delete(m.id);

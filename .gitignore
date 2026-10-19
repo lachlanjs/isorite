@@ -20,3 +20,6 @@ packages/server/models/
 # SvelteKit working files made when a check runs from the root
 .svelte-kit/
 /site/
+
+# The npm package, built by npm run package
+/.npm/

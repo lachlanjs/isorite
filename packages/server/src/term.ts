@@ -16,7 +16,8 @@ import { writeExample } from "@isorite/example/node";
 import { defaultHome, findOpenCode, gatewayFrom, startScripted, tutorialScript, writeHome } from "@isorite/opencode";
 import { locate, WEB_DIR } from "./serve.ts";
 
-const MAIN = fileURLToPath(new URL("./main.ts", import.meta.url));
+// The command itself, to start a server with: main.ts in a checkout, or the one file it is built into for npm.
+const MAIN = import.meta.url.endsWith(".ts") ? fileURLToPath(new URL("./main.ts", import.meta.url)) : fileURLToPath(import.meta.url);
 
 export interface TermOptions {
   port?: number;

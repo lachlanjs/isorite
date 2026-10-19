@@ -3,9 +3,10 @@
 // build: no native binary, and the same runtime a webview has. Asked for a
 // vector by a message {id, text}; answers {id, vector} or {id, error}.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parentPort, workerData } from "node:worker_threads";
 
 const MAX_TOKENS = 512; // the model reads no more
@@ -15,7 +16,9 @@ const ort = await import("onnxruntime-web/wasm");
 const { Tokenizer } = await import("@huggingface/tokenizers");
 // One thread: the web runtime's own workers do not start under Node. And it cannot fetch its binary from a file here, so it is handed it.
 ort.env.wasm.numThreads = 1;
-ort.env.wasm.wasmBinary = readFileSync(join(dirname(createRequire(import.meta.url).resolve("onnxruntime-web")), "ort-wasm-simd-threaded.wasm"));
+// Beside this file as built for npm; in a checkout, in the package.
+const WASM = "ort-wasm-simd-threaded.wasm", beside = join(dirname(fileURLToPath(import.meta.url)), WASM);
+ort.env.wasm.wasmBinary = readFileSync(existsSync(beside) ? beside : join(dirname(createRequire(import.meta.url).resolve("onnxruntime-web")), WASM));
 const tok = new Tokenizer(JSON.parse(readFileSync(join(dir, "tokenizer.json"), "utf8")), JSON.parse(readFileSync(join(dir, "tokenizer_config.json"), "utf8")));
 const session = await ort.InferenceSession.create(readFileSync(join(dir, "model.onnx")), { executionProviders: ["wasm"] });
 const typed = session.inputNames.includes("token_type_ids");

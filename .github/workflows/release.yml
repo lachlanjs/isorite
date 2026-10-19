@@ -1,0 +1,84 @@
+# Release: push a tag v<version> (matching packages/server/package.json; node scripts/version.ts <version> sets it)
+# to test, build and publish isorite to npm, then make a GitHub Release with the package.
+#
+# Publishing uses trusted publishing: npm trusts this workflow in this repository (set up once on npmjs.com), so no
+# password or token is stored. The npm job runs in the `release` environment, which waits for your approval, and
+# only stages the version: it goes live when you approve it on npmjs.com with 2FA. See docs/release.md.
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: The tag matches the version
+        run: node scripts/version.ts --tag "$GITHUB_REF_NAME"
+      - name: Build the app # the package carries it, and the tests read it
+        run: npm run build
+      - name: Test
+        run: |
+          npm test
+          npm run check
+      - name: Build the npm package
+        run: |
+          npm run package
+          mkdir npm-dist
+          (cd .npm/isorite && npm pack --pack-destination ../../npm-dist)
+      - name: Check the package carries the app, the notes and the plugin, and runs
+        run: |
+          tar -tzf npm-dist/isorite-*.tgz | grep -q "package/web/index.html"
+          tar -tzf npm-dist/isorite-*.tgz | grep -q "package/notes/physics/softening.md"
+          tar -tzf npm-dist/isorite-*.tgz | grep -q "package/plugin/tui.tsx"
+          npm install -g ./npm-dist/isorite-*.tgz
+          test "$(isorite --version)" = "${GITHUB_REF_NAME#v}"
+          isorite example "$RUNNER_TEMP/example" && isorite check "$RUNNER_TEMP/example/nbody-notes"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release
+          path: npm-dist/
+          if-no-files-found: error
+
+  npm:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write # trusted publishing
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+      # Staged: the version goes live only when approved on npmjs.com with 2FA.
+      # "./" so npm reads a file path, not "owner/repo" GitHub shorthand.
+      - run: npm stage publish ./isorite-*.tgz --access public
+
+  github:
+    needs: npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to create the release
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" isorite-*.tgz --repo "$GITHUB_REPOSITORY" --generate-notes --verify-tag
