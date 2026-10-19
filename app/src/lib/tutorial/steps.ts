@@ -65,8 +65,9 @@ let listening = false;
 function listen(): void { if (!listening && app.api) { listening = true; app.on((e) => { if (e.type === "note-changed" && texts.has(e.id)) read(e.id); }); } }
 const count = (text: string, pattern: RegExp) => { listen(); return text.match(pattern)?.length ?? 0; };
 const links = (text: string, to: string) => count(text, new RegExp(`\\]\\(/${to.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.md`, "g"));
-/** The chosen note on the Atlas and what is lit with it: lit as one, its links and the notes at their ends (T5). */
-const lit = (): Element[] => (app.atlas?.chosenId ? [...document.querySelectorAll(".atlas-world [data-note]:not(.dim)")] : []);
+/** With a note chosen, the whole Atlas is lit (T5): the Atlas dims what is not joined to the note itself, and so its
+ *  links, the chain back along them, and the notes at their ends all stay in view. */
+const lit = (): Element[] => (app.atlas?.chosenId ? [...document.querySelectorAll(".atlas")] : []);
 /** Whether L1's first step has seen you inside integrators, and its timeline step the note as it was. */
 let inside = false, looked = false;
 
