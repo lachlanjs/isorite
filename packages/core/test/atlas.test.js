@@ -115,9 +115,9 @@ describe("the layout", () => {
     expect(gridLayout(model(6, 9), {})).toEqual(gridLayout(model(6, 9), { gridFlow: "up" }));
     const big = model(40, 28), t = performance.now(), U = gridLayout(big, {}), R = gridLayout(big, { gridFlow: "right" });
     console.log(`layout at 1177 notes: up ${U.W} by ${U.H}, right ${R.W} by ${R.H} cells, ${(performance.now() - t).toFixed(0)} ms for both`);
-    // A guard against a layout gone badly wrong, not a measure: a shared runner takes several seconds over it.
-    expect(performance.now() - t).toBeLessThan(20000);
-  }, 30000);
+    // A guard against a layout gone badly wrong, not a measure: about 11 s on a desktop, 23 s on GitHub's runner.
+    expect(performance.now() - t).toBeLessThan(60000);
+  }, 90000);
 });
 
 describe("the cells", () => {
@@ -193,8 +193,9 @@ describe("the routes", () => {
     const t = performance.now(), out = gridRouter(big)(some), ms = performance.now() - t;
     console.log(`router at 1177 notes, ${big.W} by ${big.H} cells: ${some.length} links between folders in ${ms.toFixed(0)} ms`);
     expect(out.measures.lost).toBe(0);
-    expect(ms).toBeLessThan(45000);
-  }, 60000);
+    // As with the layout, a guard, not a measure: about 27 s on a desktop, 55 s on GitHub's runner.
+    expect(ms).toBeLessThan(150000);
+  }, 200000);
 });
 
 describe("room for routes (T71)", () => {
