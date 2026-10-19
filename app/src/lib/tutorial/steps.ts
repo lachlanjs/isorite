@@ -5,7 +5,7 @@
 // by isorite --tutorial, beside the terminal's tour, a part may read differently again (`local`).
 
 import type { EngineEvent } from "@isorite/engine";
-import { BH, COST, DIRECT, GALAXY, LAW, LEAP, LOOP, PROMPTS, QUAD, SOFT, SYMP } from "@isorite/example";
+import { BH, COST, DIRECT, ENERGY, GALAXY, LAW, LEAP, LOOP, PROMPTS, QUAD, SOFT } from "@isorite/example";
 import { app, noteHref } from "$lib/app.svelte.ts";
 
 export interface Step {
@@ -53,6 +53,23 @@ const has = (selector: string) => () => document.querySelector(selector) !== nul
 const chosen = (note: string) => () => document.querySelector(`[data-note="${note}"]`)?.classList.contains("at") ?? false;
 const titled = (pattern: RegExp) => app.listing.notes.find((n) => pattern.test(n.title));
 
+// The text of the notes a step reads, kept current from the engine's events, for checks that look a few times a
+// second; and as each was when the tutorial began.
+const texts = new Map<string, string>(), first = new Map<string, string>();
+function read(id: string): void {
+  void app.api.readNote(id).then((n) => { texts.set(id, n.text); if (!first.has(id)) first.set(id, n.text); }, () => texts.delete(id));
+}
+const textOf = (id: string): string => { if (!texts.has(id)) { texts.set(id, ""); read(id); } return texts.get(id) ?? ""; };
+const original = (id: string): string => { textOf(id); return first.get(id) ?? ""; };
+let listening = false;
+function listen(): void { if (!listening && app.api) { listening = true; app.on((e) => { if (e.type === "note-changed" && texts.has(e.id)) read(e.id); }); } }
+const count = (text: string, pattern: RegExp) => { listen(); return text.match(pattern)?.length ?? 0; };
+const links = (text: string, to: string) => count(text, new RegExp(`\\]\\(/${to.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.md`, "g"));
+/** The chosen note on the Atlas and what is lit with it: lit as one, its links and the notes at their ends (T5). */
+const lit = (): Element[] => (app.atlas?.chosenId ? [...document.querySelectorAll(".atlas-world [data-note]:not(.dim)")] : []);
+/** Whether L1's first step has seen you inside integrators, and its timeline step the note as it was. */
+let inside = false, looked = false;
+
 // The note you make in L1, as it is moved and then deleted: whatever was not there when the tutorial began.
 const ORIGINAL = new Set<string>();
 /** Note what the base holds, once, before anything is made in it. */
@@ -63,29 +80,47 @@ export const PARTS: Part[] = [
   {
     key: "L1", title: "The isorite knowledge base", about: "Understand the basics of using an isorite knowledge base, editing Markdown, and linking notes together.",
     steps: [
-      { go: "/atlas", target: ".atlas-world", title: "This is the Atlas",
-        text: "nbody-notes: a developer's notes on an N-body simulation, three weeks in. Each block is a note, in its folder: physics, integrators, algorithms, the simulation itself. The lines are links between them." },
+      { go: "/atlas", target: `[data-folder="integrators"]`, check: () => { if (app.atlas?.here === "integrators") inside = true; return inside && app.atlas?.here === ""; }, title: "This is the Atlas",
+        text: "nbody-notes: a developer's notes on an N-body simulation. Each block is a note, and each bubble a folder, nested as the folders are. The lines are links: each says what a note requires or builds on. The notes' text is not here. Click inside the integrators bubble to step into it, then click open ground to step back out.",
+        phone: { text: "nbody-notes: a developer's notes on an N-body simulation. Each block is a note, and each bubble a folder, nested as the folders are. The lines are links. Tap inside the integrators bubble to step into it, then ↑ out at the top." } },
       { go: "/atlas", target: `[data-note="${LEAP}"]`, check: chosen(LEAP), title: "What a note rests on",
-        text: "Click Leapfrog. What it requires lights up, all the way back to Newton's law, and so does what builds on it.",
-        phone: { text: "Tap Leapfrog. What it requires lights up, all the way back to Newton's law, and so does what builds on it." } },
-      { target: `[data-note="${LEAP}"]`, check: here(`#/n/${LEAP}`), title: "Open it",
-        text: "Click it again to open the note.", phone: { text: "Tap it again to open the note." } },
-      { go: `/n/${LEAP}`, target: ".cm-content", title: "A note is Markdown",
-        text: "Click into the code block, or the line with the link. Its Markdown shows on the lines you touch and hides again when you leave. $…$ is maths; Ctrl+B, Ctrl+I and Ctrl+K make bold, italics and a link; Ctrl+S saves, though it saves by itself.",
-        phone: { text: "Tap into the code block, or the line with the link. Its Markdown shows on the lines you touch and hides again when you leave. $…$ is maths. It saves by itself." } },
-      { target: ".cm-content", title: "Links, and their kind",
-        text: "A link to another note is a Markdown link. Type [[ and a few letters of a title to make one. Its kind is the link's title: requires, uses, or see also. Alt+L on a link sets it, and the Atlas draws requires strongest.",
-        phone: { text: "A link to another note is a Markdown link. Type [[ and a few letters of a title to make one. Its kind is the link's title: requires, uses, or see also; the button beside a link sets it." } },
-      { target: ".cm-content", check: here(`#/n/${SYMP}`), title: "Follow a link",
-        text: "Ctrl and click (⌘ on a Mac) the link to symplectic.",
-        phone: { go: "/atlas", target: `[data-note="${SYMP}"]`, text: "On a phone, the Atlas is the way between notes: tap Symplectic integrators, then tap it again." } },
-      { go: `/n/${SYMP}`, check: has(".details"), title: "Its frontmatter",
-        text: "Above the text, details shows the note's frontmatter: its type, a one-line description, and tags. source shows the whole file, frontmatter and all. Open details." },
-      { go: "/notes", target: '[data-tour="new-note"]', check: () => yours().length > 0, title: "A new note, in a new folder",
-        text: "Make a note: new note, a title (say Plummer sphere), and a folder that is not there yet (say galaxies). A folder is made when a note is put in it." },
-      { check: () => yours().length > 0 && yours().every((n) => n.id.startsWith("simulation/")), title: "Move it",
-        text: "In the new note's details, change its path to simulation/ and its name, and press Enter. The note moves; links to it would follow. Its old folder, now empty, is gone." },
-      { check: () => ORIGINAL.size > 0 && yours().length === 0 && app.listing.notes.length === BASE, title: "Delete it",
+        wrong: () => (app.atlas?.chosenId && app.atlas.chosenId !== LEAP ? `That is ${app.atlas.chosen}. Choose Leapfrog, in integrators.` : null),
+        text: "Click Leapfrog. What it requires lights up, back along the chain to Newton's law, and so does what builds on it.",
+        phone: { text: "Tap Leapfrog. What it requires lights up, back along the chain to Newton's law, and so does what builds on it." } },
+      { target: lit, check: here(`#/n/${LEAP}`), title: "Open it",
+        text: "Click Leapfrog again. It opens beside the Atlas: the atlas and note switch at the top right shows both, and either half turns its view off.",
+        phone: { text: "Tap Leapfrog again to open it. The atlas and note tabs at the foot switch between the two." } },
+      { go: `/n/${LEAP}`, target: ".cm-content", check: () => count(textOf(LEAP), /\*\*[^*\n]+\*\*/g) > count(original(LEAP), /\*\*[^*\n]+\*\*/g), title: "A note is Markdown",
+        text: "Its Markdown shows on the lines you touch and hides when you leave them. Select a word and press Ctrl+B to make it bold. There is no saving to do: every change is kept as you type.",
+        phone: { text: "Its Markdown shows on the lines you touch and hides when you leave them. Make a word bold: type ** on each side of it. There is no saving to do: every change is kept as you type." } },
+      { target: ".cm-content", check: () => links(textOf(LEAP), ENERGY) > links(original(LEAP), ENERGY), title: "Link a note",
+        text: "At the end of the last paragraph, type [[ener and choose Energy and its conservation. A link to another note is a Markdown link to its file." },
+      { target: () => [...lit(), ...document.querySelectorAll("path.grown")], title: "The link, on the Atlas",
+        text: "The Atlas drew the new link as it was made: a line from Leapfrog to Energy and its conservation, in physics. The Atlas makes room for what changes, and keeps close to how it was.",
+        phone: { go: "/atlas", target: `[data-note="${ENERGY}"]`, text: "The Atlas has the new link: a line from Leapfrog to Energy and its conservation, in physics. The Atlas makes room for what changes, and keeps close to how it was." } },
+      { go: `/n/${LEAP}`, target: ".cm-content", check: () => /\]\(\/physics\/energy-conservation\.md "requires"\)/.test(textOf(LEAP)), title: "Its kind",
+        text: "A link's kind is its title: requires, uses, or see also. Put the cursor in the new link, press Alt+L, and choose requires.",
+        phone: { text: "A link's kind is its title: requires, uses, or see also. Tap the button beside the new link and choose requires." } },
+      { target: lit, title: "The kind, on the Atlas",
+        text: "requires is drawn strongest. Energy and its conservation now lights with what Leapfrog rests on.",
+        phone: { go: "/atlas", target: `[data-note="${ENERGY}"]`, text: "requires is drawn strongest. Energy and its conservation now lights with what Leapfrog rests on." } },
+      { go: `/n/${LEAP}`, target: () => [...document.querySelectorAll('button[aria-label="timeline"], .timeline, .atbar')], check: () => { if (has(".atbar")()) looked = true; return looked && !has(".atbar")(); }, title: "Every change is kept",
+        text: "Open the timeline, the clock beside the title. Each mark is a change: squares are yours. Click the first mark to see the note as it was before today, then the arrow at the right of the bar to come back to now.",
+        phone: { text: "Open the timeline, the clock beside the title. Each mark is a change: squares are yours. Tap the first mark to see the note as it was before today, then the arrow at the right of the bar to come back to now." } },
+      { go: `/n/${LEAP}`, target: ".cm-content", check: here(`#/n/${ENERGY}`), title: "Follow the link",
+        wrong: () => { const at = decodeURIComponent(location.hash).match(/^#\/n\/([^?]+)/)?.[1]; return at && at !== LEAP && at !== ENERGY ? "That is another note. Go back, and follow the link to Energy and its conservation." : null; },
+        text: "Ctrl and click (⌘ on a Mac) the link to Energy and its conservation.",
+        phone: { go: "/atlas", target: `[data-note="${ENERGY}"]`, text: "On a phone the Atlas is the way between notes: tap Energy and its conservation, then tap it again." } },
+      { go: `/n/${ENERGY}`, target: () => [...document.querySelectorAll('.tools, .details')], check: () => /^tags:/m.test(textOf(ENERGY)) && !/^tags:/m.test(original(ENERGY)), title: "Its details",
+        text: "A note begins with frontmatter: its type, a one-line description, and tags. Open details above the text and give it a tag, say energy." },
+      { go: "/notes", target: () => [...document.querySelectorAll('[data-tour="new-note"], form.new')], check: () => yours().some((n) => n.dir === "galaxies"),
+        wrong: () => { const n = yours().find((x) => x.dir !== "galaxies"); return n ? `It went into ${n.dir || "the top of the base"}. Redo, and type galaxies as its folder.` : null; },
+        title: "A new note, in a new folder",
+        text: "This is the list of notes; the base's name at the top left opens it. Make a note: new note, the title Plummer sphere, and the folder galaxies, which is not there yet. A folder is made when a note is put in it. Watch the Atlas when it opens." },
+      { target: () => [...document.querySelectorAll(".details, .tools, .atlas-pane")], check: () => yours().length > 0 && yours().every((n) => n.dir === "simulation"), title: "Move it",
+        wrong: () => { const n = yours().find((x) => x.dir !== "galaxies" && x.dir !== "simulation"); return n ? `It went into ${n.dir || "the top of the base"}. Choose simulation.` : null; },
+        text: "In the new note's details, change its folder: type sim and choose simulation from the suggestions. The note moves, and galaxies, now empty, is gone." },
+      { target: () => [...document.querySelectorAll(".details, .tools")], check: () => ORIGINAL.size > 0 && yours().length === 0 && app.listing.notes.length === BASE, title: "Delete it",
         text: "In details, delete. You are told first which notes link to it, since their links would be left broken. Its history is kept." },
       { title: "That is the base",
         text: "nbody-notes is a folder of Markdown files in git: any editor opens it, and isorite notices what changed outside it. Next, Iso, in L2." },

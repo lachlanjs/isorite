@@ -9,6 +9,9 @@
 
   // The Atlas, with the session's timeline at its side. It stands in the shell, alone or beside a note (V1).
 
+  // Beside a note (V1), the note's own timeline stands next to it: the session's is not shown as well.
+  let { beside = false }: { beside?: boolean } = $props();
+
   // `?pick=<a note for Iso>`: the map is then for linking notes to it.
   // With hash routing the question mark is inside the fragment.
   const pick = $derived(page.url.searchParams.get("pick") ?? new URLSearchParams(page.url.hash.split("?")[1] ?? "").get("pick") ?? "");
@@ -45,9 +48,9 @@
 
 <div class="map">
   <Atlas pick={pick ? `@draft/${pick}` : ""} moment={pointed ? { note: pointed.note, who: isos(pointed) ? "iso" : "you" } : null} />
-  {#if !pick}
+  {#if !pick && !beside}
     <div class="side">
-      <button class="icon" type="button" aria-label="timeline" title="timeline" aria-pressed={timeline} onclick={toggle}>
+      <button class="icon" type="button" aria-label="this session's timeline" title="this session's timeline" aria-pressed={timeline} onclick={toggle}>
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1v14" stroke="currentColor" stroke-width="1.2" fill="none" /><rect x="5.5" y="2" width="5" height="3.2" fill="currentColor" /><path d="M8 6.3l2.3 2.3L8 10.9 5.7 8.6z" fill="currentColor" /><rect x="5.5" y="12" width="5" height="3" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
       </button>
       {#if timeline}

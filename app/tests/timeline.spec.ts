@@ -124,7 +124,7 @@ test("the Atlas's timeline: this session's moments as marks; pointing outlines t
   await expect(page.getByRole("status")).toHaveText("saved");
 
   await page.goto("#/atlas");
-  await page.getByRole("button", { name: "timeline", exact: true }).click();
+  await page.getByRole("button", { name: "this session's timeline", exact: true }).click();
   const marks = page.getByRole("list", { name: "This session's timeline" }).locator(".moment");
   await expect(marks.last()).toHaveAccessibleName(/you edited/);
   await marks.last().hover();

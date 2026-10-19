@@ -15,6 +15,7 @@ export const tour = $state({
 export const begun: { snap: Promise<Snapshot> | null } = { snap: null };
 
 export function tick(key: string, at: number): void {
-  const t = (tour.ticks[key] ??= []);
-  if (!t.includes(at)) t.push(at);
+  // Through the state, not the array assigned: a plain array put in state is copied, and a push on it is lost.
+  tour.ticks[key] ??= [];
+  if (!tour.ticks[key].includes(at)) tour.ticks[key].push(at);
 }

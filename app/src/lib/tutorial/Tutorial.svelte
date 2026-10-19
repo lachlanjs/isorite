@@ -27,6 +27,9 @@
   const ticked = (key: string, k: number) => tour.ticks[key]?.includes(k) ?? false;
   const met = $derived(part !== null && ticked(part.key, tour.at));
   let spot = $state.raw<{ x: number; y: number; w: number; h: number } | null>(null);
+  // The card stands bottom right, or bottom left where it would cover what the step lights.
+  let coach = $state<HTMLElement>();
+  let leftSide = $state(false);
   // The lit area eases only when the step's target changes; while the page scrolls it follows at once (T6).
   let easing = $state(false);
   let redoing = $state(false);
@@ -93,6 +96,13 @@
         x0 = Math.min(x0, r.left); y0 = Math.min(y0, r.top); x1 = Math.max(x1, r.right); y1 = Math.max(y1, r.bottom);
       }
       spot = x0 < x1 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+      // Where the card would stand on the right: over the lit area, it goes left, unless the left is as bad.
+      if (!narrow && coach) {
+        const c = coach.getBoundingClientRect(), w = c.width, h = c.height, top = innerHeight - 48 - h;
+        const over = (x: number) => (spot ? Math.max(0, Math.min(x + w, spot.x + spot.w) - Math.max(x, spot.x)) * Math.max(0, Math.min(top + h, spot.y + spot.h) - Math.max(top, spot.y)) : 0);
+        const right = over(innerWidth - 24 - w), left = over(24);
+        leftSide = right > 0 && left < right;
+      }
     };
     look();
     // A few times a second: whether the objective is met, a wrong move, and the prompt to fill in.
@@ -145,10 +155,12 @@
   </div>
 {:else if step}
   {#if spot}<div class="spot" class:easing aria-hidden="true" style="left:{spot.x - 8}px;top:{spot.y - 8}px;width:{spot.w + 16}px;height:{spot.h + 16}px"></div>{/if}
-  <div class="coach frame" class:small role="dialog" aria-label="The tutorial" aria-live="polite" style:bottom={lift ? `${lift}px` : null}>
+  <div class="coach frame" class:small class:left={leftSide && !narrow} bind:this={coach} role="dialog" aria-label="The tutorial" aria-live="polite" style:bottom={lift ? `${lift}px` : null}>
     <div class="row head">
       <span class="label">{part.key} · {part.title.toLowerCase()}</span><span class="grow"></span>
       <span class="seg" aria-label="step {tour.at + 1} of {part.steps.length}, {tour.ticks[part.key]?.length ?? 0} done">{#each part.steps as s, k (s.title)}<i class:d={ticked(part.key, k)} class:at={k === tour.at}></i>{/each}</span>
+      <button class="link" type="button" onclick={() => (tour.part = -1)}>sections</button>
+      <button class="link" type="button" onclick={() => (tour.left = true)}>leave</button>
     </div>
     <h2>{#if narrow}<button class="fold" type="button" aria-expanded={!small} onclick={() => (small = !small)}>{step.title}</button>{:else}{step.title}{/if}</h2>
     {#if !small}<p>{step.text}</p>{/if}
@@ -163,10 +175,6 @@
       <span class="grow"></span>
       {#if waits}<button class="btn quiet" type="button" onclick={redo} disabled={redoing} title="put the base back as this step found it">{redoing ? "redoing…" : "redo"}</button>{/if}
       <button class="btn {waits && !met ? 'quiet' : 'primary'}" type="button" onclick={next}>{last ? "done" : "next ›"}</button>
-    </div>
-    <div class="row foot" class:hidden={small}>
-      <button class="link" type="button" onclick={() => (tour.part = -1)}>sections</button>
-      <button class="link" type="button" onclick={() => (tour.left = true)}>leave</button>
     </div>
   </div>
 {/if}
@@ -184,6 +192,7 @@
     position: fixed; right: 24px; bottom: 48px; z-index: 50; width: 340px; padding: 20px 22px 14px;
     display: flex; flex-direction: column; gap: 12px; --fill: var(--ground-2); --edge: var(--growth); --behind: var(--ground-2);
   }
+  .coach.left { right: auto; left: 24px; }
   .coach.parts { width: 420px; max-height: calc(100vh - 96px); overflow-y: auto; }
   .row { display: flex; align-items: center; gap: 8px; }
   .coach h2 { font-family: var(--font-text); font-size: 23px; line-height: 1.25; font-weight: 400; margin: 0; color: var(--text); }
@@ -208,7 +217,7 @@
   .progress { display: flex; align-items: center; gap: 8px; flex: none; font-family: var(--font-mono); font-size: 11px; color: var(--growth); padding-top: 3px; white-space: nowrap; }
   .go { color: var(--text-faint); font-size: 16px; line-height: 1; transition: transform 0.15s, color 0.15s; }
   .tick { color: var(--growth); flex: none; }
-  .head { flex-wrap: wrap; row-gap: 6px; }
+  .head { flex-wrap: wrap; row-gap: 6px; column-gap: 10px; }
   .seg { display: inline-flex; gap: 3px; margin-left: auto; align-items: center; }
   .seg i { width: 9px; height: 2px; background: var(--line); }
   .seg i.d { background: var(--growth); }
@@ -216,7 +225,6 @@
   .mistake { color: var(--rose) !important; border-left: 2px solid var(--rose); padding-left: 8px; }
   .actions { margin-top: 2px; gap: 10px; }
   .actions .btn { height: 30px; font-size: 12px; }
-  .foot { gap: 14px; justify-content: flex-end; }
   .link { background: none; border: 0; padding: 2px 0; color: var(--text-faint); font-size: 11px; cursor: pointer; }
   .link:hover, .link:focus-visible { color: var(--text); }
   .waiting { color: var(--growth); white-space: nowrap; }

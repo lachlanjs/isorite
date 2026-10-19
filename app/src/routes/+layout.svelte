@@ -105,7 +105,7 @@
     {#if app.error}
       <p class="stopped">isorite could not open the base: {app.error}</p>
     {:else}
-      {#if atlasOn}<div class="pane atlas-pane"><AtlasPane /></div>{/if}
+      {#if atlasOn}<div class="pane atlas-pane"><AtlasPane beside={shown === "both"} /></div>{/if}
       {#if shown === "both"}
         <!-- A focusable separator is a widget (WAI-ARIA window splitter): dragged, or moved with the arrow keys. -->
         <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -122,7 +122,8 @@
       <span>{app.session.study ? "study" : "project: no journal is kept"}</span>
       {#if inNote && app.saving}<span class:bad={app.saving.bad} role="status">{app.saving.text}</span>{/if}
       {#if inNote && app.hint && !run}<span class="grow"></span><span class="hint">{app.hint}</span>{/if}
-      {#if run && (running || !app.atlas?.chosen)}
+      <!-- Iso's request, as the Atlas shows it: not for the note open beside it, which says so itself. -->
+      {#if run && (!app.open || run.note !== app.open) && (running || !app.atlas?.chosen)}
         <span class="grow"></span>
         {#if run.agent}
           <span class="hint">{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentNamed}'s turn is done · click open ground to let its path go`}</span>
