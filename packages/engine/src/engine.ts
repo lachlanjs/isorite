@@ -6,7 +6,7 @@ import {
   Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
   type Cost, type Entry, type FileEntry, type Insert, type LearnerEvent, type Marks, type Passage, type Proposal, type SessionMoment, type Stamp, type Understanding,
 } from "@isorite/core";
-import { Conflict, EngineError, type AgentLook, type AgentProposal, type Api, type AskRequest, type ContextReport, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport } from "./api.ts";
+import { Conflict, EngineError, type AgentLook, type AgentProposal, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport } from "./api.ts";
 import { ANSWER_CLOSE, ANSWER_OPEN, CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, exerciseMessages, exerciseReply, fitted, helpSince, insertMessages, markMessages, noteMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part, type Tested } from "./iso.ts";
 import { rounds } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, type Similar } from "./lookup.ts";
@@ -511,8 +511,9 @@ export class Engine implements Api {
 
     const { messages, olds, text: sent } = await this.compose(req, asked);
     const maxTokens = req.form === "insert" ? REPLY_TOKENS : req.form === "note" ? NOTE_TOKENS : req.form === "mark" ? MARK_TOKENS : req.form === "exercise" ? EXERCISE_TOKENS : Math.max(REPLY_TOKENS, Math.ceil(olds.join("").length / 3) + 1000);
-    // Marking and writing an exercise are one call with no tools: what is sent is all Iso has, and you chose it.
-    const most = req.form === "mark" || req.form === "exercise" ? 0 : undefined;
+    // Marking and writing an exercise are one call with no tools: what is sent is all Iso has, and you chose it. So
+    // is a request in place when you said Iso is not to look further (I3).
+    const most = req.form === "mark" || req.form === "exercise" || ((req.form === "insert" || req.form === "rewrite") && req.choice?.lookup === false) ? 0 : undefined;
 
     const request = newId(this.opts.clock.now()), abort = new AbortController();
     this.running.set(request, abort);
@@ -618,16 +619,7 @@ export class Engine implements Api {
       try { body = splitFrontmatter(text)[1]; } catch { /* sent as it is */ }
       if (!body.trim()) throw new EngineError("write what you want from Iso first");
       // The notes it links to go with it, as far as there is room; the rest Iso reads with its tools.
-      const linked: { id: string; title: string; text: string }[] = [];
-      let room = LINKED_BUDGET;
-      for (const m of body.matchAll(/\]\(\/([^)\s#]+)\.md(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/g)) {
-        const c = this.bundle.concepts.get(decodeURIComponent(m[1]!));
-        if (!c || linked.some((l) => l.id === c.id)) continue;
-        const piece = c.body.trim().slice(0, Math.max(0, room) * 4);
-        if (piece.length < Math.min(c.body.trim().length, 400)) break; // no room for a useful part of it
-        linked.push({ id: c.id, title: c.title, text: piece + (piece.length < c.body.trim().length ? "\n[…cut: read the rest with read_note]" : "") });
-        room -= estimate(piece);
-      }
+      const linked = this.linkedSent(body);
       const earlier = await this.exchangesNow();
       return { ...noteMessages({ tier: req.tier, meaning: Boolean(this.similar), title: this.titleOf(req.note, text), body: windowed(body.split("\n"), [0]), linked, conversation: conversation(earlier), moments: earlier.length }), text, olds };
     }
@@ -658,16 +650,44 @@ export class Engine implements Api {
     }
     const title = this.titleOf(req.note, text);
     const entries = await this.journal(req.note);
-    const earlier = await this.exchangesNow();
-    // What Iso read for this note's exchanges that are still in the conversation: it may well read them again.
-    const read = new Set(entries.flatMap((e) => (e.kind === "proposal" && earlier.some((x) => x.id === e.id) ? e.read ?? [] : [])));
+    // What you chose to send (I3): earlier exchanges and linked notes switched off are left out; with no look-ups,
+    // Iso has no tools.
+    const off = new Set(req.choice?.off ?? []);
+    const earlier = (await this.exchangesNow()).filter((x) => !off.has(`x:${x.id}`));
+    let body = text;
+    try { body = splitFrontmatter(text)[1]; } catch { /* links read from the whole file */ }
     const given = {
       tier: req.tier, meaning: Boolean(this.similar), title, id: req.note, marked: windowed(lines, keep), asked,
       unkept: pending(entries).map((p) => (p.form === "insert" ? p.text : p.regions.map((r) => r.new).join("\n\n"))),
       conversation: conversation(earlier), moments: earlier.length,
-      linked: { notes: read.size, tokens: [...read].reduce((n, id) => n + estimate(this.bundle.concepts.get(id)?.body ?? ""), 0) },
+      linked: this.linkedSent(body, off, req.note), lookup: req.choice?.lookup !== false,
     };
     return { ...(req.form === "insert" ? insertMessages(given) : rewriteMessages({ ...given, count: olds.length })), text, olds };
+  }
+
+  /** The notes a note's text links to, each once, in order: the note itself left out. */
+  private linksOf(body: string, self = ""): { id: string; title: string; body: string }[] {
+    const out: { id: string; title: string; body: string }[] = [];
+    for (const m of body.matchAll(/\]\(\/([^)\s#]+)\.md(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/g)) {
+      const c = this.bundle.concepts.get(decodeURIComponent(m[1]!));
+      if (c && c.id !== self && !out.some((l) => l.id === c.id)) out.push({ id: c.id, title: c.title, body: c.body.trim() });
+    }
+    return out;
+  }
+
+  /** The linked notes sent with a request, those switched off left out, as far as there is room; the rest Iso
+   *  reads with its tools. */
+  private linkedSent(body: string, off: ReadonlySet<string> = new Set(), self = ""): { id: string; title: string; text: string }[] {
+    const linked: { id: string; title: string; text: string }[] = [];
+    let room = LINKED_BUDGET;
+    for (const c of this.linksOf(body, self)) {
+      if (off.has(`n:${c.id}`)) continue;
+      const piece = c.body.slice(0, Math.max(0, room) * 4);
+      if (piece.length < Math.min(c.body.length, 400)) break; // no room for a useful part of it
+      linked.push({ id: c.id, title: c.title, text: piece + (piece.length < c.body.length ? "\n[…cut: read the rest with read_note]" : "") });
+      room -= estimate(piece);
+    }
+    return linked;
   }
 
   private titleOf(id: string, text: string): string {
@@ -745,8 +765,8 @@ export class Engine implements Api {
     this.cleared = await this.one(() => this.record({ event: "context-cleared" }));
   }
 
-  async context(note?: string): Promise<ContextReport> {
-    let parts: Part[] | null = null;
+  async context(note?: string, choice?: Choice): Promise<ContextReport> {
+    let parts: Part[] | null = null, items: ContextItem[] = [];
     // A note for Iso with nothing written in it yet is counted as no note at all.
     if (note && isDraftId(note)) {
       const exerciseDraft = await this.exerciseDraft(note).catch(() => null);
@@ -756,7 +776,17 @@ export class Engine implements Api {
     } else if (note && isStudyId(note)) {
       // In an exercise, what sending it for marking would send.
       parts = await this.readNote(note).then(async (s) => (await this.markCompose(note, s.text, null)).parts, () => null);
-    } else if (note) ({ parts } = await this.compose({ note, form: "insert", after: null, before: null, asked: "", tier: "mid" }, ""));
+    } else if (note) {
+      ({ parts } = await this.compose({ note, form: "insert", after: null, before: null, asked: "", tier: "mid", ...(choice ? { choice } : {}) }, ""));
+      // What can be switched off, each with what it would add (I3): the session's exchanges, and the notes this links to.
+      const off = new Set(choice?.off ?? []);
+      let body = (await this.readNote(note)).text;
+      try { body = splitFrontmatter(body)[1]; } catch { /* links read from the whole file */ }
+      items = [
+        ...(await this.exchangesNow()).map((x): ContextItem => ({ id: `x:${x.id}`, kind: "exchange", title: x.text.split("\n")[0]!.replace(/^In (.+?) \(\/[^)]*\) they asked[^:]*: /, "$1: "), tokens: estimate(x.text), on: !off.has(`x:${x.id}`) })),
+        ...this.linksOf(body, note).map((c): ContextItem => ({ id: `n:${c.id}`, kind: "linked", title: c.title, tokens: estimate(c.body), on: !off.has(`n:${c.id}`) })),
+      ];
+    }
     if (!parts) {
       // In no note: the instructions, and the conversation as it would be sent.
       const earlier = await this.exchangesNow();
@@ -769,7 +799,7 @@ export class Engine implements Api {
     for (const entries of (await this.sessionEntries()).values()) for (const e of entries) if (((e.kind === "proposal" && !e.copyOf) || e.kind === "marks") && e.cost) { usd += e.cost.usd; requests++; } // a proposal with no cost is the second of one request
     const text = this.opts.study ? await this.opts.study.read(recordPath(this.opts.device)) : null;
     for (const e of readRecord(text ?? "")) if (e.event === "iso-unused" && e.session === session) { usd += typeof e.usd === "number" ? e.usd : 0; requests++; }
-    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: { usd, requests } };
+    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: { usd, requests }, items, lookup: choice?.lookup !== false };
   }
 
   // ------------------------------------------------------------ notes for Iso

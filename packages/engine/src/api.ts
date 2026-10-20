@@ -69,12 +69,17 @@ export interface SearchHit {
   snippet: string;
 }
 
+/** What you chose of Iso's context for a request in a note (I3): the parts switched off, by id ("x:<entry>" an
+ *  earlier exchange of the session, "n:<note>" a note this note links to), and whether Iso may look up more notes
+ *  with its tools while it works (on unless said). The note itself is always sent: it is where the answer goes. */
+export interface Choice { off?: string[]; lookup?: boolean }
+
 /** A request to Iso in a note. The form decides where its text may go, whatever it writes. */
 export type AskRequest =
   /** New text at a point: between the block `after` and the block `before`. */
-  | { note: string; form: "insert"; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier }
+  | { note: string; form: "insert"; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier; choice?: Choice }
   /** These passages rewritten, and nothing else. What Iso says of the changes goes between `after` and `before`. */
-  | { note: string; form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier }
+  | { note: string; form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier; choice?: Choice }
   /** A note written for Iso (a draft, `@draft/…`): the draft is what is asked, and the reply is a note to keep in its place. */
   | { note: string; form: "note"; tier: Tier }
   /** An exercise (`@study/…`) sent for marking, with the passage of its working that is the answer. One round, no tools. */
@@ -107,7 +112,14 @@ export interface ContextReport {
   limit: number;
   parts: Part[];
   session: { usd: number; requests: number };
+  /** In a note of the base: each part you can switch on or off, as the choice asked about has it (I3). */
+  items: ContextItem[];
+  /** Whether Iso may look up more notes, as the choice has it. */
+  lookup: boolean;
 }
+
+/** One part of Iso's context that can be switched off: an earlier exchange, or a note this note links to. */
+export interface ContextItem { id: string; kind: "exchange" | "linked"; title: string; tokens: number; on: boolean }
 
 /** What can be set, as the app may know it. The key itself is never sent back. */
 export interface Settings {
@@ -221,7 +233,8 @@ export interface Api {
   /** You think Iso rates you too highly: one square down for every note this exercise tests. */
   windBack(exercise: string): Promise<void>;
   /** What Iso would be sent if asked now, in this note (or in none). */
-  context(note?: string): Promise<ContextReport>;
+  /** What asking Iso in a note would send, with `choice` as the request would carry it. */
+  context(note?: string, choice?: Choice): Promise<ContextReport>;
   /** Leave the session's earlier exchanges out of what Iso is sent from now on. Nothing is deleted. */
   clearConversation(): Promise<void>;
   settings(): Promise<Settings>;

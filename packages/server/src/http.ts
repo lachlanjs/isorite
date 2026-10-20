@@ -7,7 +7,7 @@ import { extname, join, resolve, sep } from "node:path";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { Conflict, EngineError, MAX_NOTE_BYTES, type Api } from "@isorite/engine";
+import { Conflict, EngineError, MAX_NOTE_BYTES, type Api, type Choice } from "@isorite/engine";
 
 export const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
 export const TOKEN_HEADER = "x-isorite-token";
@@ -35,9 +35,11 @@ const Edit = z.object({ base: z.string().max(64), text: z.string() }).strict();
 const Make = z.object({ text: z.string() }).strict();
 const Anchor = z.object({ text: z.string(), nth: z.number().int().min(0) }).strict();
 const Tier = z.enum(["low", "mid", "max"]);
+/** What you chose of Iso's context (I3): parts switched off by id, and whether it may look up more. */
+const ChoiceSchema = z.object({ off: z.array(z.string().max(400)).max(500).optional(), lookup: z.boolean().optional() }).strict();
 const Ask = z.discriminatedUnion("form", [
-  z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
-  z.object({ note: z.string(), form: z.literal("rewrite"), regions: z.array(Anchor).min(1).max(40), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
+  z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier, choice: ChoiceSchema.optional() }).strict(),
+  z.object({ note: z.string(), form: z.literal("rewrite"), regions: z.array(Anchor).min(1).max(40), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier, choice: ChoiceSchema.optional() }).strict(),
   z.object({ note: z.string(), form: z.literal("note"), tier: Tier }).strict(),
   z.object({ note: z.string(), form: z.literal("mark"), answer: Anchor, tier: Tier }).strict(),
   z.object({ note: z.string(), form: z.literal("exercise"), tier: Tier }).strict(),
@@ -146,7 +148,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes }:
   post("/api/exercise/draft", ExerciseAsk, (_c, b) => api.createExerciseDraft(b.folder, b.tests, b.after ?? null));
   post("/api/exercise/keep", z.object({ proposal: z.string().max(64) }).strict(), (c, b) => api.keepExercise(id(c), b.proposal));
   post("/api/exercise/wind-back", z.object({}).strict(), (c) => api.windBack(id(c)));
-  app.get("/api/context", (c) => answer(c, () => api.context(c.req.query("id") || undefined)));
+  app.get("/api/context", (c) => answer(c, () => api.context(c.req.query("id") || undefined, choiceOf(c.req.query("choice")))));
   post("/api/context/clear", z.object({}).strict(), () => api.clearConversation());
   // The key goes in and never comes out: settings say only whether one is held.
   app.get("/api/settings", (c) => answer(c, () => api.settings()));
@@ -205,4 +207,13 @@ function staticFile(c: Context, web: string): Response {
   return c.body(new Uint8Array(readFileSync(file)), 200, {
     "Content-Type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream", "Cache-Control": cache, "X-Content-Type-Options": "nosniff",
   });
+}
+
+/** The choice of what Iso is sent, as the context route takes it: JSON, and only its known fields kept. */
+function choiceOf(raw: string | undefined): Choice | undefined {
+  if (!raw) return undefined;
+  try {
+    const c = JSON.parse(raw) as { off?: unknown; lookup?: unknown };
+    return { ...(Array.isArray(c.off) ? { off: c.off.filter((x): x is string => typeof x === "string").slice(0, 500) } : {}), ...(typeof c.lookup === "boolean" ? { lookup: c.lookup } : {}) };
+  } catch { return undefined; }
 }
