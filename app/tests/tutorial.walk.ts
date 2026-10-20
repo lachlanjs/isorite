@@ -33,14 +33,6 @@ async function askHere(page: Page) {
   if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
   else await page.keyboard.press("Control+Enter");
 }
-/** Press and keep still, as long as starts a note for Iso. */
-async function hold(page: Page, x: number, y: number) {
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.waitForURL(/#\/draft\//);
-  await page.mouse.up();
-}
-const middle = async (page: Page, selector: string) => { const b = (await page.locator(selector).boundingBox())!; return [b.x + b.width / 2, b.y + b.height / 2] as const; };
 
 /** From the list of sections, the one named. */
 async function section(page: Page, key: string) {
@@ -151,49 +143,64 @@ test("L1: the Atlas and its folders, a note opened beside it, Markdown, a link a
   await finish(page, "L1", 15);
 });
 
-test("L2 (earlier): Iso asked in place and kept, a TODO rewritten, what Iso is sent, the timeline, and a note for Iso kept", async ({ page }) => {
+/** Hold still on the map until a new note is marked, and let go: its title is asked for there. */
+async function holdAt(page: Page, x: number, y: number) {
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.waitForTimeout(900);
+  await page.mouse.up();
+  await expect(page.getByLabel("the new note's title")).toBeVisible();
+}
+
+test("L2: asked in the text and kept, a TODO rewritten (a wrong selection named first), a part of the context switched off, and a note made by holding on the Atlas and asked in", async ({ page }) => {
   test.setTimeout(150_000);
   await section(page, "L2");
-  await at(page, "Ask Iso in place");
-  await ask(page, "I don't have this straight yet.");
-  await expect(prompt(page)).toHaveValue("how is a body inserted, and what does each node keep?");
-  await prompt(page).press("Enter");
-  await at(page, "Keep it, or not");
+  await at(page, "Ask in the text");
+  await editor(page).getByText("I don't have this straight yet.").click();
+  await askHere(page);
+  await at(page, "Watch it read");
+  await at(page, "Keep it");
   await expect(page.locator(".between[data-proposal]")).toContainText("An empty leaf");
-  await look(page, "B2-asked");
+  await look(page, "L2-03-answer");
   await page.locator(".between[data-proposal]").getByRole("button", { name: "keep" }).click();
   await at(page, "Rewrite a selection");
-  await line(page, /^TODO/);
+  await line(page, /^With /);
   await askHere(page);
-  await expect(page.getByRole("radio", { name: "rewrite a selection" })).toHaveAttribute("aria-checked", "true");
+  await expect(card(page).locator(".mistake")).toContainText("no TODO");
+  await look(page, "L2-04-wrong");
+  await prompt(page).press("Escape");
+  // The whole line, however it wraps in the note's pane: three clicks.
+  await page.locator(".cm-line").filter({ hasText: /^TODO/ }).click({ clickCount: 3 });
+  await askHere(page);
   await expect(prompt(page)).toHaveValue("answer my TODO");
   await prompt(page).press("Enter");
   await at(page, "Keep the change");
-  await page.getByRole("button", { name: "[ keep all ]" }).click();
+  await expect(page.locator(".changes, .cm-content").first()).toContainText("force error is about a percent");
+  await look(page, "L2-05-change");
+  await page.getByRole("button", { name: "keep all" }).click();
   await at(page, "What Iso is sent");
-  await expect(editor(page)).toContainText("each body visits");
   await page.locator(".bar .count .tokens").click();
-  await at(page, "Every change is kept");
-  await page.getByRole("button", { name: "Close the breakdown" }).click();
-  await visible(page, "timeline").click();
-  await at(page, "The note as it was");
-  await page.locator(".timeline .moment").first().click();
-  await at(page, "Step through it");
-  await look(page, "B8-timeline");
-  await page.getByRole("button", { name: "back to now" }).click();
-  await at(page, "A note for Iso");
-  await expect(page.locator("[data-note]").first()).toBeVisible();
-  const box = (await page.locator(".atlas").boundingBox())!;
-  await hold(page, box.x + 6, box.y + 6);
-  await at(page, "Send it");
-  await expect(page.getByText("In the cluster run, two bodies pass very close")).toBeVisible();
-  await page.getByRole("button", { name: "send to Iso" }).click();
-  await at(page, "Keep it as a note");
-  await look(page, "B12-path");
-  await page.getByLabel("Folder").fill("physics");
-  await page.getByRole("button", { name: "keep as a note" }).click();
+  const panel = page.getByRole("dialog", { name: "Context" });
+  await panel.getByRole("switch").first().click();
+  await at(page, "A note to ask in");
+  await look(page, "L2-06-context");
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  const physics = (await page.locator('[data-folder="physics"]').first().boundingBox())!;
+  await holdAt(page, physics.x + 10, physics.y + physics.height - 10);
+  await look(page, "L2-07-naming");
+  await page.getByLabel("the new note's title").fill("Close encounters");
+  await page.getByLabel("the new note's title").press("Enter");
+  await at(page, "Ask in it");
+  await expect(page).toHaveURL(/#\/n\/physics\/close-encounters/);
+  await editor(page).click();
+  await page.keyboard.type("What goes wrong when two bodies pass close?");
+  await askHere(page);
+  await at(page, "Keep it");
+  await expect(page.locator(".between[data-proposal]")).toContainText("Soften the force");
+  await page.locator(".between[data-proposal]").getByRole("button", { name: "keep" }).click();
   await at(page, "Iso, in short");
-  await finish(page, "L2");
+  await finish(page, "L2", 10);
 });
 
 test("E1 (earlier): from the goal back along the chain, a question in a note, an octree planned with Iso, kept and linked in", async ({ page }) => {
@@ -205,24 +212,24 @@ test("E1 (earlier): from the goal back along the chain, a question in a note, an
   await page.locator('[data-note="simulation/two-galaxies-colliding"]').click();
   await at(page, "How much faster?");
   await look(page, "C2-chain");
-  await ask(page, "rather than trust the exponents.");
-  await expect(prompt(page)).toHaveValue("how much faster is Barnes–Hut at N = 5000?");
-  await prompt(page).press("Enter");
+  await editor(page).getByText("rather than trust the exponents.").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("\n\nHow much faster is Barnes–Hut at N = 5000?");
+  await askHere(page);
   await at(page, "Keep what is useful");
   await expect(page.locator(".between[data-proposal]")).toContainText("About ten times fewer interactions");
   await page.locator(".between[data-proposal]").getByRole("button", { name: "keep" }).click();
   await at(page, "Plan the octree");
-  const [x, y] = await middle(page, '[data-note="algorithms/barnes-hut"]');
-  await hold(page, x, y);
+  const algorithms = (await page.locator('[data-folder="algorithms"]').first().boundingBox())!;
+  await holdAt(page, algorithms.x + 10, algorithms.y + algorithms.height - 10);
+  await page.getByLabel("the new note's title").fill("The octree");
+  await page.getByLabel("the new note's title").press("Enter");
   await at(page, "Ask it");
-  await expect(page.locator(".deck .chip")).toHaveText(["Barnes–Hut"]);
-  await page.getByLabel("Title").fill("The octree");
-  await page.locator(".cm-content").click();
+  await editor(page).click();
   await page.keyboard.type("How does the quadtree become an octree for 3D, and what changes in Barnes–Hut?");
-  await page.getByRole("button", { name: "send to Iso" }).click();
-  await at(page, "Keep it in algorithms");
-  await page.getByLabel("Folder").fill("algorithms");
-  await page.getByRole("button", { name: "keep as a note" }).click();
+  await askHere(page);
+  await at(page, "Keep it");
+  await page.locator(".between[data-proposal]").getByRole("button", { name: "keep" }).click();
   await at(page, "Link it in");
   await page.locator(".cm-line").filter({ hasText: /^Rests on/ }).click();
   await page.keyboard.press("End");

@@ -14,6 +14,8 @@ export const PROMPTS = {
   speed: "how much faster is Barnes–Hut at N = 5000?",
   /** The project: a note for Iso, written from the Atlas. */
   octree: "How does the quadtree become an octree for 3D, and what changes in Barnes–Hut?",
+  /** L2: the question written in a new note, Close encounters. */
+  close: "What goes wrong when two bodies pass close?",
 } as const;
 
 export const UNSCRIPTED = "In this tutorial I answer only what it walks you through. With a provider key in your own isorite, I would answer this too.";
@@ -97,6 +99,16 @@ export function tutorialAnswer(r: Request): Reply {
   if (q.includes("inserted")) {
     if (!looked(r)) return { calls: [{ name: "search_notes", arguments: { query: "quadtree" } }, { name: "read_note", arguments: { id: "algorithms/centre-of-mass" } }], usage: { in: 5100, out: 50, usd: 0.0059 } };
     return { text: INSERT, usage: { in: 8400, out: 310, cached: 4800, usd: 0.0163 } };
+  }
+  // E1: the octree, asked in a new note of its own.
+  if (q.includes("octree") && q.includes("barnes")) {
+    if (!looked(r)) return { calls: [{ name: "read_note", arguments: { id: "algorithms/the-quadtree" } }, { name: "read_note", arguments: { id: "algorithms/barnes-hut" } }, { name: "search_notes", arguments: { query: "octree" } }], usage: { in: 5200, out: 60, usd: 0.0058 } };
+    return { text: OCTREE, usage: { in: 9900, out: 340, cached: 4400, usd: 0.0188 } };
+  }
+  // L2: a question written in a new note of its own, and asked there.
+  if (/pass(es)? close|close (pass|encounter)/.test(q)) {
+    if (!looked(r)) return { calls: [{ name: "read_note", arguments: { id: "physics/softening" } }, { name: "read_note", arguments: { id: "integrators/choosing-the-timestep" } }, { name: "find_similar", arguments: { text: "an energy jump when two bodies pass close" } }], usage: { in: 4900, out: 60, usd: 0.0056 } };
+    return { text: CLOSE, usage: { in: 9600, out: 360, cached: 4100, usd: 0.0191 } };
   }
   // Asked in place in the terminal's note view.
   if (/\b3d\b|three dimensions/.test(q)) return { text: "In 3D the same tree has eight children a node: an octree.", usage: { in: 4200, out: 30, usd: 0.0051 } };

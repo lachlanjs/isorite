@@ -538,6 +538,6 @@ test("what Iso is sent is chosen part by part: linked notes and earlier exchange
   user = String(sent[2]!.messages[1]!.content);
   expect(user).not.toContain("# Earlier in this session");
   expect(sent[2]!.tools ?? []).toEqual([]);
-  expect(String(sent[2]!.messages[0]!.content[0]?.text ?? sent[2]!.messages[0]!.content)).toContain("You have no tools this time");
+  expect(JSON.stringify(sent[2]!.messages[0]!.content)).toContain("You have no tools this time");
   expect(await engine.context("basics/information", { lookup: false })).toMatchObject({ lookup: false, parts: [{ detail: "no tools" }, {}, {}, {}, {}] });
 });

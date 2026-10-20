@@ -22,7 +22,6 @@ test("the map draws both bases: folders, notes where you stand, a study folder a
   await expect(folder(page, "@study/coding")).toContainText("study · coding");
   await expect(page.getByRole("link", { name: "written: Build a prefix code" })).toBeVisible();
   expect(await page.locator(".routes path").count()).toBeGreaterThan(2);
-  await expect(page.getByText("click a note to see what it rests on")).toBeVisible();
   await look(page, "atlas");
 });
 
@@ -144,20 +143,20 @@ test("a note made while the map is open appears on it", async ({ page }) => {
   await expect(note(page, id)).toBeVisible();
 });
 
-/** Press and keep still, as long as starts a note for Iso. */
+/** Press and keep still until the hold is taken, then let go: a name is asked for there. */
 async function hold(page: Page, x: number, y: number) {
   await page.mouse.move(x, y);
   await page.mouse.down();
   await expect(page.locator(".atlas .grasp")).toBeVisible();
-  await page.waitForURL(/#\/draft\//);
+  await page.waitForTimeout(800);
   await page.mouse.up();
 }
-const notesOnDisk = async (page: Page) => ((await (await page.request.get("api/notes")).json()) as { notes: unknown[] }).notes.length;
+const asked = (page: Page, what: "note" | "folder") => page.getByLabel(what === "note" ? "the new note's title" : "the new folder's name");
+const session = async (page: Page) => ({ "x-isorite-token": ((await (await page.request.get("api/session")).json()) as { token: string }).token, origin: new URL(page.url()).origin });
 
-test("holding on open ground starts a blank note for Iso, on a note one that links it; the base is not touched", async ({ page }) => {
+test("holding makes a new note in the folder held in; holding, then dragging, a new folder with its first note; a press that moves is a drag", async ({ page }) => {
   await atlas(page);
-  const before = await notesOnDisk(page), box = (await page.locator(".atlas").boundingBox())!;
-  await expect(page.getByText("hold on open ground to start a note for Iso")).toBeAttached();
+  const name = test.info().project.name, box = (await page.locator(".atlas").boundingBox())!;
 
   // A press that moves is a drag, however long it lasts.
   await page.mouse.move(box.x + 6, box.y + 6);
@@ -165,25 +164,46 @@ test("holding on open ground starts a blank note for Iso, on a note one that lin
   await page.mouse.move(box.x + 30, box.y + 20, { steps: 3 });
   await page.waitForTimeout(900);
   await page.mouse.up();
-  await expect(page).toHaveURL(/#\/atlas$/);
+  await expect(asked(page, "note")).toHaveCount(0);
 
-  await hold(page, box.x + 6, box.y + 6);
-  await expect(page.getByText("for Iso · not in your base yet")).toBeVisible();
-  await expect(page.getByText("no notes yet")).toBeVisible();
-  await page.getByRole("button", { name: "[ discard ]" }).click();
+  // Held still inside basics: a note there, named in place, and opened.
+  const basics = (await folder(page, "basics").boundingBox())!;
+  await hold(page, basics.x + 8, basics.y + basics.height - 8);
+  await expect(asked(page, "note")).toHaveAttribute("placeholder", "a new note in basics");
+  await look(page, "atlas-hold-note");
+  await asked(page, "note").fill(`Held ${name}`);
+  await asked(page, "note").press("Enter");
+  await expect(page).toHaveURL(new RegExp(`#/n/basics/held-${name}$`));
 
+  // Held, then dragged on open ground: a folder, its name, then its first note's.
   await atlas(page);
-  const on = (await note(page, "coding/kraft-inequality").boundingBox())!;
-  await hold(page, on.x + on.width / 2, on.y + on.height / 2);
-  await expect(page.locator(".deck .chip")).toHaveText(["Kraft inequality"]);
-  expect(await notesOnDisk(page)).toBe(before);
-  await page.getByRole("button", { name: "[ discard ]" }).click();
+  await page.mouse.move(box.x + 10, box.y + 10);
+  await page.mouse.down();
+  await page.waitForTimeout(900);
+  await page.mouse.move(box.x + 90, box.y + 70, { steps: 6 });
+  await expect(page.locator(".atlas .grasp.folder")).toBeVisible();
+  await page.mouse.up();
+  await look(page, "atlas-hold-folder");
+  await asked(page, "folder").fill(`Drawn ${name}`);
+  await asked(page, "folder").press("Enter");
+  await expect(asked(page, "note")).toHaveAttribute("placeholder", `a new note in drawn-${name}`);
+  await asked(page, "note").fill("First");
+  await asked(page, "note").press("Enter");
+  await expect(page).toHaveURL(new RegExp(`#/n/drawn-${name}/first$`));
+
+  // Gone again, so the rest of the tests find the base as they expect.
+  const headers = await session(page);
+  for (const id of [`basics/held-${name}`, `drawn-${name}/first`]) {
+    const { version } = (await (await page.request.get(`api/note?id=${id}`)).json()) as { version: string };
+    expect((await page.request.post(`api/note/delete?id=${id}`, { headers, data: { base: version } })).ok()).toBe(true);
+  }
 });
 
-test("notes are picked on the map for a note for Iso: numbered in order, sized in the dock, and taken away again", async ({ page }) => {
+test("notes are picked on the map for a request: numbered in order, sized in the dock, and taken away again", async ({ page }) => {
+  // Only an exercise is asked for this way now (no note for Iso is started from the app): one made by the Api.
   await atlas(page);
-  const box = (await page.locator(".atlas").boundingBox())!;
-  await hold(page, box.x + 6, box.y + 6);
+  const made = (await (await page.request.post("api/drafts", { headers: await session(page), data: {} })).json()) as { id: string };
+  await page.goto(`#/draft/${made.id.slice("@draft/".length)}`);
   await page.getByLabel("Title").fill("Codes, in my words");
   await page.locator(".cm-content").click();
   await page.keyboard.type("A code is short where the source is likely.");
@@ -214,49 +234,6 @@ test("notes are picked on the map for a note for Iso: numbered in order, sized i
   await expect(page.locator(".deck .chip")).toHaveText(["Surprise", "Kraft inequality"]);
   await expect(page.locator(".cm-content")).toContainText("A code is short where the source is likely.");
   await page.getByRole("button", { name: "[ discard ]" }).click();
-});
-
-/** A note for Iso, written from the notes page and linked to Huffman codes, then sent. */
-async function sendForIso(page: Page, title: string, asked: string) {
-  await page.goto("#/notes");
-  await page.getByRole("button", { name: "new note for Iso" }).click();
-  await page.getByLabel("Title").fill(title);
-  await page.getByRole("textbox", { name: "The note", exact: true }).click();
-  await page.keyboard.type(`${asked}, resting on [[Huff`);
-  await page.getByRole("option", { name: /Huffman codes/ }).click();
-  await expect(page.locator(".deck .chip")).toHaveText("Huffman codes");
-  await page.getByRole("button", { name: "send to Iso" }).click();
-}
-
-test("a note for Iso is watched on the map: its block, blue lines to what it links, what Iso reads; stopped, its path stays until let go", async ({ page }) => {
-  const title = `Watched ${test.info().project.name}`;
-  await sendForIso(page, title, "look slowly at codes");
-  await page.waitForURL(/#\/atlas$/);
-  await expect(page.getByRole("link", { name: `${title}: your note for Iso` })).toBeVisible();
-  await expect(note(page, "coding/huffman-codes")).toHaveClass(/\blinked\b/);
-  await expect(page.locator(".routes path.sent")).toHaveCount(1);
-  // The scripted provider reads Surprise, then writes slowly: the note it rests on is filled gold.
-  await expect(note(page, "basics/surprise")).toHaveClass(/\bp-used\b/);
-  await expect(page.locator(".asker .doing")).toContainText("Iso is");
-  await expect(page.getByText("your note opens when Iso is done")).toBeAttached();
-  await look(page, "atlas-think");
-
-  await page.getByRole("button", { name: "[ stop ]" }).click();
-  await expect(page.getByText(/Iso was stopped/)).toBeAttached();
-  await expect(page.locator(".asker .doing")).toHaveCount(0);
-  await expect(note(page, "basics/surprise")).toHaveClass(/\bp-(link|key|sem)\b/); // reached, no longer being read
-  await expect(page).toHaveURL(/#\/atlas$/); // stopped: nothing to open
-  const box = (await page.locator(".atlas").boundingBox())!;
-  await page.mouse.click(box.x + 4, box.y + 4);
-  await expect(page.getByRole("link", { name: `${title}: your note for Iso` })).toHaveCount(0);
-  await expect(note(page, "basics/surprise")).not.toHaveClass(/\bp-/);
-});
-
-test("a note for Iso opens again with its answer when Iso is done", async ({ page }) => {
-  await sendForIso(page, `Answered ${test.info().project.name}`, "look at codes");
-  await page.waitForURL(/#\/draft\//);
-  await expect(page.locator(".between .said strong")).toHaveText("bits");
-  await page.getByRole("button", { name: "discard" }).last().click();
 });
 
 test("lines from notes to their folder's wall are drawn at rest when asked for (key l)", async ({ page }) => {

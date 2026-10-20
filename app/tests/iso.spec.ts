@@ -21,9 +21,11 @@ async function open(page: Page, what: string): Promise<{ id: string; text: strin
   return { id, text };
 }
 
-/** Open the prompt under the first paragraph: Ctrl+Enter on a desktop, the field at the foot on a phone. */
+/** Open the prompt under the first paragraph: on the empty line after it (Ctrl+Enter in a paragraph asks the
+ *  paragraph itself), by Ctrl+Enter on a desktop, the field at the foot on a phone. */
 async function prompt(page: Page, asked: string) {
-  await editor(page).getByText("The average surprise of a source.").click();
+  await editor(page).getByText("It is largest when every symbol is equally likely.").click({ position: { x: 2, y: 4 } });
+  await page.keyboard.press("ArrowUp");
   if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
   else await page.keyboard.press("Control+Enter");
   const field = page.getByRole("textbox", { name: "Ask Iso" });
@@ -50,11 +52,6 @@ test("Iso's text arrives between dotted rules, is not in the file until kept, an
   expect(onDisk(id)).toBe(text);
   await look(page, "proposal");
 
-  // The prompt is the other face of the same block.
-  await block.getByRole("radio", { name: "prompt" }).click();
-  await expect(block).toContainText("say what it is measured in");
-  await block.getByRole("radio", { name: "answer" }).click();
-
   // Closing the browser with it waiting, and coming back: it is there again, and the file is still untouched.
   await page.reload();
   await expect(page.locator(".between[data-proposal] strong")).toHaveText("bits");
@@ -67,6 +64,22 @@ test("Iso's text arrives between dotted rules, is not in the file until kept, an
   // Kept, it is ordinary prose of the note.
   await expect(editor(page).locator(".cm-lp-strong")).toHaveText("bits");
   await expect(editor(page).locator(".katex-display")).toBeVisible();
+});
+
+test("a question written in the note is asked as it stands: Iso's answer comes under it, and the question stays yours", async ({ page }) => {
+  const { id, text } = await open(page, "in-text");
+  // The cursor in a paragraph, and Ctrl+Enter (on a phone, ask Iso here): the paragraph is what is asked, with no prompt.
+  await editor(page).getByText("The average surprise of a source.").click();
+  if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
+  else await page.keyboard.press("Control+Enter");
+  await expect(page.getByRole("textbox", { name: "Ask Iso" })).toHaveCount(0);
+  await expect(page.locator(".between[data-proposal]")).toBeVisible();
+  const order = await page.evaluate(() => [...document.querySelectorAll(".cm-content > *")].map((el) => (el.classList.contains("cm-overlay") ? "ISO" : el.textContent)).filter(Boolean));
+  expect(order).toEqual(["The average surprise of a source.", "ISO", "It is largest when every symbol is equally likely."]);
+  expect(onDisk(id)).toBe(text);
+  const journal = await (await page.request.get(`api/journal?id=${id}`)).json() as { kind: string; asked?: string }[];
+  expect(journal.find((e) => e.kind === "proposal")?.asked).toBe("The average surprise of a source.");
+  await page.locator(".between[data-proposal]").getByRole("button", { name: "remove" }).click();
 });
 
 test("Iso's text can be edited before it is kept, or removed and leave the note as it was", async ({ page }) => {
@@ -102,12 +115,12 @@ test("what Iso looks up is told while it works; it can be stopped, and a refusal
   await prompt(page, "be slow about it");
   await expect(page.locator(".between.working")).toContainText("Iso is writing");
   await look(page, "working");
-  await page.getByRole("button", { name: "[ stop ]" }).click();
+  await page.getByRole("button", { name: "stop", exact: true }).click();
   await expect(page.locator(".between")).toHaveCount(0);
 
   await prompt(page, "fail this one");
   await expect(page.getByRole("alert")).toContainText("the scripted provider was told to fail");
-  await page.getByRole("button", { name: "[ dismiss ]" }).click();
+  await page.getByRole("button", { name: "dismiss" }).click();
   await expect(page.locator(".between")).toHaveCount(0);
   expect(onDisk(id)).toBe(text);
 });
@@ -177,7 +190,8 @@ test("a key is made by signing in at the provider, and comes back to where you w
 
 test("a prompt sent twice in a hurry is asked once", async ({ page }) => {
   const { id } = await open(page, "twice");
-  await editor(page).getByText("The average surprise of a source.").click();
+  await editor(page).getByText("It is largest when every symbol is equally likely.").click({ position: { x: 2, y: 4 } });
+  await page.keyboard.press("ArrowUp");
   if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
   else await page.keyboard.press("Control+Enter");
   const field = page.getByRole("textbox", { name: "Ask Iso" });
@@ -191,13 +205,12 @@ test("a prompt sent twice in a hurry is asked once", async ({ page }) => {
   expect(journal.filter((e) => e.kind === "proposal")).toHaveLength(1);
 });
 
-/** Open the prompt with the cursor in the first paragraph, and turn it to choosing passages for a rewrite. */
-async function choosing(page: Page) {
-  await editor(page).getByText("The average surprise of a source.").click();
+/** Select a word and ask: with text selected, the prompt is for a rewrite of it, and more can be chosen. */
+async function choosing(page: Page, first: string) {
+  await word(page, first);
   if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
   else await page.keyboard.press("Control+Enter");
-  await page.getByRole("radio", { name: "rewrite a selection" }).click();
-  await expect(page.getByText("select text in the note: each selection is added")).toBeVisible();
+  await expect(page.getByText("rewriting 1 passage")).toBeVisible();
 }
 /** Select one word of the note by double-clicking it. */
 const word = (page: Page, text: string) => page.evaluate((w) => {
@@ -215,18 +228,17 @@ const word = (page: Page, text: string) => page.evaluate((w) => {
 
 test("several passages are chosen anywhere in the note and rewritten; each change is kept or removed on its own", async ({ page }) => {
   const { id, text } = await open(page, "regions");
-  await choosing(page);
   // Passages in two different paragraphs, each a word inside a sentence.
-  await word(page, "surprise");
+  await choosing(page, "surprise");
   await expect(page.locator(".cm-iso-picked")).toHaveText(["surprise"]);
   await word(page, "largest");
   await expect(page.locator(".cm-iso-picked")).toHaveText(["surprise", "largest"]);
-  await expect(page.getByText("2 passages chosen")).toBeVisible();
+  await expect(page.getByText(/rewriting 2 passages/)).toBeVisible();
   // One chosen by mistake is dropped by clicking it, and chosen again.
   await page.locator(".cm-iso-picked", { hasText: "largest" }).click();
-  await expect(page.getByText("1 passage chosen")).toBeVisible();
+  await expect(page.getByText(/rewriting 1 passage/)).toBeVisible();
   await word(page, "largest");
-  await expect(page.getByText("2 passages chosen")).toBeVisible();
+  await expect(page.getByText(/rewriting 2 passages/)).toBeVisible();
   await look(page, "choosing");
 
   const field = page.getByRole("textbox", { name: "Ask Iso" });
@@ -270,8 +282,7 @@ test("text selected before asking is the first passage; changes wait across a re
   await page.keyboard.press("Shift+End");
   if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
   else await page.keyboard.press("Control+Enter");
-  await expect(page.getByRole("radio", { name: "rewrite a selection" })).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByText("1 passage chosen")).toBeVisible();
+  await expect(page.getByText(/rewriting 1 passage/)).toBeVisible();
   await expect(page.locator(".cm-iso-picked")).toHaveText("The average surprise of a source.");
   await word(page, "symbol");
   const field = page.getByRole("textbox", { name: "Ask Iso" });
@@ -282,15 +293,14 @@ test("text selected before asking is the first passage; changes wait across a re
   await page.reload();
   await expect(page.locator("[data-change]")).toHaveCount(2);
   expect(onDisk(id)).toBe(text);
-  await page.getByRole("button", { name: "[ keep all ]" }).click();
+  await page.getByRole("button", { name: "keep all" }).click();
   await expect(page.locator("[data-change]")).toHaveCount(0);
   expect(onDisk(id)).toBe(text.replace("The average surprise of a source.", "rewritten 1").replace("symbol", "rewritten 2"));
 });
 
 test("a change whose passage you have edited since is told of at the foot, and the rest are removed at once", async ({ page }) => {
   const { id, text } = await open(page, "regions-lost");
-  await choosing(page);
-  await word(page, "surprise");
+  await choosing(page, "surprise");
   await word(page, "largest");
   await page.getByRole("textbox", { name: "Ask Iso" }).fill("another way, quiet");
   await page.getByRole("textbox", { name: "Ask Iso" }).press("Enter");
@@ -301,13 +311,13 @@ test("a change whose passage you have edited since is told of at the foot, and t
   await expect(page.getByRole("status").filter({ hasText: "saved" })).toBeVisible();
   await expect(page.locator("[data-change]")).toHaveCount(1);
   await expect(page.getByText("One change Iso offered is for text that is no longer in the note as it was")).toBeVisible();
-  await page.getByRole("button", { name: "[ remove all ]" }).click();
+  await page.getByRole("button", { name: "remove all" }).click();
   await expect(page.locator("[data-change]")).toHaveCount(0);
   await expect(page.locator(".between")).toHaveCount(0);
   await expect.poll(() => onDisk(id)).toBe(text.replace("largest", "greatest"));
 });
 
-test("the header counts what Iso would be sent and what the session has cost; the count opens the breakdown", async ({ page }) => {
+test("the header counts what Iso would be sent and what the session has cost; the count opens the panel, where parts are switched off and the tier is chosen", async ({ page }) => {
   await open(page, "count");
   const count = page.getByRole("button", { name: /^Context: / });
   await expect(count).toBeVisible();
@@ -322,74 +332,36 @@ test("the header counts what Iso would be sent and what the session has cost; th
 
   await count.click();
   const box = page.getByRole("dialog", { name: "Context" });
-  for (const part of ["instructions and tools", "study record", "your prompts and Iso's answers", "this note", "linked notes"]) await expect(box).toContainText(part);
+  for (const part of ["instructions and tools", "study record", "this note", "notes this one links to", "earlier in this session"]) await expect(box).toContainText(part);
   await expect(box).toContainText("Entropy count");
-  await expect(box).toContainText(/\d+ moments?/);
-  // The parts sum to the count.
-  const shown = await box.locator(".part .n").allTextContents();
+  await expect(box).toContainText("none: it links to no other note");
+  // The earlier exchange, by the note and what was asked, with its switch.
+  // (The test server's session holds every test's exchanges; a note written straight to disk may be named by its path.)
+  const mine = (on: string) => new RegExp(`^(Entropy count|iso/count-${test.info().project.name}): say what it is measured in: ${on}$`);
+  const exchange = box.getByRole("switch", { name: mine("sent") });
+  await expect(exchange).toHaveAttribute("aria-checked", "true");
+  // The parts and the pieces sum to the count.
   const tokens = (t: string) => (t.endsWith("k") ? Number(t.slice(0, -1)) * 1000 : Number(t));
+  const sum = async () => (await box.locator(".part .n, .head .total").allTextContents()).map(tokens).reduce((a, b) => a + b, 0);
   const total = tokens((await count.textContent())!);
-  expect(Math.abs(shown.map(tokens).reduce((a, b) => a + b, 0) - total)).toBeLessThanOrEqual(300); // each is rounded to a tenth of a thousand
+  expect(Math.abs((await sum()) - total)).toBeLessThanOrEqual(300); // each is rounded to a tenth of a thousand
   await look(page, "context");
 
-  await box.getByRole("button", { name: "[ clear the conversation ]" }).click();
-  await expect(box).not.toContainText(/\d+ moments?/);
+  // Switched off, the exchange is not counted, and the count says so.
+  await exchange.click();
+  await expect(box.getByRole("switch", { name: mine("not sent") })).toHaveAttribute("aria-checked", "false");
+  // (That the count falls is the engine's test: here the count is rounded, and other tests share the session.)
+  await expect(box.locator(".item.off")).toHaveCount(1);
+  // The tier is chosen here, once for every note.
+  await box.getByRole("radio", { name: "max" }).click();
+  await expect(box.getByRole("radio", { name: "max" })).toHaveAttribute("aria-checked", "true");
+  await box.getByRole("radio", { name: "mid" }).click();
+
+  await box.getByRole("button", { name: "clear the conversation" }).click();
+  await expect(box).toContainText("nothing asked yet");
   await page.keyboard.press("Escape");
   await expect(box).toHaveCount(0);
   await expect(page.locator(".between[data-proposal]")).toBeVisible(); // clearing took nothing out of the note
-});
-
-test("a note for Iso: written outside the base with the notes it rests on, sent, reviewed, and kept as a note", async ({ page }) => {
-  const name = test.info().project.name, title = `Units of information ${name}`, slug = `units-of-information-${name}`;
-  await page.goto("#/notes");
-  await page.getByRole("button", { name: "new note for Iso" }).click();
-  await expect(page.getByText("for Iso · not in your base yet")).toBeVisible();
-  await page.getByLabel("Title").fill(title);
-  const box = page.getByRole("textbox", { name: "The note", exact: true });
-  await box.click();
-  await page.keyboard.type("I think information is counted in bits because of coin tosses. Write this up, resting on [[Surpr");
-  await page.getByRole("option", { name: /Surprise/ }).click();
-  await page.keyboard.type(", and say where I am wrong.");
-  await expect(page.locator(".deck .chip")).toHaveText("Surprise");
-  await expect(page.getByRole("status")).toHaveText("saved, outside your base");
-  await look(page, "draft");
-  // Not in the base: no such note is listed, and nothing was written into the knowledge base.
-  expect(existsSync(join(NOTES, `${slug}.md`))).toBe(false);
-
-  await page.getByRole("button", { name: "send to Iso" }).click();
-  const reply = page.locator(".between .said");
-  await expect(reply.locator("strong")).toHaveText("bits");
-  await expect(page.getByRole("button", { name: "[ show all ]" })).toBeVisible(); // what you wrote is folded above it
-  await expect(page.getByText("mid · $0.012")).toBeVisible();
-  await look(page, "review");
-
-  // Edited in place, then kept in a folder.
-  await page.getByRole("button", { name: "edit" }).click();
-  await page.getByRole("textbox", { name: "Iso's text, to edit" }).fill("Information is counted in **bits**.");
-  await page.getByLabel("Folder").fill("basics");
-  await page.getByRole("button", { name: "keep as a note" }).click();
-  await expect(page.getByLabel("Title")).toHaveValue(title);
-  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Information is counted in bits.");
-  expect(onDisk(`basics/${slug}`)).toBe(`---\ntype: Concept\ntitle: ${JSON.stringify(title)}\n---\n\nInformation is counted in **bits**.\n`);
-  // It is a note now, and no longer a draft.
-  await page.goto("#/notes");
-  await expect(page.getByRole("link", { name: title })).toHaveCount(1);
-  await expect(page.locator(".title.draft", { hasText: title })).toHaveCount(0);
-});
-
-test("a note for Iso can be taken back to be rewritten, or discarded", async ({ page }) => {
-  await page.goto("#/notes");
-  await page.getByRole("button", { name: "new note for Iso" }).click();
-  await page.getByLabel("Title").fill(`Thrown away ${test.info().project.name}`);
-  await page.getByRole("textbox", { name: "The note", exact: true }).click();
-  await page.keyboard.type("Write about noise.");
-  await page.getByRole("button", { name: "send to Iso" }).click();
-  await expect(page.locator(".between .said strong")).toHaveText("bits");
-  await page.getByRole("button", { name: "[ back to what I wrote ]" }).click();
-  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Write about noise.");
-  await page.getByRole("button", { name: "[ discard ]" }).click();
-  await expect(page.getByRole("searchbox", { name: "Find a note" })).toBeVisible();
-  await expect(page.getByText(`Thrown away ${test.info().project.name}`)).toHaveCount(0);
 });
 
 test("a terminal agent's edit to a note waits in it as Iso's changes do, says whose it is, and is kept the same way", async ({ page, baseURL }) => {

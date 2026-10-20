@@ -158,7 +158,7 @@
   <div class="coach frame" class:small class:left={leftSide && !narrow} bind:this={coach} role="dialog" aria-label="The tutorial" aria-live="polite" style:bottom={lift ? `${lift}px` : null}>
     <div class="row head">
       <span class="label">{part.key} · {part.title.toLowerCase()}</span><span class="grow"></span>
-      <span class="seg" aria-label="step {tour.at + 1} of {part.steps.length}, {tour.ticks[part.key]?.length ?? 0} done">{#each part.steps as s, k (s.title)}<i class:d={ticked(part.key, k)} class:at={k === tour.at}></i>{/each}</span>
+      <span class="seg" aria-label="step {tour.at + 1} of {part.steps.length}, {tour.ticks[part.key]?.length ?? 0} done">{#each part.steps as _s, k (k)}<i class:d={ticked(part.key, k)} class:at={k === tour.at}></i>{/each}</span>
       <button class="link" type="button" onclick={() => (tour.part = -1)}>sections</button>
       <button class="link" type="button" onclick={() => (tour.left = true)}>leave</button>
     </div>

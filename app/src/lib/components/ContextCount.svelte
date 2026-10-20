@@ -21,6 +21,9 @@
   // The parts that are always sent, shown with their share; the two that are made of switchable pieces are listed
   // piece by piece below them.
   const fixed = $derived(report?.parts.filter((p) => p.name !== "your prompts and Iso's answers" && (p.name !== "linked notes" || !note)) ?? []);
+  // What each switchable group comes to as sent: a long conversation is shortened to fit, so its pieces, each
+  // counted whole, can add up to more.
+  const sent = (name: string): number => report?.parts.find((p) => p.name === name)?.tokens ?? 0;
 
   function refresh(soon = false) {
     clearTimeout(timer);
@@ -33,6 +36,8 @@
   $effect(() => app.on((e) => { if (e.type === "note-changed" || e.type === "journal" || e.type === "record") refresh(); }));
   $effect(() => () => clearTimeout(timer));
   $effect(() => { if (open && !settings) void app.api.settings().then((s) => (settings = s), () => undefined); });
+  // Closed on going to another note or view: what it shows was for where you were.
+  $effect(() => { void app.open; open = false; });
 
   async function clear() {
     await app.api.clearConversation();
@@ -56,6 +61,8 @@
       <button class="away" type="button" aria-label="Close the breakdown" onclick={() => (open = false)}></button>
       <div class="frame breakdown" role="dialog" aria-label="Context">
         <span class="frame-title">context · {short(report.tokens)} of {short(report.limit)} tokens</span>
+        <!-- What scrolls is inside the frame, so its title on the top edge is never cut off. -->
+        <div class="scroll">
         <p class="lead">What Iso is sent when you ask it {note ? "in this note" : "now"}. Switch off what it does not need.</p>
         {#each fixed as part (part.name)}
           <div class="part">
@@ -65,13 +72,13 @@
         {/each}
         {#if note}
           <div class="group">
-            <span class="label">notes this one links to</span>
+            <div class="head"><span class="label">notes this one links to</span><span class="n total">{short(sent("linked notes"))}</span></div>
             {#each linked as item (item.id)}
               <div class="item" class:off={!item.on}><span class="t">{item.title}</span><span class="n">{short(item.tokens)}</span>{@render onOff(item.on, `${item.title}: ${item.on ? "sent" : "not sent"}`, () => context.toggle(note, item.id))}</div>
             {:else}<p class="faint none">none: it links to no other note</p>{/each}
           </div>
           <div class="group">
-            <span class="label">earlier in this session</span>
+            <div class="head"><span class="label">earlier in this session</span><span class="n total">{short(sent("your prompts and Iso's answers"))}</span></div>
             {#each exchanges as item (item.id)}
               <div class="item" class:off={!item.on}><span class="t">{item.title}</span><span class="n">{short(item.tokens)}</span>{@render onOff(item.on, `${item.title}: ${item.on ? "sent" : "not sent"}`, () => context.toggle(note, item.id))}</div>
             {:else}<p class="faint none">nothing asked yet</p>{/each}
@@ -95,6 +102,7 @@
           <button class="link" type="button" onclick={clear}>clear the conversation</button>
         </div>
         <p class="label">Sizes are estimates until Iso is asked. A long note or a long conversation is cut to fit, and Iso is told what was left out.</p>
+        </div>
       </div>
     {/if}
   </span>
@@ -104,13 +112,16 @@
   .count { position: relative; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; }
   .tokens { color: var(--text); background: var(--ground-3); border: 0; padding: 2px 6px; }
   .away { position: fixed; inset: 0; z-index: 14; background: none; border: 0; cursor: default; }
-  .breakdown { --inside: var(--ground-2); position: absolute; z-index: 15; right: 0; top: 32px; width: min(420px, calc(100vw - 24px)); max-height: calc(100dvh - 120px); overflow-y: auto; padding: 22px 18px 14px; display: flex; flex-direction: column; gap: 10px; white-space: normal; }
+  .breakdown { --inside: var(--ground-2); position: absolute; z-index: 15; right: 0; top: 40px; width: min(420px, calc(100vw - 24px)); padding: 22px 8px 14px 18px; white-space: normal; }
+  .scroll { max-height: calc(100dvh - 140px); overflow-y: auto; padding-right: 10px; display: flex; flex-direction: column; gap: 10px; }
   .lead { margin: 0; color: var(--text-soft); }
   .part { display: grid; grid-template-columns: 1fr auto 48px; gap: 2px 12px; color: var(--text); }
   .part .detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
   .part .n, .item .n { text-align: right; font-variant-numeric: tabular-nums; }
   .part i { grid-column: 1 / -1; height: 3px; background: linear-gradient(to right, var(--lattice) var(--w), var(--line) var(--w)); }
   .group { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .head { display: flex; justify-content: space-between; gap: 12px; }
+  .head .total { color: var(--text); font-variant-numeric: tabular-nums; }
   .item { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; color: var(--text); }
   .item .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .item.off .t, .item.off .n { color: var(--text-faint); text-decoration: line-through; }

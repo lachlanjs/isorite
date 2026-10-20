@@ -11,9 +11,11 @@ async function look(page: Page, name: string) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} is no wider than the window`).toBe(true);
 }
 
-/** Ask Iso under the first paragraph, and wait for its text. */
+/** Ask Iso under the first paragraph, on the empty line after it (Ctrl+Enter in a paragraph asks the paragraph
+ *  itself), and wait for its text. */
 async function ask(page: Page, asked: string) {
-  await editor(page).getByText("The average surprise of a source.").click();
+  await editor(page).getByText("It is largest").click({ position: { x: 2, y: 4 } });
+  await page.keyboard.press("ArrowUp");
   if (phone()) await page.getByRole("button", { name: "ask Iso here" }).click();
   else await page.keyboard.press("Control+Enter");
   const field = page.getByRole("textbox", { name: "Ask Iso" });
