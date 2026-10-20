@@ -72,7 +72,7 @@
       onFollow: (id) => { void goto(noteHref(id)); },
       ...(iso ? {
         // Ctrl+Enter opens the prompt under the cursor's paragraph; with text selected, asking for a rewrite of it.
-        onAsk: (w: Where) => iso.promptAt(w.line + head.lines, { from: w.from + head.chars, to: w.to + head.chars }),
+        onAsk: (w: Where) => iso.askAt(w.line + head.lines, { from: w.from + head.chars, to: w.to + head.chars }),
         onCursor: (w: Where) => { iso.cursor = { line: w.line + head.lines, from: w.from + head.chars, to: w.to + head.chars }; },
         // While the prompt asks for a rewrite, text selected in the note is chosen for it.
         picking: () => iso.picking,

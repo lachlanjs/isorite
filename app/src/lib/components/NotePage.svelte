@@ -9,6 +9,7 @@
   import { isStudyId, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
   import type { StudyReport } from "@isorite/engine";
   import { app, noteHref } from "$lib/app.svelte.ts";
+  import { views } from "$lib/views.svelte.ts";
   import { ExerciseState, moveText } from "$lib/exercise.svelte.ts";
   import { NoteIso } from "$lib/iso.svelte.ts";
   import { NoteSession } from "$lib/note.svelte.ts";
@@ -20,6 +21,10 @@
   import type { Touched } from "$lib/editor/overlays.ts";
 
   let { id }: { id: string } = $props();
+  // Iso's latest request in this note, for a phone's strip under it (I6): how many notes it has read, and the way to
+  // see them on the Atlas. Back from there, the note takes the request up as it stands.
+  const isoHere = $derived(app.iso && !app.iso.agent && app.iso.note === id ? app.iso : null);
+  const isoRead = $derived(new Set(isoHere?.steps.flatMap((s) => (s.opened && !s.failed ? [s.opened] : [])) ?? []).size);
 
   // One session for the page's life: the route gives each note its own page ({#key}).
   // svelte-ignore state_referenced_locally
@@ -303,14 +308,18 @@
         <i class="dia" aria-hidden="true"></i>
         <span class="soft">{iso.changes.length} {iso.changes.length === 1 ? "change" : "changes"} from {changesFrom} waiting</span>
         <span class="grow"></span>
-        <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(true)}>[ keep all ]</button>
-        <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(false)}>[ remove all ]</button>
+        <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(true)}>keep all</button>
+        <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(false)}>remove all</button>
       </div>
     {/if}
 
     <!-- On a phone there is no Ctrl+Enter: a field at the foot opens the prompt where the cursor was (Mobile-Note). -->
     {#if iso.prompt === null && !iso.asking}
-      <div class="seed"><button class="field" type="button" onclick={() => iso.promptHere()}><span class="faint">›</span><span class="faint">ask Iso here</span></button></div>
+      <div class="seed">
+        {#if isoHere && (isoHere.state === "reading" || isoHere.state === "writing" || isoRead)}
+          <button class="strip" type="button" onclick={() => void views.atlas("note", id)}>{isoHere.state === "reading" || isoHere.state === "writing" ? "Iso is reading" : "Iso read"}{isoRead ? ` ${isoRead} ${isoRead === 1 ? "note" : "notes"}` : ""} · see on the Atlas ›</button>
+        {/if}
+        <button class="field" type="button" onclick={() => iso.askHere()}><span class="faint">›</span><span class="faint">ask Iso here</span></button></div>
     {/if}
   {/if}
 </article>
@@ -367,6 +376,7 @@
   @media (max-width: 600px) {
     .seed { display: block; position: fixed; left: 0; right: 0; bottom: 84px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--ground-1); z-index: 9; }
     .seed .field { width: 100%; height: 44px; display: flex; align-items: center; gap: 8px; text-align: left; }
+    .seed .strip { width: 100%; margin: -4px 0 8px; padding: 4px 0; background: none; border: 0; text-align: left; font-size: 12px; color: var(--growth); }
     .note { padding: 20px 20px 80px; }
     .note.timed { padding-left: 56px; }
     .tl-col { top: 20px; left: 8px; bottom: 0; z-index: 1; padding-right: 2px; border-right: 1px solid var(--line); background: var(--ground-1); }

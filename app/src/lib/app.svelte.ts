@@ -98,7 +98,7 @@ class AppState {
   }
 
   private follow(e: EngineEvent): void {
-    if (e.type === "iso-start") { this.iso = { request: e.request, note: e.note, agent: null, state: "reading", steps: [], message: "" }; return; }
+    if (e.type === "iso-start") { this.iso = { request: e.request, note: e.note, agent: null, state: "reading", steps: [], message: "", start: e, text: "" }; return; }
     // A terminal agent's turn is drawn as Iso's request is, but does not take the map from Iso while it answers.
     // A page that opens during a turn learns of it from its next step.
     if ((e.type === "agent-start" || e.type === "agent-step") && this.iso?.request !== e.request) {
@@ -108,7 +108,7 @@ class AppState {
     const run = this.iso;
     if (!run || !("request" in e) || e.request !== run.request) return;
     if (e.type === "iso-step" || e.type === "agent-step") this.iso = { ...run, state: "reading", steps: [...run.steps, e.step] };
-    else if (e.type === "iso-text" && run.state !== "writing") this.iso = { ...run, state: "writing" };
+    else if (e.type === "iso-text") this.iso = { ...run, state: "writing", text: e.again ? e.delta : (run.text ?? "") + e.delta };
     else if (e.type === "iso-done" || e.type === "agent-done") this.iso = { ...run, state: "done" };
     else if (e.type === "iso-stopped") this.iso = { ...run, state: "stopped" };
     else if (e.type === "iso-failed") this.iso = { ...run, state: "failed", message: e.message };
@@ -123,7 +123,12 @@ class AppState {
 
 /** One request to Iso as it goes: `reading` while it looks things up, `writing` once its text comes. Or a terminal
  *  agent's turn (`agent` names it; `note` is empty): `reading` until the turn ends. */
-export interface IsoRun { request: string; note: string; agent: string | null; state: "reading" | "writing" | "done" | "stopped" | "failed"; steps: Step[]; message: string }
+export interface IsoRun {
+  request: string; note: string; agent: string | null; state: "reading" | "writing" | "done" | "stopped" | "failed"; steps: Step[]; message: string;
+  /** How it began, and what it has written so far: a note's page opened while it runs takes it up from here (I6). */
+  start?: Extract<EngineEvent, { type: "iso-start" }>;
+  text?: string;
+}
 
 const SIGN_IN_BACK = "isorite.sign-in.back", SIGN_IN_CODE = "isorite.sign-in.code";
 

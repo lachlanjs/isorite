@@ -129,7 +129,7 @@
           <span class="hint">{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentNamed}'s turn is done · click open ground to let its path go`}</span>
         {:else if running}
           <span class="hint">{run.note.startsWith("@draft/") ? "your note opens when Iso is done" : `Iso is answering in ${runTitle}`}</span>
-          <button class="link" type="button" onclick={stop}>[ stop ]</button>
+          <button class="link" type="button" onclick={stop}>stop</button>
         {:else}
           <span class="hint" class:bad={run.state === "failed"}>{run.state === "done" ? `Iso is done in ${runTitle}` : run.state === "stopped" ? "Iso was stopped" : `Iso could not answer: ${run.message}`} · click open ground to let its path go</span>
         {/if}
@@ -139,12 +139,10 @@
       {:else if app.atlas?.chosen}
         {#if app.atlas.steps}<span>{app.atlas.steps} {app.atlas.steps === 1 ? "step" : "steps"} back</span>{/if}
         <span class="grow"></span>
-        <span class="hint">click a note it requires to step back to it, the note again to open it</span>
       {:else if app.atlas}
         <span>{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span>
         {#if app.atlas.items}<span>{app.atlas.items} study {app.atlas.items === 1 ? "item" : "items"}</span>{/if}
         <span class="grow"></span>
-        <span class="hint">click a note to see what it rests on · hold on open ground to start a note for Iso, on a note to start from it</span>
       {:else}
         <span class="grow"></span>
         <span>{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span>
@@ -159,7 +157,7 @@
   .bar .out, .bar .stop { height: 28px; padding: 0 10px; font-size: 12px; }
   .bar .where { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   /* Out of a folder, and stopping Iso from the header, are the phone's (Mobile-Atlas, Mobile-Think): on a desktop
-     a click on open ground steps out, and the status line has [ stop ]. */
+     a click on open ground steps out, and the status line has stop. */
   @media (min-width: 601px) { .bar .out, .bar .where, .bar .stop { display: none; } }
   /* In a folder, a phone's header names the folder, not the base (Mobile-Atlas). */
   @media (max-width: 600px) { .bar:has(.where) .path { display: none; } }

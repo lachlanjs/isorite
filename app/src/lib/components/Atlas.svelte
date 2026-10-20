@@ -7,10 +7,10 @@
   import { reach } from "@isorite/core";
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
   import type { How, MapReport, NoteSource } from "@isorite/engine";
-  import { linkedIn, place, placeOf, testsIn, titleIn, withLink, withoutLink, withTest } from "$lib/atlas/picks.ts";
+  import { linkedIn, placeOf, testsIn, titleIn, withLink, withoutLink, withTest } from "$lib/atlas/picks.ts";
   import { tick } from "svelte";
   import AtlasDock from "./AtlasDock.svelte";
-  import { app, noteHref } from "$lib/app.svelte.ts";
+  import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import { views } from "$lib/views.svelte.ts";
   import { CELL, LABELS_AT, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
@@ -353,33 +353,71 @@
     });
   }
 
-  // ------------------------------------------------------------ holding, to start a note for Iso
+  // ------------------------------------------------------------ holding, to make a note or a folder (V6)
+  //
+  // Hold still, and a new note is marked where you hold; let go, and its title is asked for there. Hold, then drag a
+  // little way, and it is a new folder instead: its name is asked for, then its first note's, since a folder is made
+  // when a note is put in it. Either goes in the folder gripped in (on a note, that note's folder), and opens beside
+  // the Atlas.
 
-  const HOLD_SHOWN = 180, HOLD = 650;
-  /** What is held: a note, or a place on open ground (in cells). Shown as a marching box until the note is made. */
-  let grasp = $state.raw<{ note: string; gx: number; gy: number; w: number; h: number } | null>(null);
+  const HOLD_SHOWN = 180, HOLD = 650, FOLDER_DRAG = 24;
+  /** What is gripped: a place (in cells), the folder it is in, and whether a drag has made it a folder. */
+  let grasp = $state.raw<{ dir: string; gx: number; gy: number; w: number; h: number; folder: boolean } | null>(null);
+  /** Held long enough: the gesture is ours until the pointer is let go. Where it began, on the screen. */
+  let gripped: { x: number; y: number } | null = null;
+  /** Let go: the name being asked for, on the map where it was gripped. */
+  let naming = $state.raw<{ dir: string; gx: number; gy: number; w: number; h: number; folder: boolean; named: string } | null>(null);
   let holdShow: ReturnType<typeof setTimeout> | undefined, holdDone: ReturnType<typeof setTimeout> | undefined;
-  function unhold(): void { clearTimeout(holdShow); clearTimeout(holdDone); holdShow = holdDone = undefined; grasp = null; }
+  function unhold(): void { clearTimeout(holdShow); clearTimeout(holdDone); holdShow = holdDone = undefined; gripped = null; if (!naming) grasp = null; }
+  /** The deepest folder of the base holding a place on the map (in cells): "" for the top. */
+  function folderAt(gx: number, gy: number): string {
+    let best: { ref: string; depth: number } | null = null;
+    for (const n of L!.items) if (n.kind === "folder" && !n.ref.startsWith("@") && gx >= n.gx && gx < n.gx + n.w && gy >= n.gy && gy < n.gy + n.h && (!best || n.depth > best.depth)) best = { ref: n.ref, depth: n.depth };
+    return best?.ref ?? "";
+  }
   function holding(e: PointerEvent, at: { x: number; y: number }): void {
     unhold();
-    if (pick || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock")) return;
+    naming = null;
+    if (pick || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock, .naming")) return;
     const on = e.target.closest<HTMLElement>("[data-note]")?.dataset.note ?? "";
-    if (on.startsWith("@")) return; // a study item is not a note to start from
-    const item = on ? L.items[idx.at.get(on) ?? -1] : undefined, u = L.cell * view.k;
+    if (on.startsWith("@")) return; // a study item is not a place in the base
+    const u = L.cell * view.k, gx = Math.round((at.x - view.x) / u), gy = Math.round((at.y - view.y) / u);
     const w = Math.round(126 / L.cell), h = Math.round(35 / L.cell); // a note's size in cells: 18 by 5, 9 by 3 on the coarse grid, 7 by 2 on the coarser
-    const what = item ? { note: on, gx: item.gx, gy: item.gy, w: item.w, h: item.h } : { note: "", gx: Math.round((at.x - view.x) / u) - Math.floor(w / 2), gy: Math.round((at.y - view.y) / u) - Math.ceil(h / 2), w, h };
+    const dir = on ? on.split("/").slice(0, -1).join("/") : folderAt(gx, gy);
+    const what = { dir, gx: gx - Math.floor(w / 2), gy: gy - Math.ceil(h / 2), w, h, folder: false };
     holdShow = setTimeout(() => { grasp = what; }, HOLD_SHOWN);
-    holdDone = setTimeout(() => { dragged = true; void begin(what); }, HOLD);
+    holdDone = setTimeout(() => { holdDone = undefined; dragged = true; gripped = at; grasp = what; viewport?.setPointerCapture(e.pointerId); }, HOLD);
   }
-  /** A note for Iso, begun where the map was held: blank, or linking the note held. It opens as any does. */
-  async function begin(what: { note: string; gx: number; gy: number }): Promise<void> {
+  /** While gripped: a drag far enough makes it a folder, drawn from where the hold began to the pointer. */
+  function drawHeld(at: { x: number; y: number }): void {
+    if (!gripped || !grasp || !L) return;
+    const far = Math.hypot(at.x - gripped.x, at.y - gripped.y) >= FOLDER_DRAG;
+    if (!far && !grasp.folder) return;
+    const u = L.cell * view.k, x0 = (gripped.x - view.x) / u, y0 = (gripped.y - view.y) / u, x1 = (at.x - view.x) / u, y1 = (at.y - view.y) / u;
+    const w = Math.max(Math.round(160 / L.cell), Math.round(Math.abs(x1 - x0))), h = Math.max(Math.round(70 / L.cell), Math.round(Math.abs(y1 - y0)));
+    grasp = { ...grasp, folder: true, gx: Math.round(Math.min(x0, x1)), gy: Math.round(Math.min(y0, y1)), w, h };
+  }
+  /** Let go while gripped: ask for the name there. */
+  function letGo(): void {
+    if (!gripped || !grasp) return;
+    gripped = null;
+    naming = { ...grasp, named: "" };
+  }
+  async function named(e: SubmitEvent): Promise<void> {
+    e.preventDefault();
+    const n = naming, input = (e.currentTarget as HTMLFormElement).querySelector("input")!, value = input.value.trim();
+    if (!n || !value) return;
+    // A folder: its name first, then its first note's title.
+    if (n.folder && !n.named) { naming = { ...n, named: slug(value) || value }; input.value = ""; return; }
+    const dir = [n.dir, n.folder ? n.named : ""].filter(Boolean).join("/"), id = [dir, slug(value)].filter(Boolean).join("/");
     try {
-      const made = await app.api.createDraft();
-      if (what.note) await app.api.saveNote(made.id, { base: made.version, text: withLink(made.text, what.note, title(what.note)) });
-      place(made.id, { gx: (what.gx * L!.cell) / CELL, gy: (what.gy * L!.cell) / CELL }); // kept in cells of the fine grid, whichever is shown
-      await goto(resolve("/draft/[id]", { id: made.id.slice("@draft/".length) }));
-    } catch (e) { notice = (e as Error).message; unhold(); }
+      await app.api.createNote(id, `---\ntype: Concept\ntitle: ${JSON.stringify(value)}\n---\n\n`);
+      naming = null; grasp = null;
+      await app.refresh();
+      await views.openFromAtlas(id);
+    } catch (err) { notice = (err as Error).message; }
   }
+  function cancelNaming(): void { naming = null; grasp = null; }
 
   const title = (ref: string): string => report?.notes[ref]?.title ?? ref.split("/").at(-1) ?? ref;
   const folderName = (ref: string): string => (ref.startsWith("@study") ? ref.replace(/^@study\/?/, "").split("/").at(-1) || app.session?.name || "the base" : ref.split("/").at(-1) ?? ref);
@@ -426,6 +464,7 @@
   function move(e: PointerEvent): void {
     if (!pointers.has(e.pointerId) || !grip) return;
     pointers.set(e.pointerId, local(e));
+    if (gripped) { drawHeld(local(e)); return; }
     const ps = [...pointers.values()];
     const x = ps.reduce((s, p) => s + p.x, 0) / ps.length, y = ps.reduce((s, p) => s + p.y, 0) / ps.length;
     if (!dragged && ps.length === 1 && Math.hypot(x - grip.x, y - grip.y) < 5) return;
@@ -436,7 +475,8 @@
   }
   function up(e: PointerEvent): void {
     if (!pointers.delete(e.pointerId)) return;
-    if (holdDone !== undefined) unhold(); // let go before the note was made
+    if (gripped) letGo();
+    else if (holdDone !== undefined) unhold(); // let go before the hold was long enough
     regrip();
   }
   function wheel(e: WheelEvent): void {
@@ -577,10 +617,19 @@
         </div>
       {/if}
       {#if grasp}
-        <div class="grasp" class:on-note={!!grasp.note} style="--x:{grasp.gx};--y:{grasp.gy};--w:{grasp.w};--h:{grasp.h}">
+        <div class="grasp" class:folder={grasp.folder} style="--x:{grasp.gx};--y:{grasp.gy};--w:{grasp.w};--h:{grasp.h}">
           <svg aria-hidden="true"><rect x="1" y="1" width="100%" height="100%" /></svg>
-          {#if !grasp.note && labels}<span><i class="dia" aria-hidden="true"></i>a new note</span>{/if}
+          {#if !naming}<span>{grasp.folder ? "a new folder" : "a new note"}{grasp.dir ? ` in ${grasp.dir}` : ""}</span>{/if}
         </div>
+      {/if}
+      {#if naming}
+        <form class="naming" style="--x:{naming.gx};--y:{naming.gy + naming.h}" onsubmit={named}>
+          <!-- svelte-ignore a11y_autofocus -->
+          <input autofocus aria-label={naming.folder && !naming.named ? "the new folder's name" : "the new note's title"} autocomplete="off"
+            placeholder={naming.folder && !naming.named ? `a new folder${naming.dir ? ` in ${naming.dir}` : ""}` : `a new note${naming.dir || naming.named ? ` in ${[naming.dir, naming.named].filter(Boolean).join("/")}` : ""}`}
+            onkeydown={(e) => { if (e.key === "Escape") { e.stopPropagation(); cancelNaming(); } }} />
+          <button class="btn primary" type="submit">{naming.folder && !naming.named ? "next" : "make it"}</button>
+        </form>
       {/if}
     </div>
     {#if pick}
@@ -604,7 +653,13 @@
   .grasp { position: absolute; left: calc(var(--x) * var(--u) - 4px); top: calc(var(--y) * var(--u) - 4px); width: calc(var(--w) * var(--u) + 8px); height: calc(var(--h) * var(--u) + 8px); display: flex; align-items: center; padding: 0 12px; gap: 8px; font-size: 11px; pointer-events: none; z-index: 1; }
   .grasp svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
   .grasp rect { width: calc(100% - 2px); height: calc(100% - 2px); fill: var(--growth-soft); stroke: var(--growth); stroke-width: 2; stroke-dasharray: 2 3; animation: march .6s linear infinite; }
-  .grasp.on-note rect { fill: none; }
+  /* A folder being drawn: a frame's outline, its name asked for when let go. */
+  .grasp.folder { align-items: flex-start; padding-top: 8px; }
+  .grasp.folder rect { fill: none; stroke-dasharray: 6 4; }
+  .naming { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u) + 8px); z-index: 3; display: flex; gap: 8px; align-items: center; padding: 8px; background: var(--ground-2); border: 1px solid var(--growth); }
+  .naming input { width: 220px; background: var(--ground-1); border: 0; border-bottom: 1px solid var(--line-strong); padding: 4px 6px; font: 14px/1.4 var(--font-text); color: var(--text); }
+  .naming input:focus-visible { outline: none; border-bottom-color: var(--growth); }
+  .naming .btn { height: 28px; font-size: 12px; }
   .grasp span { position: relative; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
   @keyframes march { to { stroke-dashoffset: -5; } }
   @media (prefers-reduced-motion: reduce) { .grasp rect { animation: none; } }

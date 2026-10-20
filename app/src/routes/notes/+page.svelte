@@ -2,8 +2,7 @@
   // Every note in the base, by folder, narrowed by typing. Typing matches titles, paths and descriptions at
   // once, and the text of the notes a moment later.
   import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
-  import type { DraftSummary, NoteSummary, SearchHit } from "@isorite/engine";
+  import type { NoteSummary, SearchHit } from "@isorite/engine";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import FolderField from "$lib/components/FolderField.svelte";
 
@@ -33,16 +32,6 @@
     const timer = setTimeout(() => { void app.api.search(q).then((found) => { if (query.trim() === q) hits = found; }, () => undefined); }, 200);
     return () => clearTimeout(timer);
   });
-
-  // Notes written for Iso that are waiting, and the way to start one.
-  let drafts = $state.raw<DraftSummary[]>([]);
-  $effect(() => { void app.api.drafts().then((d) => (drafts = d), () => undefined); });
-  async function forIso() {
-    try {
-      const made = await app.api.createDraft();
-      await goto(resolve("/draft/[id]", { id: made.id.slice("@draft/".length) }));
-    } catch (e) { problem = (e as Error).message; making = true; }
-  }
 
   const id = $derived([folder.trim().replace(/^\/+|\/+$/g, ""), slug(title)].filter(Boolean).join("/"));
 
@@ -74,18 +63,6 @@
     <input id="filter" class="field grow" type="search" placeholder="find a note" bind:value={query} autocomplete="off" autofocus />
     <button class="btn primary" type="button" data-tour="new-note" onclick={() => start()}>new note</button>
   </div>
-
-  <!-- Notes for Iso: written to it, not in the base until its reply is kept (the Desktop-Ask board). -->
-  {#if app.session?.study}
-    <section>
-      <h2><span class="label">for Iso · not in your base yet</span><button class="btn quiet add" type="button" onclick={forIso}>new note for Iso</button></h2>
-      <ul>
-        {#each drafts as d (d.id)}
-          <li><a href={resolve("/draft/[id]", { id: d.id.slice("@draft/".length) })}><span class="serif title draft"><i class="dia open" aria-hidden="true"></i>{d.title || "a new note"}</span></a></li>
-        {/each}
-      </ul>
-    </section>
-  {/if}
 
   {#if making}
     <form class="frame new" onsubmit={make}>
@@ -147,7 +124,5 @@
   li a { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) 0; border-bottom: 1px solid var(--line); color: var(--text); }
   li a:hover { text-decoration: none; background: var(--ground-1); }
   .title { font-size: 18px; line-height: 1.3; }
-  .title.draft { display: flex; align-items: center; gap: 12px; }
-  .title.draft .dia { margin-left: 3px; }
   .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

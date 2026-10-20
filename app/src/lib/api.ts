@@ -59,7 +59,7 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     keepExercise: (draft, proposal) => write("POST", "exercise/keep" + q(draft), { proposal }),
     study: () => ask("study"),
     windBack: async (exercise) => { await write("POST", "exercise/wind-back" + q(exercise), {}); },
-    context: (note) => ask("context" + (note ? q(note) : "")),
+    context: (note, choice) => ask("context" + (note ? q(note) : "") + (choice ? `${note ? "&" : "?"}choice=${encodeURIComponent(JSON.stringify(choice))}` : "")),
     clearConversation: async () => { await write("POST", "context/clear", {}); },
     settings: () => ask("settings"),
     setKey: (key) => write("PUT", "settings/key", { key }),
