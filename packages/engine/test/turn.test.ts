@@ -138,3 +138,30 @@ test("Write mode: an edit whose passage is not found is said to Iso; moving asks
   expect(await engine.undoTurn(first.conversation, second.turn)).toEqual({ notes: [], left: ["basics/entropy"] });
   expect(notes.files.get("basics/entropy.md")).toContain("Mine.");
 });
+
+test("Understand mode: Iso is sent your understanding of the note, records evidence that moves its squares, writes its reading, and leaves your scratchpad alone", async () => {
+  const { engine, ended, sent, study } = await open([
+    { calls: [{ name: "record_understanding", arguments: { id: "basics/entropy", by: 1, why: "You derived it unaided." } }] },
+    { calls: [{ name: "record_understanding", arguments: { id: "basics/entropy", by: 1, why: "Again." } }, { name: "write_understanding", arguments: { id: "basics/entropy", reading: "You can derive it." } }] },
+    { text: ["Well done."] },
+    { text: ["Where were we?"] },
+  ]);
+  await engine.saveScratchpad("basics/entropy", "My own words.", null);
+  const { conversation, turn } = await engine.converse({ mode: "understand", asked: "why is it largest when even?", tier: "mid", given: [{ kind: "understanding", id: "basics/entropy" }] });
+  await ended(turn);
+  expect(JSON.stringify(sent[0]!.messages[0]!.content)).toContain("Understand mode");
+  expect(String(sent[0]!.messages[1]!.content)).toContain("## Their understanding of Entropy (/basics/entropy.md): 0 of 6 squares\n\nYour reading so far: none yet.");
+  expect(sent[0]!.tools!.map((t) => t.function.name)).toEqual(["search_notes", "outline_note", "read_note", "record_understanding", "write_understanding", "point_to_note"]);
+  // Once a note a turn.
+  expect(JSON.stringify(sent[2]!.messages)).toContain("You recorded Entropy once this turn already.");
+  const u = await engine.understanding("basics/entropy");
+  expect(u).toMatchObject({ reading: "You can derive it.", scratchpad: "My own words.", squares: 1, evidence: [{ event: "understood", by: 1, why: "You derived it unaided.", conversation }] });
+  expect(study.files.get("understanding/basics/entropy.md")).toContain("## Iso's reading\n\nYou can derive it.\n\n## Scratchpad\n\nMy own words.");
+  expect((await engine.journal("@understanding/basics/entropy")).at(-1)).toMatchObject({ who: "iso:openrouter/anthropic/claude-sonnet-5.5" });
+  // The next turn is told the reading and what changed it.
+  const next = await engine.converse({ conversation, mode: "understand", asked: "go on", tier: "mid", given: [{ kind: "understanding", id: "basics/entropy" }] });
+  await ended(next.turn);
+  expect(String(sent[3]!.messages[1]!.content)).toMatch(/1 of 6 squares\n\nYour reading so far: You can derive it\.\n\nWhat changed it, newest first:\n- 2026-10-22: \+1, You derived it unaided\./);
+  // The map says nothing has changed it since.
+  expect((await engine.map()).notes["basics/entropy"]).not.toHaveProperty("changedSince");
+});

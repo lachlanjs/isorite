@@ -59,6 +59,9 @@ export interface MapReport {
     kind?: string;
     /** An exercise whose last attempt was marked right. */
     passed?: true;
+    /** Changed by someone other than you (Iso, an agent, another editor) since your understanding of it was last
+     *  recorded: when (M10). */
+    changedSince?: string;
     /** A note of the knowledge base: the size of its text, as an estimate in tokens (what linking it to a note for Iso adds). */
     tokens?: number;
   }>;
@@ -100,7 +103,11 @@ export interface DraftSummary { id: string; title: string; exercise?: true }
 
 /** One thing that moved a note's understanding: an attempt, with what Iso judged and why, or your wind back. */
 /** `marks` names the marking's entry in the exercise's journal. */
-export interface Evidence { id: string; at: string; event: "attempt" | "wind-back"; by: number; why?: string; exercise?: string; result?: Result; marks?: string }
+export interface Evidence { id: string; at: string; event: "attempt" | "wind-back" | "understood"; by: number; why?: string; exercise?: string; result?: Result; marks?: string; conversation?: string }
+
+/** A note's Understanding note (M10): Iso's reading of your understanding, your scratchpad (`version` is the file's,
+ *  null before there is one), and what the record says: the number, its squares and steps, and the evidence. */
+export interface UnderstandingReport { note: string; reading: string; scratchpad: string; version: string | null; level: number; squares: number; step: 0 | 1 | 2 | 3; due: boolean; evidence: Evidence[] }
 
 /** What the study page and the squares read. */
 export interface StudyReport {
@@ -226,6 +233,10 @@ export interface Api {
   conversation(id?: string): Promise<Conversation | null>;
   /** What a turn would send now, part by part, with the session's cost. */
   turnContext(request: Omit<TurnRequest, "asked">): Promise<ContextReport>;
+  /** A note's Understanding note. */
+  understanding(note: string): Promise<UnderstandingReport>;
+  /** Save your scratchpad in a note's Understanding note. */
+  saveScratchpad(note: string, scratchpad: string, base: string | null): Promise<UnderstandingReport>;
   /** Put back every note a turn changed as it was before the turn. A note changed since is left as it is, and said. */
   undoTurn(conversation: string, turn: string): Promise<{ notes: string[]; left: string[] }>;
   /** Your answer to what Iso asked before doing something in a turn. */

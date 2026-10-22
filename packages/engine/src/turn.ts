@@ -17,7 +17,9 @@ export type Mode = (typeof MODES)[number];
 export type Given =
   | { kind: "note"; id: string }
   | { kind: "folder"; id: string }
-  | { kind: "passage"; id: string; text: string };
+  | { kind: "passage"; id: string; text: string }
+  /** The note's Understanding note: Iso's reading of you, and what changed it (Understand mode). */
+  | { kind: "understanding"; id: string };
 
 /** One thing that happened in a turn, in order. */
 export type TurnItem =
@@ -205,7 +207,7 @@ export function sentText(s: Sent): string {
 export function turnExchange(t: Turn): Exchange {
   const text = t.items.filter((i) => i.kind === "text").map((i) => i.text).join("\n\n").trim();
   const changed = t.items.flatMap((i) => (i.kind === "change" ? [`${i.why === "create" ? "made" : i.why === "delete" ? "deleted" : i.why === "move" ? "moved" : "changed"} ${i.title} (/${i.note}.md)`] : []));
-  const gave = t.given.map((g) => (g.kind === "passage" ? `a passage of /${g.id}.md` : `/${g.id}${g.kind === "note" ? ".md" : "/"}`));
+  const gave = t.given.filter((g) => g.kind !== "understanding").map((g) => (g.kind === "passage" ? `a passage of /${g.id}.md` : `/${g.id}${g.kind === "note" ? ".md" : "/"}`));
   return {
     id: t.id, note: "",
     text: `In ${t.mode} mode they asked${gave.length ? `, giving you ${gave.join(", ")}` : ""}: ${t.asked}\n\nYou wrote:\n\n${text || "(nothing)"}\n\n${changed.length ? `You ${changed.join("; ")}.` : t.state === "done" ? "" : `The turn was ${t.state}.`}`.trim(),

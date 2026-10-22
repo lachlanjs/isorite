@@ -114,3 +114,36 @@ test("Write mode: moving a note is asked first, and not allowed it stays", async
   expect((await page.request.get("api/note?id=basics/bit")).ok()).toBe(true);
   await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
 });
+
+test("Understand mode: your understanding of the note open goes with what you ask; what Iso records shows in the note's Understand lens, beside your scratchpad", async ({ page }) => {
+  const name = test.info().project.name, id = `channels/understand-${name}`;
+  const { token } = (await (await page.request.get("api/session")).json()) as { token: string };
+  await page.request.post(`api/note?id=${id}`, { data: { text: `---\ntype: Concept\ntitle: Rate ${name}\n---\n\nBits a use.\n` }, headers: { "x-isorite-token": token, Origin: new URL(test.info().project.use.baseURL!).origin } });
+  await page.goto(`#/n/${id}`);
+  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Bits a use.");
+  await toIso(page);
+  await pane(page).getByRole("button", { name: "Understand", exact: true }).click();
+  const tray = page.getByRole("list", { name: "What Iso is sent" });
+  await expect(tray.getByRole("listitem")).toHaveText([`◇Understanding · Rate ${name}`]);
+  await box(page).fill(`understand ${id}`);
+  await box(page).press("Enter");
+  const turn = page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last();
+  await expect(turn).toHaveAttribute("data-state", "done");
+  await expect(turn.locator(".understood")).toContainText(new RegExp(`recorded\\s*Rate ${name}\\s*\\+0\\.5\\s*You said why it holds in your own words\\.`));
+
+  // The note's Understand lens: Iso's reading, what changed it, and your scratchpad, kept.
+  await turn.locator(".understood").getByRole("button").click();
+  const note = page.locator('[data-pane="note"]');
+  await expect(note.locator(".lens[data-lens=understand]")).toHaveAttribute("aria-pressed", "true");
+  await expect(note.locator(".reading")).toHaveText("You can say what it measures, and why.");
+  await expect(note.locator("ol li")).toHaveCount(1);
+  await expect(note.locator("ol li")).toContainText("+0.5You said why it holds in your own words.");
+  await note.getByLabel("Scratchpad").fill(`Mine, ${name}.`);
+  await expect(note.getByRole("status")).toHaveText("saved", { timeout: 8000 });
+  await page.screenshot({ path: `test-results/screens/${name}-understand-lens.png`, fullPage: true });
+  await page.reload();
+  await expect(page.locator('[data-pane="note"]').getByLabel("Scratchpad")).toHaveValue(`Mine, ${name}.`);
+  await page.locator('[data-pane="note"] .lens[data-lens=normal]').click();
+  await toIso(page);
+  await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
+});

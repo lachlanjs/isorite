@@ -11,8 +11,8 @@
   import { ALLOWS, panes } from "$lib/panes.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
 
-  const SYM: Record<Part["kind"], string> = { note: "▣", folder: "▭", passage: "“" };
-  const said = (p: Part): string => (p.kind === "passage" ? `“${p.text}” from ${p.title}` : p.kind === "folder" ? `the folder ${p.title}` : p.title);
+  const SYM: Record<Part["kind"], string> = { note: "▣", folder: "▭", passage: "“", understanding: "◇" };
+  const said = (p: Part): string => (p.kind === "passage" ? `“${p.text}” from ${p.title}` : p.kind === "folder" ? `the folder ${p.title}` : p.kind === "understanding" ? `your understanding of ${p.title}` : p.title);
   const titleOf = (id: string): string => app.listing.notes.find((n) => n.id === id)?.title ?? id.split("/").at(-1) ?? id;
   const HOW: Record<Step["how"], string> = { keyword: "searched", meaning: "by meaning", link: "followed", read: "read" };
   const TIERS: Tier[] = ["low", "mid", "max"];
@@ -32,7 +32,7 @@
 
   onMount(() => converse.start());
   // What is sent is measured again when what you give, the mode, the tier or the switch changes.
-  $effect(() => { void tray.parts; void panes.mode; void context.tier; void converse.lookup; converse.measure(); });
+  $effect(() => { void tray.sent; void panes.mode; void context.tier; void converse.lookup; converse.measure(); });
   // Kept at the newest as the conversation grows.
   $effect(() => { void converse.turns; void converse.streaming; void tick().then(() => { if (list) list.scrollTop = list.scrollHeight; }); });
 
@@ -46,8 +46,13 @@
     else if (e.key === "Escape" && running) { e.preventDefault(); void converse.stop(); }
   }
   function open(id: string): void { void panes.open(id, true); }
-  /** A note Iso changed opens in the note's Iso lens, where its words are marked. */
-  function openChanged(id: string): void { panes.setLens("note", "iso"); void panes.open(id, true); }
+  /** A note Iso changed opens in the note's Iso lens, where its words are marked; an Understanding note in the
+   *  note's Understand lens. */
+  function openChanged(id: string): void {
+    if (id.startsWith("@understanding/")) { openUnderstanding(id.slice("@understanding/".length)); return; }
+    panes.setLens("note", "iso"); void panes.open(id, true);
+  }
+  function openUnderstanding(id: string): void { panes.setLens("note", "understand"); void panes.open(id, true); }
   const changes = (t: Turn): boolean => t.items.some((i) => i.kind === "change") && !t.items.some((i) => i.kind === "undone");
 </script>
 
@@ -55,7 +60,7 @@
   {#if t.given.length}
     <span class="gave">
       {#each t.given as g, k (k)}
-        <span class="chip small"><span class="k" aria-hidden="true">{SYM[g.kind]}</span><span class="t">{g.kind === "passage" ? g.text : g.kind === "folder" ? g.id || "the base" : titleOf(g.id)}</span></span>
+        <span class="chip small" class:u={g.kind === "understanding"}><span class="k" aria-hidden="true">{SYM[g.kind]}</span><span class="t">{g.kind === "passage" ? g.text : g.kind === "folder" ? g.id || "the base" : titleOf(g.id)}</span></span>
       {/each}
     </span>
   {/if}
@@ -73,8 +78,8 @@
     </p>
   {:else if i.kind === "change"}
     <p class="change">
-      <span class="v">{i.why === "create" ? "made" : i.why === "delete" ? "deleted" : i.why === "move" ? "moved" : "changed"}</span>
-      {#if i.why === "delete"}<span class="q">{i.title}</span>{:else}<button type="button" class="note-link" onclick={() => openChanged(i.why === "move" ? i.to! : i.note)}>{i.why === "move" ? `${i.title} → ${i.to}` : titleOf(i.note)}</button>{/if}
+      <span class="v">{i.note.startsWith("@understanding/") ? "wrote" : i.why === "create" ? "made" : i.why === "delete" ? "deleted" : i.why === "move" ? "moved" : "changed"}</span>
+      {#if i.why === "delete"}<span class="q">{i.title}</span>{:else}<button type="button" class="note-link" onclick={() => openChanged(i.why === "move" ? i.to! : i.note)}>{i.why === "move" ? `${i.title} → ${i.to}` : i.note.startsWith("@") ? i.title : titleOf(i.note)}</button>{/if}
       {#if i.added || i.removed}<span class="n"><span class="add">+{i.added}</span> <span class="del">−{i.removed}</span></span>{/if}
     </p>
   {:else if i.kind === "permission"}
@@ -86,6 +91,8 @@
         <p class="acts"><button type="button" onclick={() => void converse.answer(i.id, "once")}>Allow once</button><button type="button" onclick={() => void converse.answer(i.id, "always")}>Always allow this</button><button type="button" class="no" onclick={() => void converse.answer(i.id, "reject")}>Don't allow</button></p>
       {/if}
     </div>
+  {:else if i.kind === "understood"}
+    <p class="understood"><span class="v">recorded</span><button type="button" class="note-link" onclick={() => openUnderstanding(i.note)}>{titleOf(i.note)}</button><span class="by" class:up={i.by > 0} class:down={i.by < 0}>{i.by > 0 ? `+${i.by}` : i.by < 0 ? `−${-i.by}` : "±0"}</span>{#if i.why}<span class="why">{i.why}</span>{/if}</p>
   {:else if i.kind === "undone"}
     <p class="faint undone">{i.notes.length ? `Undone: ${i.notes.map(titleOf).join(", ")} put back.` : "Nothing was put back."}{i.left.length ? ` Left as they are, changed since: ${i.left.map(titleOf).join(", ")}.` : ""}</p>
   {:else if i.kind === "point"}
@@ -126,9 +133,9 @@
   <div class="composer">
     <div class="tray" role="list" aria-label="What Iso is sent">
       <span class="lbl">context</span>
-      {#each tray.parts as p (tray.keyOf(p))}
-        <span class="chip" class:fresh={tray.fresh === tray.keyOf(p)} role="listitem" title={said(p)}>
-          <span class="k" aria-hidden="true">{SYM[p.kind]}</span><span class="t">{p.kind === "passage" ? p.text : p.title}</span>
+      {#each tray.sent as p (tray.keyOf(p))}
+        <span class="chip" class:fresh={tray.fresh === tray.keyOf(p)} class:u={p.kind === "understanding"} role="listitem" title={said(p)}>
+          <span class="k" aria-hidden="true">{SYM[p.kind]}</span><span class="t">{p.kind === "passage" ? p.text : p.kind === "understanding" ? `Understanding · ${p.title}` : p.title}</span>
           <button type="button" aria-label="Take {said(p)} out of Iso's context" onclick={() => tray.remove(p)}>
             <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 8M12 4l-8 8" /></svg>
           </button>
@@ -200,6 +207,12 @@
   .acts button { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
   .acts button:hover { color: var(--text); }
   .acts .no { color: var(--text-faint); }
+  .understood { padding-left: 16px; font-size: 12px; color: var(--text-faint); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; position: relative; }
+  .understood::before { content: "◇"; position: absolute; left: 0; color: var(--malachite); }
+  .understood .v { color: var(--text-soft); min-width: 5.5em; }
+  .understood .by.up { color: var(--malachite); }
+  .understood .by.down { color: var(--rose); }
+  .understood .why { flex-basis: 100%; padding-left: calc(5.5em + 8px); color: var(--text-soft); }
   .undo { padding-left: 10px; margin-top: -4px; }
   .undone { font-size: 12px; padding-left: 16px; }
   .point .dia { color: var(--growth); font-size: 10px; position: absolute; left: 0; }
@@ -213,6 +226,8 @@
   .chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 2px 0 8px; border: 1px solid var(--line-strong); font-size: 12px; color: var(--text-soft); max-width: 100%; }
   .chip.small { height: 20px; padding-right: 8px; font-size: 11px; border-color: var(--line); }
   .chip .k { color: var(--growth); }
+  .chip.u { border-color: var(--malachite); }
+  .chip.u .k { color: var(--malachite); }
   .chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
   .chip button { width: 18px; height: 18px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .chip button:hover { color: var(--rose); }

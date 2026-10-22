@@ -6,10 +6,11 @@ import {
   Bundle, SearchIndex, STUDY_DIR, diffLines, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
   type Cost, type Entry, type FileEntry, type Insert, type LearnerEvent, type Marks, type Passage, type Proposal, type SessionMoment, type Stamp, type Understanding,
 } from "@isorite/core";
-import { Conflict, EngineError, type AgentLook, type AgentProposal, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport, type TurnRequest } from "./api.ts";
+import { Conflict, EngineError, type AgentLook, type AgentProposal, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { ANSWER_CLOSE, ANSWER_OPEN, CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, exerciseMessages, exerciseReply, fitted, helpSince, insertMessages, markMessages, noteMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part, type Tested } from "./iso.ts";
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, noteId, type Similar } from "./lookup.ts";
+import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
 import { CONVERSATIONS_DIR, MODES, MODE_TOOLS, conversationPath, readTurns, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
 import { regionsOf } from "./agent.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
@@ -51,9 +52,9 @@ export const MAX_ASKED = 4000, REPLY_TOKENS = 2500, NOTE_TOKENS = 6000, MARK_TOK
 export const DRAFT_PREFIX = "@draft/", DRAFT_DIR = "drafts";
 export const isDraftId = (id: string): boolean => id.startsWith(DRAFT_PREFIX);
 /** A note's id without the prefix that says which folder of the study base it is in. */
-const bare = (id: string): string => (isStudyId(id) ? id.slice(STUDY_PREFIX.length) : isDraftId(id) ? id.slice(DRAFT_PREFIX.length) : id);
+const bare = (id: string): string => (isStudyId(id) ? id.slice(STUDY_PREFIX.length) : isDraftId(id) ? id.slice(DRAFT_PREFIX.length) : isUnderstandingId(id) ? id.slice(UNDERSTANDING_PREFIX.length) : id);
 /** In the knowledge base itself: neither an exercise nor a draft. */
-const inBase = (id: string): boolean => !isStudyId(id) && !isDraftId(id);
+const inBase = (id: string): boolean => !isStudyId(id) && !isDraftId(id) && !isUnderstandingId(id);
 
 const BAD_PART = /^\.|[\0\\:*?"<>|]|^\s|\s$/;
 
@@ -193,6 +194,13 @@ export class Engine implements Api {
     for (const e of events) if (e.event === "attempt" && typeof e.exercise === "string") last.set(e.exercise, e.result);
     const notes: MapReport["notes"] = {};
     for (const c of this.bundle.concepts.values()) notes[c.id] = { title: c.title, step: read.get(c.id)?.step ?? 0, tokens: estimate(c.body.trim()) };
+    // A note whose understanding was recorded and that changed since, by anyone but you (M10): the Understand lens
+    // marks it. Only notes with a reading are looked at, so this reads a journal for each of those alone.
+    for (const [id, u] of read) {
+      if (!notes[id] || u.last === null || !study) continue;
+      const changed = (await this.journal(id)).findLast((e) => e.kind === "change" && e.who !== "you" && e.why !== "move");
+      if (changed && Date.parse(changed.at) > u.last) notes[id] = { ...notes[id]!, changedSince: changed.at };
+    }
     for (const c of exercises?.concepts.values() ?? []) notes[studyId(c.id)] = { title: c.title, step: 0, kind: plain(c.meta.kind ?? "") || "note", ...(last.get(c.id) === "right" ? { passed: true as const } : {}) };
     return { model: mapModel(this.bundle, exercises), notes };
   }
@@ -396,7 +404,7 @@ export class Engine implements Api {
   private where(id: string): { files: Files; path: string } {
     if (!inBase(id)) {
       if (!this.opts.study) throw new EngineError("there is no study base open", 404);
-      return { files: this.opts.study, path: `${isDraftId(id) ? DRAFT_DIR : STUDY_DIR}/${checkNoteId(bare(id))}.md` };
+      return { files: this.opts.study, path: `${isDraftId(id) ? DRAFT_DIR : isUnderstandingId(id) ? UNDERSTANDING_DIR : STUDY_DIR}/${checkNoteId(bare(id))}.md` };
     }
     return { files: this.opts.notes, path: `${checkNoteId(id)}.md` };
   }
@@ -844,6 +852,7 @@ export class Engine implements Api {
       if (g?.kind === "folder") { if (id) checkNoteId(id); return { kind: "folder", id }; }
       if (!inBase(checkNoteId(id))) throw new EngineError("only notes of the base are given to Iso");
       if (g?.kind === "note") return { kind: "note", id };
+      if (g?.kind === "understanding") return { kind: "understanding", id };
       if (g?.kind === "passage" && typeof g.text === "string" && g.text.trim() && g.text.length <= 20_000) return { kind: "passage", id, text: g.text };
       throw new EngineError("a part given to Iso is a note, a folder or a passage");
     });
@@ -860,6 +869,12 @@ export class Engine implements Api {
       }
       const c = this.bundle.concepts.get(g.id);
       if (!c) continue;
+      if (g.kind === "understanding") {
+        const u = await this.understanding(g.id);
+        const said = (e: Evidence) => `${e.at.slice(0, 10)}: ${e.by > 0 ? "+" : ""}${e.by}${e.event === "wind-back" ? " (they wound you back)" : e.event === "attempt" ? " (an exercise)" : ""}${e.why ? `, ${e.why}` : ""}`;
+        out.push({ kind: "understanding", id: g.id, title: c.title, reading: u.reading, events: u.evidence.slice(-8).reverse().map(said), squares: u.squares });
+        continue;
+      }
       if (g.kind === "passage") out.push({ kind: "passage", id: g.id, title: c.title, text: g.text });
       else out.push({ kind: "note", id: g.id, title: c.title, text: (await this.readNote(g.id)).text });
     }
@@ -879,7 +894,6 @@ export class Engine implements Api {
     if (!study) throw new EngineError("Iso's conversations are kept in a study base, and none is open (isorite study init)", 409);
     if (!(MODES as readonly string[]).includes(req.mode)) throw new EngineError("the mode is ask, write, build or understand");
     if (req.mode === "build") throw new EngineError("Build mode is the terminal's: start isorite term", 409);
-    if (req.mode === "understand") throw new EngineError("Understand mode is not here yet", 409);
     if (!TIERS.includes(req.tier)) throw new EngineError("the tier is low, mid or max");
     const asked = String(req.asked ?? "").trim();
     if (!asked) throw new EngineError("say what you want from Iso");
@@ -1036,7 +1050,53 @@ export class Engine implements Api {
       await t.item({ kind: "change", note: id, entry: (await this.journal(id)).at(-1)?.id ?? "", why: "delete", title: before, added: 0, removed: now.text.split("\n").length });
       return `Deleted ${before}. Its history stays.`;
     }
+    if (name === "record_understanding") {
+      const id = noteId(this.bundle, args.id);
+      if (!id) return `There is no note ${String(args.id ?? "")}.`;
+      const by = Number(args.by);
+      if (![-1, -0.5, 0, 0.5, 1].includes(by)) return "by is one of -1, -0.5, 0, 0.5, 1.";
+      const why = String(args.why ?? "").trim().slice(0, 300);
+      if (this.recorded.get(t.turn)?.has(id)) return `You recorded ${title(id)} once this turn already.`;
+      this.recorded.set(t.turn, new Set([...(this.recorded.get(t.turn) ?? []), id]));
+      const event = await this.one(() => this.record({ event: "understood", note: id, by, why, conversation: t.conversation, turn: t.turn }));
+      await t.item({ kind: "understood", note: id, event, by, why });
+      return `Recorded for ${title(id)}.`;
+    }
+    if (name === "write_understanding") {
+      const id = noteId(this.bundle, args.id);
+      if (!id) return `There is no note ${String(args.id ?? "")}.`;
+      const reading = String(args.reading ?? "").trim();
+      if (!reading) return "Give your reading.";
+      const uid = understandingId(id), was = await this.readNote(uid).catch(() => null);
+      const text = understandingText(id, title(id), { ...parseUnderstanding(was?.text ?? null), reading });
+      const saved = await this.one(() => this.put(uid, text, was?.version ?? null, "edit", {}, t.who));
+      if (saved.entry) await t.item({ kind: "change", note: uid, entry: saved.entry, why: was ? "edit" : "create", title: `Understanding · ${title(id)}`, added: 0, removed: 0 });
+      return `Your reading of ${title(id)} is written.`;
+    }
     return `${name} cannot be used yet.`;
+  }
+
+  /** The notes each turn recorded understanding of: once a note a turn. */
+  private readonly recorded = new Map<string, Set<string>>();
+
+  /** A note's Understanding note (M10): Iso's reading, your scratchpad, and what the record says of it. */
+  async understanding(note: string): Promise<UnderstandingReport> {
+    if (!inBase(checkNoteId(note))) throw new EngineError("only a note of the base has an Understanding note");
+    const uid = understandingId(note);
+    const source = this.opts.study ? await this.readNote(uid).catch(() => null) : null;
+    const read = (await this.study()).notes[note];
+    return { note, ...parseUnderstanding(source?.text ?? null), version: source?.version ?? null, level: read?.level ?? 0, squares: read?.squares ?? 0, step: read?.step ?? 0, due: read?.due ?? false, evidence: read?.evidence ?? [] };
+  }
+
+  /** Your scratchpad in a note's Understanding note: yours alone; Iso does not write it. `base` as for saveNote, or
+   *  null when there is no Understanding note yet. */
+  async saveScratchpad(note: string, scratchpad: string, base: string | null): Promise<UnderstandingReport> {
+    if (!this.opts.study) throw new EngineError("there is no study base open", 409);
+    if (!inBase(checkNoteId(note))) throw new EngineError("only a note of the base has an Understanding note");
+    const uid = understandingId(note), was = await this.readNote(uid).catch(() => null);
+    const title = this.bundle.concepts.get(note)?.title ?? note;
+    await this.one(() => this.put(uid, understandingText(note, title, { ...parseUnderstanding(was?.text ?? null), scratchpad }), base));
+    return this.understanding(note);
   }
 
   async undoTurn(conversation: string, turn: string): Promise<{ notes: string[]; left: string[] }> {
@@ -1288,6 +1348,7 @@ export class Engine implements Api {
       const e = byId.get(id);
       if (!e) return [];
       if (e.event === "wind-back") return [{ id, at: String(e.at), event: "wind-back", by: -1 }];
+      if (e.event === "understood") return [{ id, at: String(e.at), event: "understood", by: typeof e.by === "number" ? e.by : 0, ...(typeof e.why === "string" && e.why ? { why: e.why } : {}), ...(typeof e.conversation === "string" ? { conversation: e.conversation } : {}) }];
       const move = (e.moves as Record<string, { by?: unknown; why?: unknown }> | undefined)?.[note];
       return [{ id, at: String(e.at), event: "attempt", by: typeof move?.by === "number" ? move.by : 0, ...(typeof move?.why === "string" && move.why ? { why: move.why } : {}), ...(typeof e.exercise === "string" ? { exercise: studyId(e.exercise) } : {}), ...(typeof e.result === "string" ? { result: e.result as Evidence["result"] } : {}), ...(typeof e.marks === "string" ? { marks: e.marks } : {}) }];
     });

@@ -4,7 +4,7 @@
   // its marks. The marks are plain maps from a note to a mark, looked up while drawing.
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { reach } from "@isorite/core";
+  import { reach, withoutStudy } from "@isorite/core";
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
   import type { How, MapReport, NoteSource } from "@isorite/engine";
   import { linkedIn, placeOf, testsIn, titleIn, withLink, withoutLink, withTest } from "$lib/atlas/picks.ts";
@@ -69,7 +69,9 @@
   }
   async function load(): Promise<void> {
     try {
-      const next = await app.api.map();
+      const got = await app.api.map();
+      // Study folders are drawn in the Understand lens only (M10).
+      const next = studyShown ? got : { ...got, model: withoutStudy(got.model) };
       // A changed base is laid out from where things stood (V5), on the same grid and the same way.
       const on = `${flow}|${grain}`, from = laid && laidOn === on ? laid.layout.orders ?? null : null;
       const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from });
@@ -83,6 +85,10 @@
     } catch (e) { failed = (e as Error).message; }
   }
 
+  const studyShown = $derived(panes.lens.atlas === "understand");
+  // Into or out of the Understand lens, the map is laid out again with or without the study folders.
+  let shownBefore: boolean | null = null;
+  $effect(() => { const s = studyShown; if (shownBefore !== null && shownBefore !== s) void load(); shownBefore = s; });
   $effect(() => {
     void load();
     let again: ReturnType<typeof setTimeout> | undefined;
@@ -525,7 +531,7 @@
     if (tray.carrying) {
       const { part, over } = tray.carrying;
       tray.carrying = null;
-      if (over && part.kind !== "passage") give(part.id, part.kind);
+      if (over && (part.kind === "note" || part.kind === "folder")) give(part.id, part.kind);
     }
     press = null;
     if (gripped) letGo();
@@ -661,7 +667,7 @@
           <AtlasStudyItem item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? "note"} {mark} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {:else}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} step={report.notes[n.item.ref]?.step ?? 0} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} step={studyShown ? (report.notes[n.item.ref]?.step ?? 0) : 1} since={studyShown ? (report.notes[n.item.ref]?.changedSince ?? "") : ""} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {/if}
       {/each}
@@ -697,6 +703,9 @@
       <p class="notice" role="alert">{notice}</p>
     {/if}
     {#if given}<p class="given" role="status">◆ {given}</p>{/if}
+    {#if studyShown && !pick && !given}
+      <p class="legend" aria-hidden="true"><span><i class="k s0"></i>not reached</span><span><i class="k s1"></i>opened</span><span><i class="k s2"></i>worked through</span><span><i class="k s3"></i>understood</span><span><i class="k ch"></i>changed since</span></p>
+    {/if}
     {#if panes.lens.atlas === "iso" && !pick && !given}
       <p class="legend" aria-hidden="true"><span><i class="k g"></i>in Iso's context</span><span><i class="k d"></i>Iso changed it</span><span><i class="k p"></i>Iso points to it</span><span><i class="k n">1</i>read, in order</span><span class="faint">tap to give or take back</span></p>
     {/if}
@@ -730,6 +739,11 @@
   .legend .g { background: var(--growth-soft); border: 1px solid var(--growth); }
   .legend .d { width: 7px; height: 7px; background: var(--growth); transform: rotate(45deg); }
   .legend .p { border: 1.5px dashed var(--growth); }
+  .legend .s0 { border: 1px dotted var(--line-strong); }
+  .legend .s1 { border: 1px solid var(--line-strong); background: var(--ground-1); }
+  .legend .s2 { border: 1px solid var(--line-strong); background: var(--ground-3); }
+  .legend .s3 { border: 3px double var(--lattice); background: var(--ground-3); }
+  .legend .ch { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid var(--builds); }
   .legend .n { width: 14px; height: 14px; background: var(--growth); color: var(--ground-0); font-size: 9px; font-weight: 700; }
   /* A note carried out of the Atlas towards Iso's pane. */
   .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font-size: 12px; white-space: nowrap; }

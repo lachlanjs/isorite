@@ -42,7 +42,7 @@ class Converse {
     this.problem = "";
     if (!asked.trim() || this.running) return false;
     try {
-      const given = tray.parts.map((p) => (p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }));
+      const given = tray.sent.map((p) => (p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }));
       const { conversation } = await app.api.converse({ ...(this.id ? { conversation: this.id } : {}), mode: panes.mode, asked: asked.trim(), given, tier: context.tier, ...(this.lookup ? {} : { lookup: false }) });
       this.id = conversation;
       return true;
@@ -79,6 +79,8 @@ class Converse {
       if (e.item.kind === "text") this.streaming = "";
       // A change to the note open is shown in the note's Iso lens: brought up, unless you are typing in it.
       if (e.item.kind === "change" && (e.item.note === app.open || e.item.to === app.open)) panes.want("note", "iso", panes.busy("note"));
+      // What Iso keeps of your understanding of the note open is shown in its Understand lens.
+      if ((e.item.kind === "change" && e.item.note === `@understanding/${app.open}`) || (e.item.kind === "understood" && e.item.note === app.open)) panes.want("note", "understand", panes.busy("note"));
       put({ ...t, items: [...t.items, e.item] });
     }
     else if (e.type === "iso-answer") put({ ...t, items: t.items.map((i): TurnItem => (i.kind === "permission" && i.id === e.permission ? { ...i, answer: e.decision } : i)) });
@@ -92,7 +94,7 @@ class Converse {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       if (!app.api) return;
-      const given = tray.parts.map((p) => (p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }));
+      const given = tray.sent.map((p) => (p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }));
       void app.api.turnContext({ ...(this.id ? { conversation: this.id } : {}), mode: panes.mode, given, tier: context.tier, ...(this.lookup ? {} : { lookup: false }) })
         .then((r) => (this.report = r), () => undefined);
     }, 250);

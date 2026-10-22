@@ -15,16 +15,23 @@ async function atlas(page: Page) {
   if ((page.viewportSize()?.width ?? 1280) <= 760) await expect.poll(() => page.locator('[data-pane="atlas"]').evaluate((el) => Math.round(el.getBoundingClientRect().left))).toBe(0);
 }
 
-test("the map draws both bases: folders, notes where you stand, a study folder and its item", async ({ page }) => {
+/** The Atlas's lens (M10). */
+const lens = (page: Page, l: "normal" | "iso" | "understand") => page.locator(`[data-pane="atlas"] .lens[data-lens="${l}"]`).click();
+
+test("the map draws the base; its Understand lens draws where you stand, and the study folders and their items", async ({ page }) => {
   await atlas(page);
   await expect(folder(page, "basics")).toBeVisible();
   await expect(folder(page, "coding")).toBeVisible();
+  await expect(note(page, "basics/surprise")).not.toHaveClass(/\bs[023]\b/);
+  await expect(folder(page, "@study/coding")).toHaveCount(0);
+  await lens(page, "understand");
   await expect(note(page, "basics/surprise")).toHaveClass(/\bs0\b/);
   await expect(note(page, "coding/source-coding")).toHaveClass(/\bs2\b/); // three right answers: worked through
   await expect(folder(page, "@study/coding")).toContainText("study · coding");
   await expect(page.getByRole("link", { name: "written: Build a prefix code" })).toBeVisible();
   expect(await page.locator(".routes path").count()).toBeGreaterThan(2);
   await look(page, "atlas");
+  await lens(page, "normal");
 });
 
 test("choosing a note outlines what it requires, all the way back, and what builds on it; again opens it", async ({ page }) => {
@@ -35,7 +42,6 @@ test("choosing a note outlines what it requires, all the way back, and what buil
   await expect(note(page, "basics/surprise")).toHaveClass(/\breq\b/);
   await expect(note(page, "coding/huffman-codes")).toHaveClass(/\bbld\b/);
   await expect(note(page, "basics/bit")).toHaveClass(/\bdim\b/);
-  await expect(note(page, "@study/coding/a-prefix-code")).toHaveClass(/\bdim\b/); // it builds on Huffman codes, not on this
   // Lines are drawn for one step each way only; the note two steps back is outlined, fainter.
   await expect(page.locator(".routes")).toHaveAttribute("data-requires", "1");
   await expect(page.locator(".routes")).toHaveAttribute("data-builds", "1");
@@ -90,9 +96,11 @@ test("the chain is walked a step at a time, the way kept", async ({ page }) => {
 
 test("a study item lights the note it tests and what that requires", async ({ page }) => {
   await atlas(page);
+  await lens(page, "understand");
   await note(page, "@study/coding/a-prefix-code").click();
   await expect(note(page, "coding/huffman-codes")).toHaveClass(/\breq\b/);
   await expect(note(page, "basics/surprise")).toHaveClass(/\breq\b/);
+  await lens(page, "normal");
 });
 
 test("a folder is zoomed to, open ground steps out, and the map is dragged and zoomed by hand", async ({ page }) => {

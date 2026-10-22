@@ -67,6 +67,12 @@ async function provider(): Promise<void> {
       data({ choices: [{ delta: { content: "Here is the rewrite.\n" } }] });
       for (let k = 1; k <= count; k++) data({ choices: [{ delta: { content: `⟦${k}⟧${asked.includes("drop") && k === 2 ? "" : ` rewritten ${k} `}⟦/${k}⟧\n` } }] });
       if (!asked.includes("quiet")) data({ choices: [{ delta: { content: "⟦note⟧I rewrote what you chose, **plainly**.⟦/note⟧" } }] });
+    } else if (/\bunderstand (\S+)/.test(asked) && sent.messages.filter((m) => m.role === "tool").length < 2) {
+      // Understand mode (M10): "understand <id>" records evidence of it, then writes Iso's reading of it.
+      const id = /\bunderstand (\S+)/.exec(asked)![1]!, first = !looked;
+      const call = first ? { name: "record_understanding", arguments: JSON.stringify({ id, by: 0.5, why: "You said why it holds in your own words." }) }
+        : { name: "write_understanding", arguments: JSON.stringify({ id, reading: "You can say what it measures, and why." }) };
+      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${first ? 1 : 2}`, function: call }] } }] });
     } else if (/\bedit (\S+)/.test(asked) && !looked) {
       // Write mode (M10): "edit <id>" changes its "Plain text." into Iso's words; "move <id> to <id>" asks first.
       const id = /\bedit (\S+)/.exec(asked)![1]!;

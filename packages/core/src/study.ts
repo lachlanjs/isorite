@@ -118,6 +118,13 @@ export function mapModel(base: Bundle, study: Bundle | null = null): MapModel {
   return { root: dir(""), edges };
 }
 
+/** The map without the study base: its folders and notes, and the edges to them, left out. The Atlas draws study
+ *  folders only in its Understand lens (M10). */
+export function withoutStudy(model: MapModel): MapModel {
+  const strip = (d: MapDir): MapDir => ({ ...d, children: d.children.filter((c) => !c.study).map((c) => (c.kind === "dir" ? strip(c) : c)) });
+  return { root: strip(model.root), edges: model.edges.filter(([a, b]) => !a.startsWith("@") && !b.startsWith("@")) };
+}
+
 // ------------------------------------------------------------ what a note rests on
 
 /** One link of a note's reach: `from` requires `to`. */

@@ -48,6 +48,7 @@ const Given = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("note"), id: z.string().max(400) }).strict(),
   z.object({ kind: z.literal("folder"), id: z.string().max(400) }).strict(),
   z.object({ kind: z.literal("passage"), id: z.string().max(400), text: z.string().max(20_000) }).strict(),
+  z.object({ kind: z.literal("understanding"), id: z.string().max(400) }).strict(),
 ]);
 const Mode = z.enum(["ask", "write", "build", "understand"]);
 const TurnAsk = z.object({ conversation: z.string().max(64).optional(), mode: Mode, asked: z.string().max(8000), given: z.array(Given).max(40), tier: Tier, lookup: z.boolean().optional() }).strict();
@@ -142,6 +143,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes }:
     });
   post("/api/iso/ask", Ask, (_c, b) => api.ask(b));
   post("/api/iso/converse", TurnAsk, (_c, b) => api.converse(b));
+  app.get("/api/understanding", (c) => answer(c, () => api.understanding(id(c))));
+  post("/api/understanding/scratchpad", z.object({ scratchpad: z.string().max(200_000), base: z.string().max(64).nullable() }).strict(), (c, b) => api.saveScratchpad(id(c), b.scratchpad, b.base));
   post("/api/iso/undo", z.object({ conversation: z.string().max(64), turn: z.string().max(64) }).strict(), (_c, b) => api.undoTurn(b.conversation, b.turn));
   post("/api/iso/answer", z.object({ turn: z.string().max(64), permission: z.string().max(64), decision: z.enum(["once", "always", "reject"]) }).strict(), (_c, b) => api.answer(b.turn, b.permission, b.decision));
   app.get("/api/conversation", (c) => answer(c, async () => (await api.conversation(c.req.query("id") || undefined)) ?? { id: "", turns: [] }));

@@ -100,7 +100,9 @@ class Panes {
 
   /** Modes the base allows: Build needs a project (M11). */
   modes: Mode[] = ["ask", "write", "understand"];
-  setMode(m: Mode): void { this.mode = m; keep("isorite.mode", m); }
+  setMode(m: Mode): void { this.mode = m; keep("isorite.mode", m); this.onMode?.(); }
+  /** Set by the tray: what a change of mode does to what Iso is sent. */
+  onMode: (() => void) | null = null;
   stepMode(by: number): void { const ms = this.modes; this.setMode(ms[(ms.indexOf(this.mode) + by + ms.length) % ms.length]!); }
 
   setLast(id: string): void { if (id && !id.startsWith("@")) { this.last = id; keep("isorite.last", id); } }
