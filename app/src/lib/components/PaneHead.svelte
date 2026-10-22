@@ -9,6 +9,8 @@
 
   const SYM: Record<Lens, string> = { normal: "○", iso: "◆", understand: "◇" };
   const WORD: Record<Lens, string> = { normal: "normal", iso: "Iso", understand: "understand" };
+  const MODE_NAME: Record<string, string> = { ask: "Ask", write: "Write", build: "Build", understand: "Understand" };
+  const MODE_SAYS: Record<string, string> = { ask: "reads the knowledge base, changes nothing", write: "reads and writes the knowledge base", build: "reads, writes and runs the project", understand: "reads the knowledge base, writes the study base" };
   const open = $derived(panes.settings === pane);
   let menu = $state<HTMLElement>();
 
@@ -42,7 +44,15 @@
   {#if pane === "iso"}
     <span class="modes" role="group" aria-label="Iso's mode">
       {#each panes.modes as m (m)}
-        <button type="button" class="mode" aria-pressed={panes.mode === m} onclick={() => panes.setMode(m)}>{m[0]!.toUpperCase() + m.slice(1)}</button>
+        <!-- A speech bubble, a scribe's quill, an L-system's sprig (I7). -->
+        <button type="button" class="mode" data-mode={m} aria-pressed={panes.mode === m} aria-label={MODE_NAME[m]} title="{MODE_NAME[m]}: {MODE_SAYS[m]}  (Shift+Tab in Iso's box)" onclick={() => panes.setMode(m)}>
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            {#if m === "ask"}<path d="M2.5 3.5h11v7.5h-6.5l-3 2.5v-2.5h-1.5z" />
+            {:else if m === "write"}<path d="M2.5 13.5l2.5-2.5M5 11c.6-4.2 3.6-7.4 8.5-8.5C12.6 7.2 9.4 10.4 5 11zM7.2 8.8l2.6-.3M8.8 6.6l2.4-.4" />
+            {:else if m === "understand"}<path d="M8 14.5V7.5M8 7.5L4.6 4.4M8 7.5l3.4-3.1M8 7.5V2.5M4.6 4.4L2.8 4.6M4.6 4.4L4.5 2.4M11.4 4.4l1.8.2M11.4 4.4l.1-2M8 11L5.8 9.6M8 11l2.2-1.4" />
+            {:else}<path d="M3 4.5l3 3.5-3 3.5M7.5 12h5.5" />{/if}
+          </svg>
+        </button>
       {/each}
     </span>
   {:else}
@@ -89,7 +99,9 @@
   .lens.waiting .sym { color: var(--growth); animation: blink 1s steps(2) infinite; }
   @keyframes blink { 50% { opacity: 0.3; } }
   /* The mode is the strongest mark in a header, so it is never taken for a lens. */
+  .mode { width: 28px; height: 26px; padding: 0; justify-content: center; }
   .mode[aria-pressed="true"] { color: var(--ground-0); background: var(--growth); }
+  .mode[data-mode="understand"][aria-pressed="true"] { background: var(--malachite); }
   .grow { flex: 1 1 auto; }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; background: none; border: 0; padding: 0; cursor: pointer; }
   .icon:hover, .icon:focus-visible { color: var(--text); }

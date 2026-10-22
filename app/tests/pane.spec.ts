@@ -13,6 +13,20 @@ async function look(page: Page, name: string) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} is no wider than the window`).toBe(true);
 }
 
+/** Iso's pane in its Context view: what you gave Iso, listed. On a phone, back to where you were after. */
+async function showContext(page: Page, back?: "Note" | "Atlas") {
+  const phone = (page.viewportSize()?.width ?? 1280) <= 760, nav = page.getByRole("navigation", { name: "Panes" });
+  if (phone) await nav.getByRole("button", { name: /^Iso/ }).click();
+  const ctx = page.locator('[data-pane="iso"]').getByRole("button", { name: "Context", exact: true });
+  if ((await ctx.getAttribute("aria-pressed")) !== "true") await ctx.click();
+  if (phone && back) {
+    await nav.getByRole("button", { name: new RegExp(`^${back}`) }).click();
+    // The row has scrolled back to the pane before anything is pressed in it.
+    await expect.poll(async () => (await page.locator(`[data-pane="${back.toLowerCase()}"]`).boundingBox())?.x).toBe(0);
+  }
+  return page.getByRole("list", { name: "What you gave Iso" });
+}
+
 test("a turn in Ask mode: what you gave is shown with it, what Iso reads is told and opens the note, and the conversation is kept", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await page.locator('[data-note="basics/surprise"]').waitFor();
@@ -48,12 +62,12 @@ test("a turn in Ask mode: what you gave is shown with it, what Iso reads is told
 test("a turn can be stopped, and a refusal is said plainly; Shift+Tab changes the mode", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toIso(page);
-  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveText("Ask");
+  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveAttribute("aria-label", "Ask");
   await box(page).press("Shift+Tab");
-  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveText("Write");
+  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveAttribute("aria-label", "Write");
   await box(page).press("Shift+Tab");
   await box(page).press("Shift+Tab");
-  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveText("Ask");
+  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveAttribute("aria-label", "Ask");
 
   await box(page).fill("slow, please");
   await box(page).press("Enter");
@@ -123,8 +137,9 @@ test("Understand mode: your understanding of the note open goes with what you as
   await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Bits a use.");
   await toIso(page);
   await pane(page).getByRole("button", { name: "Understand", exact: true }).click();
-  const tray = page.getByRole("list", { name: "What Iso is sent" });
-  await expect(tray.getByRole("listitem")).toHaveText([`◇Understanding · Rate ${name}`]);
+  const tray = await showContext(page);
+  await expect(tray.getByRole("listitem")).toHaveText([new RegExp(`^◇ Understanding · Rate ${name} \\d+`)]);
+  await pane(page).getByRole("button", { name: "Context", exact: true }).click();
   await box(page).fill(`understand ${id}`);
   await box(page).press("Enter");
   const turn = page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last();
@@ -148,7 +163,7 @@ test("Understand mode: your understanding of the note open goes with what you as
   await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
 });
 
-test("the count under Iso's box opens what the next turn is sent, part by part; an earlier turn can be left out", async ({ page }) => {
+test("the count under Iso's box opens the Context view: what the next turn is sent, part by part; an earlier turn can be left out", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toIso(page);
   // The last conversation comes up as the page opens (earlier tests made one); a new one is begun.
@@ -160,6 +175,7 @@ test("the count under Iso's box opens what the next turn is sent, part by part; 
   await expect(page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last()).toHaveAttribute("data-state", "done");
   await pane(page).getByRole("button", { name: /tokens$/ }).click();
   const parts = pane(page).getByRole("region", { name: "What Iso is sent" });
+  await expect(page.getByRole("log", { name: "The conversation with Iso" })).toHaveCount(0);
   await expect(parts.locator(".part").first()).toContainText("instructions and tools");
   await expect(parts).toContainText("earlier in this conversation1 turn");
   const sw = parts.getByRole("switch", { name: "Send: what is a bit?" });

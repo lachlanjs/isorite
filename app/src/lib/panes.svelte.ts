@@ -20,14 +20,6 @@ export type Lens = (typeof LENSES)[number];
 export const MODES = ["ask", "write", "build", "understand"] as const;
 export type Mode = (typeof MODES)[number];
 
-/** What each of Iso's modes may do, in a line (shown above Iso's box). */
-export const ALLOWS: Record<Mode, string> = {
-  ask: "reads the knowledge base · changes nothing",
-  write: "reads and writes the knowledge base · you see each change",
-  build: "reads, writes and runs the project · reads and writes the knowledge base",
-  understand: "reads the knowledge base · writes the study base",
-};
-
 /** The panes' relative widths when side by side. */
 const WIDTHS = { note: 1.25, atlas: 1, iso: 1.05 };
 const LIMIT = { min: 0.4, max: 3 };

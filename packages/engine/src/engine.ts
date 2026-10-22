@@ -11,7 +11,7 @@ import { ANSWER_CLOSE, ANSWER_OPEN, CLOSE, HERE, LINKED_BUDGET, OPEN, conversati
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, noteId, type Similar } from "./lookup.ts";
 import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
-import { CONVERSATIONS_DIR, MODES, MODE_TOOLS, conversationPath, readTurns, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
+import { CONVERSATIONS_DIR, MODES, MODE_TOOLS, conversationPath, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
 import { regionsOf } from "./agent.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
 import { KEY, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
@@ -886,10 +886,12 @@ export class Engine implements Api {
     const mode = req.mode === "build" ? "ask" : req.mode;
     const all = req.conversation ? (await this.conversation(req.conversation))?.turns ?? [] : [];
     const off = new Set(req.off ?? []), earlier = all.filter((t) => !off.has(t.id));
-    const { parts } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: req.lookup !== false, earlier, sent: await this.sentOf(this.given(req.given ?? [])), asked: "" });
+    const sent = await this.sentOf(this.given(req.given ?? []));
+    const { parts } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: req.lookup !== false, earlier, sent, asked: "" });
     // Each earlier turn can be left out (M9's switches, kept for the pane): what it adds, whole.
     const items = all.map((t): ContextItem => ({ id: t.id, kind: "exchange", title: t.asked, tokens: estimate(turnExchange(t).text), on: !off.has(t.id) }));
-    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: await this.sessionCost(), items, lookup: req.lookup !== false };
+    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: await this.sessionCost(), items, lookup: req.lookup !== false,
+      given: sent.map((g) => ({ kind: g.kind, id: g.id, ...(g.kind === "passage" ? { text: g.text } : {}), tokens: estimate(sentText(g)) })) };
   }
 
   async converse(req: TurnRequest): Promise<{ conversation: string; turn: string }> {

@@ -13,7 +13,9 @@
   import IsoPane from "$lib/components/IsoPane.svelte";
   import NoteList from "$lib/components/NoteList.svelte";
   import PaneHead from "$lib/components/PaneHead.svelte";
+  import { converse } from "$lib/converse.svelte.ts";
   import { PANES, panes, type Pane } from "$lib/panes.svelte.ts";
+  import { tray } from "$lib/tray.svelte.ts";
   import IsoSettings from "$lib/components/IsoSettings.svelte";
   import NoteSettings from "$lib/components/NoteSettings.svelte";
 
@@ -177,6 +179,14 @@
                 {#if run?.agent}
                   <span class="says" title={running ? "" : "click open ground on the Atlas to let its path go"}>{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentNamed}'s turn is done`}</span>
                 {/if}
+                <!-- What the next turn is sent (I8), with how many parts you gave; a new conversation. -->
+                <button class="icon ctx" type="button" aria-label="Context" aria-pressed={converse.view === "context"} title="What Iso is sent: what you gave, and the rest" onclick={() => (converse.view = converse.view === "context" ? "chat" : "context")}>
+                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h6" /></svg>
+                  {#if tray.sent.length}{#key tray.fresh}<span class="n" class:pulse={converse.view === "chat" && tray.fresh !== ""}>{tray.sent.length}</span>{/key}{/if}
+                </button>
+                <button class="icon" type="button" aria-label="A new conversation" title="A new conversation: nothing earlier is sent" disabled={!!converse.running || !converse.turns.length} onclick={() => { converse.fresh(); converse.view = "chat"; }}>
+                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.5v9M3.5 8h9" /></svg>
+                </button>
               {/snippet}
             </PaneHead>
             <div class="pbody iso-body"><IsoPane /></div>
@@ -268,5 +278,11 @@
   }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; }
   .icon:hover, .icon:focus-visible { color: var(--text); text-decoration: none; }
+  .icon:disabled { opacity: 0.35; cursor: default; }
+  .ctx { width: auto; min-width: 28px; padding: 0 5px; display: inline-flex; align-items: center; gap: 4px; }
+  .ctx .n { font: 11px/1 var(--font-ui); color: var(--growth); font-variant-numeric: tabular-nums; }
+  .ctx .n.pulse { animation: pulse 900ms ease-out; }
+  @keyframes pulse { 0% { color: var(--text); text-shadow: 0 0 6px var(--growth); } }
+  @media (prefers-reduced-motion: reduce) { .ctx .n.pulse { animation: none; } }
   .stopped { padding: var(--space-12) var(--space-4); text-align: center; color: var(--rose); }
 </style>

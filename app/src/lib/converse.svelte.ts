@@ -5,7 +5,7 @@ import type { ContextReport, Conversation, Decision, EngineEvent, Turn, TurnItem
 import { app } from "./app.svelte.ts";
 import { context } from "./context.svelte.ts";
 import { panes } from "./panes.svelte.ts";
-import { tray } from "./tray.svelte.ts";
+import { tray, type Part } from "./tray.svelte.ts";
 
 class Converse {
   /** The conversation shown: its id ("" before the first turn) and its turns, oldest first. */
@@ -17,11 +17,16 @@ class Converse {
   problem = $state("");
   /** What the next turn would send, part by part. */
   report = $state.raw<ContextReport | null>(null);
-  /** Iso kept from looking further than what you gave it. */
-  lookup = $state(true);
+  /** What Iso's pane shows: the conversation, or what the next turn is sent (M10b). */
+  view = $state<"chat" | "context">("chat");
   /** Earlier turns left out of what the next is sent. */
   off = $state.raw<string[]>([]);
   toggleTurn(id: string): void { this.off = this.off.includes(id) ? this.off.filter((x) => x !== id) : [...this.off, id]; this.measure(); }
+  /** As much as a part given adds to the next turn, once measured. */
+  sizeOf(p: Part): number | null {
+    const g = this.report?.given?.find((x) => x.kind === p.kind && x.id === p.id && (p.kind !== "passage" || x.text === p.text));
+    return g ? g.tokens : null;
+  }
   private started = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -46,7 +51,7 @@ class Converse {
     if (!asked.trim() || this.running) return false;
     try {
       const given = tray.sent.map((p) => (p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }));
-      const { conversation } = await app.api.converse({ ...(this.id ? { conversation: this.id } : {}), mode: panes.mode, asked: asked.trim(), given, tier: context.tier, ...(this.lookup ? {} : { lookup: false }), ...(this.off.length ? { off: this.off } : {}) });
+      const { conversation } = await app.api.converse({ ...(this.id ? { conversation: this.id } : {}), mode: panes.mode, asked: asked.trim(), given, tier: context.tier, ...(this.off.length ? { off: this.off } : {}) });
       this.id = conversation;
       return true;
     } catch (e) { this.problem = (e as Error).message; return false; }
@@ -98,7 +103,7 @@ class Converse {
     this.timer = setTimeout(() => {
       if (!app.api) return;
       const given = tray.sent.map((p) => (p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }));
-      void app.api.turnContext({ ...(this.id ? { conversation: this.id } : {}), mode: panes.mode, given, tier: context.tier, ...(this.lookup ? {} : { lookup: false }), ...(this.off.length ? { off: this.off } : {}) })
+      void app.api.turnContext({ ...(this.id ? { conversation: this.id } : {}), mode: panes.mode, given, tier: context.tier, ...(this.off.length ? { off: this.off } : {}) })
         .then((r) => (this.report = r), () => undefined);
     }, 250);
   }

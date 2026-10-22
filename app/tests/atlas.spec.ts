@@ -18,6 +18,20 @@ async function atlas(page: Page) {
 /** The Atlas's lens (M10). */
 const lens = (page: Page, l: "normal" | "iso" | "understand") => page.locator(`[data-pane="atlas"] .lens[data-lens="${l}"]`).click();
 
+/** Iso's pane in its Context view: what you gave Iso, listed. On a phone, back to where you were after. */
+async function showContext(page: Page, back?: "Note" | "Atlas") {
+  const phone = (page.viewportSize()?.width ?? 1280) <= 760, nav = page.getByRole("navigation", { name: "Panes" });
+  if (phone) await nav.getByRole("button", { name: /^Iso/ }).click();
+  const ctx = page.locator('[data-pane="iso"]').getByRole("button", { name: "Context", exact: true });
+  if ((await ctx.getAttribute("aria-pressed")) !== "true") await ctx.click();
+  if (phone && back) {
+    await nav.getByRole("button", { name: new RegExp(`^${back}`) }).click();
+    // The row has scrolled back to the pane before anything is pressed in it.
+    await expect.poll(async () => (await page.locator(`[data-pane="${back.toLowerCase()}"]`).boundingBox())?.x).toBe(0);
+  }
+  return page.getByRole("list", { name: "What you gave Iso" });
+}
+
 test("the map draws the base; its Understand lens draws where you stand, and the study folders and their items", async ({ page }) => {
   await atlas(page);
   await expect(folder(page, "basics")).toBeVisible();
@@ -211,15 +225,15 @@ test("holding makes a new note in the folder held in; holding, then dragging, a 
 
 test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given to Iso; a drag inside moves the map", async ({ page }) => {
   await atlas(page);
-  const tray = page.getByRole("list", { name: "What Iso is sent" });
-  // Held still on a note: it goes into the tray above Iso's box, and the map says so.
+  const tray = await showContext(page, "Atlas");
+  // Held still on a note: it goes into Iso's context, listed in Iso's Context view, and the map says so.
   const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
   await page.mouse.move(huffman.x + 10, huffman.y + 6);
   await page.mouse.down();
   await page.waitForTimeout(800);
   await page.mouse.up();
   await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
-  await expect(tray.getByRole("listitem")).toHaveText(["▣Huffman codes"]);
+  await expect(tray.getByRole("listitem")).toHaveText([/^▣ Huffman codes \d+/]);
   await page.mouse.move(huffman.x - 60, huffman.y + 120); // off it, so it is not lit by pointing
   await expect(note(page, "coding/huffman-codes")).not.toHaveClass(/\bat\b/); // held, not chosen
   if ((page.viewportSize()?.width ?? 1280) <= 760) return; // carrying is a mouse's: a phone holds
@@ -231,10 +245,10 @@ test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given t
   await page.mouse.move(iso.x + 80, iso.y + 200, { steps: 8 });
   await expect(page.locator(".carried")).toHaveText("▣ Surprise");
   await page.mouse.up();
-  await expect(tray.getByRole("listitem")).toHaveText(["▣Huffman codes", "▣Surprise"]);
+  await expect(tray.getByRole("listitem")).toHaveText([/^▣ Huffman codes \d+/, /^▣ Surprise \d+/]);
   // Taken out again.
   await tray.getByRole("button", { name: "Take Huffman codes out of Iso's context" }).click();
-  await expect(tray.getByRole("listitem")).toHaveText(["▣Surprise"]);
+  await expect(tray.getByRole("listitem")).toHaveText([/^▣ Surprise \d+/]);
 });
 
 test("notes are picked on the map for a request: numbered in order, sized in the dock, and taken away again", async ({ page }) => {
