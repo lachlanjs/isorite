@@ -143,7 +143,6 @@
       iso.close();
       exercise?.close();
       app.exercise = null;
-      app.hint = "";
       void note.close();
       app.here = "";
       app.open = "";
@@ -154,7 +153,6 @@
   // The header's part of an open exercise: its kind, the squares, wind back and next.
   $effect(() => {
     app.exercise = ex ? { kind: KINDS[ex.ex.kind] ?? ex.ex.kind, squares: ex.squares.squares, due: ex.squares.due, flash: ex.flash, windBack: () => void ex.windBack(), why: () => (why = !why), next: ex.ex.next ? `@study/${ex.ex.next}` : null } : null;
-    app.hint = ex ? "write as much as you like · only what you mark is your answer" : "";
   });
 
   const SAYS = { saved: "saved", unsaved: "not saved yet", saving: "saving", conflict: "changed elsewhere: choose below", failed: "not saved" } as const;

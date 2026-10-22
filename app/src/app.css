@@ -43,7 +43,6 @@
   --font-pixel: "Departure Mono", "Ioskeley Mono", ui-monospace, monospace;
   --text-size: 18px;
   --measure: 680px;
-  --bar-h: 44px;
 
   /* Space: a 4px base. */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px; --space-12: 48px; --space-16: 64px;
@@ -100,24 +99,12 @@ button { cursor: pointer; }
 /* ------------------------------------------------------------ the shell */
 
 .shell { display: flex; flex-direction: column; min-height: 100dvh; }
-.bar { height: var(--bar-h); flex: none; display: flex; align-items: center; gap: 22px; padding: 0 16px; border-bottom: 1px solid var(--line); white-space: nowrap; position: sticky; top: 0; z-index: 10; background: var(--ground-0); }
-.bar .home { background: none; border: 0; padding: 0; display: flex; }
-.bar .path { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-soft); }
-.bar .path a { color: inherit; }
-.bar .path .sep { margin: 0 1ch; }
 .page { flex: 1 1 auto; min-width: 0; }
-.status { height: 28px; flex: none; overflow: hidden; display: flex; align-items: center; gap: 22px; padding: 0 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-faint); white-space: nowrap; position: sticky; bottom: 0; background: var(--ground-0); }
-.status .bad { color: var(--rose); }
 
 .logo { display: block; flex: none; overflow: visible; }
 .logo path { fill: none; stroke: var(--text); stroke-width: .7; stroke-linecap: round; stroke-linejoin: round; }
 .logo .iso { fill: var(--growth); stroke: none; }
 .logo .right { fill: var(--malachite); stroke: none; }
-
-/* On a phone the panes' tabs are at the foot, where a thumb reaches (+layout.svelte). */
-@media (max-width: 760px) {
-  .bar { gap: 12px; padding: 0 12px; }
-}
 
 /* ------------------------------------------------------------ parts */
 

@@ -71,9 +71,9 @@ test("Write mode: Iso's change goes into the note, is marked as Iso's in the not
   const name = test.info().project.name, id = `basics/write-${name}`;
   const { token } = (await (await page.request.get("api/session")).json()) as { token: string };
   const headers = { "x-isorite-token": token, Origin: new URL(test.info().project.use.baseURL!).origin };
-  await page.request.post(`api/note?id=${id}`, { data: { text: `---\ntype: Concept\ntitle: Write ${name}\n---\n\nPlain text.\n` }, headers });
+  await page.request.post(`api/note?id=${id}`, { data: { text: `---\ntype: Concept\ntitle: Write ${name}\n---\n\nPlain text. The rest of this line is yours, and stays as it was.\n` }, headers });
   await page.goto(`#/n/${id}`);
-  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Plain text.");
+  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Plain text. The rest");
   await toIso(page);
   await pane(page).getByRole("button", { name: "Write", exact: true }).click();
   await box(page).fill(`edit ${id}`);
@@ -87,7 +87,7 @@ test("Write mode: Iso's change goes into the note, is marked as Iso's in the not
   await expect(page.locator(`[data-note="${id}"]`)).toHaveClass(/\bchanged\b/);
   await look(page, "iso-write");
 
-  // In the note's Iso lens, Iso's words are marked; the plain ones are not.
+  // In the note's Iso lens, Iso's words are marked; yours are not. (A passage mostly Iso's would be Iso's whole.)
   await turn.locator(".change").getByRole("button").click();
   await expect(page.locator('[data-pane="note"] .lens[data-lens="iso"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".cm-iso-by-iso")).toHaveText([", and Iso's words"]);
@@ -97,7 +97,7 @@ test("Write mode: Iso's change goes into the note, is marked as Iso's in the not
   await toIso(page);
   await turn.getByRole("button", { name: "Undo this turn's changes" }).click();
   await expect(turn.locator(".undone")).toContainText(`Write ${name} put back`);
-  await expect.poll(file).toContain("\nPlain text.\n");
+  await expect.poll(file).toContain("\nPlain text. The rest");
   await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
 });
 
@@ -139,7 +139,7 @@ test("Understand mode: your understanding of the note open goes with what you as
   await expect(note.locator("ol li")).toHaveCount(1);
   await expect(note.locator("ol li")).toContainText("+0.5You said why it holds in your own words.");
   await note.getByLabel("Scratchpad").fill(`Mine, ${name}.`);
-  await expect(note.getByRole("status")).toHaveText("saved", { timeout: 8000 });
+  await expect(note.locator(".u h2 .state")).toHaveText("saved", { timeout: 8000 });
   await page.screenshot({ path: `test-results/screens/${name}-understand-lens.png`, fullPage: true });
   await page.reload();
   await expect(page.locator('[data-pane="note"]').getByLabel("Scratchpad")).toHaveValue(`Mine, ${name}.`);

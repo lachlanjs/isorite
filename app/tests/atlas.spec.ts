@@ -292,7 +292,7 @@ test("on a phone, ↑ out steps out of the folder the screen is in", async ({ pa
   await expect(page.getByRole("button", { name: "↑ out" })).toHaveCount(0);
   await folder(page, "coding").getByRole("button", { name: "coding", exact: true }).click();
   await expect.poll(() => cell(page)).toBeGreaterThan(whole);
-  await expect(page.locator(".bar .where")).toHaveText("coding");
+  await expect(page.locator('[data-pane="atlas"] .where')).toHaveText("coding");
   await page.getByRole("button", { name: "↑ out" }).click();
   await expect.poll(() => cell(page)).toBeCloseTo(whole, 3);
 });

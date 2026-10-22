@@ -53,10 +53,9 @@ test("a note with maths and a typed link is written, saved, and there when reope
   expect(entries.length).toBeGreaterThan(1);
   expect(entries.slice(1).every((e) => e.kind === "change" && e.why === "edit" && e.who === "you")).toBe(true);
 
-  // The header says where you are; the link in the list leads back here.
-  await expect(page.locator("header .path")).toHaveText(`information-theory/Entropy ${name}`);
-  // The base's name opens the list (V2), in the Note pane.
-  await page.locator("header .path").getByRole("link", { name: "information-theory", exact: true }).click();
+  // The page's title says where you are; the notes, from the Note pane's header, lead back here.
+  await expect(page).toHaveTitle(`Entropy ${name} · isorite`);
+  await notePane(page).getByRole("button", { name: "All notes" }).click();
   await notePane(page).getByRole("link", { name: `Entropy ${name}` }).click();
   await expect(page.getByLabel("Title")).toHaveValue(`Entropy ${name}`);
 });

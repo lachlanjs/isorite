@@ -48,6 +48,8 @@ class Panes {
   unseen = $state(0);
   /** The notes, open over the note in the Note pane. */
   tree = $state(false);
+  /** The pane whose settings are open, under its header (M10b: the header's menu, split by pane). */
+  settings = $state<Pane | null>(null);
   /** The note last open: what the Note pane opens to when none is. */
   last = $state(read("isorite.last", ""));
 

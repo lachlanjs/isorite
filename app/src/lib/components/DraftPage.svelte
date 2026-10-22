@@ -246,7 +246,7 @@
 </article>
 
 <style>
-  .draft { display: flex; flex-direction: column; align-items: center; min-height: calc(100dvh - var(--bar-h) - 28px); }
+  .draft { display: flex; flex-direction: column; align-items: center; min-height: 100%; }
   .col { width: 100%; max-width: calc(var(--measure) + 2 * var(--space-4)); padding: 56px var(--space-4) 32px; display: flex; flex-direction: column; gap: 18px; flex: 1 1 auto; }
   .mark { display: flex; align-items: center; gap: 10px; }
   .mark .dia { margin-left: 3px; }

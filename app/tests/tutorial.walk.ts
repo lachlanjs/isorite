@@ -264,7 +264,7 @@ test("L3 (earlier): the two bases, the squares, the study list, an exercise mark
   await page.getByRole("button", { name: "mark as answer" }).click();
   await page.getByRole("button", { name: "mark it again" }).click();
   await at(page, "The squares moved");
-  await expect(page.locator(".bar .pip.lv")).toHaveCount(1);
+  await expect(page.locator('[data-pane="note"] .pip.lv')).toHaveCount(1);
   await next(page);
   await at(page, "And on the map");
   await expect(page.locator('[data-note="algorithms/direct-summation"]')).toHaveClass(/\bs1\b/);
