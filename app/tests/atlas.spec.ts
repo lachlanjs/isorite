@@ -247,6 +247,21 @@ test("a new layout comes in three beats: the lines retract, the notes move with 
   await lens(page, "normal");
 });
 
+test("held with a finger, a note offers to go to Iso or to open (Q16)", async ({ page }) => {
+  await atlas(page);
+  const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
+  const at = { pointerId: 9, pointerType: "touch", isPrimary: true, button: 0, clientX: huffman.x + 10, clientY: huffman.y + 6 };
+  await note(page, "coding/huffman-codes").dispatchEvent("pointerdown", at);
+  await page.waitForTimeout(800);
+  await page.locator(".atlas").dispatchEvent("pointerup", at);
+  const offer = page.getByRole("menu", { name: "Huffman codes" });
+  await expect(offer.getByRole("menuitem")).toHaveText(["◆Give to Iso", "▣Open"]);
+  await look(page, "atlas-offer");
+  await offer.getByRole("menuitem", { name: "Give to Iso" }).click();
+  await expect(offer).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
+});
+
 test("a drag from a note never moves the map; a drag from open ground does", async ({ page }) => {
   await atlas(page);
   const world = page.locator(".atlas-world");

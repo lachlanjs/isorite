@@ -185,7 +185,7 @@
       const sel = getSelection(), box = noteEl!.getBoundingClientRect();
       const r = sel?.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
       if (!r || (!r.width && !r.height)) { toIsoAt = { top: 8, left: box.width - 140 }; return; }
-      toIsoAt = { top: panes.narrow ? r.bottom - box.top + 10 : r.top - box.top - 36, left: Math.max(8, Math.min(r.left - box.left, box.width - 140)) };
+      toIsoAt = { top: panes.narrow ? r.bottom - box.top + 30 : r.top - box.top - 36, left: Math.max(8, Math.min(r.left - box.left, box.width - 140)) };
     });
     return () => cancelAnimationFrame(frame);
   });

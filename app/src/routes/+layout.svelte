@@ -200,9 +200,10 @@
 
   <nav class="tabs" aria-label="Panes">
     {#each PANES as p (p)}
-      <button type="button" aria-current={panes.focus === p} onclick={() => panes.to(p)}>
+      <!-- A pane's lens, or Iso's mode, is the colour of its name: gold for the Iso lens, green for understand (W1). -->
+      {@const tint = p === "iso" ? (panes.mode === "understand" ? "m" : "") : panes.lens[p] === "iso" ? "g" : panes.lens[p] === "understand" ? "m" : ""}
+      <button type="button" class={tint} aria-current={panes.focus === p} aria-label="{NAME[p]}{p === 'iso' ? `, ${panes.mode} mode` : panes.lens[p] === 'normal' ? '' : `, ${panes.lens[p]} lens`}" onclick={() => panes.to(p)}>
         {NAME[p]}
-        <span class="under">{#if p === "iso"}<span class="g">{panes.mode}</span>{:else if panes.lens[p] === "iso"}<span class="g">◆ Iso</span>{:else if panes.lens[p] === "understand"}<span class="m">◇ understand</span>{/if}</span>
         {#if p === "iso" && panes.unseen}<span class="badge">{panes.unseen}</span>{/if}
       </button>
     {/each}
@@ -244,7 +245,9 @@
   .set { display: flex; flex-direction: column; gap: var(--space-2); }
   .set h2 { font-weight: 400; }
   /* The panes (M10): a grid on a desktop, a row of full-width panes on a phone. */
-  .panes { display: grid; min-height: 0; min-width: 0; height: 100dvh; }
+  /* Under a phone's status bar, opened from the Home Screen, the panes start below it. */
+  .shell { padding-top: env(safe-area-inset-top); }
+  .panes { display: grid; min-height: 0; min-width: 0; height: calc(100dvh - env(safe-area-inset-top)); }
   .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--line); position: relative; background: var(--ground-0); }
   .pane.first { border-left: 0; }
   .pane.top { border-bottom: 1px solid var(--line); }
@@ -264,16 +267,17 @@
   .tabs { display: none; }
   @media (max-width: 760px) {
     .tree { top: 48px; }
-    .panes { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; height: calc(100dvh - 52px - env(safe-area-inset-bottom)); }
+    .panes { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; height: calc(100dvh - env(safe-area-inset-top) - 52px - env(safe-area-inset-bottom)); }
     .panes::-webkit-scrollbar { display: none; }
     .pane, .pane[hidden] { display: flex; flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; border-left: 0; }
     .tabs { display: grid; grid-template-columns: repeat(3, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); background: var(--ground-0); }
     .tabs button { height: 52px; background: none; border: 0; font-family: var(--font-pixel); font-size: 14px; color: var(--text-faint); position: relative; display: grid; place-content: center; gap: 2px; cursor: pointer; }
     .tabs button[aria-current="true"] { color: var(--text); }
     .tabs button[aria-current="true"]::before { content: ""; position: absolute; top: -1px; left: 20%; right: 20%; height: 2px; background: var(--text); }
-    .tabs .under { font: 10px var(--font-ui); height: 12px; color: var(--text-faint); }
-    .tabs .g { color: var(--growth); }
-    .tabs .m { color: var(--malachite); }
+    .tabs button.g { color: var(--growth); }
+    .tabs button.m { color: var(--malachite); }
+    .tabs button.g[aria-current="true"]::before { background: var(--growth); }
+    .tabs button.m[aria-current="true"]::before { background: var(--malachite); }
     .tabs .badge { position: absolute; top: 8px; right: calc(50% - 30px); font: 10px var(--font-ui); color: var(--ground-0); background: var(--growth); min-width: 16px; height: 16px; display: grid; place-items: center; padding: 0 3px; }
   }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; }

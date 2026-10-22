@@ -426,11 +426,14 @@
   }
   function holding(e: PointerEvent, at: { x: number; y: number }): void {
     unhold();
+    if (offered && !(e.target instanceof Element && e.target.closest(".offer"))) offered = null;
     if (pick || making || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock")) return;
     const on = e.target.closest<HTMLElement>("[data-note]")?.dataset.note ?? "";
     if (on.startsWith("@")) return; // a study item is not a place in the base
     if (on) {
-      holdDone = setTimeout(() => { holdDone = undefined; dragged = true; give(on); }, HOLD);
+      // A mouse gives it straight away; a finger is offered a choice there, since a phone has no Iso beside the map (Q16).
+      const touch = e.pointerType !== "mouse";
+      holdDone = setTimeout(() => { holdDone = undefined; dragged = true; if (touch) offered = { ref: on, x: at.x, y: at.y }; else give(on); }, HOLD);
       return;
     }
     const u = L.cell * view.k, gx = Math.round((at.x - view.x) / u), gy = Math.round((at.y - view.y) / u);
@@ -443,6 +446,8 @@
     if (!gripped || !grasp || grasp.folder) return;
     if (Math.hypot(at.x - gripped.x, at.y - gripped.y) >= FOLDER_DRAG) grasp = { ...grasp, folder: true };
   }
+  /** A note held with a finger: what can be done with it, offered where it was held. */
+  let offered = $state.raw<{ ref: string; x: number; y: number } | null>(null);
   /** A note given to Iso: into the tray, said on the map for a moment. */
   let given = $state("");
   let givenTimer: ReturnType<typeof setTimeout> | undefined;
@@ -733,6 +738,13 @@
     {#if panes.lens.atlas === "iso" && !pick && !given && panes.settings === "atlas"}
       <p class="legend" aria-hidden="true"><span><i class="k g"></i>in Iso's context</span><span><i class="k d"></i>Iso changed it</span><span><i class="k p"></i>Iso points to it</span><span><i class="k n">1</i>read, in order</span><span class="faint">tap to give or take back</span></p>
     {/if}
+    {#if offered}
+      {@const o = offered}
+      <div class="offer frame" role="menu" aria-label={title(o.ref)} style="left:{Math.min(o.x, size.w - 170)}px;top:{o.y + 14}px">
+        <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); give(o.ref); offered = null; }}><i aria-hidden="true">◆</i>Give to Iso</button>
+        <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void panes.open(o.ref, true); }}><i aria-hidden="true">▣</i>Open</button>
+      </div>
+    {/if}
     {#if tray.carrying}
       <div class="carried" class:over={tray.carrying.over} style="left:{carryAt.x}px;top:{carryAt.y}px" aria-hidden="true">{tray.carrying.part.kind === "folder" ? "▭" : "▣"} {tray.carrying.part.title}</div>
     {/if}
@@ -748,6 +760,10 @@
   @media (prefers-reduced-motion: reduce) { .shifting :global(:is(.n, .sn, .folder)) { transition: none; } }
   .said { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-4); text-align: center; }
   /* What a hold will make: a note's or a folder's icon where it was held, and what it is (V6). */
+  .offer { --inside: var(--ground-2); position: absolute; z-index: 8; min-width: 150px; padding: 6px; display: grid; gap: 2px; }
+  .offer button { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; background: none; border: 0; color: var(--text); font: 13px var(--font-ui); text-align: left; cursor: pointer; }
+  .offer button:hover, .offer button:focus-visible { background: var(--ground-3); }
+  .offer i { font-style: normal; width: 12px; color: var(--growth); font-size: 11px; }
   .grasp { position: absolute; left: calc(var(--x) * var(--u) - 10px); top: calc(var(--y) * var(--u) - 12px); display: flex; align-items: center; gap: 6px; font-size: 11px; pointer-events: none; z-index: 1; }
   .grasp svg { flex: none; overflow: visible; }
   .grasp svg path { fill: var(--growth-soft); stroke: var(--growth); stroke-width: 1.5; stroke-linejoin: round; stroke-dasharray: 2 2.5; animation: march .6s linear infinite; }
