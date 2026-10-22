@@ -841,7 +841,8 @@ export class Engine implements Api {
     }
     if (!TURN_ID.test(id)) throw new EngineError("not a conversation's id");
     const text = await study.read(conversationPath(id));
-    return text === null ? null : { id, turns: readTurns(text) };
+    // A turn with no ending in the file was stopped, unless it is running here now.
+    return text === null ? null : { id, turns: readTurns(text).map((t) => (this.running.has(t.id) ? { ...t, state: "running" as const } : t)) };
   }
 
   /** What was given, checked: notes and passages of the base, and its folders. */

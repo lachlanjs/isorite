@@ -241,3 +241,39 @@ primary basis of understanding."
 | Q4 | In Write mode, ask before moving or deleting, not before editing? | Yes |
 | Q5 | The tier (low, mid, max): beside the send button, or only in the count's breakdown? | Beside the count under the box, one tap to change |
 | Q6 | Ask-mode conversations as evidence of understanding? Ask cannot write the study base. | Not now; Understand mode may read recent Ask turns when they are in its tray |
+
+## 13. What was built (2026-10-22)
+
+Branch `m10-panes`, steps 1 to 6 of §11, and the tutorial's Iso scripted for the pane. Results and screenshots are on
+the refinement page (W1, W2, V6); the tutorial's sections L1, L2 and L3 are rewritten there as drafts, waiting for
+approval before their steps are written (§11 step 7).
+
+| Step | Commit | What |
+|---|---|---|
+| 1 | 72998ad | The three panes, layouts, show and hide, dividers, the phone's row and tabs, keys |
+| 2 | 115fa68 | The notes over the note; giving notes, folders and passages to Iso; the hold marked by an icon (V6) |
+| 3 | 31f7def | Turns in the engine (`converse`, `conversation`, `turnContext`), Ask mode, the pane; inline Iso taken out of the note |
+| 4 | ee0e4a9 | Write mode (edit, write, move, delete; asked first for move and delete; undo by turn); `wordAuthors`; the Iso lenses |
+| 5 | 4788464 | Understanding notes, the `understood` event, Understand mode, the Understand lenses |
+| 6 | 71dd521 | The header's count and study link, the note's margin and exercise asking, taken out; the pane's breakdown with switches for earlier turns |
+| | 0f00192 | The tutorial's Iso answers turns; a rewritten passage is marked as the rewriter's whole |
+
+**Departures from this plan.**
+- Conversations are kept as `conversations/<id>.jsonl` in the study base, not `sessions/` (Q12): a session already
+  means a stretch of work in isorite's journals.
+- Asking in the text is gone from the note, as planned, but its code (the prompt in `NoteIso`, the `insert` and
+  `rewrite` forms) stays, unreachable from the note, for pending proposals and the terminal until M11.
+- The Atlas lays itself out again when it goes into or out of its Understand lens, since study folders are drawn
+  only there.
+- A turn is part of the session for its cost, but only journals are read when the engine starts to find the last
+  session, so a conversation alone does not carry a session over a restart.
+
+**Checked.** `npm test` (core 323, engine 87, and the rest), `npm run check`, and every browser test (132, at 1280
+and 390 px on both grounds); the tutorial's own tests are not run, since its sections are rewritten next. Screens
+were compared with the mockup. One real-model check of each mode on a temporary copy of the information-theory base
+(mid tier, Claude Sonnet 5.5): Ask $0.0038, Write $0.0154 (one sentence added where asked), Understand $0.0267
+(recorded +0.5 with a reason, and asked a question back); with a first Ask stopped by a fault the check found (a
+running turn read back as stopped, fixed), $0.054 in all.
+
+**Not checked.** The Atlas's Understand lens on a large base (its relayout); carrying a note with a pen or a
+trackpad; the phone's swipe on a real phone (only emulated touch); search by meaning inside turns.

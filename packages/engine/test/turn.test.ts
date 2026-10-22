@@ -75,6 +75,8 @@ test("Build is the terminal's, a note outside the base is not given, and a stopp
   await expect(engine.converse({ mode: "ask", asked: "x", tier: "mid", given: [{ kind: "note", id: "@study/x" }] })).rejects.toThrow(/only notes of the base/);
   const { conversation, turn } = await engine.converse({ mode: "ask", asked: "what is it measured in?", tier: "mid", given: [] });
   await new Promise((r) => setTimeout(r, 20));
+  // Read back while it runs, it is running (a page opened now shows it so).
+  expect((await engine.conversation(conversation))!.turns[0]).toMatchObject({ state: "running" });
   await engine.stop(turn);
   release();
   expect(await ended(turn)).toMatchObject({ type: "iso-stopped" });
