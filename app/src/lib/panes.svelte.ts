@@ -92,6 +92,12 @@ class Panes {
     if (busy) this.waiting[p] = l; else this.setLens(p, l);
   }
 
+  /** Whether you are working in a pane: typing in it. Iso does not switch its lens then. */
+  busy(p: Pane): boolean {
+    const el = typeof document === "undefined" ? null : document.activeElement;
+    return !!el && !!el.closest(`[data-pane="${p}"]`) && (el.matches("input, textarea, [contenteditable=true]") || !!el.closest(".cm-editor"));
+  }
+
   /** Modes the base allows: Build needs a project (M11). */
   modes: Mode[] = ["ask", "write", "understand"];
   setMode(m: Mode): void { this.mode = m; keep("isorite.mode", m); }

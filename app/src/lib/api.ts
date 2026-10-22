@@ -48,6 +48,7 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     search: (query) => ask(`search?q=${encodeURIComponent(query)}`),
     ask: (request) => write("POST", "iso/ask", request),
     converse: (request) => write("POST", "iso/converse", request),
+    undoTurn: (conversation, turn) => write("POST", "iso/undo", { conversation, turn }),
     answer: async (turn, permission, decision) => { await write("POST", "iso/answer", { turn, permission, decision }); },
     conversation: async (id) => { const c = await ask<{ id: string; turns: [] }>("conversation" + (id ? q(id) : "")); return c.id ? c : null; },
     turnContext: (request) => ask(`turn/context?turn=${encodeURIComponent(JSON.stringify(request))}`),

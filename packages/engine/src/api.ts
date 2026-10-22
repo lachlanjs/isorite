@@ -226,6 +226,8 @@ export interface Api {
   conversation(id?: string): Promise<Conversation | null>;
   /** What a turn would send now, part by part, with the session's cost. */
   turnContext(request: Omit<TurnRequest, "asked">): Promise<ContextReport>;
+  /** Put back every note a turn changed as it was before the turn. A note changed since is left as it is, and said. */
+  undoTurn(conversation: string, turn: string): Promise<{ notes: string[]; left: string[] }>;
   /** Your answer to what Iso asked before doing something in a turn. */
   answer(turn: string, permission: string, decision: Decision): Promise<void>;
   /** Stop a request. Nothing is entered. */

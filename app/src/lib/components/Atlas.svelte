@@ -13,6 +13,7 @@
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
+  import { converse } from "$lib/converse.svelte.ts";
   import { CELL, LABELS_AT, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
@@ -254,6 +255,19 @@
     for (const s of run?.steps ?? []) if (s.opened && !s.failed && !out.has(s.opened)) out.set(s.opened, s.how);
     return out;
   });
+  // The Iso lens (M10): what Iso is sent, what it changed in this conversation, what it points to, and the order
+  // it read in during its last turn. Iso's path is drawn only in this lens.
+  const isoLens = $derived(panes.lens.atlas === "iso" || !!pick);
+  const givenNotes = $derived(new Set(tray.parts.filter((p) => p.kind === "note").map((p) => p.id)));
+  const givenFolders = $derived(new Set(tray.parts.filter((p) => p.kind === "folder").map((p) => p.id)));
+  const lastTurn = $derived(converse.turns.at(-1));
+  const changedByIso = $derived(new Set(converse.turns.filter((t) => !t.items.some((i) => i.kind === "undone")).flatMap((t) => t.items.flatMap((i) => (i.kind === "change" && i.why !== "delete" ? [i.why === "move" ? i.to! : i.note] : [])))));
+  const pointedTo = $derived(new Map((lastTurn?.items ?? []).flatMap((i) => (i.kind === "point" ? [[i.note, i.why] as const] : []))));
+  const readOrder = $derived.by(() => {
+    const out = new Map<string, number>();
+    for (const i of lastTurn?.items ?? []) if (i.kind === "look" && i.step.opened && !i.step.failed && !out.has(i.step.opened)) out.set(i.step.opened, out.size + 1);
+    return out;
+  });
   /** The note it is reading now. */
   const reading = $derived(running ? (run!.steps.findLast((s) => s.opened && !s.failed)?.opened ?? "") : "");
   // Its steps along links, drawn as the map draws a link: from the note in hand to the one it led to.
@@ -300,6 +314,7 @@
   });
   /** How a note is outlined for Iso's path: by keyword, by meaning, along a link (or named outright), or being read now. */
   const isoMark = (ref: string): "" | "key" | "sem" | "link" | "used" => {
+    if (!isoLens) return "";
     if (ref === reading) return "used";
     const how = reached.get(ref);
     return how === "keyword" ? "key" : how === "meaning" ? "sem" : how ? "link" : "";
@@ -541,6 +556,8 @@
     e.stopPropagation();
     if (dragged) return;
     if (pick) { toggle(ref); return; }
+    // In the Iso lens a note is brought into what Iso is sent, or taken out (M10).
+    if (panes.lens.atlas === "iso" && !ref.startsWith("@")) { tray.toggle({ kind: "note", id: ref, title: title(ref) }); return; }
     // Chosen already: open it, beside the Atlas on a desktop (V1).
     if (chosen === ref) { void panes.open(ref); return; }
     const back: string[] = [];
@@ -550,6 +567,8 @@
   /** A click on a folder frames it; on one already framed, the folder it is in. */
   function enter(i: number): void {
     if (dragged || !L) return;
+    const ref = L.items[i]!.ref;
+    if (panes.lens.atlas === "iso" && !ref.startsWith("@")) { tray.toggle({ kind: "folder", id: ref, title: folderName(ref) }); return; }
     moved = true;
     const to = fit(L.items[i]!, size.w, size.h, 1.5, L.cell), there = Math.abs(to.k - view.k) < 0.01 * to.k && Math.hypot(to.x - view.x, to.y - view.y) < 4;
     const parent = L.items[i]!.parent;
@@ -626,10 +645,10 @@
         {#if f.item.ref.startsWith("@study")}
           <AtlasStudyFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} passes={L.items.filter((x) => x.parent === f.i && report?.notes[x.ref]?.passed).length} onpick={() => enter(f.i)} />
         {:else}
-          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * view.k >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} onpick={() => enter(f.i)} />
+          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * view.k >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} onpick={() => enter(f.i)} />
         {/if}
       {/each}
-      <AtlasRoutes k={view.k} {rest} hot={[...isoHot, ...hot]} counts={litCount} sent={sentLines} {grown} />
+      <AtlasRoutes k={view.k} {rest} hot={[...(isoLens ? isoHot : []), ...hot]} counts={litCount} sent={sentLines} {grown} />
       {#if labels}
         {#each rest as r (r.key)}
           {#if r.label}<span class="count {r.side}" style="--x:{r.mid[0]};--y:{r.mid[1]}">{r.count}</span>{/if}
@@ -642,7 +661,7 @@
           <AtlasStudyItem item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? "note"} {mark} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {:else}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} step={report.notes[n.item.ref]?.step ?? 0} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} step={report.notes[n.item.ref]?.step ?? 0} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {/if}
       {/each}
@@ -678,6 +697,9 @@
       <p class="notice" role="alert">{notice}</p>
     {/if}
     {#if given}<p class="given" role="status">◆ {given}</p>{/if}
+    {#if panes.lens.atlas === "iso" && !pick && !given}
+      <p class="legend" aria-hidden="true"><span><i class="k g"></i>in Iso's context</span><span><i class="k d"></i>Iso changed it</span><span><i class="k p"></i>Iso points to it</span><span><i class="k n">1</i>read, in order</span><span class="faint">tap to give or take back</span></p>
+    {/if}
     {#if tray.carrying}
       <div class="carried" class:over={tray.carrying.over} style="left:{carryAt.x}px;top:{carryAt.y}px" aria-hidden="true">{tray.carrying.part.kind === "folder" ? "▭" : "▣"} {tray.carrying.part.title}</div>
     {/if}
@@ -702,6 +724,13 @@
   @keyframes march { to { stroke-dashoffset: -9; } }
   .given { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--growth); font-size: 12px; z-index: 2; }
   .given::first-letter { color: var(--growth); }
+  .legend { position: absolute; left: 12px; bottom: 10px; right: 12px; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--text-soft); pointer-events: none; z-index: 2; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; background: var(--ground-0); padding: 0 4px; }
+  .legend .k { width: 10px; height: 10px; display: inline-grid; place-items: center; font-style: normal; }
+  .legend .g { background: var(--growth-soft); border: 1px solid var(--growth); }
+  .legend .d { width: 7px; height: 7px; background: var(--growth); transform: rotate(45deg); }
+  .legend .p { border: 1.5px dashed var(--growth); }
+  .legend .n { width: 14px; height: 14px; background: var(--growth); color: var(--ground-0); font-size: 9px; font-weight: 700; }
   /* A note carried out of the Atlas towards Iso's pane. */
   .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font-size: 12px; white-space: nowrap; }
   .carried.over { border-color: var(--growth); }

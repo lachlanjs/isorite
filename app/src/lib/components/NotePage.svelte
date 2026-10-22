@@ -12,6 +12,8 @@
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
+  import { wordAuthors } from "@isorite/core";
+  import type { Mark } from "$lib/editor/overlays.ts";
   import { ExerciseState, moveText } from "$lib/exercise.svelte.ts";
   import { NoteIso } from "$lib/iso.svelte.ts";
   import { NoteSession } from "$lib/note.svelte.ts";
@@ -99,6 +101,28 @@
     if (!m) return;
     wanted = null;
     timeline = true; at = m;
+  });
+  // The note's Iso lens (M10): the timeline shows, the words Iso wrote are marked, and so is what was given to Iso.
+  const isoLens = $derived(panes.lens.note === "iso");
+  $effect(() => { timeline = isoLens || remembered("isorite.timeline"); });
+  const lensMarks = $derived.by((): Mark[] => {
+    if (!isoLens || note.loaded !== "ready") return [];
+    const out: Mark[] = [];
+    // Words: where the journal's text is the note's (not while unsaved typing runs ahead of it).
+    const runs = wordAuthors(iso.entries), lines = note.text.split("\n");
+    if (runs && runs.length === lines.length) {
+      let at = 0;
+      for (const [k, line] of lines.entries()) {
+        for (const r of runs[k]!) if ((r.who.startsWith("iso:") || r.who.startsWith("agent:")) && r.to <= line.length && line.slice(r.from, r.to).trim()) out.push({ kind: "by-iso", from: at + r.from, to: at + r.to });
+        at += line.length + 1;
+      }
+    }
+    for (const p of tray.parts) {
+      if (p.kind !== "passage" || p.id !== id) continue;
+      const k = note.text.indexOf(p.text);
+      if (k >= 0) out.push({ kind: "given", from: k, to: k + p.text.length });
+    }
+    return out;
   });
   function toggleTimeline() { timeline = !timeline; remember("isorite.timeline", timeline); if (!timeline) { at = null; pointed = null; } }
   function pick(m: Moment) { restoreProblem = ""; at = at === m ? null : m; }
@@ -303,7 +327,7 @@
       <button class="toiso" type="button" style:top="{toIsoAt.top}px" style:left="{toIsoAt.left}px" onmousedown={(e) => e.preventDefault()} onclick={sendToIso}><i class="dia" aria-hidden="true">◆</i>send to Iso</button>
     {/if}
     <div class="live" hidden={Boolean(at && version)}>
-      {#key asSource}<NoteEditor {note} {iso} exercise={ex ?? undefined} source={asSource} touched={live} />{/key}
+      {#key asSource}<NoteEditor {note} {iso} exercise={ex ?? undefined} source={asSource} touched={live} lens={lensMarks} />{/key}
     </div>
 
     {#if ex && !asSource && !at}
@@ -390,6 +414,14 @@
   .squares { display: inline-flex; gap: 4px; }
   .evidence { display: flex; gap: 12px; padding-left: 4px; }
   .evidence .by { width: 2.5ch; flex: none; text-align: right; color: var(--text-soft); }
+  /* A narrow pane (M10) lays the head out as a phone does: the title under the tools, the whole width. */
+  @container page (max-width: 600px) {
+    .head { flex-direction: column-reverse; gap: var(--space-1); }
+    .tools { align-self: flex-end; padding-top: 0; }
+    .side { align-self: stretch; flex-direction: row-reverse; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; }
+    .margin { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+    .title { font-size: 30px; width: 100%; }
+  }
   @media (max-width: 600px) {
     .note { padding: 20px 20px 80px; }
     .note.timed { padding-left: 56px; }

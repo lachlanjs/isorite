@@ -46,6 +46,9 @@
     else if (e.key === "Escape" && running) { e.preventDefault(); void converse.stop(); }
   }
   function open(id: string): void { void panes.open(id, true); }
+  /** A note Iso changed opens in the note's Iso lens, where its words are marked. */
+  function openChanged(id: string): void { panes.setLens("note", "iso"); void panes.open(id, true); }
+  const changes = (t: Turn): boolean => t.items.some((i) => i.kind === "change") && !t.items.some((i) => i.kind === "undone");
 </script>
 
 {#snippet given(t: Turn)}
@@ -68,14 +71,30 @@
       {#if i.step.opened}<button type="button" class="note-link" onclick={() => open(i.step.opened!)}>{titleOf(i.step.opened)}{i.step.section ? ` · ${i.step.section}` : ""}</button>
       {:else}<span class="q">{i.step.query ? `“${i.step.query}”` : i.step.said}</span>{#if i.step.notes.length}<span class="n">{i.step.notes.length} found</span>{/if}{/if}
     </p>
+  {:else if i.kind === "change"}
+    <p class="change">
+      <span class="v">{i.why === "create" ? "made" : i.why === "delete" ? "deleted" : i.why === "move" ? "moved" : "changed"}</span>
+      {#if i.why === "delete"}<span class="q">{i.title}</span>{:else}<button type="button" class="note-link" onclick={() => openChanged(i.why === "move" ? i.to! : i.note)}>{i.why === "move" ? `${i.title} → ${i.to}` : titleOf(i.note)}</button>{/if}
+      {#if i.added || i.removed}<span class="n"><span class="add">+{i.added}</span> <span class="del">−{i.removed}</span></span>{/if}
+    </p>
+  {:else if i.kind === "permission"}
+    <div class="permit" role="group" aria-label="Iso asks before it does this">
+      <p>Iso wants to {i.what}.</p>
+      {#if i.answer}
+        <p class="faint">{i.answer === "reject" ? "Not allowed." : i.answer === "always" ? "Allowed, and from now on in this conversation." : "Allowed once."}</p>
+      {:else}
+        <p class="acts"><button type="button" onclick={() => void converse.answer(i.id, "once")}>Allow once</button><button type="button" onclick={() => void converse.answer(i.id, "always")}>Always allow this</button><button type="button" class="no" onclick={() => void converse.answer(i.id, "reject")}>Don't allow</button></p>
+      {/if}
+    </div>
+  {:else if i.kind === "undone"}
+    <p class="faint undone">{i.notes.length ? `Undone: ${i.notes.map(titleOf).join(", ")} put back.` : "Nothing was put back."}{i.left.length ? ` Left as they are, changed since: ${i.left.map(titleOf).join(", ")}.` : ""}</p>
   {:else if i.kind === "point"}
     <p class="point"><span class="dia" aria-hidden="true">◆</span> look at <button type="button" class="note-link" onclick={() => open(i.note)}>{titleOf(i.note)}</button>{#if i.why}: {i.why}{/if}</p>
   {/if}
 {/snippet}
 
 <div class="iso" class:drop={tray.carrying?.over}>
-  <div class="iso-top"><span class="mname">{panes.mode[0]!.toUpperCase() + panes.mode.slice(1)} mode</span> · {ALLOWS[panes.mode]}
-    <span class="grow"></span>
+  <div class="iso-top"><span class="allows"><span class="mname">{panes.mode[0]!.toUpperCase() + panes.mode.slice(1)} mode</span> · {ALLOWS[panes.mode]}</span>
     <button class="icon" type="button" aria-label="A new conversation" title="A new conversation: nothing earlier is sent" disabled={!!running || !converse.turns.length} onclick={() => converse.fresh()}>
       <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.5v9M3.5 8h9" /></svg>
     </button>
@@ -91,7 +110,10 @@
             <div class="said prose">{@html render(converse.streaming)}</div>
           {/if}
           <p class="doing" role="status"><i class="spin" aria-hidden="true"></i>{doing}</p>
-        {:else if t.state === "failed"}
+        {:else if changes(t)}
+          <p class="undo"><button class="icon" type="button" aria-label="Undo this turn's changes" title="Put back every note this turn changed" onclick={() => void converse.undo(t.id)}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3.2 9.5A5 5 0 1 0 4.6 4.3" /><path d="M3 1.8v3.4h3.4" /></svg></button></p>
+        {/if}
+        {#if t.state === "failed"}
           <p class="bad" role="alert">Iso could not answer: {t.message}</p>
         {:else if t.state === "stopped"}
           <p class="faint end">stopped</p>
@@ -140,7 +162,8 @@
 <style>
   .iso { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .iso.drop { outline: 2px dashed var(--growth); outline-offset: -4px; }
-  .iso-top { flex: none; display: flex; align-items: center; gap: 4px; padding: 2px 6px 2px 16px; min-height: 32px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--text-faint); flex-wrap: wrap; }
+  .iso-top { flex: none; display: flex; align-items: center; gap: 8px; padding: 2px 6px 2px 16px; min-height: 32px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--text-faint); }
+  .allows { flex: 1 1 auto; min-width: 0; padding: 4px 0; }
   .mname { color: var(--growth); }
   .grow { flex: 1 1 auto; }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
@@ -167,6 +190,18 @@
   .note-link { background: none; border: 0; padding: 0; font: inherit; color: var(--text-soft); cursor: pointer; text-align: left; overflow-wrap: anywhere; }
   .note-link:hover, .note-link:focus-visible { color: var(--lattice); }
   .point { color: var(--text-soft); }
+  .change { padding-left: 16px; font-size: 12px; color: var(--text-faint); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; position: relative; }
+  .change::before { content: "✎"; position: absolute; left: 0; color: var(--growth); }
+  .change .v { color: var(--text-soft); min-width: 5.5em; }
+  .change .add { color: var(--malachite); }
+  .change .del { color: var(--rose); }
+  .permit { margin-left: 16px; border: 1px solid var(--growth); padding: 10px 12px; display: grid; gap: 8px; font-size: 12.5px; }
+  .acts { display: flex; gap: 16px; flex-wrap: wrap; }
+  .acts button { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
+  .acts button:hover { color: var(--text); }
+  .acts .no { color: var(--text-faint); }
+  .undo { padding-left: 10px; margin-top: -4px; }
+  .undone { font-size: 12px; padding-left: 16px; }
   .point .dia { color: var(--growth); font-size: 10px; position: absolute; left: 0; }
   .doing .spin { position: absolute; left: 1px; top: 4px; width: 8px; height: 8px; border: 1px solid var(--growth); animation: spin 1.2s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }

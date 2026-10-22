@@ -20,7 +20,7 @@ async function look(page: Page, name: string) {
 test("a note with maths and a typed link is written, saved, and there when reopened", async ({ page }) => {
   const name = test.info().project.name, id = `basics/entropy-${name}`;
   await page.goto("");
-  await expect(page.getByRole("link", { name: "Surprise" })).toBeVisible();
+  await expect(notePane(page).getByRole("link", { name: "Surprise" })).toBeVisible();
   await look(page, "notes");
 
   await page.getByRole("button", { name: "new note", exact: true }).click();
@@ -113,7 +113,7 @@ test("a note changed elsewhere while you write is offered as a choice, and nothi
   await editor(page).click();
   await page.keyboard.press("Control+End");
   await page.keyboard.type("Typed here meanwhile.");
-  await expect(page.getByRole("alert")).toContainText("changed somewhere else");
+  await expect(notePane(page).getByRole("alert")).toContainText("changed somewhere else");
   expect(await file(page, id)).toBe(theirs);
   await look(page, "choice");
 

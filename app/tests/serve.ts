@@ -67,6 +67,13 @@ async function provider(): Promise<void> {
       data({ choices: [{ delta: { content: "Here is the rewrite.\n" } }] });
       for (let k = 1; k <= count; k++) data({ choices: [{ delta: { content: `⟦${k}⟧${asked.includes("drop") && k === 2 ? "" : ` rewritten ${k} `}⟦/${k}⟧\n` } }] });
       if (!asked.includes("quiet")) data({ choices: [{ delta: { content: "⟦note⟧I rewrote what you chose, **plainly**.⟦/note⟧" } }] });
+    } else if (/\bedit (\S+)/.test(asked) && !looked) {
+      // Write mode (M10): "edit <id>" changes its "Plain text." into Iso's words; "move <id> to <id>" asks first.
+      const id = /\bedit (\S+)/.exec(asked)![1]!;
+      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "edit_note", arguments: JSON.stringify({ id, old: "Plain text.", new: "Plain text, and Iso's words." }) } }] } }] });
+    } else if (/\bmove (\S+) to (\S+)/.test(asked) && !looked) {
+      const [, id, to] = /\bmove (\S+) to (\S+)/.exec(asked)!;
+      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "move_note", arguments: JSON.stringify({ id, to }) } }] } }] });
     } else if (asked.includes("look") && !looked) {
       data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "read_note", arguments: JSON.stringify({ id: "/basics/surprise.md" }) } }] } }] });
     } else {

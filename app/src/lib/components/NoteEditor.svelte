@@ -19,7 +19,8 @@
   // Without `iso` (a note written for Iso) there is no prompt line and nothing is laid over the text.
   // With `exercise`, the question, the working's heading, the answer and Iso's marks are drawn over the text too.
   // `touched` is what a moment of the timeline changed, by line of the whole file, while it is pointed at.
-  let { note, iso, exercise, source, placeholder, touched = null }: { note: NoteSession; iso?: NoteIso; exercise?: ExerciseState; source: boolean; placeholder?: string; touched?: Touched | null } = $props();
+  // `lens` is what the note's Iso lens marks (M10), by character of the whole file: Iso's words, and what was given to Iso.
+  let { note, iso, exercise, source, placeholder, touched = null, lens = [] }: { note: NoteSession; iso?: NoteIso; exercise?: ExerciseState; source: boolean; placeholder?: string; touched?: Touched | null; lens?: Mark[] } = $props();
 
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
@@ -57,7 +58,7 @@
     }
     return {
       blocks: iso.layout.blocks.map((b) => ({ key: b.key, line: Math.max(0, b.line - head.lines) })).sort((a, b) => a.line - b.line),
-      marks: [...iso.layout.picked.map(within("picked")), ...iso.layout.old.map(within("old")), ...ex].filter((m) => m.to > 0),
+      marks: [...iso.layout.picked.map(within("picked")), ...iso.layout.old.map(within("old")), ...ex, ...lens.map((m) => within(m.kind)(m))].filter((m) => m.to > 0),
       inline: [...iso.layout.inline.map((i) => ({ key: i.key, at: i.at - head.chars })), ...tags].filter((i) => i.at >= 0),
     };
   });

@@ -31,6 +31,8 @@ export type TurnItem =
   | { kind: "permission"; id: string; tool: string; note: string; what: string; answer?: Decision }
   /** A note it wants you to look at. */
   | { kind: "point"; note: string; why: string }
+  /** You undid the turn's changes: the notes put back, and those that had changed since and were left. */
+  | { kind: "undone"; notes: string[]; left: string[] }
   /** It recorded something of your understanding of a note (Understand mode). */
   | { kind: "understood"; note: string; event: string; by: number; why: string };
 

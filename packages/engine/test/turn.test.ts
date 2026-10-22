@@ -80,3 +80,61 @@ test("Build is the terminal's, a note outside the base is not given, and a stopp
   expect(await ended(turn)).toMatchObject({ type: "iso-stopped" });
   expect(readTurns(study.files.get(`conversations/${conversation}.jsonl`)!)[0]).toMatchObject({ state: "stopped" });
 });
+
+test("Write mode: an edit goes into the note at once as Iso's change, a new note is made, and the turn is undone", async () => {
+  const { engine, notes, study, ended, events } = await open([
+    { calls: [{ name: "edit_note", arguments: { id: "basics/entropy", old: "The average surprise of a source.", new: "The average surprise of a source, in bits." } }] },
+    { calls: [{ name: "write_note", arguments: { id: "basics/bit", text: "# The bit\n\nOne fair coin toss." } }] },
+    { text: ["I said the unit, and made a note for it."] },
+  ]);
+  const { conversation, turn } = await engine.converse({ mode: "write", asked: "say the unit", tier: "mid", given: [{ kind: "note", id: "basics/entropy" }] });
+  expect(await ended(turn)).toMatchObject({ type: "iso-done" });
+  expect(notes.files.get("basics/entropy.md")).toContain("The average surprise of a source, in bits.");
+  expect(notes.files.get("basics/bit.md")).toBe("---\ntype: Concept\ntitle: \"The bit\"\n---\n\nOne fair coin toss.");
+  // In the note's journal as Iso's, and in the conversation as changes naming those entries.
+  const journal = (await engine.journal("basics/entropy")).filter((e) => e.kind === "change");
+  expect(journal.at(-1)).toMatchObject({ who: "iso:openrouter/anthropic/claude-sonnet-5.5", why: "edit" });
+  const t = readTurns(study.files.get(`conversations/${conversation}.jsonl`)!)[0]!;
+  expect(t.items.filter((i) => i.kind === "change")).toMatchObject([
+    { note: "basics/entropy", why: "edit", entry: journal.at(-1)!.id, added: 1, removed: 1, title: "Entropy" },
+    { note: "basics/bit", why: "create", title: "The bit" },
+  ]);
+  expect(events.some((e) => e.type === "note-changed" && e.id === "basics/entropy" && e.who.startsWith("iso:"))).toBe(true);
+
+  // Undone: both notes as they were.
+  expect(await engine.undoTurn(conversation, turn)).toEqual({ notes: ["basics/bit", "basics/entropy"], left: [] });
+  expect(notes.files.get("basics/entropy.md")).toBe(ENTROPY);
+  expect(notes.files.has("basics/bit.md")).toBe(false);
+  await expect(engine.undoTurn(conversation, turn)).rejects.toMatchObject({ status: 409 });
+});
+
+test("Write mode: an edit whose passage is not found is said to Iso; moving asks first, and a refusal leaves the note; a note changed since is left on undo", async () => {
+  const { engine, notes, ended, events, sent } = await open([
+    { calls: [{ name: "edit_note", arguments: { id: "basics/entropy", old: "not in the note", new: "x" } }] },
+    { calls: [{ name: "move_note", arguments: { id: "basics/surprise", to: "units/surprise" } }] },
+    { text: ["Left as it was."] },
+    { calls: [{ name: "edit_note", arguments: { id: "basics/entropy", old: "It is largest", new: "Entropy is largest" } }] },
+    { text: ["Done."] },
+  ]);
+  const first = await engine.converse({ mode: "write", asked: "tidy it", tier: "mid", given: [] });
+  // Iso asks before moving: wait for it, and say no.
+  const asked = await new Promise<Extract<EngineEvent, { type: "iso-item" }>>((done) => {
+    const look = () => events.find((e): e is Extract<EngineEvent, { type: "iso-item" }> => e.type === "iso-item" && e.item.kind === "permission");
+    const seen = look(); if (seen) return done(seen);
+    const stop = engine.events(() => { const e = look(); if (e) { stop(); done(e); } });
+  });
+  expect(asked.item).toMatchObject({ kind: "permission", tool: "move_note", note: "basics/surprise", what: "move Surprise to units/surprise" });
+  await engine.answer(first.turn, asked.item.kind === "permission" ? asked.item.id : "", "reject");
+  await ended(first.turn);
+  expect(JSON.stringify(sent[1]!.messages.at(-1))).toContain("is not in Entropy as you wrote it");
+  expect(JSON.stringify(sent[2]!.messages.at(-1))).toContain("They did not allow it");
+  expect(notes.files.has("basics/surprise.md")).toBe(true);
+
+  const second = await engine.converse({ conversation: first.conversation, mode: "write", asked: "and the second line", tier: "mid", given: [] });
+  await ended(second.turn);
+  // You change it after Iso did: undo leaves it, and says so.
+  const now = await engine.readNote("basics/entropy");
+  await engine.saveNote("basics/entropy", { base: now.version, text: now.text + "\nMine.\n" });
+  expect(await engine.undoTurn(first.conversation, second.turn)).toEqual({ notes: [], left: ["basics/entropy"] });
+  expect(notes.files.get("basics/entropy.md")).toContain("Mine.");
+});

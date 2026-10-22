@@ -3,7 +3,7 @@
   // a single block that says how many notes it holds.
   import type { LayoutItem } from "@isorite/core/atlas";
 
-  let { item, name, count, open, titled = true, held = { req: 0, bld: 0 }, dim = false, onpick }: {
+  let { item, name, count, open, titled = true, held = { req: 0, bld: 0 }, dim = false, given = false, onpick }: {
     item: LayoutItem;
     name: string;
     /** The notes in it, however deep. */
@@ -14,6 +14,8 @@
     /** With a note chosen elsewhere: how many notes in here it requires, and how many build on it. */
     held?: { req: number; bld: number };
     dim?: boolean;
+    /** In what Iso is sent (the Iso lens, M10). */
+    given?: boolean;
     onpick: () => void;
   } = $props();
 
@@ -26,12 +28,12 @@
 </script>
 
 {#if open}
-  <div class="folder frame {tone}" data-folder={item.ref} style="{place};--inside:{inside};--behind:{behind};--ground-here:{inside}">
+  <div class="folder frame {tone}" class:given data-folder={item.ref} style="{place};--inside:{inside};--behind:{behind};--ground-here:{inside}">
     {#if titled}<button class="frame-title" type="button" onclick={onpick}>{name}</button>{/if}
     {#if says}<span class="frame-title held">{says}</span>{/if}
   </div>
 {:else}
-  <button class="folder frame closed {tone}" class:dim type="button" data-folder={item.ref} style={place} onclick={onpick}>
+  <button class="folder frame closed {tone}" class:dim class:given type="button" data-folder={item.ref} style={place} onclick={onpick}>
     <span class="name">{name}</span><span class="label">{says || `${count} ${count === 1 ? "note" : "notes"}`}</span>
   </button>
 {/if}
@@ -55,4 +57,5 @@
   @container (max-width: 150px) { .held { display: none; } }
   @container (max-height: 22px) { .name, .label { display: none; } }
   @container (max-height: 44px) { .closed .label { display: none; } }
+  .given { outline: 2px solid var(--growth); outline-offset: 2px; }
 </style>

@@ -3,7 +3,7 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
+  Bundle, SearchIndex, STUDY_DIR, diffLines, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
   type Cost, type Entry, type FileEntry, type Insert, type LearnerEvent, type Marks, type Passage, type Proposal, type SessionMoment, type Stamp, type Understanding,
 } from "@isorite/core";
 import { Conflict, EngineError, type AgentLook, type AgentProposal, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport, type TurnRequest } from "./api.ts";
@@ -63,6 +63,9 @@ export function checkNoteId(id: string): string {
   if (!id || id.length > 400 || parts.some((p) => !p || BAD_PART.test(p))) throw new EngineError(`not a note's id: ${JSON.stringify(id)}`);
   return id;
 }
+
+/** What a mode's tool is handed of the turn it is in. */
+interface TurnCtx { turn: string; conversation: string; mode: Turn["mode"]; item: (i: TurnItem) => Promise<void>; signal: AbortSignal; who: string }
 
 /** A conversation's or turn's id: a ULID. */
 const TURN_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -312,7 +315,8 @@ export class Engine implements Api {
     return this.one(() => this.put(id, text, null));
   }
 
-  async moveNote(id: string, to: string, base: string): Promise<Saved> {
+  /** `who` is you unless Iso moves it, in Write mode. */
+  async moveNote(id: string, to: string, base: string, who = "you"): Promise<Saved> {
     to = to.trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/, "");
     if (!inBase(id) || !inBase(to)) throw new EngineError("only a note of the base is moved, and only within it");
     checkNoteId(to);
@@ -334,15 +338,15 @@ export class Engine implements Api {
         const journal = await study.read(journalPath(id));
         if (journal !== null) { await study.write(journalPath(to), journal); await study.remove(journalPath(id)); }
         const hash = hashText(now);
-        await this.enter(to, entries, { ...(await this.stamp("you")), kind: "change", why: "move", before: hash, after: hash, hunks: [], from: id });
+        await this.enter(to, entries, { ...(await this.stamp(who)), kind: "change", why: "move", before: hash, after: hash, hunks: [], from: id });
         await this.record({ event: "moved", from: id, to });
       }
       this.files.delete(from);
       this.files.set(path, { path, text: now });
       this.built = this.index = null;
       this.embedSoon();
-      this.publish({ type: "note-changed", id, version: null, who: "you" });
-      this.publish({ type: "note-changed", id: to, version: hashText(now), who: "you" });
+      this.publish({ type: "note-changed", id, version: null, who });
+      this.publish({ type: "note-changed", id: to, version: hashText(now), who });
       return now;
     });
     // Links to it, in the form the base writes them (absolute, `/folder/note.md`), and its own links to itself.
@@ -350,7 +354,7 @@ export class Engine implements Api {
     for (const c of linking) {
       const source = await this.readNote(c);
       const changed = source.text.replace(old, `](/${to}.md`);
-      if (changed !== source.text) await this.saveNote(c, { base: source.version, text: changed });
+      if (changed !== source.text) await this.one(() => this.put(c, changed, source.version, "edit", {}, who));
     }
     // Exercises that test it.
     if (study) {
@@ -364,7 +368,7 @@ export class Engine implements Api {
     return { id: to, text, version: hashText(text), changed: true };
   }
 
-  async deleteNote(id: string, base: string): Promise<void> {
+  async deleteNote(id: string, base: string, who = "you"): Promise<void> {
     if (!inBase(id)) throw new EngineError("only a note of the base is deleted here");
     const notes = this.opts.notes, path = `${checkNoteId(id)}.md`;
     await this.one(async () => {
@@ -378,7 +382,7 @@ export class Engine implements Api {
       this.built = this.index = null;
       this.embedSoon();
     });
-    this.publish({ type: "note-changed", id, version: null, who: "you" });
+    this.publish({ type: "note-changed", id, version: null, who });
   }
 
   /** Writes happen one at a time, in the order asked. */
@@ -411,7 +415,7 @@ export class Engine implements Api {
     return this.one(async () => this.put(id, await this.version(id, entry), base, "restore", { to: entry }));
   }
 
-  private async put(id: string, text: string, base: string | null, why: "edit" | "restore" = "edit", extra: { to?: string } = {}): Promise<Saved> {
+  private async put(id: string, text: string, base: string | null, why: "edit" | "restore" = "edit", extra: { to?: string } = {}, who = "you"): Promise<Saved & { entry?: string }> {
     const { files, path } = this.where(id);
     if (text.length > MAX_NOTE_BYTES) throw new EngineError("note too large", 413);
     const now = await files.read(path);
@@ -425,15 +429,16 @@ export class Engine implements Api {
     if (now === text) return { id, text, version: hashText(text), changed: false };
 
     await files.write(path, text);
-    await this.enter(id, entries, change(entries, text, await this.stamp("you"), why, extra));
+    const entry = change(entries, text, await this.stamp(who), why, extra);
+    await this.enter(id, entries, entry);
     if (inBase(id)) {
       this.files.set(path, { path, text });
       this.built = this.index = null;
       this.embedSoon();
     }
     const version = hashText(text);
-    this.publish({ type: "note-changed", id, version, who: "you" });
-    return { id, text, version, changed: true };
+    this.publish({ type: "note-changed", id, version, who });
+    return { id, text, version, changed: true, ...(entry ? { entry: entry.id } : {}) };
   }
 
   // ------------------------------------------------------------ Iso
@@ -874,6 +879,7 @@ export class Engine implements Api {
     if (!study) throw new EngineError("Iso's conversations are kept in a study base, and none is open (isorite study init)", 409);
     if (!(MODES as readonly string[]).includes(req.mode)) throw new EngineError("the mode is ask, write, build or understand");
     if (req.mode === "build") throw new EngineError("Build mode is the terminal's: start isorite term", 409);
+    if (req.mode === "understand") throw new EngineError("Understand mode is not here yet", 409);
     if (!TIERS.includes(req.tier)) throw new EngineError("the tier is low, mid or max");
     const asked = String(req.asked ?? "").trim();
     if (!asked) throw new EngineError("say what you want from Iso");
@@ -905,6 +911,7 @@ export class Engine implements Api {
     this.conversing.set(conversation, turn);
     this.publish({ type: "iso-start", request: turn, note: "", asked: req.asked, tier: req.tier, place: { form: "turn", conversation, mode, given: req.given } });
     const item = async (i: TurnItem): Promise<void> => { await line({ kind: "item", turn, item: i }); this.publish({ type: "iso-item", request: turn, conversation, item: i }); };
+    const who = `iso:${this.provider.name}/${this.provider.tiers[req.tier]}`;
 
     const lookup = new Lookup(this.bundle, req.given.find((g) => g.kind !== "folder")?.id ?? "", this.similar);
     const looks = new Set(lookup.defs().map((d) => d.function.name));
@@ -915,7 +922,7 @@ export class Engine implements Api {
         let args: Record<string, unknown> = {};
         try { const parsed: unknown = raw.trim() ? JSON.parse(raw) : {}; if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) args = parsed as Record<string, unknown>; } catch { /* no arguments */ }
         if (!MODE_TOOLS[mode].some((d) => d.function.name === name)) return { text: `There is no tool ${name} in ${mode} mode.` };
-        return { text: await this.turnTool(name, args, { turn, conversation, mode, item, signal: abort.signal }) };
+        return { text: await this.turnTool(name, args, { turn, conversation, mode, item, signal: abort.signal, who }) };
       },
     };
 
@@ -948,15 +955,134 @@ export class Engine implements Api {
     return turn;
   }
 
+  /** What you allowed for the rest of a conversation ("always"): by conversation, the tools. */
+  private readonly allowed = new Map<string, Set<string>>();
+
+  /** Ask you before doing something; wait for your answer. "always" holds for the rest of the conversation. */
+  private async permit(t: TurnCtx, tool: string, note: string, what: string): Promise<Decision> {
+    if (this.allowed.get(t.conversation)?.has(tool)) return "always";
+    const id = newId(this.opts.clock.now());
+    const answer = new Promise<Decision>((settle) => this.waitingAnswer.set(id, { turn: t.turn, conversation: t.conversation, settle }));
+    await t.item({ kind: "permission", id, tool, note, what });
+    const stop = new Promise<Decision>((settle) => t.signal.addEventListener("abort", () => settle("reject"), { once: true }));
+    const d = await Promise.race([answer, stop]);
+    this.waitingAnswer.delete(id);
+    if (d === "always") this.allowed.set(t.conversation, new Set([...(this.allowed.get(t.conversation) ?? []), tool]));
+    return d;
+  }
+
+  /** A note's id as Iso writes one for a new note: folder/name, without a leading slash or `.md`. */
+  private newNoteId(raw: unknown): string | null {
+    const id = String(raw ?? "").trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/i, "");
+    try { checkNoteId(id); } catch { return null; }
+    return inBase(id) ? id : null;
+  }
+
   /** One of a mode's own tools, in a turn: what is said back to Iso. */
-  private async turnTool(name: string, args: Record<string, unknown>, t: { turn: string; conversation: string; mode: Turn["mode"]; item: (i: TurnItem) => Promise<void>; signal: AbortSignal }): Promise<string> {
+  private async turnTool(name: string, args: Record<string, unknown>, t: TurnCtx): Promise<string> {
+    const title = (id: string): string => this.bundle.concepts.get(id)?.title ?? id;
     if (name === "point_to_note") {
       const id = noteId(this.bundle, args.id);
       if (!id) return `There is no note ${String(args.id ?? "")}.`;
       await t.item({ kind: "point", note: id, why: String(args.why ?? "").trim().slice(0, 300) });
-      return `${this.bundle.concepts.get(id)!.title} is marked on their Atlas.`;
+      return `${title(id)} is marked on their Atlas.`;
+    }
+    const counted = (before: string, after: string) => {
+      const hunks = diffLines(before.split("\n"), after.split("\n"));
+      return { added: hunks.reduce((n, h) => n + h.ins.length, 0), removed: hunks.reduce((n, h) => n + h.del.length, 0) };
+    };
+    if (name === "edit_note") {
+      const id = noteId(this.bundle, args.id);
+      if (!id) return `There is no note ${String(args.id ?? "")}. Search for it by its words.`;
+      const old = String(args.old ?? ""), next = String(args.new ?? "");
+      if (!old) return "Give the passage as it is now, in old.";
+      const now = await this.readNote(id);
+      const at = now.text.indexOf(old), again = at < 0 ? -1 : now.text.indexOf(old, at + 1);
+      if (at < 0) return `That passage is not in ${title(id)} as you wrote it. Read the note again and give the passage exactly.`;
+      if (again >= 0) return `That passage occurs more than once in ${title(id)}. Give more of it, so it is found once.`;
+      const text = now.text.slice(0, at) + next + now.text.slice(at + old.length);
+      const saved = await this.one(() => this.put(id, text, now.version, "edit", {}, t.who));
+      if (saved.entry) await t.item({ kind: "change", note: id, entry: saved.entry, why: "edit", title: title(id), ...counted(now.text, text) });
+      return `Changed ${title(id)}.`;
+    }
+    if (name === "write_note") {
+      const id = this.newNoteId(args.id);
+      if (!id) return `${String(args.id ?? "")} is not a note's id in their base: give folder/name, lower case with hyphens.`;
+      let text = String(args.text ?? "");
+      if (!text.trim()) return "Give the note's whole text.";
+      if (!/^---\n/.test(text)) text = `---\ntype: Concept\ntitle: ${JSON.stringify(/^#\s+(.+)$/m.exec(text)?.[1]?.trim() ?? id.split("/").at(-1)!.replace(/-/g, " "))}\n---\n\n${text.replace(/^#\s+.+\n+/, "")}`;
+      const was = this.bundle.concepts.has(id) ? await this.readNote(id) : null;
+      const saved = await this.one(() => this.put(id, text, was?.version ?? null, "edit", {}, t.who));
+      if (saved.entry) await t.item({ kind: "change", note: id, entry: saved.entry, why: was ? "edit" : "create", title: title(id), ...counted(was?.text ?? "", text) });
+      return was ? `Wrote ${title(id)} anew.` : `Made ${title(id)} (/${id}.md).`;
+    }
+    if (name === "move_note") {
+      const id = noteId(this.bundle, args.id), to = this.newNoteId(args.to);
+      if (!id) return `There is no note ${String(args.id ?? "")}.`;
+      if (!to) return `${String(args.to ?? "")} is not a note's id in their base.`;
+      if ((await this.permit(t, "move_note", id, `move ${title(id)} to ${to}`)) === "reject") return "They did not allow it. It was not moved.";
+      const now = await this.readNote(id), before = title(id);
+      try { await this.moveNote(id, to, now.version, t.who); } catch (e) { return `It could not be moved: ${(e as Error).message}`; }
+      const entry = (await this.journal(to)).at(-1)?.id ?? "";
+      await t.item({ kind: "change", note: to, entry, why: "move", to, title: before, added: 0, removed: 0 });
+      return `Moved ${before} to /${to}.md.`;
+    }
+    if (name === "delete_note") {
+      const id = noteId(this.bundle, args.id);
+      if (!id) return `There is no note ${String(args.id ?? "")}.`;
+      if ((await this.permit(t, "delete_note", id, `delete ${title(id)}`)) === "reject") return "They did not allow it. It was not deleted.";
+      const now = await this.readNote(id), before = title(id);
+      try { await this.deleteNote(id, now.version, t.who); } catch (e) { return `It could not be deleted: ${(e as Error).message}`; }
+      await t.item({ kind: "change", note: id, entry: (await this.journal(id)).at(-1)?.id ?? "", why: "delete", title: before, added: 0, removed: now.text.split("\n").length });
+      return `Deleted ${before}. Its history stays.`;
     }
     return `${name} cannot be used yet.`;
+  }
+
+  async undoTurn(conversation: string, turn: string): Promise<{ notes: string[]; left: string[] }> {
+    const c = await this.conversation(conversation);
+    const t = c?.turns.find((x) => x.id === turn);
+    if (!t) throw new EngineError("there is no such turn", 404);
+    if (t.state === "running") throw new EngineError("wait for Iso to finish, or stop it, first", 409);
+    if (t.items.some((i) => i.kind === "undone")) throw new EngineError("that turn was undone already", 409);
+    const changes = t.items.filter((i): i is Extract<TurnItem, { kind: "change" }> => i.kind === "change");
+    const notes: string[] = [], left: string[] = [];
+    // Newest first, so a note changed twice goes back past both.
+    const done = new Set<string>();
+    for (const ch of [...changes].reverse()) {
+      const key = ch.why === "move" ? ch.to! : ch.note;
+      if (done.has(key)) continue;
+      done.add(key);
+      try {
+        if (ch.why === "delete") {
+          const entries = await this.journal(ch.note);
+          const was = replay(entries)?.text;
+          if (was === undefined || this.bundle.concepts.has(ch.note)) { left.push(ch.note); continue; }
+          await this.createNote(ch.note, was);
+        } else if (ch.why === "move") {
+          const from = (await this.journal(ch.to!)).find((e) => e.id === ch.entry);
+          const back = from && "from" in from ? from.from : undefined;
+          if (!back || !this.bundle.concepts.has(ch.to!)) { left.push(ch.to!); continue; }
+          await this.moveNote(ch.to!, back, (await this.readNote(ch.to!)).version);
+        } else {
+          // Back to before the turn's first change of this note, if nothing has changed it since its last.
+          const entries = await this.journal(ch.note);
+          const mine = changes.filter((x) => x.note === ch.note && x.why !== "move").map((x) => x.entry);
+          const first = entries.findIndex((e) => mine.includes(e.id)), last = entries.findLastIndex((e) => e.kind === "change");
+          if (first < 0 || !mine.includes(entries[last]?.id ?? "")) { left.push(ch.note); continue; }
+          const now = await this.readNote(ch.note);
+          if (hashText(now.text) !== hashText(replay(entries)!.text)) { left.push(ch.note); continue; }
+          // Made in the turn: it goes.
+          if (first === 0) await this.deleteNote(ch.note, now.version);
+          else await this.restore(ch.note, entries.slice(0, first).findLast((e) => e.kind === "change")!.id, now.version);
+        }
+        notes.push(key);
+      } catch { left.push(key); }
+    }
+    const item: TurnItem = { kind: "undone", notes, left };
+    await this.one(() => this.opts.study!.append(conversationPath(conversation), JSON.stringify({ kind: "item", turn, item } satisfies TurnLine) + "\n"));
+    this.publish({ type: "iso-item", request: turn, conversation, item });
+    return { notes, left };
   }
 
   async answer(turn: string, permission: string, decision: Decision): Promise<void> {

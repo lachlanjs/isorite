@@ -66,3 +66,51 @@ test("a turn can be stopped, and a refusal is said plainly; Shift+Tab changes th
   await box(page).press("Enter");
   await expect(log.locator(".turn").last().getByRole("alert")).toContainText("Iso could not answer");
 });
+
+test("Write mode: Iso's change goes into the note, is marked as Iso's in the note's Iso lens and on the Atlas, and the turn is undone", async ({ page }) => {
+  const name = test.info().project.name, id = `basics/write-${name}`;
+  const { token } = (await (await page.request.get("api/session")).json()) as { token: string };
+  const headers = { "x-isorite-token": token, Origin: new URL(test.info().project.use.baseURL!).origin };
+  await page.request.post(`api/note?id=${id}`, { data: { text: `---\ntype: Concept\ntitle: Write ${name}\n---\n\nPlain text.\n` }, headers });
+  await page.goto(`#/n/${id}`);
+  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Plain text.");
+  await toIso(page);
+  await pane(page).getByRole("button", { name: "Write", exact: true }).click();
+  await box(page).fill(`edit ${id}`);
+  await box(page).press("Enter");
+  const turn = page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last();
+  await expect(turn.locator(".change")).toContainText(`changed Write ${name} +1 −1`);
+  await expect(turn).toHaveAttribute("data-state", "done");
+  const file = async () => ((await (await page.request.get(`api/note?id=${id}`)).json()) as { text: string }).text;
+  expect(await file()).toContain("Plain text, and Iso's words.");
+  // The Atlas came up in its Iso lens when Iso began, and shows the note as changed by Iso.
+  await expect(page.locator(`[data-note="${id}"]`)).toHaveClass(/\bchanged\b/);
+  await look(page, "iso-write");
+
+  // In the note's Iso lens, Iso's words are marked; the plain ones are not.
+  await turn.locator(".change").getByRole("button").click();
+  await expect(page.locator('[data-pane="note"] .lens[data-lens="iso"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".cm-iso-by-iso")).toHaveText([", and Iso's words"]);
+  await look(page, "note-iso-lens");
+
+  // Undone: the note as it was.
+  await toIso(page);
+  await turn.getByRole("button", { name: "Undo this turn's changes" }).click();
+  await expect(turn.locator(".undone")).toContainText(`Write ${name} put back`);
+  await expect.poll(file).toContain("\nPlain text.\n");
+  await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
+});
+
+test("Write mode: moving a note is asked first, and not allowed it stays", async ({ page }) => {
+  await page.goto("#/n/basics/bit");
+  await toIso(page);
+  await pane(page).getByRole("button", { name: "Write", exact: true }).click();
+  await box(page).fill(`move basics/bit to units/bit-${test.info().project.name}`);
+  await box(page).press("Enter");
+  const asks = pane(page).getByRole("group", { name: "Iso asks before it does this" });
+  await expect(asks).toContainText(`Iso wants to move The bit to units/bit-${test.info().project.name}.`);
+  await asks.getByRole("button", { name: "Don't allow" }).click();
+  await expect(asks).toContainText("Not allowed.");
+  expect((await page.request.get("api/note?id=basics/bit")).ok()).toBe(true);
+  await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
+});
