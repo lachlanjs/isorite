@@ -7,7 +7,7 @@ import { extname, join, resolve, sep } from "node:path";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { Conflict, EngineError, MAX_NOTE_BYTES, type Api } from "@isorite/engine";
+import { Conflict, EngineError, MAX_NOTE_BYTES, type Api, type Choice } from "@isorite/engine";
 
 export const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
 export const TOKEN_HEADER = "x-isorite-token";
@@ -35,13 +35,24 @@ const Edit = z.object({ base: z.string().max(64), text: z.string() }).strict();
 const Make = z.object({ text: z.string() }).strict();
 const Anchor = z.object({ text: z.string(), nth: z.number().int().min(0) }).strict();
 const Tier = z.enum(["low", "mid", "max"]);
+/** What you chose of Iso's context (I3): parts switched off by id, and whether it may look up more. */
+const ChoiceSchema = z.object({ off: z.array(z.string().max(400)).max(500).optional(), lookup: z.boolean().optional() }).strict();
 const Ask = z.discriminatedUnion("form", [
-  z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
-  z.object({ note: z.string(), form: z.literal("rewrite"), regions: z.array(Anchor).min(1).max(40), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier }).strict(),
+  z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier, choice: ChoiceSchema.optional() }).strict(),
+  z.object({ note: z.string(), form: z.literal("rewrite"), regions: z.array(Anchor).min(1).max(40), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier, choice: ChoiceSchema.optional() }).strict(),
   z.object({ note: z.string(), form: z.literal("note"), tier: Tier }).strict(),
   z.object({ note: z.string(), form: z.literal("mark"), answer: Anchor, tier: Tier }).strict(),
   z.object({ note: z.string(), form: z.literal("exercise"), tier: Tier }).strict(),
 ]);
+const Given = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("note"), id: z.string().max(400) }).strict(),
+  z.object({ kind: z.literal("folder"), id: z.string().max(400) }).strict(),
+  z.object({ kind: z.literal("passage"), id: z.string().max(400), text: z.string().max(20_000) }).strict(),
+  z.object({ kind: z.literal("understanding"), id: z.string().max(400) }).strict(),
+]);
+const Mode = z.enum(["ask", "write", "build", "understand"]);
+const TurnAsk = z.object({ conversation: z.string().max(64).optional(), mode: Mode, asked: z.string().max(8000), given: z.array(Given).max(40), tier: Tier, lookup: z.boolean().optional(), off: z.array(z.string().max(64)).max(500).optional() }).strict();
+const TurnShape = TurnAsk.omit({ asked: true });
 const ExerciseAsk = z.object({ folder: z.string().max(400), tests: z.array(z.string().max(400)).min(1).max(20), after: z.string().max(400).nullable().optional() }).strict();
 const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
 const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
@@ -131,6 +142,17 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes }:
       return sent instanceof Response ? sent : answer(c, async () => (await act(c, sent)) ?? {});
     });
   post("/api/iso/ask", Ask, (_c, b) => api.ask(b));
+  post("/api/iso/converse", TurnAsk, (_c, b) => api.converse(b));
+  app.get("/api/understanding", (c) => answer(c, () => api.understanding(id(c))));
+  post("/api/understanding/scratchpad", z.object({ scratchpad: z.string().max(200_000), base: z.string().max(64).nullable() }).strict(), (c, b) => api.saveScratchpad(id(c), b.scratchpad, b.base));
+  post("/api/iso/undo", z.object({ conversation: z.string().max(64), turn: z.string().max(64) }).strict(), (_c, b) => api.undoTurn(b.conversation, b.turn));
+  post("/api/iso/answer", z.object({ turn: z.string().max(64), permission: z.string().max(64), decision: z.enum(["once", "always", "reject"]) }).strict(), (_c, b) => api.answer(b.turn, b.permission, b.decision));
+  app.get("/api/conversation", (c) => answer(c, async () => (await api.conversation(c.req.query("id") || undefined)) ?? { id: "", turns: [] }));
+  app.get("/api/turn/context", (c) => answer(c, () => {
+    let raw: unknown = {};
+    try { raw = JSON.parse(c.req.query("turn") ?? "{}"); } catch { /* the shape check says so */ }
+    return api.turnContext(TurnShape.parse(raw));
+  }));
   post("/api/iso/stop", z.object({ request: z.string().max(64) }).strict(), (_c, b) => api.stop(b.request));
   post("/api/note/restore", z.object({ entry: z.string().max(64), base: z.string().max(64) }).strict(), (c, b) => api.restore(id(c), b.entry, b.base));
   post("/api/note/move", z.object({ to: z.string().max(400), base: z.string().max(64) }).strict(), (c, b) => api.moveNote(id(c), b.to, b.base));
@@ -146,7 +168,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes }:
   post("/api/exercise/draft", ExerciseAsk, (_c, b) => api.createExerciseDraft(b.folder, b.tests, b.after ?? null));
   post("/api/exercise/keep", z.object({ proposal: z.string().max(64) }).strict(), (c, b) => api.keepExercise(id(c), b.proposal));
   post("/api/exercise/wind-back", z.object({}).strict(), (c) => api.windBack(id(c)));
-  app.get("/api/context", (c) => answer(c, () => api.context(c.req.query("id") || undefined)));
+  app.get("/api/context", (c) => answer(c, () => api.context(c.req.query("id") || undefined, choiceOf(c.req.query("choice")))));
   post("/api/context/clear", z.object({}).strict(), () => api.clearConversation());
   // The key goes in and never comes out: settings say only whether one is held.
   app.get("/api/settings", (c) => answer(c, () => api.settings()));
@@ -205,4 +227,13 @@ function staticFile(c: Context, web: string): Response {
   return c.body(new Uint8Array(readFileSync(file)), 200, {
     "Content-Type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream", "Cache-Control": cache, "X-Content-Type-Options": "nosniff",
   });
+}
+
+/** The choice of what Iso is sent, as the context route takes it: JSON, and only its known fields kept. */
+function choiceOf(raw: string | undefined): Choice | undefined {
+  if (!raw) return undefined;
+  try {
+    const c = JSON.parse(raw) as { off?: unknown; lookup?: unknown };
+    return { ...(Array.isArray(c.off) ? { off: c.off.filter((x): x is string => typeof x === "string").slice(0, 500) } : {}), ...(typeof c.lookup === "boolean" ? { lookup: c.lookup } : {}) };
+  } catch { return undefined; }
 }

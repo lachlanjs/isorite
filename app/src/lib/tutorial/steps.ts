@@ -62,7 +62,17 @@ function read(id: string): void {
 const textOf = (id: string): string => { if (!texts.has(id)) { texts.set(id, ""); read(id); } return texts.get(id) ?? ""; };
 const original = (id: string): string => { textOf(id); return first.get(id) ?? ""; };
 let listening = false;
-function listen(): void { if (!listening && app.api) { listening = true; app.on((e) => { if (e.type === "note-changed" && texts.has(e.id)) read(e.id); }); } }
+/** Notes where Iso's text was removed, and where it was kept: for steps that name removing as a wrong move. */
+const removed = new Set<string>(), keptIn = new Set<string>();
+function listen(): void {
+  if (listening || !app.api) return;
+  listening = true;
+  app.on((e) => {
+    if (e.type === "note-changed" && texts.has(e.id)) read(e.id);
+    if (e.type === "journal" && e.entry.kind === "discard") removed.add(e.id);
+    if (e.type === "journal" && e.entry.kind === "change" && e.entry.why === "keep") keptIn.add(e.id);
+  });
+}
 const count = (text: string, pattern: RegExp) => { listen(); return text.match(pattern)?.length ?? 0; };
 const links = (text: string, to: string) => count(text, new RegExp(`\\]\\(/${to.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.md`, "g"));
 /** With a note chosen, the whole Atlas is lit (T5): the Atlas dims what is not joined to the note itself, and so its
@@ -88,7 +98,7 @@ function steppedIn(folder: string): () => boolean {
 // The note you make in L1, as it is moved and then deleted: whatever was not there when the tutorial began.
 const ORIGINAL = new Set<string>();
 /** Note what the base holds, once, before anything is made in it. */
-export function remember(): void { if (!ORIGINAL.size) for (const n of app.listing.notes) ORIGINAL.add(n.id); }
+export function remember(): void { listen(); if (!ORIGINAL.size) for (const n of app.listing.notes) ORIGINAL.add(n.id); }
 const yours = () => app.listing.notes.filter((n) => ORIGINAL.size && !ORIGINAL.has(n.id));
 
 export const PARTS: Part[] = [
@@ -142,41 +152,39 @@ export const PARTS: Part[] = [
     ],
   },
   {
-    key: "L2", title: "Iso", earlier: true, about: "Iso is an agent who is aware of your isorite knowledge base. Learn how to work with Iso to explore and edit it.",
+    key: "L2", title: "Iso", about: "Iso is an agent who is aware of your isorite knowledge base. Learn how to work with Iso to explore and edit it.",
     steps: [
-      { go: `/n/${QUAD}`, target: ".cm-content", fill: PROMPTS.insert, until: done(QUAD), title: "Ask Iso in place",
-        text: "The quadtree is a stub with a question in it. Click at the end of the question and press Ctrl+Enter. The prompt is filled in: press Enter, and watch what Iso looks up.",
-        phone: { text: "The quadtree is a stub with a question in it. Tap at the end of the question, then ask Iso here, at the foot of the screen. The prompt is filled in: send it." } },
-      { target: ".between[data-proposal]", until: settled(QUAD), title: "Keep it, or not",
-        text: "Iso read your notes before answering. Its answer waits between the dotted lines: it is not in the note until you keep it. Keep it, edit it first, or remove it." },
+      { go: `/n/${QUAD}`, target: ".cm-content", until: (e) => e.type === "iso-start" && e.note === QUAD, title: "Ask in the text",
+        text: "The last paragraph is a question. Click in it and press Ctrl+Enter.",
+        phone: { text: "The last paragraph is a question. Tap in it, then ask Iso here at the foot." } },
+      { target: () => [...document.querySelectorAll(".atlas, .between")], until: done(QUAD), title: "Watch it read",
+        text: "On the Atlas, what Iso reads is drawn as it reads it: found by words, by meaning, or along a link.",
+        phone: { target: ".seed", text: "Iso reads your notes first. The strip at the foot counts them; tap it to see them on the Atlas, and come back with the note tab." } },
+      { target: ".between[data-proposal]", until: kept(QUAD), title: "Keep it",
+        wrong: () => (removed.has(QUAD) && !keptIn.has(QUAD) ? "You removed it. Go back two steps, and ask again." : null),
+        text: "Iso's answer waits between the dotted lines. It is not in the note until you keep it." },
       { go: `/n/${BH}`, target: ".cm-content", fill: PROMPTS.rewrite, until: done(BH), title: "Rewrite a selection",
-        text: "Select the paragraph that begins TODO, and press Ctrl+Enter. Iso may change only what you selected. The prompt is filled in: press Enter.",
-        phone: { text: "Select the paragraph that begins TODO (hold on a word, then drag), and tap ask Iso here. Iso may change only what you selected. The prompt is filled in: send it." } },
-      { target: ".cm-content", until: kept(BH), title: "Keep the change",
-        text: "The old text is struck through and Iso's stands beside it. Keep it." },
-      { target: ".bar .count", check: has('[role="dialog"][aria-label="Context"]'), title: "What Iso is sent",
-        text: "The count in the header is what Iso would be sent from this note: the note, those it links, what you asked before, and what this session has cost. Click it to see it part by part. Here Iso is scripted, so nothing is spent.",
-        phone: { text: "The count in the header is what Iso would be sent from this note: the note, those it links, what you asked before, and what this session has cost. Tap it to see it part by part. Here Iso is scripted, so nothing is spent." } },
-      { go: `/n/${BH}`, target: 'button[aria-label="timeline"]', check: has(".timeline"), title: "Every change is kept",
-        text: "Open the timeline, the clock beside the title. Squares are your changes, diamonds Iso's. Point at a mark to see what it changed.",
-        phone: { text: "Open the timeline, the clock beside the title. Squares are your changes, diamonds Iso's." } },
-      { target: ".timeline", check: has(".atbar"), title: "The note as it was",
-        text: "Click the first mark, to see the note as it was first written.", phone: { text: "Tap the first mark, to see the note as it was first written." } },
-      { target: ".atbar", check: () => !document.querySelector(".atbar"), title: "Step through it",
-        text: "← and → step from moment to moment. The curved arrow restores the note to this point, as a new change; the other comes back to now.",
-        phone: { text: "Tap another mark to step to it. The curved arrow restores the note to this point, as a new change; the other comes back to now." } },
-      { go: "/atlas", target: ".atlas-world", check: here("#/draft/"), title: "A note for Iso",
-        text: "Hold on open ground to start a note for Iso: a question, answered from your notes, that becomes a note when you keep it. Hold on a note to start from it, linked.",
-        phone: { text: "Press and hold on open ground to start a note for Iso: a question, answered from your notes, that becomes a note when you keep it. Hold on a note to start from it, linked." } },
-      { go: async () => `/draft/${((await app.api.drafts()).find((d) => d.title.includes("Close encounters"))?.id ?? "").slice("@draft/".length)}`,
-        until: (e) => e.type === "iso-start" && e.note.startsWith("@draft/"), title: "Send it",
-        text: "Here is one you wrote yesterday and did not send, with the notes it rests on linked. Send it to Iso, and watch the Atlas." },
-      { until: done((id) => id.startsWith("@draft/")), title: "What Iso reads",
-        text: "Iso's path through your base is drawn as it reads: found by words (dashed), by meaning (dotted), or along a link. This is its context: what it reads, it is sent." },
-      { check: () => titled(/^Close encounters/) !== undefined, title: "Keep it as a note",
-        text: "When Iso is done, open the note, read the answer, and keep it in physics. It is a note of your base now, linked to what it rests on: found again by you, by Iso, and by the agent in the terminal, as an answer in a chat is not." },
+        wrong: () => { const p = [...document.querySelectorAll(".cm-iso-picked")].map((e) => e.textContent ?? "").join(" "); return p && !/TODO/.test(p) ? "That selection has no TODO in it. Select the paragraph that begins TODO." : null; },
+        text: "On to Barnes–Hut, which uses the quadtree. Select the paragraph that begins TODO and press Ctrl+Enter. The prompt is filled in: press Enter.",
+        phone: { text: "On to Barnes–Hut, which uses the quadtree. Select the paragraph that begins TODO, then ask Iso here. The prompt is filled in: send it." } },
+      { target: () => [...document.querySelectorAll(".cm-content, .changes")], until: kept(BH), title: "Keep the change",
+        wrong: () => (removed.has(BH) && !keptIn.has(BH) ? "You removed it. Go back a step, and ask again." : null),
+        text: "The old text is struck through, Iso's beside it. Keep it." },
+      { target: () => [...document.querySelectorAll('.bar .count, [role="dialog"][aria-label="Context"]')], check: has('[role="dialog"][aria-label="Context"] .item.off'), title: "What Iso is sent",
+        text: "Click the count in the header: what Iso is sent from this note. Switch off one of the notes it links to.",
+        phone: { text: "Tap the count in the header: what Iso is sent from this note. Switch off one of the notes it links to." } },
+      { go: `/n/${BH}`, target: () => [...document.querySelectorAll('.atlas [data-folder="physics"], .naming')], check: () => titled(/^close encounters$/i)?.dir === "physics",
+        wrong: () => { const n = titled(/^close encounters$/i); return n && n.dir !== "physics" ? `It went into ${n.dir || "the top of the base"}. Redo, and hold inside physics.` : null; },
+        title: "A note to ask in",
+        text: "On the Atlas, press and hold inside physics until a new note is marked, let go, and call it Close encounters.",
+        phone: { go: "/atlas", text: "On the Atlas, press and hold inside physics until a new note is marked, let go, and call it Close encounters." } },
+      { target: ".cm-content", until: done((id) => id === titled(/^close encounters$/i)?.id), title: "Ask in it",
+        text: `Write ${PROMPTS.close} Then press Ctrl+Enter in it.`,
+        phone: { text: `Write ${PROMPTS.close} Then ask Iso here.` } },
+      { target: ".between[data-proposal]", until: (e) => kept(titled(/^close encounters$/i)?.id ?? "")(e), title: "Keep it",
+        text: "Keep the answer. It is part of a note of your base now: found again by you, by Iso, and by the agent in the terminal." },
       { title: "Iso, in short",
-        text: "Iso writes only where you ask, and only what you keep goes in. It reads your notes to answer, and you can see what it read and what it costs. E1 puts this to work on the project." },
+        text: "Iso writes only where you ask, and only what you keep goes in. Next: E1 puts it to work on the project." },
     ],
   },
   {
@@ -186,18 +194,18 @@ export const PARTS: Part[] = [
         text: "Two galaxies colliding, at N = 5000: where the tidal tails start to look right, and where direct summation is too slow. This evening's work is to get there with Barnes–Hut." },
       { go: "/atlas", target: `[data-note="${GALAXY}"]`, check: chosen(GALAXY), title: "What it rests on",
         text: "Choose Two galaxies colliding: what it requires is lit, and a click on one of those steps back to it, and on, back to Newton's law. That is the reading list for tonight." },
-      { go: `/n/${COST}`, target: ".cm-content", fill: PROMPTS.speed, until: done(COST), title: "How much faster?",
-        text: "In Cost and accuracy, put the cursor after the last paragraph and press Ctrl+Enter. The prompt is filled in: send it.",
-        phone: { text: "In Cost and accuracy, tap after the last paragraph, then ask Iso here. The prompt is filled in: send it." } },
+      { go: `/n/${COST}`, target: ".cm-content", until: done(COST), title: "How much faster?",
+        text: `In Cost and accuracy, write a new last paragraph: ${PROMPTS.speed} Then press Ctrl+Enter in it.`,
+        phone: { text: `In Cost and accuracy, write a new last paragraph: ${PROMPTS.speed} Then ask Iso here.` } },
       { target: ".between[data-proposal]", until: settled(COST), title: "Keep what is useful",
         text: "Iso checked its arithmetic against your notes, and says to measure. Keep it, or edit it down first." },
-      { go: "/atlas", target: `[data-note="${BH}"]`, check: here("#/draft/"), title: "Plan the octree",
-        text: "The simulation is 3D, and the quadtree is 2D. Hold on Barnes–Hut to start a note for Iso from it, linked.",
-        phone: { text: "The simulation is 3D, and the quadtree is 2D. Press and hold on Barnes–Hut to start a note for Iso from it, linked." } },
-      { until: (e) => e.type === "iso-start" && e.note.startsWith("@draft/"), title: "Ask it",
-        text: `Give it the title The octree, and write: ${PROMPTS.octree} Then send it.` },
-      { check: () => titled(/octree/i) !== undefined, title: "Keep it in algorithms",
-        text: "When Iso is done, open the note and keep it in algorithms." },
+      { go: "/atlas", target: `[data-folder="algorithms"]`, check: () => titled(/octree/i)?.dir === "algorithms", title: "Plan the octree",
+        text: "The simulation is 3D, and the quadtree is 2D. Hold inside algorithms, let go, and call the new note The octree." },
+      { target: ".cm-content", until: done((id) => id === titled(/octree/i)?.id), title: "Ask it",
+        text: `Write ${PROMPTS.octree} Then press Ctrl+Enter in it.`,
+        phone: { text: `Write ${PROMPTS.octree} Then ask Iso here.` } },
+      { target: ".between[data-proposal]", until: (e) => kept(titled(/octree/i)?.id ?? "")(e), title: "Keep it",
+        text: "Keep the answer: the plan is a note in algorithms now." },
       { go: `/n/${LOOP}`, target: ".cm-content", check: () => /octree/i.test(document.querySelector(".cm-content")?.textContent ?? ""), title: "Link it in",
         text: "The main loop is where it will be used. At the end of the first paragraph, type [[oct and choose the octree." },
       { go: async () => { const n = titled(/octree/i); return n ? noteHref(n.id).split("#").at(-1)! : `/n/${LOOP}`; }, target: '[data-tour="send"]', title: "Hand it on",

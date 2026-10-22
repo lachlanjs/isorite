@@ -95,6 +95,9 @@ const FORMAT = `# How notes work here
   and $$ alone on the line after.
 - Ordinary Markdown otherwise. No HTML.`;
 
+/** How notes are written, for any request that writes or quotes them. */
+export const FORMAT_RULES = FORMAT;
+
 const LOOKUP = (rounds: number, meaning: boolean) => `# Looking things up
 
 Before you reply you may look things up in their knowledge base with the
@@ -118,7 +121,7 @@ tools. Nothing has been looked up for you: below there is only the note.
 export const estimate = (text: string): number => Math.ceil(text.length / 4);
 
 /** One part of what is sent, as the header's breakdown names it. */
-export interface Part { name: "instructions and tools" | "study record" | "your prompts and Iso's answers" | "this note" | "linked notes"; detail: string; tokens: number }
+export interface Part { name: "instructions and tools" | "study record" | "your prompts and Iso's answers" | "this note" | "linked notes" | "earlier in this conversation" | "what you gave" | "your understanding" | "your message"; detail: string; tokens: number }
 
 /** One earlier request of this session: what was asked, what Iso wrote, and what became of it. */
 export interface Exchange { id: string; note: string; text: string }
@@ -205,14 +208,28 @@ export interface Asked {
   unkept: string[];
   conversation: string;
   asked: string;
-  /** How many exchanges the conversation holds, and what Iso read for them: for the breakdown. */
+  /** How many exchanges the conversation holds: for the breakdown. */
   moments?: number;
-  linked?: { notes: number; tokens: number };
+  /** The notes this note links to that are sent with it (I3), as `linkedSection` writes them. */
+  linked?: { id: string; title: string; text: string }[];
+  /** False: Iso has no tools this time, and answers from what is sent. */
+  lookup?: boolean;
 }
+
+/** The notes a note links to, as they are sent with a request in it. */
+export function linkedSection(linked: readonly { id: string; title: string; text: string }[], intro = "The notes this note links to"): string {
+  return linked.length ? `# ${intro}\n\n${linked.map((l) => `## ${l.title} (/${l.id}.md)\n\n${l.text}`).join("\n\n")}` : "";
+}
+
+const NO_LOOKUP = `# Looking things up
+
+You have no tools this time: they chose what you are sent. Answer from it, and
+say plainly what you would need to look up to say more.`;
 
 /** The messages for new text at a point, and what they hold, part by part. */
 export function insertMessages(a: Asked): { messages: Message[]; parts: Part[] } {
-  const system = [WHO, INSERT, FORMAT, LOOKUP(ROUNDS[a.tier], a.meaning)].join("\n\n");
+  const system = [WHO, INSERT, FORMAT, a.lookup === false ? NO_LOOKUP : looked(a)].join("\n\n");
+  const linked = linkedSection(a.linked ?? []);
   const note = `# Their note: ${a.title} (/${a.id}.md)\n\n${a.marked}`
     + (a.unkept.length ? `\n\n# Text you offered in this note that they have not kept yet\n\nIt is not part of the note. Do not write it again.\n\n${a.unkept.join("\n\n---\n\n")}` : "");
   const earlier = a.conversation ? `# Earlier in this session\n\n${a.conversation}` : "";
@@ -221,16 +238,23 @@ export function insertMessages(a: Asked): { messages: Message[]; parts: Part[] }
     messages: [
       // The instructions do not change within a session: a provider that caches is asked to keep them.
       { role: "system", content: [{ text: system, cache: true }] },
-      { role: "user", content: [earlier, note, request].filter(Boolean).join("\n\n") },
+      { role: "user", content: [earlier, linked, note, request].filter(Boolean).join("\n\n") },
     ],
-    parts: [
-      { name: "instructions and tools", detail: "", tokens: estimate(system) + 500 },
-      { name: "study record", detail: "nothing yet", tokens: 0 },
-      { name: "your prompts and Iso's answers", detail: a.moments ? `${a.moments} ${a.moments === 1 ? "moment" : "moments"}` : "", tokens: estimate(earlier) },
-      { name: "this note", detail: a.title, tokens: estimate(note) + estimate(request) },
-      { name: "linked notes", detail: a.linked?.notes ? `${a.linked.notes} read` : "", tokens: a.linked?.tokens ?? 0 },
-    ],
+    parts: inPlaceParts(a, system, earlier, linked, note, request),
   };
+}
+
+/** The look-up instructions for a request in place, saying what is sent below it. */
+const looked = (a: Asked): string => LOOKUP(ROUNDS[a.tier], a.meaning).replace("below there is only the note.", a.linked?.length ? "below there is the note, and\nthe notes it links to that they chose to send." : "below there is only the note.");
+
+function inPlaceParts(a: Asked, system: string, earlier: string, linked: string, note: string, request: string): Part[] {
+  return [
+    { name: "instructions and tools", detail: a.lookup === false ? "no tools" : "", tokens: estimate(system) + (a.lookup === false ? 0 : 500) },
+    { name: "study record", detail: "nothing yet", tokens: 0 },
+    { name: "your prompts and Iso's answers", detail: a.moments ? `${a.moments} ${a.moments === 1 ? "moment" : "moments"}` : "", tokens: estimate(earlier) },
+    { name: "this note", detail: a.title, tokens: estimate(note) + estimate(request) },
+    { name: "linked notes", detail: a.linked?.length ? `${a.linked.length} sent` : "", tokens: estimate(linked) },
+  ];
 }
 
 export interface AskedRewrite extends Omit<Asked, "marked"> {
@@ -241,19 +265,14 @@ export interface AskedRewrite extends Omit<Asked, "marked"> {
 
 /** The messages for a rewrite of chosen paragraphs. */
 export function rewriteMessages(a: AskedRewrite): { messages: Message[]; parts: Part[] } {
-  const system = [WHO, REWRITE(a.count), FORMAT, LOOKUP(ROUNDS[a.tier], a.meaning)].join("\n\n");
+  const system = [WHO, REWRITE(a.count), FORMAT, a.lookup === false ? NO_LOOKUP : looked(a)].join("\n\n");
+  const linked = linkedSection(a.linked ?? []);
   const note = `# Their note: ${a.title} (/${a.id}.md)\n\n${a.marked}`;
   const earlier = a.conversation ? `# Earlier in this session\n\n${a.conversation}` : "";
   const request = `# What they ask now, of the marked ${a.count === 1 ? "passage" : "passages"}\n\n${a.asked}`;
   return {
-    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [earlier, note, request].filter(Boolean).join("\n\n") }],
-    parts: [
-      { name: "instructions and tools", detail: "", tokens: estimate(system) + 500 },
-      { name: "study record", detail: "nothing yet", tokens: 0 },
-      { name: "your prompts and Iso's answers", detail: a.moments ? `${a.moments} ${a.moments === 1 ? "moment" : "moments"}` : "", tokens: estimate(earlier) },
-      { name: "this note", detail: a.title, tokens: estimate(note) + estimate(request) },
-      { name: "linked notes", detail: a.linked?.notes ? `${a.linked.notes} read` : "", tokens: a.linked?.tokens ?? 0 },
-    ],
+    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [earlier, linked, note, request].filter(Boolean).join("\n\n") }],
+    parts: inPlaceParts(a, system, earlier, linked, note, request),
   };
 }
 

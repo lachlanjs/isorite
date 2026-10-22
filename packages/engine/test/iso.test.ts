@@ -396,8 +396,9 @@ test("the context report names the five parts, sums them, and counts what the se
   expect(after.parts[2]).toMatchObject({ detail: "1 moment" });
   expect(after.parts[2]!.tokens).toBeGreaterThan(0);
   expect(after.parts[3]).toMatchObject({ detail: "Entropy" });
-  expect(after.parts[4]).toMatchObject({ detail: "1 read" });
-  expect(after.parts[4]!.tokens).toBeGreaterThan(0);
+  // Entropy links to nothing: what Iso read with its tools is not part of what is sent (I3).
+  expect(after.parts[4]).toMatchObject({ detail: "", tokens: 0 });
+  expect(after.items.map((i) => i.kind)).toEqual(["exchange"]);
 
   // A reply that was paid for and offered nothing is still counted.
   const failed = await ended((await engine.ask({ ...two(), asked: "improve" })).request);
@@ -498,4 +499,45 @@ test("a draft needs a title to be kept, and can be thrown away", async () => {
   expect(await engine.drafts()).toEqual([]);
   expect([...study.files.keys()].some((k) => k.startsWith("drafts/"))).toBe(false);
   await expect(engine.discardDraft("basics/entropy")).rejects.toMatchObject({ status: 400 });
+});
+
+test("what Iso is sent is chosen part by part: linked notes and earlier exchanges switched off, and no look-ups", async () => {
+  const { engine, ended, sent } = await open([{ text: ["Bits."] }, { text: ["Bits again."] }, { text: ["From what I have."] }]);
+  const LINKS = "---\ntype: Concept\ntitle: Information\n---\n\nIt rests on [surprise](/basics/surprise.md \"requires\") and [entropy](/basics/entropy.md).\n";
+  await engine.createNote("basics/information", LINKS);
+  const at = insertAt(LINKS, 6), ask = (choice?: { off?: string[]; lookup?: boolean }) => engine.ask({ note: "basics/information", ...at, asked: "what unit?", tier: "mid", ...(choice ? { choice } : {}) });
+
+  // By default both linked notes go with the request, and Iso has its tools.
+  const all = await engine.context("basics/information");
+  expect(all.items).toEqual([
+    { id: "n:basics/surprise", kind: "linked", title: "Surprise", tokens: expect.any(Number), on: true },
+    { id: "n:basics/entropy", kind: "linked", title: "Entropy", tokens: expect.any(Number), on: true },
+  ]);
+  expect(all.parts[4]).toMatchObject({ detail: "2 sent" });
+  await ended((await ask()).request);
+  let user = String(sent[0]!.messages[1]!.content);
+  expect(user).toContain("## Surprise (/basics/surprise.md)");
+  expect(user).toContain("## Entropy (/basics/entropy.md)");
+  expect(sent[0]!.tools!.length).toBeGreaterThan(0);
+
+  // Surprise switched off: it is not sent, the count falls, and the report says it is off.
+  const less = await engine.context("basics/information", { off: ["n:basics/surprise"] });
+  expect(less.tokens).toBeLessThan((await engine.context("basics/information")).tokens);
+  expect(less.items.find((i) => i.id === "n:basics/surprise")?.on).toBe(false);
+  const exchange = less.items.find((i) => i.kind === "exchange")!;
+  expect(exchange.title).toBe("Information: what unit?");
+  await ended((await ask({ off: ["n:basics/surprise"] })).request);
+  user = String(sent[1]!.messages[1]!.content);
+  expect(user).not.toContain("## Surprise");
+  expect(user).toContain("# Earlier in this session");
+
+  // Both earlier exchanges switched off, and no look-ups: no conversation, no tools, and Iso told so.
+  const exchanges = (await engine.context("basics/information")).items.filter((i) => i.kind === "exchange").map((i) => i.id);
+  expect(exchanges).toHaveLength(2);
+  await ended((await ask({ off: exchanges, lookup: false })).request);
+  user = String(sent[2]!.messages[1]!.content);
+  expect(user).not.toContain("# Earlier in this session");
+  expect(sent[2]!.tools ?? []).toEqual([]);
+  expect(JSON.stringify(sent[2]!.messages[0]!.content)).toContain("You have no tools this time");
+  expect(await engine.context("basics/information", { lookup: false })).toMatchObject({ lookup: false, parts: [{ detail: "no tools" }, {}, {}, {}, {}] });
 });

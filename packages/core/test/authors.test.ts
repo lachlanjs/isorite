@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { authors, change, insertAt, stamp, type Entry, type Insert, type Stamp } from "../src/index.ts";
+import { authors, change, insertAt, stamp, wordAuthors, type Entry, type Insert, type Stamp } from "../src/index.ts";
 
 let clock = Date.parse("2026-10-18T09:00:00Z");
 const at = (who: string): Stamp => stamp(who, "laptop1", null, (clock += 1000));
@@ -26,4 +26,35 @@ test("nothing is said of a journal whose chain is broken, or of none", () => {
   expect(authors([])).toBeNull();
   const e = change([], "a\n", at("you"), "edit")!;
   expect(authors([e, { ...change([e], "b\n", at("you"), "edit")!, before: "0000000000000000" }])).toBeNull();
+});
+
+test("word by word: Iso's words in a line it changed are its own, the words it kept stay yours, and a word retyped is yours again", () => {
+  const entries: Entry[] = [];
+  const write = (text: string, who: string) => { const e = change(entries, text, at(who), entries.length ? "edit" : "start"); if (e) entries.push(e); };
+  write("# Cost\n\nA step costs N log N.\nThe end.\n", "you");
+  write("# Cost\n\nA step costs N log N, not N squared.\nThe end.\n", "iso:openrouter/m");
+  const iso = (runs: { from: number; to: number; who: string }[], line: string) => runs.filter((r) => r.who.startsWith("iso:")).map((r) => line.slice(r.from, r.to));
+  let runs = wordAuthors(entries)!;
+  expect(iso(runs[2]!, "A step costs N log N, not N squared.")).toEqual([", not N squared"]);
+  expect(iso(runs[3]!, "The end.")).toEqual([]);
+  // A line it wrote anew is its own, but for what it carried over from the line it replaced (the full stop).
+  write("# Cost\n\nA step costs N log N,\nnot N squared, by the tree's depth.\nThe end.\n", "iso:openrouter/m");
+  runs = wordAuthors(entries)!;
+  expect(iso(runs[2]!, "A step costs N log N,")).toEqual([","]);
+  expect(iso(runs[3]!, "not N squared, by the tree's depth.")).toEqual(["not N squared, by the tree's depth"]);
+  // You retype one of its words.
+  write("# Cost\n\nA step costs N log N,\nnot N squared, by the quadtree's depth.\nThe end.\n", "you");
+  runs = wordAuthors(entries)!;
+  expect(iso(runs[3]!, "not N squared, by the quadtree's depth.")).toEqual(["not N squared, by the ", "'s depth"]);
+  expect(wordAuthors([])).toEqual([]);
+});
+
+test("a passage Iso rewrote is its own, though a few of its words were in what it replaced", () => {
+  const entries: Entry[] = [];
+  const write = (text: string, who: string) => { const e = change(entries, text, at(who), entries.length ? "edit" : "start"); if (e) entries.push(e); };
+  write("TODO: how big an error does θ give, and why does the cost grow only as N log N?\n", "you");
+  const now = "The error of a node used whole is of order (s/d)^2. The cost: a body opens nodes only near it.";
+  write(now + "\n", "iso:openrouter/m");
+  const runs = wordAuthors(entries)!;
+  expect(runs[0]).toEqual([{ from: 0, to: now.length, who: "iso:openrouter/m" }]);
 });

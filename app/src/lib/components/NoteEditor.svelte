@@ -8,6 +8,8 @@
   import { createEditor, setText, type Where } from "$lib/editor/codemirror.ts";
   import { setMarks, setOverlays, setTouched, type Inline, type Mark, type Overlay, type Touched } from "$lib/editor/overlays.ts";
   import type { ExerciseState } from "$lib/exercise.svelte.ts";
+  import { panes } from "$lib/panes.svelte.ts";
+  import { tray } from "$lib/tray.svelte.ts";
   import type { NoteIso } from "$lib/iso.svelte.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
   import IsoBlock from "./IsoBlock.svelte";
@@ -17,7 +19,8 @@
   // Without `iso` (a note written for Iso) there is no prompt line and nothing is laid over the text.
   // With `exercise`, the question, the working's heading, the answer and Iso's marks are drawn over the text too.
   // `touched` is what a moment of the timeline changed, by line of the whole file, while it is pointed at.
-  let { note, iso, exercise, source, placeholder, touched = null }: { note: NoteSession; iso?: NoteIso; exercise?: ExerciseState; source: boolean; placeholder?: string; touched?: Touched | null } = $props();
+  // `lens` is what the note's Iso lens marks (M10), by character of the whole file: Iso's words, and what was given to Iso.
+  let { note, iso, exercise, source, placeholder, touched = null, lens = [] }: { note: NoteSession; iso?: NoteIso; exercise?: ExerciseState; source: boolean; placeholder?: string; touched?: Touched | null; lens?: Mark[] } = $props();
 
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
@@ -55,7 +58,7 @@
     }
     return {
       blocks: iso.layout.blocks.map((b) => ({ key: b.key, line: Math.max(0, b.line - head.lines) })).sort((a, b) => a.line - b.line),
-      marks: [...iso.layout.picked.map(within("picked")), ...iso.layout.old.map(within("old")), ...ex].filter((m) => m.to > 0),
+      marks: [...iso.layout.picked.map(within("picked")), ...iso.layout.old.map(within("old")), ...ex, ...lens.map((m) => within(m.kind)(m))].filter((m) => m.to > 0),
       inline: [...iso.layout.inline.map((i) => ({ key: i.key, at: i.at - head.chars })), ...tags].filter((i) => i.at >= 0),
     };
   });
@@ -71,8 +74,13 @@
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
       onFollow: (id) => { void goto(noteHref(id)); },
       ...(iso ? {
-        // Ctrl+Enter opens the prompt under the cursor's paragraph; with text selected, asking for a rewrite of it.
-        onAsk: (w: Where) => iso.promptAt(w.line + head.lines, { from: w.from + head.chars, to: w.to + head.chars }),
+        // Ctrl+Enter goes to Iso's pane (M10), with the text selected, if any, given to Iso.
+        onAsk: (w: Where) => {
+          const chosen = note.text.slice(w.from + head.chars, w.to + head.chars).trim();
+          if (chosen) tray.add({ kind: "passage", id: note.id, title: note.fields.title || note.id, text: chosen });
+          panes.to("iso");
+          requestAnimationFrame(() => document.getElementById("iso-box")?.focus());
+        },
         onCursor: (w: Where) => { iso.cursor = { line: w.line + head.lines, from: w.from + head.chars, to: w.to + head.chars }; },
         // While the prompt asks for a rewrite, text selected in the note is chosen for it.
         picking: () => iso.picking,

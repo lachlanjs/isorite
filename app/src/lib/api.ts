@@ -47,6 +47,13 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     timeline: () => ask("timeline"),
     search: (query) => ask(`search?q=${encodeURIComponent(query)}`),
     ask: (request) => write("POST", "iso/ask", request),
+    converse: (request) => write("POST", "iso/converse", request),
+    understanding: (note) => ask("understanding" + q(note)),
+    saveScratchpad: (note, scratchpad, base) => write("POST", "understanding/scratchpad" + q(note), { scratchpad, base }),
+    undoTurn: (conversation, turn) => write("POST", "iso/undo", { conversation, turn }),
+    answer: async (turn, permission, decision) => { await write("POST", "iso/answer", { turn, permission, decision }); },
+    conversation: async (id) => { const c = await ask<{ id: string; turns: [] }>("conversation" + (id ? q(id) : "")); return c.id ? c : null; },
+    turnContext: (request) => ask(`turn/context?turn=${encodeURIComponent(JSON.stringify(request))}`),
     stop: async (request) => { await write("POST", "iso/stop", { request }); },
     keep: (id, proposal, region) => write("POST", "proposal/keep" + q(id), { proposal, ...(region === undefined ? {} : { region }) }),
     revise: async (id, proposal, text) => { await write("POST", "proposal/revise" + q(id), { proposal, text }); },
@@ -59,7 +66,7 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     keepExercise: (draft, proposal) => write("POST", "exercise/keep" + q(draft), { proposal }),
     study: () => ask("study"),
     windBack: async (exercise) => { await write("POST", "exercise/wind-back" + q(exercise), {}); },
-    context: (note) => ask("context" + (note ? q(note) : "")),
+    context: (note, choice) => ask("context" + (note ? q(note) : "") + (choice ? `${note ? "&" : "?"}choice=${encodeURIComponent(JSON.stringify(choice))}` : "")),
     clearConversation: async () => { await write("POST", "context/clear", {}); },
     settings: () => ask("settings"),
     setKey: (key) => write("PUT", "settings/key", { key }),
@@ -74,7 +81,7 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     events(listener) {
       const source = new EventSource(root + "events");
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
-      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-done", "iso-stopped", "iso-failed", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received"] satisfies EngineEvent["type"][];
+      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-item", "iso-answer", "iso-done", "iso-stopped", "iso-failed", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received"] satisfies EngineEvent["type"][];
       for (const type of types) source.addEventListener(type, on);
       return () => source.close();
     },

@@ -5,10 +5,14 @@
   // A note, open for writing: its title, its details when they are wanted, and its text. Saving is the
   // session's business (note.svelte.ts); this shows how it stands and offers the choice when a save is refused.
   import { onMount } from "svelte";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { isStudyId, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
-  import type { StudyReport } from "@isorite/engine";
   import { app, noteHref } from "$lib/app.svelte.ts";
+  import { panes } from "$lib/panes.svelte.ts";
+  import { tray } from "$lib/tray.svelte.ts";
+  import { wordAuthors } from "@isorite/core";
+  import type { Mark } from "$lib/editor/overlays.ts";
   import { ExerciseState, moveText } from "$lib/exercise.svelte.ts";
   import { NoteIso } from "$lib/iso.svelte.ts";
   import { NoteSession } from "$lib/note.svelte.ts";
@@ -32,22 +36,6 @@
   const KINDS: Record<string, string> = { written: "written response" };
   const titleOf = (n: string): string => app.listing.notes.find((x) => x.id === n)?.title ?? n.split("/").at(-1)!;
 
-  // A note of the base, in study (Study-Fit): its squares in the margin, the exercises that test it, and the way to
-  // ask for one. Project mode shows none of this.
-  // svelte-ignore state_referenced_locally
-  const studied = !id.startsWith("@") && Boolean(app.session?.study);
-  let report = $state.raw<StudyReport | null>(null);
-  let marginProblem = $state("");
-  const reading = $derived(report?.notes[id]);
-  const testing = $derived(report?.exercises.filter((x) => x.tests.includes(id)).length ?? 0);
-  const STEPS = ["not reached", "opened", "worked through", "understood"];
-  async function readStudy() { try { report = await app.api.study(); } catch { /* the next event asks again */ } }
-  async function askExercise() {
-    try {
-      const made = await app.api.createExerciseDraft(app.listing.notes.find((n) => n.id === id)?.dir ?? id.split("/").slice(0, -1).join("/"), [id]);
-      await goto(resolve("/draft/[id]", { id: made.id.slice("@draft/".length) }));
-    } catch (e) { marginProblem = (e as Error).message; }
-  }
 
   const remembered = (key: string): boolean => { try { return localStorage.getItem(key) === "1"; } catch { return false; } };
   const remember = (key: string, on: boolean) => { try { localStorage.setItem(key, on ? "1" : "0"); } catch { /* not kept */ } };
@@ -65,10 +53,12 @@
   const all = $derived(moments(iso.entries));
   const isos = (m: Moment) => m.who.startsWith("iso:") || m.who.startsWith("agent:");
   const lines = (runs: { from: number; to: number }[]) => runs.flatMap((r) => Array.from({ length: r.to - r.from }, (_, k) => r.from + k));
-  // In the note as it is: the moment pointed at, or, with the timeline open and nothing pointed at, Iso's latest kept.
+  // In the note as it is: the moment pointed at, or, with the timeline open and nothing pointed at, Iso's latest
+  // kept or written.
   const live = $derived.by((): Touched | null => {
     if (!timeline || at || asSource) return null;
-    const m = pointed ?? all.findLast((x) => isos(x) && x.what === "kept");
+    // In the Iso lens Iso's words are marked already, so only the moment pointed at is.
+    const m = pointed ?? (isoLens ? undefined : all.findLast((x) => isos(x) && (x.what === "kept" || x.what === "edited")));
     if (!m) return null;
     const got = lines(touchedBy(iso.entries, m.ids).runs);
     return got.length ? { who: isos(m) ? "iso" : "you", lines: got } : null;
@@ -86,13 +76,38 @@
     return { text, touched: { who: isos(at) ? "iso" : "you", lines: lines(touchedBy(upTo, at.ids).runs) } as Touched, asked: at.asked, offered };
   });
   // Opened from a moment chosen elsewhere (the Atlas's timeline): `?at=<entry>` shows the note as it was then.
-  let wanted = new URLSearchParams(location.hash.split("?")[1] ?? "").get("at");
+  // The note may already be open in its pane when the moment is chosen, so the address is followed, not read once.
+  const atOf = (): string | null => page.url.searchParams.get("at") ?? new URLSearchParams(location.hash.split("?")[1] ?? "").get("at");
+  let wanted = $state(atOf());
+  $effect(() => { const w = atOf(); if (w) wanted = w; });
   $effect(() => {
     if (!wanted) return;
     const m = all.find((x) => x.ids.includes(wanted!));
     if (!m) return;
     wanted = null;
     timeline = true; at = m;
+  });
+  // The note's Iso lens (M10): the timeline shows, the words Iso wrote are marked, and so is what was given to Iso.
+  const isoLens = $derived(panes.lens.note === "iso");
+  $effect(() => { timeline = isoLens || remembered("isorite.timeline"); });
+  const lensMarks = $derived.by((): Mark[] => {
+    if (!isoLens || note.loaded !== "ready") return [];
+    const out: Mark[] = [];
+    // Words: where the journal's text is the note's (not while unsaved typing runs ahead of it).
+    const runs = wordAuthors(iso.entries), lines = note.text.split("\n");
+    if (runs && runs.length === lines.length) {
+      let at = 0;
+      for (const [k, line] of lines.entries()) {
+        for (const r of runs[k]!) if ((r.who.startsWith("iso:") || r.who.startsWith("agent:")) && r.to <= line.length && line.slice(r.from, r.to).trim()) out.push({ kind: "by-iso", from: at + r.from, to: at + r.to });
+        at += line.length + 1;
+      }
+    }
+    for (const p of tray.parts) {
+      if (p.kind !== "passage" || p.id !== id) continue;
+      const k = note.text.indexOf(p.text);
+      if (k >= 0) out.push({ kind: "given", from: k, to: k + p.text.length });
+    }
+    return out;
   });
   function toggleTimeline() { timeline = !timeline; remember("isorite.timeline", timeline); if (!timeline) { at = null; pointed = null; } }
   function pick(m: Moment) { restoreProblem = ""; at = at === m ? null : m; }
@@ -119,14 +134,11 @@
     app.open = id;
     void note.open().then(() => iso.open());
     void exercise?.open();
-    const unhear = studied ? app.on((e) => { if (e.type === "record" || (e.type === "note-changed" && e.id.startsWith("@study/"))) void readStudy(); }) : null;
-    if (studied) void readStudy();
     const leaving = () => { void note.save(); };
     addEventListener("pagehide", leaving);
     document.addEventListener("visibilitychange", leaving);
     return () => {
       removeEventListener("pagehide", leaving);
-      unhear?.();
       document.removeEventListener("visibilitychange", leaving);
       iso.close();
       exercise?.close();
@@ -157,6 +169,26 @@
   // Sending the note, or the passage chosen in it, to the terminal's agent.
   let sending = $state(false);
   const chosen = $derived(iso.cursor && iso.cursor.to > iso.cursor.from ? note.text.slice(iso.cursor.from, iso.cursor.to).trim() : "");
+  // A passage chosen in the note can be sent to Iso (M10): one button by the selection, above it on a desktop and
+  // below it on a phone, where the system's own handles are above.
+  let noteEl = $state<HTMLElement>();
+  let toIsoAt = $state<{ top: number; left: number } | null>(null);
+  $effect(() => {
+    void iso.cursor;
+    if (!chosen || !noteEl || asSource || at) { toIsoAt = null; return; }
+    const frame = requestAnimationFrame(() => {
+      const sel = getSelection(), box = noteEl!.getBoundingClientRect();
+      const r = sel?.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
+      if (!r || (!r.width && !r.height)) { toIsoAt = { top: 8, left: box.width - 140 }; return; }
+      toIsoAt = { top: panes.narrow ? r.bottom - box.top + 10 : r.top - box.top - 36, left: Math.max(8, Math.min(r.left - box.left, box.width - 140)) };
+    });
+    return () => cancelAnimationFrame(frame);
+  });
+  function sendToIso(): void {
+    if (!chosen) return;
+    tray.add({ kind: "passage", id, title: note.fields.title || id, text: chosen });
+    toIsoAt = null;
+  }
 </script>
 
 <svelte:window onkeydown={keys} />
@@ -165,7 +197,7 @@
   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1v14" stroke="currentColor" stroke-width="1.2" fill="none" /><rect x="5.5" y="2" width="5" height="3.2" fill="currentColor" /><path d="M8 6.3l2.3 2.3L8 10.9 5.7 8.6z" fill="currentColor" /><rect x="5.5" y="12" width="5" height="3" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
 {/snippet}
 
-<article class="note" class:timed={timeline && note.loaded === "ready" && !asSource}>
+<article class="note" bind:this={noteEl} class:timed={timeline && note.loaded === "ready" && !asSource}>
   {#if note.loaded === "loading"}
     <p class="faint">opening…</p>
   {:else if note.loaded === "missing"}
@@ -236,18 +268,6 @@
         <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => (source = !source)}>source</button>
         {#if !asSource}<button class="btn quiet" type="button" data-tour="send" aria-pressed={sending} onclick={() => (sending = !sending)}>send to agent</button>{/if}
       </div>
-      {#if studied && !asSource && report}
-        <div class="margin" role="group" aria-label="Iso's read of you">
-          <span class="squares" aria-label="{reading?.squares ?? 0} of 6">{#each [0, 1, 2, 3, 4, 5] as k (k)}<i class="pip" class:lv={k < (reading?.squares ?? 0)}></i>{/each}</span>
-          {#if testing}
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, with the note to narrow to -->
-            <a href={`${resolve("/study")}?note=${encodeURIComponent(id)}`}>{testing} {testing === 1 ? "exercise" : "exercises"}</a>
-          {/if}
-          <span class="label">{STEPS[reading?.step ?? 0]}{reading?.due ? " · due" : ""}</span>
-          <button class="link" type="button" onclick={askExercise}>[ + an exercise ]</button>
-          {#if marginProblem}<span class="bad" role="alert">{marginProblem}</span>{/if}
-        </div>
-      {/if}
       </div>
     </div>
     {/if}
@@ -273,8 +293,11 @@
       {#key momentKey(at)}<NoteVersion text={version.text} title={note.fields.title} touched={version.touched} asked={version.asked} offered={version.offered} />{/key}
     {/if}
 
+    {#if toIsoAt}
+      <button class="toiso" type="button" style:top="{toIsoAt.top}px" style:left="{toIsoAt.left}px" onmousedown={(e) => e.preventDefault()} onclick={sendToIso}><i class="dia" aria-hidden="true">◆</i>send to Iso</button>
+    {/if}
     <div class="live" hidden={Boolean(at && version)}>
-      {#key asSource}<NoteEditor {note} {iso} exercise={ex ?? undefined} source={asSource} touched={live} />{/key}
+      {#key asSource}<NoteEditor {note} {iso} exercise={ex ?? undefined} source={asSource} touched={live} lens={lensMarks} />{/key}
     </div>
 
     {#if ex && !asSource && !at}
@@ -303,19 +326,17 @@
         <i class="dia" aria-hidden="true"></i>
         <span class="soft">{iso.changes.length} {iso.changes.length === 1 ? "change" : "changes"} from {changesFrom} waiting</span>
         <span class="grow"></span>
-        <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(true)}>[ keep all ]</button>
-        <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(false)}>[ remove all ]</button>
+        <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(true)}>keep all</button>
+        <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(false)}>remove all</button>
       </div>
     {/if}
 
-    <!-- On a phone there is no Ctrl+Enter: a field at the foot opens the prompt where the cursor was (Mobile-Note). -->
-    {#if iso.prompt === null && !iso.asking}
-      <div class="seed"><button class="field" type="button" onclick={() => iso.promptHere()}><span class="faint">›</span><span class="faint">ask Iso here</span></button></div>
-    {/if}
   {/if}
 </article>
 
 <style>
+  .toiso { position: absolute; z-index: 6; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; background: var(--ground-2); border: 1px solid var(--growth); color: var(--text); font-size: 12px; cursor: pointer; }
+  .toiso .dia { font-style: normal; font-size: 10px; color: var(--growth); }
   .note { position: relative; max-width: calc(var(--measure) + 2 * var(--space-4)); margin: 0 auto; padding: 40px var(--space-4) 0; display: flex; flex-direction: column; gap: var(--space-2); }
   .head { display: flex; align-items: flex-start; gap: var(--space-3); }
   .title { flex: 1 1 auto; min-width: 0; font-size: 34px; line-height: 1.2; font-weight: 700; background: none; border: 0; padding: 0 2px; color: var(--text); resize: none; field-sizing: content; overflow: hidden; }
@@ -323,11 +344,8 @@
   .title:focus-visible { outline: none; }
   .tools { display: flex; flex: none; padding-top: 6px; }
   .side { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); flex: none; }
-  .margin { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: 12px; padding-top: 2px; }
-  .margin .link { font-size: 12px; padding: 0; }
   /* Where the pane leaves room (a container query: the note may stand beside the Atlas), the margin is the page's own, beside the text and level with the title, 8 px down
      (Study-Fit), and the text starts under the title as in any note. */
-  @container page (min-width: 1100px) { .margin { position: absolute; top: 46px; left: calc(100% + 8px); align-items: flex-start; width: 150px; } }
   .tools .btn { height: 28px; font-size: 12px; }
   .tools .btn[aria-pressed="true"] { color: var(--text); --fill: var(--ground-3); }
   /* The quiet icon buttons: the timeline's, and with a version shown, restore and back to now. Faint until pointed at. */
@@ -354,7 +372,6 @@
   .changes { position: sticky; bottom: 28px; z-index: 8; display: flex; align-items: center; gap: 12px; padding: 10px 2px; background: var(--ground-0); border-top: 1px solid var(--line); }
   .changes .dia { margin: 0 3px; }
   .link { background: none; border: 0; padding: 4px 0; color: var(--lattice); white-space: nowrap; }
-  .seed { display: none; }
   .tests { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; padding-top: 16px; }
   .tests .tools { padding-top: 0; }
   .foot { position: sticky; bottom: 28px; z-index: 8; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 16px 0 20px; background: var(--ground-0); border-top: 1px solid var(--line); }
@@ -364,9 +381,14 @@
   .squares { display: inline-flex; gap: 4px; }
   .evidence { display: flex; gap: 12px; padding-left: 4px; }
   .evidence .by { width: 2.5ch; flex: none; text-align: right; color: var(--text-soft); }
+  /* A narrow pane (M10) lays the head out as a phone does: the title under the tools, the whole width. */
+  @container page (max-width: 600px) {
+    .head { flex-direction: column-reverse; gap: var(--space-1); }
+    .tools { align-self: flex-end; padding-top: 0; }
+    .side { align-self: stretch; flex-direction: row-reverse; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; }
+    .title { font-size: 30px; width: 100%; }
+  }
   @media (max-width: 600px) {
-    .seed { display: block; position: fixed; left: 0; right: 0; bottom: 84px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--ground-1); z-index: 9; }
-    .seed .field { width: 100%; height: 44px; display: flex; align-items: center; gap: 8px; text-align: left; }
     .note { padding: 20px 20px 80px; }
     .note.timed { padding-left: 56px; }
     .tl-col { top: 20px; left: 8px; bottom: 0; z-index: 1; padding-right: 2px; border-right: 1px solid var(--line); background: var(--ground-1); }
@@ -376,7 +398,6 @@
     .head { flex-direction: column-reverse; gap: var(--space-1); }
     .tools { align-self: flex-end; padding-top: 0; }
     .side { align-self: stretch; flex-direction: row-reverse; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; }
-    .margin { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
     .title { font-size: 30px; width: 100%; }
   }
 </style>

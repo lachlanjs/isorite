@@ -12,6 +12,8 @@
 //                             today. The result (right, partly, wrong) moves nothing:
 //                             Iso weighs how accurate the attempt was, how much help
 //                             it needed, and how closely the note bears on it.
+//   understood                a note moves by what Iso judged in a conversation in Understand mode (−1 to +1),
+//                             and counts as tested today (M10)
 //   wind-back                 one level down: you told Iso it rated you too highly
 //
 // An exercise that tests several notes moves each of them, and shows the lowest.
@@ -79,6 +81,10 @@ export function understanding(events: readonly LearnerEvent[], now = Date.now())
         s.level = clamp(s.level + (typeof by === "number" && Number.isFinite(by) ? Math.max(-1, Math.min(1, by)) : 0));
         s.last = when; s.evidence.push(e.id);
       }
+    } else if (e.event === "understood" && typeof e.note === "string") {
+      const s = at(e.note), by = e.by;
+      s.level = clamp(s.level + (typeof by === "number" && Number.isFinite(by) ? Math.max(-1, Math.min(1, by)) : 0));
+      s.last = when; s.evidence.push(e.id);
     } else if (e.event === "moved" && typeof e.from === "string" && typeof e.to === "string") {
       // The note was moved: what was known of it goes with it.
       const s = state.get(e.from);

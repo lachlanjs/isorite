@@ -4,14 +4,16 @@
   // its marks. The marks are plain maps from a note to a mark, looked up while drawing.
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { reach } from "@isorite/core";
+  import { reach, withoutStudy } from "@isorite/core";
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
   import type { How, MapReport, NoteSource } from "@isorite/engine";
-  import { linkedIn, place, placeOf, testsIn, titleIn, withLink, withoutLink, withTest } from "$lib/atlas/picks.ts";
+  import { linkedIn, placeOf, testsIn, titleIn, withLink, withoutLink, withTest } from "$lib/atlas/picks.ts";
   import { tick } from "svelte";
   import AtlasDock from "./AtlasDock.svelte";
-  import { app, noteHref } from "$lib/app.svelte.ts";
-  import { views } from "$lib/views.svelte.ts";
+  import { app, noteHref, slug } from "$lib/app.svelte.ts";
+  import { panes } from "$lib/panes.svelte.ts";
+  import { tray, type Part } from "$lib/tray.svelte.ts";
+  import { converse } from "$lib/converse.svelte.ts";
   import { CELL, LABELS_AT, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
@@ -67,7 +69,9 @@
   }
   async function load(): Promise<void> {
     try {
-      const next = await app.api.map();
+      const got = await app.api.map();
+      // Study folders are drawn in the Understand lens only (M10).
+      const next = studyShown ? got : { ...got, model: withoutStudy(got.model) };
       // A changed base is laid out from where things stood (V5), on the same grid and the same way.
       const on = `${flow}|${grain}`, from = laid && laidOn === on ? laid.layout.orders ?? null : null;
       const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from });
@@ -81,6 +85,10 @@
     } catch (e) { failed = (e as Error).message; }
   }
 
+  const studyShown = $derived(panes.lens.atlas === "understand");
+  // Into or out of the Understand lens, the map is laid out again with or without the study folders.
+  let shownBefore: boolean | null = null;
+  $effect(() => { const s = studyShown; if (shownBefore !== null && shownBefore !== s) void load(); shownBefore = s; });
   $effect(() => {
     void load();
     let again: ReturnType<typeof setTimeout> | undefined;
@@ -253,6 +261,19 @@
     for (const s of run?.steps ?? []) if (s.opened && !s.failed && !out.has(s.opened)) out.set(s.opened, s.how);
     return out;
   });
+  // The Iso lens (M10): what Iso is sent, what it changed in this conversation, what it points to, and the order
+  // it read in during its last turn. Iso's path is drawn only in this lens.
+  const isoLens = $derived(panes.lens.atlas === "iso" || !!pick);
+  const givenNotes = $derived(new Set(tray.parts.filter((p) => p.kind === "note").map((p) => p.id)));
+  const givenFolders = $derived(new Set(tray.parts.filter((p) => p.kind === "folder").map((p) => p.id)));
+  const lastTurn = $derived(converse.turns.at(-1));
+  const changedByIso = $derived(new Set(converse.turns.filter((t) => !t.items.some((i) => i.kind === "undone")).flatMap((t) => t.items.flatMap((i) => (i.kind === "change" && i.why !== "delete" ? [i.why === "move" ? i.to! : i.note] : [])))));
+  const pointedTo = $derived(new Map((lastTurn?.items ?? []).flatMap((i) => (i.kind === "point" ? [[i.note, i.why] as const] : []))));
+  const readOrder = $derived.by(() => {
+    const out = new Map<string, number>();
+    for (const i of lastTurn?.items ?? []) if (i.kind === "look" && i.step.opened && !i.step.failed && !out.has(i.step.opened)) out.set(i.step.opened, out.size + 1);
+    return out;
+  });
   /** The note it is reading now. */
   const reading = $derived(running ? (run!.steps.findLast((s) => s.opened && !s.failed)?.opened ?? "") : "");
   // Its steps along links, drawn as the map draws a link: from the note in hand to the one it led to.
@@ -299,6 +320,7 @@
   });
   /** How a note is outlined for Iso's path: by keyword, by meaning, along a link (or named outright), or being read now. */
   const isoMark = (ref: string): "" | "key" | "sem" | "link" | "used" => {
+    if (!isoLens) return "";
     if (ref === reading) return "used";
     const how = reached.get(ref);
     return how === "keyword" ? "key" : how === "meaning" ? "sem" : how ? "link" : "";
@@ -353,33 +375,79 @@
     });
   }
 
-  // ------------------------------------------------------------ holding, to start a note for Iso
+  // ------------------------------------------------------------ holding, to make a note or a folder (V6)
+  //
+  // Hold still on open ground, and a new note is marked where you hold; let go, and its title is asked for there.
+  // Hold, then drag a little way, and it is a new folder instead: its name is asked for, then its first note's, since
+  // a folder is made when a note is put in it. Either goes in the folder gripped in, and opens in the Note pane. What
+  // is marked is a note's or a folder's icon, not an area (Lachlan, on V6). Held on a note, the note is given to Iso
+  // (M10): it goes into the tray above Iso's box.
 
-  const HOLD_SHOWN = 180, HOLD = 650;
-  /** What is held: a note, or a place on open ground (in cells). Shown as a marching box until the note is made. */
-  let grasp = $state.raw<{ note: string; gx: number; gy: number; w: number; h: number } | null>(null);
+  const HOLD_SHOWN = 180, HOLD = 650, FOLDER_DRAG = 24;
+  /** What is gripped: a place (in cells), the folder it is in, and whether a drag has made it a folder. */
+  let grasp = $state.raw<{ dir: string; gx: number; gy: number; w: number; h: number; folder: boolean } | null>(null);
+  /** Held long enough: the gesture is ours until the pointer is let go. Where it began, on the screen. */
+  let gripped: { x: number; y: number } | null = null;
+  /** Let go: the name being asked for, on the map where it was gripped. */
+  let naming = $state.raw<{ dir: string; gx: number; gy: number; w: number; h: number; folder: boolean; named: string } | null>(null);
   let holdShow: ReturnType<typeof setTimeout> | undefined, holdDone: ReturnType<typeof setTimeout> | undefined;
-  function unhold(): void { clearTimeout(holdShow); clearTimeout(holdDone); holdShow = holdDone = undefined; grasp = null; }
+  function unhold(): void { clearTimeout(holdShow); clearTimeout(holdDone); holdShow = holdDone = undefined; gripped = null; if (!naming) grasp = null; }
+  /** The deepest folder of the base holding a place on the map (in cells): "" for the top. */
+  function folderAt(gx: number, gy: number): string {
+    let best: { ref: string; depth: number } | null = null;
+    for (const n of L!.items) if (n.kind === "folder" && !n.ref.startsWith("@") && gx >= n.gx && gx < n.gx + n.w && gy >= n.gy && gy < n.gy + n.h && (!best || n.depth > best.depth)) best = { ref: n.ref, depth: n.depth };
+    return best?.ref ?? "";
+  }
   function holding(e: PointerEvent, at: { x: number; y: number }): void {
     unhold();
-    if (pick || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock")) return;
+    naming = null;
+    if (pick || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock, .naming")) return;
     const on = e.target.closest<HTMLElement>("[data-note]")?.dataset.note ?? "";
-    if (on.startsWith("@")) return; // a study item is not a note to start from
-    const item = on ? L.items[idx.at.get(on) ?? -1] : undefined, u = L.cell * view.k;
-    const w = Math.round(126 / L.cell), h = Math.round(35 / L.cell); // a note's size in cells: 18 by 5, 9 by 3 on the coarse grid, 7 by 2 on the coarser
-    const what = item ? { note: on, gx: item.gx, gy: item.gy, w: item.w, h: item.h } : { note: "", gx: Math.round((at.x - view.x) / u) - Math.floor(w / 2), gy: Math.round((at.y - view.y) / u) - Math.ceil(h / 2), w, h };
+    if (on.startsWith("@")) return; // a study item is not a place in the base
+    if (on) {
+      holdDone = setTimeout(() => { holdDone = undefined; dragged = true; give(on); }, HOLD);
+      return;
+    }
+    const u = L.cell * view.k, gx = Math.round((at.x - view.x) / u), gy = Math.round((at.y - view.y) / u);
+    const what = { dir: folderAt(gx, gy), gx, gy, w: 0, h: 0, folder: false };
     holdShow = setTimeout(() => { grasp = what; }, HOLD_SHOWN);
-    holdDone = setTimeout(() => { dragged = true; void begin(what); }, HOLD);
+    holdDone = setTimeout(() => { holdDone = undefined; dragged = true; gripped = at; grasp = what; viewport?.setPointerCapture(e.pointerId); }, HOLD);
   }
-  /** A note for Iso, begun where the map was held: blank, or linking the note held. It opens as any does. */
-  async function begin(what: { note: string; gx: number; gy: number }): Promise<void> {
+  /** While gripped: a drag far enough makes it a folder. Its icon stays where the hold began. */
+  function drawHeld(at: { x: number; y: number }): void {
+    if (!gripped || !grasp || grasp.folder) return;
+    if (Math.hypot(at.x - gripped.x, at.y - gripped.y) >= FOLDER_DRAG) grasp = { ...grasp, folder: true };
+  }
+  /** A note given to Iso: into the tray, said on the map for a moment. */
+  let given = $state("");
+  let givenTimer: ReturnType<typeof setTimeout> | undefined;
+  function give(ref: string, kind: "note" | "folder" = "note"): void {
+    const put = tray.add({ kind, id: ref, title: kind === "note" ? title(ref) : folderName(ref) });
+    given = put ? `${kind === "note" ? title(ref) : folderName(ref)} is in Iso's context` : `${kind === "note" ? title(ref) : folderName(ref)} is in Iso's context already`;
+    clearTimeout(givenTimer);
+    givenTimer = setTimeout(() => (given = ""), 2200);
+  }
+  /** Let go while gripped: ask for the name there. */
+  function letGo(): void {
+    if (!gripped || !grasp) return;
+    gripped = null;
+    naming = { ...grasp, named: "" };
+  }
+  async function named(e: SubmitEvent): Promise<void> {
+    e.preventDefault();
+    const n = naming, input = (e.currentTarget as HTMLFormElement).querySelector("input")!, value = input.value.trim();
+    if (!n || !value) return;
+    // A folder: its name first, then its first note's title.
+    if (n.folder && !n.named) { naming = { ...n, named: slug(value) || value }; input.value = ""; return; }
+    const dir = [n.dir, n.folder ? n.named : ""].filter(Boolean).join("/"), id = [dir, slug(value)].filter(Boolean).join("/");
     try {
-      const made = await app.api.createDraft();
-      if (what.note) await app.api.saveNote(made.id, { base: made.version, text: withLink(made.text, what.note, title(what.note)) });
-      place(made.id, { gx: (what.gx * L!.cell) / CELL, gy: (what.gy * L!.cell) / CELL }); // kept in cells of the fine grid, whichever is shown
-      await goto(resolve("/draft/[id]", { id: made.id.slice("@draft/".length) }));
-    } catch (e) { notice = (e as Error).message; unhold(); }
+      await app.api.createNote(id, `---\ntype: Concept\ntitle: ${JSON.stringify(value)}\n---\n\n`);
+      naming = null; grasp = null;
+      await app.refresh();
+      await panes.open(id);
+    } catch (err) { notice = (err as Error).message; }
   }
+  function cancelNaming(): void { naming = null; grasp = null; }
 
   const title = (ref: string): string => report?.notes[ref]?.title ?? ref.split("/").at(-1) ?? ref;
   const folderName = (ref: string): string => (ref.startsWith("@study") ? ref.replace(/^@study\/?/, "").split("/").at(-1) || app.session?.name || "the base" : ref.split("/").at(-1) ?? ref);
@@ -415,10 +483,32 @@
   }
   const local = (e: PointerEvent | WheelEvent): { x: number; y: number } => { const r = viewport!.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
+  // A note or folder dragged out of the Atlas with a mouse is carried: let go over Iso's pane, it is given to Iso. Inside
+  // the Atlas the same drag moves the map, as it always has.
+  let press: Part | null = null;
+  let carryAt = $state({ x: 0, y: 0 });
+  function pressed(e: PointerEvent): Part | null {
+    if (e.pointerType !== "mouse" || pick || !(e.target instanceof Element)) return null;
+    const n = e.target.closest<HTMLElement>("[data-note]")?.dataset.note;
+    if (n) return n.startsWith("@") ? null : { kind: "note", id: n, title: title(n) };
+    const f = e.target.closest<HTMLElement>("[data-folder]")?.dataset.folder;
+    return f && !f.startsWith("@") ? { kind: "folder", id: f, title: folderName(f) } : null;
+  }
+  function carry(e: PointerEvent): boolean {
+    if (!press || !grip || !viewport) return false;
+    const r = viewport.getBoundingClientRect();
+    const out = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    if (!tray.carrying && !out) return false;
+    if (!tray.carrying) view = grip.view; // the map goes back to where it was: the note leaves it
+    carryAt = { x: e.clientX, y: e.clientY };
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-pane="iso"]') != null;
+    tray.carrying = { part: press, over };
+    return true;
+  }
   function down(e: PointerEvent): void {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     cancelAnimationFrame(flying);
-    if (!pointers.size) dragged = false;
+    if (!pointers.size) { dragged = false; press = pressed(e); }
     pointers.set(e.pointerId, local(e));
     regrip();
     if (pointers.size === 1) holding(e, local(e)); else unhold();
@@ -426,17 +516,26 @@
   function move(e: PointerEvent): void {
     if (!pointers.has(e.pointerId) || !grip) return;
     pointers.set(e.pointerId, local(e));
+    if (gripped) { drawHeld(local(e)); return; }
     const ps = [...pointers.values()];
     const x = ps.reduce((s, p) => s + p.x, 0) / ps.length, y = ps.reduce((s, p) => s + p.y, 0) / ps.length;
     if (!dragged && ps.length === 1 && Math.hypot(x - grip.x, y - grip.y) < 5) return;
     if (!dragged) { dragged = moved = true; unhold(); viewport!.setPointerCapture(e.pointerId); }
+    if (ps.length === 1 && carry(e)) return;
     const span = ps.length > 1 ? Math.hypot(ps[0]!.x - ps[1]!.x, ps[0]!.y - ps[1]!.y) : 0;
     const zoomed = grip.span && span ? zoomAbout(grip.view, span / grip.span, grip.x, grip.y) : grip.view;
     view = { k: zoomed.k, x: zoomed.x + x - grip.x, y: zoomed.y + y - grip.y };
   }
   function up(e: PointerEvent): void {
     if (!pointers.delete(e.pointerId)) return;
-    if (holdDone !== undefined) unhold(); // let go before the note was made
+    if (tray.carrying) {
+      const { part, over } = tray.carrying;
+      tray.carrying = null;
+      if (over && (part.kind === "note" || part.kind === "folder")) give(part.id, part.kind);
+    }
+    press = null;
+    if (gripped) letGo();
+    else if (holdDone !== undefined) unhold(); // let go before the hold was long enough
     regrip();
   }
   function wheel(e: WheelEvent): void {
@@ -463,8 +562,10 @@
     e.stopPropagation();
     if (dragged) return;
     if (pick) { toggle(ref); return; }
+    // In the Iso lens a note is brought into what Iso is sent, or taken out (M10).
+    if (panes.lens.atlas === "iso" && !ref.startsWith("@")) { tray.toggle({ kind: "note", id: ref, title: title(ref) }); return; }
     // Chosen already: open it, beside the Atlas on a desktop (V1).
-    if (chosen === ref) { void views.openFromAtlas(ref); return; }
+    if (chosen === ref) { void panes.open(ref); return; }
     const back: string[] = [];
     if (lit && at === chosen && lit.depth[ref]) for (let r: string | undefined = ref; r && r !== chosen; r = lit.via[r]) back.unshift(r);
     walk = walk.includes(ref) ? walk.slice(0, walk.indexOf(ref) + 1) : back.length ? [...walk, ...back] : [ref];
@@ -472,6 +573,8 @@
   /** A click on a folder frames it; on one already framed, the folder it is in. */
   function enter(i: number): void {
     if (dragged || !L) return;
+    const ref = L.items[i]!.ref;
+    if (panes.lens.atlas === "iso" && !ref.startsWith("@")) { tray.toggle({ kind: "folder", id: ref, title: folderName(ref) }); return; }
     moved = true;
     const to = fit(L.items[i]!, size.w, size.h, 1.5, L.cell), there = Math.abs(to.k - view.k) < 0.01 * to.k && Math.hypot(to.x - view.x, to.y - view.y) < 4;
     const parent = L.items[i]!.parent;
@@ -537,6 +640,7 @@
 <div class="atlas dots" class:lit={!!lit} bind:this={viewport} role="application" aria-label="The atlas: the map of the base" tabindex="0"
   style="background-position: {view.x}px {view.y}px"
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onclick={ground} onkeydown={key}
+  ondragstart={(e) => e.preventDefault()}
   oncontextmenu={(e) => { if (grasp || holdShow !== undefined) e.preventDefault(); }}>
   {#if failed}
     <p class="said">The map could not be drawn: {failed}</p>
@@ -547,10 +651,10 @@
         {#if f.item.ref.startsWith("@study")}
           <AtlasStudyFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} passes={L.items.filter((x) => x.parent === f.i && report?.notes[x.ref]?.passed).length} onpick={() => enter(f.i)} />
         {:else}
-          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * view.k >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} onpick={() => enter(f.i)} />
+          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * view.k >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} onpick={() => enter(f.i)} />
         {/if}
       {/each}
-      <AtlasRoutes k={view.k} {rest} hot={[...isoHot, ...hot]} counts={litCount} sent={sentLines} {grown} />
+      <AtlasRoutes k={view.k} {rest} hot={[...(isoLens ? isoHot : []), ...hot]} counts={litCount} sent={sentLines} {grown} />
       {#if labels}
         {#each rest as r (r.key)}
           {#if r.label}<span class="count {r.side}" style="--x:{r.mid[0]};--y:{r.mid[1]}">{r.count}</span>{/if}
@@ -563,7 +667,7 @@
           <AtlasStudyItem item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? "note"} {mark} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {:else}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} step={report.notes[n.item.ref]?.step ?? 0} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} step={studyShown ? (report.notes[n.item.ref]?.step ?? 0) : 1} since={studyShown ? (report.notes[n.item.ref]?.changedSince ?? "") : ""} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
         {/if}
       {/each}
@@ -577,10 +681,19 @@
         </div>
       {/if}
       {#if grasp}
-        <div class="grasp" class:on-note={!!grasp.note} style="--x:{grasp.gx};--y:{grasp.gy};--w:{grasp.w};--h:{grasp.h}">
-          <svg aria-hidden="true"><rect x="1" y="1" width="100%" height="100%" /></svg>
-          {#if !grasp.note && labels}<span><i class="dia" aria-hidden="true"></i>a new note</span>{/if}
+        <div class="grasp" class:folder={grasp.folder} style="--x:{grasp.gx};--y:{grasp.gy}">
+          <svg viewBox="0 0 20 24" width="20" height="24" aria-hidden="true">{#if grasp.folder}<path d="M1.5 5.5h6l2 2.5h9v12.5h-17z" />{:else}<path d="M3.5 1.5h9l4.5 4.5v16.5h-13.5z M12.5 1.5v4.5h4.5" /><path class="ln" d="M6.5 11h7.5M6.5 14.5h7.5M6.5 18h5" />{/if}</svg>
+          {#if !naming}<span>{grasp.folder ? "a new folder" : "a new note"}{grasp.dir ? ` in ${grasp.dir}` : ""}</span>{/if}
         </div>
+      {/if}
+      {#if naming}
+        <form class="naming" style="--x:{naming.gx};--y:{naming.gy}" onsubmit={named}>
+          <!-- svelte-ignore a11y_autofocus -->
+          <input autofocus aria-label={naming.folder && !naming.named ? "the new folder's name" : "the new note's title"} autocomplete="off"
+            placeholder={naming.folder && !naming.named ? `a new folder${naming.dir ? ` in ${naming.dir}` : ""}` : `a new note${naming.dir || naming.named ? ` in ${[naming.dir, naming.named].filter(Boolean).join("/")}` : ""}`}
+            onkeydown={(e) => { if (e.key === "Escape") { e.stopPropagation(); cancelNaming(); } }} />
+          <button class="btn primary" type="submit">{naming.folder && !naming.named ? "next" : "make it"}</button>
+        </form>
       {/if}
     </div>
     {#if pick}
@@ -588,6 +701,16 @@
         href={resolve("/draft/[id]", { id: pick.slice("@draft/".length) })} />
     {:else if notice}
       <p class="notice" role="alert">{notice}</p>
+    {/if}
+    {#if given}<p class="given" role="status">◆ {given}</p>{/if}
+    {#if studyShown && !pick && !given}
+      <p class="legend" aria-hidden="true"><span><i class="k s0"></i>not reached</span><span><i class="k s1"></i>opened</span><span><i class="k s2"></i>worked through</span><span><i class="k s3"></i>understood</span><span><i class="k ch"></i>changed since</span></p>
+    {/if}
+    {#if panes.lens.atlas === "iso" && !pick && !given}
+      <p class="legend" aria-hidden="true"><span><i class="k g"></i>in Iso's context</span><span><i class="k d"></i>Iso changed it</span><span><i class="k p"></i>Iso points to it</span><span><i class="k n">1</i>read, in order</span><span class="faint">tap to give or take back</span></p>
+    {/if}
+    {#if tray.carrying}
+      <div class="carried" class:over={tray.carrying.over} style="left:{carryAt.x}px;top:{carryAt.y}px" aria-hidden="true">{tray.carrying.part.kind === "folder" ? "▭" : "▣"} {tray.carrying.part.title}</div>
     {/if}
   {/if}
 </div>
@@ -600,14 +723,31 @@
   .shifting :global(:is(.n, .sn, .folder)) { transition: left 0.45s ease, top 0.45s ease, width 0.45s ease, height 0.45s ease; }
   @media (prefers-reduced-motion: reduce) { .shifting :global(:is(.n, .sn, .folder)) { transition: none; } }
   .said { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-4); text-align: center; }
-  /* What is held, until its note is made: a gold box whose dots march (Desktop-Atlas). */
-  .grasp { position: absolute; left: calc(var(--x) * var(--u) - 4px); top: calc(var(--y) * var(--u) - 4px); width: calc(var(--w) * var(--u) + 8px); height: calc(var(--h) * var(--u) + 8px); display: flex; align-items: center; padding: 0 12px; gap: 8px; font-size: 11px; pointer-events: none; z-index: 1; }
-  .grasp svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-  .grasp rect { width: calc(100% - 2px); height: calc(100% - 2px); fill: var(--growth-soft); stroke: var(--growth); stroke-width: 2; stroke-dasharray: 2 3; animation: march .6s linear infinite; }
-  .grasp.on-note rect { fill: none; }
-  .grasp span { position: relative; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-  @keyframes march { to { stroke-dashoffset: -5; } }
-  @media (prefers-reduced-motion: reduce) { .grasp rect { animation: none; } }
+  /* What a hold will make: a note's or a folder's icon where it was held, and what it is (V6). */
+  .grasp { position: absolute; left: calc(var(--x) * var(--u) - 10px); top: calc(var(--y) * var(--u) - 12px); display: flex; align-items: center; gap: 6px; font-size: 11px; pointer-events: none; z-index: 1; }
+  .grasp svg { flex: none; overflow: visible; }
+  .grasp svg path { fill: var(--growth-soft); stroke: var(--growth); stroke-width: 1.5; stroke-linejoin: round; stroke-dasharray: 2 2.5; animation: march .6s linear infinite; }
+  .grasp svg path.ln { fill: none; stroke-dasharray: none; animation: none; }
+  .grasp span { white-space: nowrap; background: var(--ground-0); padding: 0 4px; }
+  @media (prefers-reduced-motion: reduce) { .grasp svg path { animation: none; } }
+  @keyframes march { to { stroke-dashoffset: -9; } }
+  .given { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--growth); font-size: 12px; z-index: 2; }
+  .given::first-letter { color: var(--growth); }
+  .legend { position: absolute; left: 12px; bottom: 10px; right: 12px; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--text-soft); pointer-events: none; z-index: 2; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; background: var(--ground-0); padding: 0 4px; }
+  .legend .k { width: 10px; height: 10px; display: inline-grid; place-items: center; font-style: normal; }
+  .legend .g { background: var(--growth-soft); border: 1px solid var(--growth); }
+  .legend .d { width: 7px; height: 7px; background: var(--growth); transform: rotate(45deg); }
+  .legend .p { border: 1.5px dashed var(--growth); }
+  .legend .s0 { border: 1px dotted var(--line-strong); }
+  .legend .s1 { border: 1px solid var(--line-strong); background: var(--ground-1); }
+  .legend .s2 { border: 1px solid var(--line-strong); background: var(--ground-3); }
+  .legend .s3 { border: 3px double var(--lattice); background: var(--ground-3); }
+  .legend .ch { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid var(--builds); }
+  .legend .n { width: 14px; height: 14px; background: var(--growth); color: var(--ground-0); font-size: 9px; font-weight: 700; }
+  /* A note carried out of the Atlas towards Iso's pane. */
+  .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font-size: 12px; white-space: nowrap; }
+  .carried.over { border-color: var(--growth); }
   .notice { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--rose); color: var(--rose); font-size: 12px; z-index: 2; }
   /* Iso's note while it is answered (Desktop-Think): the draft's block, dotted gold, and under it (or under the
      note asking) a marching gold line and what Iso is doing. */

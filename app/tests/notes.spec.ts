@@ -5,6 +5,8 @@ import { NOTES } from "./serve.ts";
 
 type Entry = { kind: string; why?: string; who: string; text?: string };
 
+/** The Note pane: the Atlas stands beside it with links of its own (M10). */
+const notePane = (page: Page) => page.locator('[data-pane="note"]');
 const editor = (page: Page) => page.getByRole("textbox", { name: "The note", exact: true });
 const saved = (page: Page) => expect(page.getByRole("status")).toHaveText("saved");
 const file = async (page: Page, id: string) => ((await (await page.request.get(`api/note?id=${id}`)).json()) as { text: string }).text;
@@ -18,7 +20,7 @@ async function look(page: Page, name: string) {
 test("a note with maths and a typed link is written, saved, and there when reopened", async ({ page }) => {
   const name = test.info().project.name, id = `basics/entropy-${name}`;
   await page.goto("");
-  await expect(page.getByRole("link", { name: "Surprise" })).toBeVisible();
+  await expect(notePane(page).getByRole("link", { name: "Surprise" })).toBeVisible();
   await look(page, "notes");
 
   await page.getByRole("button", { name: "new note", exact: true }).click();
@@ -52,11 +54,10 @@ test("a note with maths and a typed link is written, saved, and there when reope
   expect(entries.slice(1).every((e) => e.kind === "change" && e.why === "edit" && e.who === "you")).toBe(true);
 
   // The header says where you are; the link in the list leads back here.
-  if (name.startsWith("phone")) await expect(page.getByRole("link", { name: "‹ information-theory" })).toBeVisible();
-  else await expect(page.locator("header .path")).toHaveText(`information-theory/Entropy ${name}`);
-  // The base's name opens the list (V2).
-  await page.getByRole("link", { name: name.startsWith("phone") ? "‹ information-theory" : "information-theory", exact: true }).click();
-  await page.getByRole("link", { name: `Entropy ${name}` }).click();
+  await expect(page.locator("header .path")).toHaveText(`information-theory/Entropy ${name}`);
+  // The base's name opens the list (V2), in the Note pane.
+  await page.locator("header .path").getByRole("link", { name: "information-theory", exact: true }).click();
+  await notePane(page).getByRole("link", { name: `Entropy ${name}` }).click();
   await expect(page.getByLabel("Title")).toHaveValue(`Entropy ${name}`);
 });
 
@@ -64,11 +65,11 @@ test("the list narrows as you type, by title and by what the notes say", async (
   await page.goto("");
   const find = page.getByRole("searchbox", { name: "Find a note" });
   await find.fill("bit");
-  await expect(page.getByRole("link", { name: /The bit/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: /^Surprise/ })).toHaveCount(0);
+  await expect(notePane(page).getByRole("link", { name: /The bit/ })).toBeVisible();
+  await expect(notePane(page).getByRole("link", { name: /^Surprise/ })).toHaveCount(0);
   await find.fill("coin toss");
   await expect(page.getByText("in the text")).toBeVisible();
-  await expect(page.getByRole("link", { name: /The bit/ })).toBeVisible();
+  await expect(notePane(page).getByRole("link", { name: /The bit/ })).toBeVisible();
   await find.fill("zzzz");
   await expect(page.getByText("No note matches.")).toBeVisible();
 });
@@ -112,7 +113,7 @@ test("a note changed elsewhere while you write is offered as a choice, and nothi
   await editor(page).click();
   await page.keyboard.press("Control+End");
   await page.keyboard.type("Typed here meanwhile.");
-  await expect(page.getByRole("alert")).toContainText("changed somewhere else");
+  await expect(notePane(page).getByRole("alert")).toContainText("changed somewhere else");
   expect(await file(page, id)).toBe(theirs);
   await look(page, "choice");
 
@@ -151,13 +152,30 @@ test("what is typed and not yet saved survives the tab closing", async ({ page, 
   expect(await file(again, "basics/surprise")).toContain(`Kept for ${name}.`);
 });
 
-test("the parts, the atlas and study pages, and a note that is not there", async ({ page }) => {
+test("a passage chosen in a note is sent to Iso; the notes open over the note and close when one is chosen", async ({ page }) => {
+  await page.goto("#/n/basics/surprise");
+  await editor(page).click();
+  await page.keyboard.press("Control+Home");
+  await page.keyboard.press("Shift+End");
+  await page.getByRole("button", { name: "send to Iso" }).click();
+  await expect(page.getByRole("list", { name: "What Iso is sent" }).getByRole("listitem")).toHaveText([/^“An outcome of probability/]);
+  await expect(page.getByRole("button", { name: "send to Iso" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "All notes" }).click();
+  await expect(page.getByRole("searchbox", { name: "Find a note" })).toBeVisible();
+  await notePane(page).getByRole("link", { name: "The bit" }).click();
+  await expect(page).toHaveURL(/#\/n\/basics\/bit$/);
+  await expect(page.getByRole("searchbox", { name: "Find a note" })).toHaveCount(0);
+});
+
+test("the parts, the atlas pane and study page, and a note that is not there", async ({ page }) => {
   await page.goto("#/parts");
   await expect(page.getByRole("button", { name: "keep" })).toBeVisible();
   await look(page, "parts");
   await page.goto("#/atlas");
   await expect(page.getByRole("application", { name: "The atlas: the map of the base" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "atlas", exact: true })).toHaveAttribute("aria-pressed", "true");
+  // An old link to the Atlas brings its pane forward (M10).
+  await expect(page.getByRole("region", { name: "Atlas" })).toHaveClass(/focus/);
   await look(page, "atlas");
   await page.goto("#/study");
   await expect(page.getByText("study · next for you")).toBeVisible();

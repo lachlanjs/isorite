@@ -105,21 +105,8 @@ button { cursor: pointer; }
 .bar .path { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-soft); }
 .bar .path a { color: inherit; }
 .bar .path .sep { margin: 0 1ch; }
-/* The views' switch (V1, V2): atlas and note, each lit while its view stands; the light slides between atlas, note
-   and both as the table moves it. */
-.switch { position: relative; display: grid; grid-template-columns: 1fr 1fr; align-items: center; }
-.switch button { position: relative; z-index: 1; background: none; border: 0; padding: 0 10px; font: inherit; line-height: 20px; color: var(--text-soft); cursor: pointer; transition: color 0.2s; }
-.switch button:hover:not(:disabled) { color: var(--text); }
-.switch button:disabled { color: var(--text-faint); cursor: default; }
-.switch button[aria-pressed="true"] { color: var(--ground-0); }
-.switch .slide { position: absolute; top: 50%; height: 20px; margin-top: -10px; left: 0; width: 50%; background: var(--text); opacity: 0; transition: left 0.22s ease, width 0.22s ease, opacity 0.22s; }
-.switch[data-shown="atlas"] .slide { left: 0; width: 50%; opacity: 1; }
-.switch[data-shown="note"] .slide { left: 50%; width: 50%; opacity: 1; }
-.switch[data-shown="both"] .slide { left: 0; width: 100%; opacity: 1; }
-@media (prefers-reduced-motion: reduce) { .switch .slide, .switch button { transition: none; } }
-.bar .back { display: none; }
 .page { flex: 1 1 auto; min-width: 0; }
-.status { height: 28px; flex: none; display: flex; align-items: center; gap: 22px; padding: 0 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-faint); white-space: nowrap; position: sticky; bottom: 0; background: var(--ground-0); }
+.status { height: 28px; flex: none; overflow: hidden; display: flex; align-items: center; gap: 22px; padding: 0 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-faint); white-space: nowrap; position: sticky; bottom: 0; background: var(--ground-0); }
 .status .bad { color: var(--rose); }
 
 .logo { display: block; flex: none; overflow: visible; }
@@ -127,19 +114,9 @@ button { cursor: pointer; }
 .logo .iso { fill: var(--growth); stroke: none; }
 .logo .right { fill: var(--malachite); stroke: none; }
 
-/* On a phone the switch is a row of tabs at the foot, where a thumb reaches. */
-@media (max-width: 600px) {
+/* On a phone the panes' tabs are at the foot, where a thumb reaches (+layout.svelte). */
+@media (max-width: 760px) {
   .bar { gap: 12px; padding: 0 12px; }
-  .switch { position: fixed; left: 0; right: 0; bottom: 0; height: 56px; gap: 0; background: var(--ground-0); border-top: 1px solid var(--line); z-index: 10; padding-bottom: env(safe-area-inset-bottom); }
-  .switch button { height: 100%; }
-  .switch .slide { height: 3px; top: auto; bottom: env(safe-area-inset-bottom); margin-top: 0; }
-  .switch button[aria-pressed="true"] { color: var(--text); }
-  /* In a note the header is the way back, as on the boards: "‹ the base". The title is on the page below it. */
-  .bar:has(.back) { height: 48px; }
-  .bar .back { display: inline-flex; align-items: center; height: 44px; }
-  .bar .home.in-note, .bar .path.in-note { display: none; }
-  .status { bottom: 56px; }
-  .shell { padding-bottom: 56px; }
 }
 
 /* ------------------------------------------------------------ parts */

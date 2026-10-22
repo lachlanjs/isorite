@@ -49,6 +49,8 @@ export interface Change extends Stamp {
   region?: number;
   to?: string;
   from?: string;
+  /** Iso's change in Write mode (M10): what it was asked, in its pane. */
+  asked?: string;
 }
 
 export interface Cost {
@@ -199,12 +201,84 @@ export function authors(entries: readonly Entry[]): string[] | null {
   return owners;
 }
 
+/** A stretch of one line written by one hand: its characters `from` to `to`. */
+export interface Run { from: number; to: number; who: string }
+
+/** A line's words, spaces and marks, in order: what is compared to tell who wrote what within a line. */
+const tokens = (line: string): string[] => line.match(/\s+|[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu) ?? [];
+
+/** Who wrote each word of the note as the journal last has it, line by line, as runs. Where a change replaced
+ *  lines, the old and the new are compared word by word, so a word kept keeps its writer and only the words put in
+ *  are the changer's. Text kept from a proposal is its proposer's, as in `authors`. Null when the chain is broken. */
+export function wordAuthors(entries: readonly Entry[]): Run[][] | null {
+  const proposers = new Map<string, string>();
+  // Each line as its tokens, each token with its writer.
+  type Line = { t: string[]; w: string[] };
+  let lines: Line[] | null = null, text: string[] | null = null;
+  const line = (l: string, who: string) => { const t = tokens(l); return { t, w: t.map(() => who) }; };
+  for (const e of entries) {
+    if (e.kind === "proposal") proposers.set(e.id, e.who);
+    if (!isChange(e)) continue;
+    const who = e.why === "keep" && e.proposal ? (proposers.get(e.proposal) ?? e.who) : e.who;
+    if (lines === null || text === null) {
+      if (e.text === undefined) return null;
+      text = e.text.split("\n");
+      lines = text.map((l) => line(l, who));
+      continue;
+    }
+    if (hashText(text.join("\n")) !== e.before) return null;
+    const next: Line[] = [];
+    let at = 0;
+    for (const h of e.hunks) {
+      next.push(...lines.slice(at, h.at));
+      // The removed lines and the added ones as one run of tokens each, with a line break as a token, compared.
+      const old = lines.slice(h.at, h.at + h.del.length);
+      const a: string[] = [], aw: string[] = [];
+      old.forEach((l, k) => { if (k) { a.push("\n"); aw.push(""); } a.push(...l.t); aw.push(...l.w); });
+      const b: string[] = [];
+      h.ins.forEach((l, k) => { if (k) b.push("\n"); b.push(...tokens(l)); });
+      const bw: string[] = b.map(() => who);
+      // Words kept from the old lines keep their writer; but where most of what was put in is new, the passage was
+      // rewritten, and a word that happens to recur in it ("the", "error") is the rewriter's too.
+      const kept: [number, number][] = [];
+      let i = 0, j = 0;
+      for (const d of diffLines(a, b)) {
+        while (i < d.at) { kept.push([j, i]); i++; j++; }
+        i += d.del.length; j += d.ins.length;
+      }
+      while (i < a.length && j < b.length) { kept.push([j, i]); i++; j++; }
+      const words = (ts: string[]) => ts.filter((t) => /[\p{L}\p{N}]/u.test(t)).length;
+      const keptWords = kept.filter(([jj]) => /[\p{L}\p{N}]/u.test(b[jj]!)).length;
+      if (keptWords * 2 >= words(b)) for (const [jj, ii] of kept) bw[jj] = aw[ii]!;
+      let cur: Line = { t: [], w: [] };
+      const made: Line[] = [];
+      b.forEach((tok, k) => { if (tok === "\n") { made.push(cur); cur = { t: [], w: [] }; } else { cur.t.push(tok); cur.w.push(bw[k]!); } });
+      if (h.ins.length) made.push(cur);
+      next.push(...made);
+      at = h.at + h.del.length;
+    }
+    next.push(...lines.slice(at));
+    lines = next;
+    text = applyHunks(text, e.hunks);
+  }
+  return (lines ?? []).map((l) => {
+    const runs: Run[] = [];
+    let pos = 0;
+    l.t.forEach((tok, k) => {
+      const who = l.w[k]!, last = runs.at(-1);
+      if (last && last.who === who && last.to === pos) last.to += tok.length; else runs.push({ from: pos, to: pos + tok.length, who });
+      pos += tok.length;
+    });
+    return runs;
+  });
+}
+
 /** The note as it was after an entry. */
 export const textAt = (entries: readonly Entry[], id?: string): string | null => replay(entries, id)?.text ?? null;
 
 /** The entry for a change of the note's file to `after`, or null when nothing changed. The difference is taken
  *  from the journal's own last version, so the chain holds whatever the caller thought the file was. */
-export function change(entries: readonly Entry[], after: string, s: Stamp, why: Why, extra: { proposal?: string; region?: number; to?: string } = {}): Change | null {
+export function change(entries: readonly Entry[], after: string, s: Stamp, why: Why, extra: { proposal?: string; region?: number; to?: string; asked?: string } = {}): Change | null {
   const head = replay(entries);
   if (head && head.text === after) return null;
   const changes = entries.filter(isChange);
@@ -367,7 +441,7 @@ export function moments(entries: readonly Entry[]): Moment[] {
       const last = out[out.length - 1];
       if (e.why === "edit" && last && last.what === "edited" && last.who === e.who && last.session === e.session) { last.ids.push(e.id); last.at = e.at; continue; }
       const what = e.why === "start" ? (e.who === "external" ? "found" : "wrote") : e.why === "edit" ? "edited" : e.why === "restore" ? "restored" : e.why === "keep" ? "kept" : e.why === "move" ? "moved" : "changed elsewhere";
-      out.push({ ...base, what });
+      out.push({ ...base, what, ...(e.asked ? { asked: e.asked } : {}) });
     }
   }
   return out;

@@ -3,7 +3,7 @@
   // understood); what is lit round it is an outline. It knows nothing of the layout or of Iso.
   import type { LayoutItem } from "@isorite/core/atlas";
 
-  let { item, title, step, mark = "", far = 0, num = 0, iso = "", linked = false, dim = false, moment = "", href, onpick, onpoint }: {
+  let { item, title, step, mark = "", far = 0, num = 0, iso = "", linked = false, dim = false, moment = "", given = false, changed = false, pointed = "", order = 0, since = "", href, onpick, onpoint }: {
     item: LayoutItem;
     title: string;
     step: 0 | 1 | 2 | 3;
@@ -20,6 +20,14 @@
     dim?: boolean;
     /** The note a moment of the timeline touched, while it is pointed at (Atlas-Timeline): yours or Iso's. */
     moment?: "" | "you" | "iso";
+    /** In the Atlas's Iso lens (M10): in what Iso is sent, changed by Iso in this conversation, pointed out by Iso
+     *  (why), and the order it was read in in the last turn. */
+    given?: boolean;
+    changed?: boolean;
+    pointed?: string;
+    order?: number;
+    /** In the Understand lens: changed by someone other than you since your understanding was last recorded (when). */
+    since?: string;
     href: string;
     onpick: (event: MouseEvent) => void;
     onpoint: (on: boolean) => void;
@@ -27,11 +35,11 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a class="n s{step} {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark}" class:linked class:dim={dim && !num && !iso && !linked} class:far={far > 1} class:pick={num > 0} {href} aria-label={num ? `${title}: linked, number ${num}` : title} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%"
+<a class="n s{step} {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark}" class:linked class:dim={dim && !num && !iso && !linked && !given} class:far={far > 1} class:pick={num > 0} class:given class:changed class:pointed={!!pointed} {href} aria-label={num ? `${title}: linked, number ${num}` : `${title}${given ? ": in Iso's context" : ""}${changed ? ", changed by Iso" : ""}${pointed ? `, Iso points to it: ${pointed}` : ""}`} title={pointed || undefined} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
-  onfocus={() => onpoint(true)} onblur={() => onpoint(false)}><span class="t">{title}</span>{#if num}<b class="num">{num}</b>{/if}</a>
+  onfocus={() => onpoint(true)} onblur={() => onpoint(false)}><span class="t">{title}</span>{#if num}<b class="num">{num}</b>{/if}{#if order}<b class="order" aria-hidden="true">{order}</b>{/if}{#if changed}<i class="dia" aria-hidden="true"></i>{/if}{#if since}<i class="since" aria-hidden="true" title="changed since your understanding of it was recorded"></i>{/if}</a>
 
 <style>
   .n {
@@ -65,4 +73,15 @@
   .n:focus-visible { outline: 2px solid var(--lattice); outline-offset: 2px; }
   .mo-you { outline: 2.5px solid var(--lattice); outline-offset: 3px; z-index: 3; }
   .mo-iso { outline: 2.5px solid var(--growth); outline-offset: 3px; z-index: 3; }
+  /* The Iso lens (M10): in Iso's context, a gold fill; changed by Iso, a diamond at the corner; pointed out, a
+     marching outline; the order it read in, a gold number. */
+  .given { background: var(--growth-soft); border-color: var(--growth); color: var(--text); }
+  .changed, .pointed, .order { overflow: visible; }
+  .n:has(.since) { overflow: visible; }
+  .since { position: absolute; top: -6px; right: -4px; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid var(--builds); }
+  .dia { position: absolute; top: -5px; right: -5px; width: 9px; height: 9px; background: var(--growth); transform: rotate(45deg); }
+  .pointed { outline: 2px dashed var(--growth); outline-offset: 4px; animation: point 1.2s linear infinite; }
+  @keyframes point { 50% { outline-offset: 6px; } }
+  .order { position: absolute; top: -9px; left: -9px; width: 16px; height: 16px; display: grid; place-items: center; background: var(--growth); color: var(--ground-0); font-size: 10px; font-weight: 700; z-index: 1; }
+  @media (prefers-reduced-motion: reduce) { .pointed { animation: none; } }
 </style>

@@ -17,7 +17,6 @@
   const lost = $derived(iso.changes.filter((c) => !c.at));
 
   let asked = $state("");
-  let face = $state<"answer" | "prompt">("answer");
   let field = $state<HTMLTextAreaElement>();
 
   $effect(() => { if (key === "prompt") void tick().then(() => field?.focus()); });
@@ -35,31 +34,19 @@
 </script>
 
 {#if key === "prompt"}
+  <!-- The prompt line (Q6): for a rewrite of what is selected, how; on an empty line, what to write there. A question
+       written in the note is asked as it stands, and needs no prompt. -->
   <div class="between">
-    <div class="foot">
-      <span class="tiers" role="radiogroup" aria-label="What to ask for">
-        <button type="button" role="radio" aria-checked={!rewrite} onclick={() => iso.setMode("insert")}>text here</button>
-        <button type="button" role="radio" aria-checked={rewrite} onclick={() => iso.setMode("rewrite")}>rewrite a selection</button>
-      </span>
-      {#if rewrite}
-        <span class="soft picked" role="status">{picked === 0 ? "select text in the note: each selection is added" : `${picked} ${picked === 1 ? "passage" : "passages"} chosen · select more, or click one to drop it`}</span>
-        {#if picked}<button class="link faint" type="button" onclick={() => iso.clearPicked()}>[ clear ]</button>{/if}
-      {/if}
-    </div>
+    {#if rewrite}<span class="soft picked" role="status">{picked === 0 ? "select text in the note to rewrite" : `rewriting ${picked} ${picked === 1 ? "passage" : "passages"} · select more, or click one to drop it`}</span>{/if}
     <div class="ask">
       <i class="dia open" aria-hidden="true"></i>
       <textarea bind:this={field} bind:value={asked} rows="1" aria-label="Ask Iso" onkeydown={promptKey}
-        placeholder={rewrite ? "say how Iso should rewrite what you chose" : "ask Iso for text here"}></textarea>
+        placeholder={rewrite ? "how should Iso rewrite it?" : "what should Iso write here?"}></textarea>
     </div>
     <div class="foot">
-      <span class="tiers" role="radiogroup" aria-label="Tier">
-        {#each ["low", "mid", "max"] as const as t (t)}
-          <button type="button" role="radio" aria-checked={iso.tier === t} onclick={() => iso.setTier(t)}>{t}</button>
-        {/each}
-      </span>
       <span class="grow"></span>
-      <button class="link faint" type="button" onclick={() => (iso.prompt = null)}>[ cancel ]</button>
-      <button class="btn primary" type="button" disabled={!ready} onclick={() => iso.ask(asked)}>send to Iso</button>
+      <button class="link faint" type="button" onclick={() => (iso.prompt = null)}>cancel</button>
+      <button class="btn primary" type="button" disabled={!ready} onclick={() => iso.ask(asked)}>ask Iso</button>
     </div>
   </div>
 {:else if key === "asking" && iso.asking}
@@ -71,13 +58,13 @@
       <i class="dia" aria-hidden="true"></i>
       <span class="soft doing">{iso.asking.text ? (rewriting ? "Iso is rewriting" : "Iso is writing") : "Iso is thinking"}{#if lastStep}<span class="faint"> · {lastStep}</span>{/if}</span>
       <span class="grow"></span>
-      <button class="link" type="button" onclick={() => iso.halt()}>[ stop ]</button>
+      <button class="link" type="button" onclick={() => iso.halt()}>stop</button>
     </div>
   </div>
 {:else if key === "failed" && iso.failed}
   <div class="between stopped" role="alert">
     <p class="bad">{iso.failed.message}</p>
-    <div class="foot"><span class="grow"></span><button class="link" type="button" onclick={() => (iso.failed = null)}>[ dismiss ]</button></div>
+    <div class="foot"><span class="grow"></span><button class="link" type="button" onclick={() => (iso.failed = null)}>dismiss</button></div>
   </div>
 {:else if key === "lost" && lost.length}
   <!-- Changes whose passages you have since edited: there is nowhere to set them, so they are told of here. -->
@@ -93,24 +80,18 @@
     {#if !iso.placed(proposal)}<p class="label">The place this was written for is no longer in the note, so it is shown here. Keeping it adds it at the end.</p>{/if}
     {#if editing}
       <textarea class="revision" bind:value={editing.text} aria-label="Iso's text, to edit" rows={Math.max(3, editing.text.split("\n").length + 1)}></textarea>
-    {:else if face === "prompt"}
-      <p class="soft asked">{proposal.asked}</p>
     {:else}<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
       <div class="prose said">{@html render(proposal.text)}</div>
     {/if}
     {#if proposal.notice}<p class="label">{proposal.notice}</p>{/if}
     <div class="foot">
       <i class="dia" aria-hidden="true"></i>
-      <span class="faces" role="radiogroup" aria-label="Show">
-        <button type="button" role="radio" aria-checked={face === "answer"} onclick={() => (face = "answer")}>answer</button>
-        <button type="button" role="radio" aria-checked={face === "prompt"} onclick={() => (face = "prompt")}>prompt</button>
-      </span>
       <span class="grow"></span>
       <button class="btn keep" type="button" disabled={waiting} onclick={() => iso.keep(proposal)}>keep</button>
       {#if editing}
         <button class="btn edit" type="button" onclick={() => iso.done(proposal)}>done</button>
       {:else}
-        <button class="btn edit" type="button" disabled={waiting} onclick={() => { face = "answer"; iso.edit(proposal); }}>edit</button>
+        <button class="btn edit" type="button" disabled={waiting} onclick={() => iso.edit(proposal)}>edit</button>
       {/if}
       <button class="btn remove" type="button" disabled={waiting} onclick={() => iso.discard(proposal)}>remove</button>
     </div>
@@ -138,7 +119,6 @@
   .said :global(> :last-child) { margin-bottom: 0; }
   .said :global(.katex-display) { margin: 0; }
   .said :global(.katex-display > .katex) { font-size: 1.17em; }
-  .asked { line-height: 1.6; white-space: pre-wrap; }
   .foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .foot .dia { margin: 0 8px 0 3px; }
   .doing { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; }
@@ -147,15 +127,13 @@
   .lost { font: var(--text-size)/1.55 var(--font-text); }
   .strike { text-decoration: line-through; color: var(--text-faint); }
 
-  .faces, .tiers { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; }
-  .faces button, .tiers button { background: none; border: 0; border-bottom: 1px solid transparent; padding: 6px 0; color: var(--text-faint); }
-  .faces button[aria-checked="true"], .tiers button[aria-checked="true"] { color: var(--text); border-bottom-color: var(--growth); }
   .link { background: none; border: 0; padding: 6px 4px; color: var(--lattice); white-space: nowrap; }
   .link.faint { color: var(--text-faint); }
 
   .ask { display: flex; align-items: flex-start; gap: 11px; }
   .ask .dia { margin: 7px 0 0 3px; }
-  .ask textarea { flex: 1 1 auto; min-width: 0; background: none; border: 0; padding: 0; resize: none; field-sizing: content; font: 13px/1.6 var(--font-ui); color: var(--text); }
+  /* What you ask is written in the note's own type, not the interface's (I2). */
+  .ask textarea { flex: 1 1 auto; min-width: 0; background: none; border: 0; padding: 0; resize: none; field-sizing: content; font: var(--text-size)/1.55 var(--font-text); color: var(--text); }
   .ask textarea:focus-visible, .revision:focus-visible { outline: none; }
   .ask textarea::placeholder { color: var(--text-faint); }
   .revision { width: 100%; background: var(--ground-1); border: 0; border-left: 2px solid var(--growth); padding: 8px 12px; resize: vertical; font: 14px/1.6 var(--font-ui); color: var(--text); }

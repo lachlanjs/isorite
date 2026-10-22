@@ -7,6 +7,7 @@ import type { Part } from "./iso.ts";
 import type { AgentEdit } from "./agent.ts";
 import type { Step } from "./lookup.ts";
 import type { Tier, ToolDef } from "./provider.ts";
+import type { Decision, Given, Mode, Turn, TurnItem } from "./turn.ts";
 
 /** What is open. */
 export interface Session {
@@ -58,6 +59,9 @@ export interface MapReport {
     kind?: string;
     /** An exercise whose last attempt was marked right. */
     passed?: true;
+    /** Changed by someone other than you (Iso, an agent, another editor) since your understanding of it was last
+     *  recorded: when (M10). */
+    changedSince?: string;
     /** A note of the knowledge base: the size of its text, as an estimate in tokens (what linking it to a note for Iso adds). */
     tokens?: number;
   }>;
@@ -69,12 +73,17 @@ export interface SearchHit {
   snippet: string;
 }
 
+/** What you chose of Iso's context for a request in a note (I3): the parts switched off, by id ("x:<entry>" an
+ *  earlier exchange of the session, "n:<note>" a note this note links to), and whether Iso may look up more notes
+ *  with its tools while it works (on unless said). The note itself is always sent: it is where the answer goes. */
+export interface Choice { off?: string[]; lookup?: boolean }
+
 /** A request to Iso in a note. The form decides where its text may go, whatever it writes. */
 export type AskRequest =
   /** New text at a point: between the block `after` and the block `before`. */
-  | { note: string; form: "insert"; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier }
+  | { note: string; form: "insert"; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier; choice?: Choice }
   /** These passages rewritten, and nothing else. What Iso says of the changes goes between `after` and `before`. */
-  | { note: string; form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier }
+  | { note: string; form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier; choice?: Choice }
   /** A note written for Iso (a draft, `@draft/…`): the draft is what is asked, and the reply is a note to keep in its place. */
   | { note: string; form: "note"; tier: Tier }
   /** An exercise (`@study/…`) sent for marking, with the passage of its working that is the answer. One round, no tools. */
@@ -82,12 +91,23 @@ export type AskRequest =
   /** A request for an exercise (a draft made by `createExerciseDraft`): the reply is an exercise to keep. One round, no tools. */
   | { note: string; form: "exercise"; tier: Tier };
 
+/** A turn of a conversation with Iso in its pane (M10): what is asked, in which mode, with what you gave it. Without
+ *  `conversation` a new conversation begins. `lookup: false` keeps Iso to what you gave. */
+export interface TurnRequest { conversation?: string; mode: Mode; asked: string; given: Given[]; tier: Tier; lookup?: boolean; off?: string[] }
+
+/** A conversation, as the pane draws it. */
+export interface Conversation { id: string; turns: Turn[] }
+
 /** A note for Iso that is not in the base yet. `exercise` marks a request for an exercise. */
 export interface DraftSummary { id: string; title: string; exercise?: true }
 
 /** One thing that moved a note's understanding: an attempt, with what Iso judged and why, or your wind back. */
 /** `marks` names the marking's entry in the exercise's journal. */
-export interface Evidence { id: string; at: string; event: "attempt" | "wind-back"; by: number; why?: string; exercise?: string; result?: Result; marks?: string }
+export interface Evidence { id: string; at: string; event: "attempt" | "wind-back" | "understood"; by: number; why?: string; exercise?: string; result?: Result; marks?: string; conversation?: string }
+
+/** A note's Understanding note (M10): Iso's reading of your understanding, your scratchpad (`version` is the file's,
+ *  null before there is one), and what the record says: the number, its squares and steps, and the evidence. */
+export interface UnderstandingReport { note: string; reading: string; scratchpad: string; version: string | null; level: number; squares: number; step: 0 | 1 | 2 | 3; due: boolean; evidence: Evidence[] }
 
 /** What the study page and the squares read. */
 export interface StudyReport {
@@ -107,7 +127,14 @@ export interface ContextReport {
   limit: number;
   parts: Part[];
   session: { usd: number; requests: number };
+  /** In a note of the base: each part you can switch on or off, as the choice asked about has it (I3). */
+  items: ContextItem[];
+  /** Whether Iso may look up more notes, as the choice has it. */
+  lookup: boolean;
 }
+
+/** One part of Iso's context that can be switched off: an earlier exchange, or a note this note links to. */
+export interface ContextItem { id: string; kind: "exchange" | "linked"; title: string; tokens: number; on: boolean }
 
 /** What can be set, as the app may know it. The key itself is never sent back. */
 export interface Settings {
@@ -127,7 +154,11 @@ export type EngineEvent =
   /** An event was added to the study record. */
   | { type: "record"; event: string }
   /** Iso was asked. Every request ends in exactly one of iso-done, iso-stopped, iso-failed. */
-  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null } | { form: "note" } | { form: "mark"; answer: Passage } | { form: "exercise" } }
+  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null } | { form: "note" } | { form: "mark"; answer: Passage } | { form: "exercise" } | { form: "turn"; conversation: string; mode: Mode; given: Given[] } }
+  /** In a turn (M10): something it did other than look up or write its reply, as kept in the conversation. */
+  | { type: "iso-item"; request: string; conversation: string; item: TurnItem }
+  /** Your answer to something it asked before doing. */
+  | { type: "iso-answer"; request: string; conversation: string; permission: string; decision: Decision }
   /** Iso looked something up. */
   | { type: "iso-step"; request: string; note: string; step: Step }
   /** A piece of its reply. `again`: what came before was not the reply; start over. */
@@ -194,6 +225,22 @@ export interface Api {
   map(): Promise<MapReport>;
   /** Ask Iso. Returns at once with the request's id; what follows comes as events, and ends as a proposal in the note's journal. */
   ask(request: AskRequest): Promise<{ request: string }>;
+  /** Ask Iso in its pane (M10). Returns at once with the conversation and the turn; what follows comes as events
+   *  (iso-start, iso-step, iso-text, iso-item, then one of iso-done, iso-stopped, iso-failed, with the turn as the
+   *  request), and is kept in the conversation. */
+  converse(request: TurnRequest): Promise<{ conversation: string; turn: string }>;
+  /** A conversation, or the latest when none is named; null when there is none. */
+  conversation(id?: string): Promise<Conversation | null>;
+  /** What a turn would send now, part by part, with the session's cost. */
+  turnContext(request: Omit<TurnRequest, "asked">): Promise<ContextReport>;
+  /** A note's Understanding note. */
+  understanding(note: string): Promise<UnderstandingReport>;
+  /** Save your scratchpad in a note's Understanding note. */
+  saveScratchpad(note: string, scratchpad: string, base: string | null): Promise<UnderstandingReport>;
+  /** Put back every note a turn changed as it was before the turn. A note changed since is left as it is, and said. */
+  undoTurn(conversation: string, turn: string): Promise<{ notes: string[]; left: string[] }>;
+  /** Your answer to what Iso asked before doing something in a turn. */
+  answer(turn: string, permission: string, decision: Decision): Promise<void>;
   /** Stop a request. Nothing is entered. */
   stop(request: string): Promise<void>;
   /** Write a proposal into its note. The note's file changes here and nowhere else on Iso's account. For a
@@ -221,7 +268,8 @@ export interface Api {
   /** You think Iso rates you too highly: one square down for every note this exercise tests. */
   windBack(exercise: string): Promise<void>;
   /** What Iso would be sent if asked now, in this note (or in none). */
-  context(note?: string): Promise<ContextReport>;
+  /** What asking Iso in a note would send, with `choice` as the request would carry it. */
+  context(note?: string, choice?: Choice): Promise<ContextReport>;
   /** Leave the session's earlier exchanges out of what Iso is sent from now on. Nothing is deleted. */
   clearConversation(): Promise<void>;
   settings(): Promise<Settings>;

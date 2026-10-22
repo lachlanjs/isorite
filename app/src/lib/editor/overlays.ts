@@ -23,7 +23,7 @@ export interface Overlay {
 }
 /** A stretch of the text, by character, marked for what Iso is doing with it; in an exercise, also its question,
  *  the working's heading, the answer, and Iso's marks. */
-export interface Mark { from: number; to: number; kind: "picked" | "old" | "question" | "working" | "answer" | "right" | "wrong" }
+export interface Mark { from: number; to: number; kind: "picked" | "old" | "question" | "working" | "answer" | "right" | "wrong" | "by-iso" | "given" }
 /** A piece set in the line at a character. */
 export interface Inline { key: string; at: number }
 
@@ -137,6 +137,9 @@ export function overlays(mount: Mount): Extension {
     ".cm-iso-working *": { fontSize: "12px !important", color: "var(--text-faint) !important", fontWeight: "400 !important" },
     ".cm-iso-answer": { background: "var(--lattice-soft)", boxShadow: "0 0 0 4px var(--lattice-soft)", borderBottom: "2px solid var(--lattice)" },
     ".cm-iso-right": { borderBottom: "3px double var(--malachite)" },
+    // The note's Iso lens (M10): words Iso wrote, in soft gold; a passage given to Iso, a dashed gold underline.
+    ".cm-iso-by-iso": { background: "var(--growth-soft)", boxShadow: "inset 0 -1.5px 0 var(--growth)" },
+    ".cm-iso-given": { textDecoration: "underline dashed var(--growth)", textUnderlineOffset: "4px", textDecorationThickness: "1.5px" },
     ".cm-iso-wrong": { borderBottom: "2px solid var(--rose)" },
   })];
 }

@@ -6,6 +6,7 @@
 import { blocks, findPassage, insertAt, locate, passageOf, pending, splitSource, type Entry, type Insert, type Passage, type Proposal, type Rewrite } from "@isorite/core";
 import type { EngineEvent, Step, Tier } from "@isorite/engine";
 import { app } from "./app.svelte.ts";
+import { context } from "./context.svelte.ts";
 import type { NoteSession } from "./note.svelte.ts";
 
 /** A stretch of the file, by character. */
@@ -23,12 +24,6 @@ export interface Block { key: string; line: number }
  *  code block, so the new text is shown in the code's face with its indentation. */
 export interface Change { key: string; proposal: Rewrite; k: number; at: Span | null; block: boolean; code: boolean }
 
-const TIERS: Tier[] = ["low", "mid", "max"];
-function remembered(): Tier {
-  try { const t = localStorage.getItem("isorite.tier") as Tier | null; if (t && TIERS.includes(t)) return t; } catch { /* the usual one */ }
-  return "mid";
-}
-
 export class NoteIso {
   private readonly note: NoteSession;
   /** The note's journal, oldest first, as it grows. */
@@ -37,7 +32,8 @@ export class NoteIso {
   asking = $state.raw<Asking | null>(null);
   /** Why the last request came to nothing. */
   failed = $state.raw<{ line: number; message: string } | null>(null);
-  tier = $state<Tier>(remembered());
+  /** How able a model Iso is asked with: one choice for every note, made in the context panel (Q8). */
+  get tier(): Tier { return context.tier; }
   /** Where the cursor or the selection last was: where the phone's prompt field asks. */
   cursor = $state.raw<{ line: number; from: number; to: number } | null>(null);
   /** What is being kept or removed: its buttons wait. A proposal's id, or a change's key. */
@@ -102,6 +98,13 @@ export class NoteIso {
 
   async open(): Promise<void> {
     this.stop = app.on((e) => this.hear(e));
+    // A request still running here from before this page opened (back from the Atlas on a phone, say): taken up as
+    // it stands, its steps and what it has written so far.
+    const run = app.iso;
+    if (run?.start && run.note === this.note.id && (run.state === "reading" || run.state === "writing")) {
+      this.hear(run.start);
+      if (this.asking) this.asking = { ...this.asking, text: run.text ?? "", steps: run.steps };
+    }
     try { this.entries = await app.api.journal(this.note.id); } catch { /* shown when the next event comes */ }
   }
   close(): void { this.stop?.(); }
@@ -155,6 +158,27 @@ export class NoteIso {
     else this.promptAt(c.line, c);
   }
 
+  /** Ask in the text (Q6): with text selected, a rewrite of it, asked how on one line. Otherwise the paragraph the
+   *  line is in is the question, as you wrote it: Iso's answer goes under it, and the question stays yours. On an
+   *  empty line the prompt line opens there, as before. */
+  askAt(line: number, selected?: Span): void {
+    if (selected && selected.to > selected.from) { this.promptAt(line, selected); return; }
+    const block = blocks(this.note.text).find((b) => b.from <= line && line < b.to);
+    const question = block?.text.trim() ?? "";
+    // A code block, a formula or a table is not a question: there, the prompt line.
+    if (!block || !question || /^(```|~~~|\$\$|\|)/.test(question)) { this.promptAt(line); return; }
+    this.failed = null;
+    this.prompt = { line: block.to, mode: "insert", regions: [] };
+    void this.ask(question);
+  }
+
+  /** As askAt, where the cursor or the selection last was (a phone's ask Iso). */
+  askHere(): void {
+    const c = this.cursor;
+    if (!c) this.promptAt(this.foot);
+    else this.askAt(c.line, c);
+  }
+
   /** New text here, or a rewrite of passages chosen in the note. What was chosen is kept while switching. */
   setMode(mode: Prompt["mode"]): void {
     if (this.prompt) this.prompt = { ...this.prompt, mode };
@@ -192,10 +216,7 @@ export class NoteIso {
     if (this.prompt) this.prompt = { ...this.prompt, regions: [] };
   }
 
-  setTier(tier: Tier): void {
-    this.tier = tier;
-    try { localStorage.setItem("isorite.tier", tier); } catch { /* not kept */ }
-  }
+  setTier(tier: Tier): void { context.setTier(tier); }
 
   // ------------------------------------------------------------ asking
 
@@ -212,9 +233,11 @@ export class NoteIso {
     try {
       await this.note.save();
       const place = insertAt(this.note.text, prompt.line);
+      // What you chose of Iso's context in the panel goes with it (I3).
+      const choice = context.of(this.note.id), chosen = Object.keys(choice).length ? { choice } : {};
       const { request } = await app.api.ask(regions.length
-        ? { note: this.note.id, form: "rewrite", regions, after: place.after, before: place.before, asked, tier: this.tier }
-        : { note: this.note.id, ...place, asked, tier: this.tier });
+        ? { note: this.note.id, form: "rewrite", regions, after: place.after, before: place.before, asked, tier: this.tier, ...chosen }
+        : { note: this.note.id, ...place, asked, tier: this.tier, ...chosen });
       if (this.asking && !this.asking.request) this.asking = { ...this.asking, request };
     } catch (e) {
       this.asking = null;

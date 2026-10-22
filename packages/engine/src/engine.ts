@@ -3,13 +3,15 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
+  Bundle, SearchIndex, STUDY_DIR, diffLines, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
   type Cost, type Entry, type FileEntry, type Insert, type LearnerEvent, type Marks, type Passage, type Proposal, type SessionMoment, type Stamp, type Understanding,
 } from "@isorite/core";
-import { Conflict, EngineError, type AgentLook, type AgentProposal, type Api, type AskRequest, type ContextReport, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport } from "./api.ts";
+import { Conflict, EngineError, type AgentLook, type AgentProposal, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { ANSWER_CLOSE, ANSWER_OPEN, CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, exerciseMessages, exerciseReply, fitted, helpSince, insertMessages, markMessages, noteMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part, type Tested } from "./iso.ts";
-import { rounds } from "./loop.ts";
-import { FIND_SIMILAR, Lookup, TOOLS, type Similar } from "./lookup.ts";
+import { ROUNDS, rounds, type Tools } from "./loop.ts";
+import { FIND_SIMILAR, Lookup, TOOLS, noteId, type Similar } from "./lookup.ts";
+import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
+import { CONVERSATIONS_DIR, MODES, MODE_TOOLS, conversationPath, readTurns, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
 import { regionsOf } from "./agent.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
 import { KEY, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
@@ -50,9 +52,9 @@ export const MAX_ASKED = 4000, REPLY_TOKENS = 2500, NOTE_TOKENS = 6000, MARK_TOK
 export const DRAFT_PREFIX = "@draft/", DRAFT_DIR = "drafts";
 export const isDraftId = (id: string): boolean => id.startsWith(DRAFT_PREFIX);
 /** A note's id without the prefix that says which folder of the study base it is in. */
-const bare = (id: string): string => (isStudyId(id) ? id.slice(STUDY_PREFIX.length) : isDraftId(id) ? id.slice(DRAFT_PREFIX.length) : id);
+const bare = (id: string): string => (isStudyId(id) ? id.slice(STUDY_PREFIX.length) : isDraftId(id) ? id.slice(DRAFT_PREFIX.length) : isUnderstandingId(id) ? id.slice(UNDERSTANDING_PREFIX.length) : id);
 /** In the knowledge base itself: neither an exercise nor a draft. */
-const inBase = (id: string): boolean => !isStudyId(id) && !isDraftId(id);
+const inBase = (id: string): boolean => !isStudyId(id) && !isDraftId(id) && !isUnderstandingId(id);
 
 const BAD_PART = /^\.|[\0\\:*?"<>|]|^\s|\s$/;
 
@@ -62,6 +64,12 @@ export function checkNoteId(id: string): string {
   if (!id || id.length > 400 || parts.some((p) => !p || BAD_PART.test(p))) throw new EngineError(`not a note's id: ${JSON.stringify(id)}`);
   return id;
 }
+
+/** What a mode's tool is handed of the turn it is in. */
+interface TurnCtx { turn: string; conversation: string; mode: Turn["mode"]; item: (i: TurnItem) => Promise<void>; signal: AbortSignal; who: string; asked: string }
+
+/** A conversation's or turn's id: a ULID. */
+const TURN_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -186,6 +194,13 @@ export class Engine implements Api {
     for (const e of events) if (e.event === "attempt" && typeof e.exercise === "string") last.set(e.exercise, e.result);
     const notes: MapReport["notes"] = {};
     for (const c of this.bundle.concepts.values()) notes[c.id] = { title: c.title, step: read.get(c.id)?.step ?? 0, tokens: estimate(c.body.trim()) };
+    // A note whose understanding was recorded and that changed since, by anyone but you (M10): the Understand lens
+    // marks it. Only notes with a reading are looked at, so this reads a journal for each of those alone.
+    for (const [id, u] of read) {
+      if (!notes[id] || u.last === null || !study) continue;
+      const changed = (await this.journal(id)).findLast((e) => e.kind === "change" && e.who !== "you" && e.why !== "move");
+      if (changed && Date.parse(changed.at) > u.last) notes[id] = { ...notes[id]!, changedSince: changed.at };
+    }
     for (const c of exercises?.concepts.values() ?? []) notes[studyId(c.id)] = { title: c.title, step: 0, kind: plain(c.meta.kind ?? "") || "note", ...(last.get(c.id) === "right" ? { passed: true as const } : {}) };
     return { model: mapModel(this.bundle, exercises), notes };
   }
@@ -308,7 +323,8 @@ export class Engine implements Api {
     return this.one(() => this.put(id, text, null));
   }
 
-  async moveNote(id: string, to: string, base: string): Promise<Saved> {
+  /** `who` is you unless Iso moves it, in Write mode. */
+  async moveNote(id: string, to: string, base: string, who = "you"): Promise<Saved> {
     to = to.trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/, "");
     if (!inBase(id) || !inBase(to)) throw new EngineError("only a note of the base is moved, and only within it");
     checkNoteId(to);
@@ -330,15 +346,15 @@ export class Engine implements Api {
         const journal = await study.read(journalPath(id));
         if (journal !== null) { await study.write(journalPath(to), journal); await study.remove(journalPath(id)); }
         const hash = hashText(now);
-        await this.enter(to, entries, { ...(await this.stamp("you")), kind: "change", why: "move", before: hash, after: hash, hunks: [], from: id });
+        await this.enter(to, entries, { ...(await this.stamp(who)), kind: "change", why: "move", before: hash, after: hash, hunks: [], from: id });
         await this.record({ event: "moved", from: id, to });
       }
       this.files.delete(from);
       this.files.set(path, { path, text: now });
       this.built = this.index = null;
       this.embedSoon();
-      this.publish({ type: "note-changed", id, version: null, who: "you" });
-      this.publish({ type: "note-changed", id: to, version: hashText(now), who: "you" });
+      this.publish({ type: "note-changed", id, version: null, who });
+      this.publish({ type: "note-changed", id: to, version: hashText(now), who });
       return now;
     });
     // Links to it, in the form the base writes them (absolute, `/folder/note.md`), and its own links to itself.
@@ -346,7 +362,7 @@ export class Engine implements Api {
     for (const c of linking) {
       const source = await this.readNote(c);
       const changed = source.text.replace(old, `](/${to}.md`);
-      if (changed !== source.text) await this.saveNote(c, { base: source.version, text: changed });
+      if (changed !== source.text) await this.one(() => this.put(c, changed, source.version, "edit", {}, who));
     }
     // Exercises that test it.
     if (study) {
@@ -360,7 +376,7 @@ export class Engine implements Api {
     return { id: to, text, version: hashText(text), changed: true };
   }
 
-  async deleteNote(id: string, base: string): Promise<void> {
+  async deleteNote(id: string, base: string, who = "you"): Promise<void> {
     if (!inBase(id)) throw new EngineError("only a note of the base is deleted here");
     const notes = this.opts.notes, path = `${checkNoteId(id)}.md`;
     await this.one(async () => {
@@ -374,7 +390,7 @@ export class Engine implements Api {
       this.built = this.index = null;
       this.embedSoon();
     });
-    this.publish({ type: "note-changed", id, version: null, who: "you" });
+    this.publish({ type: "note-changed", id, version: null, who });
   }
 
   /** Writes happen one at a time, in the order asked. */
@@ -388,7 +404,7 @@ export class Engine implements Api {
   private where(id: string): { files: Files; path: string } {
     if (!inBase(id)) {
       if (!this.opts.study) throw new EngineError("there is no study base open", 404);
-      return { files: this.opts.study, path: `${isDraftId(id) ? DRAFT_DIR : STUDY_DIR}/${checkNoteId(bare(id))}.md` };
+      return { files: this.opts.study, path: `${isDraftId(id) ? DRAFT_DIR : isUnderstandingId(id) ? UNDERSTANDING_DIR : STUDY_DIR}/${checkNoteId(bare(id))}.md` };
     }
     return { files: this.opts.notes, path: `${checkNoteId(id)}.md` };
   }
@@ -407,7 +423,7 @@ export class Engine implements Api {
     return this.one(async () => this.put(id, await this.version(id, entry), base, "restore", { to: entry }));
   }
 
-  private async put(id: string, text: string, base: string | null, why: "edit" | "restore" = "edit", extra: { to?: string } = {}): Promise<Saved> {
+  private async put(id: string, text: string, base: string | null, why: "edit" | "restore" = "edit", extra: { to?: string; asked?: string } = {}, who = "you"): Promise<Saved & { entry?: string }> {
     const { files, path } = this.where(id);
     if (text.length > MAX_NOTE_BYTES) throw new EngineError("note too large", 413);
     const now = await files.read(path);
@@ -421,15 +437,16 @@ export class Engine implements Api {
     if (now === text) return { id, text, version: hashText(text), changed: false };
 
     await files.write(path, text);
-    await this.enter(id, entries, change(entries, text, await this.stamp("you"), why, extra));
+    const entry = change(entries, text, await this.stamp(who), why, extra);
+    await this.enter(id, entries, entry);
     if (inBase(id)) {
       this.files.set(path, { path, text });
       this.built = this.index = null;
       this.embedSoon();
     }
     const version = hashText(text);
-    this.publish({ type: "note-changed", id, version, who: "you" });
-    return { id, text, version, changed: true };
+    this.publish({ type: "note-changed", id, version, who });
+    return { id, text, version, changed: true, ...(entry ? { entry: entry.id } : {}) };
   }
 
   // ------------------------------------------------------------ Iso
@@ -511,8 +528,9 @@ export class Engine implements Api {
 
     const { messages, olds, text: sent } = await this.compose(req, asked);
     const maxTokens = req.form === "insert" ? REPLY_TOKENS : req.form === "note" ? NOTE_TOKENS : req.form === "mark" ? MARK_TOKENS : req.form === "exercise" ? EXERCISE_TOKENS : Math.max(REPLY_TOKENS, Math.ceil(olds.join("").length / 3) + 1000);
-    // Marking and writing an exercise are one call with no tools: what is sent is all Iso has, and you chose it.
-    const most = req.form === "mark" || req.form === "exercise" ? 0 : undefined;
+    // Marking and writing an exercise are one call with no tools: what is sent is all Iso has, and you chose it. So
+    // is a request in place when you said Iso is not to look further (I3).
+    const most = req.form === "mark" || req.form === "exercise" || ((req.form === "insert" || req.form === "rewrite") && req.choice?.lookup === false) ? 0 : undefined;
 
     const request = newId(this.opts.clock.now()), abort = new AbortController();
     this.running.set(request, abort);
@@ -618,16 +636,7 @@ export class Engine implements Api {
       try { body = splitFrontmatter(text)[1]; } catch { /* sent as it is */ }
       if (!body.trim()) throw new EngineError("write what you want from Iso first");
       // The notes it links to go with it, as far as there is room; the rest Iso reads with its tools.
-      const linked: { id: string; title: string; text: string }[] = [];
-      let room = LINKED_BUDGET;
-      for (const m of body.matchAll(/\]\(\/([^)\s#]+)\.md(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/g)) {
-        const c = this.bundle.concepts.get(decodeURIComponent(m[1]!));
-        if (!c || linked.some((l) => l.id === c.id)) continue;
-        const piece = c.body.trim().slice(0, Math.max(0, room) * 4);
-        if (piece.length < Math.min(c.body.trim().length, 400)) break; // no room for a useful part of it
-        linked.push({ id: c.id, title: c.title, text: piece + (piece.length < c.body.trim().length ? "\n[…cut: read the rest with read_note]" : "") });
-        room -= estimate(piece);
-      }
+      const linked = this.linkedSent(body);
       const earlier = await this.exchangesNow();
       return { ...noteMessages({ tier: req.tier, meaning: Boolean(this.similar), title: this.titleOf(req.note, text), body: windowed(body.split("\n"), [0]), linked, conversation: conversation(earlier), moments: earlier.length }), text, olds };
     }
@@ -658,16 +667,44 @@ export class Engine implements Api {
     }
     const title = this.titleOf(req.note, text);
     const entries = await this.journal(req.note);
-    const earlier = await this.exchangesNow();
-    // What Iso read for this note's exchanges that are still in the conversation: it may well read them again.
-    const read = new Set(entries.flatMap((e) => (e.kind === "proposal" && earlier.some((x) => x.id === e.id) ? e.read ?? [] : [])));
+    // What you chose to send (I3): earlier exchanges and linked notes switched off are left out; with no look-ups,
+    // Iso has no tools.
+    const off = new Set(req.choice?.off ?? []);
+    const earlier = (await this.exchangesNow()).filter((x) => !off.has(`x:${x.id}`));
+    let body = text;
+    try { body = splitFrontmatter(text)[1]; } catch { /* links read from the whole file */ }
     const given = {
       tier: req.tier, meaning: Boolean(this.similar), title, id: req.note, marked: windowed(lines, keep), asked,
       unkept: pending(entries).map((p) => (p.form === "insert" ? p.text : p.regions.map((r) => r.new).join("\n\n"))),
       conversation: conversation(earlier), moments: earlier.length,
-      linked: { notes: read.size, tokens: [...read].reduce((n, id) => n + estimate(this.bundle.concepts.get(id)?.body ?? ""), 0) },
+      linked: this.linkedSent(body, off, req.note), lookup: req.choice?.lookup !== false,
     };
     return { ...(req.form === "insert" ? insertMessages(given) : rewriteMessages({ ...given, count: olds.length })), text, olds };
+  }
+
+  /** The notes a note's text links to, each once, in order: the note itself left out. */
+  private linksOf(body: string, self = ""): { id: string; title: string; body: string }[] {
+    const out: { id: string; title: string; body: string }[] = [];
+    for (const m of body.matchAll(/\]\(\/([^)\s#]+)\.md(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/g)) {
+      const c = this.bundle.concepts.get(decodeURIComponent(m[1]!));
+      if (c && c.id !== self && !out.some((l) => l.id === c.id)) out.push({ id: c.id, title: c.title, body: c.body.trim() });
+    }
+    return out;
+  }
+
+  /** The linked notes sent with a request, those switched off left out, as far as there is room; the rest Iso
+   *  reads with its tools. */
+  private linkedSent(body: string, off: ReadonlySet<string> = new Set(), self = ""): { id: string; title: string; text: string }[] {
+    const linked: { id: string; title: string; text: string }[] = [];
+    let room = LINKED_BUDGET;
+    for (const c of this.linksOf(body, self)) {
+      if (off.has(`n:${c.id}`)) continue;
+      const piece = c.body.slice(0, Math.max(0, room) * 4);
+      if (piece.length < Math.min(c.body.length, 400)) break; // no room for a useful part of it
+      linked.push({ id: c.id, title: c.title, text: piece + (piece.length < c.body.length ? "\n[…cut: read the rest with read_note]" : "") });
+      room -= estimate(piece);
+    }
+    return linked;
   }
 
   private titleOf(id: string, text: string): string {
@@ -745,8 +782,8 @@ export class Engine implements Api {
     this.cleared = await this.one(() => this.record({ event: "context-cleared" }));
   }
 
-  async context(note?: string): Promise<ContextReport> {
-    let parts: Part[] | null = null;
+  async context(note?: string, choice?: Choice): Promise<ContextReport> {
+    let parts: Part[] | null = null, items: ContextItem[] = [];
     // A note for Iso with nothing written in it yet is counted as no note at all.
     if (note && isDraftId(note)) {
       const exerciseDraft = await this.exerciseDraft(note).catch(() => null);
@@ -756,20 +793,370 @@ export class Engine implements Api {
     } else if (note && isStudyId(note)) {
       // In an exercise, what sending it for marking would send.
       parts = await this.readNote(note).then(async (s) => (await this.markCompose(note, s.text, null)).parts, () => null);
-    } else if (note) ({ parts } = await this.compose({ note, form: "insert", after: null, before: null, asked: "", tier: "mid" }, ""));
+    } else if (note) {
+      ({ parts } = await this.compose({ note, form: "insert", after: null, before: null, asked: "", tier: "mid", ...(choice ? { choice } : {}) }, ""));
+      // What can be switched off, each with what it would add (I3): the session's exchanges, and the notes this links to.
+      const off = new Set(choice?.off ?? []);
+      let body = (await this.readNote(note)).text;
+      try { body = splitFrontmatter(body)[1]; } catch { /* links read from the whole file */ }
+      items = [
+        ...(await this.exchangesNow()).map((x): ContextItem => ({ id: `x:${x.id}`, kind: "exchange", title: x.text.split("\n")[0]!.replace(/^In (.+?) \(\/[^)]*\) they asked[^:]*: /, "$1: "), tokens: estimate(x.text), on: !off.has(`x:${x.id}`) })),
+        ...this.linksOf(body, note).map((c): ContextItem => ({ id: `n:${c.id}`, kind: "linked", title: c.title, tokens: estimate(c.body), on: !off.has(`n:${c.id}`) })),
+      ];
+    }
     if (!parts) {
       // In no note: the instructions, and the conversation as it would be sent.
       const earlier = await this.exchangesNow();
       ({ parts } = insertMessages({ tier: "mid", meaning: Boolean(this.similar), title: "", id: "", marked: "", unkept: [], conversation: conversation(earlier), moments: earlier.length, asked: "" }));
       parts = parts.map((p) => (p.name === "this note" ? { ...p, detail: "none open", tokens: 0 } : p));
     }
-    // What the session has cost: every reply offered, kept or not, and every reply that came to nothing.
+    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: await this.sessionCost(), items, lookup: choice?.lookup !== false };
+  }
+
+  /** What the session has cost: every reply offered, kept or not, every turn in Iso's pane, and every reply that came
+   *  to nothing. */
+  private async sessionCost(): Promise<{ usd: number; requests: number }> {
     const session = await this.sessionNow();
     let usd = 0, requests = 0;
     for (const entries of (await this.sessionEntries()).values()) for (const e of entries) if (((e.kind === "proposal" && !e.copyOf) || e.kind === "marks") && e.cost) { usd += e.cost.usd; requests++; } // a proposal with no cost is the second of one request
     const text = this.opts.study ? await this.opts.study.read(recordPath(this.opts.device)) : null;
-    for (const e of readRecord(text ?? "")) if (e.event === "iso-unused" && e.session === session) { usd += typeof e.usd === "number" ? e.usd : 0; requests++; }
-    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: { usd, requests } };
+    for (const e of readRecord(text ?? "")) if ((e.event === "iso-unused" || e.event === "iso-turn") && e.session === session) { usd += typeof e.usd === "number" ? e.usd : 0; requests++; }
+    return { usd, requests };
+  }
+
+  // ------------------------------------------------------------ conversations with Iso in its pane (M10)
+
+  /** The turn running in each conversation: one at a time. */
+  private readonly conversing = new Map<string, string>();
+  /** What Iso asked before doing something, waiting for your answer, by the permission's id. */
+  private readonly waitingAnswer = new Map<string, { turn: string; conversation: string; settle: (d: Decision) => void }>();
+
+  async conversation(id?: string): Promise<Conversation | null> {
+    const study = this.opts.study;
+    if (!study) return null;
+    if (!id) {
+      const names = await study.list(CONVERSATIONS_DIR).catch(() => []);
+      id = names.filter((f) => !f.dir && f.name.endsWith(".jsonl")).map((f) => f.name.slice(0, -".jsonl".length)).sort().at(-1);
+      if (!id) return null;
+    }
+    if (!TURN_ID.test(id)) throw new EngineError("not a conversation's id");
+    const text = await study.read(conversationPath(id));
+    // A turn with no ending in the file was stopped, unless it is running here now.
+    return text === null ? null : { id, turns: readTurns(text).map((t) => (this.running.has(t.id) ? { ...t, state: "running" as const } : t)) };
+  }
+
+  /** What was given, checked: notes and passages of the base, and its folders. */
+  private given(raw: unknown): Given[] {
+    if (!Array.isArray(raw) || raw.length > 40) throw new EngineError("give Iso between none and forty notes, folders and passages");
+    return raw.map((g: Record<string, unknown>): Given => {
+      const id = typeof g?.id === "string" ? g.id.replace(/^\/+|\/+$/g, "") : "";
+      if (g?.kind === "folder") { if (id) checkNoteId(id); return { kind: "folder", id }; }
+      if (!inBase(checkNoteId(id))) throw new EngineError("only notes of the base are given to Iso");
+      if (g?.kind === "note") return { kind: "note", id };
+      if (g?.kind === "understanding") return { kind: "understanding", id };
+      if (g?.kind === "passage" && typeof g.text === "string" && g.text.trim() && g.text.length <= 20_000) return { kind: "passage", id, text: g.text };
+      throw new EngineError("a part given to Iso is a note, a folder or a passage");
+    });
+  }
+
+  /** What was given, read now, as it is sent. A note that is gone is left out. */
+  private async sentOf(given: readonly Given[]): Promise<Sent[]> {
+    const out: Sent[] = [];
+    for (const g of given) {
+      if (g.kind === "folder") {
+        const under = g.id ? `${g.id}/` : "";
+        out.push({ kind: "folder", id: g.id, notes: [...this.bundle.concepts.values()].filter((c) => c.id.startsWith(under) && inBase(c.id)).map((c) => ({ id: c.id, title: c.title, description: c.description })) });
+        continue;
+      }
+      const c = this.bundle.concepts.get(g.id);
+      if (!c) continue;
+      if (g.kind === "understanding") {
+        const u = await this.understanding(g.id);
+        const said = (e: Evidence) => `${e.at.slice(0, 10)}: ${e.by > 0 ? "+" : ""}${e.by}${e.event === "wind-back" ? " (they wound you back)" : e.event === "attempt" ? " (an exercise)" : ""}${e.why ? `, ${e.why}` : ""}`;
+        out.push({ kind: "understanding", id: g.id, title: c.title, reading: u.reading, events: u.evidence.slice(-8).reverse().map(said), squares: u.squares });
+        continue;
+      }
+      if (g.kind === "passage") out.push({ kind: "passage", id: g.id, title: c.title, text: g.text });
+      else out.push({ kind: "note", id: g.id, title: c.title, text: (await this.readNote(g.id)).text });
+    }
+    return out;
+  }
+
+  async turnContext(req: Omit<TurnRequest, "asked">): Promise<ContextReport> {
+    const mode = req.mode === "build" ? "ask" : req.mode;
+    const all = req.conversation ? (await this.conversation(req.conversation))?.turns ?? [] : [];
+    const off = new Set(req.off ?? []), earlier = all.filter((t) => !off.has(t.id));
+    const { parts } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: req.lookup !== false, earlier, sent: await this.sentOf(this.given(req.given ?? [])), asked: "" });
+    // Each earlier turn can be left out (M9's switches, kept for the pane): what it adds, whole.
+    const items = all.map((t): ContextItem => ({ id: t.id, kind: "exchange", title: t.asked, tokens: estimate(turnExchange(t).text), on: !off.has(t.id) }));
+    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: await this.sessionCost(), items, lookup: req.lookup !== false };
+  }
+
+  async converse(req: TurnRequest): Promise<{ conversation: string; turn: string }> {
+    const http = this.opts.http, study = this.opts.study;
+    if (!http) throw new EngineError("Iso cannot be asked here", 409);
+    if (!study) throw new EngineError("Iso's conversations are kept in a study base, and none is open (isorite study init)", 409);
+    if (!(MODES as readonly string[]).includes(req.mode)) throw new EngineError("the mode is ask, write, build or understand");
+    if (req.mode === "build") throw new EngineError("Build mode is the terminal's: start isorite term", 409);
+    if (!TIERS.includes(req.tier)) throw new EngineError("the tier is low, mid or max");
+    const asked = String(req.asked ?? "").trim();
+    if (!asked) throw new EngineError("say what you want from Iso");
+    if (asked.length > MAX_ASKED) throw new EngineError("that is too long to ask at once", 413);
+    const given = this.given(req.given ?? []);
+    if (req.conversation !== undefined && !TURN_ID.test(req.conversation)) throw new EngineError("not a conversation's id");
+    const conversation = req.conversation ?? newId(this.opts.clock.now());
+    // Claimed before anything is awaited, so a message sent twice is one turn.
+    if (this.conversing.has(conversation)) throw new EngineError("Iso is still answering in this conversation. Wait for it, or stop it.", 409);
+    this.conversing.set(conversation, "");
+    try { return { conversation, turn: await this.beginTurn(conversation, { ...req, mode: req.mode, asked, given }, http) }; }
+    catch (err) { this.conversing.delete(conversation); throw err; }
+  }
+
+  private async beginTurn(conversation: string, req: TurnRequest & { mode: Exclude<TurnRequest["mode"], "build"> }, http: Http): Promise<string> {
+    const study = this.opts.study!;
+    const key = (await this.opts.secrets?.get(KEY)) ?? null;
+    if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
+    const off = new Set(req.off ?? []), earlier = ((await this.conversation(conversation))?.turns ?? []).filter((t) => !off.has(t.id));
+    const lookupOn = req.lookup !== false, mode = req.mode;
+    const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier, sent: await this.sentOf(req.given), asked: req.asked });
+
+    // A turn is of the session as a journal entry is, and carries it on.
+    const s = await this.stamp("you"), turn = s.id, abort = new AbortController(), path = conversationPath(conversation);
+    this.last = { at: s.at, session: s.session };
+    const line = (l: TurnLine) => this.one(() => study.append(path, JSON.stringify(l) + "\n"));
+    await line({ kind: "turn", id: turn, conversation, at: s.at, session: s.session, mode, asked: req.asked, given: req.given, tier: req.tier });
+    this.running.set(turn, abort);
+    this.conversing.set(conversation, turn);
+    this.publish({ type: "iso-start", request: turn, note: "", asked: req.asked, tier: req.tier, place: { form: "turn", conversation, mode, given: req.given } });
+    const item = async (i: TurnItem): Promise<void> => { await line({ kind: "item", turn, item: i }); this.publish({ type: "iso-item", request: turn, conversation, item: i }); };
+    const who = `iso:${this.provider.name}/${this.provider.tiers[req.tier]}`;
+
+    const lookup = new Lookup(this.bundle, req.given.find((g) => g.kind !== "folder")?.id ?? "", this.similar);
+    const looks = new Set(lookup.defs().map((d) => d.function.name));
+    const tools: Tools = {
+      defs: () => [...(lookupOn ? lookup.defs() : []), ...MODE_TOOLS[mode]],
+      call: async (name, raw) => {
+        if (looks.has(name)) return lookupOn ? lookup.call(name, raw) : { text: "Looking things up is off: they chose what you are sent." };
+        let args: Record<string, unknown> = {};
+        try { const parsed: unknown = raw.trim() ? JSON.parse(raw) : {}; if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) args = parsed as Record<string, unknown>; } catch { /* no arguments */ }
+        if (!MODE_TOOLS[mode].some((d) => d.function.name === name)) return { text: `There is no tool ${name} in ${mode} mode.` };
+        return { text: await this.turnTool(name, args, { turn, conversation, mode, item, signal: abort.signal, who, asked: req.asked }) };
+      },
+    };
+
+    void (async () => {
+      try {
+        const got = await rounds({
+          http, provider: this.provider, key, tier: req.tier, messages, lookup: tools, maxTokens: REPLY_TOKENS * 2, signal: abort.signal, most: ROUNDS[req.tier],
+          onText: (delta, again) => this.publish({ type: "iso-text", request: turn, note: "", delta, again }),
+          onStep: (step) => { void item({ kind: "look", step }); this.publish({ type: "iso-step", request: turn, note: "", step }); },
+        });
+        if (abort.signal.aborted) throw Object.assign(new Error("stopped"), { name: "AbortError" });
+        const cost: Cost = { model: got.usage.model, tier: req.tier, tokensIn: got.usage.tokensIn, tokensOut: got.usage.tokensOut, tokensCached: got.usage.tokensCached, usd: got.usage.usd };
+        const said = got.text.trim() + (got.cut ? "\n\n[Cut off at its length limit.]" : "");
+        if (said) await item({ kind: "text", text: said });
+        await line({ kind: "end", turn, state: "done", cost });
+        if (cost.usd > 0) await this.one(async () => this.record({ event: "iso-turn", conversation, turn, session: s.session, model: cost.model, usd: cost.usd }));
+        this.publish({ type: "iso-done", request: turn, note: "", proposal: "", cost });
+      } catch (err) {
+        const stopped = abort.signal.aborted || (err as Error).name === "AbortError";
+        const message = (err as Error).message || "Iso could not answer";
+        await line(stopped ? { kind: "end", turn, state: "stopped" } : { kind: "end", turn, state: "failed", message }).catch(() => undefined);
+        if (stopped) this.publish({ type: "iso-stopped", request: turn, note: "" });
+        else this.publish({ type: "iso-failed", request: turn, note: "", message });
+      } finally {
+        this.running.delete(turn);
+        this.conversing.delete(conversation);
+        for (const [id, w] of this.waitingAnswer) if (w.turn === turn) { this.waitingAnswer.delete(id); w.settle("reject"); }
+      }
+    })();
+    return turn;
+  }
+
+  /** What you allowed for the rest of a conversation ("always"): by conversation, the tools. */
+  private readonly allowed = new Map<string, Set<string>>();
+
+  /** Ask you before doing something; wait for your answer. "always" holds for the rest of the conversation. */
+  private async permit(t: TurnCtx, tool: string, note: string, what: string): Promise<Decision> {
+    if (this.allowed.get(t.conversation)?.has(tool)) return "always";
+    const id = newId(this.opts.clock.now());
+    const answer = new Promise<Decision>((settle) => this.waitingAnswer.set(id, { turn: t.turn, conversation: t.conversation, settle }));
+    await t.item({ kind: "permission", id, tool, note, what });
+    const stop = new Promise<Decision>((settle) => t.signal.addEventListener("abort", () => settle("reject"), { once: true }));
+    const d = await Promise.race([answer, stop]);
+    this.waitingAnswer.delete(id);
+    if (d === "always") this.allowed.set(t.conversation, new Set([...(this.allowed.get(t.conversation) ?? []), tool]));
+    return d;
+  }
+
+  /** A note's id as Iso writes one for a new note: folder/name, without a leading slash or `.md`. */
+  private newNoteId(raw: unknown): string | null {
+    const id = String(raw ?? "").trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/i, "");
+    try { checkNoteId(id); } catch { return null; }
+    return inBase(id) ? id : null;
+  }
+
+  /** One of a mode's own tools, in a turn: what is said back to Iso. */
+  private async turnTool(name: string, args: Record<string, unknown>, t: TurnCtx): Promise<string> {
+    const title = (id: string): string => this.bundle.concepts.get(id)?.title ?? id;
+    if (name === "point_to_note") {
+      const id = noteId(this.bundle, args.id);
+      if (!id) return `There is no note ${String(args.id ?? "")}.`;
+      await t.item({ kind: "point", note: id, why: String(args.why ?? "").trim().slice(0, 300) });
+      return `${title(id)} is marked on their Atlas.`;
+    }
+    const counted = (before: string, after: string) => {
+      const hunks = diffLines(before.split("\n"), after.split("\n"));
+      return { added: hunks.reduce((n, h) => n + h.ins.length, 0), removed: hunks.reduce((n, h) => n + h.del.length, 0) };
+    };
+    if (name === "edit_note") {
+      const id = noteId(this.bundle, args.id);
+      if (!id) return `There is no note ${String(args.id ?? "")}. Search for it by its words.`;
+      const old = String(args.old ?? ""), next = String(args.new ?? "");
+      if (!old) return "Give the passage as it is now, in old.";
+      const now = await this.readNote(id);
+      const at = now.text.indexOf(old), again = at < 0 ? -1 : now.text.indexOf(old, at + 1);
+      if (at < 0) return `That passage is not in ${title(id)} as you wrote it. Read the note again and give the passage exactly.`;
+      if (again >= 0) return `That passage occurs more than once in ${title(id)}. Give more of it, so it is found once.`;
+      const text = now.text.slice(0, at) + next + now.text.slice(at + old.length);
+      const saved = await this.one(() => this.put(id, text, now.version, "edit", { asked: t.asked }, t.who));
+      if (saved.entry) await t.item({ kind: "change", note: id, entry: saved.entry, why: "edit", title: title(id), ...counted(now.text, text) });
+      return `Changed ${title(id)}.`;
+    }
+    if (name === "write_note") {
+      const id = this.newNoteId(args.id);
+      if (!id) return `${String(args.id ?? "")} is not a note's id in their base: give folder/name, lower case with hyphens.`;
+      let text = String(args.text ?? "");
+      if (!text.trim()) return "Give the note's whole text.";
+      if (!/^---\n/.test(text)) text = `---\ntype: Concept\ntitle: ${JSON.stringify(/^#\s+(.+)$/m.exec(text)?.[1]?.trim() ?? id.split("/").at(-1)!.replace(/-/g, " "))}\n---\n\n${text.replace(/^#\s+.+\n+/, "")}`;
+      const was = this.bundle.concepts.has(id) ? await this.readNote(id) : null;
+      const saved = await this.one(() => this.put(id, text, was?.version ?? null, "edit", { asked: t.asked }, t.who));
+      if (saved.entry) await t.item({ kind: "change", note: id, entry: saved.entry, why: was ? "edit" : "create", title: title(id), ...counted(was?.text ?? "", text) });
+      return was ? `Wrote ${title(id)} anew.` : `Made ${title(id)} (/${id}.md).`;
+    }
+    if (name === "move_note") {
+      const id = noteId(this.bundle, args.id), to = this.newNoteId(args.to);
+      if (!id) return `There is no note ${String(args.id ?? "")}.`;
+      if (!to) return `${String(args.to ?? "")} is not a note's id in their base.`;
+      if ((await this.permit(t, "move_note", id, `move ${title(id)} to ${to}`)) === "reject") return "They did not allow it. It was not moved.";
+      const now = await this.readNote(id), before = title(id);
+      try { await this.moveNote(id, to, now.version, t.who); } catch (e) { return `It could not be moved: ${(e as Error).message}`; }
+      const entry = (await this.journal(to)).at(-1)?.id ?? "";
+      await t.item({ kind: "change", note: to, entry, why: "move", to, title: before, added: 0, removed: 0 });
+      return `Moved ${before} to /${to}.md.`;
+    }
+    if (name === "delete_note") {
+      const id = noteId(this.bundle, args.id);
+      if (!id) return `There is no note ${String(args.id ?? "")}.`;
+      if ((await this.permit(t, "delete_note", id, `delete ${title(id)}`)) === "reject") return "They did not allow it. It was not deleted.";
+      const now = await this.readNote(id), before = title(id);
+      try { await this.deleteNote(id, now.version, t.who); } catch (e) { return `It could not be deleted: ${(e as Error).message}`; }
+      await t.item({ kind: "change", note: id, entry: (await this.journal(id)).at(-1)?.id ?? "", why: "delete", title: before, added: 0, removed: now.text.split("\n").length });
+      return `Deleted ${before}. Its history stays.`;
+    }
+    if (name === "record_understanding") {
+      const id = noteId(this.bundle, args.id);
+      if (!id) return `There is no note ${String(args.id ?? "")}.`;
+      const by = Number(args.by);
+      if (![-1, -0.5, 0, 0.5, 1].includes(by)) return "by is one of -1, -0.5, 0, 0.5, 1.";
+      const why = String(args.why ?? "").trim().slice(0, 300);
+      if (this.recorded.get(t.turn)?.has(id)) return `You recorded ${title(id)} once this turn already.`;
+      this.recorded.set(t.turn, new Set([...(this.recorded.get(t.turn) ?? []), id]));
+      const event = await this.one(() => this.record({ event: "understood", note: id, by, why, conversation: t.conversation, turn: t.turn }));
+      await t.item({ kind: "understood", note: id, event, by, why });
+      return `Recorded for ${title(id)}.`;
+    }
+    if (name === "write_understanding") {
+      const id = noteId(this.bundle, args.id);
+      if (!id) return `There is no note ${String(args.id ?? "")}.`;
+      const reading = String(args.reading ?? "").trim();
+      if (!reading) return "Give your reading.";
+      const uid = understandingId(id), was = await this.readNote(uid).catch(() => null);
+      const text = understandingText(id, title(id), { ...parseUnderstanding(was?.text ?? null), reading });
+      const saved = await this.one(() => this.put(uid, text, was?.version ?? null, "edit", {}, t.who));
+      if (saved.entry) await t.item({ kind: "change", note: uid, entry: saved.entry, why: was ? "edit" : "create", title: `Understanding · ${title(id)}`, added: 0, removed: 0 });
+      return `Your reading of ${title(id)} is written.`;
+    }
+    return `${name} cannot be used yet.`;
+  }
+
+  /** The notes each turn recorded understanding of: once a note a turn. */
+  private readonly recorded = new Map<string, Set<string>>();
+
+  /** A note's Understanding note (M10): Iso's reading, your scratchpad, and what the record says of it. */
+  async understanding(note: string): Promise<UnderstandingReport> {
+    if (!inBase(checkNoteId(note))) throw new EngineError("only a note of the base has an Understanding note");
+    const uid = understandingId(note);
+    const source = this.opts.study ? await this.readNote(uid).catch(() => null) : null;
+    const read = (await this.study()).notes[note];
+    return { note, ...parseUnderstanding(source?.text ?? null), version: source?.version ?? null, level: read?.level ?? 0, squares: read?.squares ?? 0, step: read?.step ?? 0, due: read?.due ?? false, evidence: read?.evidence ?? [] };
+  }
+
+  /** Your scratchpad in a note's Understanding note: yours alone; Iso does not write it. `base` as for saveNote, or
+   *  null when there is no Understanding note yet. */
+  async saveScratchpad(note: string, scratchpad: string, base: string | null): Promise<UnderstandingReport> {
+    if (!this.opts.study) throw new EngineError("there is no study base open", 409);
+    if (!inBase(checkNoteId(note))) throw new EngineError("only a note of the base has an Understanding note");
+    const uid = understandingId(note), was = await this.readNote(uid).catch(() => null);
+    const title = this.bundle.concepts.get(note)?.title ?? note;
+    await this.one(() => this.put(uid, understandingText(note, title, { ...parseUnderstanding(was?.text ?? null), scratchpad }), base));
+    return this.understanding(note);
+  }
+
+  async undoTurn(conversation: string, turn: string): Promise<{ notes: string[]; left: string[] }> {
+    const c = await this.conversation(conversation);
+    const t = c?.turns.find((x) => x.id === turn);
+    if (!t) throw new EngineError("there is no such turn", 404);
+    if (t.state === "running") throw new EngineError("wait for Iso to finish, or stop it, first", 409);
+    if (t.items.some((i) => i.kind === "undone")) throw new EngineError("that turn was undone already", 409);
+    const changes = t.items.filter((i): i is Extract<TurnItem, { kind: "change" }> => i.kind === "change");
+    const notes: string[] = [], left: string[] = [];
+    // Newest first, so a note changed twice goes back past both.
+    const done = new Set<string>();
+    for (const ch of [...changes].reverse()) {
+      const key = ch.why === "move" ? ch.to! : ch.note;
+      if (done.has(key)) continue;
+      done.add(key);
+      try {
+        if (ch.why === "delete") {
+          const entries = await this.journal(ch.note);
+          const was = replay(entries)?.text;
+          if (was === undefined || this.bundle.concepts.has(ch.note)) { left.push(ch.note); continue; }
+          await this.createNote(ch.note, was);
+        } else if (ch.why === "move") {
+          const from = (await this.journal(ch.to!)).find((e) => e.id === ch.entry);
+          const back = from && "from" in from ? from.from : undefined;
+          if (!back || !this.bundle.concepts.has(ch.to!)) { left.push(ch.to!); continue; }
+          await this.moveNote(ch.to!, back, (await this.readNote(ch.to!)).version);
+        } else {
+          // Back to before the turn's first change of this note, if nothing has changed it since its last.
+          const entries = await this.journal(ch.note);
+          const mine = changes.filter((x) => x.note === ch.note && x.why !== "move").map((x) => x.entry);
+          const first = entries.findIndex((e) => mine.includes(e.id)), last = entries.findLastIndex((e) => e.kind === "change");
+          if (first < 0 || !mine.includes(entries[last]?.id ?? "")) { left.push(ch.note); continue; }
+          const now = await this.readNote(ch.note);
+          if (hashText(now.text) !== hashText(replay(entries)!.text)) { left.push(ch.note); continue; }
+          // Made in the turn: it goes.
+          if (first === 0) await this.deleteNote(ch.note, now.version);
+          else await this.restore(ch.note, entries.slice(0, first).findLast((e) => e.kind === "change")!.id, now.version);
+        }
+        notes.push(key);
+      } catch { left.push(key); }
+    }
+    const item: TurnItem = { kind: "undone", notes, left };
+    await this.one(() => this.opts.study!.append(conversationPath(conversation), JSON.stringify({ kind: "item", turn, item } satisfies TurnLine) + "\n"));
+    this.publish({ type: "iso-item", request: turn, conversation, item });
+    return { notes, left };
+  }
+
+  async answer(turn: string, permission: string, decision: Decision): Promise<void> {
+    if (!["once", "always", "reject"].includes(decision)) throw new EngineError("the answer is once, always or reject");
+    const w = this.waitingAnswer.get(permission);
+    if (!w || w.turn !== turn) throw new EngineError("Iso is not waiting for that answer", 409);
+    this.waitingAnswer.delete(permission);
+    await this.one(() => this.opts.study!.append(conversationPath(w.conversation), JSON.stringify({ kind: "answer", turn, permission, decision } satisfies TurnLine) + "\n"));
+    this.publish({ type: "iso-answer", request: turn, conversation: w.conversation, permission, decision });
+    w.settle(decision);
   }
 
   // ------------------------------------------------------------ notes for Iso
@@ -965,6 +1352,7 @@ export class Engine implements Api {
       const e = byId.get(id);
       if (!e) return [];
       if (e.event === "wind-back") return [{ id, at: String(e.at), event: "wind-back", by: -1 }];
+      if (e.event === "understood") return [{ id, at: String(e.at), event: "understood", by: typeof e.by === "number" ? e.by : 0, ...(typeof e.why === "string" && e.why ? { why: e.why } : {}), ...(typeof e.conversation === "string" ? { conversation: e.conversation } : {}) }];
       const move = (e.moves as Record<string, { by?: unknown; why?: unknown }> | undefined)?.[note];
       return [{ id, at: String(e.at), event: "attempt", by: typeof move?.by === "number" ? move.by : 0, ...(typeof move?.why === "string" && move.why ? { why: move.why } : {}), ...(typeof e.exercise === "string" ? { exercise: studyId(e.exercise) } : {}), ...(typeof e.result === "string" ? { result: e.result as Evidence["result"] } : {}), ...(typeof e.marks === "string" ? { marks: e.marks } : {}) }];
     });
