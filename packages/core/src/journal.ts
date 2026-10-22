@@ -238,12 +238,18 @@ export function wordAuthors(entries: readonly Entry[]): Run[][] | null {
       const b: string[] = [];
       h.ins.forEach((l, k) => { if (k) b.push("\n"); b.push(...tokens(l)); });
       const bw: string[] = b.map(() => who);
+      // Words kept from the old lines keep their writer; but where most of what was put in is new, the passage was
+      // rewritten, and a word that happens to recur in it ("the", "error") is the rewriter's too.
+      const kept: [number, number][] = [];
       let i = 0, j = 0;
       for (const d of diffLines(a, b)) {
-        while (i < d.at) { bw[j] = aw[i]!; i++; j++; }
+        while (i < d.at) { kept.push([j, i]); i++; j++; }
         i += d.del.length; j += d.ins.length;
       }
-      while (i < a.length && j < b.length) { bw[j] = aw[i]!; i++; j++; }
+      while (i < a.length && j < b.length) { kept.push([j, i]); i++; j++; }
+      const words = (ts: string[]) => ts.filter((t) => /[\p{L}\p{N}]/u.test(t)).length;
+      const keptWords = kept.filter(([jj]) => /[\p{L}\p{N}]/u.test(b[jj]!)).length;
+      if (keptWords * 2 >= words(b)) for (const [jj, ii] of kept) bw[jj] = aw[ii]!;
       let cur: Line = { t: [], w: [] };
       const made: Line[] = [];
       b.forEach((tok, k) => { if (tok === "\n") { made.push(cur); cur = { t: [], w: [] }; } else { cur.t.push(tok); cur.w.push(bw[k]!); } });

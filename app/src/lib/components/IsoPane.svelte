@@ -98,7 +98,7 @@
   {:else if i.kind === "undone"}
     <p class="faint undone">{i.notes.length ? `Undone: ${i.notes.map(titleOf).join(", ")} put back.` : "Nothing was put back."}{i.left.length ? ` Left as they are, changed since: ${i.left.map(titleOf).join(", ")}.` : ""}</p>
   {:else if i.kind === "point"}
-    <p class="point"><span class="dia" aria-hidden="true">◆</span> look at <button type="button" class="note-link" onclick={() => open(i.note)}>{titleOf(i.note)}</button>{#if i.why}: {i.why}{/if}</p>
+    <p class="point"><span class="dia" aria-hidden="true">◆</span><span class="v">look at</span><button type="button" class="note-link" onclick={() => open(i.note)}>{titleOf(i.note)}</button>{#if i.why}<span class="why">{i.why}</span>{/if}</p>
   {/if}
 {/snippet}
 
@@ -212,7 +212,9 @@
   .look .n { color: var(--text-faint); }
   .note-link { background: none; border: 0; padding: 0; font: inherit; color: var(--text-soft); cursor: pointer; text-align: left; overflow-wrap: anywhere; }
   .note-link:hover, .note-link:focus-visible { color: var(--lattice); }
-  .point { color: var(--text-soft); }
+  .point { color: var(--text-faint); }
+  .point .v { color: var(--text-soft); min-width: 5.5em; }
+  .point .why { flex-basis: 100%; padding-left: calc(5.5em + 8px); color: var(--text-soft); }
   .change { padding-left: 16px; font-size: 12px; color: var(--text-faint); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; position: relative; }
   .change::before { content: "✎"; position: absolute; left: 0; color: var(--growth); }
   .change .v { color: var(--text-soft); min-width: 5.5em; }

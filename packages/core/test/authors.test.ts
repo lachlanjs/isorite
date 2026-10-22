@@ -48,3 +48,13 @@ test("word by word: Iso's words in a line it changed are its own, the words it k
   expect(iso(runs[3]!, "not N squared, by the quadtree's depth.")).toEqual(["not N squared, by the ", "'s depth"]);
   expect(wordAuthors([])).toEqual([]);
 });
+
+test("a passage Iso rewrote is its own, though a few of its words were in what it replaced", () => {
+  const entries: Entry[] = [];
+  const write = (text: string, who: string) => { const e = change(entries, text, at(who), entries.length ? "edit" : "start"); if (e) entries.push(e); };
+  write("TODO: how big an error does θ give, and why does the cost grow only as N log N?\n", "you");
+  const now = "The error of a node used whole is of order (s/d)^2. The cost: a body opens nodes only near it.";
+  write(now + "\n", "iso:openrouter/m");
+  const runs = wordAuthors(entries)!;
+  expect(runs[0]).toEqual([{ from: 0, to: now.length, who: "iso:openrouter/m" }]);
+});

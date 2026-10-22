@@ -59,7 +59,42 @@ Three ways out:
 For two galaxies colliding, the first is the usual answer.`;
 
 /** The answer to one request to the tutorial's Iso. */
+/** In a turn in Iso's pane (M10): which mode, from what it was told. */
+const modeOf = (r: Request): "ask" | "write" | "understand" | null => {
+  const system = JSON.stringify(r.messages.find((m) => m.role === "system")?.content ?? "");
+  return system.includes("# Write mode") ? "write" : system.includes("# Understand mode") ? "understand" : system.includes("# Ask mode") ? "ask" : null;
+};
+const tools = (r: Request): number => r.messages.filter((m) => m.role === "tool").length;
+
+const TODO = "TODO: how big an error does θ = 0.5 give, and why does the cost grow only as N log N?";
+
+/** Iso's pane (M10): Ask, Write and Understand mode, on the questions the tutorial walks through. */
+function turnAnswer(r: Request, mode: "ask" | "write" | "understand"): Reply | null {
+  const q = asked(r), n = tools(r);
+  if (mode === "ask" && q.includes("inserted")) {
+    if (n === 0) return { calls: [{ name: "search_notes", arguments: { query: "quadtree" } }, { name: "read_note", arguments: { id: "algorithms/centre-of-mass" } }], usage: { in: 5100, out: 50, usd: 0.0059 } };
+    if (n === 2) return { calls: [{ name: "point_to_note", arguments: { id: "algorithms/centre-of-mass", why: "It is what each node keeps as bodies pass down." } }], usage: { in: 7800, out: 40, usd: 0.0061 } };
+    return { text: INSERT, usage: { in: 8400, out: 310, cached: 4800, usd: 0.0163 } };
+  }
+  if (mode === "write" && q.includes("todo")) {
+    if (n === 0) return { calls: [{ name: "read_note", arguments: { id: "algorithms/barnes-hut" } }, { name: "read_note", arguments: { id: "algorithms/the-quadtree" } }], usage: { in: 5600, out: 60, usd: 0.0061 } };
+    if (n === 2) return { calls: [{ name: "edit_note", arguments: { id: "algorithms/barnes-hut", old: TODO, new: THETA } }], usage: { in: 8900, out: 290, cached: 5100, usd: 0.0154 } };
+    return { text: "I answered both questions in your TODO, from the quadtree's depth and the centre of mass, and took the TODO away.", usage: { in: 9400, out: 40, cached: 8800, usd: 0.0041 } };
+  }
+  if (mode === "understand" && /backwards|retrace|reverse/.test(q)) {
+    if (n === 0) return { calls: [{ name: "record_understanding", arguments: { id: "integrators/leapfrog", by: 0.5, why: "You saw that running it backwards retraces it, and that this is why its error cannot pile up." } }, { name: "write_understanding", arguments: { id: "integrators/leapfrog", reading: "You can say why leapfrog's energy error stays bounded: it is time-reversible, so it cannot drift one way. Not yet shown: what being symplectic adds to that." } }], usage: { in: 6200, out: 120, usd: 0.0068 } };
+    return { text: "Yes: run backwards it retraces its steps, so an error it made going forward is undone coming back, and it cannot keep growing one way. That is reversibility. Being [symplectic](/integrators/symplectic-integrators.md) is the stronger reason, and the next thing to look at.", usage: { in: 7100, out: 90, cached: 5600, usd: 0.0049 } };
+  }
+  if (mode === "understand" && /leapfrog|bounded|drift/.test(q)) {
+    if (n === 0) return { calls: [{ name: "read_note", arguments: { id: "integrators/leapfrog", section: "Why it does not drift" } }], usage: { in: 5200, out: 40, usd: 0.0056 } };
+    return { text: "Before I say why: what happens if you run leapfrog with $-\\Delta t$, from where it ended?", usage: { in: 6900, out: 30, cached: 4800, usd: 0.0044 } };
+  }
+  return null;
+}
+
 export function tutorialAnswer(r: Request): Reply {
+  const mode = modeOf(r);
+  if (mode) return turnAnswer(r, mode) ?? { text: UNSCRIPTED, usage: { in: 4000, out: 40, usd: 0.0049 } };
   const all = text(r);
   // A marking: the cost of direct summation is right once the pairs are halved.
   if (all.includes("⟦answer⟧")) {
