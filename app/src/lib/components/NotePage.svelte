@@ -8,7 +8,7 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { isStudyId, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
-  import { app, noteHref } from "$lib/app.svelte.ts";
+  import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import { wordAuthors } from "@isorite/core";
@@ -155,6 +155,20 @@
     app.exercise = ex ? { kind: KINDS[ex.ex.kind] ?? ex.ex.kind, squares: ex.squares.squares, due: ex.squares.due, flash: ex.flash, windBack: () => void ex.windBack(), why: () => (why = !why), next: ex.ex.next ? `@study/${ex.ex.next}` : null } : null;
   });
 
+  // A note made on the Atlas is "untitled-note" until it is named: its first title names its file too.
+  async function named(): Promise<void> {
+    const name = id.split("/").at(-1)!, title = note.fields.title.trim();
+    if (!/^untitled-note(-\d+)?$/.test(name) || !title || /^untitled note( \d+)?$/i.test(title)) return;
+    const to = [...id.split("/").slice(0, -1), slug(title)].filter(Boolean).join("/");
+    if (!slug(title) || app.listing.notes.some((n) => n.id === to)) return;
+    try {
+      const moved = await note.move(to);
+      await app.refresh();
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
+      await goto(noteHref(moved), { replaceState: true });
+    } catch { /* it keeps its name: details can move it */ }
+  }
+
   // A note just made on the Atlas opens with its title chosen, to type over (V6).
   $effect(() => {
     if (note.loaded !== "ready" || panes.fresh !== id) return;
@@ -262,7 +276,7 @@
         <!-- A textarea so a long title wraps instead of running out of sight; a title is still one line of text. -->
         <textarea id="title" class="serif title" rows="1" value={note.fields.title} placeholder={id.split("/").at(-1)} autocomplete="off"
           oninput={(e) => note.setFields({ title: e.currentTarget.value.replace(/\s*\n\s*/g, " ") })}
-          onkeydown={(e) => { if (e.key === "Enter") e.preventDefault(); }}></textarea>
+          onkeydown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }} onblur={() => void named()}></textarea>
       {:else}
         <span class="grow faint">{id}.md{note.meta === null ? ": the frontmatter cannot be read, so the file is shown as it is" : ""}</span>
       {/if}
