@@ -16,6 +16,12 @@ export const PROMPTS = {
   octree: "How does the quadtree become an octree for 3D, and what changes in Barnes–Hut?",
   /** L2: the question written in a new note, Close encounters. */
   close: "What goes wrong when two bodies pass close?",
+  /** E1, in Write mode: a note on the octree asked for. */
+  octreeWrite: "write a note in algorithms on the octree: how the quadtree becomes one for 3D, and what changes in Barnes–Hut",
+  /** L3, in Understand mode: Leapfrog's bounded energy error. */
+  understand: "help me see why leapfrog's energy error stays bounded",
+  /** L3: the answer to what Iso asks back. */
+  answer: "run backwards with −Δt, it retraces its steps",
 } as const;
 
 export const UNSCRIPTED = "In this tutorial I answer only what it walks you through. With a provider key in your own isorite, I would answer this too.";
@@ -49,6 +55,17 @@ What changes:
 
 Nothing in the [main loop](/simulation/the-main-loop.md) changes: only \`accelerations\`.`;
 
+const OCTREE_NOTE = `---
+type: Concept
+title: The octree
+description: The quadtree in 3D: each cube split into eight.
+---
+
+The [quadtree](/algorithms/the-quadtree.md "requires") in three dimensions, for [Barnes–Hut](/algorithms/barnes-hut.md "uses") on the 3D simulation.
+
+${OCTREE}
+`;
+
 const CLOSE = `When two bodies pass within a small fraction of their usual distance, their acceleration grows as $1/r^2$, and a step of fixed length overshoots: the energy jumps.
 
 Three ways out:
@@ -75,6 +92,15 @@ function turnAnswer(r: Request, mode: "ask" | "write" | "understand"): Reply | n
     if (n === 0) return { calls: [{ name: "search_notes", arguments: { query: "quadtree" } }, { name: "read_note", arguments: { id: "algorithms/centre-of-mass" } }], usage: { in: 5100, out: 50, usd: 0.0059 } };
     if (n === 2) return { calls: [{ name: "point_to_note", arguments: { id: "algorithms/centre-of-mass", why: "It is what each node keeps as bodies pass down." } }], usage: { in: 7800, out: 40, usd: 0.0061 } };
     return { text: INSERT, usage: { in: 8400, out: 310, cached: 4800, usd: 0.0163 } };
+  }
+  if (mode === "ask" && q.includes("faster")) {
+    if (n === 0) return { calls: [{ name: "read_note", arguments: { id: "algorithms/direct-summation" } }, { name: "read_note", arguments: { id: "algorithms/barnes-hut" } }], usage: { in: 5300, out: 50, usd: 0.0060 } };
+    return { text: SPEED, usage: { in: 8800, out: 260, cached: 5000, usd: 0.0158 } };
+  }
+  if (mode === "write" && q.includes("octree")) {
+    if (n === 0) return { calls: [{ name: "read_note", arguments: { id: "algorithms/the-quadtree" } }, { name: "read_note", arguments: { id: "algorithms/barnes-hut" } }], usage: { in: 5200, out: 60, usd: 0.0058 } };
+    if (n === 2) return { calls: [{ name: "write_note", arguments: { id: "algorithms/the-octree", text: OCTREE_NOTE } }], usage: { in: 9900, out: 380, cached: 4400, usd: 0.0192 } };
+    return { text: "I wrote The octree in algorithms, from the quadtree and Barnes–Hut, and linked it to both.", usage: { in: 10400, out: 40, cached: 9800, usd: 0.0043 } };
   }
   if (mode === "write" && q.includes("todo")) {
     if (n === 0) return { calls: [{ name: "read_note", arguments: { id: "algorithms/barnes-hut" } }, { name: "read_note", arguments: { id: "algorithms/the-quadtree" } }], usage: { in: 5600, out: 60, usd: 0.0061 } };

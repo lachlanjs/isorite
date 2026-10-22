@@ -33,11 +33,11 @@
   // The lit area eases only when the step's target changes; while the page scrolls it follows at once (T6).
   let easing = $state(false);
   let redoing = $state(false);
-  // On a phone the foot of the screen holds what a step asks you to use (ask Iso here, an exercise's buttons, a note
-  // for Iso's): the card stands above it, and folds to its title when it is in the way.
+  // On a phone the foot of the screen holds what a step asks you to use (Iso's box, an exercise's buttons): the card
+  // stands above it, and folds to its title when it is in the way.
   let lift = $state(0);
   let small = $state(false);
-  const FOOT = ".seed, .foot, .changes, .deck";
+  const FOOT = '.seed, .foot, .changes, .deck, [data-pane="iso"] .composer';
 
   async function enter(k: number) {
     tour.at = k; tour.mistake = ""; small = false;
@@ -87,7 +87,8 @@
       lift = 0;
       if (narrow) for (const el of document.querySelectorAll<HTMLElement>(FOOT)) {
         const r = el.getBoundingClientRect();
-        if (r.height && r.top > innerHeight / 2) lift = Math.max(lift, innerHeight - r.top + 8);
+        // Only what is on screen: the panes not swiped to stand beside it.
+        if (r.height && r.top > innerHeight / 2 && r.left < innerWidth && r.right > 0) lift = Math.max(lift, innerHeight - r.top + 8);
       }
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       for (const el of lit(step.target)) {
@@ -109,9 +110,10 @@
     const every = setInterval(() => {
       if (left || !step || redoing) return;
       if (step.fill) {
-        const field = document.querySelector<HTMLTextAreaElement | HTMLInputElement>('[aria-label="Ask Iso"]');
-        if (field && !field.value && !field.dataset.filled) {
-          field.dataset.filled = "1";
+        const field = document.querySelector<HTMLTextAreaElement>("#iso-box");
+        // Iso's box stays from step to step (M10): each step's words are put in once, when it is empty.
+        if (field && !field.value && field.dataset.filled !== step.fill) {
+          field.dataset.filled = step.fill;
           field.value = step.fill;
           field.dispatchEvent(new Event("input", { bubbles: true }));
         }

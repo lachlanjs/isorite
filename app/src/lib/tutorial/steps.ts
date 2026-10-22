@@ -5,8 +5,11 @@
 // by isorite --tutorial, beside the terminal's tour, a part may read differently again (`local`).
 
 import type { EngineEvent } from "@isorite/engine";
-import { BH, COST, DIRECT, ENERGY, GALAXY, LAW, LEAP, LOOP, PROMPTS, QUAD, SOFT } from "@isorite/example";
+import { BH, COST, ENERGY, GALAXY, LEAP, LOOP, PROMPTS, QUAD, SOFT } from "@isorite/example";
 import { app, noteHref } from "$lib/app.svelte.ts";
+import { converse } from "$lib/converse.svelte.ts";
+import { panes } from "$lib/panes.svelte.ts";
+import { tray } from "$lib/tray.svelte.ts";
 
 export interface Step {
   title: string;
@@ -42,12 +45,19 @@ export interface Part {
   local?: Pick<Part, "about" | "steps">;
 }
 
-const EXERCISE = "@study/algorithms/the-cost-of-direct-summation";
 const BASE = 18; // the example's notes, before you add any
 
-const settled = (note: string) => (e: EngineEvent) => e.type === "journal" && e.id === note && (e.entry.kind === "discard" || (e.entry.kind === "change" && e.entry.why === "keep"));
-const kept = (note: string) => (e: EngineEvent) => e.type === "journal" && e.id === note && e.entry.kind === "change" && e.entry.why === "keep";
-const done = (note: string | ((id: string) => boolean)) => (e: EngineEvent) => e.type === "iso-done" && (typeof note === "string" ? e.note === note : note(e.note));
+// Turns in Iso's pane (M10), as they begin: the mode, what was asked, and whether an Understanding note went with it.
+const turns = new Map<string, { mode: string; asked: string; understanding: boolean }>();
+let undone = 0;
+const turnBegun = (mode: string, asked: RegExp) => (e: EngineEvent) => e.type === "iso-start" && e.place.form === "turn" && e.place.mode === mode && asked.test(e.asked.toLowerCase());
+const turnDone = (mode: string, asked: RegExp, also: (t: { understanding: boolean }) => boolean = () => true) => (e: EngineEvent) => {
+  if (e.type !== "iso-done") return false;
+  const t = turns.get(e.request);
+  return !!t && t.mode === mode && asked.test(t.asked.toLowerCase()) && also(t);
+};
+/** L2's writes in Barnes–Hut, counted so its undo step can see the TODO answered again. */
+let todoWrites = 0;
 const here = (hash: string) => () => decodeURIComponent(location.hash).startsWith(hash);
 const has = (selector: string) => () => document.querySelector(selector) !== null;
 const chosen = (note: string) => () => document.querySelector(`[data-note="${note}"]`)?.classList.contains("at") ?? false;
@@ -62,15 +72,14 @@ function read(id: string): void {
 const textOf = (id: string): string => { if (!texts.has(id)) { texts.set(id, ""); read(id); } return texts.get(id) ?? ""; };
 const original = (id: string): string => { textOf(id); return first.get(id) ?? ""; };
 let listening = false;
-/** Notes where Iso's text was removed, and where it was kept: for steps that name removing as a wrong move. */
-const removed = new Set<string>(), keptIn = new Set<string>();
 function listen(): void {
   if (listening || !app.api) return;
   listening = true;
   app.on((e) => {
     if (e.type === "note-changed" && texts.has(e.id)) read(e.id);
-    if (e.type === "journal" && e.entry.kind === "discard") removed.add(e.id);
-    if (e.type === "journal" && e.entry.kind === "change" && e.entry.why === "keep") keptIn.add(e.id);
+    if (e.type === "iso-start" && e.place.form === "turn") turns.set(e.request, { mode: e.place.mode, asked: e.asked, understanding: e.place.given.some((g) => g.kind === "understanding") });
+    if (e.type === "iso-item" && e.item.kind === "undone") undone++;
+    if (turnDone("write", /todo/)(e)) todoWrites++;
   });
 }
 const count = (text: string, pattern: RegExp) => { listen(); return text.match(pattern)?.length ?? 0; };
@@ -80,6 +89,11 @@ const links = (text: string, to: string) => count(text, new RegExp(`\\]\\(/${to.
 const lit = (): Element[] => (app.atlas?.chosenId ? [...document.querySelectorAll(".atlas")] : []);
 /** Whether L1's timeline step has seen the note as it was. */
 let looked = false;
+/** L1's first step: another layout tried, and back to the one you had (counted, however quickly it was done). */
+let layoutFrom = "", layoutChanges = 0;
+const layoutRound = (): boolean => panes.layoutChanges > layoutChanges && panes.layout === layoutFrom;
+/** The scratchpad of the Understanding note open, saved. */
+const padSaved = () => document.querySelector('[data-pane="note"] .u h2 .state')?.textContent === "saved";
 /** Stepped into a folder and out again, however it was done: clicked into, scrolled or pinched. In, when the Atlas
  *  says it is in the folder or the folder fills half the Atlas; out, when it no longer is and the folder is back
  *  near the size it was first seen at. */
@@ -95,16 +109,24 @@ function steppedIn(folder: string): () => boolean {
   };
 }
 
+const ISO = '[data-pane="iso"]';
 // The note you make in L1, as it is moved and then deleted: whatever was not there when the tutorial began.
 const ORIGINAL = new Set<string>();
 /** Note what the base holds, once, before anything is made in it. */
-export function remember(): void { listen(); if (!ORIGINAL.size) for (const n of app.listing.notes) ORIGINAL.add(n.id); }
+export function remember(): void {
+  listen();
+  if (!ORIGINAL.size) for (const n of app.listing.notes) ORIGINAL.add(n.id);
+  layoutFrom = panes.layout; layoutChanges = panes.layoutChanges;
+}
 const yours = () => app.listing.notes.filter((n) => ORIGINAL.size && !ORIGINAL.has(n.id));
 
 export const PARTS: Part[] = [
   {
-    key: "L1", title: "The isorite knowledge base", about: "Understand the basics of using an isorite knowledge base, editing Markdown, and linking notes together.",
+    key: "L1", title: "The isorite knowledge base", about: "Understand the basics of an isorite knowledge base in its three panes: the note, the Atlas, and Iso. Edit Markdown, link notes, and see the links on the Atlas.",
     steps: [
+      { go: "/atlas", target: '[data-pane="note"] [data-settings="note"], [role="dialog"][aria-label="Note settings"]', check: layoutRound, title: "Three panes",
+        text: "The Note pane is for thinking and writing, the Atlas for connecting, Iso for building and talking. The layouts are in the Note pane's settings, at the right of its header: try another, then come back to this one.",
+        phone: { go: "/notes", target: 'nav[aria-label="Panes"]', check: () => panes.focus === "atlas", text: "The Note pane is for thinking and writing, the Atlas for connecting, Iso for building and talking. On a phone they are the tabs at the foot: tap Atlas." } },
       { go: "/atlas", target: `[data-folder="integrators"]`, check: steppedIn("integrators"), title: "This is the Atlas",
         text: "Each block is a note, each bubble a folder, each line a link. Step into integrators: click inside it, or scroll in. Then click open ground to step out.",
         phone: { text: "Each block is a note, each bubble a folder, each line a link. Tap inside integrators to step in, then ↑ out at the top." } },
@@ -113,17 +135,17 @@ export const PARTS: Part[] = [
         text: "Click Leapfrog. What it requires, and what builds on it, light up.",
         phone: { text: "Tap Leapfrog. What it requires, and what builds on it, light up." } },
       { target: lit, check: here(`#/n/${LEAP}`), title: "Open it",
-        text: "Click Leapfrog again. It opens beside the Atlas.",
-        phone: { text: "Tap Leapfrog again to open it. The tabs at the foot switch between the note and the Atlas." } },
-      { go: `/n/${LEAP}`, target: ".cm-content", check: () => count(textOf(LEAP), /\*\*[^*\n]+\*\*/g) > count(original(LEAP), /\*\*[^*\n]+\*\*/g), title: "A note is Markdown",
-        text: "Select a word and press Ctrl+B. Changes save as you type.",
+        text: "Click Leapfrog again. It opens in the Note pane.",
+        phone: { text: "Tap Leapfrog again. It opens in the Note pane, and the Note tab comes forward." } },
+      { go: `/n/${LEAP}`, target: '[data-pane="note"] .cm-content', check: () => count(textOf(LEAP), /\*\*[^*\n]+\*\*/g) > count(original(LEAP), /\*\*[^*\n]+\*\*/g), title: "A note is Markdown",
+        text: "Select a word and press Ctrl+B. Changes save as you type: the dot in the Note pane's header says so.",
         phone: { text: "Make a word bold: type ** on each side of it. Changes save as you type." } },
-      { target: ".cm-content", check: () => links(textOf(LEAP), ENERGY) > links(original(LEAP), ENERGY), title: "Link a note",
+      { target: '[data-pane="note"] .cm-content', check: () => links(textOf(LEAP), ENERGY) > links(original(LEAP), ENERGY), title: "Link a note",
         text: "At the end of the last paragraph, type [[ener and choose Energy and its conservation." },
       { target: () => [...lit(), ...document.querySelectorAll("path.grown")], title: "The link, on the Atlas",
         text: "Watch the Atlas: the new link is drawn from Leapfrog to Energy and its conservation.",
         phone: { go: "/atlas", target: `[data-note="${ENERGY}"]`, text: "On the Atlas, the new link runs from Leapfrog to Energy and its conservation." } },
-      { go: `/n/${LEAP}`, target: ".cm-content", check: () => /\]\(\/physics\/energy-conservation\.md "requires"\)/.test(textOf(LEAP)), title: "Its kind",
+      { go: `/n/${LEAP}`, target: '[data-pane="note"] .cm-content', check: () => /\]\(\/physics\/energy-conservation\.md "requires"\)/.test(textOf(LEAP)), title: "Its kind",
         text: "Click in the new link, press Alt+L, and choose Requires.",
         phone: { text: "Tap the button beside the new link and choose Requires." } },
       { target: lit, title: "The kind, on the Atlas",
@@ -132,108 +154,89 @@ export const PARTS: Part[] = [
       { go: `/n/${LEAP}`, target: () => [...document.querySelectorAll('button[aria-label="timeline"], .timeline, .atbar')], check: () => { if (has(".atbar")()) looked = true; return looked && !has(".atbar")(); }, title: "Every change is kept",
         text: "Click the timeline button by the title, then its first mark: the note as it was. The → at the right of the bar brings you back.",
         phone: { text: "Tap the timeline button by the title, then its first mark: the note as it was. The → at the right of the bar brings you back." } },
-      { go: `/n/${LEAP}`, target: ".cm-content", check: here(`#/n/${ENERGY}`), title: "Follow the link",
+      { go: `/n/${LEAP}`, target: '[data-pane="note"] .cm-content', check: here(`#/n/${ENERGY}`), title: "Follow the link",
         wrong: () => { const at = decodeURIComponent(location.hash).match(/^#\/n\/([^?]+)/)?.[1]; return at && at !== LEAP && at !== ENERGY ? "That is another note. Go back, and follow the link to Energy and its conservation." : null; },
         text: "Ctrl+click (⌘ on a Mac) the link to Energy and its conservation.",
         phone: { go: "/atlas", target: `[data-note="${ENERGY}"]`, text: "Tap Energy and its conservation on the Atlas, then tap it again." } },
-      { go: `/n/${ENERGY}`, target: () => [...document.querySelectorAll('.tools, .details')], check: () => /^tags:/m.test(textOf(ENERGY)) && !/^tags:/m.test(original(ENERGY)), title: "Its details",
-        text: "Open details above the text and add a tag, say energy." },
-      { go: "/notes", target: () => [...document.querySelectorAll('[data-tour="new-note"], form.new')], check: () => yours().some((n) => n.dir === "galaxies"),
-        wrong: () => { const n = yours().find((x) => x.dir !== "galaxies"); return n ? `It went into ${n.dir || "the top of the base"}. Redo, and type galaxies as its folder.` : null; },
-        title: "A new note, in a new folder",
-        text: "The base's name, top left, opens this list. Click new note: title Plummer sphere, folder galaxies. The folder is made for it." },
-      { target: () => [...document.querySelectorAll(".details, .tools, .atlas-pane")], check: () => yours().length > 0 && yours().every((n) => n.dir === "simulation"), title: "Move it",
-        wrong: () => { const n = yours().find((x) => x.dir !== "galaxies" && x.dir !== "simulation"); return n ? `It went into ${n.dir || "the top of the base"}. Choose simulation.` : null; },
-        text: "In details, change its folder: type sim and choose simulation." },
-      { target: () => [...document.querySelectorAll(".details, .tools")], check: () => ORIGINAL.size > 0 && yours().length === 0 && app.listing.notes.length === BASE, title: "Delete it",
+      { go: `/n/${ENERGY}`, target: '[data-pane="note"] button[aria-label="All notes"], [data-pane="note"] .tree', check: here(`#/n/${SOFT}`), title: "All the notes",
+        text: "The icon by the settings, in the Note pane's header, opens every note. Type soft to find Softening, and open it." },
+      { go: `/n/${SOFT}`, target: () => [...document.querySelectorAll('[data-pane="note"] .tools, [data-pane="note"] .details')], check: () => /^tags:/m.test(textOf(SOFT)) && !/^tags:/m.test(original(SOFT)), title: "Its details",
+        text: "Open details above the text and add a tag, say numerics." },
+      { go: "/atlas", target: `[data-folder="physics"]`, check: () => titled(/^plummer sphere$/i)?.dir === "physics",
+        wrong: () => { const n = titled(/^plummer sphere$/i); return n && n.dir !== "physics" ? `It went into ${n.dir || "the top of the base"}. Redo, and hold inside physics.` : null; },
+        title: "A new note, where you hold",
+        text: "On the Atlas, press and hold inside physics until a note's icon is marked, and let go. An untitled note opens with its title chosen: type Plummer sphere, and press Enter." },
+      { target: () => [...document.querySelectorAll('[data-pane="note"] .details, [data-pane="note"] .tools')], check: () => yours().length > 0 && yours().every((n) => n.dir === "galaxies"), title: "Move it",
+        wrong: () => { const n = yours().find((x) => x.dir !== "physics" && x.dir !== "galaxies"); return n ? `It went into ${n.dir || "the top of the base"}. Type galaxies: a new folder is made for it.` : null; },
+        text: "In details, change its folder to galaxies, a folder the base does not have yet: it is made for the note." },
+      { target: () => [...document.querySelectorAll('[data-pane="note"] .details, [data-pane="note"] .tools')], check: () => ORIGINAL.size > 0 && yours().length === 0 && app.listing.notes.length === BASE, title: "Delete it",
         text: "In details, click delete, then confirm." },
       { title: "That is the base",
         text: "The base is a folder of Markdown files: any editor opens them. Next, Iso, in L2." },
     ],
   },
   {
-    key: "L2", title: "Iso", about: "Iso is an agent who is aware of your isorite knowledge base. Learn how to work with Iso to explore and edit it.",
+    key: "L2", title: "Iso", about: "Iso is an agent who knows your knowledge base. Talk with it in its own pane: ask, give it notes and passages, and let it write, with every change marked and undoable.",
     steps: [
-      { go: `/n/${QUAD}`, target: ".cm-content", until: (e) => e.type === "iso-start" && e.note === QUAD, title: "Ask in the text",
-        text: "The last paragraph is a question. Click in it and press Ctrl+Enter.",
-        phone: { text: "The last paragraph is a question. Tap in it, then ask Iso here at the foot." } },
-      { target: () => [...document.querySelectorAll(".atlas, .between")], until: done(QUAD), title: "Watch it read",
-        text: "On the Atlas, what Iso reads is drawn as it reads it: found by words, by meaning, or along a link.",
-        phone: { target: ".seed", text: "Iso reads your notes first. The strip at the foot counts them; tap it to see them on the Atlas, and come back with the note tab." } },
-      { target: ".between[data-proposal]", until: kept(QUAD), title: "Keep it",
-        wrong: () => (removed.has(QUAD) && !keptIn.has(QUAD) ? "You removed it. Go back two steps, and ask again." : null),
-        text: "Iso's answer waits between the dotted lines. It is not in the note until you keep it." },
-      { go: `/n/${BH}`, target: ".cm-content", fill: PROMPTS.rewrite, until: done(BH), title: "Rewrite a selection",
-        wrong: () => { const p = [...document.querySelectorAll(".cm-iso-picked")].map((e) => e.textContent ?? "").join(" "); return p && !/TODO/.test(p) ? "That selection has no TODO in it. Select the paragraph that begins TODO." : null; },
-        text: "On to Barnes–Hut, which uses the quadtree. Select the paragraph that begins TODO and press Ctrl+Enter. The prompt is filled in: press Enter.",
-        phone: { text: "On to Barnes–Hut, which uses the quadtree. Select the paragraph that begins TODO, then ask Iso here. The prompt is filled in: send it." } },
-      { target: () => [...document.querySelectorAll(".cm-content, .changes")], until: kept(BH), title: "Keep the change",
-        wrong: () => (removed.has(BH) && !keptIn.has(BH) ? "You removed it. Go back a step, and ask again." : null),
-        text: "The old text is struck through, Iso's beside it. Keep it." },
-      { target: () => [...document.querySelectorAll('.bar .count, [role="dialog"][aria-label="Context"]')], check: has('[role="dialog"][aria-label="Context"] .item.off'), title: "What Iso is sent",
-        text: "Click the count in the header: what Iso is sent from this note. Switch off one of the notes it links to.",
-        phone: { text: "Tap the count in the header: what Iso is sent from this note. Switch off one of the notes it links to." } },
-      { go: `/n/${BH}`, target: () => [...document.querySelectorAll('.atlas [data-folder="physics"], .naming')], check: () => titled(/^close encounters$/i)?.dir === "physics",
-        wrong: () => { const n = titled(/^close encounters$/i); return n && n.dir !== "physics" ? `It went into ${n.dir || "the top of the base"}. Redo, and hold inside physics.` : null; },
-        title: "A note to ask in",
-        text: "On the Atlas, press and hold inside physics until a new note is marked, let go, and call it Close encounters.",
-        phone: { go: "/atlas", text: "On the Atlas, press and hold inside physics until a new note is marked, let go, and call it Close encounters." } },
-      { target: ".cm-content", until: done((id) => id === titled(/^close encounters$/i)?.id), title: "Ask in it",
-        text: `Write ${PROMPTS.close} Then press Ctrl+Enter in it.`,
-        phone: { text: `Write ${PROMPTS.close} Then ask Iso here.` } },
-      { target: ".between[data-proposal]", until: (e) => kept(titled(/^close encounters$/i)?.id ?? "")(e), title: "Keep it",
-        text: "Keep the answer. It is part of a note of your base now: found again by you, by Iso, and by the agent in the terminal." },
+      { go: `/n/${QUAD}`, target: `${ISO}`, fill: PROMPTS.insert, until: turnBegun("ask", /inserted/), title: "Ask Iso",
+        text: "Iso has a pane of its own. In Ask mode, the speech bubble in its header, it reads your notes and changes nothing. Your question from the quadtree is written in its box: press Enter.",
+        phone: { text: "Iso has a pane of its own: tap its tab. In Ask mode, the speech bubble, it reads your notes and changes nothing. Your question from the quadtree is written in its box: send it with the arrow." } },
+      { target: () => [...document.querySelectorAll(`.atlas, ${ISO}`)], until: turnDone("ask", /inserted/), title: "Watch it read",
+        text: "The Atlas comes up in its Iso lens: what Iso reads is numbered in order, as it reads it. In Iso's pane, each note it read opens with a click.",
+        phone: { target: ISO, text: "Each note Iso reads is said in its pane as it reads it. The Atlas tab turns gold: there, what it read is numbered in order." } },
+      { go: `/n/${QUAD}`, target: () => [...document.querySelectorAll(`[data-note="${BH}"], [data-pane="note"] .cm-content`)], check: () => tray.parts.some((p) => p.kind === "note" && p.id === BH) && tray.parts.some((p) => p.kind === "passage" && p.id === QUAD), title: "Give Iso a note, and a passage",
+        text: "Iso answers from what it finds. To give it what you mean: hold Barnes–Hut on the Atlas (or drag it onto Iso's pane). Then select a sentence of the quadtree, and click send to Iso beside it.",
+        phone: { text: "Iso answers from what it finds. To give it what you mean: on the Atlas, hold Barnes–Hut and choose Give to Iso. Then select a sentence of the quadtree, and tap send to Iso under it." } },
+      { target: `${ISO} .ctx, ${ISO} .context`, check: () => converse.view === "context" && converse.off.length > 0 && !tray.parts.some((p) => p.kind === "passage"), title: "What Iso is sent",
+        text: "The icon by Iso's modes counts what you gave: click it. Here is what Iso is sent, part by part, each with its size. Switch off your first question, and take the sentence out with its ×." },
+      { go: `/n/${BH}`, target: () => [...document.querySelectorAll(`${ISO} .mode[data-mode="write"], #iso-box`)], fill: PROMPTS.rewrite, until: turnDone("write", /todo/), title: "Let it write",
+        text: "Click the Context icon again for the conversation. Switch to Write mode: the quill, or Shift+Tab in Iso's box. In Write mode Iso changes your notes. Barnes–Hut is open, with its TODO; the request is written for you: send it." },
+      { target: () => [...document.querySelectorAll(`${ISO} .change, [data-pane="note"] .cm-content`)], title: "Its words, marked",
+        text: "The change went straight into the note, and the note came up in its Iso lens (◆ in its header): Iso's words are marked. On the Atlas, the note it changed is marked too. The change in Iso's pane opens it again whenever you like." },
+      { target: () => [...document.querySelectorAll(`${ISO} button[aria-label="Undo this turn's changes"], [data-pane="note"] .cm-content`)], check: () => undone > 0 && todoWrites >= 2 && !/TODO:/.test(textOf(BH)), title: "Undo, and again",
+        text: "Under Iso's reply, ↺ puts back everything the turn changed: the TODO is back. Then send the request again, and leave the answer this time." },
       { title: "Iso, in short",
-        text: "Iso writes only where you ask, and only what you keep goes in. Next: E1 puts it to work on the project." },
+        text: "In Ask mode Iso reads; in Write mode it writes, and every change it makes is marked and can be undone. What it is sent is yours to choose. Next: L3, your understanding." },
     ],
   },
   {
     key: "E1", title: "Knowledge work with isorite", earlier: true, about: "isorite provides a home for structured project knowledge work. This walkthrough shows how isorite can be used in an example knowledge base on an N-body simulation.",
     steps: [
-      { go: `/n/${GALAXY}`, target: ".cm-content", title: "The goal",
+      { go: `/n/${GALAXY}`, target: '[data-pane="note"] .cm-content', title: "The goal",
         text: "Two galaxies colliding, at N = 5000: where the tidal tails start to look right, and where direct summation is too slow. This evening's work is to get there with Barnes–Hut." },
       { go: "/atlas", target: `[data-note="${GALAXY}"]`, check: chosen(GALAXY), title: "What it rests on",
         text: "Choose Two galaxies colliding: what it requires is lit, and a click on one of those steps back to it, and on, back to Newton's law. That is the reading list for tonight." },
-      { go: `/n/${COST}`, target: ".cm-content", until: done(COST), title: "How much faster?",
-        text: `In Cost and accuracy, write a new last paragraph: ${PROMPTS.speed} Then press Ctrl+Enter in it.`,
-        phone: { text: `In Cost and accuracy, write a new last paragraph: ${PROMPTS.speed} Then ask Iso here.` } },
-      { target: ".between[data-proposal]", until: settled(COST), title: "Keep what is useful",
-        text: "Iso checked its arithmetic against your notes, and says to measure. Keep it, or edit it down first." },
-      { go: "/atlas", target: `[data-folder="algorithms"]`, check: () => titled(/octree/i)?.dir === "algorithms", title: "Plan the octree",
-        text: "The simulation is 3D, and the quadtree is 2D. Hold inside algorithms, let go, and call the new note The octree." },
-      { target: ".cm-content", until: done((id) => id === titled(/octree/i)?.id), title: "Ask it",
-        text: `Write ${PROMPTS.octree} Then press Ctrl+Enter in it.`,
-        phone: { text: `Write ${PROMPTS.octree} Then ask Iso here.` } },
-      { target: ".between[data-proposal]", until: (e) => kept(titled(/octree/i)?.id ?? "")(e), title: "Keep it",
-        text: "Keep the answer: the plan is a note in algorithms now." },
-      { go: `/n/${LOOP}`, target: ".cm-content", check: () => /octree/i.test(document.querySelector(".cm-content")?.textContent ?? ""), title: "Link it in",
+      { go: `/n/${COST}`, target: ISO, fill: PROMPTS.speed, until: turnDone("ask", /faster/), title: "How much faster?",
+        text: "Cost and accuracy is open. In Ask mode (the speech bubble), ask Iso how much faster Barnes–Hut is at N = 5000: the question is written for you." },
+      { target: ISO, title: "Checked against your notes",
+        text: "Iso checked its arithmetic against direct summation and Barnes–Hut, and says to measure, as your note says." },
+      { target: ISO, fill: PROMPTS.octreeWrite, until: turnDone("write", /octree/), title: "Plan the octree",
+        text: "The simulation is 3D, and the quadtree is 2D. In Write mode (the quill), ask Iso to write a note on the octree, in algorithms: the request is written for you." },
+      { target: `${ISO} .change`, check: () => here("#/n/algorithms/the-octree")(), title: "Its note",
+        text: "Iso made The octree. Click it in Iso's pane to open it: it is one of your notes now, linked to the quadtree and Barnes–Hut." },
+      { go: `/n/${LOOP}`, target: '[data-pane="note"] .cm-content', check: () => /octree/i.test(document.querySelector('[data-pane="note"] .cm-content')?.textContent ?? ""), title: "Link it in",
         text: "The main loop is where it will be used. At the end of the first paragraph, type [[oct and choose the octree." },
       { go: async () => { const n = titled(/octree/i); return n ? noteHref(n.id).split("#").at(-1)! : `/n/${LOOP}`; }, target: '[data-tour="send"]', title: "Hand it on",
         text: "The code is the agent's work, in the terminal. send to agent puts this note in its next prompt: L4." },
     ],
   },
   {
-    key: "L3", title: "The study base", earlier: true, about: "Designed to help you pay back cognitive debt, isorite comes equipped with didactic tools. Learn how to work with Iso to build understanding of your knowledge base through targeted exercises.",
+    key: "L3", title: "Understanding", about: "isorite keeps track of your understanding, note by note, so you can see where you stand and how it grew. Iso uses it: in Understand mode it starts from where you are.",
     steps: [
-      { go: "/atlas", target: ".atlas-world", title: "Two bases",
-        text: "Beside each folder of notes stands a dark-headed folder of exercises. They are the study base: a repository of its own. Your notes are yours to share or publish; what you know, and what you got wrong, stays with you." },
-      { go: `/n/${LAW}`, target: ".margin", title: "What you understand",
-        text: "The six squares in the margin are Iso's read of how well you know this note, from the exercises you have done. On the Atlas they are four steps: dotted not reached, filled opened, worked through, and a double edge understood. Newton's law is understood." },
-      { go: "/study", target: ".list", title: "What to study next",
-        text: "Every exercise, in the order Iso would take them: due first, then never tried, then the fewest squares. A few are due: Iso would like to see them again." },
-      { go: `/n/${EXERCISE}`, target: ".cm-content", until: done(EXERCISE), title: "An exercise",
-        text: "An exercise is written: a question, then your working under Working. This is yesterday's. Select the last line, mark it as your answer, and send it for marking." },
-      { target: ".cm-content", check: () => has(".cm-iso-right")() && !has(".cm-iso-wrong")() && !has('[aria-label="Iso is marking"]')(), title: "Wrong, and where",
-        text: "Iso marks what is right and what is wrong, and says nothing more unless you ask. The pairs were counted twice; the third law halves them. Change the last line to 0.04 s, mark it as your answer again, and send it." },
-      { target: '[data-pane="note"] .squares', title: "The squares moved",
-        text: "Right, and unaided: direct summation is now opened, one square of six. Click the squares for Iso's reason for each move, and wind back if it rates you too highly.",
-        phone: { text: "Right, and unaided: direct summation is now opened, one square of six. Tap the squares for Iso's reason for each move, and wind back if it rates you too highly." } },
-      { go: "/atlas", target: `[data-note="${DIRECT}"]`, title: "And on the map",
-        text: "Its block has moved from dotted to opened." },
-      { go: `/n/${SOFT}`, target: ".margin", check: () => decodeURIComponent(location.hash).includes("@study/physics/"), title: "Ask for an exercise",
-        text: "From a note's margin, + an exercise asks Iso for one on it. Ask for one on softening, send it, and keep it: it is filed in the study base, beside physics." },
-      { go: "/study", target: ".list", title: "Keep coming back",
-        text: "An answer right moves the notes it tests up; leave them, and they fall due, and then slip a square. The list says what is due. That is the whole of studying here." },
+      { go: "/atlas", target: '[data-pane="atlas"] .lens[data-lens="understand"], .atlas', check: () => panes.lens.atlas === "understand", title: "Where you stand",
+        text: "Switch the Atlas to its Understand lens, ◇ in its header. Each note shows where you stand with it, from dotted, not reached, to a double edge, understood; and the study folders appear, with your exercises." },
+      { go: `/n/${LEAP}`, target: '[data-pane="note"] .lens[data-lens="understand"], [data-pane="note"] .u', check: () => panes.lens.note === "understand" && padSaved(), title: "Your Understanding note",
+        text: "Every note has an Understanding note: switch Leapfrog to its Understand lens, ◇ in the Note pane's header. Iso's reading of you, what changed it, and a scratchpad only you see. Write a line in the scratchpad." },
+      { target: () => [...document.querySelectorAll(`${ISO} .mode[data-mode="understand"], #iso-box`)], fill: PROMPTS.understand, until: turnDone("understand", /bounded|leapfrog/), title: "Understand mode",
+        text: "In Iso's pane, switch to Understand mode: the sprig. Your Understanding note of Leapfrog now goes with what you ask (the Context icon shows it). The question is written for you: send it. Iso asks you something back." },
+      { target: ISO, fill: PROMPTS.answer, until: turnDone("understand", /backwards|retrace|reverse/), title: "Answer it",
+        text: "Answer Iso's question: an answer is written for you, or say it your own way, with backwards in it. Iso records what it saw, and rewrites its reading of you." },
+      { target: '[data-pane="note"] .u', title: "What changed it",
+        text: "In Leapfrog's Understand lens: Iso's reading is new, and what changed it has a new line, with Iso's reason. You can see how your understanding grew, and why." },
+      { target: `${ISO} .ctx, ${ISO} .context`, until: turnDone("understand", /bounded|leapfrog/, (t) => !t.understanding), title: "Without it",
+        text: "Open the Context icon and take your Understanding of Leapfrog out with its ×. Then ask the first question again: Iso starts from the beginning, as it would for anyone." },
+      { title: "Understanding, in short",
+        text: "Iso keeps a reading of your understanding, note by note, from what you say and do; it is yours to read, and to take out of what Iso is sent. Your notes are yours to share; your understanding stays in your study base." },
     ],
   },
   { key: "E2", title: "Learning with isorite", steps: [],

@@ -203,6 +203,8 @@
     });
     return () => cancelAnimationFrame(frame);
   });
+  // Sent as the button is pressed, not when the press ends: on a touch screen the selection is let go by then (W1).
+  // A click with no press (Enter on the button) sends too.
   function sendToIso(): void {
     if (!chosen) return;
     tray.add({ kind: "passage", id, title: note.fields.title || id, text: chosen });
@@ -313,7 +315,7 @@
     {/if}
 
     {#if toIsoAt}
-      <button class="toiso" type="button" style:top="{toIsoAt.top}px" style:left="{toIsoAt.left}px" onmousedown={(e) => e.preventDefault()} onclick={sendToIso}><i class="dia" aria-hidden="true">◆</i>send to Iso</button>
+      <button class="toiso" type="button" style:top="{toIsoAt.top}px" style:left="{toIsoAt.left}px" onpointerdown={(e) => { e.preventDefault(); sendToIso(); }} onclick={(e) => { if (e.detail === 0) sendToIso(); }}><i class="dia" aria-hidden="true">◆</i>send to Iso</button>
     {/if}
     <div class="live" hidden={Boolean(at && version)}>
       {#key asSource}<NoteEditor {note} {iso} exercise={ex ?? undefined} source={asSource} touched={live} lens={lensMarks} />{/key}
