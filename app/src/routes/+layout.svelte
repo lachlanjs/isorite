@@ -10,7 +10,6 @@
   import { app } from "$lib/app.svelte.ts";
   import { onMount } from "svelte";
   import AtlasPane from "$lib/components/AtlasPane.svelte";
-  import ContextCount from "$lib/components/ContextCount.svelte";
   import IsoPane from "$lib/components/IsoPane.svelte";
   import NoteList from "$lib/components/NoteList.svelte";
   import PaneHead from "$lib/components/PaneHead.svelte";
@@ -140,11 +139,6 @@
       <button class="link wind" type="button" onclick={x.windBack}>[ wind back ]</button>
       {#if x.next}<a class="next" href={resolve("/n/[...id]", { id: x.next })}>next</a>{/if}
     {/if}
-    {#if !app.error}<ContextCount />{/if}
-    <!-- Study keeps a way in until learning becomes a mode (V3). -->
-    <a class="icon study" href={resolve("/study")} aria-label="study" title="study" aria-current={page.route.id === "/study" || app.exercise || app.studying ? "page" : undefined}>
-      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="2.5" y="2.5" width="4.5" height="4.5" fill="currentColor" /><rect x="9" y="2.5" width="4.5" height="4.5" fill="none" stroke="currentColor" stroke-width="1.2" /><rect x="2.5" y="9" width="4.5" height="4.5" fill="none" stroke="currentColor" stroke-width="1.2" /><rect x="9" y="9" width="4.5" height="4.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="1.5 1.2" /></svg>
-    </a>
     <span class="layouts" role="group" aria-label="Layout">
       {#each LAYOUTS as l (l)}
         <button class="icon" type="button" aria-pressed={panes.layout === l} aria-label={LAYOUT_NAME[l]} title="{LAYOUT_NAME[l]}  (Alt+L)" onclick={() => panes.setLayout(l)}>
@@ -299,6 +293,5 @@
   }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; }
   .icon:hover, .icon:focus-visible { color: var(--text); text-decoration: none; }
-  .icon[aria-current="page"] { color: var(--text); }
   .stopped { padding: var(--space-12) var(--space-4); text-align: center; color: var(--rose); }
 </style>

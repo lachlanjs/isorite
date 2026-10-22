@@ -11,7 +11,7 @@ import { ANSWER_CLOSE, ANSWER_OPEN, CLOSE, HERE, LINKED_BUDGET, OPEN, conversati
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, noteId, type Similar } from "./lookup.ts";
 import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
-import { CONVERSATIONS_DIR, MODES, MODE_TOOLS, conversationPath, readTurns, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
+import { CONVERSATIONS_DIR, MODES, MODE_TOOLS, conversationPath, readTurns, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
 import { regionsOf } from "./agent.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
 import { KEY, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
@@ -66,7 +66,7 @@ export function checkNoteId(id: string): string {
 }
 
 /** What a mode's tool is handed of the turn it is in. */
-interface TurnCtx { turn: string; conversation: string; mode: Turn["mode"]; item: (i: TurnItem) => Promise<void>; signal: AbortSignal; who: string }
+interface TurnCtx { turn: string; conversation: string; mode: Turn["mode"]; item: (i: TurnItem) => Promise<void>; signal: AbortSignal; who: string; asked: string }
 
 /** A conversation's or turn's id: a ULID. */
 const TURN_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -423,7 +423,7 @@ export class Engine implements Api {
     return this.one(async () => this.put(id, await this.version(id, entry), base, "restore", { to: entry }));
   }
 
-  private async put(id: string, text: string, base: string | null, why: "edit" | "restore" = "edit", extra: { to?: string } = {}, who = "you"): Promise<Saved & { entry?: string }> {
+  private async put(id: string, text: string, base: string | null, why: "edit" | "restore" = "edit", extra: { to?: string; asked?: string } = {}, who = "you"): Promise<Saved & { entry?: string }> {
     const { files, path } = this.where(id);
     if (text.length > MAX_NOTE_BYTES) throw new EngineError("note too large", 413);
     const now = await files.read(path);
@@ -883,9 +883,12 @@ export class Engine implements Api {
 
   async turnContext(req: Omit<TurnRequest, "asked">): Promise<ContextReport> {
     const mode = req.mode === "build" ? "ask" : req.mode;
-    const earlier = req.conversation ? (await this.conversation(req.conversation))?.turns ?? [] : [];
+    const all = req.conversation ? (await this.conversation(req.conversation))?.turns ?? [] : [];
+    const off = new Set(req.off ?? []), earlier = all.filter((t) => !off.has(t.id));
     const { parts } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: req.lookup !== false, earlier, sent: await this.sentOf(this.given(req.given ?? [])), asked: "" });
-    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: await this.sessionCost(), items: [], lookup: req.lookup !== false };
+    // Each earlier turn can be left out (M9's switches, kept for the pane): what it adds, whole.
+    const items = all.map((t): ContextItem => ({ id: t.id, kind: "exchange", title: t.asked, tokens: estimate(turnExchange(t).text), on: !off.has(t.id) }));
+    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: await this.sessionCost(), items, lookup: req.lookup !== false };
   }
 
   async converse(req: TurnRequest): Promise<{ conversation: string; turn: string }> {
@@ -912,7 +915,7 @@ export class Engine implements Api {
     const study = this.opts.study!;
     const key = (await this.opts.secrets?.get(KEY)) ?? null;
     if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
-    const earlier = (await this.conversation(conversation))?.turns ?? [];
+    const off = new Set(req.off ?? []), earlier = ((await this.conversation(conversation))?.turns ?? []).filter((t) => !off.has(t.id));
     const lookupOn = req.lookup !== false, mode = req.mode;
     const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier, sent: await this.sentOf(req.given), asked: req.asked });
 
@@ -936,7 +939,7 @@ export class Engine implements Api {
         let args: Record<string, unknown> = {};
         try { const parsed: unknown = raw.trim() ? JSON.parse(raw) : {}; if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) args = parsed as Record<string, unknown>; } catch { /* no arguments */ }
         if (!MODE_TOOLS[mode].some((d) => d.function.name === name)) return { text: `There is no tool ${name} in ${mode} mode.` };
-        return { text: await this.turnTool(name, args, { turn, conversation, mode, item, signal: abort.signal, who }) };
+        return { text: await this.turnTool(name, args, { turn, conversation, mode, item, signal: abort.signal, who, asked: req.asked }) };
       },
     };
 
@@ -1015,7 +1018,7 @@ export class Engine implements Api {
       if (at < 0) return `That passage is not in ${title(id)} as you wrote it. Read the note again and give the passage exactly.`;
       if (again >= 0) return `That passage occurs more than once in ${title(id)}. Give more of it, so it is found once.`;
       const text = now.text.slice(0, at) + next + now.text.slice(at + old.length);
-      const saved = await this.one(() => this.put(id, text, now.version, "edit", {}, t.who));
+      const saved = await this.one(() => this.put(id, text, now.version, "edit", { asked: t.asked }, t.who));
       if (saved.entry) await t.item({ kind: "change", note: id, entry: saved.entry, why: "edit", title: title(id), ...counted(now.text, text) });
       return `Changed ${title(id)}.`;
     }
@@ -1026,7 +1029,7 @@ export class Engine implements Api {
       if (!text.trim()) return "Give the note's whole text.";
       if (!/^---\n/.test(text)) text = `---\ntype: Concept\ntitle: ${JSON.stringify(/^#\s+(.+)$/m.exec(text)?.[1]?.trim() ?? id.split("/").at(-1)!.replace(/-/g, " "))}\n---\n\n${text.replace(/^#\s+.+\n+/, "")}`;
       const was = this.bundle.concepts.has(id) ? await this.readNote(id) : null;
-      const saved = await this.one(() => this.put(id, text, was?.version ?? null, "edit", {}, t.who));
+      const saved = await this.one(() => this.put(id, text, was?.version ?? null, "edit", { asked: t.asked }, t.who));
       if (saved.entry) await t.item({ kind: "change", note: id, entry: saved.entry, why: was ? "edit" : "create", title: title(id), ...counted(was?.text ?? "", text) });
       return was ? `Wrote ${title(id)} anew.` : `Made ${title(id)} (/${id}.md).`;
     }

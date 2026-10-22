@@ -20,6 +20,8 @@
   const money = (usd: number): string => `$${usd.toFixed(usd > 0 && usd < 0.1 ? 3 : 2)}`;
 
   let text = $state("");
+  /** The breakdown of what the next turn is sent, opened from the count. */
+  let parts = $state(false);
   let list = $state<HTMLElement>();
   const running = $derived(converse.running);
   /** Where Iso is in the turn running: what it reads now, or that it is writing. */
@@ -154,8 +156,22 @@
       {/if}
     </div>
     {#if converse.problem}<p class="bad" role="alert">{converse.problem}</p>{/if}
+    {#if parts && converse.report}
+      <div class="parts" role="region" aria-label="What Iso is sent">
+        {#each converse.report.parts as p (p.name)}
+          <p class="part"><span>{p.name}</span><span class="faint">{p.detail}</span><span class="grow"></span><span class="num">{short(p.tokens)}</span></p>
+        {/each}
+        {#if converse.report.items.length}
+          <p class="faint sub">earlier turns, each sent or left out</p>
+          {#each converse.report.items as it (it.id)}
+            <p class="part"><span class="t" class:off={!it.on}>{it.title}</span><span class="grow"></span><span class="num">{short(it.tokens)}</span>
+              <button class="sw" type="button" role="switch" aria-checked={it.on} aria-label="Send: {it.title}" onclick={() => converse.toggleTurn(it.id)}><i></i></button></p>
+          {/each}
+        {/if}
+      </div>
+    {/if}
     <div class="foot">
-      {#if converse.report}<span title="What Iso is sent with your message, with its instructions">{short(converse.report.tokens)} tokens</span>{/if}
+      {#if converse.report}<button class="count" type="button" aria-expanded={parts} title="What Iso is sent with your message, part by part" onclick={() => (parts = !parts)}>{short(converse.report.tokens)} tokens</button>{/if}
       <span class="tiers" role="radiogroup" aria-label="How able a model">
         {#each TIERS as t (t)}<button type="button" role="radio" aria-checked={context.tier === t} onclick={() => context.setTier(t)}>{t}</button>{/each}
       </span>
@@ -240,6 +256,17 @@
   .send:disabled { opacity: 0.4; cursor: default; }
   .send.stop { border-color: var(--rose); color: var(--rose); }
   .foot { display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--text-faint); flex-wrap: wrap; }
+  .count { background: none; border: 0; padding: 2px 0; font: inherit; color: var(--text-soft); cursor: pointer; }
+  .count[aria-expanded="true"] { color: var(--text); }
+  .parts { border: 1px solid var(--line); padding: 8px 10px; display: grid; gap: 4px; font-size: 11.5px; max-height: 240px; overflow: auto; }
+  .part { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .part .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .part .t.off { color: var(--text-faint); text-decoration: line-through; }
+  .part .num { font-variant-numeric: tabular-nums; color: var(--text-faint); }
+  .sub { margin-top: 6px; }
+  .sw { width: 26px; height: 14px; flex: none; background: var(--ground-2); border: 1px solid var(--line-strong); padding: 0; position: relative; cursor: pointer; }
+  .sw i { position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; background: var(--text-faint); transition: left 0.15s; }
+  .sw[aria-checked="true"] i { left: 14px; background: var(--growth); }
   .tiers { display: inline-flex; gap: 8px; }
   .tiers button, .lookup { background: none; border: 0; border-bottom: 1px solid transparent; padding: 2px 0; font: inherit; color: var(--text-faint); cursor: pointer; }
   .tiers button[aria-checked="true"] { color: var(--text); border-bottom-color: var(--growth); }

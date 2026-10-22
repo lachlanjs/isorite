@@ -8,7 +8,6 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { isStudyId, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
-  import type { StudyReport } from "@isorite/engine";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
@@ -37,22 +36,6 @@
   const KINDS: Record<string, string> = { written: "written response" };
   const titleOf = (n: string): string => app.listing.notes.find((x) => x.id === n)?.title ?? n.split("/").at(-1)!;
 
-  // A note of the base, in study (Study-Fit): its squares in the margin, the exercises that test it, and the way to
-  // ask for one. Project mode shows none of this.
-  // svelte-ignore state_referenced_locally
-  const studied = !id.startsWith("@") && Boolean(app.session?.study);
-  let report = $state.raw<StudyReport | null>(null);
-  let marginProblem = $state("");
-  const reading = $derived(report?.notes[id]);
-  const testing = $derived(report?.exercises.filter((x) => x.tests.includes(id)).length ?? 0);
-  const STEPS = ["not reached", "opened", "worked through", "understood"];
-  async function readStudy() { try { report = await app.api.study(); } catch { /* the next event asks again */ } }
-  async function askExercise() {
-    try {
-      const made = await app.api.createExerciseDraft(app.listing.notes.find((n) => n.id === id)?.dir ?? id.split("/").slice(0, -1).join("/"), [id]);
-      await goto(resolve("/draft/[id]", { id: made.id.slice("@draft/".length) }));
-    } catch (e) { marginProblem = (e as Error).message; }
-  }
 
   const remembered = (key: string): boolean => { try { return localStorage.getItem(key) === "1"; } catch { return false; } };
   const remember = (key: string, on: boolean) => { try { localStorage.setItem(key, on ? "1" : "0"); } catch { /* not kept */ } };
@@ -70,10 +53,12 @@
   const all = $derived(moments(iso.entries));
   const isos = (m: Moment) => m.who.startsWith("iso:") || m.who.startsWith("agent:");
   const lines = (runs: { from: number; to: number }[]) => runs.flatMap((r) => Array.from({ length: r.to - r.from }, (_, k) => r.from + k));
-  // In the note as it is: the moment pointed at, or, with the timeline open and nothing pointed at, Iso's latest kept.
+  // In the note as it is: the moment pointed at, or, with the timeline open and nothing pointed at, Iso's latest
+  // kept or written.
   const live = $derived.by((): Touched | null => {
     if (!timeline || at || asSource) return null;
-    const m = pointed ?? all.findLast((x) => isos(x) && x.what === "kept");
+    // In the Iso lens Iso's words are marked already, so only the moment pointed at is.
+    const m = pointed ?? (isoLens ? undefined : all.findLast((x) => isos(x) && (x.what === "kept" || x.what === "edited")));
     if (!m) return null;
     const got = lines(touchedBy(iso.entries, m.ids).runs);
     return got.length ? { who: isos(m) ? "iso" : "you", lines: got } : null;
@@ -149,14 +134,11 @@
     app.open = id;
     void note.open().then(() => iso.open());
     void exercise?.open();
-    const unhear = studied ? app.on((e) => { if (e.type === "record" || (e.type === "note-changed" && e.id.startsWith("@study/"))) void readStudy(); }) : null;
-    if (studied) void readStudy();
     const leaving = () => { void note.save(); };
     addEventListener("pagehide", leaving);
     document.addEventListener("visibilitychange", leaving);
     return () => {
       removeEventListener("pagehide", leaving);
-      unhear?.();
       document.removeEventListener("visibilitychange", leaving);
       iso.close();
       exercise?.close();
@@ -286,18 +268,6 @@
         <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => (source = !source)}>source</button>
         {#if !asSource}<button class="btn quiet" type="button" data-tour="send" aria-pressed={sending} onclick={() => (sending = !sending)}>send to agent</button>{/if}
       </div>
-      {#if studied && !asSource && report}
-        <div class="margin" role="group" aria-label="Iso's read of you">
-          <span class="squares" aria-label="{reading?.squares ?? 0} of 6">{#each [0, 1, 2, 3, 4, 5] as k (k)}<i class="pip" class:lv={k < (reading?.squares ?? 0)}></i>{/each}</span>
-          {#if testing}
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, with the note to narrow to -->
-            <a href={`${resolve("/study")}?note=${encodeURIComponent(id)}`}>{testing} {testing === 1 ? "exercise" : "exercises"}</a>
-          {/if}
-          <span class="label">{STEPS[reading?.step ?? 0]}{reading?.due ? " · due" : ""}</span>
-          <button class="link" type="button" onclick={askExercise}>[ + an exercise ]</button>
-          {#if marginProblem}<span class="bad" role="alert">{marginProblem}</span>{/if}
-        </div>
-      {/if}
       </div>
     </div>
     {/if}
@@ -374,11 +344,8 @@
   .title:focus-visible { outline: none; }
   .tools { display: flex; flex: none; padding-top: 6px; }
   .side { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); flex: none; }
-  .margin { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: 12px; padding-top: 2px; }
-  .margin .link { font-size: 12px; padding: 0; }
   /* Where the pane leaves room (a container query: the note may stand beside the Atlas), the margin is the page's own, beside the text and level with the title, 8 px down
      (Study-Fit), and the text starts under the title as in any note. */
-  @container page (min-width: 1100px) { .margin { position: absolute; top: 46px; left: calc(100% + 8px); align-items: flex-start; width: 150px; } }
   .tools .btn { height: 28px; font-size: 12px; }
   .tools .btn[aria-pressed="true"] { color: var(--text); --fill: var(--ground-3); }
   /* The quiet icon buttons: the timeline's, and with a version shown, restore and back to now. Faint until pointed at. */
@@ -419,7 +386,6 @@
     .head { flex-direction: column-reverse; gap: var(--space-1); }
     .tools { align-self: flex-end; padding-top: 0; }
     .side { align-self: stretch; flex-direction: row-reverse; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; }
-    .margin { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
     .title { font-size: 30px; width: 100%; }
   }
   @media (max-width: 600px) {
@@ -432,7 +398,6 @@
     .head { flex-direction: column-reverse; gap: var(--space-1); }
     .tools { align-self: flex-end; padding-top: 0; }
     .side { align-self: stretch; flex-direction: row-reverse; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; }
-    .margin { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
     .title { font-size: 30px; width: 100%; }
   }
 </style>

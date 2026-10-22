@@ -93,7 +93,7 @@ export type AskRequest =
 
 /** A turn of a conversation with Iso in its pane (M10): what is asked, in which mode, with what you gave it. Without
  *  `conversation` a new conversation begins. `lookup: false` keeps Iso to what you gave. */
-export interface TurnRequest { conversation?: string; mode: Mode; asked: string; given: Given[]; tier: Tier; lookup?: boolean }
+export interface TurnRequest { conversation?: string; mode: Mode; asked: string; given: Given[]; tier: Tier; lookup?: boolean; off?: string[] }
 
 /** A conversation, as the pane draws it. */
 export interface Conversation { id: string; turns: Turn[] }

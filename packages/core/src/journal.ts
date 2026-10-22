@@ -49,6 +49,8 @@ export interface Change extends Stamp {
   region?: number;
   to?: string;
   from?: string;
+  /** Iso's change in Write mode (M10): what it was asked, in its pane. */
+  asked?: string;
 }
 
 export interface Cost {
@@ -270,7 +272,7 @@ export const textAt = (entries: readonly Entry[], id?: string): string | null =>
 
 /** The entry for a change of the note's file to `after`, or null when nothing changed. The difference is taken
  *  from the journal's own last version, so the chain holds whatever the caller thought the file was. */
-export function change(entries: readonly Entry[], after: string, s: Stamp, why: Why, extra: { proposal?: string; region?: number; to?: string } = {}): Change | null {
+export function change(entries: readonly Entry[], after: string, s: Stamp, why: Why, extra: { proposal?: string; region?: number; to?: string; asked?: string } = {}): Change | null {
   const head = replay(entries);
   if (head && head.text === after) return null;
   const changes = entries.filter(isChange);
@@ -433,7 +435,7 @@ export function moments(entries: readonly Entry[]): Moment[] {
       const last = out[out.length - 1];
       if (e.why === "edit" && last && last.what === "edited" && last.who === e.who && last.session === e.session) { last.ids.push(e.id); last.at = e.at; continue; }
       const what = e.why === "start" ? (e.who === "external" ? "found" : "wrote") : e.why === "edit" ? "edited" : e.why === "restore" ? "restored" : e.why === "keep" ? "kept" : e.why === "move" ? "moved" : "changed elsewhere";
-      out.push({ ...base, what });
+      out.push({ ...base, what, ...(e.asked ? { asked: e.asked } : {}) });
     }
   }
   return out;

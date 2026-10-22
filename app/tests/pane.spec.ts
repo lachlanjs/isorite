@@ -147,3 +147,25 @@ test("Understand mode: your understanding of the note open goes with what you as
   await toIso(page);
   await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
 });
+
+test("the count under Iso's box opens what the next turn is sent, part by part; an earlier turn can be left out", async ({ page }) => {
+  await page.goto("#/n/basics/bit");
+  await toIso(page);
+  // The last conversation comes up as the page opens (earlier tests made one); a new one is begun.
+  await expect(page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").first()).toBeVisible();
+  await pane(page).getByRole("button", { name: "A new conversation" }).click();
+  await expect(page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn")).toHaveCount(0);
+  await box(page).fill("what is a bit?");
+  await box(page).press("Enter");
+  await expect(page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last()).toHaveAttribute("data-state", "done");
+  await pane(page).getByRole("button", { name: /tokens$/ }).click();
+  const parts = pane(page).getByRole("region", { name: "What Iso is sent" });
+  await expect(parts.locator(".part").first()).toContainText("instructions and tools");
+  await expect(parts).toContainText("earlier in this conversation1 turn");
+  const sw = parts.getByRole("switch", { name: "Send: what is a bit?" });
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+  await expect(parts).toContainText("earlier in this conversation");
+  await expect(parts.locator(".part").nth(1)).not.toContainText("1 turn");
+});

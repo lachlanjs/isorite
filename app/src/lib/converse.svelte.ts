@@ -19,6 +19,9 @@ class Converse {
   report = $state.raw<ContextReport | null>(null);
   /** Iso kept from looking further than what you gave it. */
   lookup = $state(true);
+  /** Earlier turns left out of what the next is sent. */
+  off = $state.raw<string[]>([]);
+  toggleTurn(id: string): void { this.off = this.off.includes(id) ? this.off.filter((x) => x !== id) : [...this.off, id]; this.measure(); }
   private started = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -36,14 +39,14 @@ class Converse {
   private show(c: Conversation): void { this.id = c.id; this.turns = c.turns; }
 
   /** A fresh conversation: nothing earlier is sent. The last one stays in the study base. */
-  fresh(): void { if (this.running) return; this.id = ""; this.turns = []; this.streaming = ""; this.measure(); }
+  fresh(): void { if (this.running) return; this.id = ""; this.turns = []; this.streaming = ""; this.off = []; this.measure(); }
 
   async send(asked: string): Promise<boolean> {
     this.problem = "";
     if (!asked.trim() || this.running) return false;
     try {
       const given = tray.sent.map((p) => (p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }));
-      const { conversation } = await app.api.converse({ ...(this.id ? { conversation: this.id } : {}), mode: panes.mode, asked: asked.trim(), given, tier: context.tier, ...(this.lookup ? {} : { lookup: false }) });
+      const { conversation } = await app.api.converse({ ...(this.id ? { conversation: this.id } : {}), mode: panes.mode, asked: asked.trim(), given, tier: context.tier, ...(this.lookup ? {} : { lookup: false }), ...(this.off.length ? { off: this.off } : {}) });
       this.id = conversation;
       return true;
     } catch (e) { this.problem = (e as Error).message; return false; }
@@ -95,7 +98,7 @@ class Converse {
     this.timer = setTimeout(() => {
       if (!app.api) return;
       const given = tray.sent.map((p) => (p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }));
-      void app.api.turnContext({ ...(this.id ? { conversation: this.id } : {}), mode: panes.mode, given, tier: context.tier, ...(this.lookup ? {} : { lookup: false }) })
+      void app.api.turnContext({ ...(this.id ? { conversation: this.id } : {}), mode: panes.mode, given, tier: context.tier, ...(this.lookup ? {} : { lookup: false }), ...(this.off.length ? { off: this.off } : {}) })
         .then((r) => (this.report = r), () => undefined);
     }, 250);
   }
