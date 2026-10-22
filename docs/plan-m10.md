@@ -96,7 +96,8 @@ inside a pane. Screens are compared with both after building.
 - **Understand lens:** each note's understanding (the existing four steps, with the squares), and a mark on a note
   that changed after the last time your understanding of it was recorded. Study folders are drawn only in this lens.
 - **Giving a note to Iso** from any lens: drag it onto the Iso pane (mouse), or press and hold (touch). Holding stays
-  "make a note" in an empty place, as M9 has it.
+  "make a note" in an empty place, as M9 has it, but what is drawn while you hold is a note or folder icon where it
+  will be made, not a whole area (Lachlan's verdict on V6, 2026-10-22).
 
 ### The Iso pane
 
@@ -229,7 +230,10 @@ interface IsoSource { turns(): Turn[]; send(asked, context, mode, tier); stop();
 
 ## 12. Questions
 
-| | Question | My recommendation |
+All six answered by Lachlan on 2026-10-22, each as recommended. On Q15 they added: "Ask turns will not form the
+primary basis of understanding."
+
+| | Question | Answer |
 |---|---|---|
 | Q1 | Split into M10 (panes, engine Iso) and M11 (terminal session, Build, Tailscale)? | Yes |
 | Q2 | A folder-level note: what file is it? Clicking a folder should open one. | `<folder>/index.md`, an ordinary note whose title defaults to the folder's name; made when first opened, not before |
