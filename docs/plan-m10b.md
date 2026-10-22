@@ -1,6 +1,6 @@
 # Milestone 10b: the panes, refined
 
-Written 2026-10-22, after Lachlan tried M10 (the demo on 4796 and their own base). Not yet approved. The refinement
+Written 2026-10-22, after Lachlan tried M10 (the demo on 4796 and their own base). Approved 2026-10-22 (W8 right; V7, V8, W7 right; Q16 hold, Q17 corner, Q18 no header at all). The refinement
 page items are V6–V9, I7, I8, W1, W2 and W7, with Q16–Q18. Branch `m10b-refine`, started from `m10-panes`, which is
 merged into `main` first (`--no-ff`) once this plan is approved, so M10 lands as built and these changes are their own
 milestone.
@@ -18,7 +18,7 @@ M10 "looks good but some minor adjustments are needed". In short:
 - **The phone:** the tabs at the foot stay and are preferred to swiping; a lens shows as the colour of the pane's
   name; a hold on a note offers to give it to Iso (Q16, W1); fullscreen (W1).
 
-V7, V8 and W7 have no answer on the page yet. I build them as read there unless you say otherwise.
+Lachlan uses isorite as a PWA added to their iPhone's Home Screen, over the Tailscale app.
 
 ## 2. The steps
 
@@ -104,8 +104,10 @@ actions (send to Iso, Ctrl+Enter) are off in it, since it is private.
 - **A passage to Iso on a phone:** "send to Iso" beside a selection is checked on a phone and fixed where the
   phone's own selection menu hides it.
 - **Fullscreen:** in the Note pane's settings, using the Fullscreen API where the browser has it (Android, desktop).
-  iOS Safari has no fullscreen for a page; there, isorite can be added to the Home Screen and opens without the
-  browser's bars. That needs a web app manifest (`display: standalone`), added here, with an icon from the logo.
+  iOS has no fullscreen for a page; added to the Home Screen, isorite opens without the browser's bars only if it
+  says it is a web app, so a manifest (`display: standalone`, theme colour from the ground, an icon from the logo)
+  and Apple's web-app meta tags are added, with the safe-area insets respected. In standalone, the fullscreen item
+  is not shown.
 
 ## 3. What is not in this plan
 
