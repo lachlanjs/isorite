@@ -153,11 +153,13 @@ test("Understand mode: your understanding of the note open goes with what you as
   await expect(note.locator(".reading")).toHaveText("You can say what it measures, and why.");
   await expect(note.locator("ol li")).toHaveCount(1);
   await expect(note.locator("ol li")).toContainText("+0.5You said why it holds in your own words.");
-  await note.getByLabel("Scratchpad").fill(`Mine, ${name}.`);
+  // The scratchpad is the note editor (V9): Markdown as you type.
+  await note.getByLabel("Scratchpad").fill(`Mine, **${name}**.`);
   await expect(note.locator(".u h2 .state")).toHaveText("saved", { timeout: 8000 });
   await page.screenshot({ path: `test-results/screens/${name}-understand-lens.png`, fullPage: true });
   await page.reload();
-  await expect(page.locator('[data-pane="note"]').getByLabel("Scratchpad")).toHaveValue(`Mine, ${name}.`);
+  await expect(page.locator('[data-pane="note"]').getByLabel("Scratchpad")).toContainText(`Mine, ${name}.`);
+  await expect(page.locator('[data-pane="note"] .pad .cm-lp-strong').first()).toContainText(name);
   await page.locator('[data-pane="note"] .lens[data-lens=normal]').click();
   await toIso(page);
   await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
