@@ -13,6 +13,7 @@
   import { NoteIso } from "$lib/iso.svelte.ts";
   import { render } from "$lib/markdown.ts";
   import { NoteSession } from "$lib/note.svelte.ts";
+  import { panes } from "$lib/panes.svelte.ts";
   import NoteEditor from "./NoteEditor.svelte";
 
   let { id }: { id: string } = $props();
@@ -91,11 +92,13 @@
     } catch (e) { problem = (e as Error).message; } finally { busy = false; }
   }
 
-  /** To the map, to link notes there. What is written is saved first, so the map adds to it. */
+  /** The Atlas's pane, to link notes there. What is written is saved first, so the map adds to it. */
   async function pickOnAtlas() {
     await note.save();
+    const short = id.slice("@draft/".length);
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, with what is picked for after it
-    await goto(`${resolve("/atlas")}?pick=${encodeURIComponent(id.slice("@draft/".length))}`);
+    await goto(`${resolve("/draft/[id]", { id: short })}?pick=${encodeURIComponent(short)}`);
+    panes.to("atlas");
   }
 
   /** Send it, and watch Iso read on the map (Desktop-Think). The note opens again when Iso is done. */
@@ -104,7 +107,7 @@
     const request = await iso.send();
     if (!request) return;
     app.watching = request;
-    await goto(resolve("/atlas"));
+    panes.to("atlas");
   }
 
   async function discard() {

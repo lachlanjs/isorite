@@ -11,7 +11,7 @@
   import { tick } from "svelte";
   import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
-  import { views } from "$lib/views.svelte.ts";
+  import { panes } from "$lib/panes.svelte.ts";
   import { CELL, LABELS_AT, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
@@ -414,7 +414,7 @@
       await app.api.createNote(id, `---\ntype: Concept\ntitle: ${JSON.stringify(value)}\n---\n\n`);
       naming = null; grasp = null;
       await app.refresh();
-      await views.openFromAtlas(id);
+      await panes.open(id);
     } catch (err) { notice = (err as Error).message; }
   }
   function cancelNaming(): void { naming = null; grasp = null; }
@@ -504,7 +504,7 @@
     if (dragged) return;
     if (pick) { toggle(ref); return; }
     // Chosen already: open it, beside the Atlas on a desktop (V1).
-    if (chosen === ref) { void views.openFromAtlas(ref); return; }
+    if (chosen === ref) { void panes.open(ref); return; }
     const back: string[] = [];
     if (lit && at === chosen && lit.depth[ref]) for (let r: string | undefined = ref; r && r !== chosen; r = lit.via[r]) back.unshift(r);
     walk = walk.includes(ref) ? walk.slice(0, walk.indexOf(ref) + 1) : back.length ? [...walk, ...back] : [ref];

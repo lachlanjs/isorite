@@ -5,11 +5,12 @@
   // A note, open for writing: its title, its details when they are wanted, and its text. Saving is the
   // session's business (note.svelte.ts); this shows how it stands and offers the choice when a save is refused.
   import { onMount } from "svelte";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { isStudyId, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
   import type { StudyReport } from "@isorite/engine";
   import { app, noteHref } from "$lib/app.svelte.ts";
-  import { views } from "$lib/views.svelte.ts";
+  import { panes } from "$lib/panes.svelte.ts";
   import { ExerciseState, moveText } from "$lib/exercise.svelte.ts";
   import { NoteIso } from "$lib/iso.svelte.ts";
   import { NoteSession } from "$lib/note.svelte.ts";
@@ -91,7 +92,10 @@
     return { text, touched: { who: isos(at) ? "iso" : "you", lines: lines(touchedBy(upTo, at.ids).runs) } as Touched, asked: at.asked, offered };
   });
   // Opened from a moment chosen elsewhere (the Atlas's timeline): `?at=<entry>` shows the note as it was then.
-  let wanted = new URLSearchParams(location.hash.split("?")[1] ?? "").get("at");
+  // The note may already be open in its pane when the moment is chosen, so the address is followed, not read once.
+  const atOf = (): string | null => page.url.searchParams.get("at") ?? new URLSearchParams(location.hash.split("?")[1] ?? "").get("at");
+  let wanted = $state(atOf());
+  $effect(() => { const w = atOf(); if (w) wanted = w; });
   $effect(() => {
     if (!wanted) return;
     const m = all.find((x) => x.ids.includes(wanted!));
@@ -317,7 +321,7 @@
     {#if iso.prompt === null && !iso.asking}
       <div class="seed">
         {#if isoHere && (isoHere.state === "reading" || isoHere.state === "writing" || isoRead)}
-          <button class="strip" type="button" onclick={() => void views.atlas("note", id)}>{isoHere.state === "reading" || isoHere.state === "writing" ? "Iso is reading" : "Iso read"}{isoRead ? ` ${isoRead} ${isoRead === 1 ? "note" : "notes"}` : ""} · see on the Atlas ›</button>
+          <button class="strip" type="button" onclick={() => panes.to("atlas")}>{isoHere.state === "reading" || isoHere.state === "writing" ? "Iso is reading" : "Iso read"}{isoRead ? ` ${isoRead} ${isoRead === 1 ? "note" : "notes"}` : ""} · see on the Atlas ›</button>
         {/if}
         <button class="field" type="button" onclick={() => iso.askHere()}><span class="faint">›</span><span class="faint">ask Iso here</span></button></div>
     {/if}

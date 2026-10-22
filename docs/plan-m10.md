@@ -1,6 +1,6 @@
 # Milestone 10: three panes, lenses, and Iso in its own pane
 
-Written 2026-10-22, after Lachlan's ideas for the panes (2026-10-22) and the mockup they approved ("way better",
+Written and approved 2026-10-22, after Lachlan's ideas for the panes (2026-10-22) and the mockup they approved ("way better",
 <https://claude.ai/artifact/9c14LQNbXWyXFeL91LM6z7>, locally `.refine/mockup.html` at `localhost:4780/mockup`).
 Branch `m10-panes`, started from `m9-l2`, so M9's engine work (each part of Iso's context chosen on its own, the
 `Choice` on a request) is kept, and its inline Iso is taken out here. The refinement page items are W1–W5.

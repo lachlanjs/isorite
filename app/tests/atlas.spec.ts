@@ -11,6 +11,8 @@ async function look(page: Page, name: string) {
 async function atlas(page: Page) {
   await page.goto("#/atlas");
   await expect(note(page, "coding/huffman-codes")).toBeVisible();
+  // On a phone the Atlas's pane slides into view (M10): wait until it has.
+  if ((page.viewportSize()?.width ?? 1280) <= 760) await expect.poll(() => page.locator('[data-pane="atlas"]').evaluate((el) => Math.round(el.getBoundingClientRect().left))).toBe(0);
 }
 
 test("the map draws both bases: folders, notes where you stand, a study folder and its item", async ({ page }) => {
@@ -208,7 +210,7 @@ test("notes are picked on the map for a request: numbered in order, sized in the
   await page.locator(".cm-content").click();
   await page.keyboard.type("A code is short where the source is likely.");
   await page.getByRole("button", { name: "[ + pick on the atlas ]" }).click();
-  await expect(page).toHaveURL(/#\/atlas\?pick=/);
+  await expect(page).toHaveURL(/\?pick=/);
 
   const dock = page.getByRole("region", { name: "Notes linked to the note for Iso" });
   await expect(dock).toContainText("Codes, in my words");
@@ -221,7 +223,7 @@ test("notes are picked on the map for a request: numbered in order, sized in the
   await expect(dock).toContainText(/2 linked · \d+ tokens/);
   await look(page, "atlas-pick");
   // A click here links; it neither chooses the note nor opens it.
-  await expect(page).toHaveURL(/#\/atlas\?pick=/);
+  await expect(page).toHaveURL(/\?pick=/);
   await expect(note(page, "coding/huffman-codes")).not.toHaveClass(/\bat\b/);
 
   await note(page, "coding/huffman-codes").click();

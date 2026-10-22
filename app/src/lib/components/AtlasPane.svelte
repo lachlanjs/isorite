@@ -7,10 +7,8 @@
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { momentKey } from "@isorite/core";
 
-  // The Atlas, with the session's timeline at its side. It stands in the shell, alone or beside a note (V1).
+  // The Atlas, with the session's timeline at its side. It stands in its own pane in the shell (M10).
 
-  // Beside a note (V1), the note's own timeline stands next to it: the session's is not shown as well.
-  let { beside = false }: { beside?: boolean } = $props();
 
   // `?pick=<a note for Iso>`: the map is then for linking notes to it.
   // With hash routing the question mark is inside the fragment.
@@ -48,7 +46,7 @@
 
 <div class="map">
   <Atlas pick={pick ? `@draft/${pick}` : ""} moment={pointed ? { note: pointed.note, who: isos(pointed) ? "iso" : "you" } : null} />
-  {#if !pick && !beside}
+  {#if !pick}
     <div class="side">
       <button class="icon" type="button" aria-label="this session's timeline" title="this session's timeline" aria-pressed={timeline} onclick={toggle}>
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1v14" stroke="currentColor" stroke-width="1.2" fill="none" /><rect x="5.5" y="2" width="5" height="3.2" fill="currentColor" /><path d="M8 6.3l2.3 2.3L8 10.9 5.7 8.6z" fill="currentColor" /><rect x="5.5" y="12" width="5" height="3" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
@@ -64,8 +62,7 @@
 
 <style>
   /* The map has its pane's width, and the height the header, the status line and (on a phone) the tabs leave. */
-  .map { position: relative; height: calc(100dvh - var(--bar-h) - 28px); }
-  @media (max-width: 600px) { .map { height: calc(100dvh - var(--bar-h) - 28px - 56px - env(safe-area-inset-bottom)); } }
+  .map { position: relative; height: 100%; }
   .side { position: absolute; top: 16px; right: 16px; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .icon:hover, .icon:focus-visible { color: var(--text); }

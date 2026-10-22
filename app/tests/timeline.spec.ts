@@ -48,13 +48,13 @@ test("the timeline: marks only, pointing marks what each changed, a version show
 
   // Closed until opened, by its button alone; open, it stays open over a reload.
   const button = page.getByRole("button", { name: "timeline", exact: true });
-  await expect(page.locator(".timeline")).toHaveCount(0);
+  await expect(page.locator('[data-pane="note"] .timeline')).toHaveCount(0);
   await button.click();
   await expect(button).toHaveAttribute("aria-pressed", "true");
   await page.reload();
-  const marks = page.locator(".timeline .moment");
+  const marks = page.locator('[data-pane="note"] .timeline .moment');
   await expect(marks).toHaveCount(4);
-  await expect(page.locator(".timeline")).not.toContainText(/\w/); // marks, no words
+  await expect(page.locator('[data-pane="note"] .timeline')).not.toContainText(/\w/); // marks, no words
   await expect(marks.nth(0).locator("i.sq.empty")).toHaveCount(1);
   await expect(marks.nth(1).locator("i.sq:not(.empty)")).toHaveCount(1);
   await expect(marks.nth(2).locator("i.dia:not(.open)")).toHaveCount(1);
@@ -68,7 +68,7 @@ test("the timeline: marks only, pointing marks what each changed, a version show
   await expect(page.locator(".cm-line.cm-touched-you")).toHaveCount(1);
   await expect(page.locator(".cm-line.cm-touched-you")).toContainText("It is zero for a certain outcome.");
   await marks.nth(2).hover();
-  await expect(page.locator(".timeline .asked")).toHaveText("“say what it is measured in”");
+  await expect(page.locator('[data-pane="note"] .timeline .asked')).toHaveText("“say what it is measured in”");
   await look(page, "timeline-pointed");
 
   // The note as it was when found: read only, the live note hidden; → steps to your edit, and back.
@@ -111,7 +111,7 @@ test("the timeline: marks only, pointing marks what each changed, a version show
   await page.getByRole("button", { name: "back to now" }).click();
   await expect(editor(page)).toBeVisible();
   await button.click();
-  await expect(page.locator(".timeline")).toHaveCount(0);
+  await expect(page.locator('[data-pane="note"] .timeline')).toHaveCount(0);
   await expect(page.locator(".cm-line.cm-touched-iso")).toHaveCount(0);
 });
 
@@ -131,7 +131,7 @@ test("the Atlas's timeline: this session's moments as marks; pointing outlines t
   await expect(marks.last()).toHaveAccessibleName(/you edited/);
   await marks.last().hover();
   await expect(page.locator(`[data-note="${id}"]`)).toHaveClass(/\bmo-you\b/);
-  await expect(page.locator(".timeline .asked")).toHaveText("On the map");
+  await expect(page.locator('[data-pane="atlas"] .timeline .asked')).toHaveText("On the map");
   await look(page, "atlas-timeline");
   await marks.last().click();
   await expect(page).toHaveURL(new RegExp(`#/n/${id.replace(/\//g, "\\/")}\\?at=`));
