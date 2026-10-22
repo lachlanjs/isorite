@@ -201,6 +201,34 @@ test("holding makes a new note in the folder held in; holding, then dragging, a 
   }
 });
 
+test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given to Iso; a drag inside moves the map", async ({ page }) => {
+  await atlas(page);
+  const tray = page.getByRole("list", { name: "What Iso is sent" });
+  // Held still on a note: it goes into the tray above Iso's box, and the map says so.
+  const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
+  await page.mouse.move(huffman.x + 10, huffman.y + 6);
+  await page.mouse.down();
+  await page.waitForTimeout(800);
+  await page.mouse.up();
+  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
+  await expect(tray.getByRole("listitem")).toHaveText(["▣Huffman codes"]);
+  await page.mouse.move(huffman.x - 60, huffman.y + 120); // off it, so it is not lit by pointing
+  await expect(note(page, "coding/huffman-codes")).not.toHaveClass(/\bat\b/); // held, not chosen
+  if ((page.viewportSize()?.width ?? 1280) <= 760) return; // carrying is a mouse's: a phone holds
+  // Dragged out of the Atlas and let go over Iso's pane.
+  const surprise = (await note(page, "basics/surprise").boundingBox())!, iso = (await page.locator('[data-pane="iso"]').boundingBox())!;
+  await page.mouse.move(surprise.x + 10, surprise.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(surprise.x + 40, surprise.y + 20, { steps: 4 });
+  await page.mouse.move(iso.x + 80, iso.y + 200, { steps: 8 });
+  await expect(page.locator(".carried")).toHaveText("▣ Surprise");
+  await page.mouse.up();
+  await expect(tray.getByRole("listitem")).toHaveText(["▣Huffman codes", "▣Surprise"]);
+  // Taken out again.
+  await tray.getByRole("button", { name: "Take Huffman codes out of Iso's context" }).click();
+  await expect(tray.getByRole("listitem")).toHaveText(["▣Surprise"]);
+});
+
 test("notes are picked on the map for a request: numbered in order, sized in the dock, and taken away again", async ({ page }) => {
   // Only an exercise is asked for this way now (no note for Iso is started from the app): one made by the Api.
   await atlas(page);

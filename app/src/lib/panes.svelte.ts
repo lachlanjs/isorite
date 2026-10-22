@@ -46,6 +46,8 @@ class Panes {
   waiting = $state<Partial<Record<"note" | "atlas", Lens>>>({});
   /** Things sent to Iso from another pane since Iso's pane was last looked at (the phone's tab shows it). */
   unseen = $state(0);
+  /** The notes, open over the note in the Note pane. */
+  tree = $state(false);
   /** The note last open: what the Note pane opens to when none is. */
   last = $state(read("isorite.last", ""));
 

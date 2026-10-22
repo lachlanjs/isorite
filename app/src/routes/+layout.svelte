@@ -12,6 +12,7 @@
   import AtlasPane from "$lib/components/AtlasPane.svelte";
   import ContextCount from "$lib/components/ContextCount.svelte";
   import IsoPane from "$lib/components/IsoPane.svelte";
+  import NoteList from "$lib/components/NoteList.svelte";
   import PaneHead from "$lib/components/PaneHead.svelte";
   import { LAYOUTS, PANES, panes, type Pane } from "$lib/panes.svelte.ts";
   import Logo from "$lib/components/Logo.svelte";
@@ -28,6 +29,8 @@
   // their state while notes open and close.
   const standing = $derived(panes.standing);
   $effect(() => { if (page.route.id === "/n/[...id]" && page.params.id) panes.setLast(page.params.id); });
+  // The notes open over a note close when a note is chosen from them.
+  $effect(() => { void page.url.href; panes.tree = false; });
   onMount(() => {
     const media = matchMedia("(max-width: 760px)");
     panes.narrow = media.matches;
@@ -87,6 +90,7 @@
   // Keys: Alt+1/2/3 a pane, Alt+←/→ the next, Alt+↑/↓ its lens or Iso's mode, Alt+L the layout. The arrows are left
   // to the editor while you type in it, where they move lines and words.
   function keys(e: KeyboardEvent): void {
+    if (e.key === "Escape" && panes.tree) { panes.tree = false; return; }
     if (!e.altKey || e.ctrlKey || e.metaKey) return;
     const inEditor = (e.target as HTMLElement | null)?.closest?.(".cm-editor, input, textarea") != null;
     const k = e.key;
@@ -172,12 +176,13 @@
           {#if p === "note"}
             <PaneHead pane="note" name="Note">
               {#snippet tools()}
-                <a class="icon" href={resolve("/notes")} aria-label="All notes" title="All notes, and search" aria-current={page.route.id === "/notes" ? "page" : undefined}>
+                <button class="icon" type="button" aria-label="All notes" title="All notes, and search" aria-pressed={page.route.id === "/notes" || panes.tree} onclick={() => { if (page.route.id !== "/notes") panes.tree = !panes.tree; }}>
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 3h4M4.5 3v9.5h3M4.5 7.5h3" /><rect x="8" y="5.5" width="5.5" height="3.5" /><rect x="8" y="10.5" width="5.5" height="3.5" /></svg>
-                </a>
+                </button>
               {/snippet}
             </PaneHead>
             <div class="pbody note-body">{@render children()}</div>
+            {#if panes.tree && page.route.id !== "/notes"}<div class="tree"><NoteList /></div>{/if}
           {:else if p === "atlas"}
             <PaneHead pane="atlas" name="Atlas" />
             <div class="pbody atlas-body"><AtlasPane /></div>
@@ -269,14 +274,16 @@
   .divider::before { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: transparent; transition: background 0.15s, width 0.15s, left 0.15s; }
   .divider:hover::before, .divider:focus-visible::before { background: var(--lattice); width: 3px; left: 2px; }
   .divider:focus-visible { outline: none; }
+  .tree { position: absolute; left: 0; right: 0; bottom: 0; top: 40px; z-index: 7; overflow: auto; background: var(--ground-0); }
+  button.icon { background: none; border: 0; padding: 0; cursor: pointer; }
+  button.icon[aria-pressed="true"] { color: var(--text); background: var(--ground-2); }
   .layouts { display: flex; align-items: center; gap: 2px; }
   .layouts .div { width: 1px; height: 18px; background: var(--line); margin: 0 8px; }
-  .layouts .icon { background: none; border: 0; padding: 0; cursor: pointer; }
-  .layouts .icon[aria-pressed="true"] { color: var(--text); background: var(--ground-2); }
   .layouts .icon.off { opacity: 0.45; background: none; }
   .tabs { display: none; }
   @media (max-width: 760px) {
     .layouts { display: none; }
+    .tree { top: 48px; }
     .panes { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; height: calc(100dvh - var(--bar-h) - 28px - 52px - env(safe-area-inset-bottom)); }
     .panes::-webkit-scrollbar { display: none; }
     .pane, .pane[hidden] { display: flex; flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; border-left: 0; }

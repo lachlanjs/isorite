@@ -11,6 +11,7 @@
   import type { StudyReport } from "@isorite/engine";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
+  import { tray } from "$lib/tray.svelte.ts";
   import { ExerciseState, moveText } from "$lib/exercise.svelte.ts";
   import { NoteIso } from "$lib/iso.svelte.ts";
   import { NoteSession } from "$lib/note.svelte.ts";
@@ -166,6 +167,26 @@
   // Sending the note, or the passage chosen in it, to the terminal's agent.
   let sending = $state(false);
   const chosen = $derived(iso.cursor && iso.cursor.to > iso.cursor.from ? note.text.slice(iso.cursor.from, iso.cursor.to).trim() : "");
+  // A passage chosen in the note can be sent to Iso (M10): one button by the selection, above it on a desktop and
+  // below it on a phone, where the system's own handles are above.
+  let noteEl = $state<HTMLElement>();
+  let toIsoAt = $state<{ top: number; left: number } | null>(null);
+  $effect(() => {
+    void iso.cursor;
+    if (!chosen || !noteEl || asSource || at) { toIsoAt = null; return; }
+    const frame = requestAnimationFrame(() => {
+      const sel = getSelection(), box = noteEl!.getBoundingClientRect();
+      const r = sel?.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
+      if (!r || (!r.width && !r.height)) { toIsoAt = { top: 8, left: box.width - 140 }; return; }
+      toIsoAt = { top: panes.narrow ? r.bottom - box.top + 10 : r.top - box.top - 36, left: Math.max(8, Math.min(r.left - box.left, box.width - 140)) };
+    });
+    return () => cancelAnimationFrame(frame);
+  });
+  function sendToIso(): void {
+    if (!chosen) return;
+    tray.add({ kind: "passage", id, title: note.fields.title || id, text: chosen });
+    toIsoAt = null;
+  }
 </script>
 
 <svelte:window onkeydown={keys} />
@@ -174,7 +195,7 @@
   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1v14" stroke="currentColor" stroke-width="1.2" fill="none" /><rect x="5.5" y="2" width="5" height="3.2" fill="currentColor" /><path d="M8 6.3l2.3 2.3L8 10.9 5.7 8.6z" fill="currentColor" /><rect x="5.5" y="12" width="5" height="3" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
 {/snippet}
 
-<article class="note" class:timed={timeline && note.loaded === "ready" && !asSource}>
+<article class="note" bind:this={noteEl} class:timed={timeline && note.loaded === "ready" && !asSource}>
   {#if note.loaded === "loading"}
     <p class="faint">opening…</p>
   {:else if note.loaded === "missing"}
@@ -282,6 +303,9 @@
       {#key momentKey(at)}<NoteVersion text={version.text} title={note.fields.title} touched={version.touched} asked={version.asked} offered={version.offered} />{/key}
     {/if}
 
+    {#if toIsoAt}
+      <button class="toiso" type="button" style:top="{toIsoAt.top}px" style:left="{toIsoAt.left}px" onmousedown={(e) => e.preventDefault()} onclick={sendToIso}><i class="dia" aria-hidden="true">◆</i>send to Iso</button>
+    {/if}
     <div class="live" hidden={Boolean(at && version)}>
       {#key asSource}<NoteEditor {note} {iso} exercise={ex ?? undefined} source={asSource} touched={live} />{/key}
     </div>
@@ -329,6 +353,8 @@
 </article>
 
 <style>
+  .toiso { position: absolute; z-index: 6; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; background: var(--ground-2); border: 1px solid var(--growth); color: var(--text); font-size: 12px; cursor: pointer; }
+  .toiso .dia { font-style: normal; font-size: 10px; color: var(--growth); }
   .note { position: relative; max-width: calc(var(--measure) + 2 * var(--space-4)); margin: 0 auto; padding: 40px var(--space-4) 0; display: flex; flex-direction: column; gap: var(--space-2); }
   .head { display: flex; align-items: flex-start; gap: var(--space-3); }
   .title { flex: 1 1 auto; min-width: 0; font-size: 34px; line-height: 1.2; font-weight: 700; background: none; border: 0; padding: 0 2px; color: var(--text); resize: none; field-sizing: content; overflow: hidden; }

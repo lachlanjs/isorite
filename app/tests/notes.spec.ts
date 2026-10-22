@@ -152,6 +152,22 @@ test("what is typed and not yet saved survives the tab closing", async ({ page, 
   expect(await file(again, "basics/surprise")).toContain(`Kept for ${name}.`);
 });
 
+test("a passage chosen in a note is sent to Iso; the notes open over the note and close when one is chosen", async ({ page }) => {
+  await page.goto("#/n/basics/surprise");
+  await editor(page).click();
+  await page.keyboard.press("Control+Home");
+  await page.keyboard.press("Shift+End");
+  await page.getByRole("button", { name: "send to Iso" }).click();
+  await expect(page.getByRole("list", { name: "What Iso is sent" }).getByRole("listitem")).toHaveText([/^“An outcome of probability/]);
+  await expect(page.getByRole("button", { name: "send to Iso" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "All notes" }).click();
+  await expect(page.getByRole("searchbox", { name: "Find a note" })).toBeVisible();
+  await notePane(page).getByRole("link", { name: "The bit" }).click();
+  await expect(page).toHaveURL(/#\/n\/basics\/bit$/);
+  await expect(page.getByRole("searchbox", { name: "Find a note" })).toHaveCount(0);
+});
+
 test("the parts, the atlas pane and study page, and a note that is not there", async ({ page }) => {
   await page.goto("#/parts");
   await expect(page.getByRole("button", { name: "keep" })).toBeVisible();

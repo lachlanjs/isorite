@@ -12,6 +12,7 @@
   import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
+  import { tray, type Part } from "$lib/tray.svelte.ts";
   import { CELL, LABELS_AT, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
@@ -355,10 +356,11 @@
 
   // ------------------------------------------------------------ holding, to make a note or a folder (V6)
   //
-  // Hold still, and a new note is marked where you hold; let go, and its title is asked for there. Hold, then drag a
-  // little way, and it is a new folder instead: its name is asked for, then its first note's, since a folder is made
-  // when a note is put in it. Either goes in the folder gripped in (on a note, that note's folder), and opens beside
-  // the Atlas.
+  // Hold still on open ground, and a new note is marked where you hold; let go, and its title is asked for there.
+  // Hold, then drag a little way, and it is a new folder instead: its name is asked for, then its first note's, since
+  // a folder is made when a note is put in it. Either goes in the folder gripped in, and opens in the Note pane. What
+  // is marked is a note's or a folder's icon, not an area (Lachlan, on V6). Held on a note, the note is given to Iso
+  // (M10): it goes into the tray above Iso's box.
 
   const HOLD_SHOWN = 180, HOLD = 650, FOLDER_DRAG = 24;
   /** What is gripped: a place (in cells), the folder it is in, and whether a drag has made it a folder. */
@@ -381,21 +383,28 @@
     if (pick || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock, .naming")) return;
     const on = e.target.closest<HTMLElement>("[data-note]")?.dataset.note ?? "";
     if (on.startsWith("@")) return; // a study item is not a place in the base
+    if (on) {
+      holdDone = setTimeout(() => { holdDone = undefined; dragged = true; give(on); }, HOLD);
+      return;
+    }
     const u = L.cell * view.k, gx = Math.round((at.x - view.x) / u), gy = Math.round((at.y - view.y) / u);
-    const w = Math.round(126 / L.cell), h = Math.round(35 / L.cell); // a note's size in cells: 18 by 5, 9 by 3 on the coarse grid, 7 by 2 on the coarser
-    const dir = on ? on.split("/").slice(0, -1).join("/") : folderAt(gx, gy);
-    const what = { dir, gx: gx - Math.floor(w / 2), gy: gy - Math.ceil(h / 2), w, h, folder: false };
+    const what = { dir: folderAt(gx, gy), gx, gy, w: 0, h: 0, folder: false };
     holdShow = setTimeout(() => { grasp = what; }, HOLD_SHOWN);
     holdDone = setTimeout(() => { holdDone = undefined; dragged = true; gripped = at; grasp = what; viewport?.setPointerCapture(e.pointerId); }, HOLD);
   }
-  /** While gripped: a drag far enough makes it a folder, drawn from where the hold began to the pointer. */
+  /** While gripped: a drag far enough makes it a folder. Its icon stays where the hold began. */
   function drawHeld(at: { x: number; y: number }): void {
-    if (!gripped || !grasp || !L) return;
-    const far = Math.hypot(at.x - gripped.x, at.y - gripped.y) >= FOLDER_DRAG;
-    if (!far && !grasp.folder) return;
-    const u = L.cell * view.k, x0 = (gripped.x - view.x) / u, y0 = (gripped.y - view.y) / u, x1 = (at.x - view.x) / u, y1 = (at.y - view.y) / u;
-    const w = Math.max(Math.round(160 / L.cell), Math.round(Math.abs(x1 - x0))), h = Math.max(Math.round(70 / L.cell), Math.round(Math.abs(y1 - y0)));
-    grasp = { ...grasp, folder: true, gx: Math.round(Math.min(x0, x1)), gy: Math.round(Math.min(y0, y1)), w, h };
+    if (!gripped || !grasp || grasp.folder) return;
+    if (Math.hypot(at.x - gripped.x, at.y - gripped.y) >= FOLDER_DRAG) grasp = { ...grasp, folder: true };
+  }
+  /** A note given to Iso: into the tray, said on the map for a moment. */
+  let given = $state("");
+  let givenTimer: ReturnType<typeof setTimeout> | undefined;
+  function give(ref: string, kind: "note" | "folder" = "note"): void {
+    const put = tray.add({ kind, id: ref, title: kind === "note" ? title(ref) : folderName(ref) });
+    given = put ? `${kind === "note" ? title(ref) : folderName(ref)} is in Iso's context` : `${kind === "note" ? title(ref) : folderName(ref)} is in Iso's context already`;
+    clearTimeout(givenTimer);
+    givenTimer = setTimeout(() => (given = ""), 2200);
   }
   /** Let go while gripped: ask for the name there. */
   function letGo(): void {
@@ -453,10 +462,32 @@
   }
   const local = (e: PointerEvent | WheelEvent): { x: number; y: number } => { const r = viewport!.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
+  // A note or folder dragged out of the Atlas with a mouse is carried: let go over Iso's pane, it is given to Iso. Inside
+  // the Atlas the same drag moves the map, as it always has.
+  let press: Part | null = null;
+  let carryAt = $state({ x: 0, y: 0 });
+  function pressed(e: PointerEvent): Part | null {
+    if (e.pointerType !== "mouse" || pick || !(e.target instanceof Element)) return null;
+    const n = e.target.closest<HTMLElement>("[data-note]")?.dataset.note;
+    if (n) return n.startsWith("@") ? null : { kind: "note", id: n, title: title(n) };
+    const f = e.target.closest<HTMLElement>("[data-folder]")?.dataset.folder;
+    return f && !f.startsWith("@") ? { kind: "folder", id: f, title: folderName(f) } : null;
+  }
+  function carry(e: PointerEvent): boolean {
+    if (!press || !grip || !viewport) return false;
+    const r = viewport.getBoundingClientRect();
+    const out = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    if (!tray.carrying && !out) return false;
+    if (!tray.carrying) view = grip.view; // the map goes back to where it was: the note leaves it
+    carryAt = { x: e.clientX, y: e.clientY };
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-pane="iso"]') != null;
+    tray.carrying = { part: press, over };
+    return true;
+  }
   function down(e: PointerEvent): void {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     cancelAnimationFrame(flying);
-    if (!pointers.size) dragged = false;
+    if (!pointers.size) { dragged = false; press = pressed(e); }
     pointers.set(e.pointerId, local(e));
     regrip();
     if (pointers.size === 1) holding(e, local(e)); else unhold();
@@ -469,12 +500,19 @@
     const x = ps.reduce((s, p) => s + p.x, 0) / ps.length, y = ps.reduce((s, p) => s + p.y, 0) / ps.length;
     if (!dragged && ps.length === 1 && Math.hypot(x - grip.x, y - grip.y) < 5) return;
     if (!dragged) { dragged = moved = true; unhold(); viewport!.setPointerCapture(e.pointerId); }
+    if (ps.length === 1 && carry(e)) return;
     const span = ps.length > 1 ? Math.hypot(ps[0]!.x - ps[1]!.x, ps[0]!.y - ps[1]!.y) : 0;
     const zoomed = grip.span && span ? zoomAbout(grip.view, span / grip.span, grip.x, grip.y) : grip.view;
     view = { k: zoomed.k, x: zoomed.x + x - grip.x, y: zoomed.y + y - grip.y };
   }
   function up(e: PointerEvent): void {
     if (!pointers.delete(e.pointerId)) return;
+    if (tray.carrying) {
+      const { part, over } = tray.carrying;
+      tray.carrying = null;
+      if (over && part.kind !== "passage") give(part.id, part.kind);
+    }
+    press = null;
     if (gripped) letGo();
     else if (holdDone !== undefined) unhold(); // let go before the hold was long enough
     regrip();
@@ -577,6 +615,7 @@
 <div class="atlas dots" class:lit={!!lit} bind:this={viewport} role="application" aria-label="The atlas: the map of the base" tabindex="0"
   style="background-position: {view.x}px {view.y}px"
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onclick={ground} onkeydown={key}
+  ondragstart={(e) => e.preventDefault()}
   oncontextmenu={(e) => { if (grasp || holdShow !== undefined) e.preventDefault(); }}>
   {#if failed}
     <p class="said">The map could not be drawn: {failed}</p>
@@ -617,13 +656,13 @@
         </div>
       {/if}
       {#if grasp}
-        <div class="grasp" class:folder={grasp.folder} style="--x:{grasp.gx};--y:{grasp.gy};--w:{grasp.w};--h:{grasp.h}">
-          <svg aria-hidden="true"><rect x="1" y="1" width="100%" height="100%" /></svg>
+        <div class="grasp" class:folder={grasp.folder} style="--x:{grasp.gx};--y:{grasp.gy}">
+          <svg viewBox="0 0 20 24" width="20" height="24" aria-hidden="true">{#if grasp.folder}<path d="M1.5 5.5h6l2 2.5h9v12.5h-17z" />{:else}<path d="M3.5 1.5h9l4.5 4.5v16.5h-13.5z M12.5 1.5v4.5h4.5" /><path class="ln" d="M6.5 11h7.5M6.5 14.5h7.5M6.5 18h5" />{/if}</svg>
           {#if !naming}<span>{grasp.folder ? "a new folder" : "a new note"}{grasp.dir ? ` in ${grasp.dir}` : ""}</span>{/if}
         </div>
       {/if}
       {#if naming}
-        <form class="naming" style="--x:{naming.gx};--y:{naming.gy + naming.h}" onsubmit={named}>
+        <form class="naming" style="--x:{naming.gx};--y:{naming.gy}" onsubmit={named}>
           <!-- svelte-ignore a11y_autofocus -->
           <input autofocus aria-label={naming.folder && !naming.named ? "the new folder's name" : "the new note's title"} autocomplete="off"
             placeholder={naming.folder && !naming.named ? `a new folder${naming.dir ? ` in ${naming.dir}` : ""}` : `a new note${naming.dir || naming.named ? ` in ${[naming.dir, naming.named].filter(Boolean).join("/")}` : ""}`}
@@ -638,6 +677,10 @@
     {:else if notice}
       <p class="notice" role="alert">{notice}</p>
     {/if}
+    {#if given}<p class="given" role="status">◆ {given}</p>{/if}
+    {#if tray.carrying}
+      <div class="carried" class:over={tray.carrying.over} style="left:{carryAt.x}px;top:{carryAt.y}px" aria-hidden="true">{tray.carrying.part.kind === "folder" ? "▭" : "▣"} {tray.carrying.part.title}</div>
+    {/if}
   {/if}
 </div>
 
@@ -649,20 +692,19 @@
   .shifting :global(:is(.n, .sn, .folder)) { transition: left 0.45s ease, top 0.45s ease, width 0.45s ease, height 0.45s ease; }
   @media (prefers-reduced-motion: reduce) { .shifting :global(:is(.n, .sn, .folder)) { transition: none; } }
   .said { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-4); text-align: center; }
-  /* What is held, until its note is made: a gold box whose dots march (Desktop-Atlas). */
-  .grasp { position: absolute; left: calc(var(--x) * var(--u) - 4px); top: calc(var(--y) * var(--u) - 4px); width: calc(var(--w) * var(--u) + 8px); height: calc(var(--h) * var(--u) + 8px); display: flex; align-items: center; padding: 0 12px; gap: 8px; font-size: 11px; pointer-events: none; z-index: 1; }
-  .grasp svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-  .grasp rect { width: calc(100% - 2px); height: calc(100% - 2px); fill: var(--growth-soft); stroke: var(--growth); stroke-width: 2; stroke-dasharray: 2 3; animation: march .6s linear infinite; }
-  /* A folder being drawn: a frame's outline, its name asked for when let go. */
-  .grasp.folder { align-items: flex-start; padding-top: 8px; }
-  .grasp.folder rect { fill: none; stroke-dasharray: 6 4; }
-  .naming { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u) + 8px); z-index: 3; display: flex; gap: 8px; align-items: center; padding: 8px; background: var(--ground-2); border: 1px solid var(--growth); }
-  .naming input { width: 220px; background: var(--ground-1); border: 0; border-bottom: 1px solid var(--line-strong); padding: 4px 6px; font: 14px/1.4 var(--font-text); color: var(--text); }
-  .naming input:focus-visible { outline: none; border-bottom-color: var(--growth); }
-  .naming .btn { height: 28px; font-size: 12px; }
-  .grasp span { position: relative; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-  @keyframes march { to { stroke-dashoffset: -5; } }
-  @media (prefers-reduced-motion: reduce) { .grasp rect { animation: none; } }
+  /* What a hold will make: a note's or a folder's icon where it was held, and what it is (V6). */
+  .grasp { position: absolute; left: calc(var(--x) * var(--u) - 10px); top: calc(var(--y) * var(--u) - 12px); display: flex; align-items: center; gap: 6px; font-size: 11px; pointer-events: none; z-index: 1; }
+  .grasp svg { flex: none; overflow: visible; }
+  .grasp svg path { fill: var(--growth-soft); stroke: var(--growth); stroke-width: 1.5; stroke-linejoin: round; stroke-dasharray: 2 2.5; animation: march .6s linear infinite; }
+  .grasp svg path.ln { fill: none; stroke-dasharray: none; animation: none; }
+  .grasp span { white-space: nowrap; background: var(--ground-0); padding: 0 4px; }
+  @media (prefers-reduced-motion: reduce) { .grasp svg path { animation: none; } }
+  @keyframes march { to { stroke-dashoffset: -9; } }
+  .given { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--growth); font-size: 12px; z-index: 2; }
+  .given::first-letter { color: var(--growth); }
+  /* A note carried out of the Atlas towards Iso's pane. */
+  .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font-size: 12px; white-space: nowrap; }
+  .carried.over { border-color: var(--growth); }
   .notice { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--rose); color: var(--rose); font-size: 12px; z-index: 2; }
   /* Iso's note while it is answered (Desktop-Think): the draft's block, dotted gold, and under it (or under the
      note asking) a marching gold line and what Iso is doing. */
