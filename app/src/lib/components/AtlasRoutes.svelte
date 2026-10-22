@@ -6,7 +6,7 @@
   // carries: the count says how many. A lit line is 3 px however many links run along it, as on the boards; one
   // whose links run both ways stands still. Iso's steps along links are gold, as its lines on Desktop-Think, and a
   // note for Iso has a blue line to each note it links to.
-  let { k, rest, hot, counts, sent = [], grown = [] }: {
+  let { k, rest, hot, counts, sent = [], grown = [], beat = "", retracting = [] }: {
     /** The zoom: paths are given at zoom 1. */
     k: number;
     /** `strong`: a "requires" runs along it. A route of weaker links only is drawn lighter. `trunk`: between two folders. */
@@ -18,14 +18,25 @@
     sent?: { key: string; d: string }[];
     /** Links just made, drawn growing from one end to the other, then gone (K3). */
     grown?: { key: string; d: string }[];
+    /** A new layout's beats (V7): the old lines retract, nothing is drawn while things move, the new lines draw out. */
+    beat?: "" | "retract" | "move" | "draw";
+    retracting?: { key: string; d: string; study: boolean; strong: boolean; trunk: boolean }[];
   } = $props();
+  // A line drawn along its own length (pathLength) is in the map's units, so its width is set by the zoom.
+  const width = (r: { study: boolean; strong: boolean; trunk: boolean }): string => `${(r.study ? 1.6 : r.strong ? (r.trunk ? 3 : 1.5) : r.trunk ? 2 : 1) / k}px`;
 </script>
 
 <svg class="routes" aria-hidden="true" data-requires={counts.requires} data-builds={counts.builds} data-uses={counts.uses}>
   <g transform="scale({k})">
-    {#each rest as r (r.key)}<path class={r.study ? "study" : r.strong ? "base" : "base weak"} class:trunk={r.trunk && !r.study} d={r.d} />{/each}
-    {#each sent as r (r.key)}<path class="sent" d={r.d} />{/each}
-    {#each hot as r (r.key)}<path class="lit {r.kind}" class:still={r.still} d={r.d} />{/each}
+    {#if beat === "retract"}
+      {#each retracting as r (r.key)}<path class="along retract {r.study ? 'study' : r.strong ? 'base' : 'base weak'}" class:trunk={r.trunk && !r.study} pathLength="1" d={r.d} style:stroke-width={width(r)} />{/each}
+    {:else if beat === "draw"}
+      {#each rest as r (r.key)}<path class="along draw {r.study ? 'study' : r.strong ? 'base' : 'base weak'}" class:trunk={r.trunk && !r.study} pathLength="1" d={r.d} style:stroke-width={width(r)} />{/each}
+    {:else if beat === ""}
+      {#each rest as r (r.key)}<path class={r.study ? "study" : r.strong ? "base" : "base weak"} class:trunk={r.trunk && !r.study} d={r.d} />{/each}
+      {#each sent as r (r.key)}<path class="sent" d={r.d} />{/each}
+      {#each hot as r (r.key)}<path class="lit {r.kind}" class:still={r.still} d={r.d} />{/each}
+    {/if}
     <!-- Measured along its own length (pathLength), so drawn in the map's units: its width is set by the zoom. -->
     {#each grown as r (r.key)}<path class="grown" pathLength="1" d={r.d} style:stroke-width="{3 / k}px" />{/each}
   </g>
@@ -50,5 +61,12 @@
   .grown { vector-effect: none; stroke: var(--growth); stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: grow 5.5s ease-in-out forwards; }
   @keyframes grow { 0% { stroke-dashoffset: 1; opacity: 1; } 9% { stroke-dashoffset: 1; } 42% { stroke-dashoffset: 0; opacity: 1; } 78% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
   .still { animation: none; }
+  /* The beats of a new layout (V7): along each line from its start, back to it, then out again. */
+  .along { vector-effect: none; stroke-dasharray: 1; stroke-linecap: butt; }
+  .along.study { stroke-dasharray: 1; }
+  .retract { stroke-dashoffset: 0; animation: retract 0.22s ease-in forwards; }
+  .draw { stroke-dashoffset: 1; animation: draw 0.34s ease-out forwards; }
+  @keyframes retract { to { stroke-dashoffset: 1; } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
   @media (prefers-reduced-motion: reduce) { .lit { animation: none; } .grown { animation: none; stroke-dashoffset: 0; opacity: .6; } }
 </style>

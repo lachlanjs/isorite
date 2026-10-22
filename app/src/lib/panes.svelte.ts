@@ -40,6 +40,8 @@ class Panes {
   unseen = $state(0);
   /** The notes, open over the note in the Note pane. */
   tree = $state(false);
+  /** A note just made from the Atlas: it opens with its title chosen, to type over (V6). */
+  fresh = $state("");
   /** The pane whose settings are open, under its header (M10b: the header's menu, split by pane). */
   settings = $state<Pane | null>(null);
   /** The note last open: what the Note pane opens to when none is. */

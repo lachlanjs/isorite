@@ -4,7 +4,7 @@
   import { resolve } from "$app/paths";
   // A note, open for writing: its title, its details when they are wanted, and its text. Saving is the
   // session's business (note.svelte.ts); this shows how it stands and offers the choice when a save is refused.
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { isStudyId, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
@@ -153,6 +153,13 @@
   // The header's part of an open exercise: its kind, the squares, wind back and next.
   $effect(() => {
     app.exercise = ex ? { kind: KINDS[ex.ex.kind] ?? ex.ex.kind, squares: ex.squares.squares, due: ex.squares.due, flash: ex.flash, windBack: () => void ex.windBack(), why: () => (why = !why), next: ex.ex.next ? `@study/${ex.ex.next}` : null } : null;
+  });
+
+  // A note just made on the Atlas opens with its title chosen, to type over (V6).
+  $effect(() => {
+    if (note.loaded !== "ready" || panes.fresh !== id) return;
+    panes.fresh = "";
+    void tick().then(() => { const t = document.getElementById("title") as HTMLTextAreaElement | null; t?.focus(); t?.select(); });
   });
 
   const SAYS = { saved: "saved", unsaved: "not saved yet", saving: "saving", conflict: "changed elsewhere: choose below", failed: "not saved" } as const;
