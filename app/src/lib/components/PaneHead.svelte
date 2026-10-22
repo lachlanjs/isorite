@@ -76,7 +76,8 @@
 {#if settings && open}
   <div class="frame settings" role="dialog" aria-label="{name} settings" tabindex="-1" bind:this={menu}>
     <span class="frame-title">{name.toLowerCase()}</span>
-    {@render settings()}
+    <!-- Scrolled inside, so the frame's title, which stands over its edge, is not cut off. -->
+    <div class="inner">{@render settings()}</div>
   </div>
 {/if}
 
@@ -107,14 +108,16 @@
   .icon:hover, .icon:focus-visible { color: var(--text); }
   .gear[aria-expanded="true"] { color: var(--text); background: var(--ground-2); }
   .gear[aria-expanded="true"] rect { fill: var(--ground-2); }
-  .settings { --inside: var(--ground-2); position: absolute; z-index: 21; top: 54px; right: 8px; width: min(400px, calc(100% - 16px)); max-height: calc(100% - 64px); overflow: auto; padding: 24px 18px 14px; display: flex; flex-direction: column; gap: var(--space-6); white-space: normal; user-select: text; }
+  .settings { --inside: var(--ground-2); position: absolute; z-index: 21; top: 54px; right: 8px; width: min(400px, calc(100% - 16px)); padding: 0; white-space: normal; user-select: text; }
+  .inner { max-height: calc(100dvh - 140px); overflow: auto; padding: 24px 18px 14px; display: flex; flex-direction: column; gap: var(--space-6); }
   .settings:focus-visible { outline: none; }
   @media (max-width: 760px) {
     .phead { height: 48px; touch-action: pan-x; }
     /* The handle says the header can be swiped up and down. */
     .phead::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 28px; height: 3px; margin-left: -14px; background: var(--line); }
     .lens .word, .lens[aria-pressed="true"] .word { display: none; }
-    .settings { top: 62px; max-height: calc(100% - 72px); }
+    .settings { top: 62px; }
+    .inner { max-height: calc(100dvh - 210px); }
   }
   @media (prefers-reduced-motion: reduce) { .lens.waiting .sym { animation: none; } }
 </style>

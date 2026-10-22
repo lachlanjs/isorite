@@ -34,6 +34,7 @@ test("settings are in each pane's header: the ground in the Note pane's, and in 
   await page.goto("#/notes");
   await page.getByRole("button", { name: "Note settings" }).click();
   const note = page.getByRole("dialog", { name: "Note settings" });
+  await look(page, "note-settings");
   await note.getByRole("radio", { name: "quartz" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-ground", "quartz");
   await note.getByRole("radio", { name: "lapis" }).click();

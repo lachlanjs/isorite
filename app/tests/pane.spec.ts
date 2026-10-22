@@ -180,6 +180,7 @@ test("the count under Iso's box opens the Context view: what the next turn is se
   await expect(page.getByRole("log", { name: "The conversation with Iso" })).toHaveCount(0);
   await expect(parts.locator(".part").first()).toContainText("instructions and tools");
   await expect(parts).toContainText("earlier in this conversation1 turn");
+  await look(page, "iso-context");
   const sw = parts.getByRole("switch", { name: "Send: what is a bit?" });
   await expect(sw).toHaveAttribute("aria-checked", "true");
   await sw.click();
