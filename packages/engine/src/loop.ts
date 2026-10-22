@@ -3,12 +3,19 @@
 // or its rounds are used, when it must reply. Carried over from rdstudio's
 // agent.ts.
 
-import type { Lookup, Step } from "./lookup.ts";
-import { complete, type Message, type ProviderConfig, type Tier, type Usage } from "./provider.ts";
+import type { Step } from "./lookup.ts";
+import { complete, type Message, type ProviderConfig, type Tier, type ToolDef, type Usage } from "./provider.ts";
 import type { Http } from "./ports.ts";
 
 /** How many times it may use its tools before it must reply, by tier. */
 export const ROUNDS: Record<Tier, number> = { low: 3, mid: 6, max: 8 };
+
+/** What the model may call: Iso's look-ups (Lookup), or those and a mode's own tools (a turn). A call that looked
+ *  something up says so with its step, which is published for the Atlas. */
+export interface Tools {
+  defs(): ToolDef[];
+  call(name: string, raw: string): Promise<{ text: string; step?: Step }>;
+}
 
 export interface Run {
   http: Http;
@@ -16,7 +23,7 @@ export interface Run {
   key: string | null;
   tier: Tier;
   messages: Message[];
-  lookup: Lookup;
+  lookup: Tools;
   maxTokens: number;
   signal: AbortSignal;
   /** Each piece of the reply as it is written. What was written before a lookup is not the reply: `again` says to start over. */
@@ -50,7 +57,7 @@ export async function rounds(o: Run): Promise<Ran> {
     for (const c of r.calls) {
       const { text, step } = await o.lookup.call(c.name, c.arguments);
       messages.push({ role: "tool", callId: c.id, content: text });
-      o.onStep(step);
+      if (step) o.onStep(step);
     }
   }
 }

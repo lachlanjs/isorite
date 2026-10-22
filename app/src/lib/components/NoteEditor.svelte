@@ -8,6 +8,8 @@
   import { createEditor, setText, type Where } from "$lib/editor/codemirror.ts";
   import { setMarks, setOverlays, setTouched, type Inline, type Mark, type Overlay, type Touched } from "$lib/editor/overlays.ts";
   import type { ExerciseState } from "$lib/exercise.svelte.ts";
+  import { panes } from "$lib/panes.svelte.ts";
+  import { tray } from "$lib/tray.svelte.ts";
   import type { NoteIso } from "$lib/iso.svelte.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
   import IsoBlock from "./IsoBlock.svelte";
@@ -71,8 +73,13 @@
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
       onFollow: (id) => { void goto(noteHref(id)); },
       ...(iso ? {
-        // Ctrl+Enter opens the prompt under the cursor's paragraph; with text selected, asking for a rewrite of it.
-        onAsk: (w: Where) => iso.askAt(w.line + head.lines, { from: w.from + head.chars, to: w.to + head.chars }),
+        // Ctrl+Enter goes to Iso's pane (M10), with the text selected, if any, given to Iso.
+        onAsk: (w: Where) => {
+          const chosen = note.text.slice(w.from + head.chars, w.to + head.chars).trim();
+          if (chosen) tray.add({ kind: "passage", id: note.id, title: note.fields.title || note.id, text: chosen });
+          panes.to("iso");
+          requestAnimationFrame(() => document.getElementById("iso-box")?.focus());
+        },
         onCursor: (w: Where) => { iso.cursor = { line: w.line + head.lines, from: w.from + head.chars, to: w.to + head.chars }; },
         // While the prompt asks for a rewrite, text selected in the note is chosen for it.
         picking: () => iso.picking,

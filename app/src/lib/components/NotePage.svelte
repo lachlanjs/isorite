@@ -23,10 +23,6 @@
   import type { Touched } from "$lib/editor/overlays.ts";
 
   let { id }: { id: string } = $props();
-  // Iso's latest request in this note, for a phone's strip under it (I6): how many notes it has read, and the way to
-  // see them on the Atlas. Back from there, the note takes the request up as it stands.
-  const isoHere = $derived(app.iso && !app.iso.agent && app.iso.note === id ? app.iso : null);
-  const isoRead = $derived(new Set(isoHere?.steps.flatMap((s) => (s.opened && !s.failed ? [s.opened] : [])) ?? []).size);
 
   // One session for the page's life: the route gives each note its own page ({#key}).
   // svelte-ignore state_referenced_locally
@@ -341,14 +337,6 @@
       </div>
     {/if}
 
-    <!-- On a phone there is no Ctrl+Enter: a field at the foot opens the prompt where the cursor was (Mobile-Note). -->
-    {#if iso.prompt === null && !iso.asking}
-      <div class="seed">
-        {#if isoHere && (isoHere.state === "reading" || isoHere.state === "writing" || isoRead)}
-          <button class="strip" type="button" onclick={() => panes.to("atlas")}>{isoHere.state === "reading" || isoHere.state === "writing" ? "Iso is reading" : "Iso read"}{isoRead ? ` ${isoRead} ${isoRead === 1 ? "note" : "notes"}` : ""} · see on the Atlas ›</button>
-        {/if}
-        <button class="field" type="button" onclick={() => iso.askHere()}><span class="faint">›</span><span class="faint">ask Iso here</span></button></div>
-    {/if}
   {/if}
 </article>
 
@@ -393,7 +381,6 @@
   .changes { position: sticky; bottom: 28px; z-index: 8; display: flex; align-items: center; gap: 12px; padding: 10px 2px; background: var(--ground-0); border-top: 1px solid var(--line); }
   .changes .dia { margin: 0 3px; }
   .link { background: none; border: 0; padding: 4px 0; color: var(--lattice); white-space: nowrap; }
-  .seed { display: none; }
   .tests { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; padding-top: 16px; }
   .tests .tools { padding-top: 0; }
   .foot { position: sticky; bottom: 28px; z-index: 8; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 16px 0 20px; background: var(--ground-0); border-top: 1px solid var(--line); }
@@ -404,9 +391,6 @@
   .evidence { display: flex; gap: 12px; padding-left: 4px; }
   .evidence .by { width: 2.5ch; flex: none; text-align: right; color: var(--text-soft); }
   @media (max-width: 600px) {
-    .seed { display: block; position: fixed; left: 0; right: 0; bottom: 84px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--ground-1); z-index: 9; }
-    .seed .field { width: 100%; height: 44px; display: flex; align-items: center; gap: 8px; text-align: left; }
-    .seed .strip { width: 100%; margin: -4px 0 8px; padding: 4px 0; background: none; border: 0; text-align: left; font-size: 12px; color: var(--growth); }
     .note { padding: 20px 20px 80px; }
     .note.timed { padding-left: 56px; }
     .tl-col { top: 20px; left: 8px; bottom: 0; z-index: 1; padding-right: 2px; border-right: 1px solid var(--line); background: var(--ground-1); }

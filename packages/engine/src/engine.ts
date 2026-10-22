@@ -6,10 +6,11 @@ import {
   Bundle, SearchIndex, STUDY_DIR, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
   type Cost, type Entry, type FileEntry, type Insert, type LearnerEvent, type Marks, type Passage, type Proposal, type SessionMoment, type Stamp, type Understanding,
 } from "@isorite/core";
-import { Conflict, EngineError, type AgentLook, type AgentProposal, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport } from "./api.ts";
+import { Conflict, EngineError, type AgentLook, type AgentProposal, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport, type TurnRequest } from "./api.ts";
 import { ANSWER_CLOSE, ANSWER_OPEN, CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, exerciseMessages, exerciseReply, fitted, helpSince, insertMessages, markMessages, noteMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part, type Tested } from "./iso.ts";
-import { rounds } from "./loop.ts";
-import { FIND_SIMILAR, Lookup, TOOLS, type Similar } from "./lookup.ts";
+import { ROUNDS, rounds, type Tools } from "./loop.ts";
+import { FIND_SIMILAR, Lookup, TOOLS, noteId, type Similar } from "./lookup.ts";
+import { CONVERSATIONS_DIR, MODES, MODE_TOOLS, conversationPath, readTurns, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
 import { regionsOf } from "./agent.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
 import { KEY, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
@@ -62,6 +63,9 @@ export function checkNoteId(id: string): string {
   if (!id || id.length > 400 || parts.some((p) => !p || BAD_PART.test(p))) throw new EngineError(`not a note's id: ${JSON.stringify(id)}`);
   return id;
 }
+
+/** A conversation's or turn's id: a ULID. */
+const TURN_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -793,13 +797,176 @@ export class Engine implements Api {
       ({ parts } = insertMessages({ tier: "mid", meaning: Boolean(this.similar), title: "", id: "", marked: "", unkept: [], conversation: conversation(earlier), moments: earlier.length, asked: "" }));
       parts = parts.map((p) => (p.name === "this note" ? { ...p, detail: "none open", tokens: 0 } : p));
     }
-    // What the session has cost: every reply offered, kept or not, and every reply that came to nothing.
+    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: await this.sessionCost(), items, lookup: choice?.lookup !== false };
+  }
+
+  /** What the session has cost: every reply offered, kept or not, every turn in Iso's pane, and every reply that came
+   *  to nothing. */
+  private async sessionCost(): Promise<{ usd: number; requests: number }> {
     const session = await this.sessionNow();
     let usd = 0, requests = 0;
     for (const entries of (await this.sessionEntries()).values()) for (const e of entries) if (((e.kind === "proposal" && !e.copyOf) || e.kind === "marks") && e.cost) { usd += e.cost.usd; requests++; } // a proposal with no cost is the second of one request
     const text = this.opts.study ? await this.opts.study.read(recordPath(this.opts.device)) : null;
-    for (const e of readRecord(text ?? "")) if (e.event === "iso-unused" && e.session === session) { usd += typeof e.usd === "number" ? e.usd : 0; requests++; }
-    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: { usd, requests }, items, lookup: choice?.lookup !== false };
+    for (const e of readRecord(text ?? "")) if ((e.event === "iso-unused" || e.event === "iso-turn") && e.session === session) { usd += typeof e.usd === "number" ? e.usd : 0; requests++; }
+    return { usd, requests };
+  }
+
+  // ------------------------------------------------------------ conversations with Iso in its pane (M10)
+
+  /** The turn running in each conversation: one at a time. */
+  private readonly conversing = new Map<string, string>();
+  /** What Iso asked before doing something, waiting for your answer, by the permission's id. */
+  private readonly waitingAnswer = new Map<string, { turn: string; conversation: string; settle: (d: Decision) => void }>();
+
+  async conversation(id?: string): Promise<Conversation | null> {
+    const study = this.opts.study;
+    if (!study) return null;
+    if (!id) {
+      const names = await study.list(CONVERSATIONS_DIR).catch(() => []);
+      id = names.filter((f) => !f.dir && f.name.endsWith(".jsonl")).map((f) => f.name.slice(0, -".jsonl".length)).sort().at(-1);
+      if (!id) return null;
+    }
+    if (!TURN_ID.test(id)) throw new EngineError("not a conversation's id");
+    const text = await study.read(conversationPath(id));
+    return text === null ? null : { id, turns: readTurns(text) };
+  }
+
+  /** What was given, checked: notes and passages of the base, and its folders. */
+  private given(raw: unknown): Given[] {
+    if (!Array.isArray(raw) || raw.length > 40) throw new EngineError("give Iso between none and forty notes, folders and passages");
+    return raw.map((g: Record<string, unknown>): Given => {
+      const id = typeof g?.id === "string" ? g.id.replace(/^\/+|\/+$/g, "") : "";
+      if (g?.kind === "folder") { if (id) checkNoteId(id); return { kind: "folder", id }; }
+      if (!inBase(checkNoteId(id))) throw new EngineError("only notes of the base are given to Iso");
+      if (g?.kind === "note") return { kind: "note", id };
+      if (g?.kind === "passage" && typeof g.text === "string" && g.text.trim() && g.text.length <= 20_000) return { kind: "passage", id, text: g.text };
+      throw new EngineError("a part given to Iso is a note, a folder or a passage");
+    });
+  }
+
+  /** What was given, read now, as it is sent. A note that is gone is left out. */
+  private async sentOf(given: readonly Given[]): Promise<Sent[]> {
+    const out: Sent[] = [];
+    for (const g of given) {
+      if (g.kind === "folder") {
+        const under = g.id ? `${g.id}/` : "";
+        out.push({ kind: "folder", id: g.id, notes: [...this.bundle.concepts.values()].filter((c) => c.id.startsWith(under) && inBase(c.id)).map((c) => ({ id: c.id, title: c.title, description: c.description })) });
+        continue;
+      }
+      const c = this.bundle.concepts.get(g.id);
+      if (!c) continue;
+      if (g.kind === "passage") out.push({ kind: "passage", id: g.id, title: c.title, text: g.text });
+      else out.push({ kind: "note", id: g.id, title: c.title, text: (await this.readNote(g.id)).text });
+    }
+    return out;
+  }
+
+  async turnContext(req: Omit<TurnRequest, "asked">): Promise<ContextReport> {
+    const mode = req.mode === "build" ? "ask" : req.mode;
+    const earlier = req.conversation ? (await this.conversation(req.conversation))?.turns ?? [] : [];
+    const { parts } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: req.lookup !== false, earlier, sent: await this.sentOf(this.given(req.given ?? [])), asked: "" });
+    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: await this.sessionCost(), items: [], lookup: req.lookup !== false };
+  }
+
+  async converse(req: TurnRequest): Promise<{ conversation: string; turn: string }> {
+    const http = this.opts.http, study = this.opts.study;
+    if (!http) throw new EngineError("Iso cannot be asked here", 409);
+    if (!study) throw new EngineError("Iso's conversations are kept in a study base, and none is open (isorite study init)", 409);
+    if (!(MODES as readonly string[]).includes(req.mode)) throw new EngineError("the mode is ask, write, build or understand");
+    if (req.mode === "build") throw new EngineError("Build mode is the terminal's: start isorite term", 409);
+    if (!TIERS.includes(req.tier)) throw new EngineError("the tier is low, mid or max");
+    const asked = String(req.asked ?? "").trim();
+    if (!asked) throw new EngineError("say what you want from Iso");
+    if (asked.length > MAX_ASKED) throw new EngineError("that is too long to ask at once", 413);
+    const given = this.given(req.given ?? []);
+    if (req.conversation !== undefined && !TURN_ID.test(req.conversation)) throw new EngineError("not a conversation's id");
+    const conversation = req.conversation ?? newId(this.opts.clock.now());
+    // Claimed before anything is awaited, so a message sent twice is one turn.
+    if (this.conversing.has(conversation)) throw new EngineError("Iso is still answering in this conversation. Wait for it, or stop it.", 409);
+    this.conversing.set(conversation, "");
+    try { return { conversation, turn: await this.beginTurn(conversation, { ...req, mode: req.mode, asked, given }, http) }; }
+    catch (err) { this.conversing.delete(conversation); throw err; }
+  }
+
+  private async beginTurn(conversation: string, req: TurnRequest & { mode: Exclude<TurnRequest["mode"], "build"> }, http: Http): Promise<string> {
+    const study = this.opts.study!;
+    const key = (await this.opts.secrets?.get(KEY)) ?? null;
+    if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
+    const earlier = (await this.conversation(conversation))?.turns ?? [];
+    const lookupOn = req.lookup !== false, mode = req.mode;
+    const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier, sent: await this.sentOf(req.given), asked: req.asked });
+
+    // A turn is of the session as a journal entry is, and carries it on.
+    const s = await this.stamp("you"), turn = s.id, abort = new AbortController(), path = conversationPath(conversation);
+    this.last = { at: s.at, session: s.session };
+    const line = (l: TurnLine) => this.one(() => study.append(path, JSON.stringify(l) + "\n"));
+    await line({ kind: "turn", id: turn, conversation, at: s.at, session: s.session, mode, asked: req.asked, given: req.given, tier: req.tier });
+    this.running.set(turn, abort);
+    this.conversing.set(conversation, turn);
+    this.publish({ type: "iso-start", request: turn, note: "", asked: req.asked, tier: req.tier, place: { form: "turn", conversation, mode, given: req.given } });
+    const item = async (i: TurnItem): Promise<void> => { await line({ kind: "item", turn, item: i }); this.publish({ type: "iso-item", request: turn, conversation, item: i }); };
+
+    const lookup = new Lookup(this.bundle, req.given.find((g) => g.kind !== "folder")?.id ?? "", this.similar);
+    const looks = new Set(lookup.defs().map((d) => d.function.name));
+    const tools: Tools = {
+      defs: () => [...(lookupOn ? lookup.defs() : []), ...MODE_TOOLS[mode]],
+      call: async (name, raw) => {
+        if (looks.has(name)) return lookupOn ? lookup.call(name, raw) : { text: "Looking things up is off: they chose what you are sent." };
+        let args: Record<string, unknown> = {};
+        try { const parsed: unknown = raw.trim() ? JSON.parse(raw) : {}; if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) args = parsed as Record<string, unknown>; } catch { /* no arguments */ }
+        if (!MODE_TOOLS[mode].some((d) => d.function.name === name)) return { text: `There is no tool ${name} in ${mode} mode.` };
+        return { text: await this.turnTool(name, args, { turn, conversation, mode, item, signal: abort.signal }) };
+      },
+    };
+
+    void (async () => {
+      try {
+        const got = await rounds({
+          http, provider: this.provider, key, tier: req.tier, messages, lookup: tools, maxTokens: REPLY_TOKENS * 2, signal: abort.signal, most: ROUNDS[req.tier],
+          onText: (delta, again) => this.publish({ type: "iso-text", request: turn, note: "", delta, again }),
+          onStep: (step) => { void item({ kind: "look", step }); this.publish({ type: "iso-step", request: turn, note: "", step }); },
+        });
+        if (abort.signal.aborted) throw Object.assign(new Error("stopped"), { name: "AbortError" });
+        const cost: Cost = { model: got.usage.model, tier: req.tier, tokensIn: got.usage.tokensIn, tokensOut: got.usage.tokensOut, tokensCached: got.usage.tokensCached, usd: got.usage.usd };
+        const said = got.text.trim() + (got.cut ? "\n\n[Cut off at its length limit.]" : "");
+        if (said) await item({ kind: "text", text: said });
+        await line({ kind: "end", turn, state: "done", cost });
+        if (cost.usd > 0) await this.one(async () => this.record({ event: "iso-turn", conversation, turn, session: s.session, model: cost.model, usd: cost.usd }));
+        this.publish({ type: "iso-done", request: turn, note: "", proposal: "", cost });
+      } catch (err) {
+        const stopped = abort.signal.aborted || (err as Error).name === "AbortError";
+        const message = (err as Error).message || "Iso could not answer";
+        await line(stopped ? { kind: "end", turn, state: "stopped" } : { kind: "end", turn, state: "failed", message }).catch(() => undefined);
+        if (stopped) this.publish({ type: "iso-stopped", request: turn, note: "" });
+        else this.publish({ type: "iso-failed", request: turn, note: "", message });
+      } finally {
+        this.running.delete(turn);
+        this.conversing.delete(conversation);
+        for (const [id, w] of this.waitingAnswer) if (w.turn === turn) { this.waitingAnswer.delete(id); w.settle("reject"); }
+      }
+    })();
+    return turn;
+  }
+
+  /** One of a mode's own tools, in a turn: what is said back to Iso. */
+  private async turnTool(name: string, args: Record<string, unknown>, t: { turn: string; conversation: string; mode: Turn["mode"]; item: (i: TurnItem) => Promise<void>; signal: AbortSignal }): Promise<string> {
+    if (name === "point_to_note") {
+      const id = noteId(this.bundle, args.id);
+      if (!id) return `There is no note ${String(args.id ?? "")}.`;
+      await t.item({ kind: "point", note: id, why: String(args.why ?? "").trim().slice(0, 300) });
+      return `${this.bundle.concepts.get(id)!.title} is marked on their Atlas.`;
+    }
+    return `${name} cannot be used yet.`;
+  }
+
+  async answer(turn: string, permission: string, decision: Decision): Promise<void> {
+    if (!["once", "always", "reject"].includes(decision)) throw new EngineError("the answer is once, always or reject");
+    const w = this.waitingAnswer.get(permission);
+    if (!w || w.turn !== turn) throw new EngineError("Iso is not waiting for that answer", 409);
+    this.waitingAnswer.delete(permission);
+    await this.one(() => this.opts.study!.append(conversationPath(w.conversation), JSON.stringify({ kind: "answer", turn, permission, decision } satisfies TurnLine) + "\n"));
+    this.publish({ type: "iso-answer", request: turn, conversation: w.conversation, permission, decision });
+    w.settle(decision);
   }
 
   // ------------------------------------------------------------ notes for Iso

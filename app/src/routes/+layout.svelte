@@ -106,7 +106,8 @@
   const LAYOUT_NAME: Record<string, string> = { cols: "Three columns", stack: "The note beside the Atlas over Iso", one: "One pane: the one in focus" };
   const inNote = $derived(page.route.id === "/n/[...id]" || page.route.id === "/draft/[id]");
   // Iso's request as the map shows it: running, or how it ended until the map lets it go.
-  const run = $derived(app.atlas && !app.atlas.pick ? app.iso : null);
+  // A turn in Iso's pane tells itself there; the status line tells of a request in a note, and of a terminal agent.
+  const run = $derived(app.atlas && !app.atlas.pick && app.iso?.start?.place.form !== "turn" ? app.iso : null);
   const running = $derived(run?.state === "reading" || run?.state === "writing");
   const runTitle = $derived(run ? (app.listing.notes.find((n) => n.id === run.note)?.title ?? "your note") : "");
   const stop = (): void => { if (run) void app.api.stop(run.request); };

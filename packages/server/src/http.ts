@@ -44,6 +44,14 @@ const Ask = z.discriminatedUnion("form", [
   z.object({ note: z.string(), form: z.literal("mark"), answer: Anchor, tier: Tier }).strict(),
   z.object({ note: z.string(), form: z.literal("exercise"), tier: Tier }).strict(),
 ]);
+const Given = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("note"), id: z.string().max(400) }).strict(),
+  z.object({ kind: z.literal("folder"), id: z.string().max(400) }).strict(),
+  z.object({ kind: z.literal("passage"), id: z.string().max(400), text: z.string().max(20_000) }).strict(),
+]);
+const Mode = z.enum(["ask", "write", "build", "understand"]);
+const TurnAsk = z.object({ conversation: z.string().max(64).optional(), mode: Mode, asked: z.string().max(8000), given: z.array(Given).max(40), tier: Tier, lookup: z.boolean().optional() }).strict();
+const TurnShape = TurnAsk.omit({ asked: true });
 const ExerciseAsk = z.object({ folder: z.string().max(400), tests: z.array(z.string().max(400)).min(1).max(20), after: z.string().max(400).nullable().optional() }).strict();
 const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
 const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
@@ -133,6 +141,14 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes }:
       return sent instanceof Response ? sent : answer(c, async () => (await act(c, sent)) ?? {});
     });
   post("/api/iso/ask", Ask, (_c, b) => api.ask(b));
+  post("/api/iso/converse", TurnAsk, (_c, b) => api.converse(b));
+  post("/api/iso/answer", z.object({ turn: z.string().max(64), permission: z.string().max(64), decision: z.enum(["once", "always", "reject"]) }).strict(), (_c, b) => api.answer(b.turn, b.permission, b.decision));
+  app.get("/api/conversation", (c) => answer(c, async () => (await api.conversation(c.req.query("id") || undefined)) ?? { id: "", turns: [] }));
+  app.get("/api/turn/context", (c) => answer(c, () => {
+    let raw: unknown = {};
+    try { raw = JSON.parse(c.req.query("turn") ?? "{}"); } catch { /* the shape check says so */ }
+    return api.turnContext(TurnShape.parse(raw));
+  }));
   post("/api/iso/stop", z.object({ request: z.string().max(64) }).strict(), (_c, b) => api.stop(b.request));
   post("/api/note/restore", z.object({ entry: z.string().max(64), base: z.string().max(64) }).strict(), (c, b) => api.restore(id(c), b.entry, b.base));
   post("/api/note/move", z.object({ to: z.string().max(400), base: z.string().max(64) }).strict(), (c, b) => api.moveNote(id(c), b.to, b.base));

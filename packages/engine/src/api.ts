@@ -7,6 +7,7 @@ import type { Part } from "./iso.ts";
 import type { AgentEdit } from "./agent.ts";
 import type { Step } from "./lookup.ts";
 import type { Tier, ToolDef } from "./provider.ts";
+import type { Decision, Given, Mode, Turn, TurnItem } from "./turn.ts";
 
 /** What is open. */
 export interface Session {
@@ -87,6 +88,13 @@ export type AskRequest =
   /** A request for an exercise (a draft made by `createExerciseDraft`): the reply is an exercise to keep. One round, no tools. */
   | { note: string; form: "exercise"; tier: Tier };
 
+/** A turn of a conversation with Iso in its pane (M10): what is asked, in which mode, with what you gave it. Without
+ *  `conversation` a new conversation begins. `lookup: false` keeps Iso to what you gave. */
+export interface TurnRequest { conversation?: string; mode: Mode; asked: string; given: Given[]; tier: Tier; lookup?: boolean }
+
+/** A conversation, as the pane draws it. */
+export interface Conversation { id: string; turns: Turn[] }
+
 /** A note for Iso that is not in the base yet. `exercise` marks a request for an exercise. */
 export interface DraftSummary { id: string; title: string; exercise?: true }
 
@@ -139,7 +147,11 @@ export type EngineEvent =
   /** An event was added to the study record. */
   | { type: "record"; event: string }
   /** Iso was asked. Every request ends in exactly one of iso-done, iso-stopped, iso-failed. */
-  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null } | { form: "note" } | { form: "mark"; answer: Passage } | { form: "exercise" } }
+  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null } | { form: "note" } | { form: "mark"; answer: Passage } | { form: "exercise" } | { form: "turn"; conversation: string; mode: Mode; given: Given[] } }
+  /** In a turn (M10): something it did other than look up or write its reply, as kept in the conversation. */
+  | { type: "iso-item"; request: string; conversation: string; item: TurnItem }
+  /** Your answer to something it asked before doing. */
+  | { type: "iso-answer"; request: string; conversation: string; permission: string; decision: Decision }
   /** Iso looked something up. */
   | { type: "iso-step"; request: string; note: string; step: Step }
   /** A piece of its reply. `again`: what came before was not the reply; start over. */
@@ -206,6 +218,16 @@ export interface Api {
   map(): Promise<MapReport>;
   /** Ask Iso. Returns at once with the request's id; what follows comes as events, and ends as a proposal in the note's journal. */
   ask(request: AskRequest): Promise<{ request: string }>;
+  /** Ask Iso in its pane (M10). Returns at once with the conversation and the turn; what follows comes as events
+   *  (iso-start, iso-step, iso-text, iso-item, then one of iso-done, iso-stopped, iso-failed, with the turn as the
+   *  request), and is kept in the conversation. */
+  converse(request: TurnRequest): Promise<{ conversation: string; turn: string }>;
+  /** A conversation, or the latest when none is named; null when there is none. */
+  conversation(id?: string): Promise<Conversation | null>;
+  /** What a turn would send now, part by part, with the session's cost. */
+  turnContext(request: Omit<TurnRequest, "asked">): Promise<ContextReport>;
+  /** Your answer to what Iso asked before doing something in a turn. */
+  answer(turn: string, permission: string, decision: Decision): Promise<void>;
   /** Stop a request. Nothing is entered. */
   stop(request: string): Promise<void>;
   /** Write a proposal into its note. The note's file changes here and nowhere else on Iso's account. For a

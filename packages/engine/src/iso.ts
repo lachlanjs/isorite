@@ -95,6 +95,9 @@ const FORMAT = `# How notes work here
   and $$ alone on the line after.
 - Ordinary Markdown otherwise. No HTML.`;
 
+/** How notes are written, for any request that writes or quotes them. */
+export const FORMAT_RULES = FORMAT;
+
 const LOOKUP = (rounds: number, meaning: boolean) => `# Looking things up
 
 Before you reply you may look things up in their knowledge base with the
@@ -118,7 +121,7 @@ tools. Nothing has been looked up for you: below there is only the note.
 export const estimate = (text: string): number => Math.ceil(text.length / 4);
 
 /** One part of what is sent, as the header's breakdown names it. */
-export interface Part { name: "instructions and tools" | "study record" | "your prompts and Iso's answers" | "this note" | "linked notes"; detail: string; tokens: number }
+export interface Part { name: "instructions and tools" | "study record" | "your prompts and Iso's answers" | "this note" | "linked notes" | "earlier in this conversation" | "what you gave" | "your understanding" | "your message"; detail: string; tokens: number }
 
 /** One earlier request of this session: what was asked, what Iso wrote, and what became of it. */
 export interface Exchange { id: string; note: string; text: string }

@@ -47,6 +47,10 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     timeline: () => ask("timeline"),
     search: (query) => ask(`search?q=${encodeURIComponent(query)}`),
     ask: (request) => write("POST", "iso/ask", request),
+    converse: (request) => write("POST", "iso/converse", request),
+    answer: async (turn, permission, decision) => { await write("POST", "iso/answer", { turn, permission, decision }); },
+    conversation: async (id) => { const c = await ask<{ id: string; turns: [] }>("conversation" + (id ? q(id) : "")); return c.id ? c : null; },
+    turnContext: (request) => ask(`turn/context?turn=${encodeURIComponent(JSON.stringify(request))}`),
     stop: async (request) => { await write("POST", "iso/stop", { request }); },
     keep: (id, proposal, region) => write("POST", "proposal/keep" + q(id), { proposal, ...(region === undefined ? {} : { region }) }),
     revise: async (id, proposal, text) => { await write("POST", "proposal/revise" + q(id), { proposal, text }); },
@@ -74,7 +78,7 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     events(listener) {
       const source = new EventSource(root + "events");
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
-      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-done", "iso-stopped", "iso-failed", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received"] satisfies EngineEvent["type"][];
+      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-item", "iso-answer", "iso-done", "iso-stopped", "iso-failed", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received"] satisfies EngineEvent["type"][];
       for (const type of types) source.addEventListener(type, on);
       return () => source.close();
     },
