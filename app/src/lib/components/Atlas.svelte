@@ -679,7 +679,7 @@
   style="background-position: {view.x}px {view.y}px"
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onclick={ground} onkeydown={key}
   ondragstart={(e) => e.preventDefault()}
-  oncontextmenu={(e) => { if (grasp || holdShow !== undefined) e.preventDefault(); }}>
+  oncontextmenu={(e) => { if (grasp || holdShow !== undefined || holdDone !== undefined || offered) e.preventDefault(); }}>
   {#if failed}
     <p class="said">The map could not be drawn: {failed}</p>
   {:else if L && report}
@@ -752,7 +752,8 @@
 </div>
 
 <style>
-  .atlas { position: relative; height: 100%; overflow: hidden; touch-action: none; user-select: none; cursor: grab; outline-offset: -2px; }
+  /* A long press is the Atlas's own (a hold): not the browser's menu, nor iOS's preview of a link. */
+  .atlas { position: relative; height: 100%; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: grab; outline-offset: -2px; }
   .atlas:active { cursor: grabbing; }
   .atlas-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
   /* Only while a changed base settles (K3): at any other time, a zoom changes the same places and must not ease. */

@@ -198,12 +198,15 @@ test("holding makes an untitled note in the folder held in, its title chosen to 
   const basics = (await folder(page, "basics").boundingBox())!;
   await hold(page, basics.x + 8, basics.y + basics.height - 8);
   await expect(page).toHaveURL(/#\/n\/basics\/untitled-note(-\d+)?$/);
-  made.push(decodeURIComponent(page.url().split("#/n/")[1]!));
   await expect(title).toBeFocused();
   await expect(title).toHaveValue(/^Untitled note( \d+)?$/);
   await page.keyboard.type(`Held ${name}`);
   await expect(title).toHaveValue(`Held ${name}`);
   await look(page, "atlas-hold-note");
+  // Its first title names its file too.
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`#/n/basics/held-${name}$`));
+  made.push(`basics/held-${name}`);
 
   // Held, then dragged on open ground: an untitled folder, made with its first note, which opens.
   await atlas(page);

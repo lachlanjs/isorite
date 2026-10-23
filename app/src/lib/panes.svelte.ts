@@ -54,7 +54,9 @@ class Panes {
     return this.layout === "one" ? [shown.includes(this.focus) ? this.focus : shown[0] ?? "note"] : shown;
   }
 
-  setLayout(l: Layout): void { this.layout = l; keep("isorite.layout", l); }
+  /** How many times the layout has been changed (the tutorial watches it). */
+  layoutChanges = 0;
+  setLayout(l: Layout): void { if (l !== this.layout) this.layoutChanges++; this.layout = l; keep("isorite.layout", l); }
   nextLayout(): void { this.setLayout(LAYOUTS[(LAYOUTS.indexOf(this.layout) + 1) % LAYOUTS.length]!); }
   toggle(p: Pane): void {
     // One pane always stands.

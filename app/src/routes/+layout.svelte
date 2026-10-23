@@ -92,7 +92,8 @@
   // to the editor while you type in it, where they move lines and words.
   function keys(e: KeyboardEvent): void {
     if (e.key === "Escape" && panes.tree) { panes.tree = false; return; }
-    if (!e.altKey || e.ctrlKey || e.metaKey) return;
+    // What the editor took (Alt+L, Alt+1… on a link) is its own, not the panes'.
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.defaultPrevented) return;
     const inEditor = (e.target as HTMLElement | null)?.closest?.(".cm-editor, input, textarea") != null;
     const k = e.key;
     if (k === "1" || k === "2" || k === "3") panes.to(PANES[+k - 1]!);
