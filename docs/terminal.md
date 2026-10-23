@@ -1,6 +1,6 @@
 # isorite beside your code: the terminal and Build mode
 
-How to use isorite on a project of your own (written for a work trial, 2026-10-23, M11). OpenCode 2 is the coding
+How to use isorite on a project of your own. OpenCode 2 is the coding
 agent in your terminal; isorite gives it your notes, and shows its session in Iso's pane in the browser, where you
 can also ask it things, give it notes and passages, stop it, and answer what it asks before it acts.
 
@@ -9,7 +9,7 @@ can also ask it things, give it notes and passages, stop it, and answer what it 
 - **Node 24** or later.
 - **OpenCode 2**: `npm i -g @opencode/cli`. It installs as `opencode2` and `opencode`. If an older OpenCode is
   your `opencode`, isorite finds `opencode2`; or name one with `ISORITE_OPENCODE=/path/to/opencode`.
-- **isorite** itself: `npm i -g isorite@trial` (the pre-release with Build mode).
+- **isorite** itself, 0.2.0 or later: `npm i -g isorite`.
 - A model provider: see below.
 
 ## Your notes for the project

@@ -18,9 +18,11 @@ You need [Node 24](https://nodejs.org) or later. For the terminal you also need 
 
 ```sh
 npm install -g isorite @opencode/cli
+isorite --version                  # 0.2.0 or later
+isorite model                      # optional: search by meaning (53 MB, once)
 ```
 
-To get the newest pre-release, which has the terminal's session in the browser, install `isorite@trial`.
+To update later, run the same `npm install -g isorite`.
 
 ## Try it
 
@@ -48,7 +50,7 @@ isorite term ~/notes/my-project
 
 **A model provider.** Set Iso's provider and key in the browser, behind the logo. They are kept in `~/.config/isorite/config.toml`, and the terminal uses the same provider. Any OpenAI-compatible endpoint works, OpenRouter by default. See [docs/terminal.md](docs/terminal.md) for a work gateway.
 
-**Optional.** `isorite model` fetches the model for search by meaning (53 MB, once) from npm, or from Hugging Face if npm can't reach it. `isorite mcp <notes> --agent claude-code` gives another agent, such as Claude Code, the notes' tools.
+**Search by meaning** needs `isorite model` once (above); without it, search is by words and links. It comes from npm, or from Hugging Face if npm can't reach it. **Other agents:** `isorite mcp <notes> --agent claude-code` gives another agent, such as Claude Code, the notes' tools.
 
 Everything runs on your own machine, and the servers listen only there.
 
