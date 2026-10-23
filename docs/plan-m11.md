@@ -1,6 +1,6 @@
 # Milestone 11: the terminal's session in the Iso pane, and Build mode
 
-Written 2026-10-23, for approval. Lachlan wants to trial isorite on a new project at work as soon as possible, so this plan is ordered to make a trial possible early (after step 3) and leaves polish for after. It builds on M6 (the terminal: `isorite term`, the OpenCode 2 plugin, its tools and views; `docs/plan-m6.md`), on M10's split (`docs/plan-m10.md` §4: one conversation model, two sources) and on the W5 spike (2026-10-21, `packages/opencode/spike/mirror.ts`). Branch: `m11-terminal`, from `m10c-tutorial`.
+Written 2026-10-23; approved the same day with every question answered as proposed (Q21: an OpenAI-compatible gateway; Q24: Linux, OpenCode 2 can be installed, no Tailscale, which is not needed at work, so `--tailnet` is dropped from this milestone). Lachlan wants to trial isorite on a new project at work as soon as possible, so this plan is ordered to make a trial possible early (after step 3) and leaves polish for after. It builds on M6 (the terminal: `isorite term`, the OpenCode 2 plugin, its tools and views; `docs/plan-m6.md`), on M10's split (`docs/plan-m10.md` §4: one conversation model, two sources) and on the W5 spike (2026-10-21, `packages/opencode/spike/mirror.ts`). Branch: `m11-terminal`, from `main` after M10b and M10c were merged (d43f778).
 
 ## 1. What a work trial needs
 
@@ -46,7 +46,7 @@ M6 made every change by the terminal agent to a note wait to be kept (a proposal
 
 ## 6. Reaching it
 
-- `isorite term [<base>] [--tailnet]`: with `--tailnet`, the isorite server is put behind `tailscale serve` (HTTPS on the machine's `….ts.net` name, which the server already accepts) and its URL printed, for the phone's Home Screen app. Without it, localhost only, as now. OpenCode's server stays on 127.0.0.1 in both.
+- **Dropped for now (Q24):** `isorite term [<base>] [--tailnet]`: with `--tailnet`, the isorite server is put behind `tailscale serve` (HTTPS on the machine's `….ts.net` name, which the server already accepts) and its URL printed, for the phone's Home Screen app. Without it, localhost only, as now. OpenCode's server stays on 127.0.0.1 in both.
 - The port is the server's `--port`; OpenCode's is chosen free and never shown.
 
 ## 7. Setting up a work project
@@ -66,7 +66,7 @@ M6 made every change by the terminal agent to a note wait to be kept (a proposal
 2. **The session in the Iso pane, read only.** Build mode appears when a terminal is connected; turns, text, tool lines, diffs, cost, live; a page opened mid-turn catches up from `message.list`.
 3. **Acting from the pane.** Prompt (with the context given), stop, permission replies. M6's "send to agent" folded into it. *A trial can start here.*
 4. **The agent's note edits as Write mode's** (§4), and the turn's end from OpenCode's `session.execution.*` events instead of M6's half-second wait.
-5. **Models** (§5) and **`--tailnet`** (§6); `docs/terminal.md`.
+5. **Models** (§5); `docs/terminal.md`.
 6. **Tests and a check:** unit tests for the session-to-turn mapping; end-to-end against the scripted gateway in tmux with the browser driving (prompt, permission, stop) at both widths; one real-model run on a temporary copy, cost reported. The write-up in §10.
 
 The tutorial's L4 (terminal) and E3 (building) wait until after the trial, so they can draw on it.

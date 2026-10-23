@@ -1,11 +1,14 @@
 // isorite term: OpenCode, with isorite's plugin and theme, beside a knowledge base.
 //
 // OpenCode opens in the folder you are in (your code); the knowledge base is reached through
-// the isorite server, as the browser reaches it. If no server answers on the port, one is
+// the isorite server, as the browser reaches it. OpenCode's own server runs on this machine with a password, the
+// terminal attached to it, and the isorite server follows the same session for the Iso pane. If no server answers on the port, one is
 // started for the base, its output kept in a log so that it does not draw over the TUI,
 // and stopped when OpenCode exits.
 
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { createServer, type AddressInfo } from "node:net";
 import { existsSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
@@ -73,16 +76,58 @@ export async function ensureServer(path: string | undefined, { port = 4767, env 
   return { url, release: () => { server.kill(); } };
 }
 
+/** A port nobody is listening on, on this machine. */
+async function freePort(): Promise<number> {
+  return new Promise((done, fail) => {
+    const probe = createServer().once("error", fail).listen(0, "127.0.0.1", () => {
+      const { port } = probe.address() as AddressInfo;
+      probe.close(() => done(port));
+    });
+  });
+}
+
+/** A POST to the isorite server, made as its page makes one: from its origin, with the token it hands out. */
+async function tell(url: string, path: string, body: unknown): Promise<void> {
+  const { token } = (await (await fetch(`${url}/api/session`)).json()) as { token: string };
+  const response = await fetch(url + path, { method: "POST", headers: { "Content-Type": "application/json", "x-isorite-token": token, Origin: url }, body: JSON.stringify(body) });
+  if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error ?? `${response.status} from ${path}`);
+}
+
+/** OpenCode's own server, on this machine only, with a password of its own; its output kept in a log. The terminal
+ *  attaches to it, and so does the isorite server, which shows its session in the Iso pane (M11). */
+export async function startOpenCode(command: string, { cwd, env, wait = 60_000 }: { cwd: string; env: NodeJS.ProcessEnv; wait?: number }): Promise<{ url: string; password: string; stop: () => void }> {
+  const port = await freePort(), password = randomBytes(24).toString("base64url"), url = `http://127.0.0.1:${port}`;
+  const log = join(tmpdir(), `isorite-opencode-${port}.log`);
+  const out = openSync(log, "w");
+  const server = spawn(command, ["serve", "--port", String(port), "--hostname", "127.0.0.1"], { cwd, stdio: ["ignore", out, out], env: { ...env, OPENCODE_PASSWORD: password } });
+  const auth = { authorization: "Basic " + Buffer.from(`opencode:${password}`).toString("base64") };
+  const started = Date.now();
+  for (;;) {
+    if (server.exitCode !== null || Date.now() - started > wait) {
+      server.kill();
+      throw new StudyError(`OpenCode's server did not start; its output is in ${log}`);
+    }
+    try { if ((await fetch(url, { headers: auth, signal: AbortSignal.timeout(1000) })).status < 500) break; } catch { /* not yet */ }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return { url, password, stop: () => { server.kill(); } };
+}
+
 export async function term(path: string | undefined, { port = 4767, cwd = process.cwd(), env = process.env, wait = 120_000, onServer }: TermOptions = {}): Promise<number> {
   const opencode = findOpenCode(env);
   const gateway = gatewayFrom(env);
   const server = await ensureServer(path, { port, env, wait });
   onServer?.(server.url);
   const home = writeHome(defaultHome(env), { gateway });
-  const child = spawn(opencode.command, ["--standalone"], {
+  const shared = { ...env, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url };
+  let backend: Awaited<ReturnType<typeof startOpenCode>>;
+  try { backend = await startOpenCode(opencode.command, { cwd, env: shared }); } catch (e) { server.release(); throw e; }
+  // The Iso pane follows the session; if this server cannot, the terminal still works.
+  await tell(server.url, "/api/terminal/attach", { url: backend.url, password: backend.password, directory: cwd }).catch((e: Error) => console.error(`isorite: the Iso pane will not show the terminal: ${e.message}`));
+  const child = spawn(opencode.command, ["--server", backend.url], {
     cwd,
     stdio: "inherit",
-    env: { ...env, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url },
+    env: { ...shared, OPENCODE_PASSWORD: backend.password },
   });
   const forward = (signal: NodeJS.Signals) => () => child.kill(signal);
   const handlers = (["SIGTERM", "SIGHUP"] as const).map((signal) => [signal, forward(signal)] as const);
@@ -92,6 +137,8 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
     child.once("exit", (exit) => done(exit ?? 1));
   });
   for (const [signal, handler] of handlers) process.off(signal, handler);
+  await tell(server.url, "/api/terminal/detach", {}).catch(() => undefined);
+  backend.stop();
   server.release();
   return code;
 }

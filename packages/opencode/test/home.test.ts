@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -59,5 +59,17 @@ describe("the config home", () => {
     writeHome(dir);
     writeHome(dir);
     expect(readlinkSync(join(dir, "plugins", "isorite"))).toBe(pluginDir);
+  });
+
+  it("puts your local.json over what it writes: providers added, the rest yours", () => {
+    const dir = fresh();
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "local.json"), JSON.stringify({ permissions: [{ action: "shell", resource: "*", effect: "ask" }], providers: { work: { name: "Work" } }, model: "work/big" }));
+    writeHome(dir, { gateway: { url: "https://gateway.example/v1", models: ["m"] } });
+    const written = JSON.parse(readFileSync(join(dir, "opencode.json"), "utf8")) as { permissions: unknown[]; providers: Record<string, unknown>; model: string };
+    expect(written.permissions).toEqual([{ action: "shell", resource: "*", effect: "ask" }]);
+    expect(Object.keys(written.providers).sort()).toEqual(["gateway", "work"]);
+    expect(written.model).toBe("work/big");
+    expect(existsSync(join(dir, "local.json"))).toBe(true);
   });
 });

@@ -1,12 +1,14 @@
 // OpenCode's config home for isorite: what `isorite term` points OPENCODE_CONFIG_DIR at,
 // so that your own OpenCode config is never read or written. It is rewritten at every start.
 //
-//   opencode.json         the providers and the default model
+//   opencode.json         the providers and the default model, with local.json over them
+//   local.json            yours, never rewritten: anything of OpenCode's config to add or change, as
+//                         { "permissions": [{ "action": "shell", "resource": "*", "effect": "ask" }] }
 //   cli.json              the TUI's settings: the theme
 //   themes/isorite.json   lapis and quartz
 //   plugins/isorite       a link to this package's plugin folder
 
-import { lstatSync, mkdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,7 +65,7 @@ export function writeHome(dir: string, { gateway = null as Gateway | null, plugi
   mkdirSync(join(dir, "themes"), { recursive: true });
   mkdirSync(join(dir, "plugins"), { recursive: true });
   const json = (value: object) => JSON.stringify(value, null, 2) + "\n";
-  writeFileSync(join(dir, "opencode.json"), json(openCodeConfig(gateway)));
+  writeFileSync(join(dir, "opencode.json"), json(withLocal(openCodeConfig(gateway), join(dir, "local.json"))));
   writeFileSync(join(dir, "cli.json"), json({ $schema: "https://opencode.ai/cli.json", theme: { name: "isorite", mode: "system" } }));
   writeFileSync(join(dir, "themes", "isorite.json"), json(theme()));
   const link = join(dir, "plugins", "isorite");
@@ -72,6 +74,20 @@ export function writeHome(dir: string, { gateway = null as Gateway | null, plugi
     symlinkSync(plugin, link, "dir");
   }
   return dir;
+}
+
+/** Your local.json over what isorite writes: its providers added to isorite's, everything else of yours taking the
+ *  place of isorite's. A local.json that is not JSON is said, and left out. */
+export function withLocal(config: object, local: string): object {
+  if (!existsSync(local)) return config;
+  let mine: Record<string, unknown>;
+  try { mine = JSON.parse(readFileSync(local, "utf8")) as Record<string, unknown>; } catch (e) {
+    console.error(`isorite: ${local} is not JSON, so it is left out: ${(e as Error).message}`);
+    return config;
+  }
+  const ours = config as Record<string, unknown>;
+  const providers = { ...(ours.providers as object | undefined), ...(mine.providers as object | undefined) };
+  return { ...ours, ...mine, ...(Object.keys(providers).length ? { providers } : {}) };
 }
 
 function linksTo(path: string, target: string): boolean {
