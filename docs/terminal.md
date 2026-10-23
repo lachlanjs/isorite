@@ -81,6 +81,16 @@ never rewritten and is laid over what isorite writes. For example, to have OpenC
 { "permissions": [{ "action": "shell", "resource": "*", "effect": "ask" }] }
 ```
 
+## Without the internet
+
+Once installed, isorite needs no network, as long as the model's address in `config.toml` is one you can reach (a
+gateway, or a model served on your own machine). What it fetches, it fetches once:
+
+- isorite and OpenCode, from npm: through your company's npm mirror, if it has one.
+- The model for search by meaning (optional): `isorite model` gets it from npm too (`isorite-model-granite`), so the
+  same mirror serves it; else from Hugging Face. On a machine with neither, copy its files from one that has them:
+  `isorite model --from <folder>`. Every file is checked against its SHA-256.
+
 ## Who can reach it
 
 OpenCode's server listens on this machine only (127.0.0.1), and only the isorite server talks to it. The isorite

@@ -48,7 +48,7 @@ isorite term ~/notes/my-project
 
 **A model provider.** Set Iso's provider and key in the browser, behind the logo. They are kept in `~/.config/isorite/config.toml`, and the terminal uses the same provider. Any OpenAI-compatible endpoint works, OpenRouter by default. See [docs/terminal.md](docs/terminal.md) for a work gateway.
 
-**Optional.** `isorite model` fetches the model for search by meaning (34 MB, once). `isorite mcp <notes> --agent claude-code` gives another agent, such as Claude Code, the notes' tools.
+**Optional.** `isorite model` fetches the model for search by meaning (53 MB, once) from npm, or from Hugging Face if npm can't reach it. `isorite mcp <notes> --agent claude-code` gives another agent, such as Claude Code, the notes' tools.
 
 Everything runs on your own machine, and the servers listen only there.
 
