@@ -9,8 +9,7 @@ can also ask it things, give it notes and passages, stop it, and answer what it 
 - **Node 24** or later.
 - **OpenCode 2**: `npm i -g @opencode/cli`. It installs as `opencode2` and `opencode`. If an older OpenCode is
   your `opencode`, isorite finds `opencode2`; or name one with `ISORITE_OPENCODE=/path/to/opencode`.
-- **isorite** itself. Until a release is published, install the tarball made by `npm run package` and `npm pack`
-  in `.npm/isorite`: `npm i -g ./isorite-<version>.tgz`.
+- **isorite** itself: `npm i -g isorite@trial` (the pre-release with Build mode).
 - A model provider: see below.
 
 ## Your notes for the project
