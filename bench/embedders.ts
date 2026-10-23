@@ -13,8 +13,8 @@ import { Meaning, MemoryFiles, type Embedder } from "@isorite/engine";
 const SEARCH = "Represent this sentence for searching relevant passages: ";
 /** How each model is meant to be used, from its model card: pooling, and a prefix for queries. */
 const MODELS: Record<string, { pool: "cls" | "mean"; query?: string }> = {
-  "bge-s": { pool: "cls" },                       // as isorite uses it now: no prefix
-  "bge-s+prefix": { pool: "cls", query: SEARCH }, // as its card suggests for short queries
+  "bge-s": { pool: "cls", query: SEARCH },        // as isorite uses it now, as its card suggests for short queries
+  "bge-s-noprefix": { pool: "cls" },
   "arctic-s": { pool: "cls", query: SEARCH },
   "mxbai-xs": { pool: "mean" },
   "granite-s": { pool: "cls" },
@@ -29,7 +29,7 @@ ort.env.wasm.numThreads = 1;
 ort.env.wasm.wasmBinary = readFileSync(join(dirname(createRequire(import.meta.url).resolve("onnxruntime-web")), "ort-wasm-simd-threaded.wasm"));
 
 async function embedder(name: string): Promise<Embedder & { querying: boolean }> {
-  const how = MODELS[name]!, dir = join(models, name.split("+")[0]!);
+  const how = MODELS[name]!, dir = join(models, name.split("-noprefix")[0]!);
   const tok = new Tokenizer(JSON.parse(readFileSync(join(dir, "tokenizer.json"), "utf8")), JSON.parse(readFileSync(join(dir, "tokenizer_config.json"), "utf8")));
   const data = readdirSync(dir).filter((f) => f.endsWith("_data")).map((f) => ({ path: f, data: readFileSync(join(dir, f)) }));
   const session = await ort.InferenceSession.create(readFileSync(join(dir, "model.onnx")), { executionProviders: ["wasm"], ...(data.length ? { externalData: data } : {}) });
@@ -37,7 +37,9 @@ async function embedder(name: string): Promise<Embedder & { querying: boolean }>
   const self = {
     model: name, dim: 384, querying: false,
     async embed(text: string): Promise<Float32Array> {
-      let ids: number[] = tok.encode(self.querying && how.query ? how.query + text : text).ids;
+      // isorite's search puts bge's prefix on every question itself: taken off here, and each model's own put on.
+      if (self.querying) text = (how.query ?? "") + (text.startsWith(SEARCH) ? text.slice(SEARCH.length) : text);
+      let ids: number[] = tok.encode(text).ids;
       if (ids.length > MAX_TOKENS) ids = [...ids.slice(0, MAX_TOKENS - 1), ids.at(-1)!];
       const big = (v: number[]) => new ort.Tensor("int64", BigInt64Array.from(v, BigInt), [1, ids.length]);
       const out = await session.run({ input_ids: big(ids), attention_mask: big(ids.map(() => 1)), ...(typed ? { token_type_ids: big(ids.map(() => 0)) } : {}) });
@@ -58,7 +60,7 @@ console.log(`${b.concepts.size} notes, ${questions.length} questions: an answeri
 console.log(`${"model".padEnd(14)}${KS.map((k) => `  @${k}`.padStart(6)).join("")}    MRR   missed   embed`);
 const each: string[] = [];
 for (const name of Object.keys(MODELS)) {
-  if (!existsSync(join(models, name.split("+")[0]!, "model.onnx"))) continue;
+  if (!existsSync(join(models, name.split("-noprefix")[0]!, "model.onnx"))) continue;
   const e = await embedder(name), meaning = new Meaning(e, new MemoryFiles(), "vectors.json");
   const t0 = Date.now();
   const made = await meaning.refresh(b);
