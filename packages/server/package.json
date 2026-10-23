@@ -1,6 +1,6 @@
 {
   "name": "isorite",
-  "version": "0.1.1",
+  "version": "0.2.0-trial.1",
   "description": "isorite: the command, the server and Iso.",
   "license": "MIT",
   "type": "module",

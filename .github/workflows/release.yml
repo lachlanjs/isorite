@@ -67,7 +67,13 @@ jobs:
           name: release
       # Staged: the version goes live only when approved on npmjs.com with 2FA.
       # "./" so npm reads a file path, not "owner/repo" GitHub shorthand.
-      - run: npm stage publish ./isorite-*.tgz --access public
+      # A pre-release (0.2.0-trial.1) goes under its own dist-tag (trial), so latest stays where it is.
+      - run: |
+          version="${GITHUB_REF_NAME#v}"
+          case "$version" in
+            *-*) tag="${version#*-}"; npm stage publish ./isorite-*.tgz --access public --tag "${tag%%.*}" ;;
+            *) npm stage publish ./isorite-*.tgz --access public ;;
+          esac
 
   github:
     needs: npm

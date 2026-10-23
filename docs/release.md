@@ -72,6 +72,12 @@ machine, and every later version goes through the workflow.
    - `npx isorite@0.1.1 --version`
    - the release page lists `isorite-0.1.1.tgz`
 
+## A pre-release
+
+A version with a suffix, as `0.2.0-trial.1`, is published under a dist-tag named by the suffix's first word
+(`trial`), not `latest`: it is installed with `npm install -g isorite@trial`, and `npm install -g isorite` still gives
+the last plain version.
+
 ## When it goes wrong
 
 - **The tests or the build fail:** nothing is published. Fix it, then move the tag and push again:
