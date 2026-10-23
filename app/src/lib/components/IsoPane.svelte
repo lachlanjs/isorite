@@ -2,7 +2,8 @@
   // Iso's pane (M10): the conversation, or what the next turn is sent (its Context, M10b), and Iso's box. Each turn
   // shows what you asked and gave, what Iso looked up, what it pointed you to, and what it said. Notes named in it
   // open in the Note pane. Enter sends; Shift+Enter is a new line; Shift+Tab is the next mode, as in OpenCode;
-  // Escape stops. Iso always reads the knowledge base as it needs.
+  // Escape stops. Iso always reads the knowledge base as it needs. In Build mode (M11) the pane is the terminal's
+  // session instead: what is asked goes to OpenCode there, with what you gave.
   import type { Step, Tier, Turn, TurnItem } from "@isorite/engine";
   import { onMount, tick } from "svelte";
   import { app } from "$lib/app.svelte.ts";
@@ -10,7 +11,9 @@
   import { converse } from "$lib/converse.svelte.ts";
   import { render } from "$lib/markdown.ts";
   import { panes } from "$lib/panes.svelte.ts";
+  import { terminal } from "$lib/terminal.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
+  import TerminalTurns from "./TerminalTurns.svelte";
 
   const SYM: Record<Part["kind"], string> = { note: "▣", folder: "▭", passage: "“", understanding: "◇" };
   const said = (p: Part): string => (p.kind === "passage" ? `“${p.text}” from ${p.title}` : p.kind === "folder" ? `the folder ${p.title}` : p.kind === "understanding" ? `your understanding of ${p.title}` : p.title);
@@ -22,7 +25,10 @@
 
   let text = $state("");
   let list = $state<HTMLElement>();
+  const build = $derived(panes.mode === "build");
   const running = $derived(converse.running);
+  /** Whether what the box sends to is at work: Iso's turn, or the terminal's. */
+  const busy = $derived(build ? terminal.running : !!running);
   /** Where Iso is in the turn running: what it reads now, or that it is writing. */
   const doing = $derived.by(() => {
     if (!running) return "";
@@ -31,7 +37,7 @@
     return last?.step.opened ? `Iso is reading ${titleOf(last.step.opened)}` : "Iso is thinking";
   });
 
-  onMount(() => converse.start());
+  onMount(() => { converse.start(); terminal.start(); });
   // What is sent is measured again when what you give, the mode, the tier or the switch changes.
   $effect(() => { void tray.sent; void panes.mode; void context.tier; converse.measure(); });
   // Kept at the newest as the conversation grows.
@@ -39,12 +45,13 @@
 
   async function send(): Promise<void> {
     const asked = text;
-    if (await converse.send(asked)) text = "";
+    if (await (build ? terminal.send(asked) : converse.send(asked))) text = "";
   }
+  const stop = (): Promise<void> => (build ? terminal.stop() : converse.stop());
   function keys(e: KeyboardEvent): void {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); void send(); }
     else if (e.key === "Tab" && e.shiftKey) { e.preventDefault(); panes.stepMode(1); }
-    else if (e.key === "Escape" && running) { e.preventDefault(); void converse.stop(); }
+    else if (e.key === "Escape" && busy) { e.preventDefault(); void stop(); }
   }
   function open(id: string): void { void panes.open(id, true); }
   /** A note Iso changed opens in the note's Iso lens, where its words are marked; an Understanding note in the
@@ -122,7 +129,9 @@
       {:else}
         <p class="faint">Nothing yet. Hold a note on the Atlas, or drag it here, or select a passage in a note and send it to Iso. Iso reads the rest of the base as it needs.</p>
       {/if}
-      {#if converse.report}
+      {#if build}
+        <p class="faint">Sent with your next message to the terminal's agent: notes and folders by name, for it to read with isorite's tools, and passages as they are.</p>
+      {:else if converse.report}
         <h2 class="label">all that is sent</h2>
         <div class="parts">
           {#each converse.report.parts as p (p.name)}
@@ -138,6 +147,8 @@
         </div>
       {/if}
     </div>
+  {:else if build}
+    <TerminalTurns />
   {:else}
     <div class="chat" bind:this={list} role="log" aria-label="The conversation with Iso" aria-live="polite">
       {#each converse.turns as t (t.id)}
@@ -165,15 +176,25 @@
   <div class="composer">
     <div class="box">
       <label class="hidden-label" for="iso-box">Message Iso</label>
-      <textarea id="iso-box" bind:value={text} rows="2" placeholder={`Ask Iso, in ${panes.mode} mode`} onkeydown={keys}></textarea>
-      {#if running}
-        <button class="corner stop" type="button" aria-label="Stop Iso" title="Stop  (Escape)" onclick={() => void converse.stop()}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="4" y="4" width="8" height="8" fill="currentColor" /></svg></button>
+      <textarea id="iso-box" bind:value={text} rows="2" placeholder={build ? "Ask in the terminal's session" : `Ask Iso, in ${panes.mode} mode`} onkeydown={keys}></textarea>
+      {#if busy}
+        <button class="corner stop" type="button" aria-label={build ? "Stop the terminal's agent" : "Stop Iso"} title="Stop  (Escape)" onclick={() => void stop()}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="4" y="4" width="8" height="8" fill="currentColor" /></svg></button>
       {:else if text.trim()}
         <!-- Enter sends; a phone's return makes a new line, so a phone has this (Q17). -->
         <button class="corner send" type="button" aria-label="Send" title="Send  (Enter)" onclick={() => void send()}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10M9 4l4 4-4 4" /></svg></button>
       {/if}
     </div>
-    {#if converse.problem}<p class="bad" role="alert">{converse.problem}</p>{/if}
+    {#if (build ? terminal.problem : converse.problem)}<p class="bad" role="alert">{build ? terminal.problem : converse.problem}</p>{/if}
+    {#if build}
+      <!-- The terminal's own model, and what the session has cost so far. -->
+      <div class="foot">
+        <span>{terminal.view?.model || "OpenCode"}</span>
+        {#if terminal.view}<span>{short(terminal.view.tokens.input + terminal.view.tokens.output)} tokens</span>{/if}
+        <span class="grow"></span>
+        <!-- OpenCode knows no price for a gateway's model, and says 0: then the tokens are all there is to say. -->
+        {#if terminal.view?.cost}<span>{money(terminal.view.cost)}</span>{/if}
+      </div>
+    {:else}
     <div class="foot">
       {#if converse.report}<button class="count" type="button" aria-pressed={converse.view === "context"} title="What Iso is sent with your message, part by part" onclick={() => (converse.view = converse.view === "context" ? "chat" : "context")}>{short(converse.report.tokens)} tokens</button>{/if}
       <span class="tiers" role="radiogroup" aria-label="How able a model">
@@ -182,6 +203,7 @@
       <span class="grow"></span>
       {#if converse.report}<span>{money(converse.report.session.usd)}</span>{/if}
     </div>
+    {/if}
   </div>
 </div>
 

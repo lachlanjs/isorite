@@ -177,7 +177,7 @@ test("the device id is made once and kept, readable by its owner only", () => {
 
 test("a terminal agent is offered the tools and looks up as the page writes: from the origin, with the token", async () => {
   const tools = await (await fetch(url + "/api/agent/tools")).json() as { function: { name: string } }[];
-  expect(tools.map((t) => t.function.name)).toEqual(["brief_base", "search_notes", "outline_note", "read_note", "propose_note_edit", "propose_note_write"]);
+  expect(tools.map((t) => t.function.name)).toEqual(["brief_base", "search_notes", "outline_note", "read_note", "edit_note", "write_note"]);
   const look = { agent: "opencode", session: "ses_1", tool: "search_notes", args: { query: "surprise" } };
   const found = await write("/api/agent/look", look, { method: "POST" });
   expect(found.status).toBe(200);

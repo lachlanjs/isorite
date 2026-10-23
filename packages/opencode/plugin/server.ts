@@ -1,6 +1,7 @@
-// isorite's server half: the knowledge base as tools, the isorite server's own (Iso's look-ups, and proposing a
-// change to a note), so that what the agent looks up is drawn on the Atlas in the browser as Iso's path is, and
-// what it would change in a note waits for the person to keep it. Edits anywhere else are OpenCode's own.
+// isorite's server half: the knowledge base as tools, the isorite server's own (Iso's look-ups, and changing a
+// note), so that what the agent looks up is drawn on the Atlas in the browser as Iso's path is, and what it changes
+// in a note is entered under its name, its words marked and undone there, as Iso's Write mode's (M11). Edits
+// anywhere else are OpenCode's own.
 //
 // A turn is told to the server when a prompt is sent, and ended when the session has settled. (A plugin's event
 // stream carries no session status.)
@@ -16,7 +17,7 @@ export default Plugin.define({
   id: "isorite",
   async setup(ctx) {
     const [tools, base] = await Promise.all([Isorite.get<Isorite.ToolDef[]>("/api/agent/tools"), Isorite.get<{ notes: string | null }>("/api/agent/base")]);
-    /** What the person last asked in each session: a proposal says what it answers. */
+    /** What the person last asked in each session: a change to a note says what it answers. */
     const asked = new Map<string, string>();
 
     await ctx.tool.transform((editor) => {
@@ -36,23 +37,23 @@ export default Plugin.define({
       }
     });
 
-    // The agent is told where the notes are, and that they are changed only by proposing.
+    // The agent is told where the notes are, and that they are changed only with isorite's tools.
     if (base.notes) {
       const notes = base.notes;
       await ctx.session.hook("context", (request) => {
         request.system.push({
           type: "text",
-          text: `The person's knowledge base is the folder ${notes}: notes in Markdown with YAML frontmatter, linked to each other. Look things up in it with brief_base, search_notes, outline_note and read_note rather than reading its files. Never edit or write its files: change a note with propose_note_edit or propose_note_write, which wait for the person to keep the change. Your edits to code and other files are yours to make as usual.\n\n${CITING}`,
+          text: `The person's knowledge base is the folder ${notes}: notes in Markdown with YAML frontmatter, linked to each other. Look things up in it with brief_base, search_notes, outline_note and read_note rather than reading its files. Never edit or write its files directly: change a note with edit_note or write_note, which write it at once and mark your words as yours for the person to see. Your edits to code and other files are yours to make as usual.\n\n${CITING}`,
         });
       });
-      // A write or an edit to a note anyway is made a proposal of the same change.
+      // A write or an edit to a note anyway is made the same change through isorite, so it is entered and marked.
       await ctx.tool.hook("execute.before", (event) => {
         if (event.tool !== "write" && event.tool !== "edit") return;
         const input = event.input as Record<string, unknown>;
         const note = noteOf(notes, ctx.location.directory, input.path);
         if (!note) return;
         const { path: _, ...rest } = input;
-        event.tool = event.tool === "write" ? "propose_note_write" : "propose_note_edit";
+        event.tool = event.tool === "write" ? "write_note" : "edit_note";
         event.input = { note, ...rest };
       });
     }

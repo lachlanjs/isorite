@@ -54,10 +54,10 @@ export function tutorialScript(notes: string): Script {
         { tool: "read_note", args: { id: "algorithms/barnes-hut" } },
         { tool: "read_note", args: { id: "algorithms/the-quadtree" } },
         { tool: "write", args: { path: "barnes_hut.py", content: code("barnes_hut.py") } },
-        // OpenCode's own edit, on a note: made a proposal by the plugin.
+        // OpenCode's own edit, on a note: made through isorite by the plugin, entered and marked as the agent's.
         { tool: "edit", args: { path: join(notes, ...GOAL.split("/")) + ".md", oldString: WAS, newString: NOW } },
       ];
-      return steps[done] ?? { text: "barnes_hut.py builds the quadtree and walks it with θ = 0.5 `[1]`. Your note on the goal now says where the code is: that change waits for you to keep or not `[2]`.\n\n```isorite\n[1] algorithms/barnes-hut\n[2] simulation/two-galaxies-colliding\n```" };
+      return steps[done] ?? { text: "barnes_hut.py builds the quadtree and walks it with θ = 0.5 `[1]`. Your note on the goal now says where the code is, marked as mine `[2]`.\n\n```isorite\n[1] algorithms/barnes-hut\n[2] simulation/two-galaxies-colliding\n```" };
     }
     return { text: UNSCRIPTED };
   };

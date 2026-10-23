@@ -98,6 +98,18 @@ export interface TurnRequest { conversation?: string; mode: Mode; asked: string;
 /** A conversation, as the pane draws it. */
 export interface Conversation { id: string; turns: Turn[] }
 
+/** The terminal's session (M11), as the Iso pane's Build mode draws it: read by the isorite server from OpenCode's
+ *  own server, which `isorite term` starts and the terminal is attached to. `connected` is false when no terminal is. */
+export interface TerminalView { connected: boolean; session: string | null; title: string; busy: boolean; turns: TerminalTurn[]; asking: TerminalPermission[]; cost: number; tokens: { input: number; output: number }; model: string }
+/** A prompt and what the agent did with it. `from` says where it was asked: in the terminal, or from a page. */
+export interface TerminalTurn { id: string; asked: string; from: "terminal" | "here"; items: TerminalItem[]; state: "running" | "done" | "stopped" | "failed" }
+export type TerminalItem =
+  | { kind: "text"; text: string }
+  /** A tool call. `title` is what it acted on (a command, a file, a note); `diff` an edit's lines, `-` and `+`. */
+  | { kind: "tool"; id: string; name: string; title: string; status: "running" | "done" | "failed"; output: string; note?: string; diff?: string[] };
+/** The agent asks before doing: `action` (as `shell`) on `resources` (as the command). */
+export interface TerminalPermission { id: string; action: string; resources: string[]; tool?: string }
+
 /** A note for Iso that is not in the base yet. `exercise` marks a request for an exercise. */
 export interface DraftSummary { id: string; title: string; exercise?: true }
 
@@ -178,11 +190,13 @@ export type EngineEvent =
   /** The person sent a note, or a passage of one, to whichever terminal agent is listening; `text` is what it is told. */
   | { type: "agent-sent"; id: string; note: string; title: string; passage?: string; said: string; text: string }
   /** An agent took what was sent into one of its sessions. */
-  | { type: "agent-received"; id: string; agent: string };
+  | { type: "agent-received"; id: string; agent: string }
+  /** The terminal's session changed (M11): the whole of it, as the isorite server reads it. Not the engine's own. */
+  | { type: "terminal"; terminal: TerminalView };
 
-/** A terminal agent's edit to a note of the base: it waits to be kept, as Iso's text does. `asked` is what the
+/** A terminal agent's change to a note of the base, written as Write mode writes (M11). `asked` is what the
  *  person asked the agent, as near as the harness can tell. */
-export interface AgentProposal {
+export interface AgentChange {
   agent: string;
   session: string;
   note: string;
@@ -281,15 +295,15 @@ export interface Api {
   connect(callback: string): Promise<{ url: string }>;
   /** Back from the provider with a code: exchange it for a key, and hold that key. */
   connected(code: string, state: string): Promise<Settings>;
-  /** The tools a terminal agent is offered over the base: a brief of it, Iso's own look-ups, and proposing a
-   *  change to a note, which waits to be kept. */
+  /** The tools a terminal agent is offered over the base: a brief of it, Iso's own look-ups, and changing a note,
+   *  which is written and marked as the agent's (M11). */
   agentTools(): Promise<ToolDef[]>;
   /** Run one of them for an agent. What it looked up is published as an agent-step, for the Atlas; a proposal is
-   *  entered as agentPropose enters it, and refused as it refuses. */
+   *  written as agentWrite writes it, and refused as it refuses. */
   agentLook(look: AgentLook): Promise<{ text: string }>;
-  /** Enter an agent's edit to a note as a proposal in its journal; the note is not written. A new note is a note
-   *  for review (a draft), kept into a folder as a note for Iso is. What comes back is said to the agent. */
-  agentPropose(proposal: AgentProposal): Promise<{ text: string }>;
+  /** Write an agent's change to a note, or a new note, as Iso's Write mode does: entered in its journal under the
+   *  agent's name, its words marked, undone from the browser. What comes back is said to the agent. */
+  agentWrite(proposal: AgentChange): Promise<{ text: string }>;
   /** Send a note, or a passage of it, with what the person says of it, to a terminal agent's session. */
   agentSend(sent: { note: string; passage?: string; said: string }): Promise<{ id: string }>;
   /** A terminal agent took what was sent. */

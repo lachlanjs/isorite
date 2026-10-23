@@ -8,6 +8,7 @@ import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { Conflict, EngineError, MAX_NOTE_BYTES, type Api, type Choice } from "@isorite/engine";
+import { given as withGiven, type Terminal } from "./terminal.ts";
 
 export const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
 export const TOKEN_HEADER = "x-isorite-token";
@@ -23,6 +24,8 @@ export interface ServerOptions {
   allowHosts?: Iterable<string>;
   /** Where the knowledge base is on disk, for a terminal agent's harness to tell its notes from code. */
   notes?: string;
+  /** The terminal's session, when `isorite term` attaches one (M11). */
+  terminal?: Terminal;
 }
 
 const TYPES: Record<string, string> = {
@@ -63,10 +66,10 @@ const AgentEdit = z.union([
   z.object({ oldString: z.string(), newString: z.string(), replaceAll: z.boolean().optional() }).strict(),
   z.object({ content: z.string() }).strict(),
 ]);
-const AgentProposal = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
+const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [], notes }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal }: ServerOptions): Hono {
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -183,10 +186,27 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes }:
   app.get("/api/agent/tools", (c) => answer(c, () => api.agentTools()));
   post("/api/agent/look", AgentLook, (_c, b) => api.agentLook(b));
   app.get("/api/agent/base", (c) => answer(c, async () => ({ notes: notes ?? null })));
-  post("/api/agent/propose", AgentProposal, (_c, b) => api.agentPropose(b));
+  post("/api/agent/write", AgentChange, (_c, b) => api.agentWrite(b));
   post("/api/agent/send", z.object({ note: z.string().max(400), passage: z.string().max(10_000).optional(), said: z.string().max(4000) }).strict(), (_c, b) => api.agentSend(b));
   post("/api/agent/received", z.object({ id: z.string().max(64), agent: AgentName }).strict(), (_c, b) => api.agentReceived(b.id, b.agent));
   post("/api/agent/status", AgentStatus, (_c, b) => api.agentStatus(b.agent, b.session, b.busy));
+
+  // The terminal's session (M11). `isorite term` attaches OpenCode's server, on this machine only; pages read the
+  // session, ask in it, stop it and answer what it asks, and never reach OpenCode themselves.
+  if (terminal) {
+    const Local = z.string().max(200).refine((u) => { try { const h = new URL(u).hostname; return h === "127.0.0.1" || h === "localhost" || h === "[::1]"; } catch { return false; } }, "OpenCode's server must be on this machine");
+    post("/api/terminal/attach", z.object({ url: Local, password: z.string().min(1).max(200), directory: z.string().max(4000) }).strict(), async (_c, b) => { await terminal.attach(b).catch((e: Error) => { throw new EngineError(`OpenCode's server did not answer: ${e.message}`, 502); }); });
+    post("/api/terminal/detach", z.object({}).strict(), async () => { terminal.detach(); });
+    app.get("/api/terminal", (c) => answer(c, async () => terminal.view()));
+    const failed = (e: Error) => { throw new EngineError(e.message, 409); };
+    post("/api/terminal/prompt", z.object({ asked: z.string().min(1).max(8000), given: z.array(Given).max(40) }).strict(), async (_c, b) => {
+      const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
+      const text = withGiven(b.asked, b.given, (id) => titles.get(id) ?? id);
+      await terminal.prompt(text).catch(failed);
+    });
+    post("/api/terminal/stop", z.object({}).strict(), async () => { await terminal.interrupt().catch(failed); });
+    post("/api/terminal/permission", z.object({ id: z.string().max(200), decision: z.enum(["once", "always", "reject"]) }).strict(), async (_c, b) => { await terminal.reply(b.id, b.decision).catch(failed); });
+  }
 
   // Everything the engine does, as it happens. A comment every 25 seconds keeps the connection open.
   // Every stream is told how many browser pages are listening (a harness's plugin listens with ?agent=<name>, and
@@ -198,8 +218,11 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes }:
   };
   app.get("/api/events", (c) => streamSSE(c, async (stream) => {
     const stop = api.events((event) => { void stream.writeSSE({ event: event.type, data: JSON.stringify(event) }); });
+    const send = (view: ReturnType<Terminal["view"]>) => { void stream.writeSSE({ event: "terminal", data: JSON.stringify({ type: "terminal", terminal: view }) }).catch(() => undefined); };
+    const unfollow = terminal?.listen(send);
     const beat = setInterval(() => { void stream.write(": still here\n\n"); }, 25_000);
     await stream.writeSSE({ event: "open", data: "{}" });
+    if (terminal?.view().connected) send(terminal.view());
     streams.set(stream, c.req.query("agent") === undefined);
     watchers();
     await new Promise<void>((done) => stream.onAbort(done));
@@ -207,6 +230,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes }:
     watchers();
     clearInterval(beat);
     stop();
+    unfollow?.();
   }));
 
   app.all("/api/*", (c) => refuse(c, 404, "not found"));

@@ -96,8 +96,13 @@ class Panes {
     return !!el && !!el.closest(`[data-pane="${p}"]`) && (el.matches("input, textarea, [contenteditable=true]") || !!el.closest(".cm-editor"));
   }
 
-  /** Modes the base allows: Build needs a project (M11). */
-  modes: Mode[] = ["ask", "write", "understand"];
+  /** Modes there are: Build only while a terminal is attached (M11), its session shown in Iso's pane. */
+  modes = $state<Mode[]>(["ask", "write", "understand"]);
+  setBuild(on: boolean): void {
+    if (on !== this.modes.includes("build")) this.modes = on ? ["ask", "write", "build", "understand"] : ["ask", "write", "understand"];
+    // Kept from before, with no terminal now.
+    if (!on && this.mode === "build") this.setMode("ask");
+  }
   setMode(m: Mode): void { this.mode = m; keep("isorite.mode", m); this.onMode?.(); }
   /** Set by the tray: what a change of mode does to what Iso is sent. */
   onMode: (() => void) | null = null;

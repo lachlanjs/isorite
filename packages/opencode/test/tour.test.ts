@@ -14,11 +14,11 @@ describe("the terminal's tour", () => {
     expect(replay.frames.map((f) => [f.title, f.text])).toEqual(TOUR.map((s) => [s.title, s.text]));
   });
 
-  it("moves on from a note's changes only once the note is read and has none left", () => {
-    const keep = TOUR.find((s) => s.title === "Keep it, or not")!;
-    expect(keep.until!(state({ page: "note", note: GOAL, waiting: -1 }), state())).toBe(false);
-    expect(keep.until!(state({ page: "note", note: GOAL, waiting: 1 }), state())).toBe(false);
-    expect(keep.until!(state({ page: "note", note: GOAL, waiting: 0 }), state())).toBe(true);
+  it("moves on from asking Iso in place only once it has answered and its change is kept or removed", () => {
+    const ask = TOUR.find((s) => s.title === "Ask Iso here")!;
+    expect(ask.until!(state({ page: "note", note: GOAL, isoAnswers: 1, waiting: 1 }), state())).toBe(false);
+    expect(ask.until!(state({ page: "note", note: GOAL, isoAnswers: 0, waiting: 0 }), state())).toBe(false);
+    expect(ask.until!(state({ page: "note", note: GOAL, isoAnswers: 1, waiting: 0 }), state())).toBe(true);
   });
 
   it("waits for a turn of the agent's that ends after the step began", () => {

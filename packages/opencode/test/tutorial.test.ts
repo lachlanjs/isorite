@@ -86,21 +86,21 @@ describe.skipIf(opencode === null || !hasTmux())("isorite --tutorial", () => {
     await at(6, "type /note two galaxies", (t) => t.includes("atlas · barnes"));
     await command("/note two galaxies");
 
-    await at(7, "press k", (t) => t.includes("not kept yet"));
-    pane.keys("k");
-
-    await at(8, "press /, ask, press enter");
+    await at(7, "press /, ask, press enter");
     pane.keys("/");
     await pane.waitFor("Ask Iso here", 10_000);
     pane.type("say what changes in 3D");
     pane.keys("Enter");
 
-    await at(9, "press t, choose a moment", (t) => t.includes("◆ Iso · not kept yet"));
+    await pane.waitFor("◆ Iso · not kept yet", 60_000);
+    pane.keys("k");
+
+    await at(8, "press t, choose a moment");
     pane.keys("t");
     await pane.waitFor("The note's timeline");
     pane.keys("Down", "Enter");
 
-    await at(10, "press q, then s, and say what you want", (t) => t.includes("as it was"));
+    await at(9, "press q, then s, and say what you want", (t) => t.includes("as it was"));
     pane.keys("q");
     await pane.waitFor((t) => !t.includes("as it was"));
     pane.keys("s");
@@ -108,7 +108,7 @@ describe.skipIf(opencode === null || !hasTmux())("isorite --tutorial", () => {
     pane.type("use this in barnes_hut.py");
     pane.keys("Enter");
 
-    await at(11, "press q, then type /next");
+    await at(10, "press q, then type /next");
     pane.keys("q");
     await command("/next");
     await pane.waitFor((t) => !t.includes("tour · "));

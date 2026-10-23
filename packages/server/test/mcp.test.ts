@@ -50,7 +50,7 @@ test("isorite mcp: the base's tools over stdio, each look-up a step on the Atlas
   input.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
 
   const listed = (await call("tools/list")).result as { tools: { name: string; inputSchema: { type: string } }[] };
-  expect(listed.tools.map((t) => t.name)).toEqual(["brief_base", "search_notes", "outline_note", "read_note", "propose_note_edit", "propose_note_write"]);
+  expect(listed.tools.map((t) => t.name)).toEqual(["brief_base", "search_notes", "outline_note", "read_note", "edit_note", "write_note"]);
   expect(listed.tools[1]!.inputSchema.type).toBe("object");
 
   // What the browser hears, from here on.

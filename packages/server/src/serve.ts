@@ -11,6 +11,7 @@ import { Engine, systemClock, type Http } from "@isorite/engine";
 import { ConfigSecrets, configPath, deviceId, providerConfig } from "./config.ts";
 import { cacheDir, modelDir, nodeEmbedder } from "./embedder.ts";
 import { LOOPBACK, createApp } from "./http.ts";
+import { Terminal } from "./terminal.ts";
 import { NodeFiles } from "./nodefiles.ts";
 import { defaultStudyPath, openStudyBase } from "./studybase.ts";
 
@@ -50,7 +51,8 @@ export async function serve(path: string, { host = "127.0.0.1", port = 4767, all
   const opened = locate(path);
   const api = await openEngine(opened);
   const web = existsSync(join(WEB_DIR, "index.html")) ? WEB_DIR : null;
-  const app = createApp({ api, token: randomBytes(24).toString("base64url"), loopback: LOOPBACK.has(host), web, allowHosts, notes: opened.notes });
+  const terminal = new Terminal();
+  const app = createApp({ api, token: randomBytes(24).toString("base64url"), loopback: LOOPBACK.has(host), web, allowHosts, notes: opened.notes, terminal });
   const server = nodeServe({ fetch: app.fetch, hostname: host, port });
   server.on("error", (e: NodeJS.ErrnoException) => {
     console.error(e.code === "EADDRINUSE" ? `port ${port} is in use (isorite serve --port <n>)` : e.message);

@@ -2,7 +2,7 @@
 // against the Api interface (@isorite/engine), so a webview can later hand it
 // the engine itself instead of this.
 
-import type { Api, EngineEvent, NoteSource, Session } from "@isorite/engine";
+import type { Api, Decision, EngineEvent, Given, NoteSource, Session, TerminalView } from "@isorite/engine";
 
 /** A request the server refused. For a save that lost a race, `current` is the note as it is now (null: gone). */
 export class ApiError extends Error {
@@ -15,7 +15,15 @@ export class ApiError extends Error {
   }
 }
 
-export function httpApi(root: string = new URL("api/", document.baseURI).href): Api {
+/** The terminal's session (M11), through the isorite server: there only when `isorite term` runs beside it. */
+export interface TerminalApi {
+  view(): Promise<TerminalView>;
+  prompt(asked: string, given: Given[]): Promise<void>;
+  stop(): Promise<void>;
+  reply(id: string, decision: Decision): Promise<void>;
+}
+
+export function httpApi(root: string = new URL("api/", document.baseURI).href): Api & { terminal: TerminalApi } {
   let token: Promise<string> | null = null;
   const ask = async <T>(path: string, init?: RequestInit): Promise<T> => {
     let res: Response;
@@ -74,14 +82,20 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     connected: (code, state) => write("POST", "settings/connected", { code, state }),
     agentTools: () => ask("agent/tools"),
     agentLook: (look) => write("POST", "agent/look", look),
-    agentPropose: (proposal) => write("POST", "agent/propose", proposal),
+    agentWrite: (proposal) => write("POST", "agent/write", proposal),
     agentSend: (sent) => write("POST", "agent/send", sent),
     agentReceived: async (id, agent) => { await write("POST", "agent/received", { id, agent }); },
     agentStatus: async (agent, session, busy) => { await write("POST", "agent/status", { agent, session, busy }); },
+    terminal: {
+      view: () => ask<TerminalView>("terminal"),
+      prompt: async (asked, given) => { await write("POST", "terminal/prompt", { asked, given }); },
+      stop: async () => { await write("POST", "terminal/stop", {}); },
+      reply: async (id, decision) => { await write("POST", "terminal/permission", { id, decision }); },
+    },
     events(listener) {
       const source = new EventSource(root + "events");
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
-      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-item", "iso-answer", "iso-done", "iso-stopped", "iso-failed", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received"] satisfies EngineEvent["type"][];
+      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-item", "iso-answer", "iso-done", "iso-stopped", "iso-failed", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "terminal"] satisfies EngineEvent["type"][];
       for (const type of types) source.addEventListener(type, on);
       return () => source.close();
     },

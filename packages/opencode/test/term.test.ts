@@ -82,13 +82,18 @@ describe.skipIf(!ready)("isorite term", () => {
       if (lastAsked(request).includes("profile the loop")) {
         const done = request.messages.slice(request.messages.findLastIndex((m) => m.role === "user")).filter((m) => m.role === "tool").length;
         const edits = [
-          // OpenCode's own edit, on a note: made a proposal by the plugin.
+          // OpenCode's own edit, on a note: made through isorite by the plugin, entered and marked as the agent's.
           { tool: "edit", args: { path: join(base.notes, "simulation", "the-main-loop.md"), oldString: "All the time is in `accelerations`.", newString: "All the time is in `accelerations`: profile it before changing anything else." } },
-          { tool: "propose_note_write", args: { note: "simulation/profiling.md", content: "---\ntype: Concept\ntitle: Profiling\n---\n\nTime each part of a step before making any of it faster.\n" } },
+          { tool: "write_note", args: { note: "simulation/profiling.md", content: "---\ntype: Concept\ntitle: Profiling\n---\n\nTime each part of a step before making any of it faster.\n" } },
           // And a file of code, which is OpenCode's own business.
           { tool: "write", args: { path: "profile.py", content: "import cProfile\n" } },
         ];
-        return edits[done] ?? { text: "Done: the note's change waits for you, and profile.py is written." };
+        return edits[done] ?? { text: "Done: the note is changed, marked as mine, and profile.py is written." };
+      }
+      // Asked from the Iso pane (M11): a command, which OpenCode asks before running.
+      if (lastAsked(request).includes("run the tests")) {
+        if (request.messages.at(-1)?.role === "tool") return { text: "The tests pass." };
+        return { tool: request.tools.find((t) => /^(shell|bash)$/.test(t)) ?? "shell", args: { command: "echo tests pass", description: "run the tests" } };
       }
       if (!lastAsked(request).includes("my notes")) return { text: `You asked: ${lastAsked(request)}. Leapfrog keeps the energy bounded.` };
       const looked = request.messages.slice(request.messages.findLastIndex((m) => m.role === "user")).filter((m) => m.role === "tool").length;
@@ -98,6 +103,9 @@ describe.skipIf(!ready)("isorite term", () => {
     // Iso, in the isorite server, is pointed at the scripted gateway too.
     mkdirSync(join(root, "config", "isorite"), { recursive: true });
     writeFileSync(join(root, "config", "isorite", "config.toml"), `[provider]\nname = "scripted"\nurl = "${gateway.url}"\nkey = "iso-key"\n`);
+    // Commands ask first (your own local.json, kept over what isorite writes), so a page can answer one.
+    mkdirSync(join(root, "config", "isorite", "opencode"), { recursive: true });
+    writeFileSync(join(root, "config", "isorite", "opencode", "local.json"), JSON.stringify({ permissions: [{ action: "shell", resource: "*", effect: "ask" }] }));
     pane = new Pane([process.execPath, MAIN, "term", base.study, "--port", String(port)], {
       cwd: join(root, "code"),
       env: {
@@ -223,45 +231,37 @@ describe.skipIf(!ready)("isorite term", () => {
     await pane.waitFor((t: string) => !t.includes("atlas · "));
   }, 60_000);
 
-  it("proposes changes to notes, which wait to be kept, and writes code as OpenCode does", async () => {
-    const loop = join(base.notes, "simulation", "the-main-loop.md"), before = readFileSync(loop, "utf8");
+  it("changes notes at once, entered and marked as the agent's, and writes code as OpenCode does", async () => {
+    const loop = join(base.notes, "simulation", "the-main-loop.md");
     pane.type("profile the loop, and note how to time it");
     pane.keys("Enter");
-    // OpenCode asks before writing a file of code; a note's proposal is not a write, and asks nothing.
-    const asked = await pane.waitFor(/Done: the note's change waits|Allow|allow/, 60_000);
-    if (!asked.includes("Done:")) { pane.keys("Enter"); await pane.waitFor("Done: the note's change waits", 60_000); }
-    keep("5-proposals");
-    expect(readFileSync(loop, "utf8")).toBe(before);
+    // OpenCode asks before writing a file of code; a change to a note goes through isorite, and asks nothing.
+    const asked = await pane.waitFor(/Done: the note is changed|Allow|allow/, 60_000);
+    if (!asked.includes("Done:")) { pane.keys("Enter"); await pane.waitFor("Done: the note is changed", 60_000); }
+    keep("5-changes");
+    expect(readFileSync(loop, "utf8")).toContain("All the time is in `accelerations`: profile it before changing anything else.");
     expect(readFileSync(join(root, "code", "profile.py"), "utf8")).toBe("import cProfile\n");
     const journal = readJournal(readFileSync(join(base.study, "journal", "simulation", "the-main-loop.jsonl"), "utf8"));
-    expect(pending(journal).at(-1)).toMatchObject({
-      who: "agent:opencode", form: "rewrite", asked: "profile the loop, and note how to time it",
-      regions: [{ old: { text: "All the time is in `accelerations`." }, new: "All the time is in `accelerations`: profile it before changing anything else." }],
-    });
-    // The new note waits as a note for review.
-    const drafts = (await (await fetch(`http://127.0.0.1:${port}/api/drafts`)).json()) as { title: string }[];
-    expect(drafts.map((d) => d.title)).toContain("Profiling");
+    expect(pending(journal)).toHaveLength(0);
+    expect(journal.at(-1)).toMatchObject({ kind: "change", who: "agent:opencode", asked: "profile the loop, and note how to time it" });
+    // The new note is made where it was meant.
+    expect(readFileSync(join(base.notes, "simulation", "profiling.md"), "utf8")).toContain("Time each part of a step");
     // The agent was told where the notes are and how they change.
     const system = JSON.stringify(gateway.requests.at(-1)?.messages.filter((m) => m.role === "system"));
     expect(system).toContain(base.notes);
-    expect(system).toContain("propose_note_edit");
+    expect(system).toContain("edit_note");
   }, 120_000);
 
-  it("opens a note in the terminal: its gutter, its code, the agent's change waiting with its keys; [k] keeps it", async () => {
+  it("opens a note in the terminal: its gutter, its code, the agent's paragraph marked as its own; Iso asked in place waits to be kept", async () => {
     const loop = join(base.notes, "simulation", "the-main-loop.md");
     pane.type("/note main loop");
     await new Promise((r) => setTimeout(r, 500));
     pane.keys("Enter");
     const shown = await pane.waitFor("simulation / the main loop", 30_000);
     expect(shown).toContain("python");
-    expect(shown).toMatch(/◆ OpenCode · not kept yet/);
-    expect(shown).toContain("[k] keep  [e] edit  [r] remove");
+    expect(shown).not.toContain("not kept yet");
     expect(shown).toContain("profile it before changing anything else.");
     keep("7-note");
-    pane.keys("k");
-    for (let waited = 0; !readFileSync(loop, "utf8").includes("profile it before") && waited < 10_000; waited += 100) await new Promise((r) => setTimeout(r, 100));
-    expect(readFileSync(loop, "utf8")).toContain("All the time is in `accelerations`: profile it before changing anything else.");
-    await pane.waitFor((t: string) => !t.includes("not kept yet"));
 
     // [/] asks Iso here; its text waits as a change of its own, and [r] removes it.
     pane.keys("/");
@@ -331,6 +331,42 @@ describe.skipIf(!ready)("isorite term", () => {
     await pane.waitFor("You asked: what did I just send you?", 60_000);
     expect(JSON.stringify(gateway.requests.at(-1)?.messages)).toContain('their note \\"Softening\\" (/physics/softening.md)');
   }, 90_000);
+
+  it("shows the terminal's session in the Iso pane, and a page asks in it, gives it a note, and answers what it asks", async () => {
+    const url = `http://127.0.0.1:${port}`;
+    const { token } = (await (await fetch(`${url}/api/session`)).json()) as { token: string };
+    const post = (path: string, body: unknown) => fetch(url + path, { method: "POST", headers: { "Content-Type": "application/json", "x-isorite-token": token, Origin: url }, body: JSON.stringify(body) });
+    type View = { connected: boolean; busy: boolean; turns: { asked: string; from: string; state: string; items: { kind: string; text?: string; name?: string; title?: string; status?: string }[] }[]; asking: { id: string; action: string; resources: string[] }[] };
+    const view = async () => (await (await fetch(`${url}/api/terminal`)).json()) as View;
+    const until = async (test: (v: View) => boolean, ms = 30_000) => {
+      const started = Date.now();
+      for (;;) { const v = await view(); if (test(v)) return v; if (Date.now() - started > ms) throw new Error("the pane did not see it: " + JSON.stringify({ ...v, turns: v.turns.slice(-2) }).slice(0, 3000)); await new Promise((r) => setTimeout(r, 150)); }
+    };
+    // What was asked in the terminal is there, with its reply.
+    const seen = await until((v) => v.turns.some((t) => t.asked.includes("what did I just send you?") && t.items.some((i) => i.text?.includes("You asked"))));
+    expect(seen.connected).toBe(true);
+    expect(seen.turns.find((t) => t.asked.includes("what did I just send you?"))?.from).toBe("terminal");
+    // Asked from a page, with a note given: the terminal shows it, and the model is told which note.
+    const heard = listen(port);
+    expect((await post("/api/terminal/prompt", { asked: "hello from the pane", given: [{ kind: "note", id: "physics/softening" }] })).status).toBe(200);
+    await pane.waitFor("You asked: hello from the pane", 30_000);
+    expect(JSON.stringify(gateway.requests.at(-1)?.messages)).toContain("Softening (physics/softening)");
+    const asked = await until((v) => v.turns.some((t) => t.asked.startsWith("hello from the pane") && t.state === "done" && t.items.some((i) => i.text?.includes("You asked"))));
+    expect(asked.turns.find((t) => t.asked.startsWith("hello from the pane"))?.from).toBe("here");
+    heard.stop();
+    expect(heard.events.some((e) => e.type === "terminal")).toBe(true);
+    // A command: OpenCode asks; the page answers once; it runs, and the pane shows the line with its output.
+    await post("/api/terminal/prompt", { asked: "run the tests", given: [] });
+    const asking = await until((v) => v.asking.length > 0);
+    expect(asking.asking[0]).toMatchObject({ action: "shell", resources: ["echo tests pass"] });
+    keep("7-asking-from-the-pane");
+    expect((await post("/api/terminal/permission", { id: asking.asking[0]!.id, decision: "once" })).status).toBe(200);
+    const ran = await until((v) => v.turns.some((t) => t.asked === "run the tests" && t.state === "done" && t.items.some((i) => i.text === "The tests pass.")));
+    expect(ran.turns.find((t) => t.asked === "run the tests")?.items).toContainEqual(expect.objectContaining({ kind: "tool", name: "shell", title: "echo tests pass", status: "done", output: "tests pass\n" }));
+    await pane.waitFor("The tests pass.", 10_000);
+    // Only what it asks can be answered.
+    expect((await post("/api/terminal/permission", { id: "per_none", decision: "once" })).status).toBe(409);
+  }, 120_000);
 
   it("stops the server it started when OpenCode exits", async () => {
     expect(await serving(port)).toBe(true);
