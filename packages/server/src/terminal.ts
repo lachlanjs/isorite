@@ -19,20 +19,23 @@ type Content =
 
 const OUTPUT = 4000;
 const LOOKUPS = new Set(["search_notes", "find_similar", "outline_note", "read_note", "brief_base"]);
+/** isorite's tools that change a note: their line opens it, where the agent's words are marked. */
+const CHANGES = new Set(["edit_note", "write_note"]);
 
 /** What a tool call acted on, in a line. */
 export function titleOf(name: string, input: Record<string, unknown> = {}): string {
   const s = (k: string) => (typeof input[k] === "string" ? (input[k] as string) : "");
   if (name === "shell" || name === "bash") return s("command");
   if (LOOKUPS.has(name)) return s("query") || s("text") || s("id") + (s("section") ? ` § ${s("section")}` : "");
+  if (CHANGES.has(name)) return s("note");
   return s("path") || s("filePath") || s("pattern") || s("url") || s("description") || "";
 }
 
 /** An edit's lines as a diff: what it took out, then what it put in. A write is all put in. */
 function diffOf(name: string, input: Record<string, unknown>): string[] | undefined {
   const lines = (v: unknown) => (typeof v === "string" ? v.replace(/\n$/, "").split("\n") : []);
-  if (name === "edit" && typeof input.oldString === "string") return [...lines(input.oldString).map((l) => "-" + l), ...lines(input.newString).map((l) => "+" + l)].slice(0, 200);
-  if (name === "write" && typeof input.content === "string") return lines(input.content).map((l) => "+" + l).slice(0, 200);
+  if ((name === "edit" || name === "edit_note") && typeof input.oldString === "string") return [...lines(input.oldString).map((l) => "-" + l), ...lines(input.newString).map((l) => "+" + l)].slice(0, 200);
+  if ((name === "write" || name === "write_note") && typeof input.content === "string") return lines(input.content).map((l) => "+" + l).slice(0, 200);
   return undefined;
 }
 
@@ -60,7 +63,8 @@ export function toTurns(messages: Message[], { live = new Map<string, string>(),
         const output = (c.state.content ?? []).map((x) => x.text ?? "").join("").slice(0, OUTPUT);
         const status = c.state.status === "completed" ? "done" : /error|fail/.test(c.state.status) ? "failed" : "running";
         const item: TerminalItem = { kind: "tool", id: c.id, name: c.name, title: titleOf(c.name, input), status, output };
-        if (LOOKUPS.has(c.name) && typeof input.id === "string") item.note = input.id.replace(/^\//, "").replace(/\.md$/, "");
+        const named = LOOKUPS.has(c.name) ? input.id : CHANGES.has(c.name) ? input.note : undefined;
+        if (typeof named === "string" && named) item.note = named.replace(/^\//, "").replace(/\.md$/, "");
         const diff = diffOf(c.name, input);
         if (diff) item.diff = diff;
         turn.items.push(item);

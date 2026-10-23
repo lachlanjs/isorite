@@ -88,7 +88,7 @@ test("a key is made by signing in at the provider, and comes back to where you w
 test("a terminal agent's edit to a note waits in it as Iso's changes do, says whose it is, and is kept the same way", async ({ page, baseURL }) => {
   const { id, text } = await open(page, "agent");
   const { token } = await (await page.request.get("api/session")).json() as { token: string };
-  const proposed = await page.request.post("api/agent/propose", {
+  const proposed = await page.request.post("api/agent/write", {
     headers: { Origin: new URL(baseURL!).origin, "x-isorite-token": token },
     data: { agent: "opencode", session: `ses-${test.info().project.name}`, note: `${id}.md`, asked: "say it plainly", edit: { oldString: "The average surprise", newString: "How surprised you are, on average," } },
   });

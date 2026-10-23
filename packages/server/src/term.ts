@@ -16,7 +16,8 @@ import { fileURLToPath } from "node:url";
 import { StudyError } from "@isorite/core";
 import { NAME } from "@isorite/example";
 import { writeExample } from "@isorite/example/node";
-import { defaultHome, findOpenCode, gatewayFrom, startScripted, tutorialScript, writeHome } from "@isorite/opencode";
+import { defaultHome, findOpenCode, GATEWAY_KEY, gatewayFrom, startScripted, tutorialScript, writeHome, type Gateway } from "@isorite/opencode";
+import { ConfigSecrets, configPath, providerConfig } from "./config.ts";
 import { locate, WEB_DIR } from "./serve.ts";
 
 // The command itself, to start a server with: main.ts in a checkout, or the one file it is built into for npm.
@@ -113,10 +114,25 @@ export async function startOpenCode(command: string, { cwd, env, wait = 60_000 }
   return { url, password, stop: () => { server.kill(); } };
 }
 
-export async function term(path: string | undefined, { port = 4767, cwd = process.cwd(), env = process.env, wait = 120_000, onServer }: TermOptions = {}): Promise<number> {
-  const opencode = findOpenCode(env);
-  const gateway = gatewayFrom(env);
-  const server = await ensureServer(path, { port, env, wait });
+/** The models the terminal uses: ISORITE_GATEWAY_URL and _MODELS when set; else Iso's own provider, as
+ *  ~/.config/isorite/config.toml has it (OpenRouter unless `[provider] url` names another), its models the tiers'
+ *  from max down, with the key it holds handed to OpenCode in the environment only. Null without a key: then
+ *  OpenCode's own models, or whatever your local.json names. */
+export async function modelsFor(env: NodeJS.ProcessEnv): Promise<{ gateway: Gateway | null; env: NodeJS.ProcessEnv }> {
+  const named = gatewayFrom(env);
+  if (named) return { gateway: named, env };
+  const path = configPath(env);
+  const key = await new ConfigSecrets(path).get("provider.key");
+  if (!key) return { gateway: null, env };
+  const provider = providerConfig(path);
+  const models = [...new Set([provider.tiers.max, provider.tiers.mid, provider.tiers.low])];
+  return { gateway: { url: provider.url, models }, env: { ...env, [GATEWAY_KEY]: key } };
+}
+
+export async function term(path: string | undefined, { port = 4767, cwd = process.cwd(), env: given = process.env, wait = 120_000, onServer }: TermOptions = {}): Promise<number> {
+  const opencode = findOpenCode(given);
+  const { gateway, env } = await modelsFor(given);
+  const server = await ensureServer(path, { port, env: given, wait });
   onServer?.(server.url);
   const home = writeHome(defaultHome(env), { gateway });
   const shared = { ...env, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url };
@@ -127,7 +143,8 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
   const child = spawn(opencode.command, ["--server", backend.url], {
     cwd,
     stdio: "inherit",
-    env: { ...shared, OPENCODE_PASSWORD: backend.password },
+    // The provider's key is OpenCode's server's to use; the terminal is not given it.
+    env: { ...given, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url, OPENCODE_PASSWORD: backend.password },
   });
   const forward = (signal: NodeJS.Signals) => () => child.kill(signal);
   const handlers = (["SIGTERM", "SIGHUP"] as const).map((signal) => [signal, forward(signal)] as const);

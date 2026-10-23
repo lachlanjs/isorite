@@ -14,7 +14,10 @@
   const titleOf = (id: string): string => app.listing.notes.find((n) => n.id === id)?.title ?? id.split("/").at(-1) ?? id;
   /** What a tool did, in a word, as the Iso pane says its own steps. */
   const VERB: Record<string, string> = { shell: "ran", bash: "ran", read: "read", write: "wrote", edit: "edited", glob: "found", grep: "searched", webfetch: "fetched", websearch: "searched the web",
-    search_notes: "searched", find_similar: "by meaning", outline_note: "outlined", read_note: "read", brief_base: "looked over", propose_note_edit: "changed", propose_note_write: "wrote" };
+    search_notes: "searched", find_similar: "by meaning", outline_note: "outlined", read_note: "read", brief_base: "looked over", edit_note: "changed", write_note: "wrote" };
+  /** A note it changed opens in the note's Iso lens, where its words are marked (and the timeline undoes them). */
+  const CHANGES = new Set(["edit_note", "write_note"]);
+  function open(name: string, id: string): void { if (CHANGES.has(name)) panes.setLens("note", "iso"); void panes.open(id, true); }
   const verb = (name: string): string => VERB[name] ?? name.replaceAll("_", " ");
   const WHAT: Record<string, string> = { shell: "run", edit: "edit", write: "write", read: "read", webfetch: "fetch", external_directory: "reach outside the project" };
   const asks = (p: TerminalPermission): string => `${WHAT[p.action] ?? p.action} ${p.resources.join(", ")}`.trim();
@@ -41,12 +44,12 @@
     <div class="tool" data-status={i.status}>
       {#if i.output || i.diff}
         <details>
-          <summary><span class="v">{verb(i.name)}</span>{#if i.note}<button type="button" class="note-link" onclick={(e) => { e.preventDefault(); void panes.open(i.note!, true); }}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}{#if i.diff}<span class="n"><span class="add">+{i.diff.filter((l) => l.startsWith("+")).length}</span> <span class="del">−{i.diff.filter((l) => l.startsWith("-")).length}</span></span>{/if}</summary>
+          <summary><span class="v">{verb(i.name)}</span>{#if i.note}<button type="button" class="note-link" onclick={(e) => { e.preventDefault(); open(i.name, i.note!); }}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}{#if i.diff}<span class="n"><span class="add">+{i.diff.filter((l) => l.startsWith("+")).length}</span> <span class="del">−{i.diff.filter((l) => l.startsWith("-")).length}</span></span>{/if}</summary>
           {#if i.diff}<pre class="diff">{#each i.diff as l, k (k)}<span class:add={l.startsWith("+")} class:del={l.startsWith("-")}>{l}</span>{/each}</pre>
           {:else}<pre class="out">{i.output}</pre>{/if}
         </details>
       {:else}
-        <p class="line"><span class="v">{verb(i.name)}</span>{#if i.note}<button type="button" class="note-link" onclick={() => void panes.open(i.note!, true)}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}</p>
+        <p class="line"><span class="v">{verb(i.name)}</span>{#if i.note}<button type="button" class="note-link" onclick={() => open(i.name, i.note!)}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}</p>
       {/if}
       {#each askingFor(i.id) as p (p.id)}{@render permit(p)}{/each}
     </div>

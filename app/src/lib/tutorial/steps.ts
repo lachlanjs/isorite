@@ -251,7 +251,7 @@ export const PARTS: Part[] = [
       { go: "/atlas", target: ".atlas-world", title: "Watched from here",
         text: "While it works, this Atlas follows it: what it found and read is drawn as Iso's path is, and what it used." },
       { title: "Its changes to notes wait",
-        text: "propose_note_edit and propose_note_write: what the agent would change in your notes waits for you, as Iso's does, under its name. Its changes to code are OpenCode's own, which asks before it writes." },
+        text: "edit_note and write_note: what the agent changes in your notes is written at once under its name, its words marked as Iso's are in Write mode, and undone the same way. Its changes to code are OpenCode's own, which asks before it writes." },
       { go: `/n/${LOOP}`, target: '[data-tour="send"]', title: "From here to there",
         text: "send to agent puts a note, or a passage of it, in the agent's next prompt. In the terminal, /note opens a note and /atlas shows what it requires and what builds on it." },
       { title: "Its tour, replayed", link: { href: "#/terminal", text: "isorite in the terminal: its tour, replayed" },

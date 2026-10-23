@@ -1,7 +1,11 @@
 // The terminal's session as the Iso pane draws it (M11): OpenCode's messages made turns, and what a page asks
 // with what it gave.
 
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { modelsFor } from "../src/term.ts";
 import { given, titleOf, toTurns, type Message } from "../src/terminal.ts";
 
 // As OpenCode 2.0.32 lists them, oldest first (spike/probe.ts).
@@ -50,5 +54,26 @@ describe("what a page asks", () => {
       "why?\n\nFrom my knowledge base (read them with read_note, or outline_note first):\n- Softening (physics/softening)\n\nFrom Softening (physics/softening):\n> a\n> b",
     );
     expect(given(" just this ", [], title)).toBe("just this");
+  });
+});
+
+describe("the terminal's models", () => {
+  const home = (toml: string) => {
+    const dir = mkdtempSync(join(tmpdir(), "isorite-models-"));
+    mkdirSync(join(dir, "isorite"));
+    writeFileSync(join(dir, "isorite", "config.toml"), toml);
+    return { XDG_CONFIG_HOME: dir } as NodeJS.ProcessEnv;
+  };
+
+  it("are Iso's provider, with its key in the environment, when no gateway is named", async () => {
+    const { gateway, env } = await modelsFor(home(`[provider]\nname = "work"\nurl = "https://gateway.work/v1"\nkey = "sk-work"\n[tiers]\nlow = "small"\nmid = "middle"\nmax = "big"\n`));
+    expect(gateway).toEqual({ url: "https://gateway.work/v1", models: ["big", "middle", "small"] });
+    expect(env.ISORITE_GATEWAY_KEY).toBe("sk-work");
+  });
+
+  it("are the gateway named in the environment first, and none without a key", async () => {
+    const named = { ...home(`[provider]\nkey = "sk-or"\n`), ISORITE_GATEWAY_URL: "https://other/v1", ISORITE_GATEWAY_MODELS: "m" };
+    expect((await modelsFor(named)).gateway).toEqual({ url: "https://other/v1", models: ["m"] });
+    expect((await modelsFor(home(`device = "abcd1234"\n`))).gateway).toBeNull();
   });
 });

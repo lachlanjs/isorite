@@ -66,7 +66,7 @@ const AgentEdit = z.union([
   z.object({ oldString: z.string(), newString: z.string(), replaceAll: z.boolean().optional() }).strict(),
   z.object({ content: z.string() }).strict(),
 ]);
-const AgentProposal = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
+const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
 export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal }: ServerOptions): Hono {
@@ -186,7 +186,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   app.get("/api/agent/tools", (c) => answer(c, () => api.agentTools()));
   post("/api/agent/look", AgentLook, (_c, b) => api.agentLook(b));
   app.get("/api/agent/base", (c) => answer(c, async () => ({ notes: notes ?? null })));
-  post("/api/agent/propose", AgentProposal, (_c, b) => api.agentPropose(b));
+  post("/api/agent/write", AgentChange, (_c, b) => api.agentWrite(b));
   post("/api/agent/send", z.object({ note: z.string().max(400), passage: z.string().max(10_000).optional(), said: z.string().max(4000) }).strict(), (_c, b) => api.agentSend(b));
   post("/api/agent/received", z.object({ id: z.string().max(64), agent: AgentName }).strict(), (_c, b) => api.agentReceived(b.id, b.agent));
   post("/api/agent/status", AgentStatus, (_c, b) => api.agentStatus(b.agent, b.session, b.busy));

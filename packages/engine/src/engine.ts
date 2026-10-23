@@ -6,13 +6,12 @@ import {
   Bundle, SearchIndex, STUDY_DIR, diffLines, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
   type Cost, type Entry, type FileEntry, type Insert, type LearnerEvent, type Marks, type Passage, type Proposal, type SessionMoment, type Stamp, type Understanding,
 } from "@isorite/core";
-import { Conflict, EngineError, type AgentLook, type AgentProposal, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport, type TurnRequest, type UnderstandingReport } from "./api.ts";
+import { Conflict, EngineError, type AgentLook, type AgentChange, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { ANSWER_CLOSE, ANSWER_OPEN, CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, exerciseMessages, exerciseReply, fitted, helpSince, insertMessages, markMessages, noteMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part, type Tested } from "./iso.ts";
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, noteId, type Similar } from "./lookup.ts";
 import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
 import { CONVERSATIONS_DIR, MODES, MODE_TOOLS, conversationPath, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
-import { regionsOf } from "./agent.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
 import { KEY, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
@@ -100,9 +99,9 @@ const MAX_SENT = 8000;
 const BRIEF: ToolDef = { type: "function", function: { name: "brief_base", description: "What this knowledge base holds: its folders, how many notes each, and how to look things up in it. Call it first, once.", parameters: { type: "object", properties: {}, additionalProperties: false } } };
 
 const NOTE_ARG = { type: "string", description: "The note's id or path in the knowledge base: physics/softening or /physics/softening.md." };
-const WAITS = "Notes are checked by the person: the change waits for them to keep it, in the browser or the terminal, and the note's file is unchanged until they do. Use this, never edit or write, for any note of the knowledge base.";
-const PROPOSE_EDIT: ToolDef = { type: "function", function: { name: "propose_note_edit", description: `Propose a change to a note of the knowledge base: oldString replaced by newString, as the edit tool does. ${WAITS}`, parameters: { type: "object", properties: { note: NOTE_ARG, oldString: { type: "string", description: "The text to replace, exactly as it is in the note." }, newString: { type: "string" }, replaceAll: { type: "boolean", description: "Replace every place oldString is." } }, required: ["note", "oldString", "newString"], additionalProperties: false } } };
-const PROPOSE_WRITE: ToolDef = { type: "function", function: { name: "propose_note_write", description: `Propose a whole note: a new note of the knowledge base, with its frontmatter (type, title), or one written anew. A new note waits as a note for review, and the person chooses its folder. ${WAITS}`, parameters: { type: "object", properties: { note: NOTE_ARG, content: { type: "string", description: "The whole note, frontmatter included." } }, required: ["note", "content"], additionalProperties: false } } };
+const MARKED = "The change is written at once, under your name: the person sees your words marked in the note, and can undo it from the browser. Use this, never edit or write, for any note of the knowledge base.";
+const EDIT_NOTE: ToolDef = { type: "function", function: { name: "edit_note", description: `Change a note of the knowledge base: oldString replaced by newString, as the edit tool does. ${MARKED}`, parameters: { type: "object", properties: { note: NOTE_ARG, oldString: { type: "string", description: "The text to replace, exactly as it is in the note." }, newString: { type: "string" }, replaceAll: { type: "boolean", description: "Replace every place oldString is." } }, required: ["note", "oldString", "newString"], additionalProperties: false } } };
+const WRITE_NOTE: ToolDef = { type: "function", function: { name: "write_note", description: `Write a whole note: a new note of the knowledge base, at folder/name (lower case, hyphens), with its frontmatter (type, title), or one written anew. ${MARKED}`, parameters: { type: "object", properties: { note: NOTE_ARG, content: { type: "string", description: "The whole note, frontmatter included." } }, required: ["note", "content"], additionalProperties: false } } };
 
 export class Engine implements Api {
   private readonly opts: EngineOptions;
@@ -219,16 +218,16 @@ export class Engine implements Api {
   // ------------------------------------------------------------ terminal agents
 
   async agentTools(): Promise<ToolDef[]> {
-    return [BRIEF, TOOLS[0]!, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1), PROPOSE_EDIT, PROPOSE_WRITE];
+    return [BRIEF, TOOLS[0]!, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1), EDIT_NOTE, WRITE_NOTE];
   }
 
   async agentLook({ agent, session, tool, args, asked = "" }: AgentLook): Promise<{ text: string }> {
     if (tool === BRIEF.function.name) return { text: this.brief() };
-    if (tool === PROPOSE_EDIT.function.name || tool === PROPOSE_WRITE.function.name) {
+    if (tool === EDIT_NOTE.function.name || tool === WRITE_NOTE.function.name) {
       const str = (v: unknown, name: string) => { if (typeof v !== "string") throw new EngineError(`${tool} needs ${name}, as text`, 400); return v; };
-      const edit = tool === PROPOSE_WRITE.function.name ? { content: str(args.content, "content") }
+      const edit = tool === WRITE_NOTE.function.name ? { content: str(args.content, "content") }
         : { oldString: str(args.oldString, "oldString"), newString: str(args.newString, "newString"), replaceAll: args.replaceAll === true };
-      return this.agentPropose({ agent, session, note: str(args.note, "note"), asked, edit });
+      return this.agentWrite({ agent, session, note: str(args.note, "note"), asked, edit });
     }
     const turn = this.turns.get(`${agent}/${session}`) ?? this.startTurn(agent, session);
     const { text, step } = await turn.lookup.call(tool, JSON.stringify(args));
@@ -242,32 +241,36 @@ export class Engine implements Api {
     if (!busy && turn) { this.turns.delete(key); this.publish({ type: "agent-done", request: turn.request, agent, session }); }
   }
 
-  async agentPropose({ agent, session, note, asked, edit }: AgentProposal): Promise<{ text: string }> {
-    if (!this.opts.study) throw new EngineError("there is no study base, so an edit to a note cannot wait to be kept: show the person the change instead", 409);
-    const id = checkNoteId(note.replace(/^\/+/, "").replace(/\.md$/i, ""));
-    const who = `agent:${agent}`, read = this.turns.get(`${agent}/${session}`)?.lookup.read() ?? [];
-    const { files, path } = this.where(id);
-    if ((await files.read(path)) === null) {
-      if (!("content" in edit)) throw new EngineError(`there is no note ${id}: to propose a new note, write the whole of it`, 404);
-      // A new note waits as a note for review, as a reply to a note for Iso does: its title, and the text offered.
-      let meta: Record<string, unknown> | null = null, body = edit.content;
-      try { [meta, body] = splitFrontmatter(edit.content); } catch { /* all of it is the body */ }
-      const title = typeof meta?.title === "string" && meta.title ? meta.title : id.split("/").at(-1)!;
-      const draft = DRAFT_PREFIX + newId(this.opts.clock.now()).toLowerCase();
-      await this.createNote(draft, `---\ntype: ${typeof meta?.type === "string" ? meta.type : "Concept"}\ntitle: ${JSON.stringify(title)}\n---\n`);
-      await this.one(async () => this.enter(draft, await this.journal(draft), {
-        ...(await this.stamp(who)), kind: "proposal", form: "insert", after: null, before: null, text: body.replace(/^\n+/, ""),
-        asked: asked || `a new note at ${id}`, read,
-      }));
-      return { text: `The new note "${title}" waits for the person to review in the browser, as a note for review; they choose its folder when they keep it (you meant ${id.split("/").slice(0, -1).join("/") || "the top"}). Nothing was written to the knowledge base. Do not write it again.` };
+  async agentWrite({ agent, session, note, asked, edit }: AgentChange): Promise<{ text: string }> {
+    // As Iso's Write mode writes (M10): at once, entered in the note's journal under the agent's name, its words
+    // marked in the note's Iso lens, and undone from the browser (agreed for M11, Q20).
+    const who = `agent:${agent}`;
+    void session;
+    const raw = note.replace(/^\/+/, "").replace(/\.md$/i, "");
+    const existing = noteId(this.bundle, raw);
+    if (!existing) {
+      if (!("content" in edit)) throw new EngineError(`there is no note ${raw}: to make one, write the whole of it`, 404);
+      const id = this.newNoteId(raw);
+      if (!id) throw new EngineError(`${raw} is not a note's id in this base: give folder/name, lower case with hyphens`, 400);
+      let text = edit.content;
+      if (!/^---\n/.test(text)) text = `---\ntype: Concept\ntitle: ${JSON.stringify(/^#\s+(.+)$/m.exec(text)?.[1]?.trim() ?? id.split("/").at(-1)!.replace(/-/g, " "))}\n---\n\n${text.replace(/^#\s+.+\n+/, "")}`;
+      await this.one(() => this.put(id, text, null, "edit", { asked }, who));
+      return { text: `Made ${this.titleOf(id, text)} (/${id}.md). The person sees it as yours, and can undo it.` };
     }
-    const current = (await this.readNote(id)).text;
-    const regions = regionsOf(current, edit);
-    if (!regions.length) return { text: `That leaves ${this.titleOf(id, current)} as it is: nothing was proposed.` };
-    await this.one(async () => this.enter(id, await this.journal(id), {
-      ...(await this.stamp(who)), kind: "proposal", form: "rewrite", regions, asked: asked || "an edit", read,
-    }));
-    return { text: `Your edit to ${this.titleOf(id, current)} (${regions.length} ${regions.length === 1 ? "passage" : "passages"}) waits for the person to keep it, in the browser or the terminal's note view. The file is unchanged until they do. Do not write it again; go on as if it may not be kept.` };
+    const id = existing, now = await this.readNote(id);
+    let text: string;
+    if ("content" in edit) text = edit.content;
+    else {
+      const at = now.text.indexOf(edit.oldString);
+      if (!edit.oldString || at < 0) throw new EngineError(`that passage is not in ${this.titleOf(id, now.text)} as you wrote it: read the note again and give the passage exactly`, 409);
+      if (edit.replaceAll) text = now.text.split(edit.oldString).join(edit.newString);
+      else {
+        if (now.text.indexOf(edit.oldString, at + 1) >= 0) throw new EngineError(`that passage occurs more than once in ${this.titleOf(id, now.text)}: give more of it, or replaceAll`, 409);
+        text = now.text.slice(0, at) + edit.newString + now.text.slice(at + edit.oldString.length);
+      }
+    }
+    const saved = await this.one(() => this.put(id, text, now.version, "edit", { asked }, who));
+    return { text: saved.changed ? `Changed ${this.titleOf(id, text)}. The person sees your words marked, and can undo it.` : `That leaves ${this.titleOf(id, now.text)} as it is.` };
   }
 
   async agentSend({ note, passage, said }: { note: string; passage?: string; said: string }): Promise<{ id: string }> {
