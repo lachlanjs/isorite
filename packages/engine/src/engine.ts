@@ -247,7 +247,8 @@ export class Engine implements Api {
     const who = `agent:${agent}`;
     void session;
     const raw = note.replace(/^\/+/, "").replace(/\.md$/i, "");
-    const existing = noteId(this.bundle, raw);
+    // The file itself says whether the note is there: one just written may not be in the index yet.
+    const existing = noteId(this.bundle, raw) ?? (await this.onDisk(raw));
     if (!existing) {
       if (!("content" in edit)) throw new EngineError(`there is no note ${raw}: to make one, write the whole of it`, 404);
       const id = this.newNoteId(raw);
@@ -271,6 +272,14 @@ export class Engine implements Api {
     }
     const saved = await this.one(() => this.put(id, text, now.version, "edit", { asked }, who));
     return { text: saved.changed ? `Changed ${this.titleOf(id, text)}. The person sees your words marked, and can undo it.` : `That leaves ${this.titleOf(id, now.text)} as it is.` };
+  }
+
+  /** A note's id when its file is there, though the index may not have it yet; else null. */
+  private async onDisk(raw: string): Promise<string | null> {
+    let id: string;
+    try { id = checkNoteId(raw); } catch { return null; }
+    const { files, path } = this.where(id);
+    return (await files.read(path)) === null ? null : id;
   }
 
   async agentSend({ note, passage, said }: { note: string; passage?: string; said: string }): Promise<{ id: string }> {

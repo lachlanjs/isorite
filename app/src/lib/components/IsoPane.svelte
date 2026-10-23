@@ -191,7 +191,8 @@
         <span>{terminal.view?.model || "OpenCode"}</span>
         {#if terminal.view}<span>{short(terminal.view.tokens.input + terminal.view.tokens.output)} tokens</span>{/if}
         <span class="grow"></span>
-        {#if terminal.view}<span>{money(terminal.view.cost)}</span>{/if}
+        <!-- OpenCode knows no price for a gateway's model, and says 0: then the tokens are all there is to say. -->
+        {#if terminal.view?.cost}<span>{money(terminal.view.cost)}</span>{/if}
       </div>
     {:else}
     <div class="foot">

@@ -116,7 +116,7 @@ export async function startOpenCode(command: string, { cwd, env, wait = 60_000 }
 
 /** The models the terminal uses: ISORITE_GATEWAY_URL and _MODELS when set; else Iso's own provider, as
  *  ~/.config/isorite/config.toml has it (OpenRouter unless `[provider] url` names another), its models the tiers'
- *  from max down, with the key it holds handed to OpenCode in the environment only. Null without a key: then
+ *  (mid, the default, then max and low), with the key it holds handed to OpenCode in the environment only. Null without a key: then
  *  OpenCode's own models, or whatever your local.json names. */
 export async function modelsFor(env: NodeJS.ProcessEnv): Promise<{ gateway: Gateway | null; env: NodeJS.ProcessEnv }> {
   const named = gatewayFrom(env);
@@ -125,7 +125,7 @@ export async function modelsFor(env: NodeJS.ProcessEnv): Promise<{ gateway: Gate
   const key = await new ConfigSecrets(path).get("provider.key");
   if (!key) return { gateway: null, env };
   const provider = providerConfig(path);
-  const models = [...new Set([provider.tiers.max, provider.tiers.mid, provider.tiers.low])];
+  const models = [...new Set([provider.tiers.mid, provider.tiers.max, provider.tiers.low])];
   return { gateway: { url: provider.url, models }, env: { ...env, [GATEWAY_KEY]: key } };
 }
 

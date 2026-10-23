@@ -67,7 +67,7 @@ describe("the terminal's models", () => {
 
   it("are Iso's provider, with its key in the environment, when no gateway is named", async () => {
     const { gateway, env } = await modelsFor(home(`[provider]\nname = "work"\nurl = "https://gateway.work/v1"\nkey = "sk-work"\n[tiers]\nlow = "small"\nmid = "middle"\nmax = "big"\n`));
-    expect(gateway).toEqual({ url: "https://gateway.work/v1", models: ["big", "middle", "small"] });
+    expect(gateway).toEqual({ url: "https://gateway.work/v1", models: ["middle", "big", "small"] });
     expect(env.ISORITE_GATEWAY_KEY).toBe("sk-work");
   });
 
