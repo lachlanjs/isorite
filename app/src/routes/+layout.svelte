@@ -185,7 +185,7 @@
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h6" /></svg>
                   {#if tray.sent.length}{#key tray.fresh}<span class="n" class:pulse={converse.view === "chat" && tray.fresh !== ""}>{tray.sent.length}</span>{/key}{/if}
                 </button>
-                <button class="icon" type="button" aria-label="A new conversation" title="A new conversation: nothing earlier is sent" disabled={!!converse.running || !converse.turns.length} onclick={() => { converse.fresh(); converse.view = "chat"; }}>
+                <button class="icon" type="button" aria-label="A new conversation" title="A new conversation: nothing earlier is sent" disabled={panes.mode === "build" || !!converse.running || !converse.turns.length} onclick={() => { converse.fresh(); converse.view = "chat"; }}>
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.5v9M3.5 8h9" /></svg>
                 </button>
               {/snippet}
