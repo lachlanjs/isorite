@@ -131,6 +131,8 @@ export interface ContextReport {
   items: ContextItem[];
   /** Whether Iso may look up more notes, as the choice has it. */
   lookup: boolean;
+  /** Each part given, as much as it adds when sent (M10b: the Context view lists them). A note that is gone is not here. */
+  given?: { kind: Given["kind"]; id: string; text?: string; tokens: number }[];
 }
 
 /** One part of Iso's context that can be switched off: an earlier exchange, or a note this note links to. */

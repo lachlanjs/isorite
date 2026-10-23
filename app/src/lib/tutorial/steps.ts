@@ -225,7 +225,7 @@ export const PARTS: Part[] = [
         text: "An exercise is written: a question, then your working under Working. This is yesterday's. Select the last line, mark it as your answer, and send it for marking." },
       { target: ".cm-content", check: () => has(".cm-iso-right")() && !has(".cm-iso-wrong")() && !has('[aria-label="Iso is marking"]')(), title: "Wrong, and where",
         text: "Iso marks what is right and what is wrong, and says nothing more unless you ask. The pairs were counted twice; the third law halves them. Change the last line to 0.04 s, mark it as your answer again, and send it." },
-      { target: ".bar .squares", title: "The squares moved",
+      { target: '[data-pane="note"] .squares', title: "The squares moved",
         text: "Right, and unaided: direct summation is now opened, one square of six. Click the squares for Iso's reason for each move, and wind back if it rates you too highly.",
         phone: { text: "Right, and unaided: direct summation is now opened, one square of six. Tap the squares for Iso's reason for each move, and wind back if it rates you too highly." } },
       { go: "/atlas", target: `[data-note="${DIRECT}"]`, title: "And on the map",

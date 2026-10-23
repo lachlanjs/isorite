@@ -13,6 +13,20 @@ async function look(page: Page, name: string) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} is no wider than the window`).toBe(true);
 }
 
+/** Iso's pane in its Context view: what you gave Iso, listed. On a phone, back to where you were after. */
+async function showContext(page: Page, back?: "Note" | "Atlas") {
+  const phone = (page.viewportSize()?.width ?? 1280) <= 760, nav = page.getByRole("navigation", { name: "Panes" });
+  if (phone) await nav.getByRole("button", { name: /^Iso/ }).click();
+  const ctx = page.locator('[data-pane="iso"]').getByRole("button", { name: "Context", exact: true });
+  if ((await ctx.getAttribute("aria-pressed")) !== "true") await ctx.click();
+  if (phone && back) {
+    await nav.getByRole("button", { name: new RegExp(`^${back}`) }).click();
+    // The row has scrolled back to the pane before anything is pressed in it.
+    await expect.poll(async () => (await page.locator(`[data-pane="${back.toLowerCase()}"]`).boundingBox())?.x).toBe(0);
+  }
+  return page.getByRole("list", { name: "What you gave Iso" });
+}
+
 test("a turn in Ask mode: what you gave is shown with it, what Iso reads is told and opens the note, and the conversation is kept", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await page.locator('[data-note="basics/surprise"]').waitFor();
@@ -48,12 +62,12 @@ test("a turn in Ask mode: what you gave is shown with it, what Iso reads is told
 test("a turn can be stopped, and a refusal is said plainly; Shift+Tab changes the mode", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toIso(page);
-  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveText("Ask");
+  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveAttribute("aria-label", "Ask");
   await box(page).press("Shift+Tab");
-  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveText("Write");
+  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveAttribute("aria-label", "Write");
   await box(page).press("Shift+Tab");
   await box(page).press("Shift+Tab");
-  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveText("Ask");
+  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveAttribute("aria-label", "Ask");
 
   await box(page).fill("slow, please");
   await box(page).press("Enter");
@@ -71,9 +85,9 @@ test("Write mode: Iso's change goes into the note, is marked as Iso's in the not
   const name = test.info().project.name, id = `basics/write-${name}`;
   const { token } = (await (await page.request.get("api/session")).json()) as { token: string };
   const headers = { "x-isorite-token": token, Origin: new URL(test.info().project.use.baseURL!).origin };
-  await page.request.post(`api/note?id=${id}`, { data: { text: `---\ntype: Concept\ntitle: Write ${name}\n---\n\nPlain text.\n` }, headers });
+  await page.request.post(`api/note?id=${id}`, { data: { text: `---\ntype: Concept\ntitle: Write ${name}\n---\n\nPlain text. The rest of this line is yours, and stays as it was.\n` }, headers });
   await page.goto(`#/n/${id}`);
-  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Plain text.");
+  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Plain text. The rest");
   await toIso(page);
   await pane(page).getByRole("button", { name: "Write", exact: true }).click();
   await box(page).fill(`edit ${id}`);
@@ -87,7 +101,7 @@ test("Write mode: Iso's change goes into the note, is marked as Iso's in the not
   await expect(page.locator(`[data-note="${id}"]`)).toHaveClass(/\bchanged\b/);
   await look(page, "iso-write");
 
-  // In the note's Iso lens, Iso's words are marked; the plain ones are not.
+  // In the note's Iso lens, Iso's words are marked; yours are not. (A passage mostly Iso's would be Iso's whole.)
   await turn.locator(".change").getByRole("button").click();
   await expect(page.locator('[data-pane="note"] .lens[data-lens="iso"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".cm-iso-by-iso")).toHaveText([", and Iso's words"]);
@@ -97,7 +111,7 @@ test("Write mode: Iso's change goes into the note, is marked as Iso's in the not
   await toIso(page);
   await turn.getByRole("button", { name: "Undo this turn's changes" }).click();
   await expect(turn.locator(".undone")).toContainText(`Write ${name} put back`);
-  await expect.poll(file).toContain("\nPlain text.\n");
+  await expect.poll(file).toContain("\nPlain text. The rest");
   await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
 });
 
@@ -123,8 +137,9 @@ test("Understand mode: your understanding of the note open goes with what you as
   await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Bits a use.");
   await toIso(page);
   await pane(page).getByRole("button", { name: "Understand", exact: true }).click();
-  const tray = page.getByRole("list", { name: "What Iso is sent" });
-  await expect(tray.getByRole("listitem")).toHaveText([`◇Understanding · Rate ${name}`]);
+  const tray = await showContext(page);
+  await expect(tray.getByRole("listitem")).toHaveText([new RegExp(`^◇ Understanding · Rate ${name} \\d+`)]);
+  await pane(page).getByRole("button", { name: "Context", exact: true }).click();
   await box(page).fill(`understand ${id}`);
   await box(page).press("Enter");
   const turn = page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last();
@@ -138,17 +153,19 @@ test("Understand mode: your understanding of the note open goes with what you as
   await expect(note.locator(".reading")).toHaveText("You can say what it measures, and why.");
   await expect(note.locator("ol li")).toHaveCount(1);
   await expect(note.locator("ol li")).toContainText("+0.5You said why it holds in your own words.");
-  await note.getByLabel("Scratchpad").fill(`Mine, ${name}.`);
-  await expect(note.getByRole("status")).toHaveText("saved", { timeout: 8000 });
+  // The scratchpad is the note editor (V9): Markdown as you type.
+  await note.getByLabel("Scratchpad").fill(`Mine, **${name}**.`);
+  await expect(note.locator(".u h2 .state")).toHaveText("saved", { timeout: 8000 });
   await page.screenshot({ path: `test-results/screens/${name}-understand-lens.png`, fullPage: true });
   await page.reload();
-  await expect(page.locator('[data-pane="note"]').getByLabel("Scratchpad")).toHaveValue(`Mine, ${name}.`);
+  await expect(page.locator('[data-pane="note"]').getByLabel("Scratchpad")).toContainText(`Mine, ${name}.`);
+  await expect(page.locator('[data-pane="note"] .pad .cm-lp-strong').first()).toContainText(name);
   await page.locator('[data-pane="note"] .lens[data-lens=normal]').click();
   await toIso(page);
   await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
 });
 
-test("the count under Iso's box opens what the next turn is sent, part by part; an earlier turn can be left out", async ({ page }) => {
+test("the count under Iso's box opens the Context view: what the next turn is sent, part by part; an earlier turn can be left out", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toIso(page);
   // The last conversation comes up as the page opens (earlier tests made one); a new one is begun.
@@ -160,8 +177,10 @@ test("the count under Iso's box opens what the next turn is sent, part by part; 
   await expect(page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last()).toHaveAttribute("data-state", "done");
   await pane(page).getByRole("button", { name: /tokens$/ }).click();
   const parts = pane(page).getByRole("region", { name: "What Iso is sent" });
+  await expect(page.getByRole("log", { name: "The conversation with Iso" })).toHaveCount(0);
   await expect(parts.locator(".part").first()).toContainText("instructions and tools");
   await expect(parts).toContainText("earlier in this conversation1 turn");
+  await look(page, "iso-context");
   const sw = parts.getByRole("switch", { name: "Send: what is a bit?" });
   await expect(sw).toHaveAttribute("aria-checked", "true");
   await sw.click();

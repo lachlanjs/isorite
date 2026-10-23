@@ -24,21 +24,31 @@ async function open(page: Page, what: string): Promise<{ id: string; text: strin
   return { id, text };
 }
 
+async function toIso(page: Page) {
+  if ((page.viewportSize()?.width ?? 1280) <= 760) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
+}
+
 test.beforeAll(() => { mkdirSync(join(NOTES, "iso"), { recursive: true }); });
 
-test("settings are behind the logo: the ground, and a key that goes in and is not shown again", async ({ page }) => {
+test("settings are in each pane's header: the ground in the Note pane's, and in Iso's a key that goes in and is not shown again", async ({ page }) => {
   await page.goto("#/notes");
-  await page.getByRole("button", { name: "isorite: settings" }).click();
-  const menu = page.getByRole("dialog", { name: "Settings" });
+  await page.getByRole("button", { name: "Note settings" }).click();
+  const note = page.getByRole("dialog", { name: "Note settings" });
+  await look(page, "note-settings");
+  await note.getByRole("radio", { name: "quartz" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-ground", "quartz");
+  await note.getByRole("radio", { name: "lapis" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-ground", "lapis");
+  await note.getByRole("radio", { name: "the system's" }).click();
+  await expect(page.locator("html")).not.toHaveAttribute("data-ground", /.+/);
+  await page.keyboard.press("Escape");
+  await expect(note).toHaveCount(0);
+
+  await toIso(page);
+  await page.getByRole("button", { name: "Iso settings" }).click();
+  const menu = page.getByRole("dialog", { name: "Iso settings" });
   await expect(menu).toContainText("Asked through scripted.");
   await look(page, "settings");
-
-  await menu.getByRole("radio", { name: "quartz" }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-ground", "quartz");
-  await menu.getByRole("radio", { name: "lapis" }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-ground", "lapis");
-  await menu.getByRole("radio", { name: "the system's" }).click();
-  await expect(page.locator("html")).not.toHaveAttribute("data-ground", /.+/);
 
   const secret = `sk-test-${test.info().project.name}`;
   await menu.getByLabel("Provider key").fill(secret);
@@ -55,8 +65,9 @@ test("settings are behind the logo: the ground, and a key that goes in and is no
 
 test("a key is made by signing in at the provider, and comes back to where you were", async ({ page }) => {
   await page.goto("#/notes");
-  await page.getByRole("button", { name: "isorite: settings" }).click();
-  const menu = page.getByRole("dialog", { name: "Settings" });
+  await toIso(page);
+  await page.getByRole("button", { name: "Iso settings" }).click();
+  const menu = page.getByRole("dialog", { name: "Iso settings" });
   await menu.getByRole("button", { name: "sign in at scripted for a new key" }).click();
   // The scripted sign-in sends you straight back with a code; the engine exchanges it for the key.
   await expect(menu).toContainText("Signed in at scripted: a key was made for isorite");

@@ -17,6 +17,20 @@ async function look(page: Page, name: string) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} is no wider than the window`).toBe(true);
 }
 
+/** Iso's pane in its Context view: what you gave Iso, listed. On a phone, back to where you were after. */
+async function showContext(page: Page, back?: "Note" | "Atlas") {
+  const phone = (page.viewportSize()?.width ?? 1280) <= 760, nav = page.getByRole("navigation", { name: "Panes" });
+  if (phone) await nav.getByRole("button", { name: /^Iso/ }).click();
+  const ctx = page.locator('[data-pane="iso"]').getByRole("button", { name: "Context", exact: true });
+  if ((await ctx.getAttribute("aria-pressed")) !== "true") await ctx.click();
+  if (phone && back) {
+    await nav.getByRole("button", { name: new RegExp(`^${back}`) }).click();
+    // The row has scrolled back to the pane before anything is pressed in it.
+    await expect.poll(async () => (await page.locator(`[data-pane="${back.toLowerCase()}"]`).boundingBox())?.x).toBe(0);
+  }
+  return page.getByRole("list", { name: "What you gave Iso" });
+}
+
 test("a note with maths and a typed link is written, saved, and there when reopened", async ({ page }) => {
   const name = test.info().project.name, id = `basics/entropy-${name}`;
   await page.goto("");
@@ -53,10 +67,9 @@ test("a note with maths and a typed link is written, saved, and there when reope
   expect(entries.length).toBeGreaterThan(1);
   expect(entries.slice(1).every((e) => e.kind === "change" && e.why === "edit" && e.who === "you")).toBe(true);
 
-  // The header says where you are; the link in the list leads back here.
-  await expect(page.locator("header .path")).toHaveText(`information-theory/Entropy ${name}`);
-  // The base's name opens the list (V2), in the Note pane.
-  await page.locator("header .path").getByRole("link", { name: "information-theory", exact: true }).click();
+  // The page's title says where you are; the notes, from the Note pane's header, lead back here.
+  await expect(page).toHaveTitle(`Entropy ${name} · isorite`);
+  await notePane(page).getByRole("button", { name: "All notes" }).click();
   await notePane(page).getByRole("link", { name: `Entropy ${name}` }).click();
   await expect(page.getByLabel("Title")).toHaveValue(`Entropy ${name}`);
 });
@@ -158,8 +171,8 @@ test("a passage chosen in a note is sent to Iso; the notes open over the note an
   await page.keyboard.press("Control+Home");
   await page.keyboard.press("Shift+End");
   await page.getByRole("button", { name: "send to Iso" }).click();
-  await expect(page.getByRole("list", { name: "What Iso is sent" }).getByRole("listitem")).toHaveText([/^“An outcome of probability/]);
   await expect(page.getByRole("button", { name: "send to Iso" })).toHaveCount(0);
+  await expect(await showContext(page, "Note")).toContainText("“An outcome of probability");
 
   await page.getByRole("button", { name: "All notes" }).click();
   await expect(page.getByRole("searchbox", { name: "Find a note" })).toBeVisible();

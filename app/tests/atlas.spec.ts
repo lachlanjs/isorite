@@ -18,6 +18,20 @@ async function atlas(page: Page) {
 /** The Atlas's lens (M10). */
 const lens = (page: Page, l: "normal" | "iso" | "understand") => page.locator(`[data-pane="atlas"] .lens[data-lens="${l}"]`).click();
 
+/** Iso's pane in its Context view: what you gave Iso, listed. On a phone, back to where you were after. */
+async function showContext(page: Page, back?: "Note" | "Atlas") {
+  const phone = (page.viewportSize()?.width ?? 1280) <= 760, nav = page.getByRole("navigation", { name: "Panes" });
+  if (phone) await nav.getByRole("button", { name: /^Iso/ }).click();
+  const ctx = page.locator('[data-pane="iso"]').getByRole("button", { name: "Context", exact: true });
+  if ((await ctx.getAttribute("aria-pressed")) !== "true") await ctx.click();
+  if (phone && back) {
+    await nav.getByRole("button", { name: new RegExp(`^${back}`) }).click();
+    // The row has scrolled back to the pane before anything is pressed in it.
+    await expect.poll(async () => (await page.locator(`[data-pane="${back.toLowerCase()}"]`).boundingBox())?.x).toBe(0);
+  }
+  return page.getByRole("list", { name: "What you gave Iso" });
+}
+
 test("the map draws the base; its Understand lens draws where you stand, and the study folders and their items", async ({ page }) => {
   await atlas(page);
   await expect(folder(page, "basics")).toBeVisible();
@@ -29,7 +43,7 @@ test("the map draws the base; its Understand lens draws where you stand, and the
   await expect(note(page, "coding/source-coding")).toHaveClass(/\bs2\b/); // three right answers: worked through
   await expect(folder(page, "@study/coding")).toContainText("study · coding");
   await expect(page.getByRole("link", { name: "written: Build a prefix code" })).toBeVisible();
-  expect(await page.locator(".routes path").count()).toBeGreaterThan(2);
+  await expect.poll(() => page.locator(".routes path.base, .routes path.study").count()).toBeGreaterThan(2);
   await look(page, "atlas");
   await lens(page, "normal");
 });
@@ -123,11 +137,11 @@ test("a folder is zoomed to, open ground steps out, and the map is dragged and z
   await page.mouse.click(open!.px, open!.py);
   await expect.poll(() => cell(page)).toBeCloseTo(whole, 3);
 
-  // A drag moves the map and chooses nothing, even when it ends on a note.
+  // A drag from open ground moves the map and chooses nothing. (One from a note picks the note up: V8, below.)
   const before = (await note(page, "basics/bit").boundingBox())!;
-  await page.mouse.move(before.x + 5, before.y + 5);
+  await page.mouse.move(box.x + 5, box.y + 5);
   await page.mouse.down();
-  await page.mouse.move(before.x + 45, before.y + 25, { steps: 4 });
+  await page.mouse.move(box.x + 45, box.y + 25, { steps: 4 });
   await page.mouse.up();
   const after = (await note(page, "basics/bit").boundingBox())!;
   expect(Math.round(after.x - before.x)).toBe(40);
@@ -164,62 +178,123 @@ async function hold(page: Page, x: number, y: number) {
 const asked = (page: Page, what: "note" | "folder") => page.getByLabel(what === "note" ? "the new note's title" : "the new folder's name");
 const session = async (page: Page) => ({ "x-isorite-token": ((await (await page.request.get("api/session")).json()) as { token: string }).token, origin: new URL(page.url()).origin });
 
-test("holding makes a new note in the folder held in; holding, then dragging, a new folder with its first note; a press that moves is a drag", async ({ page }) => {
+test("holding makes an untitled note in the folder held in, its title chosen to type over; holding, then dragging, an untitled folder with its first note; a press that moves is a drag", async ({ page }) => {
   await atlas(page);
   const name = test.info().project.name, box = (await page.locator(".atlas").boundingBox())!;
+  const title = page.getByLabel("Title");
+  const made: string[] = [];
 
   // A press that moves is a drag, however long it lasts.
+  const before = page.url();
   await page.mouse.move(box.x + 6, box.y + 6);
   await page.mouse.down();
   await page.mouse.move(box.x + 30, box.y + 20, { steps: 3 });
   await page.waitForTimeout(900);
   await page.mouse.up();
-  await expect(asked(page, "note")).toHaveCount(0);
+  await expect(page.locator(".atlas .grasp")).toHaveCount(0);
+  expect(page.url()).toBe(before);
 
-  // Held still inside basics: a note there, named in place, and opened.
+  // Held still inside basics: an untitled note there, opened with its title chosen; typing names it.
   const basics = (await folder(page, "basics").boundingBox())!;
   await hold(page, basics.x + 8, basics.y + basics.height - 8);
-  await expect(asked(page, "note")).toHaveAttribute("placeholder", "a new note in basics");
+  await expect(page).toHaveURL(/#\/n\/basics\/untitled-note(-\d+)?$/);
+  made.push(decodeURIComponent(page.url().split("#/n/")[1]!));
+  await expect(title).toBeFocused();
+  await expect(title).toHaveValue(/^Untitled note( \d+)?$/);
+  await page.keyboard.type(`Held ${name}`);
+  await expect(title).toHaveValue(`Held ${name}`);
   await look(page, "atlas-hold-note");
-  await asked(page, "note").fill(`Held ${name}`);
-  await asked(page, "note").press("Enter");
-  await expect(page).toHaveURL(new RegExp(`#/n/basics/held-${name}$`));
 
-  // Held, then dragged on open ground: a folder, its name, then its first note's.
+  // Held, then dragged on open ground: an untitled folder, made with its first note, which opens.
   await atlas(page);
   await page.mouse.move(box.x + 10, box.y + 10);
   await page.mouse.down();
   await page.waitForTimeout(900);
   await page.mouse.move(box.x + 90, box.y + 70, { steps: 6 });
   await expect(page.locator(".atlas .grasp.folder")).toBeVisible();
-  await page.mouse.up();
   await look(page, "atlas-hold-folder");
-  await asked(page, "folder").fill(`Drawn ${name}`);
-  await asked(page, "folder").press("Enter");
-  await expect(asked(page, "note")).toHaveAttribute("placeholder", `a new note in drawn-${name}`);
-  await asked(page, "note").fill("First");
-  await asked(page, "note").press("Enter");
-  await expect(page).toHaveURL(new RegExp(`#/n/drawn-${name}/first$`));
+  await page.mouse.up();
+  await expect(page).toHaveURL(/#\/n\/untitled-folder(-\d+)?\/untitled-note$/);
+  made.push(decodeURIComponent(page.url().split("#/n/")[1]!));
+  await expect(title).toHaveValue("Untitled note");
 
   // Gone again, so the rest of the tests find the base as they expect.
   const headers = await session(page);
-  for (const id of [`basics/held-${name}`, `drawn-${name}/first`]) {
+  for (const id of made) {
+    await expect.poll(async () => (await page.request.get(`api/note?id=${id}`)).ok()).toBe(true);
     const { version } = (await (await page.request.get(`api/note?id=${id}`)).json()) as { version: string };
     expect((await page.request.post(`api/note/delete?id=${id}`, { headers, data: { base: version } })).ok()).toBe(true);
   }
 });
 
+test("a new layout comes in three beats: the lines retract, the notes move with no line drawn, then the lines draw out", async ({ page }) => {
+  await atlas(page);
+  await expect(page.locator(".routes path.base").first()).toBeAttached();
+  // Into the Understand lens the study folders join the map, so it is laid out again.
+  const seen: string[] = [];
+  await page.exposeFunction("beatSeen", (b: string) => { if (seen.at(-1) !== b) seen.push(b); });
+  await page.evaluate(() => {
+    const look = () => {
+      const r = document.querySelector(".routes");
+      const b = r?.querySelector("path.retract") ? "retract" : r?.querySelector("path.draw") ? "draw" : r?.querySelector("path") ? "rest" : "none";
+      (window as unknown as { beatSeen: (b: string) => void }).beatSeen(b);
+      requestAnimationFrame(look);
+    };
+    look();
+  });
+  await lens(page, "understand");
+  await expect.poll(() => seen.join(" ")).toContain("retract none draw rest");
+  await lens(page, "normal");
+});
+
+test("held with a finger, a note offers to go to Iso or to open (Q16)", async ({ page }) => {
+  await atlas(page);
+  const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
+  const at = { pointerId: 9, pointerType: "touch", isPrimary: true, button: 0, clientX: huffman.x + 10, clientY: huffman.y + 6 };
+  await note(page, "coding/huffman-codes").dispatchEvent("pointerdown", at);
+  await page.waitForTimeout(800);
+  await page.locator(".atlas").dispatchEvent("pointerup", at);
+  const offer = page.getByRole("menu", { name: "Huffman codes" });
+  await expect(offer.getByRole("menuitem")).toHaveText(["◆Give to Iso", "▣Open"]);
+  await look(page, "atlas-offer");
+  await offer.getByRole("menuitem", { name: "Give to Iso" }).click();
+  await expect(offer).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
+});
+
+test("a drag from a note never moves the map; a drag from open ground does", async ({ page }) => {
+  await atlas(page);
+  const world = page.locator(".atlas-world");
+  const at = async () => (await world.getAttribute("style"))?.match(/translate\(([^)]*)\)/)?.[1];
+  const still = await at();
+  const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
+  await page.mouse.move(huffman.x + 10, huffman.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(huffman.x + 80, huffman.y + 60, { steps: 6 });
+  await expect(page.locator(".carried")).toHaveText("▣ Huffman codes");
+  await page.mouse.up();
+  await expect(page.locator(".carried")).toHaveCount(0);
+  expect(await at()).toBe(still);
+  // Open ground pans.
+  const box = (await page.locator(".atlas").boundingBox())!;
+  await page.mouse.move(box.x + 6, box.y + box.height - 6);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 60, box.y + box.height - 40, { steps: 4 });
+  await page.mouse.up();
+  expect(await at()).not.toBe(still);
+});
+
 test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given to Iso; a drag inside moves the map", async ({ page }) => {
   await atlas(page);
-  const tray = page.getByRole("list", { name: "What Iso is sent" });
-  // Held still on a note: it goes into the tray above Iso's box, and the map says so.
+  const tray = await showContext(page, "Atlas");
+  // Held still on a note: it goes into Iso's context, listed in Iso's Context view, and the map says so.
   const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
   await page.mouse.move(huffman.x + 10, huffman.y + 6);
   await page.mouse.down();
   await page.waitForTimeout(800);
   await page.mouse.up();
   await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
-  await expect(tray.getByRole("listitem")).toHaveText(["▣Huffman codes"]);
+  await expect(tray.getByRole("listitem")).toHaveText([/^▣ Huffman codes \d+/]);
   await page.mouse.move(huffman.x - 60, huffman.y + 120); // off it, so it is not lit by pointing
   await expect(note(page, "coding/huffman-codes")).not.toHaveClass(/\bat\b/); // held, not chosen
   if ((page.viewportSize()?.width ?? 1280) <= 760) return; // carrying is a mouse's: a phone holds
@@ -231,10 +306,10 @@ test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given t
   await page.mouse.move(iso.x + 80, iso.y + 200, { steps: 8 });
   await expect(page.locator(".carried")).toHaveText("▣ Surprise");
   await page.mouse.up();
-  await expect(tray.getByRole("listitem")).toHaveText(["▣Huffman codes", "▣Surprise"]);
+  await expect(tray.getByRole("listitem")).toHaveText([/^▣ Huffman codes \d+/, /^▣ Surprise \d+/]);
   // Taken out again.
   await tray.getByRole("button", { name: "Take Huffman codes out of Iso's context" }).click();
-  await expect(tray.getByRole("listitem")).toHaveText(["▣Surprise"]);
+  await expect(tray.getByRole("listitem")).toHaveText([/^▣ Surprise \d+/]);
 });
 
 test("notes are picked on the map for a request: numbered in order, sized in the dock, and taken away again", async ({ page }) => {
@@ -292,7 +367,7 @@ test("on a phone, ↑ out steps out of the folder the screen is in", async ({ pa
   await expect(page.getByRole("button", { name: "↑ out" })).toHaveCount(0);
   await folder(page, "coding").getByRole("button", { name: "coding", exact: true }).click();
   await expect.poll(() => cell(page)).toBeGreaterThan(whole);
-  await expect(page.locator(".bar .where")).toHaveText("coding");
+  await expect(page.locator('[data-pane="atlas"] .where')).toHaveText("coding");
   await page.getByRole("button", { name: "↑ out" }).click();
   await expect.poll(() => cell(page)).toBeCloseTo(whole, 3);
 });

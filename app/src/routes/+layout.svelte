@@ -1,8 +1,8 @@
 <script lang="ts">
   import { agentName } from "@isorite/core";
   import { resolve } from "$app/paths";
-  // The shell: the header (the name, where you are, the layouts), the three panes, the status line, and on a phone
-  // the panes' tabs.
+  // The shell: the three panes, and on a phone their tabs. There is no header or status line (M10b): each pane's
+  // header holds its own tools, what it is doing, and its settings.
   import "../app.css";
   import "katex/dist/katex.min.css";
   import type { Snippet } from "svelte";
@@ -13,16 +13,18 @@
   import IsoPane from "$lib/components/IsoPane.svelte";
   import NoteList from "$lib/components/NoteList.svelte";
   import PaneHead from "$lib/components/PaneHead.svelte";
-  import { LAYOUTS, PANES, panes, type Pane } from "$lib/panes.svelte.ts";
-  import Logo from "$lib/components/Logo.svelte";
-  import Menu from "$lib/components/Menu.svelte";
+  import { converse } from "$lib/converse.svelte.ts";
+  import { PANES, panes, type Pane } from "$lib/panes.svelte.ts";
+  import { tray } from "$lib/tray.svelte.ts";
+  import IsoSettings from "$lib/components/IsoSettings.svelte";
+  import NoteSettings from "$lib/components/NoteSettings.svelte";
 
   let { children }: { children: Snippet } = $props();
   // The tutorial walks through the app with a coach card (lib/tutorial): in the tutorial's own build, and on the base
   // isorite --tutorial serves, which the session names as the tutorial's. Loaded only then.
   const tutorial = $derived(import.meta.env.MODE === "tutorial" || app.session?.tutorial ? import("$lib/tutorial/Tutorial.svelte") : null);
-  // Back from signing in at the provider: the settings open to say how it went.
-  let menu = $state(app.signIn !== null);
+  // Back from signing in at the provider: Iso's settings open to say how it went.
+  if (app.signIn !== null) panes.settings = "iso";
 
   // The three panes (M10). The Note pane shows the route's page; the Atlas and Iso stand in the shell, so they keep
   // their state while notes open and close.
@@ -102,10 +104,9 @@
     e.preventDefault();
   }
   const NAME: Record<Pane, string> = { note: "Note", atlas: "Atlas", iso: "Iso" };
-  const LAYOUT_NAME: Record<string, string> = { cols: "Three columns", stack: "The note beside the Atlas over Iso", one: "One pane: the one in focus" };
   const inNote = $derived(page.route.id === "/n/[...id]" || page.route.id === "/draft/[id]");
   // Iso's request as the map shows it: running, or how it ended until the map lets it go.
-  // A turn in Iso's pane tells itself there; the status line tells of a request in a note, and of a terminal agent.
+  // A turn in Iso's pane tells itself there; the Atlas's header tells of a request in a note, Iso's of a terminal agent.
   const run = $derived(app.atlas && !app.atlas.pick && app.iso?.start?.place.form !== "turn" ? app.iso : null);
   const running = $derived(run?.state === "reading" || run?.state === "writing");
   const runTitle = $derived(run ? (app.listing.notes.find((n) => n.id === run.note)?.title ?? "your note") : "");
@@ -121,41 +122,6 @@
 <svelte:head><title>{inNote && app.here ? `${app.here} · isorite` : "isorite"}</title></svelte:head>
 
 <div class="shell">
-  <header class="bar">
-    <button class="home" type="button" aria-label="isorite: settings" aria-haspopup="dialog" aria-expanded={menu} onclick={() => (menu = !menu)}><Logo /></button>
-    <span class="path">
-      {#if app.session}
-        <a href={resolve("/notes")}>{app.session.name}</a>{#if inNote && app.here}<span class="faint sep">/</span>{app.here}{/if}
-      {/if}
-    </span>
-    <span class="grow"></span>
-    {#if app.atlas?.here}<span class="where soft">{app.atlas.here}</span><button class="btn out" type="button" onclick={app.atlas.out}>↑ out</button>{/if}
-    {#if running && !run?.agent}<button class="btn stop" type="button" onclick={stop}>stop</button>{/if}
-    {#if app.exercise}
-      {@const x = app.exercise}
-      <!-- An exercise (Study-Written): its kind, Iso's read of you as six squares, wind back, and the next if it names one. -->
-      <span class="label kind">{x.kind}</span><span class="faint dot">·</span><span class="label read">Iso's read of you</span>
-      {#key x.flash}<button class="squares" class:flash={x.flash > 0} type="button" aria-label="understanding {x.squares} of 6{x.due ? ', due' : ''}: why" onclick={x.why}>{#each [0, 1, 2, 3, 4, 5] as k (k)}<i class="pip" class:lv={k < x.squares}></i>{/each}</button>{/key}
-      <button class="link wind" type="button" onclick={x.windBack}>[ wind back ]</button>
-      {#if x.next}<a class="next" href={resolve("/n/[...id]", { id: x.next })}>next</a>{/if}
-    {/if}
-    <span class="layouts" role="group" aria-label="Layout">
-      {#each LAYOUTS as l (l)}
-        <button class="icon" type="button" aria-pressed={panes.layout === l} aria-label={LAYOUT_NAME[l]} title="{LAYOUT_NAME[l]}  (Alt+L)" onclick={() => panes.setLayout(l)}>
-          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" />{#if l === "cols"}<path d="M5.8 2.5v11M10.2 2.5v11" />{:else if l === "stack"}<path d="M8 2.5v11M8 8h6.5" />{/if}</svg>
-        </button>
-      {/each}
-      <i class="div" aria-hidden="true"></i>
-      {#each PANES as p (p)}
-        <button class="icon" type="button" class:off={!panes.show[p]} aria-pressed={panes.show[p]} aria-label="Show {NAME[p]}" title="Show or hide {NAME[p]}{p === 'iso' ? ' (hide it when your terminal has the session)' : ''}" onclick={() => panes.toggle(p)}>
-          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3">{#if p === "note"}<path d="M4 2.5h6l2.5 2.5v8.5H4zM6 7h5M6 9.5h5" />{:else if p === "atlas"}<rect x="2" y="2.5" width="5" height="4" /><rect x="9" y="9.5" width="5" height="4" /><path d="M4.5 6.5v5H9" />{:else}<path d="M8 2.5l5.5 5.5L8 13.5 2.5 8z" />{/if}</svg>
-        </button>
-      {/each}
-    </span>
-  </header>
-
-  {#if menu}<Menu close={() => (menu = false)} />{/if}
-
   <main class="panes" data-layout={panes.layout} style:grid-template={grid.template} bind:this={row} onscroll={scrolled}>
     {#if app.error}
       <p class="stopped">isorite could not open the base: {app.error}</p>
@@ -169,8 +135,17 @@
             <div class="divider" role="separator" aria-orientation="vertical" aria-label="Resize {NAME[p]}" tabindex="0" onpointerdown={(e) => drag(e, p)} onkeydown={(e) => nudge(e, p)}></div>
           {/if}
           {#if p === "note"}
-            <PaneHead pane="note" name="Note">
+            <PaneHead pane="note" name="Note" settings={noteSettings}>
               {#snippet tools()}
+                {#if app.exercise}
+                  {@const x = app.exercise}
+                  <!-- An exercise (Study-Written): its kind, Iso's read of you as six squares, wind back, and the next if it names one. -->
+                  <span class="label kind">{x.kind}</span>
+                  {#key x.flash}<button class="squares" class:flash={x.flash > 0} type="button" aria-label="understanding {x.squares} of 6{x.due ? ', due' : ''}: why" onclick={x.why}>{#each [0, 1, 2, 3, 4, 5] as k (k)}<i class="pip" class:lv={k < x.squares}></i>{/each}</button>{/key}
+                  <button class="link wind" type="button" onclick={x.windBack}>wind back</button>
+                  {#if x.next}<a class="next" href={resolve("/n/[...id]", { id: x.next })}>next</a>{/if}
+                {/if}
+                {#if inNote && app.saving}<span class="saved" class:bad={app.saving.bad} class:busy={!app.saving.text.startsWith("saved")} title={app.saving.text} role="status"><i aria-hidden="true"></i><span class="hidden-label">{app.saving.text}</span></span>{/if}
                 <button class="icon" type="button" aria-label="All notes" title="All notes, and search" aria-pressed={page.route.id === "/notes" || panes.tree} onclick={() => { if (page.route.id !== "/notes") panes.tree = !panes.tree; }}>
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 3h4M4.5 3v9.5h3M4.5 7.5h3" /><rect x="8" y="5.5" width="5.5" height="3.5" /><rect x="8" y="10.5" width="5.5" height="3.5" /></svg>
                 </button>
@@ -179,10 +154,41 @@
             <div class="pbody note-body">{@render children()}</div>
             {#if panes.tree && page.route.id !== "/notes"}<div class="tree"><NoteList /></div>{/if}
           {:else if p === "atlas"}
-            <PaneHead pane="atlas" name="Atlas" />
+            <PaneHead pane="atlas" name="Atlas" settings={atlasSettings}>
+              {#snippet tools()}
+                <!-- Iso's request in a note, as the Atlas draws it: not for the note open beside it, which says so itself. -->
+                {#if run && !run.agent && (!app.open || run.note !== app.open) && (running || !app.atlas?.chosen)}
+                  {#if running}
+                    <span class="says">{run.note.startsWith("@draft/") ? "your note opens when Iso is done" : `Iso is answering in ${runTitle}`}</span>
+                    <button class="link" type="button" onclick={stop}>stop</button>
+                  {:else}
+                    <span class="says" class:bad={run.state === "failed"} title="click open ground to let its path go">{run.state === "done" ? `Iso is done in ${runTitle}` : run.state === "stopped" ? "Iso was stopped" : `Iso could not answer: ${run.message}`}</span>
+                  {/if}
+                {:else if app.atlas?.pick}
+                  <span class="says">click a note to link it, again to take it away</span>
+                {:else if app.atlas?.chosen && app.atlas.steps}
+                  <span class="says">{app.atlas.steps} {app.atlas.steps === 1 ? "step" : "steps"} back</span>
+                {/if}
+                {#if app.atlas?.here}<span class="where soft">{app.atlas.here}</span><button class="btn out" type="button" onclick={app.atlas.out}>↑ out</button>{/if}
+              {/snippet}
+            </PaneHead>
             <div class="pbody atlas-body"><AtlasPane /></div>
           {:else}
-            <PaneHead pane="iso" name="Iso" />
+            <PaneHead pane="iso" name="Iso" settings={isoSettings}>
+              {#snippet tools()}
+                {#if run?.agent}
+                  <span class="says" title={running ? "" : "click open ground on the Atlas to let its path go"}>{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentNamed}'s turn is done`}</span>
+                {/if}
+                <!-- What the next turn is sent (I8), with how many parts you gave; a new conversation. -->
+                <button class="icon ctx" type="button" aria-label="Context" aria-pressed={converse.view === "context"} title="What Iso is sent: what you gave, and the rest" onclick={() => (converse.view = converse.view === "context" ? "chat" : "context")}>
+                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h6" /></svg>
+                  {#if tray.sent.length}{#key tray.fresh}<span class="n" class:pulse={converse.view === "chat" && tray.fresh !== ""}>{tray.sent.length}</span>{/key}{/if}
+                </button>
+                <button class="icon" type="button" aria-label="A new conversation" title="A new conversation: nothing earlier is sent" disabled={!!converse.running || !converse.turns.length} onclick={() => { converse.fresh(); converse.view = "chat"; }}>
+                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.5v9M3.5 8h9" /></svg>
+                </button>
+              {/snippet}
+            </PaneHead>
             <div class="pbody iso-body"><IsoPane /></div>
           {/if}
         </section>
@@ -192,43 +198,12 @@
   <!-- Not over the terminal's replay, which has a card of its own. -->
   {#if tutorial && page.route.id !== "/terminal"}{#await tutorial then t}<t.default />{/await}{/if}
 
-  <footer class="status">
-    {#if app.session}
-      <span>{app.session.study ? "study" : "project: no journal is kept"}</span>
-      {#if inNote && app.saving}<span class:bad={app.saving.bad} role="status">{app.saving.text}</span>{/if}
-      {#if inNote && app.hint && !run}<span class="grow"></span><span class="hint">{app.hint}</span>{/if}
-      <!-- Iso's request, as the Atlas shows it: not for the note open beside it, which says so itself. -->
-      {#if run && (!app.open || run.note !== app.open) && (running || !app.atlas?.chosen)}
-        <span class="grow"></span>
-        {#if run.agent}
-          <span class="hint">{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentNamed}'s turn is done · click open ground to let its path go`}</span>
-        {:else if running}
-          <span class="hint">{run.note.startsWith("@draft/") ? "your note opens when Iso is done" : `Iso is answering in ${runTitle}`}</span>
-          <button class="link" type="button" onclick={stop}>stop</button>
-        {:else}
-          <span class="hint" class:bad={run.state === "failed"}>{run.state === "done" ? `Iso is done in ${runTitle}` : run.state === "stopped" ? "Iso was stopped" : `Iso could not answer: ${run.message}`} · click open ground to let its path go</span>
-        {/if}
-      {:else if app.atlas?.pick}
-        <span class="grow"></span>
-        <span class="hint">click a note to link it, again to take it away</span>
-      {:else if app.atlas?.chosen}
-        {#if app.atlas.steps}<span>{app.atlas.steps} {app.atlas.steps === 1 ? "step" : "steps"} back</span>{/if}
-        <span class="grow"></span>
-      {:else if app.atlas}
-        <span>{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span>
-        {#if app.atlas.items}<span>{app.atlas.items} study {app.atlas.items === 1 ? "item" : "items"}</span>{/if}
-        <span class="grow"></span>
-      {:else}
-        <span class="grow"></span>
-        <span>{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span>
-      {/if}
-    {/if}
-  </footer>
   <nav class="tabs" aria-label="Panes">
     {#each PANES as p (p)}
-      <button type="button" aria-current={panes.focus === p} onclick={() => panes.to(p)}>
+      <!-- A pane's lens, or Iso's mode, is the colour of its name: gold for the Iso lens, green for understand (W1). -->
+      {@const tint = p === "iso" ? (panes.mode === "understand" ? "m" : "") : panes.lens[p] === "iso" ? "g" : panes.lens[p] === "understand" ? "m" : ""}
+      <button type="button" class={tint} aria-current={panes.focus === p} aria-label="{NAME[p]}{p === 'iso' ? `, ${panes.mode} mode` : panes.lens[p] === 'normal' ? '' : `, ${panes.lens[p]} lens`}" onclick={() => panes.to(p)}>
         {NAME[p]}
-        <span class="under">{#if p === "iso"}<span class="g">{panes.mode}</span>{:else if panes.lens[p] === "iso"}<span class="g">◆ Iso</span>{:else if panes.lens[p] === "understand"}<span class="m">◇ understand</span>{/if}</span>
         {#if p === "iso" && panes.unseen}<span class="badge">{panes.unseen}</span>{/if}
       </button>
     {/each}
@@ -236,26 +211,43 @@
 </div>
 <svelte:window onkeydown={keys} />
 
+{#snippet noteSettings()}<NoteSettings />{/snippet}
+{#snippet isoSettings()}<IsoSettings />{/snippet}
+{#snippet atlasSettings()}
+  <section class="set">
+    <h2 class="label">the map</h2>
+    {#if app.atlas}
+      <p class="soft">{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}{#if app.atlas.items} · {app.atlas.items} study {app.atlas.items === 1 ? "item" : "items"}{/if}</p>
+    {/if}
+    <p class="faint">{panes.lens.atlas === "normal" ? "The Iso and understand lenses have a legend, shown at the foot of the map while these settings are open." : "The legend is at the foot of the map while these settings are open."}</p>
+  </section>
+{/snippet}
+
 <style>
-  .hint { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  .link { background: none; border: 0; padding: 4px 0; color: var(--lattice); white-space: nowrap; font-size: 12px; flex: none; }
-  .bar .out, .bar .stop { height: 28px; padding: 0 10px; font-size: 12px; }
-  .bar .where { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  /* Out of a folder, and stopping Iso from the header, are the phone's (Mobile-Atlas, Mobile-Think): on a desktop
-     a click on open ground steps out, and the status line has stop. */
-  @media (min-width: 601px) { .bar .out, .bar .where, .bar .stop { display: none; } }
-  /* In a folder, a phone's header names the folder, not the base (Mobile-Atlas). */
-  @media (max-width: 600px) { .bar:has(.where) .path { display: none; } }
+  .says { overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 12px; color: var(--text-soft); flex: 0 1 auto; }
+  .link { background: none; border: 0; padding: 4px 0; color: var(--lattice); white-space: nowrap; font-size: 12px; flex: none; cursor: pointer; }
+  .out { height: 28px; padding: 0 10px; font-size: 12px; flex: none; }
+  .where { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 12px; }
+  /* Out of a folder is the phone's (Mobile-Atlas): on a desktop a click on open ground steps out. */
+  @media (min-width: 761px) { .out, .where { display: none; } }
   .bad { color: var(--rose); }
-  .squares { display: inline-flex; gap: 4px; background: none; border: 0; padding: 6px 2px; cursor: pointer; }
+  /* The note's saving, as a mark: faint when saved, lit while saving or not saved, rose when it failed. */
+  .saved { display: grid; place-items: center; width: 14px; height: 28px; flex: none; }
+  .saved i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); }
+  .saved.busy i { background: var(--growth); }
+  .saved.bad i { background: var(--rose); }
+  .squares { display: inline-flex; gap: 4px; background: none; border: 0; padding: 6px 2px; cursor: pointer; flex: none; }
   .squares.flash { animation: flash 900ms ease-out; }
   @keyframes flash { 0% { box-shadow: 0 0 0 0 var(--malachite); background: var(--malachite-soft); } 100% { box-shadow: 0 0 0 10px transparent; background: none; } }
-  .bar .kind, .bar .read, .bar .dot { white-space: nowrap; }
-  .bar .next { white-space: nowrap; }
+  .kind, .next { white-space: nowrap; font-size: 12px; }
   /* On a phone an exercise's header is its kind and the squares (Mobile-Study): wind back is in the squares' panel. */
-  @media (max-width: 600px) { .bar .read, .bar .dot, .bar .wind, .bar:has(.squares) :global(.count), .bar:has(.squares) .path { display: none; } }
+  @media (max-width: 600px) { .wind, .kind { display: none; } }
+  .set { display: flex; flex-direction: column; gap: var(--space-2); }
+  .set h2 { font-weight: 400; }
   /* The panes (M10): a grid on a desktop, a row of full-width panes on a phone. */
-  .panes { display: grid; min-height: 0; min-width: 0; height: calc(100dvh - var(--bar-h) - 28px); }
+  /* Under a phone's status bar, opened from the Home Screen, the panes start below it. */
+  .shell { padding-top: env(safe-area-inset-top); }
+  .panes { display: grid; min-height: 0; min-width: 0; height: calc(100dvh - env(safe-area-inset-top)); }
   .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--line); position: relative; background: var(--ground-0); }
   .pane.first { border-left: 0; }
   .pane.top { border-bottom: 1px solid var(--line); }
@@ -272,26 +264,29 @@
   .tree { position: absolute; left: 0; right: 0; bottom: 0; top: 40px; z-index: 7; overflow: auto; background: var(--ground-0); }
   button.icon { background: none; border: 0; padding: 0; cursor: pointer; }
   button.icon[aria-pressed="true"] { color: var(--text); background: var(--ground-2); }
-  .layouts { display: flex; align-items: center; gap: 2px; }
-  .layouts .div { width: 1px; height: 18px; background: var(--line); margin: 0 8px; }
-  .layouts .icon.off { opacity: 0.45; background: none; }
   .tabs { display: none; }
   @media (max-width: 760px) {
-    .layouts { display: none; }
     .tree { top: 48px; }
-    .panes { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; height: calc(100dvh - var(--bar-h) - 28px - 52px - env(safe-area-inset-bottom)); }
+    .panes { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; height: calc(100dvh - env(safe-area-inset-top) - 52px - env(safe-area-inset-bottom)); }
     .panes::-webkit-scrollbar { display: none; }
     .pane, .pane[hidden] { display: flex; flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; border-left: 0; }
     .tabs { display: grid; grid-template-columns: repeat(3, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); background: var(--ground-0); }
     .tabs button { height: 52px; background: none; border: 0; font-family: var(--font-pixel); font-size: 14px; color: var(--text-faint); position: relative; display: grid; place-content: center; gap: 2px; cursor: pointer; }
     .tabs button[aria-current="true"] { color: var(--text); }
     .tabs button[aria-current="true"]::before { content: ""; position: absolute; top: -1px; left: 20%; right: 20%; height: 2px; background: var(--text); }
-    .tabs .under { font: 10px var(--font-ui); height: 12px; color: var(--text-faint); }
-    .tabs .g { color: var(--growth); }
-    .tabs .m { color: var(--malachite); }
+    .tabs button.g { color: var(--growth); }
+    .tabs button.m { color: var(--malachite); }
+    .tabs button.g[aria-current="true"]::before { background: var(--growth); }
+    .tabs button.m[aria-current="true"]::before { background: var(--malachite); }
     .tabs .badge { position: absolute; top: 8px; right: calc(50% - 30px); font: 10px var(--font-ui); color: var(--ground-0); background: var(--growth); min-width: 16px; height: 16px; display: grid; place-items: center; padding: 0 3px; }
   }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; }
   .icon:hover, .icon:focus-visible { color: var(--text); text-decoration: none; }
+  .icon:disabled { opacity: 0.35; cursor: default; }
+  .ctx { width: auto; min-width: 28px; padding: 0 5px; display: inline-flex; align-items: center; gap: 4px; }
+  .ctx .n { font: 11px/1 var(--font-ui); color: var(--growth); font-variant-numeric: tabular-nums; }
+  .ctx .n.pulse { animation: pulse 900ms ease-out; }
+  @keyframes pulse { 0% { color: var(--text); text-shadow: 0 0 6px var(--growth); } }
+  @media (prefers-reduced-motion: reduce) { .ctx .n.pulse { animation: none; } }
   .stopped { padding: var(--space-12) var(--space-4); text-align: center; color: var(--rose); }
 </style>

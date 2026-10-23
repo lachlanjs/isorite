@@ -1,10 +1,14 @@
 <script lang="ts">
   // The note's Understand lens (M10): its Understanding note. Iso's reading of your understanding of the note, what
-  // changed it (from the study record, newest first), and your scratchpad, which only you see and Iso does not write.
+  // changed it (from the study record, newest first), and your scratchpad, which only you see and Iso does not write:
+  // written in the note editor, Markdown and maths as you type, [[ to link a note (V9).
   // Its purpose is to let you see what is kept about your understanding, and how it has grown.
   import type { Evidence, UnderstandingReport } from "@isorite/engine";
   import { onMount } from "svelte";
-  import { app } from "$lib/app.svelte.ts";
+  import { goto } from "$app/navigation";
+  import type { EditorView } from "@codemirror/view";
+  import { app, noteHref } from "$lib/app.svelte.ts";
+  import { createEditor, setText } from "$lib/editor/codemirror.ts";
   import { render } from "$lib/markdown.ts";
   import { panes } from "$lib/panes.svelte.ts";
 
@@ -16,20 +20,32 @@
   let saving = $state<"" | "saving" | "saved" | "failed">("");
   let typed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let host: HTMLDivElement;
+  let editor: EditorView | undefined;
 
   async function read(): Promise<void> {
     try {
       const r = await app.api.understanding(id);
       report = r;
-      if (!typed) pad = r.scratchpad;
+      if (!typed) { pad = r.scratchpad; if (editor) setText(editor, pad); }
     } catch (e) { problem = (e as Error).message; }
   }
   onMount(() => {
+    editor = createEditor(host, {
+      doc: pad,
+      label: "Scratchpad",
+      placeholder: "Anything you like about this note. [[ links a note, $x$ is maths.",
+      notes: () => app.listing.notes.filter((n) => n.id !== id).map((n) => ({ id: n.id, title: n.title, folder: n.dir })),
+      onChange: (text) => { pad = text; typing(); },
+      onSave: () => { if (typed) void save(); },
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
+      onFollow: (to) => { void goto(noteHref(to)); },
+    });
     void read();
     const off = app.on((e) => {
       if (e.type === "record" || (e.type === "note-changed" && (e.id === `@understanding/${id}` || e.id === id))) void read();
     });
-    return () => { off(); clearTimeout(timer); if (typed) void save(); };
+    return () => { off(); clearTimeout(timer); if (typed) void save(); editor?.destroy(); };
   });
 
   function typing(): void {
@@ -84,8 +100,8 @@
   </section>
 
   <section>
-    <h2><label for="scratchpad">Scratchpad</label>{#if saving}<span class="state" class:bad={saving === "failed"} role="status">{saving === "failed" ? "not saved" : saving}</span>{/if}</h2>
-    <textarea id="scratchpad" bind:value={pad} oninput={typing} onblur={() => { if (typed) void save(); }} placeholder="Anything you like about this note."></textarea>
+    <h2><span>Scratchpad</span>{#if saving}<span class="state" class:bad={saving === "failed"} role="status">{saving === "failed" ? "not saved" : saving}</span>{/if}</h2>
+    <div class="pad" bind:this={host} onfocusout={() => { if (typed) void save(); }}></div>
     <p class="faint private">Only you see this, also in a base you share: it is kept in your study base.</p>
   </section>
 </article>
@@ -109,8 +125,9 @@
   .by.up { color: var(--malachite); }
   .by.down { color: var(--rose); }
   .t { color: var(--text-soft); }
-  textarea { width: 100%; min-height: 140px; resize: vertical; background: var(--ground-1); border: 1px solid var(--line); padding: 10px 12px; font: 15px/1.55 var(--font-text); color: var(--text); }
-  textarea:focus { outline: none; border-color: var(--line-strong); }
+  .pad { min-height: 140px; background: var(--ground-1); border: 1px solid var(--line); padding: 6px 12px; }
+  .pad:focus-within { border-color: var(--line-strong); }
+  .pad :global(.cm-editor) { min-height: 126px; }
   .private { font-size: 12px; margin-top: 6px; }
   .link { background: none; border: 0; padding: 0; margin-top: 8px; color: var(--lattice); font: inherit; font-size: 12px; cursor: pointer; }
   .bad { color: var(--rose); }

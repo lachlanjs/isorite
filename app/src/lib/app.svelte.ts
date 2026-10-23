@@ -15,9 +15,9 @@ class AppState {
   open = $state("");
   /** What the header's path ends in: the open note's title. */
   here = $state("");
-  /** How the open note's saving stands, for the status line. */
+  /** How the open note's saving stands, for the Note pane's header. */
   saving = $state<{ text: string; bad: boolean } | null>(null);
-  /** The Atlas, while it is the page: how many study items it shows, for the status line. */
+  /** The Atlas: how many study items it shows, and where it is, for its header and settings. */
   atlas = $state.raw<{ items: number; chosen: string; chosenId: string; steps: number; pick: boolean; here: string; out: () => void } | null>(null);
   /** An exercise, while one is open: what the header shows of it (Study-Written): its kind, the squares for what it
    *  tests, whether they flash, and the two things done from there. */
@@ -26,8 +26,6 @@ class AppState {
   studying = $state(false);
   /** Back from signing in at the provider for a key: how it went, for the settings to say. */
   signIn = $state.raw<{ ok: boolean; message: string } | null>(null);
-  /** A hint for the status line from the page, when it has one. */
-  hint = $state("");
   /** Iso's latest request, from any page or tab, as the Atlas draws its path: the note asking, each step, and how
    *  it ended. It stays until the next request, or until the Atlas lets it go. */
   iso = $state.raw<IsoRun | null>(null);

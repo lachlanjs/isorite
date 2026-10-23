@@ -4,7 +4,7 @@
   import { resolve } from "$app/paths";
   // A note, open for writing: its title, its details when they are wanted, and its text. Saving is the
   // session's business (note.svelte.ts); this shows how it stands and offers the choice when a save is refused.
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { isStudyId, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
@@ -143,7 +143,6 @@
       iso.close();
       exercise?.close();
       app.exercise = null;
-      app.hint = "";
       void note.close();
       app.here = "";
       app.open = "";
@@ -154,7 +153,13 @@
   // The header's part of an open exercise: its kind, the squares, wind back and next.
   $effect(() => {
     app.exercise = ex ? { kind: KINDS[ex.ex.kind] ?? ex.ex.kind, squares: ex.squares.squares, due: ex.squares.due, flash: ex.flash, windBack: () => void ex.windBack(), why: () => (why = !why), next: ex.ex.next ? `@study/${ex.ex.next}` : null } : null;
-    app.hint = ex ? "write as much as you like · only what you mark is your answer" : "";
+  });
+
+  // A note just made on the Atlas opens with its title chosen, to type over (V6).
+  $effect(() => {
+    if (note.loaded !== "ready" || panes.fresh !== id) return;
+    panes.fresh = "";
+    void tick().then(() => { const t = document.getElementById("title") as HTMLTextAreaElement | null; t?.focus(); t?.select(); });
   });
 
   const SAYS = { saved: "saved", unsaved: "not saved yet", saving: "saving", conflict: "changed elsewhere: choose below", failed: "not saved" } as const;
@@ -180,7 +185,7 @@
       const sel = getSelection(), box = noteEl!.getBoundingClientRect();
       const r = sel?.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
       if (!r || (!r.width && !r.height)) { toIsoAt = { top: 8, left: box.width - 140 }; return; }
-      toIsoAt = { top: panes.narrow ? r.bottom - box.top + 10 : r.top - box.top - 36, left: Math.max(8, Math.min(r.left - box.left, box.width - 140)) };
+      toIsoAt = { top: panes.narrow ? r.bottom - box.top + 30 : r.top - box.top - 36, left: Math.max(8, Math.min(r.left - box.left, box.width - 140)) };
     });
     return () => cancelAnimationFrame(frame);
   });

@@ -40,7 +40,7 @@ async function select(page: Page, text: string) {
 // An exercise is worked through in the Note pane alone, so its working's lines are as wide as on a page of their own.
 test.beforeEach(async ({ page }) => { await page.addInitScript(() => localStorage.setItem("isorite.layout", "one")); });
 
-const lit = (page: Page) => page.locator(".bar .squares .pip.lv");
+const lit = (page: Page) => page.locator('[data-pane="note"] .phead .squares .pip.lv');
 
 test("an exercise: mark a selection as the answer, send it for marking, see the marks and the squares move, wind back", async ({ page }) => {
   const { note, id } = await open(page, "mark");
@@ -50,7 +50,7 @@ test("an exercise: mark a selection as the answer, send it for marking, see the 
   await expect(page.locator(".tests").getByRole("link")).toHaveText(`Coin ${note.split("/")[1]}`);
   await expect(page.locator(".cm-iso-question")).toContainText("Show that a fair coin carries one bit.");
   await expect(page.locator(".cm-iso-working")).toBeVisible();
-  await expect(page.locator(".bar")).toContainText("written response");
+  await expect(page.locator('[data-pane="note"] .phead')).toContainText("written response");
   await expect(lit(page)).toHaveCount(0);
   const send = page.getByRole("button", { name: "send for marking" });
   await expect(send).toBeDisabled();
@@ -78,7 +78,7 @@ test("an exercise: mark a selection as the answer, send it for marking, see the 
   await look(page, "exercise-marked");
 
   // The squares say why, and wind back takes one away.
-  await page.locator(".bar .squares").click();
+  await page.locator('[data-pane="note"] .phead .squares').click();
   await expect(page.locator(".why")).toContainText("Exact, and unaided.");
   await page.locator(".why").getByRole("button", { name: "[ wind back ]" }).click();
   await expect(lit(page)).toHaveCount(0);
@@ -111,6 +111,6 @@ test("a wrong answer is marked wrong in rose and lowers nothing below nothing", 
   await expect(page.locator(".cm-content")).toContainText("× wrong");
   await expect(page.locator(".cm-content .chip")).toHaveText("× 1 wrong");
   await expect(lit(page)).toHaveCount(0);
-  if (!phone()) await expect(page.locator(".bar").getByRole("button", { name: "[ wind back ]" })).toBeVisible();
+  if (!phone()) await expect(page.locator('[data-pane="note"] .phead').getByRole("button", { name: "wind back" })).toBeVisible();
   await look(page, "exercise-wrong");
 });
