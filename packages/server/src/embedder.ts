@@ -9,16 +9,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import type { Embedder } from "@isorite/engine";
-import { userModelDir } from "./model.ts";
+import { NAME, userModelDir } from "./model.ts";
 
-export const MODEL = "bge-small-en-v1.5-q8";
+export const MODEL = `${NAME}-q8`;
 export const DIM = 384;
 
-/** Where the model's files are (npm run model in a checkout, isorite model when installed), or null when they are
- *  not there. */
+/** Where the model's files are (npm run model in a checkout, into packages/model; isorite model when installed), or
+ *  null when they are not there. */
 export function modelDir(env: NodeJS.ProcessEnv = process.env): string | null {
   if (env.ISORITE_EMBED === "off") return null;
-  const dirs = env.ISORITE_EMBED_DIR ? [env.ISORITE_EMBED_DIR] : [join(dirname(fileURLToPath(import.meta.url)), "..", "models", "bge-small-en-v1.5"), userModelDir(env)];
+  const dirs = env.ISORITE_EMBED_DIR ? [env.ISORITE_EMBED_DIR] : [join(dirname(fileURLToPath(import.meta.url)), "..", "..", "model"), userModelDir(env)];
   return dirs.find((dir) => existsSync(join(dir, "model.onnx")) && existsSync(join(dir, "tokenizer.json"))) ?? null;
 }
 

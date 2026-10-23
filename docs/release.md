@@ -86,3 +86,8 @@ the last plain version.
 - **npm answers 404 (not 403):** the trusted publisher does not match the run. Check the owner, repository,
   workflow file name and environment on npmjs.com.
 - **The npm job passed but the GitHub Release failed:** re-run only that job.
+
+## The model package
+
+`isorite-model-granite` (`packages/model`) holds the files for search by meaning, and is published apart from
+isorite, by hand: `npm run model`, then `npm publish` in `packages/model`. See `docs/plan-embed.md`.

@@ -1,0 +1,11 @@
+{
+  "name": "isorite-model-granite",
+  "version": "1.0.0",
+  "description": "The model isorite searches notes by meaning with: IBM's granite-embedding-small-english-r2, 8-bit ONNX. Files only, no code.",
+  "license": "Apache-2.0",
+  "repository": { "type": "git", "url": "git+https://github.com/lachlanjs/isorite.git", "directory": "packages/model" },
+  "homepage": "https://github.com/lachlanjs/isorite/tree/main/packages/model",
+  "keywords": ["isorite", "embeddings", "onnx", "granite"],
+  "files": ["model.onnx", "model_quantized.onnx_data", "tokenizer.json", "tokenizer_config.json", "LICENSE", "NOTICE", "README.md"],
+  "scripts": { "prepack": "node ../server/scripts/embed-model.ts" }
+}

@@ -1,0 +1,7 @@
+granite-embedding-small-english-r2
+Copyright IBM Corp. Licensed under the Apache License, Version 2.0 (LICENSE).
+https://huggingface.co/ibm-granite/granite-embedding-small-english-r2
+
+The files here are the 8-bit quantised ONNX conversion by onnx-community, unchanged:
+https://huggingface.co/onnx-community/granite-embedding-small-english-r2-ONNX
+revision 1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8

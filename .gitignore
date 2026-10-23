@@ -15,7 +15,10 @@ playwright-report/
 
 # The embedding model for search by meaning: fetched, not kept in git
 packages/server/models/
-packages/server/models/
+packages/model/*.onnx
+packages/model/*.onnx_data
+packages/model/tokenizer*.json
+packages/model/*.tgz
 
 # SvelteKit working files made when a check runs from the root
 .svelte-kit/

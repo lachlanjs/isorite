@@ -18,11 +18,12 @@ export interface Embedder {
   /** Its name: a cache made with another model is made again. */
   model: string;
   dim: number;
+  /** Put before a question, where the model is meant to be asked one that way (none for some). */
+  query?: string;
   embed(text: string): Promise<Float32Array>;
 }
 
 const MAX_PIECE = 1800; // characters: a longer section is cut at its paragraphs, so that all of it is read
-const QUERY = "Represent this sentence for searching relevant passages: "; // how bge is asked a question
 /** This many pieces without a vector are made at once, before a search; more are left to the background. */
 export const INLINE = 12;
 
@@ -170,7 +171,7 @@ export class Meaning {
       missing = ps.filter((p) => !vectors.has(p.key));
     } else if (missing.length) void this.refresh(b).catch(() => undefined);
     if (ps.length && missing.length === ps.length) return { hits: [], pending: missing.length, ready: false };
-    const q = pack(await this.embedder.embed(QUERY + text)), dim = this.embedder.dim;
+    const q = pack(await this.embedder.embed((this.embedder.query ?? "") + text)), dim = this.embedder.dim;
     const under = opts.under?.replace(/^\/+|\/+$/g, "");
     const best = new Map<string, Hit>();
     for (const p of ps) {

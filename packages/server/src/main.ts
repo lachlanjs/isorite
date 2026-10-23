@@ -39,7 +39,8 @@ const USAGE = `isorite: an agentic harness for understanding
   isorite mcp [<study base | notes>] [--port <n>] [--agent <name>]
                                          the knowledge base's tools over MCP, on stdio, for Claude Code or Pi:
                                          claude mcp add isorite -- isorite mcp <base> --agent claude-code
-  isorite model                          fetch the model for search by meaning (34 MB, once)
+  isorite model [--from <folder>]        fetch the model for search by meaning (53 MB, once): from npm, else
+                                         Hugging Face; or from a folder its files were copied into
   isorite --tutorial [<folder>] [--port <n>]
                                          the tutorial, on the example base, with a scripted model (no key,
                                          nothing sent anywhere): the terminal's tour in OpenCode 2, and the
@@ -89,7 +90,11 @@ export function main(argv: string[]): number | Promise<number> {
       const run = command === "term" ? term(path, port === undefined ? {} : { port }) : mcp(path, { ...(port === undefined ? {} : { port }), ...(agent ? { agent } : {}) });
       return run.catch((e: Error) => { console.error(e.message); return 2; });
     }
-    if (command === "model") return fetchModel(userModelDir()).then(() => 0, (e: Error) => { console.error(e.message); return 1; });
+    if (command === "model") {
+      const from = rest[rest.indexOf("--from") + 1];
+      if (rest.includes("--from") && !from) { console.error("--from takes a folder"); return 2; }
+      return fetchModel(userModelDir(), console.log, from && rest.includes("--from") ? { from } : {}).then(() => 0, (e: Error) => { console.error(e.message); return 1; });
+    }
     if (command === "--version" || command === "-v") { console.log(VERSION); return 0; }
     if (command === "example" && rest[0]) {
       return writeExample(rest[0]).then(({ notes, study }) => {

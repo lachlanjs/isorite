@@ -1,9 +1,9 @@
 // The embedding model, run in a thread of its own so the server answers while
-// it works. bge-small-en-v1.5 (8-bit), through onnxruntime-web's WebAssembly
+// it works. granite-embedding-small-english-r2 (8-bit), through onnxruntime-web's WebAssembly
 // build: no native binary, and the same runtime a webview has. Asked for a
 // vector by a message {id, text}; answers {id, vector} or {id, error}.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,7 +20,9 @@ ort.env.wasm.numThreads = 1;
 const WASM = "ort-wasm-simd-threaded.wasm", beside = join(dirname(fileURLToPath(import.meta.url)), WASM);
 ort.env.wasm.wasmBinary = readFileSync(existsSync(beside) ? beside : join(dirname(createRequire(import.meta.url).resolve("onnxruntime-web")), WASM));
 const tok = new Tokenizer(JSON.parse(readFileSync(join(dir, "tokenizer.json"), "utf8")), JSON.parse(readFileSync(join(dir, "tokenizer_config.json"), "utf8")));
-const session = await ort.InferenceSession.create(readFileSync(join(dir, "model.onnx")), { executionProviders: ["wasm"] });
+// The weights, where the model keeps them apart from its graph, under the names the graph gives them.
+const externalData = readdirSync(dir).filter((f) => f.endsWith(".onnx_data")).map((path) => ({ path, data: readFileSync(join(dir, path)) }));
+const session = await ort.InferenceSession.create(readFileSync(join(dir, "model.onnx")), { executionProviders: ["wasm"], externalData });
 const typed = session.inputNames.includes("token_type_ids");
 
 async function embed(text: string): Promise<Float32Array> {
