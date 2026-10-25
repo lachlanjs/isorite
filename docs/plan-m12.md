@@ -3,7 +3,7 @@
 Written 2026-10-25. It follows the understanding mockup Lachlan approved on 2026-10-25 ("much better, go ahead").
 The mockup is https://claude.ai/artifact/KLr7fU9GrjpTYgxdcSX6oK (version 4), built from `.refine/understand/src.html`.
 
-On the refinement page this is U1–U6, with Q36–Q46 answered, and Q47–Q52 below waiting for answers. This plan
+On the refinement page this is U1–U6, with Q36–Q46 answered, and Q47–Q53 below waiting for answers. This plan
 replaces M10's lenses and modes, and the study base of M4 and M10. Branch `m12-understanding`, from `main`.
 
 **Design sources.** The mockup is the reference for every screen here. The mood boards are behind on all of it, so
@@ -231,11 +231,11 @@ Each step is a commit with its tests, as before. Svelte files go through `svelte
   - L1 and L2 are changed only where they name a lens or a mode.
   - L3 taught the study base, which is gone. It becomes "Questions and problems", walked on the differential geometry
     base from the mockup, added to `packages/example` as a second example.
-  - T9–T11 and V11–V12 (M10d) stay for the next milestone unless they fall out of this one on the way (Q52 asks).
+  - T9–T11 and V11–V12 (M10d) stay for the next milestone unless they fall out of this one on the way (Q53 asks).
 - **The real-model check** runs once, at step 5, on a temporary copy: a question asked back, a solution checked, and
   an Understanding note written. It should cost under $0.15, and I'll report the figure.
 
-## 8. Questions for Lachlan (on the page as Q47–Q52)
+## 8. Questions for Lachlan (on the page as Q47–Q53)
 
 - **Q47. The files and run switches:** do Iso's turns go to the terminal agent, with its permissions matching the
   switches?
@@ -249,9 +249,9 @@ Each step is a commit with its tests, as before. Svelte files go through `svelte
   always by path?
 - **Q51. Web links:** one node per link (*recommended*, now that each kind has a switch), or one per note with a
   count, as Q25 chose before the switches?
-- **Q52. Two scopes:**
-  - Is the spend cap per month (*recommended*) or per conversation?
-  - Do M10d's tutorial items wait for the next milestone (*recommended*), or join this one?
+- **Q52. The spend cap:** per calendar month (*recommended*), or per conversation?
+- **Q53. M10d's tutorial items (T9–T11, V11, V12):** do they wait for the next milestone (*recommended*), or join this
+  one?
 
 ## 9. What was built
 
