@@ -65,15 +65,18 @@ describe("the terminal's models", () => {
     return { XDG_CONFIG_HOME: dir } as NodeJS.ProcessEnv;
   };
 
-  it("are Iso's provider, with its key in the environment, when no gateway is named", async () => {
-    const { gateway, env } = await modelsFor(home(`[provider]\nname = "work"\nurl = "https://gateway.work/v1"\nkey = "sk-work"\n[tiers]\nlow = "small"\nmid = "middle"\nmax = "big"\n`));
-    expect(gateway).toEqual({ url: "https://gateway.work/v1", models: ["middle", "big", "small"] });
-    expect(env.ISORITE_GATEWAY_KEY).toBe("sk-work");
+  const server = { url: "http://127.0.0.1:4767", token: "the-token" };
+
+  it("are Iso's provider, reached through the isorite server's relay with its token, never the key", async () => {
+    const { gateway, env, from } = await modelsFor(home(`[provider]\nname = "work"\nurl = "https://gateway.work/v1"\nkey = "sk-work"\n[tiers]\nlow = "small"\nmid = "middle"\nmax = "big"\n`), server);
+    expect(gateway).toEqual({ url: "http://127.0.0.1:4767/api/gateway", models: ["middle", "big", "small"] });
+    expect(env.ISORITE_GATEWAY_KEY).toBe("the-token");
+    expect(from).toBe("config");
   });
 
-  it("are the gateway named in the environment first, and none without a key", async () => {
+  it("are the gateway named in the environment first, and OpenCode's own without a key or a certificate", async () => {
     const named = { ...home(`[provider]\nkey = "sk-or"\n`), ISORITE_GATEWAY_URL: "https://other/v1", ISORITE_GATEWAY_MODELS: "m" };
-    expect((await modelsFor(named)).gateway).toEqual({ url: "https://other/v1", models: ["m"] });
-    expect((await modelsFor(home(`device = "abcd1234"\n`))).gateway).toBeNull();
+    expect(await modelsFor(named, server)).toMatchObject({ gateway: { url: "https://other/v1", models: ["m"] }, from: "environment" });
+    expect(await modelsFor(home(`device = "abcd1234"\n`), server)).toMatchObject({ gateway: null, from: "opencode" });
   });
 });

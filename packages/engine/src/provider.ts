@@ -25,6 +25,16 @@ export interface ProviderConfig {
   /** Where the person signs in for the provider to make a key and hand it here (OAuth with PKCE); its codes are
    *  exchanged at `url` + /auth/keys. Without it, a key can only be pasted. */
   auth?: string;
+  /** Sent with every request: what a company's gateway may want besides the key (a team, a project). */
+  headers?: Record<string, string>;
+  /** The header the key goes in, as it is (`api-key`), in place of `Authorization: Bearer`. */
+  keyHeader?: string;
+  /** Added to every request's address (`api-version`). */
+  query?: Record<string, string>;
+  /** false for a gateway that refuses `stream_options`: the turns then cost what the prices say, or nothing. */
+  streamUsage?: boolean;
+  /** The tiers are OpenRouter's, kept because none were named for this provider: a 404 says so. */
+  defaultTiers?: boolean;
 }
 
 export const OPENROUTER: ProviderConfig = {
@@ -92,6 +102,34 @@ export interface Reply {
 /** The provider refused, or could not be reached. */
 export class ModelError extends EngineError {}
 
+/** The certificates Node refuses when it does not know the authority that signed them. */
+const UNTRUSTED = new Set(["SELF_SIGNED_CERT_IN_CHAIN", "DEPTH_ZERO_SELF_SIGNED_CERT", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "UNABLE_TO_GET_ISSUER_CERT", "UNABLE_TO_GET_ISSUER_CERT_LOCALLY"]);
+
+/** Why a request did not reach `url`, and what to change: the reason Node keeps in the error's cause (a fetch says
+ *  only "fetch failed"), with one line of advice for the common ones. */
+export function unreachable(err: unknown, url: string): string {
+  let reason = err as { code?: string; message?: string; cause?: unknown } | undefined, code = "", said = "";
+  while (reason) {
+    if (reason.code) code = reason.code;
+    if (reason.message) said = reason.message;
+    reason = reason.cause as typeof reason;
+  }
+  said = said.split("\n")[0]!.replace(/^[0-9A-F]{8,}:error:[0-9A-F]+:SSL routines:[^:]*:/, "").replace(/:\.\.\/deps\/.*$/, "");
+  let host = url;
+  try { host = new URL(url).host; } catch { /* as given */ }
+  const advice =
+    UNTRUSTED.has(code) ? `Its certificate is signed by an authority not trusted here, often a company's own. Add it to the system's authorities (isorite trusts those), or set NODE_EXTRA_CA_CERTS to its certificate (a .pem), or name that as ca in [provider].`
+    : code === "CERT_HAS_EXPIRED" ? "Its certificate has expired: that is the gateway's to fix."
+    : code === "ERR_TLS_CERT_ALTNAME_INVALID" ? `Its certificate is not for ${host}: check the url in [provider].`
+    : /CERTIFICATE_REQUIRED|HANDSHAKE_FAILURE|BAD_CERTIFICATE|UNKNOWN_CA/.test(code) ? "It asks for a client certificate (mTLS) and was given none it accepts: name yours as pfx (with pfx_passphrase), or cert and cert_key, in [provider]."
+    : code === "UND_ERR_SOCKET" && url.startsWith("https:") ? "It closed the connection as it was being set up. A gateway that asks for a client certificate (mTLS) does this: name yours as pfx, or cert and cert_key, in [provider]."
+    : code === "ENOTFOUND" || code === "EAI_AGAIN" ? `The name ${host} could not be found: check the url in [provider], and whether it is only found on the company's network or VPN.`
+    : code === "ECONNREFUSED" ? `Nothing answers at ${host}: check the url and its port in [provider].`
+    : code === "ETIMEDOUT" || code === "UND_ERR_CONNECT_TIMEOUT" || code === "ENETUNREACH" || code === "EHOSTUNREACH" ? `${host} did not answer. If the company's network reaches it through a proxy, set HTTPS_PROXY.`
+    : "";
+  return [said || (err as Error)?.message || "no reason given", code && !said.includes(code) ? ` (${code})` : "", advice ? `. ${advice}` : ""].join("");
+}
+
 export const plain = (m: Message): string => (typeof m.content === "string" ? m.content : m.content.map((p) => p.text).join("\n\n"));
 
 /** A message as it is sent. */
@@ -105,22 +143,29 @@ const wire = (marks: boolean) => (m: Message) => m.role === "tool" ? { role: "to
 
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
+/** The address of `path` at the provider, and the headers that go with every request to it: its key, where it
+ *  wants it, and its own. */
+export function endpoint(p: ProviderConfig, key: string | null, path: string): { url: string; headers: Record<string, string> } {
+  const url = new URL(p.url.replace(/\/+$/, "") + path);
+  for (const [name, value] of Object.entries(p.query ?? {})) url.searchParams.set(name, value);
+  const auth: Record<string, string> = !key ? {} : p.keyHeader ? { [p.keyHeader]: key } : { Authorization: `Bearer ${key}` };
+  return { url: url.toString(), headers: { ...p.headers, ...auth, "X-Title": "isorite" } };
+}
+
 /** Call the model, streaming. */
 export async function complete(http: Http, p: ProviderConfig, key: string | null, call: Call): Promise<Reply> {
   const body = JSON.stringify({
-    model: call.model, messages: call.messages.map(wire(p.cacheMarks)), stream: true, stream_options: { include_usage: true },
+    model: call.model, messages: call.messages.map(wire(p.cacheMarks)), stream: true, ...(p.streamUsage === false ? {} : { stream_options: { include_usage: true } }),
     ...(call.maxTokens ? { max_tokens: call.maxTokens } : {}),
     ...(call.tools?.length ? { tools: call.tools, tool_choice: call.toolChoice ?? "auto" } : {}),
   });
   let res: Response;
   try {
-    res = await http.fetch(p.url.replace(/\/+$/, "") + "/chat/completions", {
-      method: "POST", body, signal: call.signal ?? null,
-      headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}), "X-Title": "isorite" },
-    });
+    const to = endpoint(p, key, "/chat/completions");
+    res = await http.fetch(to.url, { method: "POST", body, signal: call.signal ?? null, headers: { "Content-Type": "application/json", ...to.headers } });
   } catch (err) {
     if ((err as Error).name === "AbortError") throw err;
-    throw new ModelError(`${p.name} could not be reached: ${(err as Error).message}`, 502);
+    throw new ModelError(`${p.name} could not be reached: ${unreachable(err, p.url)}`, 502);
   }
   if (!res.ok || !res.body) {
     let detail = "";
@@ -128,7 +173,7 @@ export async function complete(http: Http, p: ProviderConfig, key: string | null
       const said = await res.text();
       try { const j = JSON.parse(said) as { error?: { message?: string } | string; message?: string }; detail = (typeof j.error === "string" ? j.error : j.error?.message) ?? j.message ?? ""; } catch { detail = said.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300); }
     } catch { /* none */ }
-    const advice = res.status === 401 ? " The key was not accepted: set it again in settings." : res.status === 402 ? " The key's credit is spent." : res.status === 404 ? ` ${p.name} may have no model called ${call.model}.` : "";
+    const advice = res.status === 401 ? " The key was not accepted: set it again in settings." : res.status === 402 ? " The key's credit is spent." : res.status === 404 ? ` ${p.name} may have no model called ${call.model}${p.defaultTiers ? ", which is OpenRouter's name for it: name this provider's models under [tiers] in config.toml" : ""}.` : "";
     throw new ModelError(`${p.name} said ${res.status}${detail ? `: ${detail}` : ""}.${advice}`, res.status === 401 || res.status === 403 ? 409 : 502);
   }
 

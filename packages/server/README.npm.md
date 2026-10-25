@@ -12,11 +12,14 @@ isorite --tutorial          # the tutorial: the terminal's tour, and the browser
 On your own notes, a folder of Markdown files (empty is fine):
 
 ```sh
-isorite study init <notes>  # the study base beside it: journals of every change, your record, exercises
 isorite serve <notes>       # the browser, at http://localhost:4767/; set Iso's provider key behind the logo
 cd <your code> && isorite term <notes>   # OpenCode here, with the notes beside it
-isorite model               # optional: search by meaning (fetches a 34 MB model, once)
+isorite model               # optional: search by meaning (fetches a 53 MB model, once)
 ```
+
+Setting it up, at work too (a company's gateway, a client certificate, a proxy): `docs/setup.md` in this package.
+When something fails, `isorite doctor` says what to change; `isorite doctor --report` gives it as one block, its
+secrets hidden, to paste to someone helping. For an AI helping you: `isorite help setup`.
 
 The tutorial in a browser alone: https://lachlanjs.github.io/isorite/
 

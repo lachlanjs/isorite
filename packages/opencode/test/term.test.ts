@@ -100,9 +100,10 @@ describe.skipIf(!ready)("isorite term", () => {
       return LOOKS[looked] ?? { text: "Your note on leapfrog says why `[1]`: its energy error stays bounded.\n\n```isorite\n[1] integrators/leapfrog § Why it does not drift\n```" };
     });
     port = await freePort();
-    // Iso, in the isorite server, is pointed at the scripted gateway too.
+    // Iso is pointed at the scripted gateway, and OpenCode reaches it through the isorite server's relay (M13),
+    // which adds the key: OpenCode is given only the server's token.
     mkdirSync(join(root, "config", "isorite"), { recursive: true });
-    writeFileSync(join(root, "config", "isorite", "config.toml"), `[provider]\nname = "scripted"\nurl = "${gateway.url}"\nkey = "iso-key"\n`);
+    writeFileSync(join(root, "config", "isorite", "config.toml"), `[provider]\nname = "scripted"\nurl = "${gateway.url}"\nkey = "iso-key"\n[tiers]\nlow = "scripted"\nmid = "scripted"\nmax = "scripted"\n`);
     // Commands ask first (your own local.json, kept over what isorite writes), so a page can answer one.
     mkdirSync(join(root, "config", "isorite", "opencode"), { recursive: true });
     writeFileSync(join(root, "config", "isorite", "opencode", "local.json"), JSON.stringify({ permissions: [{ action: "shell", resource: "*", effect: "ask" }] }));
@@ -112,9 +113,6 @@ describe.skipIf(!ready)("isorite term", () => {
         PATH: process.env.PATH ?? "",
         HOME: process.env.HOME ?? root,
         ISORITE_OPENCODE: opencode!.command,
-        ISORITE_GATEWAY_URL: gateway.url,
-        ISORITE_GATEWAY_MODELS: "scripted",
-        ISORITE_GATEWAY_KEY: "test-key",
         // Everything OpenCode and isorite keep goes in the test's own folder; the cache, which holds
         // the AI SDK package OpenCode fetches, is shared.
         XDG_CONFIG_HOME: join(root, "config"),
@@ -161,11 +159,11 @@ describe.skipIf(!ready)("isorite term", () => {
     await pane.waitFor(() => !footer().includes("atlas following"));
   }, 30_000);
 
-  it("sends a prompt to the gateway, with the key, and shows the reply", async () => {
+  it("sends a prompt to the gateway through isorite's relay, which adds the key, and shows the reply", async () => {
     pane.type("why does my orbit drift?");
     pane.keys("Enter");
     await pane.waitFor("Leapfrog keeps the energy bounded.", 60_000);
-    expect(gateway.requests.at(-1)?.authorization).toBe("Bearer test-key");
+    expect(gateway.requests.at(-1)?.authorization).toBe("Bearer iso-key");
     keep("3-session");
   }, 90_000);
 
