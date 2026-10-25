@@ -85,9 +85,12 @@ writeFileSync(join(OUT, "package.json"), JSON.stringify({
   repository: { type: "git", url: "git+https://github.com/lachlanjs/isorite.git" },
   homepage: "https://lachlanjs.github.io/isorite/",
   keywords: ["notes", "knowledge-base", "markdown", "study", "agent", "opencode"],
-  files: ["dist", "web", "notes", "plugin", "README.md", "LICENSE"],
+  files: ["dist", "web", "notes", "plugin", "docs", "README.md", "LICENSE"],
   dependencies,
 }, null, 2) + "\n");
 cpSync(at("LICENSE"), join(OUT, "LICENSE"));
 cpSync(at("packages/server/README.npm.md"), join(OUT, "README.md"));
+// The setup guides, for people and for an AI helping them: `isorite help setup` prints the second.
+mkdirSync(join(OUT, "docs"), { recursive: true });
+for (const doc of ["setup.md", "setup-for-agents.md", "terminal.md"]) cpSync(at("docs", doc), join(OUT, "docs", doc));
 console.log(`isorite ${version} is in ${OUT}; dependencies: ${Object.keys(dependencies).join(", ")}`);

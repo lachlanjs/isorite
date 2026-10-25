@@ -1,48 +1,25 @@
-# isorite beside your code: the terminal and Build mode
+# isorite beside your code: the terminal
 
-How to use isorite on a project of your own. OpenCode 2 is the coding
-agent in your terminal; isorite gives it your notes, and shows its session in Iso's pane in the browser, where you
-can also ask it things, give it notes and passages, stop it, and answer what it asks before it acts.
+How to use isorite on a project of your own. OpenCode 2 is the coding agent in your terminal; isorite gives it your
+notes, and shows its session in Iso's pane in the browser. From there you can ask it things, give it notes and
+passages, stop it, and answer what it asks before it acts.
+
+Setting isorite up the first time, or at work behind a company's gateway, is in [setup.md](setup.md).
 
 ## What you need
 
 - **Node 24** or later.
-- **OpenCode 2**: `npm i -g @opencode/cli`. It installs as `opencode2` and `opencode`. If an older OpenCode is
-  your `opencode`, isorite finds `opencode2`; or name one with `ISORITE_OPENCODE=/path/to/opencode`.
-- **isorite** itself, 0.2.0 or later: `npm i -g isorite`.
-- A model provider: see below.
+- **isorite**: `npm i -g isorite`.
+- **OpenCode 2**: `npm i -g @opencode/cli`. It installs as `opencode2` and `opencode`. If an older OpenCode is your
+  `opencode`, isorite finds `opencode2`; or name one with `ISORITE_OPENCODE=/path/to/opencode`.
+- A model provider, set once in `~/.config/isorite/config.toml`: see [setup.md](setup.md). `isorite doctor` checks
+  all of this.
 
 ## Your notes for the project
 
-Keep the project's notes in a folder of their own, outside the repository (yours, nothing to commit), for example
-`~/notes/<project>`. It can start empty.
-
-```sh
-mkdir -p ~/notes/my-project
-isorite study init ~/notes/my-project     # its study base beside it: the notes' journals, your understanding
-```
-
-## The model
-
-`isorite term` gives OpenCode the same provider Iso uses, set once in `~/.config/isorite/config.toml`:
-
-```toml
-[provider]
-name = "work"
-url = "https://gateway.example.com/v1"   # any OpenAI-compatible endpoint; leave out for OpenRouter
-key = "…"                                # or set it in the browser: Iso's settings, in Iso's pane
-
-[tiers]                                  # the models: mid is the terminal's default, max and low beside it
-low = "…"
-mid = "…"
-max = "…"
-```
-
-The key is handed to OpenCode's server in its environment only; it is never written into OpenCode's settings.
-`ISORITE_GATEWAY_URL`, `ISORITE_GATEWAY_MODELS` (comma-separated) and `ISORITE_GATEWAY_KEY`, when set, are used
-instead. With no key at all, OpenCode uses its own free models.
-
-OpenCode does not know a gateway's prices, so Iso's pane shows the session's tokens rather than its cost.
+Keep the project's notes in a folder of their own, for example `~/notes/<project>`. It can start empty. isorite
+keeps what it needs in the folder's `.isorite/` (the journals of every change, and its settings), made the first
+time the folder is opened. Commit `.isorite/` with the notes, if they're in git.
 
 ## Starting it
 
@@ -51,31 +28,70 @@ cd ~/code/my-project
 isorite term ~/notes/my-project
 ```
 
-This starts the isorite server for the notes (if none is running on port 4767; `--port <n>` for another), starts
-OpenCode's own server on this machine with a password of its own, and opens the terminal on it. Open
-`http://localhost:4767/` in the browser: while the terminal runs, Iso's pane has a fourth mode, **Build** (the `>_`
-icon). Closing the terminal stops both servers.
+This starts the isorite server for the notes (unless one is running on port 4767; `--port <n>` for another), and
+OpenCode's own server, on this machine, with a password of its own. Then it opens the terminal on that server.
+
+Before OpenCode takes the screen, `isorite term` prints:
+
+```
+isorite: http://localhost:4767/
+  the terminal's models: work-large, work-small, as config.toml names them, through the isorite server
+```
+
+Most terminals let you click the link. It prints the same again when OpenCode exits. Closing the terminal stops
+both servers, if `isorite term` started them.
+
+The first time, the folder you started in is named as the notes' repository in `.isorite/settings.toml`, so that
+code links in the notes point into it.
+
+### Over SSH
+
+`localhost` is the machine `isorite term` runs on. To open isorite from your own machine, forward the port:
+
+```sh
+ssh -L 4767:localhost:4767 <the machine>
+```
+
+Then open `http://localhost:4767/` on your own. Over SSH, `isorite term` prints this command too. Any local port
+works (`-L 9000:localhost:4767`, then `http://localhost:9000/`).
 
 ## In the browser
 
-- **Build mode** shows the terminal's session: each prompt (asked in the terminal, or from here), what the agent
-  says, a line for each thing it does (a command, which opens on its output; a file, which opens on its diff; a
-  look-up in your notes, which opens the note).
-- **Ask from here:** what you type in Build mode goes to the terminal's session, with what you gave Iso (hold a
-  note on the Atlas, or select a passage and *send to Iso*): notes by name, for the agent to read with isorite's
-  tools, and passages as they are. Escape, or the square, stops it.
-- **Permissions:** when OpenCode asks before doing something, the same question is in the pane: *Allow once*,
-  *Always allow this*, *Don't allow*. Answered in either place, it is gone from both.
-- **Notes the agent changes** are written at once, under its name, as Iso's are in Write mode: open the note in its
-  Iso lens to see the agent's words marked, and its timeline to put it back.
-- Ask, Write and Understand stay Iso's own, in the app, as before.
+Open the link. While the terminal runs, Iso's pane header has two more switches beside *Iso may edit the notes*:
+*Iso may edit the project's files* (Alt+F) and *Iso may run commands* (Alt+R). With either on, the pane is the
+terminal's session:
+
+- **The session:** each prompt (asked in the terminal, or from here), what the agent says, and a line for each thing
+  it does. A command opens on its output, a file on its diff, a look-up in your notes on the note.
+- **Asking from here:** what you type goes to the terminal's session, with what you gave Iso (hold a note on the
+  Atlas, or select a passage and send it to Iso): notes by name, for the agent to read with isorite's tools, and
+  passages as they are. Escape, or the square, stops it.
+- **Permissions:** when OpenCode asks before doing something, the same question is in the pane: allow once, always
+  allow, or don't allow. Answered in either place, it's gone from both.
+- **Notes the agent changes** are written at once, under its name. Turn on provenance in the Note pane's header to
+  see the agent's words marked, and the timeline to put a note back.
+
+With both off, the pane is Iso's own again.
+
+## The models
+
+The terminal uses Iso's provider, as `config.toml` names it ([setup.md](setup.md)): the `[tiers]` models, `mid` its
+default. OpenCode asks the isorite server, which passes each request on to the provider with the key, the client
+certificate, the headers and the query `config.toml` names. OpenCode is given none of them, only the isorite
+server's token.
+
+`ISORITE_GATEWAY_URL`, `ISORITE_GATEWAY_MODELS` (comma-separated) and `ISORITE_GATEWAY_KEY`, when set, are used
+instead, and OpenCode asks that address itself. With no key and no certificate in `config.toml`, OpenCode uses its
+own models; `isorite term` says which.
+
+OpenCode doesn't know a gateway's prices, so Iso's pane shows the session's tokens rather than its cost.
 
 ## OpenCode's settings
 
 isorite keeps OpenCode's settings in `~/.config/isorite/opencode/`, rewritten at each start, so your own OpenCode
-config is never read or changed. Anything of your own goes in `~/.config/isorite/opencode/local.json`, which is
-never rewritten and is laid over what isorite writes. For example, to have OpenCode ask before every command
-(by default it runs them):
+settings are never read or changed. Anything of your own goes in `~/.config/isorite/opencode/local.json`, which is
+never rewritten, and is laid over what isorite writes. For example, to have OpenCode ask before every command (by
+default it runs them):
 
 ```json
 { "permissions": [{ "action": "shell", "resource": "*", "effect": "ask" }] }
@@ -94,5 +110,6 @@ gateway, or a model served on your own machine). What it fetches, it fetches onc
 ## Who can reach it
 
 OpenCode's server listens on this machine only (127.0.0.1), and only the isorite server talks to it. The isorite
-server listens on this machine only too, unless you put it on your tailnet (`tailscale serve`); then anyone on your
-tailnet who opens the page can ask the agent to act in your project, as they could already edit your notes.
+server listens on this machine only too, unless you put it on your tailnet (`tailscale serve`). Then anyone on your
+tailnet who opens the page can ask the agent to act in your project, as they could already edit your notes. The
+provider is passed on to OpenCode only on this machine, never over the tailnet.

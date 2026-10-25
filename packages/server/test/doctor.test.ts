@@ -121,3 +121,13 @@ describe("isorite doctor", () => {
     expect(text.endsWith("```")).toBe(true);
   });
 });
+
+describe("isorite help setup", () => {
+  it("prints the setup guide written for an AI helping someone", async () => {
+    const { execFileSync } = await import("node:child_process");
+    const main = new URL("../src/main.ts", import.meta.url).pathname;
+    const said = execFileSync(process.execPath, [main, "help", "setup"], { encoding: "utf8" });
+    expect(said.startsWith("# Setting isorite up: for an AI helping someone")).toBe(true);
+    expect(said).toContain("isorite doctor --report");
+  });
+});

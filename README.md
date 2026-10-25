@@ -49,7 +49,7 @@ cd ~/code/my-project
 isorite term ~/notes/my-project
 ```
 
-**A model provider.** Set Iso's provider and key in the browser, behind the logo. They are kept in `~/.config/isorite/config.toml`, and the terminal uses the same provider. Any OpenAI-compatible endpoint works, OpenRouter by default. See [docs/terminal.md](docs/terminal.md) for a work gateway.
+**A model provider.** Set Iso's provider and key in the browser, behind the logo. They are kept in `~/.config/isorite/config.toml`, and the terminal uses the same provider. Any OpenAI-compatible endpoint works, OpenRouter by default. A company's gateway (other headers, a client certificate, a proxy) is in [docs/setup.md](docs/setup.md). If something fails, `isorite doctor` says what to change, and `isorite doctor --report` gives it all as one block to paste to whoever, or whichever AI, is helping; [docs/setup-for-agents.md](docs/setup-for-agents.md) is written for an AI.
 
 **Search by meaning** needs `isorite model` once (above); without it, search is by words and links. It comes from npm, or from Hugging Face if npm can't reach it. **Other agents:** `isorite mcp <notes> --agent claude-code` gives another agent, such as Claude Code, the notes' tools.
 
