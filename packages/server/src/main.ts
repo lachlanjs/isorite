@@ -8,12 +8,14 @@
 //   isorite term [<notes>]                 OpenCode, with isorite's plugin, beside a knowledge base
 //   isorite mcp [<notes>]                    the knowledge base's tools over MCP, on stdio, for another harness
 //   isorite --tutorial [<folder>]          the tutorial: the terminal's tour, and the browser's beside it
+//   isorite doctor [<notes>] [--report]    whether isorite can work here, a step at a time
 
 import { existsSync, realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { StudyError } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
+import { doctor } from "./doctor.ts";
 import { serve } from "./serve.ts";
 import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
@@ -43,6 +45,11 @@ const USAGE = `isorite: an agentic harness for understanding
                                          claude mcp add isorite -- isorite mcp <base> --agent claude-code
   isorite model [--from <folder>]        fetch the model for search by meaning (53 MB, once): from npm, else
                                          Hugging Face; or from a folder its files were copied into
+  isorite doctor [<notes>] [--report] [--offline]
+                                         whether isorite can work here: the configuration, the network, the
+                                         provider (asked a few words, a few hundred tokens), the terminal and
+                                         the notes; --report gives it as one block, secrets hidden, to paste
+                                         to someone (or an AI) helping
   isorite --tutorial [<folder>] [--port <n>]
                                          the tutorial, on the example base, with a scripted model (no key,
                                          nothing sent anywhere): the terminal's tour in OpenCode 2, and the
@@ -98,6 +105,12 @@ export function main(argv: string[]): number | Promise<number> {
       return fetchModel(userModelDir(), console.log, from && rest.includes("--from") ? { from } : {}).then(() => 0, (e: Error) => { console.error(e.message); return 1; });
     }
     if (command === "--version" || command === "-v") { console.log(VERSION); return 0; }
+    if (command === "doctor") {
+      const at = rest.indexOf("--port"), port = at < 0 ? undefined : Number(rest[at + 1]);
+      if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
+      const folder = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port");
+      return doctor(folder, { report: rest.includes("--report"), offline: rest.includes("--offline"), version: VERSION, ...(port === undefined ? {} : { port }) });
+    }
     if (command === "example" && rest.find((r) => !r.startsWith("--"))) {
       const folder = rest.find((r) => !r.startsWith("--"))!;
       return (rest.includes("--geometry") ? writeGeometry(folder) : writeExample(folder)).then(({ notes }) => {
