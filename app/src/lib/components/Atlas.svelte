@@ -38,6 +38,22 @@
   let laidOn = "";
   let failed = $state("");
   let view = $state.raw<View>({ x: 0, y: 0, k: 1 });
+  /** How far a zoom under way goes from the drawn map before it is drawn again, as a log ratio (about 40%). */
+  const REDRAW = 0.35;
+  /** The zoom the map is drawn at: its borders, titles, open folders and lines. While a zoom is under way the drawn
+   *  map is only scaled to the view, which the compositor does without painting it again; it is drawn at the view's
+   *  zoom once the zoom rests, or once it has gone far enough from it that borders and folders would look wrong
+   *  (a pinch had restyled and repainted every block at each frame). */
+  let drawnK = $state(1);
+  let resting: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    const k = view.k;
+    clearTimeout(resting);
+    if (Math.abs(Math.log(k / drawnK)) > REDRAW) drawnK = k;
+    else if (k !== drawnK) resting = setTimeout(() => (drawnK = k), 150);
+  });
+  /** A first view is drawn at once, not scaled into. */
+  const begin = (to: View): void => { view = to; drawnK = to.k; };
   let size = $state.raw({ w: 0, h: 0 });
   /** The note pointed at, and the notes walked: the one first chosen, then each requirement stepped back to.
    *  The last is the note chosen. Their names in the model. */
@@ -92,7 +108,7 @@
       }
       report = next; laid = next_laid; failed = "";
       if (was && changed) void arrive(was);
-      if (first && size.w) view = whole();
+      if (first && size.w) begin(whole());
       if (staged) {
         await wait(MOVE);
         if (run !== beats) return;
@@ -124,7 +140,7 @@
   // The layout's trunks and feeders are drawn as the highways (one object a layout, kept).
   const L = $derived(laid ? withHighways(laid.layout) : null);
   const idx = $derived(L ? indexLayout(L) : null);
-  const open = $derived(L ? openAt(L, view.k) : "");
+  const open = $derived(L ? openAt(L, drawnK) : "");
   // The whole map: what is on it, and half the margin round it, where the ways round the outside run.
   // With a note for Iso being answered, its block beside the map is framed too.
   const whole = (): View => {
@@ -179,7 +195,7 @@
     const ro = new ResizeObserver(([entry]) => {
       const { width: w, height: h } = entry!.contentRect, first = !size.w, was = size;
       size = { w, h };
-      if (first && L) view = whole();
+      if (first && L) begin(whole());
       else if (!first && w && h) view = { ...view, x: view.x + (w - was.w) / 2, y: view.y + (h - was.h) / 2 };
     });
     ro.observe(viewport);
@@ -686,7 +702,7 @@
   }
 
   // Titles are set once, in the map's units (M12): shown while they are big enough on screen to read.
-  const labels = $derived(TITLE_UNITS * view.k >= TITLE_PX);
+  const labels = $derived(TITLE_UNITS * drawnK >= TITLE_PX);
   /** The links out of the base switched on, beside their notes. */
   const sats = $derived(L && report ? satellites(notes.map((n) => n.item), report.notes, { web: panes.on.web, code: panes.on.code }) : []);
   /** What a note's block stands on: its folder's inside, which a kind's glyph in its top edge cuts the edge with. */
@@ -698,30 +714,30 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-<div class="atlas dots" class:lit={!!lit} bind:this={viewport} role="application" aria-label="The atlas: the map of the base" tabindex="0"
-  style="background-position: {view.x}px {view.y}px"
+<div class="atlas" class:lit={!!lit} bind:this={viewport} role="application" aria-label="The atlas: the map of the base" tabindex="0"
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onclick={ground} onkeydown={key}
   ondragstart={(e) => e.preventDefault()}
   oncontextmenu={(e) => { if (grasp || holdShow !== undefined || holdDone !== undefined || offered) e.preventDefault(); }}>
+  <div class="ground dots" aria-hidden="true" style="transform: translate({((view.x % 24) + 24) % 24}px, {((view.y % 24) + 24) % 24}px)"></div>
   {#if failed}
     <p class="said">The map could not be drawn: {failed}</p>
   {:else if L && report}
     {#if !L.items.length}<p class="said faint">There are no notes yet. The map draws itself as you write them.</p>{/if}
     <!-- One move for the whole map (M12): the folders and the notes are scaled as they stand, in the map's units;
          what is drawn round them (routes, counts, Iso's note) is placed at the zoom. -->
-    <div class="atlas-world" class:labels class:shifting data-open={open} style="transform: translate({view.x}px, {view.y}px); --u: {(L?.cell ?? 7) * view.k}px; --k: {view.k}">
-      <div class="scaled" style="transform: scale({view.k}); --u: {L.cell}px; --px: {1 / view.k}px; --ik: {1 / view.k}">
+    <div class="atlas-world" class:labels class:shifting data-open={open} style="transform: translate({view.x}px, {view.y}px) scale({view.k / drawnK}); --u: {(L?.cell ?? 7) * drawnK}px; --k: {drawnK}">
+      <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each folders as f (f.item.id)}
-          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * view.k >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} onpick={() => enter(f.i)} />
+          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} onpick={() => enter(f.i)} />
       {/each}
       </div>
-      <AtlasRoutes k={view.k} {rest} hot={[...(isoLens ? isoHot : []), ...hot]} counts={litCount} sent={sentLines} {grown} {beat} {retracting} />
+      <AtlasRoutes k={drawnK} {rest} hot={[...(isoLens ? isoHot : []), ...hot]} counts={litCount} sent={sentLines} {grown} {beat} {retracting} />
       {#if labels && !beat}
         {#each rest as r (r.key)}
           {#if r.label}<span class="count {r.side}" style="--x:{r.mid[0]};--y:{r.mid[1]}">{r.count}</span>{/if}
         {/each}
       {/if}
-      <div class="scaled" style="transform: scale({view.k}); --u: {L.cell}px; --px: {1 / view.k}px; --ik: {1 / view.k}">
+      <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each notes as n (n.item.id)}
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
@@ -782,9 +798,11 @@
 
 <style>
   /* A long press is the Atlas's own (a hold): not the browser's menu, nor iOS's preview of a link. */
-  .atlas { position: relative; height: 100%; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: grab; outline-offset: -2px; }
+  .atlas { position: relative; isolation: isolate; height: 100%; overflow: clip; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: grab; outline-offset: -2px; }
   .atlas:active { cursor: grabbing; }
-  .atlas-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+  .atlas-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; will-change: transform; }
+  /* The dot grid, moved with the map by a transform a cell at most, so that a pan paints nothing. */
+  .ground { position: absolute; inset: -24px; z-index: -1; pointer-events: none; will-change: transform; }
   .scaled { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
   /* A link out of the base (M12): a small block beside its note, in the map's units. */
   .sat { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(3 * var(--u)); height: calc(3 * var(--u)); display: grid; place-items: center; background: var(--ground-1); border: var(--px) solid var(--line-strong); color: var(--lattice); }
