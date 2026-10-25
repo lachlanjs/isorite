@@ -25,6 +25,8 @@ export type { Change, Cost, Discard, Entry, Insert, Moment, Passage, Placement, 
 export { GITATTRIBUTES, OWN_DIR, OWN_FORMAT, journalPath, recordPath } from "./own.ts";
 export { CONFIG_FILE, STUDY_DIR, STUDY_FORMAT, StudyError, parseStudyConfig } from "./study.ts";
 export { mapModel, reach } from "./map.ts";
+export { ABOUT, DONE, doneOf, embedFor, embedRefs, idsOf, kindOf } from "./kinds.ts";
+export type { Kind } from "./kinds.ts";
 export type { MapDir, MapModel, MapNote, Reach, ReachLink } from "./map.ts";
 export type { StudyConfig } from "./study.ts";
 export { agentName } from "./agents.ts";

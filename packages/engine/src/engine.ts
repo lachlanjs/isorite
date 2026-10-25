@@ -3,7 +3,7 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
+  embedRefs, embedFor, spliceText, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
 import { Conflict, EngineError, type AgentLook, type AgentChange, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
@@ -92,6 +92,17 @@ async function walk(files: Files, root: string): Promise<FileEntry[]> {
   return out;
 }
 
+/** `next` with the `resolved` or `solved` field of `before` put back, where `before` is a question or a problem. */
+function keepDone(before: string, next: string): string {
+  try {
+    const [was] = splitFrontmatter(before), [now] = splitFrontmatter(next);
+    const kind = kindOf(String(was?.type ?? ""));
+    if (!was || !now || kind === "note") return next;
+    const field = DONE[kind];
+    return JSON.stringify(was[field] ?? null) === JSON.stringify(now[field] ?? null) ? next : spliceText(next, { [field]: was[field] ?? null }, null);
+  } catch { return next; }
+}
+
 /** The most of a note sent to an agent at once, as a passage. */
 const MAX_SENT = 8000;
 
@@ -164,7 +175,7 @@ export class Engine implements Api {
   }
 
   async notes(): Promise<Listing> {
-    const notes = [...this.bundle.concepts.values()].map((c) => ({ id: c.id, title: c.title, description: c.description, type: c.type, dir: c.directory }));
+    const notes = [...this.bundle.concepts.values()].map((c) => ({ id: c.id, title: c.title, description: c.description, type: c.type, dir: c.directory, ...(c.kind === "note" ? {} : { kind: c.kind, attached: c.attached }), ...(c.done ? { done: c.done } : {}) }));
     notes.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     return { notes, dirs: [...this.bundle.directories.keys()].filter(Boolean).sort() };
   }
@@ -185,7 +196,7 @@ export class Engine implements Api {
   /** The base as the Atlas draws it: the model the layout takes, and what each block says. */
   async map(): Promise<MapReport> {
     const notes: MapReport["notes"] = {};
-    for (const c of this.bundle.concepts.values()) notes[c.id] = { title: c.title, tokens: estimate(c.body.trim()) };
+    for (const c of this.bundle.concepts.values()) notes[c.id] = { title: c.title, tokens: estimate(c.body.trim()), ...(c.done ? { done: c.done } : {}) };
     return { model: mapModel(this.bundle), notes };
   }
 
@@ -357,6 +368,18 @@ export class Engine implements Api {
       const changed = source.text.replace(old, `](/${to}.md`);
       if (changed !== source.text) await this.one(() => this.put(c, changed, source.version, "edit", {}, who));
     }
+    // What names it as a question's or problem's `about` or `uses`, and the embeds of it (M12).
+    const was = this.bundle;
+    for (const c of [...was.concepts.values()]) {
+      if (c.id === to) continue;
+      const field = c.kind === "note" ? null : ABOUT[c.kind], listed = field ? idsOf(c.meta[field]) : [];
+      const embeds = embedRefs(c.body).some((ref) => ref.replace(/^\/+|\.md$/g, "") === id || ref === id.split("/").at(-1));
+      if (!listed.includes(id) && !embeds) continue;
+      const source = await this.readNote(c.id);
+      let changed = field && listed.includes(id) ? spliceText(source.text, { [field]: listed.map((x) => (x === id ? to : x)) }, null) : source.text;
+      changed = changed.replace(new RegExp(`^([ \\t]*)\\[\\[!(?:/?${escapeRe(id)}(?:\\.md)?|${escapeRe(id.split("/").at(-1)!)})\\]\\]([ \\t]*)$`, "gm"), (_m, a: string, b: string) => `${a}${embedFor(to, was.concepts.keys())}${b}`);
+      if (changed !== source.text) await this.one(() => this.put(c.id, changed, source.version, "edit", {}, who));
+    }
     return { id: to, text, version: hashText(text), changed: true };
   }
 
@@ -375,6 +398,16 @@ export class Engine implements Api {
       this.embedSoon();
     });
     this.publish({ type: "note-changed", id, version: null, who });
+  }
+
+  /** Resolve a question, or say a problem is solved, today; or open it again (M12). Yours alone: Iso's tools never
+   *  change it. `base` as for saveNote. */
+  async setDone(id: string, done: boolean, base: string): Promise<Saved> {
+    const c = this.bundle.concepts.get(checkNoteId(id));
+    if (!c || c.kind === "note") throw new EngineError("only a question or a problem is resolved or solved");
+    const source = await this.readNote(id);
+    const day = new Date(this.opts.clock.now()).toISOString().slice(0, 10);
+    return this.one(() => this.put(id, spliceText(source.text, { [DONE[c.kind as "question" | "problem"]]: done ? day : null }, null), base));
   }
 
   /** Writes happen one at a time, in the order asked. */
@@ -417,6 +450,8 @@ export class Engine implements Api {
     const entries = await this.journal(id);
     if (now !== null) await this.enter(id, entries, reconcile(entries, now, await this.stamp("external")));
     if (now !== null && base !== hashText(now)) throw new Conflict(`${id} was changed since you opened it`, { id, text: now, version: hashText(now) });
+    // Only you resolve a question or say a problem is solved (M12): from anyone else, that field stays as it was.
+    if (who !== "you" && now !== null) text = keepDone(now, text);
     if (now === text) return { id, text, version: hashText(text), changed: false };
 
     await files.write(path, text);

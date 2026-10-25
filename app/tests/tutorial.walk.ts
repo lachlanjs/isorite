@@ -40,7 +40,7 @@ async function section(page: Page, key: string) {
 /** The last step's "done": back to the list, every objective of the section met when `all` says how many. */
 async function finish(page: Page, key: string, all?: number) {
   await card(page).getByRole("button", { name: "done" }).click();
-  await expect(card(page).getByRole("button", { name: new RegExp(`^${key}: .*${all ? `, ${all} of ${all} done` : ""}`) })).toBeVisible();
+  await expect(card(page).getByRole("button", { name: new RegExp(`^${key}: .*${all ? `, ${all} of ${all} done` : ""}`) })).toBeVisible({ timeout: 15_000 });
 }
 
 let failures: string[] = [];

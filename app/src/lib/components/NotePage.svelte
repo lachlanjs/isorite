@@ -6,7 +6,7 @@
   import { onMount, tick } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
+  import { ABOUT, doneOf, idsOf, kindOf, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
@@ -137,10 +137,11 @@
     };
   });
 
-  // A note made on the Atlas is "untitled-note" until it is named: its first title names its file too.
+  // A note made on the Atlas is "untitled-note" (or "untitled-question", "untitled-problem") until it is named: its
+  // first title names its file too.
   async function named(): Promise<void> {
     const name = id.split("/").at(-1)!, title = note.fields.title.trim();
-    if (!/^untitled-note(-\d+)?$/.test(name) || !title || /^untitled note( \d+)?$/i.test(title)) return;
+    if (!/^untitled-(note|question|problem)(-\d+)?$/.test(name) || !title || /^untitled (note|question|problem)( \d+)?$/i.test(title)) return;
     const to = [...id.split("/").slice(0, -1), slug(title)].filter(Boolean).join("/");
     if (!slug(title) || app.listing.notes.some((n) => n.id === to)) return;
     try {
@@ -167,6 +168,19 @@
   });
   // Whose changes wait: Iso's, an agent's, or both.
   const changesFrom = $derived([...new Set(iso.changes.map((c) => agentName(c.proposal.who) || "Iso"))].join(" and "));
+  // A question or a problem (M12): its kind and when it was done, the notes it is about or uses, and on any note,
+  // the questions and problems attached to it.
+  const kind = $derived(kindOf(String(note.meta?.type ?? "")));
+  const done = $derived(kind === "note" ? null : doneOf(note.meta ?? {}, kind));
+  const about = $derived(kind === "note" ? [] : (app.listing.notes.find((n) => n.id === id)?.attached ?? idsOf(note.meta?.[ABOUT[kind]])));
+  const attached = $derived(app.listing.notes.filter((n) => n.kind && n.id !== id && n.attached?.includes(id)).sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "question" ? -1 : 1)));
+  const titleOf = (n: string): string => app.listing.notes.find((x) => x.id === n)?.title ?? n.split("/").at(-1)!;
+  let marking = $state(false);
+  async function toggleDone(): Promise<void> {
+    marking = true;
+    try { await note.setDone(!done); } catch { /* said by the session's saving state */ } finally { marking = false; }
+  }
+
   // The passage chosen in the note.
   const chosen = $derived(iso.cursor && iso.cursor.to > iso.cursor.from ? note.text.slice(iso.cursor.from, iso.cursor.to).trim() : "");
   // A passage chosen in the note can be sent to Iso (M10): one button by the selection, above it on a desktop and
@@ -195,6 +209,12 @@
 
 <svelte:window onkeydown={keys} />
 
+{#snippet glyph(k: "note" | "question" | "problem", solved: boolean)}
+  <svg class="glyph {k}" class:solved viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4">
+    {#if k === "question"}<path d="M5.6 5.6a2.4 2.4 0 1 1 3.4 2.2c-.6.3-1 .8-1 1.5v.9" /><path d="M8 12v1.2" />{:else}<path d="M8 2.5l5.8 10.5H2.2z" fill={solved ? "currentColor" : "none"} />{/if}
+  </svg>
+{/snippet}
+
 
 <article class="note" bind:this={noteEl} class:timed={timeline && note.loaded === "ready" && !asSource}>
   {#if note.loaded === "loading"}
@@ -219,11 +239,20 @@
 
     <div class="head">
       {#if !asSource}
+        <div class="titlerow">
+        {#if kind !== "note"}{@render glyph(kind, !!done)}{/if}
         <label class="hidden-label" for="title">Title</label>
         <!-- A textarea so a long title wraps instead of running out of sight; a title is still one line of text. -->
         <textarea id="title" class="serif title" rows="1" value={note.fields.title} placeholder={id.split("/").at(-1)} autocomplete="off"
           oninput={(e) => note.setFields({ title: e.currentTarget.value.replace(/\s*\n\s*/g, " ") })}
           onkeydown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }} onblur={() => void named()}></textarea>
+        {#if kind !== "note"}
+          {@const verb = kind === "question" ? (done ? "Resolved" : "Resolve") : done ? "Solved" : "Mark solved"}
+          <button class="done-tg" type="button" aria-pressed={!!done} disabled={marking} aria-label={kind === "question" ? "Resolved" : "Solved"} title={done ? `${verb} ${done} · press to open it again` : verb} onclick={() => void toggleDone()}>
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8.5l3 3 7-7" /></svg>
+          </button>
+        {/if}
+        </div>
       {:else}
         <span class="grow faint">{id}.md{note.meta === null ? ": the frontmatter cannot be read, so the file is shown as it is" : ""}</span>
       {/if}
@@ -234,6 +263,10 @@
       </div>
       </div>
     </div>
+    {#if about.length && !asSource}
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves -->
+      <p class="about">{#each about as a, k (a)}{k ? " · " : ""}<a href={noteHref(a)}>{titleOf(a)}</a>{/each}</p>
+    {/if}
     {#if details && !asSource}<NoteDetails {note} />{/if}
 
     {#if timeline && !asSource}
@@ -261,6 +294,16 @@
     <div class="live" hidden={Boolean(at && version)}>
       {#key asSource}<NoteEditor {note} {iso} source={asSource} touched={live} lens={lensMarks} />{/key}
     </div>
+
+    {#if attached.length && !asSource && !at}
+      <!-- What is attached to it, by kind (M12): its questions, then its problems. -->
+      <ul class="attached">
+        {#each attached as a (a.id)}
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves -->
+          <li><a href={noteHref(a.id)} class:done={!!a.done && a.kind === "question"}>{@render glyph(a.kind ?? "question", !!a.done)}<span>{a.title}</span>{#if a.done}<svg class="ok" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8.5l3 3 7-7" /></svg>{/if}</a></li>
+        {/each}
+      </ul>
+    {/if}
 
     <!-- A rewrite's changes are kept or removed one by one in the text; here, all that are left at once. -->
     {#if iso.changes.length}
@@ -294,6 +337,21 @@
   .icon { width: 28px; height: 28px; display: inline-grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .icon:hover:not(:disabled), .icon:focus-visible { color: var(--text); }
   .icon:disabled { opacity: 0.35; cursor: default; }
+  .titlerow { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start; gap: var(--space-2); }
+  .titlerow > .glyph { flex: none; margin-top: 13px; }
+  .glyph.question { color: var(--rose); }
+  .glyph.problem { color: var(--text-soft); }
+  .glyph.problem.solved { color: var(--malachite); }
+  .done-tg { flex: none; width: 30px; height: 30px; margin-top: 8px; display: grid; place-items: center; background: none; border: 1px solid var(--line); color: var(--text-faint); cursor: pointer; }
+  .done-tg:hover:not(:disabled) { color: var(--text); border-color: var(--line-strong); }
+  .done-tg[aria-pressed="true"] { color: var(--ground-0); background: var(--malachite); border-color: var(--malachite); }
+  .about { margin: -6px 0 0 2px; font-size: 12px; color: var(--text-faint); }
+  .about a { color: var(--text-soft); }
+  .attached { list-style: none; margin: 32px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; }
+  .attached a { display: grid; grid-template-columns: 18px minmax(0, 1fr) 14px; gap: 10px; align-items: center; padding: 6px 0; font: 15px var(--font-text); color: var(--text); text-decoration: none; }
+  .attached a:hover span { color: var(--lattice); }
+  .attached a.done span { color: var(--text-faint); }
+  .attached .ok { color: var(--malachite); }
   .atbar { display: flex; align-items: center; gap: 6px; min-height: 28px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
   /* The timeline sits in the page's left margin, level with the title (Desktop-Editor); where there is no margin,
      it is a narrow column at the note's left (Mobile-Timeline). */

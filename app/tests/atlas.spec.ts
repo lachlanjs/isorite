@@ -236,7 +236,7 @@ test("a new layout comes in three beats: the lines retract, the notes move with 
   expect((await page.request.post(`api/note/delete?id=${id}`, { headers, data: { base: version } })).ok()).toBe(true);
 });
 
-test("held with a finger, a note offers to go to Iso or to open (Q16)", async ({ page }) => {
+test("held with a finger, a note offers to go to Iso, to open, or a question or problem of its own (Q16, M12)", async ({ page }) => {
   await atlas(page);
   const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
   const at = { pointerId: 9, pointerType: "touch", isPrimary: true, button: 0, clientX: huffman.x + 10, clientY: huffman.y + 6 };
@@ -244,7 +244,7 @@ test("held with a finger, a note offers to go to Iso or to open (Q16)", async ({
   await page.waitForTimeout(800);
   await page.locator(".atlas").dispatchEvent("pointerup", at);
   const offer = page.getByRole("menu", { name: "Huffman codes" });
-  await expect(offer.getByRole("menuitem")).toHaveText(["◆Give to Iso", "▣Open"]);
+  await expect(offer.getByRole("menuitem")).toHaveText(["◆Give to Iso", "▣Open", "?A question about it", "△A problem using it"]);
   await look(page, "atlas-offer");
   await offer.getByRole("menuitem", { name: "Give to Iso" }).click();
   await expect(offer).toHaveCount(0);

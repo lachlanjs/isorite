@@ -9,7 +9,7 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { EditorView, drawSelection, keymap, placeholder } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { blocksTheme, renderedBlocks } from "./blocks.ts";
+import { blocksTheme, embeds, renderedBlocks, type Embeds } from "./blocks.ts";
 import { format, formatKeymap, type Format } from "./commands.ts";
 import { linkAt, linkControl } from "./linkControl.ts";
 import { linkCompletion, type LinkTarget } from "./links.ts";
@@ -48,6 +48,8 @@ export interface EditorOptions {
   mountOverlay?: Mount;
   /** Shown, not written in: a version of the note from its timeline. */
   readOnly?: boolean;
+  /** What an embed (`[[!name]]`, M12) names, and how it opens: drawn as a callout in the live preview. */
+  embeds?: Embeds;
 }
 
 // Plain source is set in the monospaced face; the live preview in the reading one.
@@ -99,7 +101,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       markdown({ base: markdownLanguage, extensions: [mathsSyntax], completeHTMLTags: false }),
       syntaxHighlighting(highlight),
       theme,
-      ...(opts.source ? [sourceTheme] : [livePreview, livePreviewTheme, renderedBlocks, blocksTheme, linkControl]),
+      ...(opts.source ? [sourceTheme] : [livePreview, livePreviewTheme, renderedBlocks, blocksTheme, linkControl, ...(opts.embeds ? [embeds.of(opts.embeds)] : [])]),
       closeBrackets(),
       // Only brackets: closing quotes would get in the way of apostrophes in prose.
       EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["(", "["] } }]),

@@ -3,14 +3,19 @@
 import type { Bundle } from "./bundle.ts";
 import { STRENGTH } from "./graph.ts";
 
-export interface MapNote { kind: "concept"; id: string; ref: string; weight: number; rank: number }
+/** `of` says a question or a problem (M12); a plain note has none. */
+export interface MapNote { kind: "concept"; id: string; ref: string; weight: number; rank: number; of?: "question" | "problem" }
 export interface MapDir { kind: "dir"; id: string; ref: string; children: (MapDir | MapNote)[] }
 export interface MapModel { root: MapDir; edges: [from: string, to: string, strength: number][] }
 
-/** The Atlas's model of a knowledge base: its folders and notes, and the links between notes, each with its strength. */
+/** The Atlas's model of a knowledge base: its folders and notes, and the links between notes, each with its strength.
+ *  A question or a problem is joined to each note it is about, or uses, as a "uses" link from it (M12). */
 export function mapModel(base: Bundle): MapModel {
   const order = base.prerequisiteOrder();
-  const note = (id: string): MapNote => ({ kind: "concept", id: "c:" + id, ref: id, weight: 1, rank: order.get(id)?.depth ?? 0 });
+  const note = (id: string): MapNote => {
+    const k = base.concepts.get(id)!.kind;
+    return { kind: "concept", id: "c:" + id, ref: id, weight: 1, rank: order.get(id)?.depth ?? 0, ...(k === "note" ? {} : { of: k }) };
+  };
   const edges: MapModel["edges"] = [];
   for (const c of base.concepts.values()) {
     const strongest = new Map<string, number>();
@@ -18,6 +23,7 @@ export function mapModel(base: Bundle): MapModel {
       if (l.broken || l.kind !== "concept" || l.target === c.id || !base.concepts.has(l.target)) continue;
       strongest.set(l.target, Math.max(strongest.get(l.target) ?? 0, (l.rel && STRENGTH[l.rel]) || STRENGTH.uses));
     }
+    for (const to of c.attached) if (!strongest.has(to)) strongest.set(to, STRENGTH.uses);
     for (const [to, s] of strongest) edges.push([c.id, to, s]);
   }
   const dir = (id: string): MapDir => {

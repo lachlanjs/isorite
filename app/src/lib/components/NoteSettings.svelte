@@ -6,6 +6,7 @@
   import { app } from "$lib/app.svelte.ts";
   import { GROUNDS, ground } from "$lib/ground.svelte.ts";
   import { LAYOUTS, PANES, panes, type Pane } from "$lib/panes.svelte.ts";
+  import { makeKind } from "$lib/make.ts";
 
   const NAME: Record<Pane, string> = { note: "Note", atlas: "Atlas", iso: "Iso" };
   const LAYOUT_NAME: Record<string, string> = { cols: "Three columns", stack: "The note beside the Atlas over Iso", one: "One pane: the one in focus" };
@@ -25,6 +26,17 @@
     else void document.documentElement.requestFullscreen().catch(() => undefined);
   }
 </script>
+
+{#if app.open && !app.open.startsWith("@")}
+  {@const open = app.open}
+  <section>
+    <h2 class="label">this note</h2>
+    <div class="row">
+      <button class="btn" type="button" onclick={() => { panes.settings = null; void makeKind("question", open); }}>A question about it</button>
+      <button class="btn" type="button" onclick={() => { panes.settings = null; void makeKind("problem", open); }}>A problem using it</button>
+    </div>
+  </section>
+{/if}
 
 {#if app.session}
   <section>

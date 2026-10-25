@@ -25,6 +25,11 @@ export interface NoteSummary {
   type: string;
   /** The folder's id: "" for the root. */
   dir: string;
+  /** A question or a problem (M12), and the notes it is about or uses. */
+  kind?: "question" | "problem";
+  attached?: string[];
+  /** When it was resolved or solved, as written. */
+  done?: string;
 }
 
 export interface Listing {
@@ -52,6 +57,8 @@ export interface MapReport {
     title: string;
     /** The size of its text, as an estimate in tokens (what linking it to a note for Iso adds). */
     tokens: number;
+    /** A question resolved or a problem solved (M12): when, as written. */
+    done?: string;
   }>;
 }
 
@@ -194,6 +201,8 @@ export interface Api {
   /** Move a note of the base to another id: a new name, or another folder (made if need be). Its journal goes with
    *  it; links to it are changed to match, as your own edits. `base` as for saveNote. */
   moveNote(id: string, to: string, base: string): Promise<Saved>;
+  /** Resolve a question or say a problem is solved, today, or open it again (M12). `base` as for saveNote. */
+  setDone(id: string, done: boolean, base: string): Promise<Saved>;
   /** Delete a note of the base. Its journal stays, and links to it are left, broken. `base` as for saveNote. */
   deleteNote(id: string, base: string): Promise<void>;
   /** The note's journal, oldest first. */

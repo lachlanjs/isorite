@@ -4,7 +4,7 @@
   import { mount, onMount, unmount, untrack } from "svelte";
   import { goto } from "$app/navigation";
   import type { EditorView } from "@codemirror/view";
-  import { app, noteHref } from "$lib/app.svelte.ts";
+  import { app, findEmbed, noteHref } from "$lib/app.svelte.ts";
   import { createEditor, setText, type Where } from "$lib/editor/codemirror.ts";
   import { setMarks, setOverlays, setTouched, type Inline, type Mark, type Overlay, type Touched } from "$lib/editor/overlays.ts";
   import { panes } from "$lib/panes.svelte.ts";
@@ -47,6 +47,9 @@
       onSave: () => { void note.save(); },
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
       onFollow: (id) => { void goto(noteHref(id)); },
+      // An embedded question or problem (M12) opens in the Note pane.
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
+      embeds: { find: findEmbed, open: (id) => { void goto(noteHref(id)); } },
       ...(iso ? {
         // Ctrl+Enter goes to Iso's pane (M10), with the text selected, if any, given to Iso.
         onAsk: (w: Where) => {

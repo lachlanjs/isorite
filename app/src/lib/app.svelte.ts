@@ -4,6 +4,7 @@
 import { resolve } from "$app/paths";
 import type { Api, EngineEvent, Listing, Session, Step } from "@isorite/engine";
 import { httpApi } from "./api.ts";
+import type { Embedded } from "./editor/blocks.ts";
 
 class AppState {
   api!: Api;
@@ -133,4 +134,12 @@ export const noteHref = (id: string): string => resolve("/n/[...id]", { id });
 /** A file name for a title: lower case, hyphens, nothing a path cannot hold. */
 export function slug(title: string): string {
   return title.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "");
+}
+
+/** What an embed names (`[[!name]]`, M12), as the bundle resolves it: by file name, or by path where two share it. */
+export function findEmbed(ref: string): Embedded | null {
+  const path = ref.trim().replace(/^\/+/, "").replace(/\.md$/, "");
+  const found = path.includes("/") ? app.listing.notes.filter((n) => n.id === path) : app.listing.notes.filter((n) => n.id.split("/").at(-1) === path);
+  const n = found.length === 1 ? found[0]! : null;
+  return n ? { id: n.id, title: n.title, kind: n.kind ?? "note", done: !!n.done } : null;
 }

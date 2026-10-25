@@ -157,6 +157,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   post("/api/note/restore", z.object({ entry: z.string().max(64), base: z.string().max(64) }).strict(), (c, b) => api.restore(id(c), b.entry, b.base));
   post("/api/note/move", z.object({ to: z.string().max(400), base: z.string().max(64) }).strict(), (c, b) => api.moveNote(id(c), b.to, b.base));
   post("/api/note/delete", z.object({ base: z.string().max(64) }).strict(), (c, b) => api.deleteNote(id(c), b.base));
+  post("/api/note/done", z.object({ done: z.boolean(), base: z.string().max(64) }).strict(), (c, b) => api.setDone(id(c), b.done, b.base));
   post("/api/proposal/keep", Named, (c, b) => api.keep(id(c), b.proposal, b.region));
   post("/api/proposal/revise", Revised, (c, b) => api.revise(id(c), b.proposal, b.text));
   post("/api/proposal/discard", Named, (c, b) => api.discard(id(c), b.proposal, b.region));

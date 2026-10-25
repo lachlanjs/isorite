@@ -112,7 +112,28 @@ Format 1 also kept what was studied here (`attempt`, `wind-back`, `understood`, 
 
 ## 5. Problems and questions
 
-A problem or an open question is a note of the base, in any folder. Milestone 12 adds them; section 1's rules hold for them as for any note.
+A problem or an open question is a note of the base, in any folder; section 1's rules hold for them as for any note. Its kind is its OKF `type` (`kinds.ts`).
+
+```markdown
+---
+type: Question
+title: Where is compactness used?
+about: [global/gauss-bonnet]
+resolved: 2026-10-25
+---
+
+The proof never says.
+```
+
+| Field | |
+|---|---|
+| `type` | `Question` or `Problem` (any case) |
+| `about` (a question), `uses` (a problem) | the notes it is about or uses, by id; one, or a list |
+| `resolved` (a question), `solved` (a problem) | the day it was resolved or solved; absent while open. Written only by your own switch: a change by Iso or an agent keeps the field as it was |
+
+- **An embed** is `[[!name]]` alone on a line, outside code: `name` is the note's file name without `.md`, or its path (`[[!global/where-is-compactness-used]]`) where two notes share the name. The app draws it as a callout. One that names nothing, or a shared name, is an issue (`embed-broken`).
+- An embed counts as an `about` (or `uses`) of the note it is in: a question embedded in a note is about that note.
+- Moving a note changes the `about` and `uses` that name it, and the embeds of it, to match.
 
 ## 6. What is kept outside the notes
 

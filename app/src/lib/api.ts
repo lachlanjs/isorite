@@ -70,6 +70,7 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     createDraft: () => write("POST", "drafts", {}),
     keepDraft: (draft, proposal, folder) => write("POST", "draft/keep" + q(draft), { proposal, folder }),
     discardDraft: async (draft) => { await write("POST", "draft/discard" + q(draft), {}); },
+    setDone: (id, done, base) => write("POST", "note/done" + q(id), { done, base }),
     context: (note, choice) => ask("context" + (note ? q(note) : "") + (choice ? `${note ? "&" : "?"}choice=${encodeURIComponent(JSON.stringify(choice))}` : "")),
     clearConversation: async () => { await write("POST", "context/clear", {}); },
     settings: () => ask("settings"),

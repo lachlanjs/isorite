@@ -8,6 +8,7 @@
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
   import type { How, MapReport, NoteSource } from "@isorite/engine";
   import { linkedIn, placeOf, titleIn, withLink, withoutLink } from "$lib/atlas/picks.ts";
+  import { makeKind as makeNew, untitled } from "$lib/make.ts";
   import { tick } from "svelte";
   import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
@@ -455,13 +456,6 @@
     gripped = null;
     void make(grasp);
   }
-  /** The first of `base`, `base-2`, `base-3`… free under `dir`, and its number. */
-  function untitled(dir: string, base: string, free: (id: string) => boolean): { slug: string; n: number } {
-    for (let n = 1; ; n++) {
-      const name = n === 1 ? base : `${base}-${n}`;
-      if (free([dir, name].filter(Boolean).join("/"))) return { slug: name, n };
-    }
-  }
   async function make(g: NonNullable<typeof grasp>): Promise<void> {
     making = true;
     const ids = app.listing.notes.map((n) => n.id);
@@ -479,6 +473,11 @@
       await panes.open(id);
     } catch (err) { notice = (err as Error).message; }
     finally { making = false; grasp = null; }
+  }
+
+  /** A question about a note, or a problem using it (M12). */
+  async function makeKind(kind: "question" | "problem", about: string): Promise<void> {
+    try { await makeNew(kind, about); } catch (err) { notice = (err as Error).message; }
   }
 
   const title = (ref: string): string => report?.notes[ref]?.title ?? ref.split("/").at(-1) ?? ref;
@@ -722,6 +721,8 @@
       <div class="offer frame" role="menu" aria-label={title(o.ref)} style="left:{Math.min(o.x, size.w - 170)}px;top:{o.y + 14}px">
         <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); give(o.ref); offered = null; }}><i aria-hidden="true">◆</i>Give to Iso</button>
         <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void panes.open(o.ref, true); }}><i aria-hidden="true">▣</i>Open</button>
+        <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void makeKind("question", o.ref); }}><i class="q" aria-hidden="true">?</i>A question about it</button>
+        <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void makeKind("problem", o.ref); }}><i aria-hidden="true">△</i>A problem using it</button>
       </div>
     {/if}
     {#if tray.carrying}
