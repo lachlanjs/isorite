@@ -5,6 +5,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { hostname } from "node:os";
 import { serve as nodeServe } from "@hono/node-server";
 import { CONFIG_FILE, GITATTRIBUTES, OWN_DIR, StudyError } from "@isorite/core";
 import { Engine, KEY, systemClock, type Http } from "@isorite/engine";
@@ -54,6 +55,9 @@ export async function openEngine({ notes }: Opened, device = deviceId(), config 
   });
 }
 
+/** A link most terminals let you click (OSC 8), when the output is a terminal; the address as it is otherwise. */
+export const link = (url: string, tty = Boolean(process.stdout.isTTY)): string => (tty ? `\x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\` : url);
+
 export async function serve(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[] } = {}): Promise<void> {
   const opened = locate(path);
   const config = configPath(), provider = providerConfig(config), http = gatewayHttp(provider, gatewayTls(config));
@@ -70,7 +74,8 @@ export async function serve(path: string, { host = "127.0.0.1", port = 4767, all
   });
   console.log(`isorite: ${opened.notes}`);
   console.log(api.meaning ? "  search by meaning: on" : "  search by meaning: off (isorite model fetches its model)");
-  console.log(web ? `  http://localhost:${port}/` : `  the app is not built (npm run build); the engine alone is at http://localhost:${port}/api/`);
+  console.log(web ? `  ${link(`http://localhost:${port}/`)}` : `  the app is not built (npm run build); the engine alone is at http://localhost:${port}/api/`);
+  if (process.env.SSH_CONNECTION && LOOPBACK.has(host)) console.log(`  over SSH, the link opens on this machine; from your own, first run: ssh -L ${port}:localhost:${port} ${hostname()}`);
   const stop = () => { server.close(); process.exit(0); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);

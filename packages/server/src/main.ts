@@ -16,6 +16,7 @@ import { pathToFileURL } from "node:url";
 import { StudyError } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { doctor } from "./doctor.ts";
+import { proxied, rerun, trustSystem } from "./network.ts";
 import { serve } from "./serve.ts";
 import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
@@ -137,4 +138,10 @@ export function main(argv: string[]): number | Promise<number> {
 }
 
 // Run as the command, however it is reached: npm installs it as a link, so the path it was run by is resolved first.
-if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) process.exit(await main(process.argv.slice(2)));
+// Inside a company, the proxy and the system's authorities are used without flags (network.ts).
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) {
+  const env = proxied(process.env);
+  if (env) process.exit(await rerun(env));
+  trustSystem();
+  process.exit(await main(process.argv.slice(2)));
+}

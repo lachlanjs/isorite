@@ -9,7 +9,7 @@ const URL_ = "https://gateway.example.com/v1";
 test("an authority Node does not trust is named, with the settings that fix it", () => {
   const said = unreachable(failed("SELF_SIGNED_CERT_IN_CHAIN", "self-signed certificate in certificate chain"), URL_);
   expect(said).toMatch(/^self-signed certificate in certificate chain \(SELF_SIGNED_CERT_IN_CHAIN\)\. /);
-  expect(said).toContain("--use-system-ca");
+  expect(said).toContain("ca in [provider]");
   expect(said).toContain("NODE_EXTRA_CA_CERTS");
 });
 

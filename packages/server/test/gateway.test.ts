@@ -103,7 +103,7 @@ describe("a gateway that asks for a client certificate (mTLS)", () => {
     const p = provider();
     const err = await complete(gatewayHttp(p, null), p, "k", hello).catch((e: Error) => e);
     expect((err as Error).message).toMatch(/SELF_SIGNED_CERT_IN_CHAIN|UNABLE_TO_VERIFY_LEAF_SIGNATURE/);
-    expect((err as Error).message).toContain("--use-system-ca");
+    expect((err as Error).message).toContain("ca in [provider]");
   });
 
   it("is refused at once, naming the setting, when the passphrase doesn't open the .pfx", () => {

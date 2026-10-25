@@ -39,7 +39,7 @@ export function gatewayHttp(provider: ProviderConfig, tls: GatewayTls | null, en
     const said = (e as Error).message;
     throw new Error(/mac verify failure|bad decrypt/i.test(said) ? `[provider] pfx_passphrase does not open ${tls.files[0]}` : `[provider] the certificate could not be used (${tls.files.join(", ")}): ${said}`);
   }
-  // ca adds to the authorities Node already trusts (the system's too, under --use-system-ca), as NODE_EXTRA_CA_CERTS does.
+  // ca adds to the authorities already trusted (the system's too, network.ts), as NODE_EXTRA_CA_CERTS does.
   const agent = new Agent({ ...options, ...(tls.ca ? { ca: [...getCACertificates("default"), tls.ca.toString()] } : {}), keepAlive: true, proxyEnv: env });
   const byAgent = fetchBy(agent);
   return { fetch: (input, init) => (new URL(input instanceof Request ? input.url : String(input)).origin === origin ? byAgent(input, init) : fetch(input, init)) };

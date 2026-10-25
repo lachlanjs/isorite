@@ -118,7 +118,7 @@ export function unreachable(err: unknown, url: string): string {
   let host = url;
   try { host = new URL(url).host; } catch { /* as given */ }
   const advice =
-    UNTRUSTED.has(code) ? `Its certificate is signed by an authority this computer's Node does not trust, often a company's own. Start isorite with --use-system-ca, or set NODE_EXTRA_CA_CERTS to that authority's certificate (a .pem), or name it as ca in [provider].`
+    UNTRUSTED.has(code) ? `Its certificate is signed by an authority not trusted here, often a company's own. Add it to the system's authorities (isorite trusts those), or set NODE_EXTRA_CA_CERTS to its certificate (a .pem), or name that as ca in [provider].`
     : code === "CERT_HAS_EXPIRED" ? "Its certificate has expired: that is the gateway's to fix."
     : code === "ERR_TLS_CERT_ALTNAME_INVALID" ? `Its certificate is not for ${host}: check the url in [provider].`
     : /CERTIFICATE_REQUIRED|HANDSHAKE_FAILURE|BAD_CERTIFICATE|UNKNOWN_CA/.test(code) ? "It asks for a client certificate (mTLS) and was given none it accepts: name yours as pfx (with pfx_passphrase), or cert and cert_key, in [provider]."

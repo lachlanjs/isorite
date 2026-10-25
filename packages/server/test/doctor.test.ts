@@ -95,7 +95,7 @@ describe("isorite doctor", () => {
 
   it("says a proxy is ignored unless Node is told, and how to reach the browser over SSH", async () => {
     const { text } = await run(work(), { offline: true, env: { HTTPS_PROXY: "http://me:hunter2@proxy.corp:8080", SSH_CONNECTION: "10.0.0.2 5000 10.0.0.3 22" } });
-    expect(text).toContain("! proxy: http://me:<hidden>@proxy.corp:8080 is set, but Node ignores it unless started with NODE_USE_ENV_PROXY=1");
+    expect(text).toContain("! proxy: http://me:<hidden>@proxy.corp:8080 is set, but Node ignores it unless started with NODE_USE_ENV_PROXY=1, as the isorite command does");
     expect(text).toContain("✓ browser: over SSH: on your own machine, ssh -L 1:localhost:1 <this host>, then http://localhost:1/");
   });
 

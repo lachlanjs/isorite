@@ -5,6 +5,7 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { arch, platform, release } from "node:os";
+import { getCACertificates } from "node:tls";
 import { join, resolve } from "node:path";
 import { OWN_DIR, SETTINGS_FILE, parseSettings } from "@isorite/core";
 import { KEY, ModelError, complete, endpoint, unreachable, type Http, type ProviderConfig, type ToolDef } from "@isorite/engine";
@@ -38,7 +39,7 @@ export interface DoctorOptions {
 const MARK: Record<Outcome, string> = { ok: "✓", fail: "✗", warn: "!", skip: "–" };
 
 /** The environment variables isorite and Node read for it; the secret ones are shown only by length. */
-const READ = ["ISORITE_GATEWAY_URL", "ISORITE_GATEWAY_MODELS", "ISORITE_GATEWAY_KEY", "ISORITE_OPENCODE", "XDG_CONFIG_HOME", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "NODE_TLS_REJECT_UNAUTHORIZED", "SSH_CONNECTION"];
+const READ = ["ISORITE_GATEWAY_URL", "ISORITE_GATEWAY_MODELS", "ISORITE_GATEWAY_KEY", "ISORITE_OPENCODE", "XDG_CONFIG_HOME", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "NODE_TLS_REJECT_UNAUTHORIZED", "ISORITE_NODE_DEFAULTS", "SSH_CONNECTION"];
 const SECRET = /key|token|secret|pass|auth|cookie/i;
 
 const hidden = (v: string) => `<${v.length} characters>`;
@@ -83,8 +84,10 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
   const flags = [...execArgv, ...(env.NODE_OPTIONS ?? "").split(/\s+/)];
   const proxy = env.HTTPS_PROXY ?? env.https_proxy ?? env.HTTP_PROXY ?? env.http_proxy;
   say("node", "ok", `${process.version} on ${platform()} ${arch()}`);
-  say("proxy", proxy && env.NODE_USE_ENV_PROXY !== "1" && !flags.includes("--use-env-proxy") ? "warn" : "ok", !proxy ? "none set" : env.NODE_USE_ENV_PROXY === "1" || flags.includes("--use-env-proxy") ? `${noPassword(proxy)}, used` : `${noPassword(proxy)} is set, but Node ignores it unless started with NODE_USE_ENV_PROXY=1 or --use-env-proxy`);
-  say("authorities", "ok", [flags.includes("--use-system-ca") ? "the system's, as well as Node's own (--use-system-ca)" : "Node's own (start with --use-system-ca to trust the system's too)", env.NODE_EXTRA_CA_CERTS ? `and ${env.NODE_EXTRA_CA_CERTS}` : ""].filter(Boolean).join(" "));
+  say("proxy", proxy && env.NODE_USE_ENV_PROXY !== "1" && !flags.includes("--use-env-proxy") ? "warn" : "ok", !proxy ? "none set" : env.NODE_USE_ENV_PROXY === "1" || flags.includes("--use-env-proxy") ? `${noPassword(proxy)}, used` : `${noPassword(proxy)} is set, but Node ignores it unless started with NODE_USE_ENV_PROXY=1, as the isorite command does unless ISORITE_NODE_DEFAULTS=0`);
+  const system = getCACertificates("system"), trusted = new Set(getCACertificates("default"));
+  const withSystem = flags.includes("--use-system-ca") || (system.length > 0 && system.every((c) => trusted.has(c)));
+  say("authorities", withSystem ? "ok" : "warn", [withSystem ? `the system's (${system.length}), as well as Node's own` : env.ISORITE_NODE_DEFAULTS === "0" ? "Node's own only (ISORITE_NODE_DEFAULTS=0)" : "Node's own only: the system's could not be read", env.NODE_EXTRA_CA_CERTS ? `and ${env.NODE_EXTRA_CA_CERTS}` : ""].filter(Boolean).join(", "));
   if (env.NODE_TLS_REJECT_UNAUTHORIZED === "0") say("authorities", "warn", "NODE_TLS_REJECT_UNAUTHORIZED=0 turns off checking certificates altogether: name the company's authority instead");
 
   // The provider, asked.

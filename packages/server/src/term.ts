@@ -10,7 +10,7 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createServer, type AddressInfo } from "node:net";
 import { existsSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { StudyError } from "@isorite/core";
@@ -18,7 +18,7 @@ import { NAME } from "@isorite/example";
 import { writeExample } from "@isorite/example/node";
 import { defaultHome, findOpenCode, GATEWAY_KEY, gatewayFrom, startScripted, tutorialScript, writeHome, type Gateway } from "@isorite/opencode";
 import { ConfigSecrets, configPath, gatewayTls, providerConfig } from "./config.ts";
-import { locate, WEB_DIR } from "./serve.ts";
+import { link, locate, WEB_DIR } from "./serve.ts";
 
 // The command itself, to start a server with: main.ts in a checkout, or the one file it is built into for npm.
 const MAIN = import.meta.url.endsWith(".ts") ? fileURLToPath(new URL("./main.ts", import.meta.url)) : fileURLToPath(import.meta.url);
@@ -133,6 +133,20 @@ export async function modelsFor(env: NodeJS.ProcessEnv, server: { url: string; t
   return { gateway: { url: `${server.url}/api/gateway`, models }, env: { ...env, [GATEWAY_KEY]: server.token }, from: "config" };
 }
 
+/** What `isorite term` says before OpenCode takes the screen, and again when it gives it back: where isorite is in
+ *  the browser, which models the terminal uses and where they come from, and, over SSH, how to reach the browser. */
+export function where(port: number, models: Awaited<ReturnType<typeof modelsFor>>, env: NodeJS.ProcessEnv, tty?: boolean): string[] {
+  const names = models.gateway?.models.join(", ");
+  const lines = [
+    `isorite: ${link(`http://localhost:${port}/`, tty)}`,
+    models.from === "environment" ? `  the terminal's models: ${names}, at ${models.gateway!.url} (ISORITE_GATEWAY_URL)`
+      : models.from === "config" ? `  the terminal's models: ${names}, as config.toml names them, through the isorite server`
+      : "  the terminal's models: OpenCode's own, as no key or certificate is named in config.toml",
+  ];
+  if (env.SSH_CONNECTION) lines.push(`  over SSH, the link opens on this machine; from your own, first run: ssh -L ${port}:localhost:${port} ${hostname()}`);
+  return lines;
+}
+
 /** The token the isorite server hands its page, which its relay takes as OpenCode's key. */
 async function tokenOf(url: string): Promise<string> {
   return ((await (await fetch(`${url}/api/session`)).json()) as { token: string }).token;
@@ -145,6 +159,8 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
   let models: Awaited<ReturnType<typeof modelsFor>>;
   try { models = await modelsFor(given, { url: server.url, token: await tokenOf(server.url) }); } catch (e) { server.release(); throw e; }
   const { gateway, env } = models;
+  const said = where(port, models, given);
+  for (const line of said) console.log(line);
   const home = writeHome(defaultHome(env), { gateway });
   const shared = { ...env, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url };
   let backend: Awaited<ReturnType<typeof startOpenCode>>;
@@ -166,6 +182,7 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
   });
   for (const [signal, handler] of handlers) process.off(signal, handler);
   await tell(server.url, "/api/terminal/detach", {}).catch(() => undefined);
+  for (const line of said) console.log(line);
   backend.stop();
   server.release();
   return code;
