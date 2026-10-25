@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Iso's pane (M10): a conversation, sent with what you gave Iso, its look-ups told as they happen, kept in the
-// study base, and stopped when asked.
+// Iso's pane (M10): a conversation, sent with what you gave Iso, its look-ups told as they happen, kept in
+// .isorite/, and stopped when asked.
 
 const pane = (page: Page) => page.locator('[data-pane="iso"]');
 const box = (page: Page) => page.getByRole("textbox", { name: "Message Iso" });
@@ -129,7 +129,7 @@ test("Write mode: moving a note is asked first, and not allowed it stays", async
   await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
 });
 
-test("Understand mode: your understanding of the note open goes with what you ask; what Iso records shows in the note's Understand lens, beside your scratchpad", async ({ page }) => {
+test("Understand mode: your understanding of the note open goes with what you ask; Iso's reading shows in the note's Understand lens, beside your scratchpad", async ({ page }) => {
   const name = test.info().project.name, id = `channels/understand-${name}`;
   const { token } = (await (await page.request.get("api/session")).json()) as { token: string };
   await page.request.post(`api/note?id=${id}`, { data: { text: `---\ntype: Concept\ntitle: Rate ${name}\n---\n\nBits a use.\n` }, headers: { "x-isorite-token": token, Origin: new URL(test.info().project.use.baseURL!).origin } });
@@ -144,15 +144,12 @@ test("Understand mode: your understanding of the note open goes with what you as
   await box(page).press("Enter");
   const turn = page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last();
   await expect(turn).toHaveAttribute("data-state", "done");
-  await expect(turn.locator(".understood")).toContainText(new RegExp(`recorded\\s*Rate ${name}\\s*\\+0\\.5\\s*You said why it holds in your own words\\.`));
 
-  // The note's Understand lens: Iso's reading, what changed it, and your scratchpad, kept.
-  await turn.locator(".understood").getByRole("button").click();
+  // The note's Understand lens, brought up by Iso's writing in it: Iso's reading, and your scratchpad, kept.
   const note = page.locator('[data-pane="note"]');
+  if (await note.locator(".lens[data-lens=understand]").getAttribute("aria-pressed") !== "true") await note.locator(".lens[data-lens=understand]").click();
   await expect(note.locator(".lens[data-lens=understand]")).toHaveAttribute("aria-pressed", "true");
   await expect(note.locator(".reading")).toHaveText("You can say what it measures, and why.");
-  await expect(note.locator("ol li")).toHaveCount(1);
-  await expect(note.locator("ol li")).toContainText("+0.5You said why it holds in your own words.");
   // The scratchpad is the note editor (V9): Markdown as you type.
   await note.getByLabel("Scratchpad").fill(`Mine, **${name}**.`);
   await expect(note.locator(".u h2 .state")).toHaveText("saved", { timeout: 8000 });

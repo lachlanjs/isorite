@@ -181,7 +181,7 @@ test("a passage chosen in a note is sent to Iso; the notes open over the note an
   await expect(page.getByRole("searchbox", { name: "Find a note" })).toHaveCount(0);
 });
 
-test("the parts, the atlas pane and study page, and a note that is not there", async ({ page }) => {
+test("the parts, the atlas pane, and a note that is not there", async ({ page }) => {
   await page.goto("#/parts");
   await expect(page.getByRole("button", { name: "keep" })).toBeVisible();
   await look(page, "parts");
@@ -190,66 +190,6 @@ test("the parts, the atlas pane and study page, and a note that is not there", a
   // An old link to the Atlas brings its pane forward (M10).
   await expect(page.getByRole("region", { name: "Atlas" })).toHaveClass(/focus/);
   await look(page, "atlas");
-  await page.goto("#/study");
-  await expect(page.getByText("study · next for you")).toBeVisible();
   await page.goto("#/n/no/such-note");
   await expect(page.getByText("There is no note at")).toBeVisible();
-});
-
-test("a note is sent to the terminal's agent with what you want of it; it says when an agent has it, and when none does", async ({ page, baseURL }) => {
-  await page.goto("#/n/basics/surprise");
-  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("carries");
-  const origin = new URL(baseURL!).origin;
-  // A terminal agent, as isorite term's plugin is: it hears what is sent and says it has it.
-  const abort = new AbortController(), heard: { id: string; note: string; passage?: string; said: string }[] = [];
-  const { token } = await (await page.request.get("api/session")).json() as { token: string };
-  const agent = (async () => {
-    const response = await fetch(`${origin}/api/events`, { signal: abort.signal });
-    let buffer = "";
-    for await (const chunk of response.body!) {
-      buffer += new TextDecoder().decode(chunk as Uint8Array);
-      for (let end; (end = buffer.indexOf("\n\n")) >= 0; buffer = buffer.slice(end + 2)) {
-        const block = buffer.slice(0, end);
-        if (!block.startsWith("event: agent-sent")) continue;
-        const sent = JSON.parse(block.match(/^data: (.*)$/m)![1]!) as { id: string; note: string; said: string };
-        heard.push(sent);
-        await fetch(`${origin}/api/agent/received`, { method: "POST", headers: { "Content-Type": "application/json", "x-isorite-token": token, Origin: origin }, body: JSON.stringify({ id: sent.id, agent: "opencode" }) });
-      }
-    }
-  })().catch(() => undefined);
-
-  await page.getByRole("button", { name: "send to agent" }).click();
-  const form = page.getByRole("group", { name: "Send to the terminal's agent" });
-  await expect(form.getByText("this note")).toBeVisible();
-  await form.getByRole("textbox", { name: "What you want of it" }).fill("check this against my note");
-  await form.getByRole("button", { name: "send to agent" }).click();
-  await expect(form.getByText("OpenCode has it, in the terminal")).toBeVisible();
-  expect(heard.at(-1)).toMatchObject({ note: "basics/surprise", said: "check this against my note" });
-  expect(heard.at(-1)!.passage).toBeUndefined();
-  await page.screenshot({ path: `test-results/screens/${test.info().project.name}-send-to-agent.png`, fullPage: true });
-
-  // A passage chosen in the note is sent instead of the whole of it.
-  // Double-clicked where the word itself is, not the middle of its line, which is maths.
-  const at = await page.evaluate(() => {
-    const walker = document.createTreeWalker(document.querySelector(".cm-content")!, NodeFilter.SHOW_TEXT);
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-      const k = n.textContent!.indexOf("carries");
-      if (k < 0) continue;
-      const range = document.createRange();
-      range.setStart(n, k); range.setEnd(n, k + "carries".length);
-      const r = range.getBoundingClientRect();
-      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-    }
-    throw new Error("no carries");
-  });
-  await page.mouse.dblclick(at.x, at.y);
-  await expect(form.getByText("the passage you chose")).toBeVisible();
-  await form.getByRole("button", { name: "send to agent" }).click();
-  await expect.poll(() => heard.at(-1)?.passage).toBe("carries");
-
-  // With no agent listening, that is said.
-  abort.abort();
-  await agent;
-  await form.getByRole("button", { name: "send to agent" }).click();
-  await expect(form.getByText("no terminal agent took it: is isorite term running?")).toBeVisible({ timeout: 8000 });
 });

@@ -32,20 +32,13 @@ async function showContext(page: Page, back?: "Note" | "Atlas") {
   return page.getByRole("list", { name: "What you gave Iso" });
 }
 
-test("the map draws the base; its Understand lens draws where you stand, and the study folders and their items", async ({ page }) => {
+test("the map draws the base: its folders, its notes, and the routes between them", async ({ page }) => {
   await atlas(page);
   await expect(folder(page, "basics")).toBeVisible();
   await expect(folder(page, "coding")).toBeVisible();
-  await expect(note(page, "basics/surprise")).not.toHaveClass(/\bs[023]\b/);
-  await expect(folder(page, "@study/coding")).toHaveCount(0);
-  await lens(page, "understand");
-  await expect(note(page, "basics/surprise")).toHaveClass(/\bs0\b/);
-  await expect(note(page, "coding/source-coding")).toHaveClass(/\bs2\b/); // three right answers: worked through
-  await expect(folder(page, "@study/coding")).toContainText("study · coding");
-  await expect(page.getByRole("link", { name: "written: Build a prefix code" })).toBeVisible();
-  await expect.poll(() => page.locator(".routes path.base, .routes path.study").count()).toBeGreaterThan(2);
+  await expect(note(page, "basics/surprise")).toBeVisible();
+  await expect.poll(() => page.locator(".routes path.base").count()).toBeGreaterThan(2);
   await look(page, "atlas");
-  await lens(page, "normal");
 });
 
 test("choosing a note outlines what it requires, all the way back, and what builds on it; again opens it", async ({ page }) => {
@@ -106,15 +99,6 @@ test("the chain is walked a step at a time, the way kept", async ({ page }) => {
   await expect(page.getByText("1 step back")).toBeVisible();
   await expect(lines).toHaveAttribute("data-requires", "2");
 
-});
-
-test("a study item lights the note it tests and what that requires", async ({ page }) => {
-  await atlas(page);
-  await lens(page, "understand");
-  await note(page, "@study/coding/a-prefix-code").click();
-  await expect(note(page, "coding/huffman-codes")).toHaveClass(/\breq\b/);
-  await expect(note(page, "basics/surprise")).toHaveClass(/\breq\b/);
-  await lens(page, "normal");
 });
 
 test("a folder is zoomed to, open ground steps out, and the map is dragged and zoomed by hand", async ({ page }) => {
@@ -233,7 +217,7 @@ test("holding makes an untitled note in the folder held in, its title chosen to 
 test("a new layout comes in three beats: the lines retract, the notes move with no line drawn, then the lines draw out", async ({ page }) => {
   await atlas(page);
   await expect(page.locator(".routes path.base").first()).toBeAttached();
-  // Into the Understand lens the study folders join the map, so it is laid out again.
+  // A note joins the base, linked to another, so the map is laid out again.
   const seen: string[] = [];
   await page.exposeFunction("beatSeen", (b: string) => { if (seen.at(-1) !== b) seen.push(b); });
   await page.evaluate(() => {
@@ -245,9 +229,12 @@ test("a new layout comes in three beats: the lines retract, the notes move with 
     };
     look();
   });
-  await lens(page, "understand");
+  const headers = await session(page), id = "coding/three-beats";
+  expect((await page.request.post(`api/note?id=${id}`, { headers, data: { text: "---\ntype: Concept\ntitle: Beats\n---\n\nIt rests on [the bit](/basics/bit.md \"requires\").\n" } })).ok()).toBe(true);
   await expect.poll(() => seen.join(" ")).toContain("retract none draw rest");
-  await lens(page, "normal");
+  // Gone again, so the rest of the tests find the base as they expect.
+  const { version } = (await (await page.request.get(`api/note?id=${id}`)).json()) as { version: string };
+  expect((await page.request.post(`api/note/delete?id=${id}`, { headers, data: { base: version } })).ok()).toBe(true);
 });
 
 test("held with a finger, a note offers to go to Iso or to open (Q16)", async ({ page }) => {
@@ -316,7 +303,7 @@ test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given t
 });
 
 test("notes are picked on the map for a request: numbered in order, sized in the dock, and taken away again", async ({ page }) => {
-  // Only an exercise is asked for this way now (no note for Iso is started from the app): one made by the Api.
+  // No note for Iso is started from the app now: one made by the Api.
   await atlas(page);
   const made = (await (await page.request.post("api/drafts", { headers: await session(page), data: {} })).json()) as { id: string };
   await page.goto(`#/draft/${made.id.slice("@draft/".length)}`);

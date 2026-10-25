@@ -5,7 +5,7 @@
 // by isorite --tutorial, beside the terminal's tour, a part may read differently again (`local`).
 
 import type { EngineEvent } from "@isorite/engine";
-import { BH, COST, ENERGY, GALAXY, LEAP, LOOP, PROMPTS, QUAD, SOFT } from "@isorite/example";
+import { BH, COST, ENERGY, GALAXY, LEAP, LOOP, PROBLEMS, PROMPTS, QUAD, SOFT } from "@isorite/example";
 import { app, noteHref } from "$lib/app.svelte.ts";
 import { converse } from "$lib/converse.svelte.ts";
 import { panes } from "$lib/panes.svelte.ts";
@@ -45,7 +45,7 @@ export interface Part {
   local?: Pick<Part, "about" | "steps">;
 }
 
-const BASE = 18; // the example's notes, before you add any
+const BASE = 18 + PROBLEMS.length; // the example's notes and its problems, before you add any
 
 // Turns in Iso's pane (M10), as they begin: the mode, what was asked, and whether an Understanding note went with it.
 const turns = new Map<string, { mode: string; asked: string; understanding: boolean }>();
@@ -216,27 +216,23 @@ export const PARTS: Part[] = [
         text: "Iso made The octree. Click it in Iso's pane to open it: it is one of your notes now, linked to the quadtree and Barnes–Hut." },
       { go: `/n/${LOOP}`, target: '[data-pane="note"] .cm-content', check: () => /octree/i.test(document.querySelector('[data-pane="note"] .cm-content')?.textContent ?? ""), title: "Link it in",
         text: "The main loop is where it will be used. At the end of the first paragraph, type [[oct and choose the octree." },
-      { go: async () => { const n = titled(/octree/i); return n ? noteHref(n.id).split("#").at(-1)! : `/n/${LOOP}`; }, target: '[data-tour="send"]', title: "Hand it on",
-        text: "The code is the agent's work, in the terminal. send to agent puts this note in its next prompt: L4." },
     ],
   },
   {
     key: "L3", title: "Understanding", about: "isorite keeps track of your understanding, note by note, so you can see where you stand and how it grew. Iso uses it: in Understand mode it starts from where you are.",
     steps: [
-      { go: "/atlas", target: '[data-pane="atlas"] .lens[data-lens="understand"], .atlas', check: () => panes.lens.atlas === "understand", title: "Where you stand",
-        text: "Switch the Atlas to its Understand lens, ◇ in its header. Each note shows where you stand with it, from dotted, not reached, to a double edge, understood; and the study folders appear, with your exercises." },
       { go: `/n/${LEAP}`, target: '[data-pane="note"] .lens[data-lens="understand"], [data-pane="note"] .u', check: () => panes.lens.note === "understand" && padSaved(), title: "Your Understanding note",
-        text: "Every note has an Understanding note: switch Leapfrog to its Understand lens, ◇ in the Note pane's header. Iso's reading of you, what changed it, and a scratchpad only you see. Write a line in the scratchpad." },
+        text: "Every note has an Understanding note: switch Leapfrog to its Understand lens, ◇ in the Note pane's header. Iso's reading of you, and a scratchpad Iso does not write. Write a line in the scratchpad." },
       { target: () => [...document.querySelectorAll(`${ISO} .mode[data-mode="understand"], #iso-box`)], fill: PROMPTS.understand, until: turnDone("understand", /bounded|leapfrog/), title: "Understand mode",
         text: "In Iso's pane, switch to Understand mode: the sprig. Your Understanding note of Leapfrog now goes with what you ask (the Context icon shows it). The question is written for you: send it. Iso asks you something back." },
       { target: ISO, fill: PROMPTS.answer, until: turnDone("understand", /backwards|retrace|reverse/), title: "Answer it",
-        text: "Answer Iso's question: an answer is written for you, or say it your own way, with backwards in it. Iso records what it saw, and rewrites its reading of you." },
-      { target: '[data-pane="note"] .u', title: "What changed it",
-        text: "In Leapfrog's Understand lens: Iso's reading is new, and what changed it has a new line, with Iso's reason. You can see how your understanding grew, and why." },
+        text: "Answer Iso's question: an answer is written for you, or say it your own way, with backwards in it. Iso rewrites its reading of you." },
+      { target: '[data-pane="note"] .u', title: "Its reading of you",
+        text: "In Leapfrog's Understand lens, Iso's reading is new: what you can do with the note, and what you have not yet shown." },
       { target: `${ISO} .ctx, ${ISO} .context`, until: turnDone("understand", /bounded|leapfrog/, (t) => !t.understanding), title: "Without it",
         text: "Open the Context icon and take your Understanding of Leapfrog out with its ×. Then ask the first question again: Iso starts from the beginning, as it would for anyone." },
       { title: "Understanding, in short",
-        text: "Iso keeps a reading of your understanding, note by note, from what you say and do; it is yours to read, and to take out of what Iso is sent. Your notes are yours to share; your understanding stays in your study base." },
+        text: "Iso keeps a reading of your understanding, note by note, from what you say and do; it is yours to read, and to take out of what Iso is sent. It is kept beside your notes, in their .isorite folder." },
     ],
   },
   { key: "E2", title: "Learning with isorite", steps: [],
@@ -252,8 +248,8 @@ export const PARTS: Part[] = [
         text: "While it works, this Atlas follows it: what it found and read is drawn as Iso's path is, and what it used." },
       { title: "Its changes to notes wait",
         text: "edit_note and write_note: what the agent changes in your notes is written at once under its name, its words marked as Iso's are in Write mode, and undone the same way. Its changes to code are OpenCode's own, which asks before it writes." },
-      { go: `/n/${LOOP}`, target: '[data-tour="send"]', title: "From here to there",
-        text: "send to agent puts a note, or a passage of it, in the agent's next prompt. In the terminal, /note opens a note and /atlas shows what it requires and what builds on it." },
+      { title: "From here to there",
+        text: "In the terminal, /note opens a note and /atlas shows what it requires and what builds on it." },
       { title: "Its tour, replayed", link: { href: "#/terminal", text: "isorite in the terminal: its tour, replayed" },
         text: "Every screen of the terminal's tour, as OpenCode drew it." },
     ],
@@ -266,8 +262,6 @@ export const PARTS: Part[] = [
           text: "In the terminal, ask the agent for code, as its card says. It looks in your notes first: watch its path drawn here as it reads, found by words, by meaning, or along a link." },
         { go: `/n/${GALAXY}`, title: "Its changes to notes wait here too",
           text: "When the agent would change a note, the change waits in the note, here as in the terminal, under its name. Keep it in either; the other sees it." },
-        { go: `/n/${LOOP}`, target: '[data-tour="send"]', until: (e) => e.type === "agent-sent", title: "From here to there",
-          text: "send to agent puts this note, or a passage of it, in the agent's next prompt. Send it, and look for it in the terminal under from you." },
         { title: "On your own notes",
           text: "In your project's folder: isorite term <your base>, and the browser at the address it gives. isorite serve <your base> opens the browser alone." },
       ],

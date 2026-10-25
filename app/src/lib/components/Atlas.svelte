@@ -4,10 +4,10 @@
   // its marks. The marks are plain maps from a note to a mark, looked up while drawing.
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { reach, withoutStudy } from "@isorite/core";
+  import { reach } from "@isorite/core";
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
   import type { How, MapReport, NoteSource } from "@isorite/engine";
-  import { linkedIn, placeOf, testsIn, titleIn, withLink, withoutLink, withTest } from "$lib/atlas/picks.ts";
+  import { linkedIn, placeOf, titleIn, withLink, withoutLink } from "$lib/atlas/picks.ts";
   import { tick } from "svelte";
   import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
@@ -19,8 +19,6 @@
   import AtlasBlock from "./AtlasBlock.svelte";
   import AtlasFolder from "./AtlasFolder.svelte";
   import AtlasRoutes from "./AtlasRoutes.svelte";
-  import AtlasStudyFolder from "./AtlasStudyFolder.svelte";
-  import AtlasStudyItem from "./AtlasStudyItem.svelte";
 
   let { pick = "", moment = null }: {
     /** A note for Iso (`@draft/…`) that notes are being picked for: a click then links a note to it. */
@@ -69,9 +67,7 @@
   }
   async function load(): Promise<void> {
     try {
-      const got = await app.api.map();
-      // Study folders are drawn in the Understand lens only (M10).
-      const next = studyShown ? got : { ...got, model: withoutStudy(got.model) };
+      const next = await app.api.map();
       // A changed base is laid out from where things stood (V5), on the same grid and the same way.
       const on = `${flow}|${grain}`, from = laid && laidOn === on ? laid.layout.orders ?? null : null;
       const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from });
@@ -103,10 +99,6 @@
     } catch (e) { failed = (e as Error).message; }
   }
 
-  const studyShown = $derived(panes.lens.atlas === "understand");
-  // Into or out of the Understand lens, the map is laid out again with or without the study folders.
-  let shownBefore: boolean | null = null;
-  $effect(() => { const s = studyShown; if (shownBefore !== null && shownBefore !== s) void load(); shownBefore = s; });
   $effect(() => {
     void load();
     let again: ReturnType<typeof setTimeout> | undefined;
@@ -187,7 +179,7 @@
   const notes = $derived(L ? L.items.flatMap((item, i) => (item.kind === "note" && open[i] === "s" ? [{ item, i }] : [])) : []);
   // The routes at rest, merged where they overlap. A line between folders is labelled with its count, as on the boards,
   // where it is long enough to carry it (5 cells); one inside a folder, only where it is long (30 cells).
-  const rest = $derived(L ? mergeRoutes(restRoutes(L, open, idx!.strong, leaves)).map((r) => ({ key: r.key, pts: r.pts, d: linePath(r.pts, 0, L.cell), count: r.count, study: r.study, strong: r.strong, trunk: r.trunk, ...countAt(r) })).map((r, i, all) => ({ ...r, label: r.label && !all.some((o, j) => j !== i && o.label && o.count === r.count && Math.hypot(o.mid[0] - r.mid[0], o.mid[1] - r.mid[1]) < 10 && (o.length > r.length || (o.length === r.length && j < i))) })) : []);
+  const rest = $derived(L ? mergeRoutes(restRoutes(L, open, idx!.strong, leaves)).map((r) => ({ key: r.key, pts: r.pts, d: linePath(r.pts, 0, L.cell), count: r.count, strong: r.strong, trunk: r.trunk, ...countAt(r) })).map((r, i, all) => ({ ...r, label: r.label && !all.some((o, j) => j !== i && o.label && o.count === r.count && Math.hypot(o.mid[0] - r.mid[0], o.mid[1] - r.mid[1]) < 10 && (o.length > r.length || (o.length === r.length && j < i))) })) : []);
   // A count: on a line between folders only, where it carries more than one link, once along its longest straight
   // stretch of 3 cells or more, beside the line (to the right of an upright one, above any other). Where a highway
   // is cut in two by a line joining it, the same count close by is shown once, on the longer piece.
@@ -378,14 +370,14 @@
     app.api.readNote(pick).then((d) => { if (!stale) draft = d; }, () => { if (!stale) notice = "that note for Iso is not here any more"; });
     return () => { stale = true; };
   });
-  const picked = $derived(draft ? (testsIn(draft.text) ?? linkedIn(draft.text)).filter((id) => report?.notes[id] && !id.startsWith("@")) : []);
+  const picked = $derived(draft ? linkedIn(draft.text).filter((id) => report?.notes[id] && !id.startsWith("@")) : []);
   let writing: Promise<void> = Promise.resolve();
   /** Link a note to the draft, or take away a link picked here. One at a time, each on the file as the last left it. */
   function toggle(ref: string): void {
     writing = writing.then(async () => {
       if (!draft || ref.startsWith("@")) return;
       // A request for an exercise is picked for what it tests; any other note for Iso, for what it links.
-      const change = (text: string): string | null => (testsIn(text) ? withTest(text, ref) : linkedIn(text).includes(ref) ? withoutLink(text, ref) : withLink(text, ref, title(ref)));
+      const change = (text: string): string | null => (linkedIn(text).includes(ref) ? withoutLink(text, ref) : withLink(text, ref, title(ref)));
       const next = change(draft.text);
       if (next === null) { notice = "linked in what you wrote: take it out there"; return; }
       notice = "";
@@ -429,7 +421,7 @@
     if (offered && !(e.target instanceof Element && e.target.closest(".offer"))) offered = null;
     if (pick || making || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock")) return;
     const on = e.target.closest<HTMLElement>("[data-note]")?.dataset.note ?? "";
-    if (on.startsWith("@")) return; // a study item is not a place in the base
+    if (on.startsWith("@")) return; // a note for Iso is not a place in the base
     if (on) {
       // A mouse gives it straight away; a finger is offered a choice there, since a phone has no Iso beside the map (Q16).
       const touch = e.pointerType !== "mouse";
@@ -490,7 +482,7 @@
   }
 
   const title = (ref: string): string => report?.notes[ref]?.title ?? ref.split("/").at(-1) ?? ref;
-  const folderName = (ref: string): string => (ref.startsWith("@study") ? ref.replace(/^@study\/?/, "").split("/").at(-1) || app.session?.name || "the base" : ref.split("/").at(-1) ?? ref);
+  const folderName = (ref: string): string => ref.split("/").at(-1) || app.session?.name || "the base";
 
   // ------------------------------------------------------------ moving about
 
@@ -667,9 +659,8 @@
   }
 
   const labels = $derived(view.k >= LABELS_AT);
-  const count = $derived(L ? L.items.filter((n) => n.kind === "note" && n.ref.startsWith("@study")).length : 0);
   $effect(() => {
-    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", chosenId: chosen, steps: walk.length - 1, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out };
+    app.atlas = { chosen: chosen ? title(chosen) : "", chosenId: chosen, steps: walk.length - 1, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out };
     return () => { app.atlas = null; };
   });
 </script>
@@ -686,11 +677,7 @@
     {#if !L.items.length}<p class="said faint">There are no notes yet. The map draws itself as you write them.</p>{/if}
     <div class="atlas-world" class:labels class:shifting data-open={open} style="transform: translate({view.x}px, {view.y}px); --u: {(L?.cell ?? 7) * view.k}px; --k: {view.k}; --fs: {(10.5 * Math.min(1.5, Math.max(0.8, view.k))).toFixed(2)}px; --lines: {view.k < 0.9 ? 1 : 2}">
       {#each folders as f (f.item.id)}
-        {#if f.item.ref.startsWith("@study")}
-          <AtlasStudyFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} passes={L.items.filter((x) => x.parent === f.i && report?.notes[x.ref]?.passed).length} onpick={() => enter(f.i)} />
-        {:else}
           <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * view.k >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} onpick={() => enter(f.i)} />
-        {/if}
       {/each}
       <AtlasRoutes k={view.k} {rest} hot={[...(isoLens ? isoHot : []), ...hot]} counts={litCount} sent={sentLines} {grown} {beat} {retracting} />
       {#if labels && !beat}
@@ -701,13 +688,8 @@
       {#each notes as n (n.item.id)}
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
-        {#if n.item.ref.startsWith("@study")}
-          <AtlasStudyItem item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? "note"} {mark} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
-        {:else}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} step={studyShown ? (report.notes[n.item.ref]?.step ?? 0) : 1} since={studyShown ? (report.notes[n.item.ref]?.changedSince ?? "") : ""} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
-            onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
-        {/if}
       {/each}
       {#if origin}
         <div class="asker" class:draft={origin.draft} style="--x:{origin.gx};--y:{origin.gy};--w:{origin.w};--h:{origin.h}">
@@ -726,15 +708,12 @@
       {/if}
     </div>
     {#if pick}
-      <AtlasDock title={draft ? (testsIn(draft.text) ? "an exercise" : titleIn(draft.text)) : ""} tests={draft ? testsIn(draft.text) !== null : false} picked={picked.map((id) => ({ id, title: title(id), tokens: report!.notes[id]?.tokens ?? 0 }))} budget={LINKED_BUDGET} {notice}
+      <AtlasDock title={draft ? titleIn(draft.text) : ""} picked={picked.map((id) => ({ id, title: title(id), tokens: report!.notes[id]?.tokens ?? 0 }))} budget={LINKED_BUDGET} {notice}
         href={resolve("/draft/[id]", { id: pick.slice("@draft/".length) })} />
     {:else if notice}
       <p class="notice" role="alert">{notice}</p>
     {/if}
     {#if given}<p class="given" role="status">◆ {given}</p>{/if}
-    {#if studyShown && !pick && !given && panes.settings === "atlas"}
-      <p class="legend" aria-hidden="true"><span><i class="k s0"></i>not reached</span><span><i class="k s1"></i>opened</span><span><i class="k s2"></i>worked through</span><span><i class="k s3"></i>understood</span><span><i class="k ch"></i>changed since</span></p>
-    {/if}
     {#if panes.lens.atlas === "iso" && !pick && !given && panes.settings === "atlas"}
       <p class="legend" aria-hidden="true"><span><i class="k g"></i>in Iso's context</span><span><i class="k d"></i>Iso changed it</span><span><i class="k p"></i>Iso points to it</span><span><i class="k n">1</i>read, in order</span><span class="faint">tap to give or take back</span></p>
     {/if}
@@ -780,11 +759,6 @@
   .legend .g { background: var(--growth-soft); border: 1px solid var(--growth); }
   .legend .d { width: 7px; height: 7px; background: var(--growth); transform: rotate(45deg); }
   .legend .p { border: 1.5px dashed var(--growth); }
-  .legend .s0 { border: 1px dotted var(--line-strong); }
-  .legend .s1 { border: 1px solid var(--line-strong); background: var(--ground-1); }
-  .legend .s2 { border: 1px solid var(--line-strong); background: var(--ground-3); }
-  .legend .s3 { border: 3px double var(--lattice); background: var(--ground-3); }
-  .legend .ch { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid var(--builds); }
   .legend .n { width: 14px; height: 14px; background: var(--growth); color: var(--ground-0); font-size: 9px; font-weight: 700; }
   /* A note carried out of the Atlas towards Iso's pane. */
   .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font-size: 12px; white-space: nowrap; }

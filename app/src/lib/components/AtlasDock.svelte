@@ -1,11 +1,10 @@
 <script lang="ts">
   // The dock at the foot of the Atlas while notes are picked for a note for Iso (the Mobile-Pick board): the
   // note they are for, what is linked and how large each is, and the way back to it. What is picked is what
-  // Iso is sent, so the sizes are said here. For a request for an exercise, what is picked is what it tests: those
-  // are sent whole, so there is no budget to be over.
+  // Iso is sent, so the sizes are said here.
   import { short } from "$lib/atlas/picks.ts";
 
-  let { title, picked, budget, href, notice = "", tests = false }: {
+  let { title, picked, budget, href, notice = "" }: {
     title: string;
     /** The notes linked, in the order they are sent. */
     picked: { id: string; title: string; tokens: number }[];
@@ -13,16 +12,14 @@
     budget: number;
     href: string;
     notice?: string;
-    /** Picking what a request for an exercise tests. */
-    tests?: boolean;
   } = $props();
 
   const total = $derived(picked.reduce((n, p) => n + p.tokens, 0));
-  const over = $derived(!tests && total > budget);
-  const says = $derived([tests ? `${picked.length} to test` : `${picked.length} linked`, picked.length ? `${short(total)} tokens` : "", over ? `over ${short(budget)}` : "", notice].filter(Boolean).join(" · "));
+  const over = $derived(total > budget);
+  const says = $derived([`${picked.length} linked`, picked.length ? `${short(total)} tokens` : "", over ? `over ${short(budget)}` : "", notice].filter(Boolean).join(" · "));
 </script>
 
-<div class="dock" role="region" aria-label={tests ? "Notes the exercise tests" : "Notes linked to the note for Iso"}>
+<div class="dock" role="region" aria-label="Notes linked to the note for Iso">
   <i class="dia open" aria-hidden="true"></i>
   <div class="what">
     <span class="name">{title || "a new note"}</span>

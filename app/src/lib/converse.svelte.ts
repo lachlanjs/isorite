@@ -88,7 +88,7 @@ class Converse {
       // A change to the note open is shown in the note's Iso lens: brought up, unless you are typing in it.
       if (e.item.kind === "change" && (e.item.note === app.open || e.item.to === app.open)) panes.want("note", "iso", panes.busy("note"));
       // What Iso keeps of your understanding of the note open is shown in its Understand lens.
-      if ((e.item.kind === "change" && e.item.note === `@understanding/${app.open}`) || (e.item.kind === "understood" && e.item.note === app.open)) panes.want("note", "understand", panes.busy("note"));
+      if (e.item.kind === "change" && e.item.note === `@understanding/${app.open}`) panes.want("note", "understand", panes.busy("note"));
       put({ ...t, items: [...t.items, e.item] });
     }
     else if (e.type === "iso-answer") put({ ...t, items: t.items.map((i): TurnItem => (i.kind === "permission" && i.id === e.permission ? { ...i, answer: e.decision } : i)) });

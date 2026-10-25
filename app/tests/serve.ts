@@ -1,5 +1,5 @@
 // The server the browser tests run against: a small base made fresh in a
-// temporary folder, with its study base, served on its own port. Nothing of
+// temporary folder, with its .isorite/, served on its own port. Nothing of
 // yours is read or written: the device's configuration is kept there too.
 
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -50,30 +50,18 @@ async function provider(): Promise<void> {
     res.writeHead(200, { "content-type": "text/event-stream" });
     const data = (o: unknown) => res.write(`data: ${JSON.stringify(o)}\n\n`);
     const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-    if (user.includes("⟦answer⟧") || user.includes("# What it is to test")) {
-      // Marking: the answer is marked right if it says "right", wrong otherwise, and each note tested moves by a
-      // square either way. Writing an exercise: a title and a question.
-      let reply: string;
-      if (user.includes("# What it is to test")) reply = "# a scripted exercise\n\nWhat is the entropy of a fair coin, in bits?";
-      else {
-        const answer = /⟦answer⟧([\s\S]*?)⟦\/answer⟧/.exec(user)![1]!, right = answer.includes("right");
-        const notes = [...user.matchAll(/\(id: ([^;]+);/g)].map((m) => m[1]!);
-        reply = JSON.stringify({ result: right ? "right" : "wrong", marks: [{ quote: answer, mark: right ? "right" : "wrong" }], moves: Object.fromEntries(notes.map((n) => [n, { by: right ? 1 : -1, why: right ? "Exact, and unaided." : "The answer is wrong." }])) });
-      }
-      data({ choices: [{ delta: { content: reply } }] });
-    } else if (user.includes("⟦1⟧")) {
+    if (user.includes("⟦1⟧")) {
       // A rewrite: each chosen passage comes back as "rewritten k" ("drop" takes the second out), with a remark
       // outside the marks that must be dropped, and a word on the changes ("quiet" says nothing).
       const count = new Set(user.match(/⟦\d+⟧/g)).size;
       data({ choices: [{ delta: { content: "Here is the rewrite.\n" } }] });
       for (let k = 1; k <= count; k++) data({ choices: [{ delta: { content: `⟦${k}⟧${asked.includes("drop") && k === 2 ? "" : ` rewritten ${k} `}⟦/${k}⟧\n` } }] });
       if (!asked.includes("quiet")) data({ choices: [{ delta: { content: "⟦note⟧I rewrote what you chose, **plainly**.⟦/note⟧" } }] });
-    } else if (/\bunderstand (\S+)/.test(asked) && sent.messages.filter((m) => m.role === "tool").length < 2) {
-      // Understand mode (M10): "understand <id>" records evidence of it, then writes Iso's reading of it.
-      const id = /\bunderstand (\S+)/.exec(asked)![1]!, first = !looked;
-      const call = first ? { name: "record_understanding", arguments: JSON.stringify({ id, by: 0.5, why: "You said why it holds in your own words." }) }
-        : { name: "write_understanding", arguments: JSON.stringify({ id, reading: "You can say what it measures, and why." }) };
-      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${first ? 1 : 2}`, function: call }] } }] });
+    } else if (/\bunderstand (\S+)/.test(asked) && !looked) {
+      // Understand mode (M10): "understand <id>" writes Iso's reading of it.
+      const id = /\bunderstand (\S+)/.exec(asked)![1]!;
+      const call = { name: "write_understanding", arguments: JSON.stringify({ id, reading: "You can say what it measures, and why." }) };
+      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: call }] } }] });
     } else if (/\bedit (\S+)/.test(asked) && !looked) {
       // Write mode (M10): "edit <id>" changes its "Plain text." into Iso's words; "move <id> to <id>" asks first.
       const id = /\bedit (\S+)/.exec(asked)![1]!;
@@ -116,10 +104,5 @@ if (process.argv[1] === import.meta.filename) {
   writeFileSync(join(ROOT, "config", "isorite", "config.toml"), `device = "browser01"\n\n[provider]\nname = "scripted"\nurl = "http://127.0.0.1:${PROVIDER_PORT}/v1"\nauth = "http://127.0.0.1:${PROVIDER_PORT}/auth"\n\n[tiers]\nlow = "scripted-low"\nmid = "scripted-mid"\nmax = "scripted-max"\n`);
   await provider();
   const { serve } = await import("../../packages/server/src/serve.ts");
-  // And in isorite's own files: one exercise on the last of them, and a record that says the first is worked through.
-  mkdirSync(join(STUDY, "study", "coding"), { recursive: true });
-  writeFileSync(join(STUDY, "study", "coding", "a-prefix-code.md"), "---\ntype: Exercise\nkind: written\ntitle: Build a prefix code\ntests: [coding/huffman-codes]\n---\n\nFor four symbols.\n");
-  mkdirSync(join(STUDY, "record"), { recursive: true });
-  writeFileSync(join(STUDY, "record", "browser01.jsonl"), [1, 2, 3].map((n) => JSON.stringify({ id: `01K7B00000000000000000000${n}`, at: `2026-10-12T09:00:0${n}Z`, device: "browser01", event: "attempt", exercise: "coding/a-prefix-code", tests: ["coding/source-coding"], result: "right", by: "iso:scripted", moves: { "coding/source-coding": { by: 1, why: "" } } }) + "\n").join(""));
   await serve(NOTES, { port: PORT });
 }

@@ -99,8 +99,6 @@
         <p class="acts"><button type="button" onclick={() => void converse.answer(i.id, "once")}>Allow once</button><button type="button" onclick={() => void converse.answer(i.id, "always")}>Always allow this</button><button type="button" class="no" onclick={() => void converse.answer(i.id, "reject")}>Don't allow</button></p>
       {/if}
     </div>
-  {:else if i.kind === "understood"}
-    <p class="understood"><span class="v">recorded</span><button type="button" class="note-link" onclick={() => openUnderstanding(i.note)}>{titleOf(i.note)}</button><span class="by" class:up={i.by > 0} class:down={i.by < 0}>{i.by > 0 ? `+${i.by}` : i.by < 0 ? `−${-i.by}` : "±0"}</span>{#if i.why}<span class="why">{i.why}</span>{/if}</p>
   {:else if i.kind === "undone"}
     <p class="faint undone">{i.notes.length ? `Undone: ${i.notes.map(titleOf).join(", ")} put back.` : "Nothing was put back."}{i.left.length ? ` Left as they are, changed since: ${i.left.map(titleOf).join(", ")}.` : ""}</p>
   {:else if i.kind === "point"}
@@ -247,12 +245,6 @@
   .acts button { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
   .acts button:hover { color: var(--text); }
   .acts .no { color: var(--text-faint); }
-  .understood { padding-left: 16px; font-size: 12px; color: var(--text-faint); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; position: relative; }
-  .understood::before { content: "◇"; position: absolute; left: 0; color: var(--malachite); }
-  .understood .v { color: var(--text-soft); min-width: 5.5em; }
-  .understood .by.up { color: var(--malachite); }
-  .understood .by.down { color: var(--rose); }
-  .understood .why { flex-basis: 100%; padding-left: calc(5.5em + 8px); color: var(--text-soft); }
   .undo { padding-left: 10px; margin-top: -4px; }
   .undone { font-size: 12px; padding-left: 16px; }
   .point .dia { color: var(--growth); font-size: 10px; position: absolute; left: 0; }

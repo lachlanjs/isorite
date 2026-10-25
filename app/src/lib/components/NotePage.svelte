@@ -1,5 +1,4 @@
 <script lang="ts">
-  import SendToAgent from "./SendToAgent.svelte";
   import { agentName } from "@isorite/core";
   import { resolve } from "$app/paths";
   // A note, open for writing: its title, its details when they are wanted, and its text. Saving is the
@@ -7,13 +6,12 @@
   import { onMount, tick } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { isStudyId, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
+  import { moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import { wordAuthors } from "@isorite/core";
   import type { Mark } from "$lib/editor/overlays.ts";
-  import { ExerciseState, moveText } from "$lib/exercise.svelte.ts";
   import { NoteIso } from "$lib/iso.svelte.ts";
   import { NoteSession } from "$lib/note.svelte.ts";
   import NoteDetails from "./NoteDetails.svelte";
@@ -29,13 +27,6 @@
   // svelte-ignore state_referenced_locally
   const note = new NoteSession(id);
   const iso = new NoteIso(note);
-  // svelte-ignore state_referenced_locally
-  const exercise = isStudyId(id) ? new ExerciseState(note, iso) : null;
-  const ex = $derived(exercise?.is ? exercise : null);
-  let why = $state(false);
-  const KINDS: Record<string, string> = { written: "written response" };
-  const titleOf = (n: string): string => app.listing.notes.find((x) => x.id === n)?.title ?? n.split("/").at(-1)!;
-
 
   const remembered = (key: string): boolean => { try { return localStorage.getItem(key) === "1"; } catch { return false; } };
   const remember = (key: string, on: boolean) => { try { localStorage.setItem(key, on ? "1" : "0"); } catch { /* not kept */ } };
@@ -133,7 +124,6 @@
   onMount(() => {
     app.open = id;
     void note.open().then(() => iso.open());
-    void exercise?.open();
     const leaving = () => { void note.save(); };
     addEventListener("pagehide", leaving);
     document.addEventListener("visibilitychange", leaving);
@@ -141,18 +131,11 @@
       removeEventListener("pagehide", leaving);
       document.removeEventListener("visibilitychange", leaving);
       iso.close();
-      exercise?.close();
-      app.exercise = null;
       void note.close();
       app.here = "";
       app.open = "";
       app.saving = null;
     };
-  });
-
-  // The header's part of an open exercise: its kind, the squares, wind back and next.
-  $effect(() => {
-    app.exercise = ex ? { kind: KINDS[ex.ex.kind] ?? ex.ex.kind, squares: ex.squares.squares, due: ex.squares.due, flash: ex.flash, windBack: () => void ex.windBack(), why: () => (why = !why), next: ex.ex.next ? `@study/${ex.ex.next}` : null } : null;
   });
 
   // A note made on the Atlas is "untitled-note" until it is named: its first title names its file too.
@@ -185,8 +168,7 @@
   });
   // Whose changes wait: Iso's, an agent's, or both.
   const changesFrom = $derived([...new Set(iso.changes.map((c) => agentName(c.proposal.who) || "Iso"))].join(" and "));
-  // Sending the note, or the passage chosen in it, to the terminal's agent.
-  let sending = $state(false);
+  // The passage chosen in the note.
   const chosen = $derived(iso.cursor && iso.cursor.to > iso.cursor.from ? note.text.slice(iso.cursor.from, iso.cursor.to).trim() : "");
   // A passage chosen in the note can be sent to Iso (M10): one button by the selection, above it on a desktop and
   // below it on a phone, where the system's own handles are above.
@@ -239,39 +221,6 @@
       </div>
     {/if}
 
-    {#if ex && why}
-      <div class="frame why" role="region" aria-label="Iso's read of you">
-        <span class="frame-title">Iso's read of you</span>
-        {#each ex.ex.tests as t (t)}
-          {@const n = ex.study?.notes[t]}
-          <div class="reading">
-            <span class="soft">{titleOf(t)}</span>
-            <span class="squares" aria-label="{n?.squares ?? 0} of 6">{#each [0, 1, 2, 3, 4, 5] as k (k)}<i class="pip" class:lv={k < (n?.squares ?? 0)}></i>{/each}</span>
-            {#if n?.due}<span class="label">due</span>{/if}
-          </div>
-          {#each [...(n?.evidence ?? [])].reverse() as e (e.id)}
-            <div class="evidence label"><span class="by">{moveText(e.by)}</span><span>{e.event === "wind-back" ? "you wound it back" : e.why || (e.result ?? "")}</span><span class="grow"></span><span>{e.at.slice(0, 10)}</span></div>
-          {:else}
-            <div class="evidence label">nothing yet</div>
-          {/each}
-        {/each}
-        <div class="row"><span class="label">rated too highly? one square down for each note it tests</span><span class="grow"></span><button class="link" type="button" onclick={() => ex.windBack()}>[ wind back ]</button></div>
-      </div>
-    {/if}
-
-    {#if ex && !asSource}
-      <div class="tests">
-        <span class="label">{KINDS[ex.ex.kind] ?? ex.ex.kind} · tests</span>
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves -->
-        {#each ex.ex.tests as t (t)}<a href={noteHref(t)}>{titleOf(t)}</a>{:else}<span class="faint">nothing: name a note in its tests</span>{/each}
-        <span class="grow"></span>
-        <div class="tools">
-          <button class="icon" type="button" aria-label="timeline" title="timeline" aria-pressed={timeline} onclick={toggleTimeline}>{@render clockIcon()}</button>
-          <button class="btn quiet" type="button" aria-pressed={details} onclick={() => { details = !details; remember("isorite.details", details); }}>details</button>
-          <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => (source = !source)}>source</button>
-        </div>
-      </div>
-    {:else}
     <div class="head">
       {#if !asSource}
         <label class="hidden-label" for="title">Title</label>
@@ -287,12 +236,9 @@
         {#if !asSource}<button class="icon" type="button" aria-label="timeline" title="timeline" aria-pressed={timeline} onclick={toggleTimeline}>{@render clockIcon()}</button>{/if}
         {#if !asSource}<button class="btn quiet" type="button" aria-pressed={details} onclick={() => { details = !details; remember("isorite.details", details); }}>details</button>{/if}
         <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => (source = !source)}>source</button>
-        {#if !asSource}<button class="btn quiet" type="button" data-tour="send" aria-pressed={sending} onclick={() => (sending = !sending)}>send to agent</button>{/if}
       </div>
       </div>
     </div>
-    {/if}
-    {#if sending && !asSource}<SendToAgent note={id} passage={chosen} onclose={() => (sending = false)} />{/if}
     {#if details && !asSource}<NoteDetails {note} />{/if}
 
     {#if timeline && !asSource}
@@ -318,28 +264,8 @@
       <button class="toiso" type="button" style:top="{toIsoAt.top}px" style:left="{toIsoAt.left}px" onpointerdown={(e) => { e.preventDefault(); sendToIso(); }} onclick={(e) => { if (e.detail === 0) sendToIso(); }}><i class="dia" aria-hidden="true">◆</i>send to Iso</button>
     {/if}
     <div class="live" hidden={Boolean(at && version)}>
-      {#key asSource}<NoteEditor {note} {iso} exercise={ex ?? undefined} source={asSource} touched={live} lens={lensMarks} />{/key}
+      {#key asSource}<NoteEditor {note} {iso} source={asSource} touched={live} lens={lensMarks} />{/key}
     </div>
-
-    {#if ex && !asSource && !at}
-      <!-- The foot of an exercise (Study-Written, Mobile-Study): mark the selection as the answer, send it for marking. -->
-      <div class="foot">
-        {#if ex.selection && !(ex.answerAt && ex.answerAt.from === ex.selection.from && ex.answerAt.to === ex.selection.to)}
-          <button class="btn" type="button" onmousedown={(e) => e.preventDefault()} onclick={() => ex.markAnswer()}>mark as answer</button>
-        {/if}
-        <button class="btn primary tall" type="button" disabled={!ex.answerAt || ex.marking !== null} onclick={() => ex.send()}>
-          {ex.marking !== null ? "marking…" : ex.last ? "mark it again" : "send for marking"}
-        </button>
-        {#if ex.marking !== null}<span class="label">Iso is marking</span>
-        {:else if ex.failed}<span class="bad" role="alert">{ex.failed}</span>
-        {:else if !ex.answerAt}<span class="label">select a part of your working, then mark it as your answer</span>
-        {:else if ex.last}
-          <span class="label moves">moves: {#each ex.moves as m, k (m.note)}{k ? ", " : ""}{titleOf(m.note)} {moveText(m.by)}{/each}</span>
-        {/if}
-        <span class="grow"></span>
-        {#if ex.last?.cost && ex.marking === null}<span class="label">{ex.last.cost.tier} · ${ex.last.cost.usd.toFixed(3)}</span>{/if}
-      </div>
-    {/if}
 
     <!-- A rewrite's changes are kept or removed one by one in the text; here, all that are left at once. -->
     {#if iso.changes.length}
@@ -393,15 +319,6 @@
   .changes { position: sticky; bottom: 28px; z-index: 8; display: flex; align-items: center; gap: 12px; padding: 10px 2px; background: var(--ground-0); border-top: 1px solid var(--line); }
   .changes .dia { margin: 0 3px; }
   .link { background: none; border: 0; padding: 4px 0; color: var(--lattice); white-space: nowrap; }
-  .tests { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; padding-top: 16px; }
-  .tests .tools { padding-top: 0; }
-  .foot { position: sticky; bottom: 28px; z-index: 8; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 16px 0 20px; background: var(--ground-0); border-top: 1px solid var(--line); }
-  .foot .moves { min-width: 0; }
-  .why { padding: var(--space-6) var(--space-4) var(--space-3); display: flex; flex-direction: column; gap: 6px; margin-top: var(--space-3); }
-  .reading { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
-  .squares { display: inline-flex; gap: 4px; }
-  .evidence { display: flex; gap: 12px; padding-left: 4px; }
-  .evidence .by { width: 2.5ch; flex: none; text-align: right; color: var(--text-soft); }
   /* A narrow pane (M10) lays the head out as a phone does: the title under the tools, the whole width. */
   @container page (max-width: 600px) {
     .head { flex-direction: column-reverse; gap: var(--space-1); }
@@ -414,8 +331,6 @@
     .note.timed { padding-left: 56px; }
     .tl-col { top: 20px; left: 8px; bottom: 0; z-index: 1; padding-right: 2px; border-right: 1px solid var(--line); background: var(--ground-1); }
     .changes { bottom: 156px; flex-wrap: wrap; }
-    .foot { bottom: 156px; gap: 12px; padding: 12px 0; }
-    .foot .tall { flex: 1 1 100%; justify-content: center; }
     .head { flex-direction: column-reverse; gap: var(--space-1); }
     .tools { align-self: flex-end; padding-top: 0; }
     .side { align-self: stretch; flex-direction: row-reverse; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; }

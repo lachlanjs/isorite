@@ -75,9 +75,7 @@ Every screen is written against `Api`, so nothing in the app knows which it has.
 | isorite writes into it | only a note's own text, only when the person saves or keeps | everything else |
 | Git | the project's own repository | a private repository, `merge=union` on `*.jsonl` |
 
-- A study base names the knowledge base it studies in `isorite.toml`. Nothing in the knowledge base names a study base, so the knowledge base is the same for every reader and exports clean.
-- **Project mode** is a knowledge base opened with no study base: reading, the Atlas, editing and Iso work, and there is no study. **Decided (2026-10-13):** project mode still keeps a journal for each note, and with no study base it is kept in the knowledge base itself. **Later** (the slice always has a study base). Proposed place: `.isorite/journal/<note id>.jsonl`, the same entries as section 3 of `docs/format.md`, so the engine's journal writer only needs a different root. Still open: whether that folder is committed (the project's shared history, and then `who: you` must name a person) or ignored by git (each person's own).
-- **Built:** `isorite study init`, the configuration, the paths, and the combined map model.
+- **Milestone 12 replaced the two bases with one (format 2).** isorite's own files (the journals, Iso's conversations, the Understanding notes, drafts, a record of usage per device) are in the notes' own `.isorite/`, committed with them; the engine is given it as its `own` folder. The table above is how it stood until then. `isorite migrate` moves a study base in (`docs/format.md` §2).
 
 ## 3. A note's life: one writer
 
@@ -192,13 +190,7 @@ study base bundle ─────┴─► mapModel (core) ─► gridLayout (co
 
 ## 8. Study
 
-- **An exercise is a note** in the study base's `study/` folder, of `type: Exercise`, naming the notes it tests (`tests:`) and, if it has one, the exercise after it (`next:`). It is edited in the same editor as any note: the question is the text before `## Working`, the working what follows. **Built** (milestone 4): written response only.
-- **Asking for one** is a request of its own form (`exercise`): a draft in the study base names the folder, the notes to test and the exercise it comes after; Iso is sent those notes whole, in one round with no tools, and writes a title and a question. Kept, it is `study/<folder>/<name>.md`, and `next` is set on the one it follows. **Built.**
-- **Marking.** "Send for marking" is a request of the `mark` form: the exercise, the answer's anchor (any selection, held in the browser until sent), the notes tested, and the prompts asked in the exercise since its last marking with Iso's kept answers, so the help given can be weighed. One round, no tools. The reply quotes passages of the working and marks each right or wrong, gives a result (right, partly, wrong), and for each note tested a move of −1 to +1 squares in halves with a one-line reason. It says nothing else. The marks are a `marks` entry in the exercise's journal, laid over the working as decorations; an `attempt` event with the moves, the answer and the working as it was is appended to the study record. A reply not in that shape records nothing but its cost. **Built.**
-- **Iso speaks only when asked.** After marking, anything further is a prompt the person writes in the exercise, as in any note.
-- **Understanding is a number derived from the record,** by one function in the core. An attempt moves each note by the move Iso judged for it, not by a fixed step for its result; `wind-back` is one square down, an event, never an edit to a number. The six squares, the Atlas's four steps and edges, a note's margin, "due" and the study list's order (due, never tried, fewest squares, oldest) all come from it. **Built.**
-- **Measured once** (milestone 4, on the mid tier): an exercise about $0.004, a marking about $0.015, of which about $0.01 is the model's reasoning.
-- **Later:** the other five kinds; marking it yourself (offline, or without spending); a recall queue; Iso's own teaching notes (`iso/` in the study base: its picture of the person, each claim citing record events); goals.
+Exercises, their marking, the study record's levels and the six squares were built in milestone 4 and removed in milestone 12 (`docs/plan-m12.md`). Understanding is shown by the notes themselves: whose words they are, the open questions and problems beside them, and Iso's reading in each note's Understanding note.
 
 ## 9. Events
 
@@ -226,9 +218,9 @@ The interface plays sound (later) by listening to this same stream and to its ow
 
 ### Sync
 
-- Both bases sync by plain git. The study base is one private repository per person.
+- The notes and their `.isorite/` sync by plain git, as one repository.
 - The knowledge base can conflict like any text in git. isorite shows a conflicted note as conflicted and does not resolve it silently.
-- The study base cannot conflict in its `.jsonl` files (union merge, ids). Exercises are notes and can.
+- `.isorite/` cannot conflict in its `.jsonl` files (union merge, ids). Its Understanding notes are notes and can.
 - **What the slice must hold to:** every entry and event has a ULID and a device; nothing personal is written to the knowledge base; caches stay outside both repositories.
 
 ### The terminal

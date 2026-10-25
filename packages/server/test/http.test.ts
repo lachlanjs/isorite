@@ -38,9 +38,9 @@ test("a folder of notes is opened with isorite's own files in its .isorite/, mad
 });
 
 test("the session, the listing and the search", async () => {
-  expect(await (await fetch(url + "/api/session")).json()).toEqual({ name: "information-theory", study: true, device: "testdev1", token: TOKEN });
+  expect(await (await fetch(url + "/api/session")).json()).toEqual({ name: "information-theory", device: "testdev1", token: TOKEN });
   expect(await (await fetch(url + "/api/notes")).json()).toMatchObject({ notes: [{ id: "basics/entropy", title: "Entropy" }], dirs: ["basics"] });
-  expect(await (await fetch(url + "/api/map")).json()).toMatchObject({ notes: { "basics/entropy": { title: "Entropy", step: 0 } }, model: { root: { kind: "dir" } } });
+  expect(await (await fetch(url + "/api/map")).json()).toMatchObject({ notes: { "basics/entropy": { title: "Entropy" } }, model: { root: { kind: "dir" } } });
   expect(await (await fetch(url + "/api/search?q=surprise")).json()).toMatchObject([{ id: "basics/entropy" }]);
 });
 
@@ -66,20 +66,6 @@ test("a note is made, once", async () => {
   expect(made.status).toBe(200);
   expect(statSync(join(notes, "channels", "capacity.md")).isFile()).toBe(true);
   expect((await write("/api/note?id=channels/capacity", { text: "x" }, { method: "POST" })).status).toBe(409);
-});
-
-test("exercises: a request for one is made on disk, the study page is read, and wind back is a write", async () => {
-  const made = await write("/api/exercise/draft", { folder: "basics", tests: ["basics/entropy"] }, { method: "POST" });
-  expect(made.status).toBe(200);
-  const draft = await made.json() as { id: string; text: string };
-  expect(draft.id).toMatch(/^@draft\//);
-  expect(readFileSync(join(study, "drafts", draft.id.slice("@draft/".length) + ".md"), "utf8")).toContain("type: Exercise");
-  expect((await write("/api/exercise/draft", { folder: "basics", tests: [] }, { method: "POST" })).status).toBe(400);
-  mkdirSync(join(study, "study", "basics"), { recursive: true });
-  writeFileSync(join(study, "study", "basics", "coin.md"), "---\ntype: Exercise\ntitle: A coin\ntests: [basics/entropy]\n---\n\nQ.\n\n## Working\n\n");
-  expect(await (await fetch(url + "/api/study")).json()).toMatchObject({ exercises: [{ id: "@study/basics/coin", title: "A coin", result: null }], folders: expect.arrayContaining(["", "basics"]) });
-  expect((await write("/api/exercise/wind-back?id=@study/basics/coin", {}, { method: "POST" })).status).toBe(200);
-  expect(readFileSync(join(study, "record", "testdev1.jsonl"), "utf8")).toContain('"event":"wind-back","note":"basics/entropy"');
 });
 
 test("each write that should be refused is", async () => {

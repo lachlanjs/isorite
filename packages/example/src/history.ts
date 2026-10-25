@@ -6,8 +6,8 @@
 // What it leaves: the physics understood or worked through, the integrators worked through or opened, the
 // algorithms begun (Barnes–Hut has a TODO, the quadtree is a stub with a question in it), the simulation's goal
 // written down. Today's session is five moments; Iso's answer on how big ε should be waits in the note on
-// softening; a note for Iso about close encounters is written and not sent; the exercise on the cost of direct
-// summation has working, wrong, and no marking yet.
+// softening; a note for Iso about close encounters is written and not sent; the problem on the cost of direct
+// summation has a solution with a slip in it.
 
 import { blocks, GITATTRIBUTES, type Anchor, type Passage } from "@isorite/core";
 import { Engine, MemoryFiles, MemorySecrets, KEY, type Clock, type EngineEvent, type Similar } from "@isorite/engine";
@@ -40,31 +40,23 @@ export function drop(text: string, prefix: string): string {
 
 const anchor = (text: string): Anchor => ({ text, nth: 0 });
 
-// ------------------------------------------------------------ exercises
+// ------------------------------------------------------------ problems
 
-interface Attempt {
-  day: number;
-  /** The working as sent; the last one given stays in the file. */
-  working: string;
-  answer: string;
-  result: "right" | "partly" | "wrong";
-  /** Passages of the working Iso marks, by their first words, as right or wrong. */
-  marks: [string, "right" | "wrong"][];
-  moves: Record<string, [number, string]>;
-}
+/** A day the solution was worked on, and the working as it was left that day. */
+interface Attempt { day: number; working: string }
 
-interface Exercise {
+/** A problem note (type: Problem) in the base, beside the notes it uses: its statement, then its solution. */
+interface Problem {
   folder: string;
   name: string;
   title: string;
-  tests: string[];
+  uses: string[];
   question: string;
-  /** Asked of Iso (on that day, after that exercise) rather than written by you. */
-  byIso?: { day: number; after: string | null; usage: Reply["usage"] };
   made: number;
-  next?: string;
   attempts: Attempt[];
-  /** The working left in the file without being sent. */
+  /** Marked solved, by you, on that day. */
+  solved?: number;
+  /** The working left in the file at the end. */
   unsent?: string;
 }
 
@@ -75,7 +67,6 @@ export const LAW = n(P, "newtons-law-of-gravitation"), NBODY = n(P, "the-n-body-
   DIRECT = n(A, "direct-summation"), COM = n(A, "centre-of-mass"), QUAD = n(A, "the-quadtree"), BH = n(A, "barnes-hut"), COST = n(A, "cost-and-accuracy"),
   LOOP = n(S, "the-main-loop"), INIT = n(S, "initial-conditions"), DIAG = n(S, "diagnostics"), GALAXY = n(S, "two-galaxies-colliding");
 
-const exact = "Exact, and unaided.";
 const pull = "$F = G m_1 m_2 / d^2 = 1 \\cdot \\tfrac12 \\cdot \\tfrac12 / 1 = \\tfrac14$.\n\nEach accelerates at $a = F/m = \\tfrac14 / \\tfrac12$.\n\nSo each accelerates at $\\tfrac12$, towards the other.";
 const energyWrong = "$K = \\tfrac12 \\cdot \\tfrac12 \\cdot (\\tfrac12)^2 = \\tfrac1{16}$.\n\n$U = -G m_1 m_2 / d = -\\tfrac14$.\n\nSo $E = \\tfrac1{16} - \\tfrac14 = -\\tfrac3{16}$.";
 const energyRight = "$K = 2 \\times \\tfrac12 \\cdot \\tfrac12 \\cdot (\\tfrac12)^2 = \\tfrac18$, both bodies moving.\n\n$U = -G m_1 m_2 / d = -\\tfrac14$.\n\nSo $E = \\tfrac18 - \\tfrac14 = -\\tfrac18$.";
@@ -86,55 +77,53 @@ const kdk = "Kick: $\\mathbf{v} \\mathrel{+}= \\tfrac12 \\Delta t\\, \\mathbf{a}
 const symplectic = "Leapfrog keeps a nearby energy $\\tilde H = H + O(\\Delta t^2)$ exactly.\n\nSo $H$ can only wobble around $\\tilde H$, never drift.\n\nRK4 keeps no such quantity, so its small errors add up.";
 const com = "$M = 1 + 2 + 1 = 4$.\n\n$\\mathbf{R} = (1 \\cdot (0,0) + 2 \\cdot (3,0) + 1 \\cdot (0,4)) / 4 = (6, 4)/4$.\n\nSo $\\mathbf{R} = (1.5, 1)$, with $M = 4$.";
 const step = "The drift falls as $\\Delta t^2$; at $T/100$ it is a few parts in a million.\n\nSo $\\Delta t = 2\\pi/100 \\approx 0.06$ is enough.\n\nCheck: record $E$ every 100 steps and plot the drift; halve $\\Delta t$ and it should fall by four.";
-/** The working on the cost of direct summation as it waits, unsent: each pair counted twice. */
+/** The working on the cost of direct summation as it is left: each pair counted twice. */
 export const COST_WORKING = "Each body feels the other $N - 1$.\n\nSo there are $N(N-1)$ pairs: $2000 \\times 1999 \\approx 4 \\times 10^6$.\n\nAt 20 ns a pair, a step takes 0.08 s.";
 
-export const EXERCISES: Exercise[] = [
-  { folder: P, name: "the-pull-between-two-bodies", title: "The pull between two bodies", tests: [LAW, UNITS], made: 20, next: "the-energy-of-the-orbit",
+export const PROBLEMS: Problem[] = [
+  { folder: P, name: "the-pull-between-two-bodies", title: "The pull between two bodies", uses: [LAW, UNITS], made: 20,
     question: "In units with $G = 1$, two bodies of mass $\\tfrac12$ are 1 apart. How fast does each accelerate, and which way?",
-    attempts: [20, 17, 12, 5, 2].map((day, k): Attempt => ({ day, working: pull, answer: "So each accelerates at $\\tfrac12$, towards the other.", result: "right", marks: [["$F = G", "right"], ["So each", "right"]],
-      moves: { [LAW]: [1, k ? exact : "The law, with its direction, unaided."], [UNITS]: [k < 2 ? 1 : 0.5, "Uses G = 1 without a slip."] } })),
+    attempts: [20, 17, 12, 5, 2].map((day): Attempt => ({ day, working: pull })),
   },
-  { folder: P, name: "the-energy-of-the-orbit", title: "The energy of the two-body orbit", tests: [ENERGY, LAW], made: 16,
+  { folder: P, name: "the-energy-of-the-orbit", title: "The energy of the two-body orbit", uses: [ENERGY, LAW], made: 16,
     question: "For the two-body orbit of the notes (masses $\\tfrac12$, 1 apart, each moving at $\\tfrac12$), find $K$, $U$ and $E$.",
     attempts: [
-      { day: 16, working: energyWrong, answer: "So $E = \\tfrac1{16} - \\tfrac14 = -\\tfrac3{16}$.", result: "partly", marks: [["$K = ", "wrong"], ["$U = ", "right"]], moves: { [ENERGY]: [0.5, "U is right; K counts one body of the two."], [LAW]: [0, "Bears on it only in passing."] } },
-      { day: 14, working: energyRight, answer: "So $E = \\tfrac18 - \\tfrac14 = -\\tfrac18$.", result: "right", marks: [["$K = 2", "right"], ["So $E", "right"]], moves: { [ENERGY]: [1, "Both bodies counted, unaided."], [LAW]: [0, "Bears on it only in passing."] } },
-      { day: 9, working: energyRight, answer: "So $E = \\tfrac18 - \\tfrac14 = -\\tfrac18$.", result: "right", marks: [["So $E", "right"]], moves: { [ENERGY]: [1, exact], [LAW]: [0, "Bears on it only in passing."] } },
-      { day: 3, working: energyRight, answer: "So $E = \\tfrac18 - \\tfrac14 = -\\tfrac18$.", result: "right", marks: [["So $E", "right"]], moves: { [ENERGY]: [0.5, "The same working as a week ago."], [LAW]: [0, "Bears on it only in passing."] } },
+      { day: 16, working: energyWrong },
+      { day: 14, working: energyRight },
+      { day: 9, working: energyRight },
+      { day: 3, working: energyRight },
     ] },
-  { folder: I, name: "why-eulers-orbit-spirals-out", title: "Why Euler's orbit spirals out", tests: [EULER, ENERGY], made: 15, next: "one-leapfrog-step",
+  { folder: I, name: "why-eulers-orbit-spirals-out", title: "Why Euler's orbit spirals out", uses: [EULER, ENERGY], made: 15,
     question: "A body on a circular orbit of radius $R$ takes one Euler step. Show that its distance from the centre grows, and by how much, to leading order in $\\Delta t$.",
     attempts: [
-      { day: 15, working: spiralWrong, answer: "So $|\\mathbf{r}'| = R + v\\,\\Delta t$.", result: "partly", marks: [["After the step", "right"], ["So $|", "wrong"]], moves: { [EULER]: [0.5, "The step is right; v is at right angles to R, so the lengths do not add."], [ENERGY]: [0, "Not reached."] } },
-      { day: 13, working: spiralRight, answer: "So $|\\mathbf{r}'| \\approx R\\,(1 + v^2 \\Delta t^2 / 2R^2)$: larger, every step, whatever the sign of $\\Delta t$.", result: "right", marks: [["So $|\\mathbf{r}'|^2", "right"], ["So $|\\mathbf{r}'| \\approx", "right"]], moves: { [EULER]: [1, exact], [ENERGY]: [0.5, "Ties the growing radius to energy gained."] } },
-      { day: 6, working: spiralRight, answer: "So $|\\mathbf{r}'| \\approx R\\,(1 + v^2 \\Delta t^2 / 2R^2)$: larger, every step, whatever the sign of $\\Delta t$.", result: "right", marks: [["So $|\\mathbf{r}'| \\approx", "right"]], moves: { [EULER]: [1, exact], [ENERGY]: [0, "Nothing new about energy."] } },
-      { day: 3, working: spiralRight, answer: "So $|\\mathbf{r}'| \\approx R\\,(1 + v^2 \\Delta t^2 / 2R^2)$: larger, every step, whatever the sign of $\\Delta t$.", result: "right", marks: [["So $|\\mathbf{r}'| \\approx", "right"]], moves: { [EULER]: [1, exact], [ENERGY]: [0, "Nothing new about energy."] } },
+      { day: 15, working: spiralWrong },
+      { day: 13, working: spiralRight },
+      { day: 6, working: spiralRight },
+      { day: 3, working: spiralRight },
     ] },
-  { folder: I, name: "one-leapfrog-step", title: "One leapfrog step", tests: [LEAP], made: 12, next: "why-leapfrog-does-not-drift",
+  { folder: I, name: "one-leapfrog-step", title: "One leapfrog step", uses: [LEAP], made: 12,
     question: "Write one leapfrog step as kick, drift and kick, and say how many times the accelerations are computed.",
     attempts: [
-      { day: 12, working: kdkPartly, answer: "Kick: $\\mathbf{v} \\mathrel{+}= \\Delta t\\, \\mathbf{a}$, with the new $\\mathbf{a}$.", result: "partly", marks: [["Drift", "right"], ["Kick: $\\mathbf{v} \\mathrel{+}= \\Delta t", "wrong"]], moves: { [LEAP]: [0.5, "The order is right; each kick is half a step, not a whole one."] } },
-      { day: 8, working: kdk, answer: "Kick: $\\mathbf{v} \\mathrel{+}= \\tfrac12 \\Delta t\\, \\mathbf{a}$, with the new $\\mathbf{a}$: two half kicks make one whole.", result: "right", marks: [["Kick: $\\mathbf{v} \\mathrel{+}= \\tfrac12", "right"], ["Drift", "right"]], moves: { [LEAP]: [1, exact] } },
-      { day: 3, working: kdk, answer: "Kick: $\\mathbf{v} \\mathrel{+}= \\tfrac12 \\Delta t\\, \\mathbf{a}$, with the new $\\mathbf{a}$: two half kicks make one whole.", result: "right", marks: [["Drift", "right"]], moves: { [LEAP]: [1, exact] } },
+      { day: 12, working: kdkPartly },
+      { day: 8, working: kdk },
+      { day: 3, working: kdk },
     ] },
-  { folder: I, name: "why-leapfrog-does-not-drift", title: "Why leapfrog does not drift", tests: [SYMP, LEAP], made: 10, byIso: { day: 10, after: "one-leapfrog-step", usage: { in: 1310, out: 150, usd: 0.0042 } },
+  { folder: I, name: "why-leapfrog-does-not-drift", title: "Why leapfrog does not drift", uses: [SYMP, LEAP], made: 10,
     question: "RK4 is more accurate than leapfrog over one step. Why, then, does its energy drift over a long run while leapfrog's does not?",
     attempts: [
-      { day: 10, working: symplectic, answer: "RK4 keeps no such quantity, so its small errors add up.", result: "right", marks: [["Leapfrog keeps", "right"], ["RK4 keeps", "right"]], moves: { [SYMP]: [1, exact], [LEAP]: [0, "Bears on it only in passing."] } },
-      { day: 1, working: symplectic, answer: "RK4 keeps no such quantity, so its small errors add up.", result: "right", marks: [["RK4 keeps", "right"]], moves: { [SYMP]: [0.5, "The same working as last week."], [LEAP]: [0, "Bears on it only in passing."] } },
+      { day: 10, working: symplectic },
+      { day: 1, working: symplectic },
     ] },
-  { folder: A, name: "the-centre-of-mass-of-a-node", title: "The centre of mass of a node", tests: [COM], made: 6,
+  { folder: A, name: "the-centre-of-mass-of-a-node", title: "The centre of mass of a node", uses: [COM], made: 6,
     question: "A node holds bodies of mass 1 at $(0,0)$, 2 at $(3,0)$ and 1 at $(0,4)$. What is its total mass, and where is its centre of mass?",
-    attempts: [6, 4, 2, 1].map((day): Attempt => ({ day, working: com, answer: "So $\\mathbf{R} = (1.5, 1)$, with $M = 4$.", result: "right", marks: [["$M = 1", "right"], ["So $\\mathbf{R}", "right"]], moves: { [COM]: [1, exact] } })),
+    attempts: [6, 4, 2, 1].map((day): Attempt => ({ day, working: com })),
   },
-  { folder: A, name: "the-cost-of-direct-summation", title: "The cost of direct summation", tests: [DIRECT], made: 1,
+  { folder: A, name: "the-cost-of-direct-summation", title: "The cost of direct summation", uses: [DIRECT], made: 1,
     question: "Using Newton's third law, how many pairs does direct summation compute each step for $N$ bodies? At 20 ns a pair, how long is a step at $N = 2000$?",
     attempts: [], unsent: COST_WORKING },
-  { folder: S, name: "a-timestep-for-the-orbit", title: "A timestep for the orbit", tests: [DT, DIAG], made: 11,
+  { folder: S, name: "a-timestep-for-the-orbit", title: "A timestep for the orbit", uses: [DT, DIAG], made: 11,
     question: "For the two-body orbit (period $2\\pi$), choose $\\Delta t$ for leapfrog so that the energy drift stays below $10^{-5}$, and say how you would check it.",
-    attempts: [11, 7].map((day): Attempt => ({ day, working: step, answer: "So $\\Delta t = 2\\pi/100 \\approx 0.06$ is enough.", result: "right", marks: [["The drift falls", "right"], ["So $\\Delta t", "right"], ["Check:", "right"]],
-      moves: { [DT]: [1, exact], [DIAG]: [1, "Knows what to measure, and what halving the step should do."] } })),
+    attempts: [11, 7].map((day): Attempt => ({ day, working: step })),
   },
 ];
 
@@ -279,31 +268,15 @@ export async function buildExample(sources: Sources, now = Date.now()): Promise<
   on(0, -4, () => insert(SOFT, "Beyond a few", "how big should ε be?", "A common choice is a few hundredths of the mean distance between neighbouring bodies: for $N$ bodies in a sphere of size 1, $\\varepsilon \\approx 0.05\\, N^{-1/3}$. Smaller, and close passes still jump; larger, and the galaxy's core is blurred.",
     [{ name: "read_note", arguments: { id: DT } }, { name: "read_note", arguments: { id: UNITS } }], { in: 8700, out: 150, cached: 6200, usd: 0.0139 }));
 
-  // ---- the exercises: made, then each attempt sent for marking
-  for (const x of EXERCISES) {
-    const id = `@study/${x.folder}/${x.name}`, head = (working: string) => {
-      const meta = [`type: Exercise`, `kind: written`, `title: ${JSON.stringify(x.title)}`, `tests: [${x.tests.join(", ")}]`, ...(x.next ? [`next: ${x.folder}/${x.next}`] : [])];
-      return `---\n${meta.join("\n")}\n---\n\n${x.question}\n\n## Working\n\n${working}\n`;
+  // ---- the problems: each made, then its solution worked on, day by day
+  for (const x of PROBLEMS) {
+    const id = `${x.folder}/${x.name}`, head = (working: string) => {
+      const meta = [`type: Problem`, `title: ${JSON.stringify(x.title)}`, `uses: [${x.uses.join(", ")}]`];
+      return `---\n${meta.join("\n")}\n---\n\n${x.question}\n${working ? `\n## Solution\n\n${working}\n` : ""}`;
     };
-    if (x.byIso) {
-      const by = x.byIso;
-      on(by.day, -40, async () => {
-        const draft = await engine.createExerciseDraft(x.folder, x.tests, by.after ? `@study/${x.folder}/${by.after}` : null);
-        const p = await iso({ note: draft.id, form: "exercise", tier: "mid" }, { text: `# ${x.title}\n\n${x.question}`, usage: by.usage });
-        const kept = await engine.keepExercise(draft.id, p.proposal);
-        if (kept.id !== id) throw new Error(`the exercise was kept as ${kept.id}, not ${id}`);
-      });
-    } else on(x.made, -40, () => write(id, head("")));
-    for (const a of x.attempts) {
-      on(a.day, -30, async () => {
-        const now = (await engine.readNote(id)).text, working = now.slice(0, now.indexOf("## Working") + "## Working".length) + `\n\n${a.working}\n`;
-        await write(id, working);
-        const marks = a.marks.map(([first, mark]) => ({ quote: block(a.working, first), mark }));
-        await iso({ note: id, form: "mark", answer: { text: a.answer, nth: 0 }, tier: "mid" },
-          { text: JSON.stringify({ result: a.result, marks, moves: Object.fromEntries(Object.entries(a.moves).map(([note, [by, why]]) => [note, { by, why }])) }), usage: { in: 2400, out: 1100, cached: 800, usd: 0.0151 } });
-      });
-    }
-    if (x.unsent) on(1, -10, async () => { const now = (await engine.readNote(id)).text; await write(id, now.slice(0, now.indexOf("## Working") + "## Working".length) + `\n\n${x.unsent}\n`); });
+    on(x.made, -40, () => write(id, head("")));
+    for (const a of x.attempts) on(a.day, -30, () => write(id, head(a.working)));
+    if (x.unsent) on(1, -10, () => write(id, head(x.unsent!)));
   }
 
   // In time order: the day, then the minute within it. Days are counted back from now; a session's minutes from

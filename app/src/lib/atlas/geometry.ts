@@ -38,7 +38,7 @@ export function indexLayout(L: Layout): Index {
   // The trunk a link runs along joins the two items that hold its ends in the lowest folder holding both.
   const under = (i: number, level: number): number => { while (L.items[i]!.parent !== level) i = L.items[i]!.parent; return i; };
   const trunkAt = new Map(L.trunks.map((t, k) => [`${t.a}|${t.b}`, k]));
-  const most = L.links.some((l) => l.s >= 3 && !L.items[l.a]!.ref.startsWith("@study")) ? 3 : 2, strong = L.trunks.map(() => false);
+  const most = L.links.some((l) => l.s >= 3) ? 3 : 2, strong = L.trunks.map(() => false);
   for (const l of L.links) {
     const t = l.s >= most ? trunkAt.get(`${under(l.a, l.level)}|${under(l.b, l.level)}`) : undefined;
     if (t !== undefined) strong[t] = true;
@@ -81,7 +81,7 @@ export function shownAs(idx: Index, open: string, i: number): number {
 }
 
 /** A route at rest. `strong`: a "requires" runs along it; the rest carry only weaker links and are drawn lighter. */
-export interface Route { key: string; pts: Point[]; lane: number; count: number; feed: boolean; study: boolean; strong: boolean }
+export interface Route { key: string; pts: Point[]; lane: number; count: number; feed: boolean; strong: boolean }
 
 /** The routes drawn at rest: each of the layout's trunks whose two ends are shown, and inside an open folder
  *  the branches from its subfolders to where a trunk arrives. A link a longer way already makes (an implied
@@ -89,15 +89,15 @@ export interface Route { key: string; pts: Point[]; lane: number; count: number;
  *  (`feed` false); one with a note at an end is drawn as the feeders are, as on the boards. With `leaves`, the
  *  branches from each note to its folder's wall are drawn too (the Atlas's key l). */
 export function restRoutes(L: Layout, open: string, strong: boolean[] = [], leaves = false): Route[] {
-  const shown = (i: number): boolean => open[i] !== "-", study = (i: number): boolean => L.items[i]!.ref.startsWith("@study");
+  const shown = (i: number): boolean => open[i] !== "-";
   const out: Route[] = [];
   L.trunks.forEach((t, k) => {
     const folders = L.items[t.a]!.kind === "folder" && L.items[t.b]!.kind === "folder";
-    if (t.pts && !t.implied && shown(t.a) && shown(t.b)) out.push({ key: "t" + k, pts: t.pts, lane: 0, count: t.count, feed: !folders, study: study(t.a) || study(t.b), strong: strong[k] ?? true });
+    if (t.pts && !t.implied && shown(t.a) && shown(t.b)) out.push({ key: "t" + k, pts: t.pts, lane: 0, count: t.count, feed: !folders, strong: strong[k] ?? true });
   });
   L.feeders.forEach((f, k) => {
     const t = L.trunks[f.trunk]!;
-    if ((leaves || !f.leaf) && !t.implied && open[f.folder] === "o" && shown(f.item) && shown(t.a) && shown(t.b)) out.push({ key: "f" + k, pts: f.pts, lane: f.lane, count: f.count, feed: true, study: study(t.a) || study(t.b), strong: strong[f.trunk] ?? true });
+    if ((leaves || !f.leaf) && !t.implied && open[f.folder] === "o" && shown(f.item) && shown(t.a) && shown(t.b)) out.push({ key: "f" + k, pts: f.pts, lane: f.lane, count: f.count, feed: true, strong: strong[f.trunk] ?? true });
   });
   return out;
 }
@@ -142,10 +142,10 @@ export interface Lit { key: string; kind: LitKind; pts: Point[] }
 /** A run of routes that overlap: drawn once, as thick as the links along it. `strong`: a "requires" runs
  *  along it; `trunk`: it runs between two folders (a route that is not a feeder, `feed` false). For lit runs, `kind` is the strongest along it and `flow` whether the links of that kind all run
  *  the way its points go (1), or both ways (0), when its dashes stand still. */
-export interface Run { key: string; pts: Point[]; count: number; strong: boolean; study: boolean; trunk: boolean; kind: LitKind; flow: 0 | 1 }
+export interface Run { key: string; pts: Point[]; count: number; strong: boolean; trunk: boolean; kind: LitKind; flow: 0 | 1 }
 
 const STRENGTH: LitKind[] = ["uses", "builds", "requires", "iso"];
-interface Edge { a: string; b: string; A: Point; B: Point; count: number; strong: boolean; study: boolean; trunk: boolean; kind: number; fwd: number[]; back: number[] }
+interface Edge { a: string; b: string; A: Point; B: Point; count: number; strong: boolean; trunk: boolean; kind: number; fwd: number[]; back: number[] }
 
 /**
  * Routes merged where they overlap. Each is cut into half-cell steps (every route runs through cell centres and
@@ -153,7 +153,7 @@ interface Edge { a: string; b: string; A: Point; B: Point; count: number; strong
  * into runs, as long as the count, the kind and (for lit routes) the way the links run stay the same, and a
  * run stops where routes meet or part.
  */
-export function mergeRoutes(routes: { pts: Point[]; count?: number; strong?: boolean; study?: boolean; feed?: boolean; kind?: LitKind }[], lit = false): Run[] {
+export function mergeRoutes(routes: { pts: Point[]; count?: number; strong?: boolean; feed?: boolean; kind?: LitKind }[], lit = false): Run[] {
   // Points to a hundredth of a cell: routes share half-cell steps, and a route that ends in the middle of a cut
   // corner (core's cornerEnds) keeps its last fraction of a cell.
   const id = (p: Point): string => `${Math.round(p[0] * 100)},${Math.round(p[1] * 100)}`;
@@ -169,20 +169,19 @@ export function mergeRoutes(routes: { pts: Point[]; count?: number; strong?: boo
         taken.add(key);
         let e = edges.get(key);
         if (!e) {
-          e = p < q ? { a: p, b: q, A: P, B: Q, count: 0, strong: false, study: false, trunk: false, kind: 0, fwd: [0, 0, 0, 0], back: [0, 0, 0, 0] } : { a: q, b: p, A: Q, B: P, count: 0, strong: false, study: false, trunk: false, kind: 0, fwd: [0, 0, 0, 0], back: [0, 0, 0, 0] };
+          e = p < q ? { a: p, b: q, A: P, B: Q, count: 0, strong: false, trunk: false, kind: 0, fwd: [0, 0, 0, 0], back: [0, 0, 0, 0] } : { a: q, b: p, A: Q, B: P, count: 0, strong: false, trunk: false, kind: 0, fwd: [0, 0, 0, 0], back: [0, 0, 0, 0] };
           edges.set(key, e);
           for (const n of [e.a, e.b]) { const list = at.get(n); if (list) list.push(key); else at.set(n, [key]); }
         }
         e.count += r.count ?? 1;
         e.strong ||= r.strong ?? true;
-        e.study ||= r.study ?? false;
         e.trunk ||= r.feed === false;
         e.kind = Math.max(e.kind, kind);
         (p === e.a ? e.fwd : e.back)[kind]! += 1;
       }
     }
   }
-  const sig = (e: Edge): string => (lit ? `${e.kind}|${e.count}` : `${e.count}|${e.strong}|${e.study}|${e.trunk}`);
+  const sig = (e: Edge): string => (lit ? `${e.kind}|${e.count}` : `${e.count}|${e.strong}|${e.trunk}`);
   // Which way the links of the step's kind run, seen walking it from node u: 1 the same way, -1 against, 0 both.
   // Only its kind counts: a "uses" running back along a "requires" leaves the requires' dashes moving.
   const flow = (e: Edge, u: string): number => {
@@ -208,7 +207,7 @@ export function mergeRoutes(routes: { pts: Point[]; count?: number; strong?: boo
     let name = `${id(pts[0]!)}>${id(pts.at(-1)!)}:${sig(e)}`;
     for (let n = 2; keys.has(name); n++) name = `${name.split("#")[0]}#${n}`;
     keys.add(name);
-    out.push({ key: name, pts, count: e.count, strong: e.strong, study: e.study, trunk: e.trunk, kind: STRENGTH[e.kind]!, flow: f ? 1 : 0 });
+    out.push({ key: name, pts, count: e.count, strong: e.strong, trunk: e.trunk, kind: STRENGTH[e.kind]!, flow: f ? 1 : 0 });
   };
   // A run starts where routes meet or part, or where what is along them changes; what is left are loops.
   for (const [n, list] of at) {

@@ -10,7 +10,7 @@
   const SYM: Record<Lens, string> = { normal: "○", iso: "◆", understand: "◇" };
   const WORD: Record<Lens, string> = { normal: "normal", iso: "Iso", understand: "understand" };
   const MODE_NAME: Record<string, string> = { ask: "Ask", write: "Write", build: "Build", understand: "Understand" };
-  const MODE_SAYS: Record<string, string> = { ask: "reads the knowledge base, changes nothing", write: "reads and writes the knowledge base", build: "reads, writes and runs the project", understand: "reads the knowledge base, writes the study base" };
+  const MODE_SAYS: Record<string, string> = { ask: "reads the knowledge base, changes nothing", write: "reads and writes the knowledge base", build: "reads, writes and runs the project", understand: "reads the knowledge base, writes its Understanding notes" };
   const open = $derived(panes.settings === pane);
   let menu = $state<HTMLElement>();
 

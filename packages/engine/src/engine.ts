@@ -1,13 +1,12 @@
-// The engine: one knowledge base and its study base, open. Every write to a
+// The engine: one knowledge base and isorite's own files for it, open. Every write to a
 // note goes through `saveNote` or `createNote` here, one at a time, which is
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  Bundle, SearchIndex, STUDY_DIR, diffLines, STUDY_PREFIX, WORKING, change, dumpFrontmatter, exercise, findPassage, hashText, isStudyId, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, markingReply, mergeRecords, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, studyId, studyList, testsOf, text as plain, understanding, withNext, written,
-  type Cost, type Entry, type FileEntry, type Insert, type LearnerEvent, type Marks, type Passage, type Proposal, type SessionMoment, type Stamp, type Understanding,
+  Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, type AgentLook, type AgentChange, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Evidence, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type StudyReport, type TurnRequest, type UnderstandingReport } from "./api.ts";
-import { ANSWER_CLOSE, ANSWER_OPEN, CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, exerciseMessages, exerciseReply, fitted, helpSince, insertMessages, markMessages, noteMessages, parseRewrite, replyText, rewriteMessages, windowed, type Exchange, type Part, type Tested } from "./iso.ts";
+import { Conflict, EngineError, type AgentLook, type AgentChange, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type TurnRequest, type UnderstandingReport } from "./api.ts";
+import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, noteId, type Similar } from "./lookup.ts";
 import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
@@ -46,15 +45,15 @@ export interface EngineOptions {
 }
 
 /** The longest request and the longest reply asked for, in characters and tokens. */
-export const MAX_ASKED = 4000, REPLY_TOKENS = 2500, NOTE_TOKENS = 6000, MARK_TOKENS = 2000, EXERCISE_TOKENS = 1500;
+export const MAX_ASKED = 4000, REPLY_TOKENS = 2500, NOTE_TOKENS = 6000;
 
-/** Notes for Iso that are not in the base yet: files of the study base, under this prefix wherever notes are named. */
+/** Notes for Iso that are not in the base yet: among isorite's own files, under this prefix wherever notes are named. */
 export const DRAFT_PREFIX = "@draft/", DRAFT_DIR = "drafts";
 export const isDraftId = (id: string): boolean => id.startsWith(DRAFT_PREFIX);
-/** A note's id without the prefix that says which folder of the study base it is in. */
-const bare = (id: string): string => (isStudyId(id) ? id.slice(STUDY_PREFIX.length) : isDraftId(id) ? id.slice(DRAFT_PREFIX.length) : isUnderstandingId(id) ? id.slice(UNDERSTANDING_PREFIX.length) : id);
-/** In the knowledge base itself: neither an exercise nor a draft. */
-const inBase = (id: string): boolean => !isStudyId(id) && !isDraftId(id) && !isUnderstandingId(id);
+/** A note's id without the prefix that says which of isorite's folders it is in. */
+const bare = (id: string): string => (isDraftId(id) ? id.slice(DRAFT_PREFIX.length) : isUnderstandingId(id) ? id.slice(UNDERSTANDING_PREFIX.length) : id);
+/** In the knowledge base itself: not one of isorite's own notes (a draft, an Understanding note), whose ids begin "@". */
+const inBase = (id: string): boolean => !id.startsWith("@");
 
 const BAD_PART = /^\.|[\0\\:*?"<>|]|^\s|\s$/;
 
@@ -110,7 +109,7 @@ export class Engine implements Api {
   private built: Bundle | null = null;
   private index: SearchIndex | null = null;
   private readonly listeners = new Set<(event: EngineEvent) => void>();
-  /** The newest entry made anywhere in the study base: it decides the session. Undefined until looked for. */
+  /** The newest entry made anywhere among isorite's files: it decides the session. Undefined until looked for. */
   private last: Pick<Stamp, "at" | "session"> | null | undefined;
   private queue: Promise<unknown> = Promise.resolve();
   /** Requests to Iso that are running, by id, and the note each is for: a note is asked one thing at a time. */
@@ -161,7 +160,7 @@ export class Engine implements Api {
   // ------------------------------------------------------------ reading
 
   async session(): Promise<Session> {
-    return { name: this.opts.name, study: true, device: this.opts.device, ...(this.opts.tutorial ? { tutorial: true } : {}) };
+    return { name: this.opts.name, device: this.opts.device, ...(this.opts.tutorial ? { tutorial: true } : {}) };
   }
 
   async notes(): Promise<Listing> {
@@ -183,26 +182,11 @@ export class Engine implements Api {
     });
   }
 
-  /** Both bases as the Atlas draws them: the model the layout takes, and what each block says. */
+  /** The base as the Atlas draws it: the model the layout takes, and what each block says. */
   async map(): Promise<MapReport> {
-    const study = this.opts.own;
-    const exercises = Bundle.fromFiles(await walk(study, STUDY_DIR));
-    const events = await this.records();
-    const read = understanding(events, this.opts.clock.now());
-    // Each exercise's last result: one last marked right is passed, and grows its folder's mark.
-    const last = new Map<string, unknown>();
-    for (const e of events) if (e.event === "attempt" && typeof e.exercise === "string") last.set(e.exercise, e.result);
     const notes: MapReport["notes"] = {};
-    for (const c of this.bundle.concepts.values()) notes[c.id] = { title: c.title, step: read.get(c.id)?.step ?? 0, tokens: estimate(c.body.trim()) };
-    // A note whose understanding was recorded and that changed since, by anyone but you (M10): the Understand lens
-    // marks it. Only notes with a reading are looked at, so this reads a journal for each of those alone.
-    for (const [id, u] of read) {
-      if (!notes[id] || u.last === null || !study) continue;
-      const changed = (await this.journal(id)).findLast((e) => e.kind === "change" && e.who !== "you" && e.why !== "move");
-      if (changed && Date.parse(changed.at) > u.last) notes[id] = { ...notes[id]!, changedSince: changed.at };
-    }
-    for (const c of exercises?.concepts.values() ?? []) notes[studyId(c.id)] = { title: c.title, step: 0, kind: plain(c.meta.kind ?? "") || "note", ...(last.get(c.id) === "right" ? { passed: true as const } : {}) };
-    return { model: mapModel(this.bundle, exercises), notes };
+    for (const c of this.bundle.concepts.values()) notes[c.id] = { title: c.title, tokens: estimate(c.body.trim()) };
+    return { model: mapModel(this.bundle), notes };
   }
 
   async journal(id: string): Promise<Entry[]> {
@@ -341,7 +325,7 @@ export class Engine implements Api {
     if (!inBase(id) || !inBase(to)) throw new EngineError("only a note of the base is moved, and only within it");
     checkNoteId(to);
     if (to === id) throw new EngineError("the note is there already");
-    const notes = this.opts.notes, study = this.opts.own, from = `${checkNoteId(id)}.md`, path = `${to}.md`;
+    const notes = this.opts.notes, own = this.opts.own, from = `${checkNoteId(id)}.md`, path = `${to}.md`;
     // Who links to it, read before it moves: they are changed after.
     const linking = this.bundle.backlinks(id).filter((c) => c !== id);
     const text = await this.one(async () => {
@@ -353,14 +337,11 @@ export class Engine implements Api {
       if (base !== hashText(now)) throw new Conflict(`${id} was changed since you opened it`, { id, text: now, version: hashText(now) });
       await notes.write(path, now);
       await notes.remove(from);
-      if (study) {
-        // The journal moves with the note, and says so; the record is told, so what is known of the note follows it.
-        const journal = await study.read(journalPath(id));
-        if (journal !== null) { await study.write(journalPath(to), journal); await study.remove(journalPath(id)); }
-        const hash = hashText(now);
-        await this.enter(to, entries, { ...(await this.stamp(who)), kind: "change", why: "move", before: hash, after: hash, hunks: [], from: id });
-        await this.record({ event: "moved", from: id, to });
-      }
+      // The journal moves with the note, and says so.
+      const journal = await own.read(journalPath(id));
+      if (journal !== null) { await own.write(journalPath(to), journal); await own.remove(journalPath(id)); }
+      const hash = hashText(now);
+      await this.enter(to, entries, { ...(await this.stamp(who)), kind: "change", why: "move", before: hash, after: hash, hunks: [], from: id });
       this.files.delete(from);
       this.files.set(path, { path, text: now });
       this.built = this.index = null;
@@ -375,15 +356,6 @@ export class Engine implements Api {
       const source = await this.readNote(c);
       const changed = source.text.replace(old, `](/${to}.md`);
       if (changed !== source.text) await this.one(() => this.put(c, changed, source.version, "edit", {}, who));
-    }
-    // Exercises that test it.
-    if (study) {
-      for (const ex of Bundle.fromFiles(await walk(study, STUDY_DIR)).concepts.values()) {
-        if (!testsOf(ex.meta).includes(id)) continue;
-        const sid = studyId(ex.id), source = await this.readNote(sid);
-        const changed = source.text.replace(/^(tests:.*)$/m, (line) => line.replace(new RegExp(`(?<=[\\[,\\s])${escapeRe(id)}(?=[\\],\\s]|$)`, "g"), to));
-        if (changed !== source.text) await this.saveNote(sid, { base: source.version, text: changed });
-      }
     }
     return { id: to, text, version: hashText(text), changed: true };
   }
@@ -412,10 +384,10 @@ export class Engine implements Api {
     return run;
   }
 
-  /** Where a note's file is: study notes (`@study/…`) are in the study base's own folder of notes. */
+  /** Where a note's file is: drafts and Understanding notes are among isorite's own files. */
   private where(id: string): { files: Files; path: string } {
     if (!inBase(id)) {
-      return { files: this.opts.own, path: `${isDraftId(id) ? DRAFT_DIR : isUnderstandingId(id) ? UNDERSTANDING_DIR : STUDY_DIR}/${checkNoteId(bare(id))}.md` };
+      return { files: this.opts.own, path: `${isDraftId(id) ? DRAFT_DIR : UNDERSTANDING_DIR}/${checkNoteId(bare(id))}.md` };
     }
     return { files: this.opts.notes, path: `${checkNoteId(id)}.md` };
   }
@@ -516,14 +488,10 @@ export class Engine implements Api {
   async ask(req: AskRequest): Promise<{ request: string }> {
     const http = this.opts.http;
     if (!http) throw new EngineError("Iso cannot be asked here", 409);
-    if (req.form === "mark" ? !isStudyId(req.note) : isStudyId(req.note) && req.form !== "insert" && req.form !== "rewrite") throw new EngineError("only an exercise is sent for marking");
-    if (isDraftId(req.note) !== (req.form === "note" || req.form === "exercise")) throw new EngineError("a note for Iso is sent whole, and only a note for Iso is");
+    if (isDraftId(req.note) !== (req.form === "note")) throw new EngineError("a note for Iso is sent whole, and only a note for Iso is");
     if (!TIERS.includes(req.tier)) throw new EngineError("the tier is low, mid or max");
     // For a note written for Iso, what is asked is the note: its title stands for it in the journal.
-    const asked = req.form === "note" ? this.titleOf(req.note, (await this.readNote(req.note)).text)
-      : req.form === "exercise" ? await this.exerciseAsked(req.note)
-      : req.form === "mark" ? "sent for marking"
-      : req.asked.trim();
+    const asked = req.form === "note" ? this.titleOf(req.note, (await this.readNote(req.note)).text) : req.asked.trim();
     if (!asked) throw new EngineError("say what you want from Iso");
     // Claimed before anything is awaited, so a prompt sent twice (a second Enter, a second tab) is one request.
     if (this.asking.has(req.note)) throw new EngineError("Iso is already writing in this note. Wait for it, or stop it.", 409);
@@ -536,16 +504,15 @@ export class Engine implements Api {
     const key = (await this.opts.secrets?.get(KEY)) ?? null;
     if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
 
-    const { messages, olds, text: sent } = await this.compose(req, asked);
-    const maxTokens = req.form === "insert" ? REPLY_TOKENS : req.form === "note" ? NOTE_TOKENS : req.form === "mark" ? MARK_TOKENS : req.form === "exercise" ? EXERCISE_TOKENS : Math.max(REPLY_TOKENS, Math.ceil(olds.join("").length / 3) + 1000);
-    // Marking and writing an exercise are one call with no tools: what is sent is all Iso has, and you chose it. So
-    // is a request in place when you said Iso is not to look further (I3).
-    const most = req.form === "mark" || req.form === "exercise" || ((req.form === "insert" || req.form === "rewrite") && req.choice?.lookup === false) ? 0 : undefined;
+    const { messages, olds } = await this.compose(req, asked);
+    const maxTokens = req.form === "insert" ? REPLY_TOKENS : req.form === "note" ? NOTE_TOKENS : Math.max(REPLY_TOKENS, Math.ceil(olds.join("").length / 3) + 1000);
+    // A request in place, when you said Iso is not to look further (I3), is one call with no tools.
+    const most = (req.form === "insert" || req.form === "rewrite") && req.choice?.lookup === false ? 0 : undefined;
 
     const request = newId(this.opts.clock.now()), abort = new AbortController();
     this.running.set(request, abort);
     this.asking.set(req.note, request);
-    const place = req.form === "insert" ? { form: req.form, after: req.after, before: req.before } : req.form === "rewrite" ? { form: req.form, regions: req.regions, after: req.after, before: req.before } : req.form === "mark" ? { form: req.form, answer: req.answer } : { form: req.form };
+    const place = req.form === "insert" ? { form: req.form, after: req.after, before: req.before } : req.form === "rewrite" ? { form: req.form, regions: req.regions, after: req.after, before: req.before } : { form: req.form };
     this.publish({ type: "iso-start", request, note: req.note, asked, tier: req.tier, place });
     const lookup = new Lookup(this.bundle, req.note, this.similar);
     // The request returns at once; the rest happens as events, and ends in exactly one of done, stopped, failed.
@@ -563,28 +530,11 @@ export class Engine implements Api {
         const stamped = async () => this.stamp(`iso:${this.provider.name}/${got.usage.model}`);
         const cost: Cost = { model: got.usage.model, tier: req.tier, tokensIn: got.usage.tokensIn, tokensOut: got.usage.tokensOut, tokensCached: got.usage.tokensCached, usd: got.usage.usd };
         const common = { kind: "proposal" as const, asked, read: lookup.read() };
-        if (req.form === "mark") {
-          if (got.cut) throw new EngineError("Iso's marking was cut off at its length limit. Send it again.");
-          const marking = markingReply(got.text, sent, exercise(sent).tests);
-          const { entry, attempt } = await this.one(async () => {
-            const entry: Marks = { ...(await stamped()), kind: "marks", answer: req.answer, result: marking.result, marks: marking.marks, ...(marking.dropped ? { dropped: marking.dropped } : {}), cost };
-            await this.enter(req.note, await this.journal(req.note), entry);
-            const attempt = await this.record({
-              event: "attempt", exercise: bare(req.note), tests: exercise(sent).tests, result: marking.result, by: entry.who,
-              moves: marking.moves, answer: req.answer, working: exercise(sent).working, marks: entry.id,
-            });
-            return { entry, attempt };
-          });
-          offered = true;
-          this.publish({ type: "iso-done", request, note: req.note, proposal: entry.id, attempt, cost });
-          return;
-        }
         let build: () => Promise<Proposal[]>;
         if (req.form !== "rewrite") {
           // A note written for Iso is answered with a note: offered whole, under what they wrote.
-          // A title line, against its instructions: the title is theirs. An exercise's title is Iso's, and stays.
-          const reply = req.form === "exercise" ? replyText(got.text) : replyText(got.text).replace(/^#\s+.*\n+/, "");
-          if (req.form === "exercise" && !exerciseReply(reply).question) throw new EngineError("Iso replied without a question. Ask again, or at another tier.");
+          // A title line, against its instructions: the title is theirs.
+          const reply = replyText(got.text).replace(/^#\s+.*\n+/, "");
           if (!reply) throw new EngineError("Iso replied with nothing. Ask again, or at another tier.");
           const place = req.form === "insert" ? { after: req.after, before: req.before } : { after: null, before: null };
           build = async () => [{ ...(await stamped()), ...common, form: "insert", ...place, text: reply, cost, ...(notices.length ? { notice: notices.join(" ") } : {}) }];
@@ -639,8 +589,6 @@ export class Engine implements Api {
     const gone = () => new Conflict("the place asked about is no longer in the note", { id: req.note, text, version: hashText(text) });
     let lines = text.split("\n"), keep: number[] = [];
     const olds: string[] = [];
-    if (req.form === "mark") return { ...(await this.markCompose(req.note, text, req.answer)), text, olds };
-    if (req.form === "exercise") return { ...(await this.exerciseCompose(req.note, text, asked)), text, olds };
     if (req.form === "note") {
       let body = text;
       try { body = splitFrontmatter(text)[1]; } catch { /* sent as it is */ }
@@ -779,7 +727,7 @@ export class Engine implements Api {
     return out.filter((x) => !copied.has(x.id));
   }
 
-  /** An event in the study record, on this device's file. */
+  /** An event in this device's record of usage (record/<device>.jsonl): what was cleared from Iso's context, what turns cost. */
   private async record(event: Record<string, unknown>): Promise<string> {
     const e = cleanEvent(event, { device: this.opts.device, now: this.opts.clock.now() });
     await this.opts.own.append(recordPath(this.opts.device), JSON.stringify(e) + "\n");
@@ -795,13 +743,7 @@ export class Engine implements Api {
     let parts: Part[] | null = null, items: ContextItem[] = [];
     // A note for Iso with nothing written in it yet is counted as no note at all.
     if (note && isDraftId(note)) {
-      const exerciseDraft = await this.exerciseDraft(note).catch(() => null);
-      parts = exerciseDraft
-        ? await this.readNote(note).then(async (s) => (await this.exerciseCompose(note, s.text, await this.exerciseAsked(note))).parts, () => null)
-        : await this.compose({ note, form: "note", tier: "mid" }, "").then((c) => c.parts, () => null);
-    } else if (note && isStudyId(note)) {
-      // In an exercise, what sending it for marking would send.
-      parts = await this.readNote(note).then(async (s) => (await this.markCompose(note, s.text, null)).parts, () => null);
+      parts = await this.compose({ note, form: "note", tier: "mid" }, "").then((c) => c.parts, () => null);
     } else if (note) {
       ({ parts } = await this.compose({ note, form: "insert", after: null, before: null, asked: "", tier: "mid", ...(choice ? { choice } : {}) }, ""));
       // What can be switched off, each with what it would add (I3): the session's exchanges, and the notes this links to.
@@ -827,7 +769,7 @@ export class Engine implements Api {
   private async sessionCost(): Promise<{ usd: number; requests: number }> {
     const session = await this.sessionNow();
     let usd = 0, requests = 0;
-    for (const entries of (await this.sessionEntries()).values()) for (const e of entries) if (((e.kind === "proposal" && !e.copyOf) || e.kind === "marks") && e.cost) { usd += e.cost.usd; requests++; } // a proposal with no cost is the second of one request
+    for (const entries of (await this.sessionEntries()).values()) for (const e of entries) if (e.kind === "proposal" && !e.copyOf && e.cost) { usd += e.cost.usd; requests++; } // a proposal with no cost is the second of one request
     const text = await this.opts.own.read(recordPath(this.opts.device));
     for (const e of readRecord(text ?? "")) if ((e.event === "iso-unused" || e.event === "iso-turn") && e.session === session) { usd += typeof e.usd === "number" ? e.usd : 0; requests++; }
     return { usd, requests };
@@ -880,8 +822,7 @@ export class Engine implements Api {
       if (!c) continue;
       if (g.kind === "understanding") {
         const u = await this.understanding(g.id);
-        const said = (e: Evidence) => `${e.at.slice(0, 10)}: ${e.by > 0 ? "+" : ""}${e.by}${e.event === "wind-back" ? " (they wound you back)" : e.event === "attempt" ? " (an exercise)" : ""}${e.why ? `, ${e.why}` : ""}`;
-        out.push({ kind: "understanding", id: g.id, title: c.title, reading: u.reading, events: u.evidence.slice(-8).reverse().map(said), squares: u.squares });
+        out.push({ kind: "understanding", id: g.id, title: c.title, reading: u.reading });
         continue;
       }
       if (g.kind === "passage") out.push({ kind: "passage", id: g.id, title: c.title, text: g.text });
@@ -1063,18 +1004,6 @@ export class Engine implements Api {
       await t.item({ kind: "change", note: id, entry: (await this.journal(id)).at(-1)?.id ?? "", why: "delete", title: before, added: 0, removed: now.text.split("\n").length });
       return `Deleted ${before}. Its history stays.`;
     }
-    if (name === "record_understanding") {
-      const id = noteId(this.bundle, args.id);
-      if (!id) return `There is no note ${String(args.id ?? "")}.`;
-      const by = Number(args.by);
-      if (![-1, -0.5, 0, 0.5, 1].includes(by)) return "by is one of -1, -0.5, 0, 0.5, 1.";
-      const why = String(args.why ?? "").trim().slice(0, 300);
-      if (this.recorded.get(t.turn)?.has(id)) return `You recorded ${title(id)} once this turn already.`;
-      this.recorded.set(t.turn, new Set([...(this.recorded.get(t.turn) ?? []), id]));
-      const event = await this.one(() => this.record({ event: "understood", note: id, by, why, conversation: t.conversation, turn: t.turn }));
-      await t.item({ kind: "understood", note: id, event, by, why });
-      return `Recorded for ${title(id)}.`;
-    }
     if (name === "write_understanding") {
       const id = noteId(this.bundle, args.id);
       if (!id) return `There is no note ${String(args.id ?? "")}.`;
@@ -1089,16 +1018,12 @@ export class Engine implements Api {
     return `${name} cannot be used yet.`;
   }
 
-  /** The notes each turn recorded understanding of: once a note a turn. */
-  private readonly recorded = new Map<string, Set<string>>();
-
-  /** A note's Understanding note (M10): Iso's reading, your scratchpad, and what the record says of it. */
+  /** A note's Understanding note (M10): Iso's reading and your scratchpad. */
   async understanding(note: string): Promise<UnderstandingReport> {
     if (!inBase(checkNoteId(note))) throw new EngineError("only a note of the base has an Understanding note");
     const uid = understandingId(note);
     const source = await this.readNote(uid).catch(() => null);
-    const read = (await this.study()).notes[note];
-    return { note, ...parseUnderstanding(source?.text ?? null), version: source?.version ?? null, level: read?.level ?? 0, squares: read?.squares ?? 0, step: read?.step ?? 0, due: read?.due ?? false, evidence: read?.evidence ?? [] };
+    return { note, ...parseUnderstanding(source?.text ?? null), version: source?.version ?? null };
   }
 
   /** Your scratchpad in a note's Understanding note: yours alone; Iso does not write it. `base` as for saveNote, or
@@ -1170,13 +1095,12 @@ export class Engine implements Api {
   // ------------------------------------------------------------ notes for Iso
 
   async drafts(): Promise<DraftSummary[]> {
-    const study = this.opts.own;
+    const own = this.opts.own;
     const out: DraftSummary[] = [];
-    for (const info of await study.list(DRAFT_DIR)) {
+    for (const info of await own.list(DRAFT_DIR)) {
       if (info.dir || !info.name.endsWith(".md")) continue;
-      const id = DRAFT_PREFIX + info.name.slice(0, -3), text = (await study.read(`${DRAFT_DIR}/${info.name}`)) ?? "";
-      const asks = this.draftMeta(text);
-      out.push(asks?.type === "Exercise" ? { id, title: `an exercise on ${testsOf(asks).map((t) => this.bundle.concepts.get(t)?.title ?? t).join(", ")}`, exercise: true } : { id, title: this.titleOf(id, text) });
+      const id = DRAFT_PREFIX + info.name.slice(0, -3), text = (await own.read(`${DRAFT_DIR}/${info.name}`)) ?? "";
+      out.push({ id, title: this.titleOf(id, text) });
     }
     return out.sort((a, b) => (a.id < b.id ? 1 : -1)); // ids begin with the time: newest first
   }
@@ -1217,165 +1141,6 @@ export class Engine implements Api {
     await this.one(async () => this.enter(draft, await this.journal(draft), { ...(await this.stamp("you")), kind: "discard", proposal }));
     await this.discardDraft(draft);
     return kept;
-  }
-
-  // ------------------------------------------------------------ exercises
-
-  /** Every device's record, merged, in time order. */
-  private async records(): Promise<LearnerEvent[]> {
-    const study = this.opts.own;
-    const files = (await study.list("record")).filter((f) => !f.dir && f.name.endsWith(".jsonl"));
-    return mergeRecords(...(await Promise.all(files.map(async (f) => readRecord((await study.read(`record/${f.name}`)) ?? "")))));
-  }
-
-  /** The notes an exercise tests, as they are sent to Iso: whole (no trimming), with their squares now. */
-  private async tested(tests: readonly string[]): Promise<Tested[]> {
-    if (!tests.length) throw new EngineError("the exercise tests no note: name one in its `tests`");
-    const read = understanding(await this.records(), this.opts.clock.now());
-    return tests.map((id) => {
-      const c = this.bundle.concepts.get(id);
-      if (!c) throw new EngineError(`the exercise tests a note that is not in the base: ${id}`);
-      return { id, title: c.title, text: c.body.trim(), squares: read.get(id)?.squares ?? 0 };
-    });
-  }
-
-  /** What marking an exercise sends. With no answer (to count what it would send), the working goes unmarked. */
-  private async markCompose(note: string, text: string, answer: Passage | null): Promise<{ messages: Message[]; parts: Part[] }> {
-    const ex = exercise(text);
-    let working = ex.working;
-    if (answer) {
-      const at = findPassage(text, answer);
-      if (!at || at.from < ex.from) throw new Conflict("the answer you marked is no longer in the working", { id: note, text, version: hashText(text) });
-      working = text.slice(ex.from, at.from) + ANSWER_OPEN + text.slice(at.from, at.to) + ANSWER_CLOSE + text.slice(at.to);
-    }
-    return markMessages({ title: ex.title || this.titleOf(note, text), question: ex.question, working, tested: await this.tested(ex.tests), help: helpSince(await this.journal(note)) });
-  }
-
-  /** A draft's frontmatter, or null. */
-  private draftMeta(text: string): Record<string, unknown> | null {
-    try { return splitFrontmatter(text)[0]; } catch { return null; }
-  }
-
-  /** A request for an exercise: where it goes, what it tests, what it follows. Refused for a draft that is not one. */
-  private async exerciseDraft(draft: string): Promise<{ folder: string; tests: string[]; after: string | null; body: string }> {
-    const text = (await this.readNote(draft)).text;
-    const meta = this.draftMeta(text);
-    if (meta?.type !== "Exercise") throw new EngineError("not a request for an exercise");
-    let body = "";
-    try { body = splitFrontmatter(text)[1].trim(); } catch { /* none */ }
-    const after = plain(meta.after ?? "");
-    return { folder: plain(meta.folder ?? ""), tests: testsOf(meta), after: after || null, body };
-  }
-
-  /** What a request for an exercise asks, in the journal's words. */
-  private async exerciseAsked(draft: string): Promise<string> {
-    const d = await this.exerciseDraft(draft);
-    return d.body || `an exercise on ${d.tests.map((t) => this.bundle.concepts.get(t)?.title ?? t).join(", ")}`;
-  }
-
-  private async exerciseCompose(draft: string, _text: string, asked: string): Promise<{ messages: Message[]; parts: Part[] }> {
-    const d = await this.exerciseDraft(draft);
-    const tested = await this.tested(d.tests);
-    const all = await this.studyExercises();
-    const existing = all.filter((e) => e.tests.some((t) => d.tests.includes(t))).map((e) => ({ title: e.title, question: e.question }));
-    const after = d.after ? all.find((e) => e.id === d.after) : undefined;
-    return exerciseMessages({ asked: d.body ? asked : "", folder: d.folder, tested, existing, after: after ? { title: after.title, question: after.question } : null });
-  }
-
-  /** Every exercise of the study base, read. */
-  private async studyExercises(): Promise<(ReturnType<typeof exercise> & { id: string })[]> {
-    const study = this.opts.own;
-    const out: (ReturnType<typeof exercise> & { id: string })[] = [];
-    for (const f of await walk(study, STUDY_DIR)) {
-      if (f.dir || !f.path.endsWith(".md") || f.text === undefined) continue;
-      let type = "";
-      try { type = plain(splitFrontmatter(f.text)[0]?.type ?? ""); } catch { continue; }
-      if (type !== "Exercise") continue;
-      const id = f.path.slice(0, -3), ex = exercise(f.text);
-      out.push({ ...ex, id, title: ex.title || id.split("/").at(-1)! });
-    }
-    return out.sort((a, b) => (a.id < b.id ? -1 : 1));
-  }
-
-  async createExerciseDraft(folder: string, tests: string[], after: string | null = null): Promise<NoteSource> {
-    const dir = folder.trim().replace(/^\/+|\/+$/g, "");
-    if (dir && !this.bundle.directories.has(dir)) throw new EngineError(`there is no folder ${dir} in the base`);
-    for (const t of tests) if (!this.bundle.concepts.has(t)) throw new EngineError(`there is no note ${t} in the base`);
-    const follows = after ? bare(after) : null;
-    if (follows && !(await this.studyExercises()).some((e) => e.id === follows)) throw new EngineError(`there is no exercise ${follows}`);
-    const id = DRAFT_PREFIX + newId(this.opts.clock.now()).toLowerCase();
-    const meta: Record<string, unknown> = { type: "Exercise", folder: dir, tests };
-    if (follows) meta.after = follows;
-    return this.createNote(id, `---\n${dumpFrontmatter(meta)}---\n\n`);
-  }
-
-  async keepExercise(draft: string, proposal: string): Promise<Saved> {
-    if (!isDraftId(draft)) throw new EngineError("not a request for an exercise");
-    const d = await this.exerciseDraft(draft);
-    const { p } = await this.waiting(draft, proposal);
-    if (p.form !== "insert") throw new EngineError("not an exercise");
-    const { title, question } = exerciseReply(p.text);
-    if (!question) throw new EngineError("there is no question in it to keep");
-    const name = (title || "exercise").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "") || "exercise";
-    const all = await this.studyExercises(), taken = new Set(all.map((e) => e.id));
-    let local = [d.folder, name].filter(Boolean).join("/");
-    for (let k = 2; taken.has(local) || (await this.opts.own.read(`${STUDY_DIR}/${local}.md`)) !== null; k++) local = [d.folder, `${name}-${k}`].filter(Boolean).join("/");
-    const id = studyId(local);
-    // Placed in its chain: it takes the place after the one it follows, and that one now leads to it.
-    const before = d.after ? all.find((e) => e.id === d.after) : undefined;
-    const meta: Record<string, unknown> = { type: "Exercise", kind: "written", title: title || name, tests: d.tests };
-    if (before?.next) meta.next = before.next;
-    meta.generated = { by: p.who, at: p.at };
-    // The exercise begins as its frontmatter and the working's heading, yours; Iso's question is then offered in it
-    // and kept, so its journal says who wrote what, as for any text of Iso's.
-    await this.createNote(id, `---\n${dumpFrontmatter(meta)}---\n\n${WORKING}\n\n`);
-    const copy = await this.one(async () => {
-      const entry = { ...p, ...(await this.stamp(p.who)), text: question, after: null, before: { text: WORKING, nth: 0 }, copyOf: p.id } as Proposal;
-      await this.enter(id, await this.journal(id), entry);
-      return entry;
-    });
-    const kept = await this.keep(id, copy.id);
-    if (before) {
-      const prev = await this.readNote(studyId(before.id));
-      await this.saveNote(prev.id, { base: prev.version, text: withNext(prev.text, local) });
-    }
-    await this.one(async () => this.enter(draft, await this.journal(draft), { ...(await this.stamp("you")), kind: "discard", proposal }));
-    await this.discardDraft(draft);
-    return kept;
-  }
-
-  async study(): Promise<StudyReport> {
-    const events = await this.records(), now = this.opts.clock.now();
-    const read = understanding(events, now);
-    const all = await this.studyExercises();
-    const byId = new Map(events.map((e) => [e.id, e]));
-    const listed = studyList(all, events, read);
-    const info = new Map(all.map((e) => [e.id, e]));
-    const evidence = (note: string, u: Understanding): Evidence[] => u.evidence.flatMap((id): Evidence[] => {
-      const e = byId.get(id);
-      if (!e) return [];
-      if (e.event === "wind-back") return [{ id, at: String(e.at), event: "wind-back", by: -1 }];
-      if (e.event === "understood") return [{ id, at: String(e.at), event: "understood", by: typeof e.by === "number" ? e.by : 0, ...(typeof e.why === "string" && e.why ? { why: e.why } : {}), ...(typeof e.conversation === "string" ? { conversation: e.conversation } : {}) }];
-      const move = (e.moves as Record<string, { by?: unknown; why?: unknown }> | undefined)?.[note];
-      return [{ id, at: String(e.at), event: "attempt", by: typeof move?.by === "number" ? move.by : 0, ...(typeof move?.why === "string" && move.why ? { why: move.why } : {}), ...(typeof e.exercise === "string" ? { exercise: studyId(e.exercise) } : {}), ...(typeof e.result === "string" ? { result: e.result as Evidence["result"] } : {}), ...(typeof e.marks === "string" ? { marks: e.marks } : {}) }];
-    });
-    const notes: StudyReport["notes"] = {};
-    for (const [note, u] of read) notes[note] = { level: u.level, squares: u.squares, step: u.step, due: u.due, evidence: evidence(note, u) };
-    return {
-      exercises: listed.map((l) => {
-        const e = info.get(l.id)!;
-        return { id: studyId(l.id), title: e.title, kind: e.kind, tests: l.tests, next: e.next ? studyId(e.next) : null, result: l.result, last: l.last === null ? null : new Date(l.last).toISOString(), squares: l.squares, due: l.due };
-      }),
-      notes,
-      folders: ["", ...[...this.bundle.directories.keys()].filter(Boolean).sort()],
-    };
-  }
-
-  async windBack(id: string): Promise<void> {
-    if (!isStudyId(id)) throw new EngineError("wind back is done from an exercise");
-    const tests = exercise((await this.readNote(id)).text).tests;
-    if (!tests.length) throw new EngineError("the exercise tests no note");
-    await this.one(async () => { for (const note of tests) await this.record({ event: "wind-back", note }); });
   }
 
   async stop(request: string): Promise<void> {

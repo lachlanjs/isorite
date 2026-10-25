@@ -138,14 +138,6 @@
           {#if p === "note"}
             <PaneHead pane="note" name="Note" settings={noteSettings}>
               {#snippet tools()}
-                {#if app.exercise}
-                  {@const x = app.exercise}
-                  <!-- An exercise (Study-Written): its kind, Iso's read of you as six squares, wind back, and the next if it names one. -->
-                  <span class="label kind">{x.kind}</span>
-                  {#key x.flash}<button class="squares" class:flash={x.flash > 0} type="button" aria-label="understanding {x.squares} of 6{x.due ? ', due' : ''}: why" onclick={x.why}>{#each [0, 1, 2, 3, 4, 5] as k (k)}<i class="pip" class:lv={k < x.squares}></i>{/each}</button>{/key}
-                  <button class="link wind" type="button" onclick={x.windBack}>wind back</button>
-                  {#if x.next}<a class="next" href={resolve("/n/[...id]", { id: x.next })}>next</a>{/if}
-                {/if}
                 {#if inNote && app.saving}<span class="saved" class:bad={app.saving.bad} class:busy={!app.saving.text.startsWith("saved")} title={app.saving.text} role="status"><i aria-hidden="true"></i><span class="hidden-label">{app.saving.text}</span></span>{/if}
                 <button class="icon" type="button" aria-label="All notes" title="All notes, and search" aria-pressed={page.route.id === "/notes" || panes.tree} onclick={() => { if (page.route.id !== "/notes") panes.tree = !panes.tree; }}>
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 3h4M4.5 3v9.5h3M4.5 7.5h3" /><rect x="8" y="5.5" width="5.5" height="3.5" /><rect x="8" y="10.5" width="5.5" height="3.5" /></svg>
@@ -218,7 +210,7 @@
   <section class="set">
     <h2 class="label">the map</h2>
     {#if app.atlas}
-      <p class="soft">{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}{#if app.atlas.items} · {app.atlas.items} study {app.atlas.items === 1 ? "item" : "items"}{/if}</p>
+      <p class="soft">{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</p>
     {/if}
     <p class="faint">{panes.lens.atlas === "normal" ? "The Iso and understand lenses have a legend, shown at the foot of the map while these settings are open." : "The legend is at the foot of the map while these settings are open."}</p>
   </section>
@@ -237,12 +229,6 @@
   .saved i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); }
   .saved.busy i { background: var(--growth); }
   .saved.bad i { background: var(--rose); }
-  .squares { display: inline-flex; gap: 4px; background: none; border: 0; padding: 6px 2px; cursor: pointer; flex: none; }
-  .squares.flash { animation: flash 900ms ease-out; }
-  @keyframes flash { 0% { box-shadow: 0 0 0 0 var(--malachite); background: var(--malachite-soft); } 100% { box-shadow: 0 0 0 10px transparent; background: none; } }
-  .kind, .next { white-space: nowrap; font-size: 12px; }
-  /* On a phone an exercise's header is its kind and the squares (Mobile-Study): wind back is in the squares' panel. */
-  @media (max-width: 600px) { .wind, .kind { display: none; } }
   .set { display: flex; flex-direction: column; gap: var(--space-2); }
   .set h2 { font-weight: 400; }
   /* The panes (M10): a grid on a desktop, a row of full-width panes on a phone. */

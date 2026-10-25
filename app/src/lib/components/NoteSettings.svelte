@@ -29,7 +29,7 @@
 {#if app.session}
   <section>
     <h2 class="label">the base</h2>
-    <p><span class="name">{app.session.name}</span> <span class="faint">· {app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"} · {app.session.study ? "a study base keeps what you understand" : "a project: no journal is kept"}</span></p>
+    <p><span class="name">{app.session.name}</span> <span class="faint">· {app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span></p>
   </section>
 {/if}
 

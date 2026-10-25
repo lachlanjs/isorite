@@ -378,26 +378,26 @@ test("the conversation is the session's exchanges across its notes, until it is 
   expect(journal().filter((e) => e.kind === "proposal")).toHaveLength(1);
 });
 
-test("the context report names the five parts, sums them, and counts what the session has cost", async () => {
+test("the context report names the four parts, sums them, and counts what the session has cost", async () => {
   const { engine, ask, ended } = await open([
     { calls: [{ name: "read_note", arguments: { id: "basics/surprise" } }], usage: { prompt_tokens: 1000, completion_tokens: 10, cost: 0.01 } },
     { text: ["Bits."], usage: { prompt_tokens: 1200, completion_tokens: 5, cost: 0.02 } },
     { text: ["No marks, two paragraphs."], usage: { prompt_tokens: 900, completion_tokens: 5, cost: 0.005 } },
   ]);
   const before = await engine.context("basics/entropy");
-  expect(before.parts.map((p) => p.name)).toEqual(["instructions and tools", "study record", "your prompts and Iso's answers", "this note", "linked notes"]);
+  expect(before.parts.map((p) => p.name)).toEqual(["instructions and tools", "your prompts and Iso's answers", "this note", "linked notes"]);
   expect(before).toMatchObject({ limit: 200_000, session: { usd: 0, requests: 0 } });
   expect(before.tokens).toBe(before.parts.reduce((n, p) => n + p.tokens, 0));
-  expect(before.parts[2]).toMatchObject({ tokens: 0, detail: "" });
+  expect(before.parts[1]).toMatchObject({ tokens: 0, detail: "" });
 
   await ended((await ask()).request);
   const after = await engine.context("basics/entropy");
   expect(after.session).toEqual({ usd: 0.03, requests: 1 });
-  expect(after.parts[2]).toMatchObject({ detail: "1 moment" });
-  expect(after.parts[2]!.tokens).toBeGreaterThan(0);
-  expect(after.parts[3]).toMatchObject({ detail: "Entropy" });
+  expect(after.parts[1]).toMatchObject({ detail: "1 moment" });
+  expect(after.parts[1]!.tokens).toBeGreaterThan(0);
+  expect(after.parts[2]).toMatchObject({ detail: "Entropy" });
   // Entropy links to nothing: what Iso read with its tools is not part of what is sent (I3).
-  expect(after.parts[4]).toMatchObject({ detail: "", tokens: 0 });
+  expect(after.parts[3]).toMatchObject({ detail: "", tokens: 0 });
   expect(after.items.map((i) => i.kind)).toEqual(["exchange"]);
 
   // A reply that was paid for and offered nothing is still counted.
@@ -408,7 +408,7 @@ test("the context report names the five parts, sums them, and counts what the se
   expect(both2.requests).toBe(2);
   expect(both2.usd).toBeCloseTo(0.035, 6);
   // With no note open there is still the conversation and the cost.
-  expect(await engine.context()).toMatchObject({ session: { requests: 2 }, parts: [{}, {}, { detail: "1 moment" }, { detail: "none open", tokens: 0 }, {}] });
+  expect(await engine.context()).toMatchObject({ session: { requests: 2 }, parts: [{}, { detail: "1 moment" }, { detail: "none open", tokens: 0 }, {}] });
 });
 
 test("a long conversation is cut to its budget: the newest whole, older ones shortened, the oldest left out", () => {
@@ -513,7 +513,7 @@ test("what Iso is sent is chosen part by part: linked notes and earlier exchange
     { id: "n:basics/surprise", kind: "linked", title: "Surprise", tokens: expect.any(Number), on: true },
     { id: "n:basics/entropy", kind: "linked", title: "Entropy", tokens: expect.any(Number), on: true },
   ]);
-  expect(all.parts[4]).toMatchObject({ detail: "2 sent" });
+  expect(all.parts[3]).toMatchObject({ detail: "2 sent" });
   await ended((await ask()).request);
   let user = String(sent[0]!.messages[1]!.content);
   expect(user).toContain("## Surprise (/basics/surprise.md)");
@@ -539,5 +539,5 @@ test("what Iso is sent is chosen part by part: linked notes and earlier exchange
   expect(user).not.toContain("# Earlier in this session");
   expect(sent[2]!.tools ?? []).toEqual([]);
   expect(JSON.stringify(sent[2]!.messages[0]!.content)).toContain("You have no tools this time");
-  expect(await engine.context("basics/information", { lookup: false })).toMatchObject({ lookup: false, parts: [{ detail: "no tools" }, {}, {}, {}, {}] });
+  expect(await engine.context("basics/information", { lookup: false })).toMatchObject({ lookup: false, parts: [{ detail: "no tools" }, {}, {}, {}] });
 });

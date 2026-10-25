@@ -96,75 +96,23 @@ Any earlier version is rebuilt by starting from the nearest `text` before it and
 
 A proposal is pending until a `discard` names it or a `change` with `why: keep` names it.
 
-### `marks`
+A journal moved in from format 1 may also hold `marks` entries (Iso's marking of an exercise). They are passed over when the journal is read.
 
-```json
-{"id":"…", …,"who":"iso:openrouter/anthropic/claude-sonnet-5.5","kind":"marks","answer":{"text":"So H = 1 bit.","nth":0},"result":"partly",
- "marks":[{"passage":{"text":"two outcomes, each with probability 1/2","nth":0},"mark":"right"},{"passage":{"text":"So H = 1 bit.","nth":0},"mark":"wrong"}],
- "dropped":0,"cost":{…}}
-```
+## 4. A device's record (`record.ts`)
 
-Iso's marking of an exercise, in the exercise's journal. Never written into the file. The newest is laid over the working; a passage edited since loses its mark. `dropped` counts passages Iso quoted that were not in the working.
-
-## 4. The study record (`record.ts`, `understanding.ts`)
-
-One file per device, so two devices never write the same file. One JSON event per line, only ever added. Each has `id` (a ULID), `at`, `device` and `event`. Records merge as a union by id.
+`.isorite/record/<device>.jsonl`: one file per device, so two devices never write the same file. One JSON event per line, only ever added. Each has `id` (a ULID), `at`, `device` and `event`. Records merge as a union by id.
 
 | `event` | Fields | Meaning |
 |---|---|---|
-| `attempt` | `exercise` (its id in the study base), `tests` (note ids), `result` (`right`, `partly`, `wrong`), `by` (`iso:<model>` or `you`), `moves`, `answer`, `working`, `marks` | an exercise was marked (below) |
-| `wind-back` | `note` | the person lowered Iso's reading of them by one |
-| `moved` | `from`, `to` | a note was moved: what the events before it say of `from` is said of `to` |
 | `context-cleared` | | Iso is no longer sent this session's exchanges from before this event. Nothing is deleted. |
 | `iso-unused` | `note`, `session`, `model`, `usd` | a reply that was paid for and offered nothing (a rewrite that changed nothing, an empty reply): counted in what the session cost |
+| `iso-turn` | `conversation`, `turn`, `session`, `model`, `usd` | a turn in Iso's pane, and what it cost |
 
-**Understanding is not stored.** It is a number from 0 to 6 worked out from these events by `understanding()`:
+Format 1 also kept what was studied here (`attempt`, `wind-back`, `understood`, `moved`), from which a level of understanding from 0 to 6 was worked out. Format 2 has no such level. `isorite migrate` leaves those events behind.
 
-- an attempt: each note it tests moves by the move Iso judged for it (−1, −½, 0, +½ or +1), and counts as tested then. The result moves nothing by itself. An attempt without `moves` moves nothing.
-- wind-back: one down.
-- Evidence at level *n* holds for 1, 3, 7, 16, 35 or 80 days. Past that the note is due. Past twice that it shows one square fewer until tested again.
-- The six squares are the level rounded down. The Atlas's four steps are 0, 1 to 2, 3 to 4, and 5 to 6 squares.
+## 5. Problems and questions
 
-The rule can change without converting anything, because only events are on disk.
-
-An `attempt`, as milestone 4 writes it:
-
-```json
-{"id":"…","at":"…","device":"91d4235f","event":"attempt","exercise":"Fundamentals/entropy-of-a-coin",
- "tests":["Fundamentals/entropy"],"result":"partly","by":"iso:openrouter/anthropic/claude-sonnet-5.5",
- "moves":{"Fundamentals/entropy":{"by":0.5,"why":"Right definition, but needed one hint to sum over both outcomes."}},
- "answer":{"text":"So H = 1 bit.","nth":0},"working":"…the working as it was sent…","marks":"01K7…"}
-```
-
-- `moves` has one entry for each note in `tests`: Iso's judgement of how far the attempt is evidence of a change in understanding, weighing its accuracy, the guidance it needed and how closely the note bears on the exercise, with a reason in a line.
-- `answer` is the passage marked as the answer, any selection of the working, named as a rewrite names its passages (`{text, nth}` through the whole file).
-- `marks` names the `marks` entry in the exercise's journal (section 3).
-
-## 5. Exercises (milestone 4)
-
-A note in `study/`, read as OKF like any other:
-
-```markdown
----
-type: Exercise
-kind: written
-title: The entropy of a fair coin
-tests: [basics/entropy, basics/mutual-information]
-next: basics/entropy-of-a-die
-generated: { by: "iso:anthropic/claude-sonnet-5-5", at: 2026-10-13T09:00:00Z }
----
-
-Show that the entropy of a fair coin is one bit.
-
-## Working
-
-…whatever you write…
-```
-
-- `tests` names notes of the knowledge base by id. This is how a study note links to the base; the base never links back.
-- `next`, optional, names the exercise that follows this one in teaching order, by its id in the study base.
-- The question is the text before `## Working`; the working is everything after it.
-- **The answer is not in the file.** It is any selection of the working, held by the app until the exercise is sent for marking, and then kept in the `attempt` event with the working as it was (section 4). Iso's marks are a `marks` entry in the exercise's journal (section 3).
+A problem or an open question is a note of the base, in any folder. Milestone 12 adds them; section 1's rules hold for them as for any note.
 
 ## 6. What is kept outside the notes
 

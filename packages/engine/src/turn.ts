@@ -35,8 +35,6 @@ export type TurnItem =
   | { kind: "point"; note: string; why: string }
   /** You undid the turn's changes: the notes put back, and those that had changed since and were left. */
   | { kind: "undone"; notes: string[]; left: string[] }
-  /** It recorded something of your understanding of a note (Understand mode). */
-  | { kind: "understood"; note: string; event: string; by: number; why: string };
 
 export type Decision = "once" | "always" | "reject";
 
@@ -139,10 +137,6 @@ You keep a record of their understanding, note by note, in their study base.
   what they have shown they know; go to what they have not yet shown.
 - Ask before you explain, where a question would show you where they stand.
   One question at a time. Short turns.
-- When they show understanding, or a gap, record it with
-  record_understanding: how far this turn is evidence that their
-  understanding of the note differs from what you had (-1, -0.5, 0, 0.5 or 1)
-  and why, in one plain sentence to them. At most once a note a turn.
 - At the end of a conversation about a note, or when your reading of them has
   changed, rewrite your reading with write_understanding: a few plain
   sentences on what they can do with the note and what they have not yet
@@ -176,8 +170,6 @@ export const WRITE_NOTE = fn("write_note", "Make a new note, or write a note's w
 export const MOVE_NOTE = fn("move_note", "Move or rename a note. Links to it are changed to match. They are asked first.",
   { id: str, to: { ...str, description: "Its new id: folder/name." } }, ["id", "to"]);
 export const DELETE_NOTE = fn("delete_note", "Delete a note. They are asked first. Its history stays.", { id: str }, ["id"]);
-export const RECORD_UNDERSTANDING = fn("record_understanding", "Record evidence of their understanding of one note from this turn: how far it differs from what you had, and why.",
-  { id: { ...str, description: "The note's id." }, by: { type: "number", enum: [-1, -0.5, 0, 0.5, 1] }, why: { ...str, description: "One plain sentence, to them." } }, ["id", "by", "why"]);
 export const WRITE_UNDERSTANDING = fn("write_understanding", "Rewrite your reading of their understanding of one note: a few plain sentences on what they can do with it and what they have not yet shown. Replaces the reading you had.",
   { id: { ...str, description: "The note's id." }, reading: str }, ["id", "reading"]);
 
@@ -185,7 +177,7 @@ export const WRITE_UNDERSTANDING = fn("write_understanding", "Rewrite your readi
 export const MODE_TOOLS: Record<Exclude<Mode, "build">, ToolDef[]> = {
   ask: [POINT_TO_NOTE],
   write: [EDIT_NOTE, WRITE_NOTE, MOVE_NOTE, DELETE_NOTE, POINT_TO_NOTE],
-  understand: [RECORD_UNDERSTANDING, WRITE_UNDERSTANDING, POINT_TO_NOTE],
+  understand: [WRITE_UNDERSTANDING, POINT_TO_NOTE],
 };
 
 /** A note, folder or passage as it is sent: what was given, read now. */
@@ -193,14 +185,14 @@ export type Sent =
   | { kind: "note"; id: string; title: string; text: string }
   | { kind: "folder"; id: string; notes: { id: string; title: string; description: string }[] }
   | { kind: "passage"; id: string; title: string; text: string }
-  /** Iso's reading of their understanding of a note, and what changed it (Understand mode). */
-  | { kind: "understanding"; id: string; title: string; reading: string; events: string[]; squares: number };
+  /** Iso's reading of their understanding of a note (its Understanding note). */
+  | { kind: "understanding"; id: string; title: string; reading: string };
 
 export function sentText(s: Sent): string {
   if (s.kind === "note") return `## ${s.title} (/${s.id}.md)\n\n${windowed(s.text.split("\n"), [0])}`;
   if (s.kind === "passage") return `## A passage they chose in ${s.title} (/${s.id}.md)\n\n${s.text.split("\n").map((l) => `> ${l}`).join("\n")}`;
   if (s.kind === "folder") return `## The folder ${s.id || "at the top of the base"}: its notes\n\n${s.notes.map((n) => `- ${n.title} (/${n.id}.md)${n.description ? `: ${n.description}` : ""}`).join("\n") || "(empty)"}`;
-  return `## Their understanding of ${s.title} (/${s.id}.md): ${s.squares} of 6 squares\n\nYour reading so far: ${s.reading || "none yet."}\n\nWhat changed it, newest first:\n${s.events.map((e) => `- ${e}`).join("\n") || "- nothing yet"}`;
+  return `## Their understanding of ${s.title} (/${s.id}.md)\n\nYour reading so far: ${s.reading || "none yet."}`;
 }
 
 /** An earlier turn as it is sent: in the shape `conversation()` shortens. */

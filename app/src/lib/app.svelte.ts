@@ -17,13 +17,8 @@ class AppState {
   here = $state("");
   /** How the open note's saving stands, for the Note pane's header. */
   saving = $state<{ text: string; bad: boolean } | null>(null);
-  /** The Atlas: how many study items it shows, and where it is, for its header and settings. */
-  atlas = $state.raw<{ items: number; chosen: string; chosenId: string; steps: number; pick: boolean; here: string; out: () => void } | null>(null);
-  /** An exercise, while one is open: what the header shows of it (Study-Written): its kind, the squares for what it
-   *  tests, whether they flash, and the two things done from there. */
-  exercise = $state.raw<{ kind: string; squares: number; due: boolean; flash: number; windBack: () => void; why: () => void; next: string | null } | null>(null);
-  /** A page of study that is not an exercise (a request for one): the view switch shows study. */
-  studying = $state(false);
+  /** The Atlas: what is chosen on it, and where it is, for its header and settings. */
+  atlas = $state.raw<{ chosen: string; chosenId: string; steps: number; pick: boolean; here: string; out: () => void } | null>(null);
   /** Back from signing in at the provider for a key: how it went, for the settings to say. */
   signIn = $state.raw<{ ok: boolean; message: string } | null>(null);
   /** Iso's latest request, from any page or tab, as the Atlas draws its path: the note asking, each step, and how

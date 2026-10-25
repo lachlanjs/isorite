@@ -144,30 +144,16 @@ test("saves asked for at once are written one at a time, in order", async () => 
   expect(replay(journal("basics/entropy"))).toMatchObject({ text: b, broken: [] });
 });
 
-test("a study note is written into the study base's own notes, and journalled under its @study id", async () => {
-  const { engine, own, journal } = await open();
-  await engine.createNote("@study/basics/coin", "---\ntype: Exercise\n---\n");
-  expect(own.files.has("study/basics/coin.md")).toBe(true);
-  expect(journal("@study/basics/coin")).toHaveLength(1);
-});
-
-test("the map: both bases as one model, each block with its title and where you stand", async () => {
-  const exercise = "---\ntype: Exercise\nkind: written\ntitle: A fair coin\ntests: [basics/entropy]\n---\n\nShow it is one bit.\n";
-  const attempt = (id: string, result: string) => JSON.stringify({ id, at: "2026-10-12T09:00:00Z", device: "laptop1", event: "attempt", exercise: "basics/a-fair-coin", tests: ["basics/entropy"], result, by: "iso:m", moves: { "basics/entropy": { by: 1, why: "" } } }) + "\n";
-  const { engine } = await open(
-    { "basics/entropy.md": NOTE, "basics/coding.md": NOTE.replace("Entropy", "Coding") + '\n[entropy](/basics/entropy.md "requires")\n' },
-    { "study/basics/a-fair-coin.md": exercise, "record/laptop1.jsonl": attempt("01K7A000000000000000000001", "right"), "record/phone1.jsonl": attempt("01K7A000000000000000000002", "right") + attempt("01K7A000000000000000000003", "right") },
-  );
+test("the map: the base as one model, each block with its title and its size", async () => {
+  const { engine } = await open({ "basics/entropy.md": NOTE, "basics/coding.md": NOTE.replace("Entropy", "Coding") + '\n[entropy](/basics/entropy.md "requires")\n' });
   const map = await engine.map();
   expect(map.notes).toEqual({
-    "basics/entropy": { title: "Entropy", step: 2, tokens: expect.any(Number) },
-    "basics/coding": { title: "Coding", step: 0, tokens: expect.any(Number) },
-    "@study/basics/a-fair-coin": { title: "A fair coin", step: 0, kind: "written", passed: true },
+    "basics/entropy": { title: "Entropy", tokens: expect.any(Number) },
+    "basics/coding": { title: "Coding", tokens: expect.any(Number) },
   });
   expect(map.notes["basics/entropy"]!.tokens).toBeGreaterThan(0); // its size, for the notes linked to a note for Iso
   expect(map.model.edges).toContainEqual(["basics/coding", "basics/entropy", 3]);
-  expect(map.model.edges).toContainEqual(["@study/basics/a-fair-coin", "basics/entropy", 2]);
-  expect(map.model.root.children.map((c) => c.ref)).toEqual(["basics", "@study/basics"]);
+  expect(map.model.root.children.map((c) => c.ref)).toEqual(["basics"]);
 });
 
 test("the map of a base with nothing of its own yet, and after a note gains a link", async () => {

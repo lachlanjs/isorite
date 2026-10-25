@@ -249,18 +249,13 @@ test("E1 (earlier): from the goal back along the chain, a question asked, an oct
   await page.keyboard.press("End");
   await page.keyboard.type(" Next, the [[oct");
   await page.getByRole("option", { name: /The octree/ }).click();
-  await at(page, "Hand it on");
-  await expect(page).toHaveURL(/#\/n\/algorithms\/the-octree/);
   await iso(page).getByRole("button", { name: "Ask", exact: true }).click();
   await finish(page, "E1");
 });
 
-test("L3: where you stand on the Atlas, an Understanding note and its scratchpad, Understand mode asking back and recording, and asked again without it", async ({ page }) => {
+test("L3: an Understanding note and its scratchpad, Understand mode asking back and rewriting its reading, and asked again without it", async ({ page }) => {
   test.setTimeout(150_000);
   await section(page, "L3");
-  await at(page, "Where you stand");
-  if (phone()) await tab(page, "Atlas");
-  await page.locator('[data-pane="atlas"] .lens[data-lens="understand"]').click();
   await at(page, "Your Understanding note");
   if (phone()) await tab(page, "Note");
   await page.locator('[data-pane="note"] .lens[data-lens="understand"]').click();
@@ -275,8 +270,7 @@ test("L3: where you stand on the Atlas, an Understanding note and its scratchpad
   await expect(log(page).locator(".turn").last().locator(".said")).toContainText("what happens if you run leapfrog");
   await expect(box(page)).toHaveValue(/run backwards/);
   await send(page);
-  await at(page, "What changed it");
-  await expect(log(page).locator(".turn").last().locator(".understood")).toContainText("Leapfrog");
+  await at(page, "Its reading of you");
   if (phone()) await tab(page, "Note");
   await expect(page.locator('[data-pane="note"] .reading')).toContainText("time-reversible");
   await look(page, "L3-05-changed");
@@ -290,7 +284,7 @@ test("L3: where you stand on the Atlas, an Understanding note and its scratchpad
   await send(page);
   await at(page, "Understanding, in short");
   await iso(page).getByRole("button", { name: "Ask", exact: true }).click();
-  await finish(page, "L3", 7);
+  await finish(page, "L3", 6);
 });
 
 test("L4 (earlier): the terminal outlined, and the way to its replay", async ({ page }) => {
@@ -305,7 +299,7 @@ test("L4 (earlier): the terminal outlined, and the way to its replay", async ({ 
   await finish(page, "L4");
 });
 
-test("L4 (earlier), beside the terminal: the page follows the agent, and a note is sent to it", async ({ page }) => {
+test("L4 (earlier), beside the terminal: the page follows the agent", async ({ page }) => {
   test.skip(!local(), "only beside the terminal");
   await section(page, "L4");
   await at(page, "The terminal beside this page");
@@ -315,10 +309,6 @@ test("L4 (earlier), beside the terminal: the page follows the agent, and a note 
   await card(page).getByRole("button", { name: "skip" }).click();
   await at(page, "Its changes to notes wait here too");
   await next(page);
-  await at(page, "From here to there");
-  await page.locator('[data-tour="send"]').click();
-  await page.getByLabel("What you want of it").fill("use this in the loop");
-  await page.getByRole("group", { name: "Send to the terminal's agent" }).getByRole("button", { name: "send to agent" }).click();
   await at(page, "On your own notes");
   await finish(page, "L4");
 });

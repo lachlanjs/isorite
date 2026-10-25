@@ -1,6 +1,6 @@
-// The Understanding note (M10): one for each note of the base, in the study base at understanding/<note>.md. It
-// holds Iso's reading of your understanding of the note, which Iso writes in Understand mode, and your scratchpad,
-// which Iso does not write. What changed your understanding is not kept here: it is the study record's.
+// The Understanding note (M10): one for each note of the base, among isorite's own files at understanding/<note>.md.
+// It holds Iso's reading of your understanding of the note, which Iso writes, and your scratchpad, which Iso does
+// not write. There is no score: what it rests on is in the notes themselves.
 
 export const UNDERSTANDING_PREFIX = "@understanding/", UNDERSTANDING_DIR = "understanding";
 export const isUnderstandingId = (id: string): boolean => id.startsWith(UNDERSTANDING_PREFIX);

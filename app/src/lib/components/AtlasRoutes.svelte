@@ -10,7 +10,7 @@
     /** The zoom: paths are given at zoom 1. */
     k: number;
     /** `strong`: a "requires" runs along it. A route of weaker links only is drawn lighter. `trunk`: between two folders. */
-    rest: { key: string; d: string; count: number; study: boolean; strong: boolean; trunk: boolean }[];
+    rest: { key: string; d: string; count: number; strong: boolean; trunk: boolean }[];
     hot: { key: string; d: string; kind: "requires" | "builds" | "uses" | "iso"; count: number; still: boolean }[];
     /** The lit links of each kind, however their lines merge: said on the layer, for whoever reads it. */
     counts: { requires: number; builds: number; uses: number };
@@ -20,20 +20,20 @@
     grown?: { key: string; d: string }[];
     /** A new layout's beats (V7): the old lines retract, nothing is drawn while things move, the new lines draw out. */
     beat?: "" | "retract" | "move" | "draw";
-    retracting?: { key: string; d: string; study: boolean; strong: boolean; trunk: boolean }[];
+    retracting?: { key: string; d: string; strong: boolean; trunk: boolean }[];
   } = $props();
   // A line drawn along its own length (pathLength) is in the map's units, so its width is set by the zoom.
-  const width = (r: { study: boolean; strong: boolean; trunk: boolean }): string => `${(r.study ? 1.6 : r.strong ? (r.trunk ? 3 : 1.5) : r.trunk ? 2 : 1) / k}px`;
+  const width = (r: { strong: boolean; trunk: boolean }): string => `${(r.strong ? (r.trunk ? 3 : 1.5) : r.trunk ? 2 : 1) / k}px`;
 </script>
 
 <svg class="routes" aria-hidden="true" data-requires={counts.requires} data-builds={counts.builds} data-uses={counts.uses}>
   <g transform="scale({k})">
     {#if beat === "retract"}
-      {#each retracting as r (r.key)}<path class="along retract {r.study ? 'study' : r.strong ? 'base' : 'base weak'}" class:trunk={r.trunk && !r.study} pathLength="1" d={r.d} style:stroke-width={width(r)} />{/each}
+      {#each retracting as r (r.key)}<path class="along retract {r.strong ? 'base' : 'base weak'}" class:trunk={r.trunk} pathLength="1" d={r.d} style:stroke-width={width(r)} />{/each}
     {:else if beat === "draw"}
-      {#each rest as r (r.key)}<path class="along draw {r.study ? 'study' : r.strong ? 'base' : 'base weak'}" class:trunk={r.trunk && !r.study} pathLength="1" d={r.d} style:stroke-width={width(r)} />{/each}
+      {#each rest as r (r.key)}<path class="along draw {r.strong ? 'base' : 'base weak'}" class:trunk={r.trunk} pathLength="1" d={r.d} style:stroke-width={width(r)} />{/each}
     {:else if beat === ""}
-      {#each rest as r (r.key)}<path class={r.study ? "study" : r.strong ? "base" : "base weak"} class:trunk={r.trunk && !r.study} d={r.d} />{/each}
+      {#each rest as r (r.key)}<path class={r.strong ? "base" : "base weak"} class:trunk={r.trunk} d={r.d} />{/each}
       {#each sent as r (r.key)}<path class="sent" d={r.d} />{/each}
       {#each hot as r (r.key)}<path class="lit {r.kind}" class:still={r.still} d={r.d} />{/each}
     {/if}
@@ -49,7 +49,6 @@
   .base.trunk { stroke-width: 3px; opacity: .8; }
   .weak { stroke-width: 1px; opacity: .3; }
   .weak.trunk { stroke-width: 2px; opacity: .45; }
-  .study { stroke: var(--line-strong); stroke-width: 1.6px; stroke-dasharray: 1.5 5; stroke-linecap: round; opacity: .9; }
   .lit { stroke-width: 3px; stroke-dasharray: 7 5; animation: run .7s linear infinite; }
   .requires { stroke: var(--requires); }
   .builds { stroke: var(--builds); }
@@ -63,7 +62,6 @@
   .still { animation: none; }
   /* The beats of a new layout (V7): along each line from its start, back to it, then out again. */
   .along { vector-effect: none; stroke-dasharray: 1; stroke-linecap: butt; }
-  .along.study { stroke-dasharray: 1; }
   .retract { stroke-dashoffset: 0; animation: retract 0.22s ease-in forwards; }
   .draw { stroke-dashoffset: 1; animation: draw 0.34s ease-out forwards; }
   @keyframes retract { to { stroke-dashoffset: 1; } }

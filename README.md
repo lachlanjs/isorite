@@ -37,9 +37,10 @@ This writes an example project (notes on an N-body simulation) into a folder, op
 Keep the notes in a folder of their own. It can start empty, and is best kept as its own git repository.
 
 ```sh
-isorite study init ~/notes/my-project     # once: the study base beside the notes
 isorite serve ~/notes/my-project          # the browser, at http://localhost:4767/
 ```
+
+isorite keeps what it knows about the notes (each note's history, Iso's conversations) in `.isorite/` inside the folder, to be committed with them. A study base from an earlier isorite is moved in with `isorite migrate <study base>`.
 
 To work in your code with the notes beside it, start the terminal from the repository. This also starts the browser's server if it isn't running.
 

@@ -1,5 +1,5 @@
 /* isorite: the one style. Two grounds (lapis, the dark one, and quartz), and four accents: lattice blue for
-   structure and for you, growth gold for Iso, malachite for what you got right, rose for what failed. Nothing
+   structure and for you, growth gold for Iso, malachite for what is done, rose for what is open or failed. Nothing
    else has a hue. Nothing is rounded and nothing casts a shadow. */
 
 @font-face { font-family: "Ioskeley Mono"; font-style: normal; font-weight: 100 550; font-display: swap; src: url(/fonts/ioskeley-mono-latin-regular.woff2) format("woff2"); }
@@ -169,13 +169,6 @@ a.btn:hover { text-decoration: none; color: var(--text); }
 .sq.empty { background: transparent; border: 1px solid var(--line-strong); }
 .dia { display: inline-block; width: 8px; height: 8px; background: var(--growth); transform: rotate(45deg); flex: none; }
 .dia.open { background: transparent; border: 1.5px solid var(--growth); }
-/* The squares: Iso's read of you, six of them (Study-Written). Filled, a square of understanding; on the study list, the
-   last try passed or wrong (Bases). */
-.pip { display: inline-block; width: 8px; height: 8px; border: 1.5px solid var(--line-strong); background: var(--ground-0); flex: none; box-sizing: border-box; }
-.pip.lv { border-color: var(--lattice); background: var(--lattice); }
-.pip.ok { border-color: var(--malachite); background: var(--malachite); }
-.pip.no { border-color: var(--rose); background: var(--rose); }
-.pip.part { border-color: var(--malachite); background: linear-gradient(90deg, var(--malachite) 50%, var(--ground-0) 50%); }
 .dots { background-image: radial-gradient(var(--line) 1px, transparent 1.2px); background-size: 24px 24px; }
 
 /* ------------------------------------------------------------ prose (rendered blocks in the editor) */

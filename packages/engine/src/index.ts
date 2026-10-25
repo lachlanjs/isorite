@@ -1,7 +1,7 @@
 // @isorite/engine: the public surface.
 
 export { Conflict, EngineError } from "./api.ts";
-export type { AgentLook, AgentChange, Api, AskRequest, Choice, ContextItem, ContextReport, Conversation, TurnRequest, UnderstandingReport, DraftSummary, EngineEvent, Evidence, StudyReport, Listing, MapReport, NoteSource, NoteSummary, Saved, SearchHit, Session, Settings, TerminalItem, TerminalPermission, TerminalTurn, TerminalView } from "./api.ts";
+export type { AgentLook, AgentChange, Api, AskRequest, Choice, ContextItem, ContextReport, Conversation, TurnRequest, UnderstandingReport, DraftSummary, EngineEvent, Listing, MapReport, NoteSource, NoteSummary, Saved, SearchHit, Session, Settings, TerminalItem, TerminalPermission, TerminalTurn, TerminalView } from "./api.ts";
 export { DRAFT_PREFIX, Engine, MAX_NOTE_BYTES, checkNoteId, isDraftId } from "./engine.ts";
 export type { EngineOptions } from "./engine.ts";
 export { MemoryFiles, MemorySecrets, systemClock } from "./ports.ts";

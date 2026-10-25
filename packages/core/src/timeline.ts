@@ -6,13 +6,12 @@ import type { Moment } from "./journal.ts";
 
 const WHAT: Record<Moment["what"], string> = {
   wrote: "wrote the note", found: "found", edited: "edited", kept: "kept", offered: "offered", discarded: "removed",
-  restored: "restored an earlier version", moved: "moved the note", "changed elsewhere": "changed elsewhere", marked: "marked",
+  restored: "restored an earlier version", moved: "moved the note", "changed elsewhere": "changed elsewhere",
 };
 
-/** Who did what: "you edited", "Iso · “give the Bethe lattice form” · kept", "Iso marked: partly". */
+/** Who did what: "you edited", "Iso · “give the Bethe lattice form” · kept". */
 export function describe(m: Moment): string {
   const who = m.who === "you" ? "you" : m.who === "external" ? "outside isorite" : m.who.startsWith("agent:") ? agentName(m.who) : "Iso";
-  if (m.what === "marked") return `Iso marked: ${m.result ?? "done"}`;
   if (m.asked !== undefined) return `${who} · “${m.asked.length > 80 ? m.asked.slice(0, 80) + "…" : m.asked}” · ${m.what === "offered" ? "not kept yet" : WHAT[m.what]}`;
   if (m.who === "external") return m.what === "found" ? "found as it was, outside isorite" : "changed outside isorite";
   return `${who} ${WHAT[m.what]}`;
