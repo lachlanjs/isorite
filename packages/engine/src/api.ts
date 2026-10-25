@@ -125,7 +125,7 @@ export interface ContextReport {
 }
 
 /** One part of Iso's context that can be switched off: an earlier exchange, or a note this note links to. */
-export interface ContextItem { id: string; kind: "exchange" | "linked"; title: string; tokens: number; on: boolean }
+export interface ContextItem { id: string; kind: "exchange" | "linked" | "question"; title: string; tokens: number; on: boolean }
 
 /** What can be set, as the app may know it. The key itself is never sent back. */
 export interface Settings {
@@ -150,6 +150,7 @@ export type EngineEvent =
   | { type: "iso-item"; request: string; conversation: string; item: TurnItem }
   /** Your answer to something it asked before doing. */
   | { type: "iso-answer"; request: string; conversation: string; permission: string; decision: Decision }
+  | { type: "iso-taken"; request: string; conversation: string; item: string; note: string }
   /** Iso looked something up. */
   | { type: "iso-step"; request: string; note: string; step: Step }
   /** A piece of its reply. `again`: what came before was not the reply; start over. */
@@ -232,6 +233,8 @@ export interface Api {
   saveScratchpad(note: string, scratchpad: string, base: string | null): Promise<UnderstandingReport>;
   /** Put back every note a turn changed as it was before the turn. A note changed since is left as it is, and said. */
   undoTurn(conversation: string, turn: string): Promise<{ notes: string[]; left: string[] }>;
+  /** Make a question Iso asked in a turn a question note, or insert what it offered: yours either way. */
+  takeItem(conversation: string, turn: string, item: string): Promise<{ note: string }>;
   /** Your answer to what Iso asked before doing something in a turn. */
   answer(turn: string, permission: string, decision: Decision): Promise<void>;
   /** Stop a request. Nothing is entered. */

@@ -59,6 +59,7 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     understanding: (note) => ask("understanding" + q(note)),
     saveScratchpad: (note, scratchpad, base) => write("POST", "understanding/scratchpad" + q(note), { scratchpad, base }),
     undoTurn: (conversation, turn) => write("POST", "iso/undo", { conversation, turn }),
+    takeItem: (conversation, turn, item) => write("POST", "iso/take", { conversation, turn, item }),
     answer: async (turn, permission, decision) => { await write("POST", "iso/answer", { turn, permission, decision }); },
     conversation: async (id) => { const c = await ask<{ id: string; turns: [] }>("conversation" + (id ? q(id) : "")); return c.id ? c : null; },
     turnContext: (request) => ask(`turn/context?turn=${encodeURIComponent(JSON.stringify(request))}`),
@@ -92,7 +93,7 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     events(listener) {
       const source = new EventSource(root + "events");
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
-      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-item", "iso-answer", "iso-done", "iso-stopped", "iso-failed", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "terminal"] satisfies EngineEvent["type"][];
+      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-item", "iso-answer", "iso-taken", "iso-done", "iso-stopped", "iso-failed", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "terminal"] satisfies EngineEvent["type"][];
       for (const type of types) source.addEventListener(type, on);
       return () => source.close();
     },

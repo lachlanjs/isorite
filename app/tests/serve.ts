@@ -62,6 +62,13 @@ async function provider(): Promise<void> {
       const id = /\bunderstand (\S+)/.exec(asked)![1]!;
       const call = { name: "write_understanding", arguments: JSON.stringify({ id, reading: "You can say what it measures, and why." }) };
       data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: call }] } }] });
+    } else if (/\bquestion (\S+)/.test(asked) && !looked) {
+      // M12: "question <id>" asks one back about the note; "offer <id>" offers your words for it.
+      const id = /\bquestion (\S+)/.exec(asked)![1]!;
+      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "ask_question", arguments: JSON.stringify({ title: `Why does ${id.split("/").at(-1)} hold?`, text: "", about: [id] }) } }] } }] });
+    } else if (/\boffer (\S+)/.test(asked) && !looked) {
+      const id = /\boffer (\S+)/.exec(asked)![1]!;
+      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "offer_text", arguments: JSON.stringify({ id, text: "Because it is so, in my words." }) } }] } }] });
     } else if (/\bedit (\S+)/.test(asked) && !looked) {
       // Write mode (M10): "edit <id>" changes its "Plain text." into Iso's words; "move <id> to <id>" asks first.
       const id = /\bedit (\S+)/.exec(asked)![1]!;

@@ -1,6 +1,7 @@
 <script lang="ts">
-  // The note's Understanding note (M10): Iso's reading of your understanding of the note, and your scratchpad, which
-  // Iso does not write: written in the note editor, Markdown and maths as you type, [[ to link a note (V9).
+  // The note's Understanding note (M10): Iso's reading of your understanding of the note, each part resting on
+  // evidence it links (your words, your questions, your problems: chips, M12), and your own part, which Iso does not
+  // write: part of the page, written in place in the note editor, Markdown and maths as you type, [[ to link (V9, V10).
   import type { UnderstandingReport } from "@isorite/engine";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
@@ -32,7 +33,7 @@
     editor = createEditor(host, {
       doc: pad,
       label: "Scratchpad",
-      placeholder: "Anything you like about this note. [[ links a note, $x$ is maths.",
+      placeholder: "…",
       notes: () => app.listing.notes.filter((n) => n.id !== id).map((n) => ({ id: n.id, title: n.title, folder: n.dir })),
       onChange: (text) => { pad = text; typing(); },
       onSave: () => { if (typed) void save(); },
@@ -66,7 +67,7 @@
   {#if problem}<p class="bad" role="alert">{problem}</p>{/if}
 
   <section>
-    <h2>Iso's reading of your understanding</h2>
+    <h2>Iso's reading</h2>
     {#if report?.reading}
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
       <div class="reading prose">{@html render(report.reading)}</div>
@@ -76,7 +77,7 @@
   </section>
 
   <section>
-    <h2><span>Scratchpad</span>{#if saving}<span class="state" class:bad={saving === "failed"} role="status">{saving === "failed" ? "not saved" : saving}</span>{/if}</h2>
+    <h2><span>Yours</span>{#if saving}<span class="state" class:bad={saving === "failed"} role="status">{saving === "failed" ? "not saved" : saving}</span>{/if}</h2>
     <div class="pad" bind:this={host} onfocusout={() => { if (typed) void save(); }}></div>
   </section>
 </article>
@@ -90,9 +91,12 @@
   h2 .state { order: 2; }
   .reading { font: 16px/1.6 var(--font-text); border-left: 2px solid var(--growth); padding-left: 14px; }
   .reading :global(p + p) { margin-top: 10px; }
-  .pad { min-height: 140px; background: var(--ground-1); border: 1px solid var(--line); padding: 6px 12px; }
-  .pad:focus-within { border-color: var(--line-strong); }
-  .pad :global(.cm-editor) { min-height: 126px; }
+  /* Its evidence: a chip for each note it rests on. */
+  .reading :global(a) { display: inline-block; padding: 0 6px; margin: 0 1px; border: 1px solid var(--line-strong); font: 12.5px/1.5 var(--font-ui); color: var(--text-soft); text-decoration: none; vertical-align: 1px; }
+  .reading :global(a:hover), .reading :global(a:focus-visible) { color: var(--lattice); border-color: var(--lattice); }
+  /* Yours is part of the page, in the note's own type, not a box. */
+  .pad { min-height: 120px; font: 16px/1.6 var(--font-text); }
+  .pad :global(.cm-editor) { min-height: 120px; }
   .bad { color: var(--rose); }
   @media (max-width: 600px) { .u { padding: 20px 20px 48px; } }
 </style>

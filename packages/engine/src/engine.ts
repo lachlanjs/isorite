@@ -3,7 +3,7 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  embedRefs, embedFor, spliceText, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
+  embedRefs, embedFor, slugify, spliceText, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
 import { Conflict, EngineError, type AgentLook, type AgentChange, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
@@ -844,8 +844,14 @@ export class Engine implements Api {
     });
   }
 
-  /** What was given, read now, as it is sent. A note that is gone is left out. */
-  private async sentOf(given: readonly Given[]): Promise<Sent[]> {
+  /** The questions still open about a note, by what they name and by embeds of them. */
+  private openAbout(id: string): { id: string; title: string }[] {
+    return [...this.bundle.concepts.values()].filter((c) => c.kind === "question" && !c.done && c.attached.includes(id)).map((c) => ({ id: c.id, title: c.title }));
+  }
+
+  /** What was given, read now, as it is sent. A note that is gone is left out. A note goes with the questions still
+   *  open about it, unless they were taken out (`q:<id>` in `off`). */
+  private async sentOf(given: readonly Given[], off: ReadonlySet<string> = new Set()): Promise<Sent[]> {
     const out: Sent[] = [];
     for (const g of given) {
       if (g.kind === "folder") {
@@ -861,7 +867,10 @@ export class Engine implements Api {
         continue;
       }
       if (g.kind === "passage") out.push({ kind: "passage", id: g.id, title: c.title, text: g.text });
-      else out.push({ kind: "note", id: g.id, title: c.title, text: (await this.readNote(g.id)).text });
+      else {
+        const open = this.openAbout(g.id).filter((q) => !off.has(`q:${q.id}`));
+        out.push({ kind: "note", id: g.id, title: c.title, text: (await this.readNote(g.id)).text, ...(c.kind !== "note" ? { of: c.kind } : {}), ...(open.length ? { open } : {}) });
+      }
     }
     return out;
   }
@@ -870,10 +879,17 @@ export class Engine implements Api {
     const mode = req.mode === "build" ? "ask" : req.mode;
     const all = req.conversation ? (await this.conversation(req.conversation))?.turns ?? [] : [];
     const off = new Set(req.off ?? []), earlier = all.filter((t) => !off.has(t.id));
-    const sent = await this.sentOf(this.given(req.given ?? []));
+    const given = this.given(req.given ?? []), sent = await this.sentOf(given, off);
     const { parts } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: req.lookup !== false, earlier, sent, asked: "" });
     // Each earlier turn can be left out (M9's switches, kept for the pane): what it adds, whole.
     const items = all.map((t): ContextItem => ({ id: t.id, kind: "exchange", title: t.asked, tokens: estimate(turnExchange(t).text), on: !off.has(t.id) }));
+    // The open questions about each note given, each sent or taken out (M12).
+    const asked = new Set<string>();
+    for (const g of given) if (g.kind === "note") for (const q of this.openAbout(g.id)) {
+      if (asked.has(q.id)) continue;
+      asked.add(q.id);
+      items.push({ id: `q:${q.id}`, kind: "question", title: q.title, tokens: estimate(`- ${q.title} (/${q.id}.md)`), on: !off.has(`q:${q.id}`) });
+    }
     return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: await this.sessionCost(), items, lookup: req.lookup !== false,
       given: sent.map((g) => ({ kind: g.kind, id: g.id, ...(g.kind === "passage" ? { text: g.text } : {}), tokens: estimate(sentText(g)) })) };
   }
@@ -902,7 +918,7 @@ export class Engine implements Api {
     const key = (await this.opts.secrets?.get(KEY)) ?? null;
     if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
     const off = new Set(req.off ?? []), earlier = ((await this.conversation(conversation))?.turns ?? []).filter((t) => !off.has(t.id));
-    const lookupOn = req.lookup !== false, mode = req.mode, sent = await this.sentOf(req.given), own = turnTools(mode, sent);
+    const lookupOn = req.lookup !== false, mode = req.mode, sent = await this.sentOf(req.given, off), own = turnTools(mode, sent);
     const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier, sent, asked: req.asked });
 
     // A turn is of the session as a journal entry is, and carries it on.
@@ -929,6 +945,7 @@ export class Engine implements Api {
       },
     };
 
+    const release = () => { this.running.delete(turn); this.conversing.delete(conversation); };
     void (async () => {
       try {
         const got = await rounds({
@@ -942,16 +959,18 @@ export class Engine implements Api {
         if (said) await item({ kind: "text", text: said });
         await line({ kind: "end", turn, state: "done", cost });
         if (cost.usd > 0) await this.one(async () => this.record({ event: "iso-turn", conversation, turn, session: s.session, model: cost.model, usd: cost.usd }));
+        // Free before it is said to be done, so a message sent at once is not refused.
+        release();
         this.publish({ type: "iso-done", request: turn, note: "", proposal: "", cost });
       } catch (err) {
         const stopped = abort.signal.aborted || (err as Error).name === "AbortError";
         const message = (err as Error).message || "Iso could not answer";
         await line(stopped ? { kind: "end", turn, state: "stopped" } : { kind: "end", turn, state: "failed", message }).catch(() => undefined);
+        release();
         if (stopped) this.publish({ type: "iso-stopped", request: turn, note: "" });
         else this.publish({ type: "iso-failed", request: turn, note: "", message });
       } finally {
-        this.running.delete(turn);
-        this.conversing.delete(conversation);
+        release();
         for (const [id, w] of this.waitingAnswer) if (w.turn === turn) { this.waitingAnswer.delete(id); w.settle("reject"); }
       }
     })();
@@ -1039,6 +1058,28 @@ export class Engine implements Api {
       await t.item({ kind: "change", note: id, entry: (await this.journal(id)).at(-1)?.id ?? "", why: "delete", title: before, added: 0, removed: now.text.split("\n").length });
       return `Deleted ${before}. Its history stays.`;
     }
+    if (name === "ask_question") {
+      const asked = String(args.title ?? "").trim().replace(/\s+/g, " ").slice(0, 200);
+      if (!asked) return "Give the question, in title.";
+      const about = [...new Set((Array.isArray(args.about) ? args.about : [args.about]).map((a) => noteId(this.bundle, a)).filter((a): a is string => Boolean(a)))];
+      if (!about.length) return "Give the ids of the notes it is about, in about.";
+      const body = String(args.text ?? "").trim().slice(0, 4000);
+      const q: Extract<TurnItem, { kind: "question" }> = { kind: "question", id: newId(this.opts.clock.now()), title: asked, text: body, about };
+      // Where Iso may change the notes it makes the question itself; elsewhere it is offered, for you to make.
+      if (t.mode !== "write") { await t.item(q); return "It is put to them. They can make it a question note."; }
+      const made = await this.one(() => this.makeQuestion(q, t.who, t.asked));
+      await t.item({ ...q, made: made.id });
+      if (made.entry) await t.item({ kind: "change", note: made.id, entry: made.entry, why: "create", title: asked, ...counted("", made.text) });
+      return `Made the question ${asked} (/${made.id}.md).`;
+    }
+    if (name === "offer_text") {
+      const id = noteId(this.bundle, args.id);
+      if (!id) return `There is no note ${String(args.id ?? "")}.`;
+      const text = String(args.text ?? "").trim().slice(0, 8000);
+      if (!text) return "Give the passage, in text.";
+      await t.item({ kind: "offer", id: newId(this.opts.clock.now()), note: id, text });
+      return `It is offered to them for ${title(id)}.`;
+    }
     if (name === "write_understanding") {
       const id = noteId(this.bundle, args.id);
       if (!id) return `There is no note ${String(args.id ?? "")}.`;
@@ -1069,6 +1110,38 @@ export class Engine implements Api {
     const title = this.bundle.concepts.get(note)?.title ?? note;
     await this.one(() => this.put(uid, understandingText(note, title, { ...parseUnderstanding(was?.text ?? null), scratchpad }), base));
     return this.understanding(note);
+  }
+
+  /** A question asked in a turn, made a question note: in the folder of the first note it is about, named by its
+   *  title. */
+  private async makeQuestion(q: Extract<TurnItem, { kind: "question" }>, who: string, asked?: string): Promise<{ id: string; text: string; entry?: string }> {
+    const dir = q.about[0]!.split("/").slice(0, -1).join("/"), name = slugify(q.title).slice(0, 60).replace(/-+$/, "") || "question";
+    let id = "";
+    for (let n = 1; !id || this.bundle.concepts.has(id); n++) id = [dir, n === 1 ? name : `${name}-${n}`].filter(Boolean).join("/");
+    const text = `---\ntype: Question\ntitle: ${JSON.stringify(q.title)}\nabout: [${q.about.join(", ")}]\n---\n\n${q.text ? `${q.text}\n` : ""}`;
+    const saved = await this.put(id, text, null, "edit", asked ? { asked } : {}, who);
+    return { id, text, ...(saved.entry ? { entry: saved.entry } : {}) };
+  }
+
+  /** Take what Iso put to you in a turn (M12): a question, made a question note as yours; or an offer of your own
+   *  answers, inserted at the end of its note as yours. */
+  async takeItem(conversation: string, turn: string, item: string): Promise<{ note: string }> {
+    const c = await this.conversation(conversation);
+    const t = c?.turns.find((x) => x.id === turn);
+    const i = t?.items.find((x) => (x.kind === "question" || x.kind === "offer") && x.id === item) as Extract<TurnItem, { kind: "question" | "offer" }> | undefined;
+    if (!i) throw new EngineError("there is no such question or offer in that turn", 404);
+    if (i.kind === "question" ? i.made : i.taken) throw new EngineError(i.kind === "question" ? "that question is a note already" : "that was inserted already", 409);
+    let note: string;
+    if (i.kind === "question") note = (await this.one(() => this.makeQuestion(i, "you"))).id;
+    else {
+      if (!this.bundle.concepts.has(i.note)) throw new EngineError("the note it was for is gone", 409);
+      const now = await this.readNote(i.note);
+      await this.one(() => this.put(i.note, `${now.text.replace(/\s*$/, "")}\n\n${i.text}\n`, now.version));
+      note = i.note;
+    }
+    await this.one(() => this.opts.own.append(conversationPath(conversation), JSON.stringify({ kind: "taken", turn, item, note } satisfies TurnLine) + "\n"));
+    this.publish({ type: "iso-taken", request: turn, conversation, item, note });
+    return { note };
   }
 
   async undoTurn(conversation: string, turn: string): Promise<{ notes: string[]; left: string[] }> {

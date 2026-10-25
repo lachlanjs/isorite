@@ -145,6 +145,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   post("/api/iso/converse", TurnAsk, (_c, b) => api.converse(b));
   app.get("/api/understanding", (c) => answer(c, () => api.understanding(id(c))));
   post("/api/understanding/scratchpad", z.object({ scratchpad: z.string().max(200_000), base: z.string().max(64).nullable() }).strict(), (c, b) => api.saveScratchpad(id(c), b.scratchpad, b.base));
+  post("/api/iso/take", z.object({ conversation: z.string().max(64), turn: z.string().max(64), item: z.string().max(64) }).strict(), (_c, b) => api.takeItem(b.conversation, b.turn, b.item));
   post("/api/iso/undo", z.object({ conversation: z.string().max(64), turn: z.string().max(64) }).strict(), (_c, b) => api.undoTurn(b.conversation, b.turn));
   post("/api/iso/answer", z.object({ turn: z.string().max(64), permission: z.string().max(64), decision: z.enum(["once", "always", "reject"]) }).strict(), (_c, b) => api.answer(b.turn, b.permission, b.decision));
   app.get("/api/conversation", (c) => answer(c, async () => (await api.conversation(c.req.query("id") || undefined)) ?? { id: "", turns: [] }));

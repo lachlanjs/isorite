@@ -72,7 +72,11 @@
   {/if}
 {/snippet}
 
-{#snippet item(i: TurnItem)}
+{#snippet qmark()}
+  <svg class="qm" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M5.6 5.6a2.4 2.4 0 1 1 3.4 2.2c-.6.3-1 .8-1 1.5v.9" /><path d="M8 12v1.2" /></svg>
+{/snippet}
+
+{#snippet item(t: Turn, i: TurnItem)}
   {#if i.kind === "text"}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
     <div class="said prose">{@html render(i.text)}</div>
@@ -101,6 +105,22 @@
     <p class="faint undone">{i.notes.length ? `Undone: ${i.notes.map(titleOf).join(", ")} put back.` : "Nothing was put back."}{i.left.length ? ` Left as they are, changed since: ${i.left.map(titleOf).join(", ")}.` : ""}</p>
   {:else if i.kind === "point"}
     <p class="point"><span class="dia" aria-hidden="true">◆</span><span class="v">look at</span><button type="button" class="note-link" onclick={() => open(i.note)}>{titleOf(i.note)}</button>{#if i.why}<span class="why">{i.why}</span>{/if}</p>
+  {:else if i.kind === "question"}
+    <!-- A question Iso asks back (M12): a question note once made; until then, + makes it one, yours. -->
+    <div class="asks" data-question={i.id}>
+      <p>{@render qmark()}{#if i.made}<button type="button" class="note-link" onclick={() => open(i.made!)}>{i.title}</button>{:else}<span class="qt">{i.title}</span>
+        <button class="icon plus" type="button" aria-label="Keep “{i.title}” as an open question" title="Keep as an open question about {i.about.map(titleOf).join(", ")}" onclick={() => void converse.take(t.id, i.id)}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10" /></svg></button>{/if}</p>
+      {#if i.text}<p class="qb">{i.text}</p>{/if}
+    </div>
+  {:else if i.kind === "offer"}
+    <!-- Your own answers, joined by Iso (M12): inserted at the end of the note, as yours. -->
+    <div class="offer" data-offer={i.id}>
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
+      <div class="prose yours">{@html render(i.text)}</div>
+      <p class="for"><button type="button" class="note-link" onclick={() => open(i.note)}>{titleOf(i.note)}</button>
+        {#if i.taken}<svg class="in" viewBox="0 0 16 16" width="14" height="14" role="img" aria-label="Inserted" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8.5l3 3 7-7" /></svg>
+        {:else}<button class="icon" type="button" aria-label="Insert into {titleOf(i.note)} as yours" title="Insert at the end of {titleOf(i.note)}, as yours" onclick={() => void converse.take(t.id, i.id)}><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13 3v6H4" /><path d="M7 6L4 9l3 3" /></svg></button>{/if}</p>
+    </div>
   {/if}
 {/snippet}
 
@@ -134,9 +154,9 @@
             <p class="part"><span>{p.name}</span><span class="faint">{p.detail}</span><span class="grow"></span><span class="num">{short(p.tokens)}</span></p>
           {/each}
           {#if converse.report.items.length}
-            <p class="faint sub">earlier turns, each sent or left out</p>
+            <span class="sub"></span>
             {#each converse.report.items as it (it.id)}
-              <p class="part"><span class="t" class:off={!it.on}>{it.title}</span><span class="grow"></span><span class="num">{short(it.tokens)}</span>
+              <p class="part" class:q={it.kind === "question"} title={it.kind === "question" ? "An open question about a note you gave" : "An earlier turn"}>{#if it.kind === "question"}{@render qmark()}{:else}<span class="mk" aria-hidden="true">›</span>{/if}<span class="t" class:off={!it.on}>{it.title}</span><span class="grow"></span><span class="num">{short(it.tokens)}</span>
                 <button class="sw" type="button" role="switch" aria-checked={it.on} aria-label="Send: {it.title}" onclick={() => converse.toggleTurn(it.id)}><i></i></button></p>
             {/each}
           {/if}
@@ -150,7 +170,7 @@
       {#each converse.turns as t (t.id)}
         <article class="turn" data-state={t.state}>
           <div class="you"><p class="asked">{t.asked}</p>{@render given(t)}{#if t.mode === "write"}<span class="tmode" title="Iso could edit the notes"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 13.5l2.5-2.5M5 11c.6-4.2 3.6-7.4 8.5-8.5C12.6 7.2 9.4 10.4 5 11zM7.2 8.8l2.6-.3M8.8 6.6l2.4-.4" /></svg><span class="hidden-label">write</span></span>{/if}</div>
-          {#each t.items as i, k (k)}{@render item(i)}{/each}
+          {#each t.items as i, k (k)}{@render item(t, i)}{/each}
           {#if t.state === "running"}
             {#if converse.streaming}
               <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
@@ -286,6 +306,20 @@
   .part .t.off { color: var(--text-faint); text-decoration: line-through; }
   .part .num { font-variant-numeric: tabular-nums; color: var(--text-faint); }
   .sub { margin-top: 6px; }
+  .part .mk { color: var(--lattice); width: 13px; flex: none; text-align: center; }
+  .qm { flex: none; color: var(--rose); }
+  .asks { padding-left: 16px; display: grid; gap: 2px; font-size: 13px; }
+  .asks p { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .asks .qm { margin-left: -17px; margin-right: 4px; }
+  .asks .qt { color: var(--text); overflow-wrap: anywhere; }
+  .asks .note-link { color: var(--text); }
+  .asks .qb { color: var(--text-soft); font-size: 12.5px; display: block; }
+  .asks .plus { width: 22px; height: 22px; flex: none; color: var(--rose); }
+  .offer { margin-left: 16px; border-left: 2px solid var(--line-strong); padding: 2px 0 2px 12px; display: grid; gap: 4px; }
+  .offer .yours { font: 15px/1.6 var(--font-text); color: var(--text); overflow-wrap: anywhere; }
+  .offer .for { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-faint); }
+  .offer .for .icon { width: 24px; height: 24px; color: var(--lattice); }
+  .offer .in { color: var(--malachite); }
   .sw { width: 26px; height: 14px; flex: none; background: var(--ground-2); border: 1px solid var(--line-strong); padding: 0; position: relative; cursor: pointer; }
   .sw i { position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; background: var(--text-faint); transition: left 0.15s; }
   .sw[aria-checked="true"] i { left: 14px; background: var(--growth); }

@@ -64,3 +64,39 @@ test("a problem using the note open is made from the Note pane's settings, untit
   expect(file).toContain("uses: [basics/bit]\n");
   await remove(page, `basics/two-coins-${name}`);
 });
+
+test("Iso asks a question back: + keeps it as an open question, yours; your words offered back are inserted as yours", async ({ page }) => {
+  const name = `${test.info().project.name}-${Date.now().toString(36)}`, n = `channels/asked-${name}`;
+  await make(page, n, `---\ntype: Concept\ntitle: Asked ${name}\n---\n\nPlain.\n`);
+  await page.goto(`#/n/${n}`);
+  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Plain.");
+  if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
+  const box = page.getByRole("textbox", { name: "Message Iso" }), log = page.getByRole("log", { name: "The conversation with Iso" });
+  // A conversation of its own: the projects run side by side on one server.
+  const fresh = page.locator('[data-pane="iso"]').getByRole("button", { name: "A new conversation" });
+  if (await fresh.isEnabled()) await fresh.click();
+  await box.fill(`question ${n}`);
+  await box.press("Enter");
+  const asked = log.locator(".turn").last();
+  await expect(asked).toHaveAttribute("data-state", "done");
+  const q = `Why does asked-${name} hold?`;
+  await expect(asked.locator(".asks")).toContainText(q);
+  await asked.getByRole("button", { name: `Keep “${q}” as an open question` }).click();
+  const made = asked.locator(".asks").getByRole("button", { name: q, exact: true });
+  await expect(made).toBeVisible();
+  const file = ((await (await page.request.get(`api/note?id=channels/why-does-asked-${name}-hold`)).json()) as { text: string }).text;
+  expect(file).toContain(`type: Question\ntitle: "${q}"\nabout: [${n}]\n`);
+
+  await box.fill(`offer ${n}`);
+  await box.press("Enter");
+  const offered = log.locator(".turn").last();
+  await expect(offered).toHaveAttribute("data-state", "done");
+  await expect(offered.locator(".offer .yours")).toHaveText("Because it is so, in my words.");
+  await page.screenshot({ path: `test-results/screens/${test.info().project.name}-iso-asks-back.png`, fullPage: true });
+  await offered.getByRole("button", { name: `Insert into Asked ${name} as yours` }).click();
+  await expect(offered.getByRole("img", { name: "Inserted" })).toBeVisible();
+  const after = ((await (await page.request.get(`api/note?id=${n}`)).json()) as { text: string }).text;
+  expect(after).toBe(`---\ntype: Concept\ntitle: Asked ${name}\n---\n\nPlain.\n\nBecause it is so, in my words.\n`);
+  await remove(page, `channels/why-does-asked-${name}-hold`);
+  await remove(page, n);
+});

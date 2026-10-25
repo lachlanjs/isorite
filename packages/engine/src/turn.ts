@@ -37,8 +37,13 @@ export type TurnItem =
   | { kind: "point"; note: string; why: string }
   /** You undid the turn's changes: the notes put back, and those that had changed since and were left. */
   | { kind: "undone"; notes: string[]; left: string[] }
+  /** A question Iso asks back (M12), about notes of the base: a question note once `made`, by Iso where it may
+   *  change the notes, or by you from the turn. */
+  | { kind: "question"; id: string; title: string; text: string; about: string[]; made?: string }
+  /** Your own answers, joined by Iso into a remark for a note (M12): yours once you insert it (`taken`). */
+  | { kind: "offer"; id: string; note: string; text: string; taken?: boolean };
 
-const ITEMS: readonly string[] = ["text", "look", "change", "permission", "point", "undone"];
+const ITEMS: readonly string[] = ["text", "look", "change", "permission", "point", "undone", "question", "offer"];
 
 export type Decision = "once" | "always" | "reject";
 
@@ -63,6 +68,8 @@ export type TurnLine =
   | ({ kind: "turn" } & Omit<Turn, "items" | "state" | "message" | "cost">)
   | { kind: "item"; turn: string; item: TurnItem }
   | { kind: "answer"; turn: string; permission: string; decision: Decision }
+  /** A question made a note, or an offer inserted, by you. */
+  | { kind: "taken"; turn: string; item: string; note: string }
   | { kind: "end"; turn: string; state: Exclude<Turn["state"], "running">; message?: string; cost?: Cost };
 
 export const CONVERSATIONS_DIR = "conversations";
@@ -86,6 +93,7 @@ export function readTurns(text: string): Turn[] {
     // Items of kinds there are no longer (what Understand mode recorded, before M12) are passed over.
     if (line.kind === "item") { if (ITEMS.includes(line.item.kind)) t.items.push(line.item); }
     else if (line.kind === "answer") { for (const i of t.items) if (i.kind === "permission" && i.id === line.permission) i.answer = line.decision; }
+    else if (line.kind === "taken") { for (const i of t.items) if (i.kind === "question" && i.id === line.item) i.made = line.note; else if (i.kind === "offer" && i.id === line.item) i.taken = true; }
     else { t.state = line.state; if (line.message) t.message = line.message; if (line.cost) t.cost = line.cost; }
   }
   // A turn never ended (the program stopped while Iso worked) was stopped.
@@ -148,8 +156,33 @@ far, from its Understanding note.
 - At the end of a conversation about a note, or when your reading of them has
   changed, rewrite your reading with write_understanding: a few plain
   sentences on what they can do with the note and what they have not yet
-  shown. It is theirs to read.
+  shown. It is theirs to read. Rest each sentence on evidence they can open,
+  linked: what they wrote in a note, a question of theirs open or resolved,
+  a problem solved or not. Say nothing the evidence does not show.
 - Never invent a note, a link or a quotation.`;
+
+const ASKING = (write: boolean) => `# Asking back, and their own answers
+
+- Where a question to them would do more than an answer (what is unclear in
+  a note, a step left unstated, a case not yet thought through), ask it with
+  ask_question: a short title in their words, a line or two of body, and the
+  notes it is about.${write ? " It is made a question note in their base." : " They can make it a question note in their base."}
+  One or two at most. Not for what you could simply tell them.
+- Where they have answered a question in what they wrote to you, and their
+  answer belongs in a note, offer it with offer_text: their own sentences,
+  joined lightly, nothing of yours added. They insert it as theirs, or not.`;
+
+const CHECKING = `# Checking a solution
+
+A problem of theirs is in hand, with what they have written towards solving it.
+Check it, step by step.
+
+- Say what holds, plainly, and where a step does not follow, say which and
+  why.
+- Where the solution leans on something it does not state, ask about it with
+  ask_question rather than supplying it.
+- Never say it is solved, and never change whether it is marked solved: that
+  is theirs alone.`;
 
 const MODE_RULES: Record<Exclude<Mode, "build">, string> = { ask: ASK, write: WRITE };
 
@@ -178,13 +211,17 @@ export const WRITE_NOTE = fn("write_note", "Make a new note, or write a note's w
 export const MOVE_NOTE = fn("move_note", "Move or rename a note. Links to it are changed to match. They are asked first.",
   { id: str, to: { ...str, description: "Its new id: folder/name." } }, ["id", "to"]);
 export const DELETE_NOTE = fn("delete_note", "Delete a note. They are asked first. Its history stays.", { id: str }, ["id"]);
-export const WRITE_UNDERSTANDING = fn("write_understanding", "Rewrite your reading of their understanding of one note: a few plain sentences on what they can do with it and what they have not yet shown. Replaces the reading you had.",
+export const WRITE_UNDERSTANDING = fn("write_understanding", "Rewrite your reading of their understanding of one note: a few plain sentences on what they can do with it and what they have not yet shown, each resting on evidence linked as [their words](/id.md), [a question](/id.md) or [a problem](/id.md). Replaces the reading you had.",
   { id: { ...str, description: "The note's id." }, reading: str }, ["id", "reading"]);
+export const ASK_QUESTION = fn("ask_question", "Ask them a question back, kept as an open question in their base, about one or more of their notes.",
+  { title: { ...str, description: "The question, short, ending in a question mark." }, text: { ...str, description: "A line or two on what is asked, or empty." }, about: { type: "array", items: str, description: "The ids of the notes it is about." } }, ["title", "text", "about"]);
+export const OFFER_TEXT = fn("offer_text", "Offer them their own answers, lightly joined, to insert at the end of a note as their writing. Only their words.",
+  { id: { ...str, description: "The note's id." }, text: { ...str, description: "The passage, in Markdown." } }, ["id", "text"]);
 
 /** The tools each mode adds to looking things up. */
 export const MODE_TOOLS: Record<Exclude<Mode, "build">, ToolDef[]> = {
-  ask: [POINT_TO_NOTE],
-  write: [EDIT_NOTE, WRITE_NOTE, MOVE_NOTE, DELETE_NOTE, POINT_TO_NOTE],
+  ask: [POINT_TO_NOTE, ASK_QUESTION, OFFER_TEXT],
+  write: [EDIT_NOTE, WRITE_NOTE, MOVE_NOTE, DELETE_NOTE, POINT_TO_NOTE, ASK_QUESTION, OFFER_TEXT],
 };
 
 /** A turn's own tools: its mode's, and with an Understanding note given, the one that rewrites Iso's reading. */
@@ -194,14 +231,18 @@ export function turnTools(mode: Exclude<Mode, "build">, sent: readonly Sent[]): 
 
 /** A note, folder or passage as it is sent: what was given, read now. */
 export type Sent =
-  | { kind: "note"; id: string; title: string; text: string }
+  /** A note; a problem says so (`of`); the questions about it still open go with it (`open`). */
+  | { kind: "note"; id: string; title: string; text: string; of?: "question" | "problem"; open?: { id: string; title: string }[] }
   | { kind: "folder"; id: string; notes: { id: string; title: string; description: string }[] }
   | { kind: "passage"; id: string; title: string; text: string }
   /** Iso's reading of their understanding of a note (its Understanding note). */
   | { kind: "understanding"; id: string; title: string; reading: string };
 
 export function sentText(s: Sent): string {
-  if (s.kind === "note") return `## ${s.title} (/${s.id}.md)\n\n${windowed(s.text.split("\n"), [0])}`;
+  if (s.kind === "note") {
+    const open = s.open?.length ? `\n\nOpen questions about it:\n${s.open.map((q) => `- ${q.title} (/${q.id}.md)`).join("\n")}` : "";
+    return `## ${s.of === "problem" ? "A problem: " : s.of === "question" ? "A question: " : ""}${s.title} (/${s.id}.md)\n\n${windowed(s.text.split("\n"), [0])}${open}`;
+  }
   if (s.kind === "passage") return `## A passage they chose in ${s.title} (/${s.id}.md)\n\n${s.text.split("\n").map((l) => `> ${l}`).join("\n")}`;
   if (s.kind === "folder") return `## The folder ${s.id || "at the top of the base"}: its notes\n\n${s.notes.map((n) => `- ${n.title} (/${n.id}.md)${n.description ? `: ${n.description}` : ""}`).join("\n") || "(empty)"}`;
   return `## Their understanding of ${s.title} (/${s.id}.md)\n\nYour reading so far: ${s.reading || "none yet."}`;
@@ -211,10 +252,11 @@ export function sentText(s: Sent): string {
 export function turnExchange(t: Turn): Exchange {
   const text = t.items.filter((i) => i.kind === "text").map((i) => i.text).join("\n\n").trim();
   const changed = t.items.flatMap((i) => (i.kind === "change" ? [`${i.why === "create" ? "made" : i.why === "delete" ? "deleted" : i.why === "move" ? "moved" : "changed"} ${i.title} (/${i.note}.md)`] : []));
+  const asked = t.items.flatMap((i) => (i.kind === "question" ? [`You asked them: ${i.title}${i.made ? ` (/${i.made}.md)` : ""}.`] : i.kind === "offer" ? [`You offered them a passage for /${i.note}.md, which they ${i.taken ? "inserted" : "have not inserted"}.`] : []));
   const gave = t.given.filter((g) => g.kind !== "understanding").map((g) => (g.kind === "passage" ? `a passage of /${g.id}.md` : `/${g.id}${g.kind === "note" ? ".md" : "/"}`));
   return {
     id: t.id, note: "",
-    text: `In ${t.mode} mode they asked${gave.length ? `, giving you ${gave.join(", ")}` : ""}: ${t.asked}\n\nYou wrote:\n\n${text || "(nothing)"}\n\n${changed.length ? `You ${changed.join("; ")}.` : t.state === "done" ? "" : `The turn was ${t.state}.`}`.trim(),
+    text: `In ${t.mode} mode they asked${gave.length ? `, giving you ${gave.join(", ")}` : ""}: ${t.asked}\n\nYou wrote:\n\n${text || "(nothing)"}\n\n${changed.length ? `You ${changed.join("; ")}.` : t.state === "done" ? "" : `The turn was ${t.state}.`}${asked.length ? `\n\n${asked.join("\n")}` : ""}`.trim(),
   };
 }
 
@@ -231,7 +273,8 @@ export interface AskedTurn {
 /** The messages for a turn, and what they hold, part by part. */
 export function turnMessages(a: AskedTurn): { messages: Message[]; parts: Part[] } {
   const understood = a.sent.filter((s) => s.kind === "understanding");
-  const system = [WHO, MODE_RULES[a.mode], ...(understood.length ? [UNDERSTANDING] : []), FORMAT_RULES, LOOKING(ROUNDS[a.tier], a.meaning, a.lookup)].join("\n\n");
+  const checking = a.sent.some((s) => s.kind === "note" && s.of === "problem");
+  const system = [WHO, MODE_RULES[a.mode], ASKING(a.mode === "write"), ...(checking ? [CHECKING] : []), ...(understood.length ? [UNDERSTANDING] : []), FORMAT_RULES, LOOKING(ROUNDS[a.tier], a.meaning, a.lookup)].join("\n\n");
   const talk = conversation(a.earlier.map(turnExchange));
   const earlier = talk ? `# Earlier in this conversation\n\n${talk}` : "";
   const given = a.sent.filter((s) => s.kind !== "understanding");
@@ -241,7 +284,7 @@ export function turnMessages(a: AskedTurn): { messages: Message[]; parts: Part[]
   return {
     messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [earlier, known, gave, request].filter(Boolean).join("\n\n") }],
     parts: [
-      { name: "instructions and tools", detail: `${a.mode} mode${a.lookup ? "" : ", no look-ups"}`, tokens: estimate(system) + (a.lookup ? 500 : 0) + turnTools(a.mode, a.sent).length * 120 },
+      { name: "instructions and tools", detail: `${a.mode} mode${checking ? ", checking" : ""}${a.lookup ? "" : ", no look-ups"}`, tokens: estimate(system) + (a.lookup ? 500 : 0) + turnTools(a.mode, a.sent).length * 120 },
       { name: "earlier in this conversation", detail: a.earlier.length ? `${a.earlier.length} ${a.earlier.length === 1 ? "turn" : "turns"}` : "", tokens: estimate(earlier) },
       { name: "what you gave", detail: given.length ? `${given.length} ${given.length === 1 ? "part" : "parts"}` : "nothing", tokens: estimate(gave) },
       ...(understood.length ? [{ name: "your understanding" as const, detail: `${understood.length} ${understood.length === 1 ? "note" : "notes"}`, tokens: estimate(known) }] : []),
