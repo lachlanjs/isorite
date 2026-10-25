@@ -26,6 +26,8 @@ export interface ServerOptions {
   notes?: string;
   /** The terminal's session, when `isorite term` attaches one (M11). */
   terminal?: Terminal;
+  /** The provider, relayed at /api/gateway for OpenCode: it asks with the token as its key (M13). */
+  gateway?: (path: string, req: Request) => Promise<Response>;
 }
 
 const TYPES: Record<string, string> = {
@@ -66,7 +68,7 @@ const AgentEdit = z.union([
 const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal, gateway }: ServerOptions): Hono {
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -109,6 +111,15 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   const id = (c: Context): string => c.req.query("id") ?? "";
 
   app.use("/api/*", async (c, next) => (hostOk(c) ? next() : refuse(c, 403, NOT_HERE)));
+
+  // The provider, for OpenCode: with its certificate, headers, query and key added here, so that OpenCode is given
+  // none of them. It asks as an OpenAI-compatible client does, with the token as its Bearer key, and no Origin; a
+  // page on another site cannot send that header without a preflight, which this server does not answer.
+  app.on(["GET", "POST"], "/api/gateway/*", (c) => {
+    if (!gateway) return refuse(c, 404, "this server relays no provider");
+    if (c.req.header("authorization") !== `Bearer ${token}`) return refuse(c, 403, "bad token");
+    return gateway(c.req.path.slice("/api/gateway".length), c.req.raw);
+  });
 
   // The token is given to the page that asks from this origin. Another site's page cannot read the reply.
   app.get("/api/session", (c) => answer(c, async () => ({ ...(await api.session()), token })));

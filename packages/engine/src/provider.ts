@@ -25,6 +25,16 @@ export interface ProviderConfig {
   /** Where the person signs in for the provider to make a key and hand it here (OAuth with PKCE); its codes are
    *  exchanged at `url` + /auth/keys. Without it, a key can only be pasted. */
   auth?: string;
+  /** Sent with every request: what a company's gateway may want besides the key (a team, a project). */
+  headers?: Record<string, string>;
+  /** The header the key goes in, as it is (`api-key`), in place of `Authorization: Bearer`. */
+  keyHeader?: string;
+  /** Added to every request's address (`api-version`). */
+  query?: Record<string, string>;
+  /** false for a gateway that refuses `stream_options`: the turns then cost what the prices say, or nothing. */
+  streamUsage?: boolean;
+  /** The tiers are OpenRouter's, kept because none were named for this provider: a 404 says so. */
+  defaultTiers?: boolean;
 }
 
 export const OPENROUTER: ProviderConfig = {
@@ -133,19 +143,26 @@ const wire = (marks: boolean) => (m: Message) => m.role === "tool" ? { role: "to
 
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
+/** The address of `path` at the provider, and the headers that go with every request to it: its key, where it
+ *  wants it, and its own. */
+export function endpoint(p: ProviderConfig, key: string | null, path: string): { url: string; headers: Record<string, string> } {
+  const url = new URL(p.url.replace(/\/+$/, "") + path);
+  for (const [name, value] of Object.entries(p.query ?? {})) url.searchParams.set(name, value);
+  const auth: Record<string, string> = !key ? {} : p.keyHeader ? { [p.keyHeader]: key } : { Authorization: `Bearer ${key}` };
+  return { url: url.toString(), headers: { ...p.headers, ...auth, "X-Title": "isorite" } };
+}
+
 /** Call the model, streaming. */
 export async function complete(http: Http, p: ProviderConfig, key: string | null, call: Call): Promise<Reply> {
   const body = JSON.stringify({
-    model: call.model, messages: call.messages.map(wire(p.cacheMarks)), stream: true, stream_options: { include_usage: true },
+    model: call.model, messages: call.messages.map(wire(p.cacheMarks)), stream: true, ...(p.streamUsage === false ? {} : { stream_options: { include_usage: true } }),
     ...(call.maxTokens ? { max_tokens: call.maxTokens } : {}),
     ...(call.tools?.length ? { tools: call.tools, tool_choice: call.toolChoice ?? "auto" } : {}),
   });
   let res: Response;
   try {
-    res = await http.fetch(p.url.replace(/\/+$/, "") + "/chat/completions", {
-      method: "POST", body, signal: call.signal ?? null,
-      headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}), "X-Title": "isorite" },
-    });
+    const to = endpoint(p, key, "/chat/completions");
+    res = await http.fetch(to.url, { method: "POST", body, signal: call.signal ?? null, headers: { "Content-Type": "application/json", ...to.headers } });
   } catch (err) {
     if ((err as Error).name === "AbortError") throw err;
     throw new ModelError(`${p.name} could not be reached: ${unreachable(err, p.url)}`, 502);
@@ -156,7 +173,7 @@ export async function complete(http: Http, p: ProviderConfig, key: string | null
       const said = await res.text();
       try { const j = JSON.parse(said) as { error?: { message?: string } | string; message?: string }; detail = (typeof j.error === "string" ? j.error : j.error?.message) ?? j.message ?? ""; } catch { detail = said.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300); }
     } catch { /* none */ }
-    const advice = res.status === 401 ? " The key was not accepted: set it again in settings." : res.status === 402 ? " The key's credit is spent." : res.status === 404 ? ` ${p.name} may have no model called ${call.model}.` : "";
+    const advice = res.status === 401 ? " The key was not accepted: set it again in settings." : res.status === 402 ? " The key's credit is spent." : res.status === 404 ? ` ${p.name} may have no model called ${call.model}${p.defaultTiers ? ", which is OpenRouter's name for it: name this provider's models under [tiers] in config.toml" : ""}.` : "";
     throw new ModelError(`${p.name} said ${res.status}${detail ? `: ${detail}` : ""}.${advice}`, res.status === 401 || res.status === 403 ? 409 : 502);
   }
 

@@ -7,8 +7,9 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve as nodeServe } from "@hono/node-server";
 import { CONFIG_FILE, GITATTRIBUTES, OWN_DIR, StudyError } from "@isorite/core";
-import { Engine, systemClock, type Http } from "@isorite/engine";
-import { ConfigSecrets, configPath, deviceId, providerConfig } from "./config.ts";
+import { Engine, KEY, systemClock, type Http } from "@isorite/engine";
+import { ConfigSecrets, configPath, deviceId, gatewayTls, providerConfig } from "./config.ts";
+import { gatewayHttp, relay } from "./gateway.ts";
 import { cacheDir, modelDir, nodeEmbedder } from "./embedder.ts";
 import { LOOPBACK, createApp } from "./http.ts";
 import { Terminal } from "./terminal.ts";
@@ -34,7 +35,8 @@ export function locate(path: string): Opened {
   return { notes: at };
 }
 
-export async function openEngine({ notes }: Opened, device = deviceId(), config = configPath(), http: Http = { fetch: (input, init) => fetch(input, init) }, model: string | null = modelDir()): Promise<Engine> {
+export async function openEngine({ notes }: Opened, device = deviceId(), config = configPath(), http?: Http, model: string | null = modelDir()): Promise<Engine> {
+  const provider = providerConfig(config);
   // isorite's own folder, made the first time a base is opened, with what lets two devices' journals merge.
   const own = join(notes, OWN_DIR);
   if (!existsSync(own)) { mkdirSync(own, { recursive: true }); writeFileSync(join(own, ".gitattributes"), GITATTRIBUTES); }
@@ -43,7 +45,7 @@ export async function openEngine({ notes }: Opened, device = deviceId(), config 
     notes: new NodeFiles(notes), own: new NodeFiles(own), clock: systemClock, device, name: basename(notes),
     // Started by isorite --tutorial: the app walks you through the base.
     tutorial: process.env.ISORITE_TUTORIAL === "1",
-    http, secrets: new ConfigSecrets(config), provider: providerConfig(config),
+    http: http ?? gatewayHttp(provider, gatewayTls(config)), secrets: new ConfigSecrets(config), provider,
     // The repository code links point into (M12): named in .isorite/settings.toml, from the notes folder.
     repository: (path) => { const dir = resolve(notes, path); return existsSync(dir) && statSync(dir).isDirectory() ? new NodeFiles(dir) : null; },
     // Search by meaning, where the model is installed (npm run model). Its vectors are a cache of this base's
@@ -54,10 +56,13 @@ export async function openEngine({ notes }: Opened, device = deviceId(), config 
 
 export async function serve(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[] } = {}): Promise<void> {
   const opened = locate(path);
-  const api = await openEngine(opened);
+  const config = configPath(), provider = providerConfig(config), http = gatewayHttp(provider, gatewayTls(config));
+  const api = await openEngine(opened, deviceId(config), config, http);
+  // The provider is relayed to OpenCode only on this machine: from a tailnet it would be anyone's to use.
+  const secrets = new ConfigSecrets(config), gateway = LOOPBACK.has(host) ? relay(provider, http, () => secrets.get(KEY)) : undefined;
   const web = existsSync(join(WEB_DIR, "index.html")) ? WEB_DIR : null;
   const terminal = new Terminal();
-  const app = createApp({ api, token: randomBytes(24).toString("base64url"), loopback: LOOPBACK.has(host), web, allowHosts, notes: opened.notes, terminal });
+  const app = createApp({ api, token: randomBytes(24).toString("base64url"), loopback: LOOPBACK.has(host), web, allowHosts, notes: opened.notes, terminal, gateway });
   const server = nodeServe({ fetch: app.fetch, hostname: host, port });
   server.on("error", (e: NodeJS.ErrnoException) => {
     console.error(e.code === "EADDRINUSE" ? `port ${port} is in use (isorite serve --port <n>)` : e.message);

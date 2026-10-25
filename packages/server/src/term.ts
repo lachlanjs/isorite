@@ -17,7 +17,7 @@ import { StudyError } from "@isorite/core";
 import { NAME } from "@isorite/example";
 import { writeExample } from "@isorite/example/node";
 import { defaultHome, findOpenCode, GATEWAY_KEY, gatewayFrom, startScripted, tutorialScript, writeHome, type Gateway } from "@isorite/opencode";
-import { ConfigSecrets, configPath, providerConfig } from "./config.ts";
+import { ConfigSecrets, configPath, gatewayTls, providerConfig } from "./config.ts";
 import { locate, WEB_DIR } from "./serve.ts";
 
 // The command itself, to start a server with: main.ts in a checkout, or the one file it is built into for npm.
@@ -89,7 +89,7 @@ async function freePort(): Promise<number> {
 
 /** A POST to the isorite server, made as its page makes one: from its origin, with the token it hands out. */
 async function tell(url: string, path: string, body: unknown): Promise<void> {
-  const { token } = (await (await fetch(`${url}/api/session`)).json()) as { token: string };
+  const token = await tokenOf(url);
   const response = await fetch(url + path, { method: "POST", headers: { "Content-Type": "application/json", "x-isorite-token": token, Origin: url }, body: JSON.stringify(body) });
   if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error ?? `${response.status} from ${path}`);
 }
@@ -114,26 +114,37 @@ export async function startOpenCode(command: string, { cwd, env, wait = 60_000 }
   return { url, password, stop: () => { server.kill(); } };
 }
 
+/** Where the terminal's models come from: the environment, isorite's config.toml, or OpenCode's own. */
+export type ModelsFrom = "environment" | "config" | "opencode";
+
 /** The models the terminal uses: ISORITE_GATEWAY_URL and _MODELS when set; else Iso's own provider, as
- *  ~/.config/isorite/config.toml has it (OpenRouter unless `[provider] url` names another), its models the tiers'
- *  (mid, the default, then max and low), with the key it holds handed to OpenCode in the environment only. Null without a key: then
- *  OpenCode's own models, or whatever your local.json names. */
-export async function modelsFor(env: NodeJS.ProcessEnv): Promise<{ gateway: Gateway | null; env: NodeJS.ProcessEnv }> {
+ *  ~/.config/isorite/config.toml has it, reached through the isorite server at `server` (its relay adds the
+ *  key, the certificate, the headers and the query, so OpenCode is given the server's token and none of those),
+ *  its models the tiers'; else, with no key and no certificate, OpenCode's own models, or whatever your
+ *  local.json names. */
+export async function modelsFor(env: NodeJS.ProcessEnv, server: { url: string; token: string }): Promise<{ gateway: Gateway | null; env: NodeJS.ProcessEnv; from: ModelsFrom }> {
   const named = gatewayFrom(env);
-  if (named) return { gateway: named, env };
+  if (named) return { gateway: named, env, from: "environment" };
   const path = configPath(env);
   const key = await new ConfigSecrets(path).get("provider.key");
-  if (!key) return { gateway: null, env };
-  const provider = providerConfig(path);
+  if (!key && !gatewayTls(path, env)) return { gateway: null, env, from: "opencode" };
+  const provider = providerConfig(path, env);
   const models = [...new Set([provider.tiers.mid, provider.tiers.max, provider.tiers.low])];
-  return { gateway: { url: provider.url, models }, env: { ...env, [GATEWAY_KEY]: key } };
+  return { gateway: { url: `${server.url}/api/gateway`, models }, env: { ...env, [GATEWAY_KEY]: server.token }, from: "config" };
+}
+
+/** The token the isorite server hands its page, which its relay takes as OpenCode's key. */
+async function tokenOf(url: string): Promise<string> {
+  return ((await (await fetch(`${url}/api/session`)).json()) as { token: string }).token;
 }
 
 export async function term(path: string | undefined, { port = 4767, cwd = process.cwd(), env: given = process.env, wait = 120_000, onServer }: TermOptions = {}): Promise<number> {
   const opencode = findOpenCode(given);
-  const { gateway, env } = await modelsFor(given);
   const server = await ensureServer(path, { port, env: given, wait });
   onServer?.(server.url);
+  let models: Awaited<ReturnType<typeof modelsFor>>;
+  try { models = await modelsFor(given, { url: server.url, token: await tokenOf(server.url) }); } catch (e) { server.release(); throw e; }
+  const { gateway, env } = models;
   const home = writeHome(defaultHome(env), { gateway });
   const shared = { ...env, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url };
   let backend: Awaited<ReturnType<typeof startOpenCode>>;
