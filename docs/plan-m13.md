@@ -80,6 +80,14 @@ Found by reading the code at `fbb6434`.
      says, in its tooltip, that the gateway doesn't report usage.
    - The 404 advice names where the model's name came from: the tier set in `config.toml`, or OpenRouter's
      default.
+   - **A client certificate (mTLS).** Lachlan's gateway asks for one (2026-10-26). `cert = "…pem"` and
+     `cert_key = "…pem"` (or `pfx = "…p12"`), with `cert_passphrase = "$NAME"` when the key has one, and
+     `ca = "…pem"` for the gateway's own authority. Node's `fetch` can't be given a client certificate without
+     the `undici` package, so Iso's requests to the gateway go through `node:https` with them (`complete()`
+     already takes its fetch from `http`). OpenCode runs on Bun and can't be given one through its settings, so
+     `isorite term` points OpenCode at a relay in isorite's own server, on localhost, which adds the
+     certificate, the headers and the query and passes the request on. The relay answers only OpenCode, by the
+     token isorite gives it.
 3. **Network errors say why.** `err.cause`'s code and message are kept in Iso's error and in `doctor`. The common
    ones each get one line of advice:
    - an untrusted certificate: `--use-system-ca` or `NODE_EXTRA_CA_CERTS`;
@@ -133,14 +141,18 @@ No new npm packages are needed. Proxies, certificates and the checks all use wha
 
 ## 5. Questions
 
-- **Q54: Which gateway is it?** Azure OpenAI, LiteLLM, Portkey, Kong, an in-house proxy, or something else. And
-  which header does it want the key in? Even the gateway's name, or a redacted example of a request that works
-  with `curl`, would decide most of §2.2.
+- **Q54: Which gateway is it?** *Answered 2026-10-26: OpenAI-compatible, and it asks for a client certificate
+  (mTLS). The product doesn't matter much beyond that. Still open: does it also want a key, and in which
+  header? A redacted `curl` command that works would answer it.*
 - **Q55: How do you get its key?** A long-lived key you paste, or one that comes from signing in and expires?
 - **Q56: Proxy and certificates by default?** Run `isorite` with the system's certificate authorities and the
   proxy settings always (proposed), or only when `doctor` finds they're needed and you turn them on.
 - **Q57: What went wrong with the terminal?** Did it start at all? Did OpenCode reach the gateway? Did Iso's pane
   show the session? If you don't remember, `doctor --report` at work will tell us.
+
+- **Q58: The client certificate.** Is it a file you were given (`.pem` and `.key`, or `.p12`/`.pfx`), or is it
+  only installed in the system's store (Windows' certificate store, the macOS keychain)? Node can't use one from
+  the store directly; it would need exporting once. Which system is the work machine?
 
 ## 6. What was built
 
