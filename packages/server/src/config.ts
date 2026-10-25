@@ -46,7 +46,8 @@ export class ConfigSecrets implements Secrets {
   async get(name: string): Promise<string | null> {
     const [section, field] = name.split(".") as [string, string];
     const value = table(readConfig(this.path)[section])[field];
-    return typeof value === "string" && value ? value : null;
+    // `spend_cap = 5` written by hand is a number, not a string.
+    return typeof value === "number" ? String(value) : typeof value === "string" && value ? value : null;
   }
 
   async set(name: string, value: string | null): Promise<void> {

@@ -175,7 +175,7 @@ test("a second request in the session is told what was asked before and what bec
 
 test("the key is held and forgotten, and never given back", async () => {
   const { engine } = await open([], { key: null });
-  expect(await engine.settings()).toEqual({ provider: "openrouter", key: false, connect: true, tiers: { low: "anthropic/claude-haiku-4.5", mid: "anthropic/claude-sonnet-5.5", max: "anthropic/claude-opus-5.5" } });
+  expect(await engine.settings()).toEqual({ provider: "openrouter", key: false, connect: true, spendCap: null, tiers: { low: "anthropic/claude-haiku-4.5", mid: "anthropic/claude-sonnet-5.5", max: "anthropic/claude-opus-5.5" } });
   expect(JSON.stringify(await engine.setKey("  sk-or-abc  "))).not.toContain("sk-or");
   expect((await engine.settings()).key).toBe(true);
   await expect(engine.setKey("two words")).rejects.toMatchObject({ status: 400 });

@@ -16,6 +16,7 @@
   import { converse } from "$lib/converse.svelte.ts";
   import { PANES, panes, type Pane, type Switch } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
+  import IsoGauge from "$lib/components/IsoGauge.svelte";
   import IsoSettings from "$lib/components/IsoSettings.svelte";
   import NoteSettings from "$lib/components/NoteSettings.svelte";
 
@@ -181,6 +182,7 @@
                 {#if run?.agent}
                   <span class="says" title={running ? "" : "click open ground on the Atlas to let its path go"}>{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentNamed}'s turn is done`}</span>
                 {/if}
+                <IsoGauge />
                 <!-- What the next turn is sent (I8), with how many parts you gave; a new conversation. -->
                 <button class="icon ctx" type="button" aria-label="Context" aria-pressed={converse.view === "context"} title="What Iso is sent: what you gave, and the rest" onclick={() => (converse.view = converse.view === "context" ? "chat" : "context")}>
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h6" /></svg>

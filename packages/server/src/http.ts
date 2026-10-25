@@ -171,6 +171,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   // The key goes in and never comes out: settings say only whether one is held.
   app.get("/api/settings", (c) => answer(c, () => api.settings()));
   post("/api/settings/key", Key, (_c, b) => api.setKey(b.key), "put");
+  app.get("/api/spend", (c) => answer(c, () => api.spend()));
+  post("/api/settings/spend-cap", z.object({ usd: z.number().positive().max(1e6).nullable() }).strict(), (_c, b) => api.setSpendCap(b.usd), "put");
   // Or made by signing in at the provider: the page to go to, and the code it comes back with, which the engine
   // exchanges for the key itself. The page never holds the key.
   post("/api/settings/connect", z.object({ callback: z.string().max(2000) }).strict(), (_c, b) => api.connect(b.callback));

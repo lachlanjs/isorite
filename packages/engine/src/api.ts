@@ -130,6 +130,12 @@ export interface ContextReport {
   given?: { kind: Given["kind"]; id: string; text?: string; tokens: number }[];
 }
 
+/** What Iso has cost against what may be spent (M12). `per` is the period the figure covers: a calendar month
+ *  (UTC), or what the provider's key counts. `source` says where `cap` comes from: the key's own limit, the
+ *  `spend_cap` setting, or, with no cap at all, the most spent in any month so far (`cap` is null while nothing
+ *  has been spent). */
+export interface Spend { usd: number; cap: number | null; per: "day" | "week" | "month" | "total"; source: "key" | "setting" | "history" }
+
 /** One part of Iso's context that can be switched off: an earlier exchange, or a note this note links to. */
 export interface ContextItem { id: string; kind: "exchange" | "linked" | "question"; title: string; tokens: number; on: boolean }
 
@@ -141,6 +147,8 @@ export interface Settings {
   /** Whether the provider can make a key by signing in there (connect). */
   connect: boolean;
   tiers: Record<Tier, string>;
+  /** The monthly spend cap set for Iso, in dollars; null for none. */
+  spendCap: number | null;
 }
 
 export type EngineEvent =
@@ -270,6 +278,10 @@ export interface Api {
   /** Leave the session's earlier exchanges out of what Iso is sent from now on. Nothing is deleted. */
   clearConversation(): Promise<void>;
   settings(): Promise<Settings>;
+  /** What Iso has cost, against the key's own limit where the provider gives one, else the `spend_cap` setting. */
+  spend(): Promise<Spend>;
+  /** Set the monthly spend cap in dollars (null: none). Where the key has a limit of its own, that is used instead. */
+  setSpendCap(usd: number | null): Promise<Settings>;
   /** Hold a provider key (null forgets it). */
   setKey(key: string | null): Promise<Settings>;
   /** Begin making a key by signing in at the provider: the page to go to, which comes back to `callback` with a code. */

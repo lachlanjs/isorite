@@ -169,7 +169,7 @@ test("with a note's Understanding note open, it goes with what you ask; Iso's re
   await page.locator('[data-pane="note"]').getByRole("button", { name: "Understanding note", exact: true }).click();
 });
 
-test("the count under Iso's box opens the Context view: what the next turn is sent, part by part; an earlier turn can be left out", async ({ page }) => {
+test("the Context button in Iso's header opens the Context view: what the next turn is sent, part by part; an earlier turn can be left out", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toIso(page);
   // The last conversation comes up as the page opens (earlier tests made one); a new one is begun.
@@ -179,7 +179,7 @@ test("the count under Iso's box opens the Context view: what the next turn is se
   await box(page).fill("what is a bit?");
   await box(page).press("Enter");
   await expect(page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last()).toHaveAttribute("data-state", "done");
-  await pane(page).getByRole("button", { name: /tokens$/ }).click();
+  await pane(page).getByRole("button", { name: "Context", exact: true }).click();
   const parts = pane(page).getByRole("region", { name: "What Iso is sent" });
   await expect(page.getByRole("log", { name: "The conversation with Iso" })).toHaveCount(0);
   await expect(parts.locator(".part").first()).toContainText("instructions and tools");
@@ -191,4 +191,17 @@ test("the count under Iso's box opens the Context view: what the next turn is se
   await expect(sw).toHaveAttribute("aria-checked", "false");
   await expect(parts).toContainText("earlier in this conversation");
   await expect(parts.locator(".part").nth(1)).not.toContainText("1 turn");
+});
+
+test("two bars in Iso's header gauge the context and the spend; the tier is chosen in the Context view; no line under the box", async ({ page }) => {
+  await page.goto("#/n/basics/bit");
+  await toIso(page);
+  const gauge = pane(page).getByRole("img", { name: /^Context: .* Spend: / });
+  await expect(gauge).toHaveAttribute("aria-label", /Context: \d[\d.]*k? of 200k tokens\. Spend: \$[\d.]+ this month/);
+  await expect(pane(page).locator(".composer .foot")).toHaveCount(0);
+  await pane(page).getByRole("button", { name: "Context", exact: true }).click();
+  const tier = pane(page).getByRole("radiogroup", { name: "How able a model" });
+  await tier.getByRole("radio", { name: "max" }).click();
+  await expect(tier.getByRole("radio", { name: "max" })).toHaveAttribute("aria-checked", "true");
+  await tier.getByRole("radio", { name: "mid" }).click();
 });

@@ -11,6 +11,7 @@
   import { converse } from "$lib/converse.svelte.ts";
   import { render } from "$lib/markdown.ts";
   import { panes } from "$lib/panes.svelte.ts";
+  import { spend } from "$lib/spend.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
   import TerminalTurns from "./TerminalTurns.svelte";
@@ -37,7 +38,7 @@
     return last?.step.opened ? `Iso is reading ${titleOf(last.step.opened)}` : "Iso is thinking";
   });
 
-  onMount(() => { converse.start(); terminal.start(); });
+  onMount(() => { converse.start(); terminal.start(); spend.start(); });
   // What is sent is measured again when what you give, what Iso may do, or the tier changes.
   $effect(() => { void tray.sent; void panes.mode; void context.tier; converse.measure(); });
   // Kept at the newest as the conversation grows.
@@ -145,6 +146,12 @@
       {:else}
         <p class="faint">Nothing yet. Hold a note on the Atlas, or drag it here, or select a passage in a note and send it to Iso. Iso reads the rest of the base as it needs.</p>
       {/if}
+      {#if !build}
+        <h2 class="label">how able a model</h2>
+        <span class="tiers" role="radiogroup" aria-label="How able a model">
+          {#each TIERS as t (t)}<button type="button" role="radio" aria-checked={context.tier === t} onclick={() => context.setTier(t)}>{t}</button>{/each}
+        </span>
+      {/if}
       {#if build}
         <p class="faint">Sent with your next message to the terminal's agent: notes and folders by name, for it to read with isorite's tools, and passages as they are.</p>
       {:else if converse.report}
@@ -210,15 +217,6 @@
         <!-- OpenCode knows no price for a gateway's model, and says 0: then the tokens are all there is to say. -->
         {#if terminal.view?.cost}<span>{money(terminal.view.cost)}</span>{/if}
       </div>
-    {:else}
-    <div class="foot">
-      {#if converse.report}<button class="count" type="button" aria-pressed={converse.view === "context"} title="What Iso is sent with your message, part by part" onclick={() => (converse.view = converse.view === "context" ? "chat" : "context")}>{short(converse.report.tokens)} tokens</button>{/if}
-      <span class="tiers" role="radiogroup" aria-label="How able a model">
-        {#each TIERS as t (t)}<button type="button" role="radio" aria-checked={context.tier === t} onclick={() => context.setTier(t)}>{t}</button>{/each}
-      </span>
-      <span class="grow"></span>
-      {#if converse.report}<span>{money(converse.report.session.usd)}</span>{/if}
-    </div>
     {/if}
   </div>
 </div>
@@ -298,8 +296,6 @@
   @keyframes fresh { 0% { background: color-mix(in srgb, var(--growth) 30%, var(--ground-0)); } }
   textarea:focus { border-color: var(--line-strong); outline: none; }
   .foot { display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--text-faint); flex-wrap: wrap; }
-  .count { background: none; border: 0; padding: 2px 0; font: inherit; color: var(--text-soft); cursor: pointer; }
-  .count[aria-pressed="true"] { color: var(--text); }
   .parts { display: grid; gap: 4px; font-size: 11.5px; }
   .part { display: flex; gap: 8px; align-items: center; min-width: 0; }
   .part .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

@@ -5,14 +5,14 @@
 import {
   embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, type AgentLook, type AgentChange, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type TurnRequest, type UnderstandingReport } from "./api.ts";
+import { Conflict, EngineError, type AgentLook, type AgentChange, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, noteId, type Similar } from "./lookup.ts";
 import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
 import { CONVERSATIONS_DIR, MODES, conversationPath, turnTools, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
-import { KEY, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
+import { KEY, SPEND_CAP, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
 
 /** The largest note taken. */
@@ -530,7 +530,90 @@ export class Engine implements Api {
   private get provider(): ProviderConfig { return this.opts.provider ?? OPENROUTER; }
 
   async settings(): Promise<Settings> {
-    return { provider: this.provider.name, key: Boolean(await this.opts.secrets?.get(KEY)), connect: Boolean(this.provider.auth && this.opts.secrets), tiers: this.provider.tiers };
+    return { provider: this.provider.name, key: Boolean(await this.opts.secrets?.get(KEY)), connect: Boolean(this.provider.auth && this.opts.secrets), tiers: this.provider.tiers, spendCap: await this.spendCap() };
+  }
+
+  // ------------------------------------------------------------ what Iso has cost (M12)
+
+  private async spendCap(): Promise<number | null> {
+    const n = Number(await this.opts.secrets?.get(SPEND_CAP));
+    return n > 0 && Number.isFinite(n) ? n : null;
+  }
+
+  async setSpendCap(usd: number | null): Promise<Settings> {
+    if (!this.opts.secrets) throw new EngineError("settings cannot be kept here", 409);
+    if (usd !== null && !(usd > 0 && usd <= 1e6)) throw new EngineError("the cap is an amount of dollars above nothing");
+    await this.opts.secrets.set(SPEND_CAP, usd === null ? null : String(usd));
+    return this.settings();
+  }
+
+  /** What each month has cost, by "YYYY-MM" (UTC): every proposal in a journal, and every turn and unused reply in
+   *  the records of every device. Read once, and again after something is spent. */
+  private months: Map<string, number> | undefined;
+  private async monthly(): Promise<Map<string, number>> {
+    if (this.months) return this.months;
+    const out = new Map<string, number>(), study = this.opts.own;
+    const add = (at: unknown, usd: unknown): void => {
+      if (typeof at !== "string" || typeof usd !== "number" || !(usd > 0)) return;
+      out.set(at.slice(0, 7), (out.get(at.slice(0, 7)) ?? 0) + usd);
+    };
+    const visit = async (dir: string): Promise<void> => {
+      for (const info of await study.list(dir)) {
+        const path = `${dir}/${info.name}`;
+        if (info.dir) await visit(path);
+        else if (info.name.endsWith(".jsonl")) for (const e of readJournal((await study.read(path)) ?? "")) if (e.kind === "proposal" && !e.copyOf && e.cost) add(e.at, e.cost.usd);
+      }
+    };
+    await visit("journal");
+    for (const info of await study.list("record")) {
+      if (info.dir || !info.name.endsWith(".jsonl")) continue;
+      for (const e of readRecord((await study.read(`record/${info.name}`)) ?? "")) if (e.event === "iso-unused" || e.event === "iso-turn") add(e.at, e.usd);
+    }
+    return (this.months = out);
+  }
+
+  /** The provider's own account of the key, at most once a minute: OpenRouter's limit, what is left of it, and
+   *  how often it resets. Null where there is no such answer. The key goes only to the provider. */
+  private keyLimit: { at: number; got: { limit: number; remaining: number; reset: string | null } | null } | undefined;
+  private async limitOfKey(): Promise<{ limit: number; remaining: number; reset: string | null } | null> {
+    const now = this.opts.clock.now(), http = this.opts.http;
+    if (this.keyLimit && now - this.keyLimit.at < 60_000) return this.keyLimit.got;
+    const key = await this.opts.secrets?.get(KEY);
+    if (!http || !key || !/\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) return null;
+    let got: { limit: number; remaining: number; reset: string | null } | null = null;
+    try {
+      const res = await http.fetch(`${this.provider.url}/key`, { headers: { Authorization: `Bearer ${key}` } });
+      const d = ((await res.json()) as { data?: Record<string, unknown> }).data;
+      if (res.ok && d && typeof d.limit === "number" && d.limit > 0) got = { limit: d.limit, remaining: typeof d.limit_remaining === "number" ? d.limit_remaining : d.limit, reset: typeof d.limit_reset === "string" ? d.limit_reset : null };
+    } catch { /* the setting, or the history, will do */ }
+    this.keyLimit = { at: now, got };
+    return got;
+  }
+
+  async spend(): Promise<Spend> {
+    const key = await this.limitOfKey();
+    if (key) return { usd: Math.max(0, key.limit - key.remaining), cap: key.limit, per: ({ daily: "day", weekly: "week", monthly: "month" } as const)[key.reset as "daily"] ?? "total", source: "key" };
+    const months = await this.monthly(), month = new Date(this.opts.clock.now()).toISOString().slice(0, 7), usd = months.get(month) ?? 0;
+    const cap = await this.spendCap();
+    if (cap) return { usd, cap, per: "month", source: "setting" };
+    const peak = Math.max(0, ...months.values());
+    return { usd, cap: peak > 0 ? peak : null, per: "month", source: "history" };
+  }
+
+  /** What the mid tier's model takes at once: the provider's model list where it says (OpenRouter's does), else
+   *  what the provider is configured with, else 200,000. Asked once. */
+  private window: Promise<number> | undefined;
+  private contextLimit(): Promise<number> {
+    return (this.window ??= (async () => {
+      const fallback = this.provider.context ?? 200_000, http = this.opts.http, model = this.provider.tiers.mid;
+      if (this.provider.context || !http || !/\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) return fallback;
+      try {
+        const res = await http.fetch(`${this.provider.url}/models`);
+        const list = ((await res.json()) as { data?: { id?: unknown; context_length?: unknown }[] }).data ?? [];
+        const n = list.find((m) => m.id === model)?.context_length;
+        return res.ok && typeof n === "number" && n > 0 ? n : fallback;
+      } catch { return fallback; }
+    })());
   }
 
   async setKey(key: string | null): Promise<Settings> {
@@ -854,7 +937,7 @@ export class Engine implements Api {
       ({ parts } = insertMessages({ tier: "mid", meaning: Boolean(this.similar), title: "", id: "", marked: "", unkept: [], conversation: conversation(earlier), moments: earlier.length, asked: "" }));
       parts = parts.map((p) => (p.name === "this note" ? { ...p, detail: "none open", tokens: 0 } : p));
     }
-    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: await this.sessionCost(), items, lookup: choice?.lookup !== false };
+    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: await this.contextLimit(), parts, session: await this.sessionCost(), items, lookup: choice?.lookup !== false };
   }
 
   /** What the session has cost: every reply offered, kept or not, every turn in Iso's pane, and every reply that came
@@ -948,7 +1031,7 @@ export class Engine implements Api {
       asked.add(q.id);
       items.push({ id: `q:${q.id}`, kind: "question", title: q.title, tokens: estimate(`- ${q.title} (/${q.id}.md)`), on: !off.has(`q:${q.id}`) });
     }
-    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: this.provider.context ?? 200_000, parts, session: await this.sessionCost(), items, lookup: req.lookup !== false,
+    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: await this.contextLimit(), parts, session: await this.sessionCost(), items, lookup: req.lookup !== false,
       given: sent.map((g) => ({ kind: g.kind, id: g.id, ...(g.kind === "passage" ? { text: g.text } : {}), tokens: estimate(sentText(g)) })) };
   }
 
@@ -1402,6 +1485,8 @@ export class Engine implements Api {
   }
 
   private publish(event: EngineEvent): void {
+    // Something was spent, or may have been: what each month has cost is read again when next asked.
+    if (event.type === "iso-done" || event.type === "record") this.months = undefined;
     for (const listener of this.listeners) {
       try { listener(event); } catch { /* one listener's fault is not the writer's */ }
     }

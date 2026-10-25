@@ -3,10 +3,12 @@
   // device's configuration and is never shown again: this only says whether one is held.
   import type { Settings } from "@isorite/engine";
   import { app } from "$lib/app.svelte.ts";
+  import { spend } from "$lib/spend.svelte.ts";
 
   let settings = $state.raw<Settings | null>(null);
   let key = $state("");
   let problem = $state("");
+  let cap = $state("");
 
   $effect(() => { void app.api.settings().then((s) => (settings = s), (e) => (problem = (e as Error).message)); });
   // What the last sign-in said is let go with the settings.
@@ -16,6 +18,10 @@
     problem = "";
     app.signIn = null;
     try { settings = await app.api.setKey(value); key = ""; } catch (e) { problem = (e as Error).message; }
+  }
+  async function setCap(value: number | null) {
+    problem = "";
+    try { settings = await app.api.setSpendCap(value); cap = ""; void spend.refresh(); } catch (e) { problem = (e as Error).message; }
   }
   async function signIn() {
     problem = "";
@@ -43,6 +49,13 @@
     {/if}
     {#if app.signIn}<p class={app.signIn.ok ? "soft" : "bad"} role="status">{app.signIn.message}</p>{/if}
     <p class="faint">The key is kept in this device's configuration, never in a base, and is not shown again.</p>
+    <form class="row" onsubmit={(e) => { e.preventDefault(); const n = Number(cap); if (n > 0) void setCap(n); }}>
+      <label class="hidden-label" for="cap">Monthly spend cap in dollars</label>
+      <input id="cap" class="field grow" type="number" min="0.01" step="any" bind:value={cap} placeholder={settings.spendCap ? `$${settings.spendCap} a month; another amount replaces it` : "a monthly cap in dollars"} autocomplete="off" />
+      <button class="btn" type="submit" disabled={!(Number(cap) > 0)}>set it</button>
+      {#if settings.spendCap}<button class="btn" type="button" onclick={() => setCap(null)}>no cap</button>{/if}
+    </form>
+    <p class="faint">The lower bar in Iso's header fills toward this, over a calendar month. A key with a limit of its own at {settings.provider} is measured by that instead.</p>
     <dl class="tiers">
       {#each ["low", "mid", "max"] as const as t (t)}<dt>{t}</dt><dd class="faint">{settings.tiers[t]}</dd>{/each}
     </dl>
