@@ -44,6 +44,8 @@ export async function openEngine({ notes }: Opened, device = deviceId(), config 
     // Started by isorite --tutorial: the app walks you through the base.
     tutorial: process.env.ISORITE_TUTORIAL === "1",
     http, secrets: new ConfigSecrets(config), provider: providerConfig(config),
+    // The repository code links point into (M12): named in .isorite/settings.toml, from the notes folder.
+    repository: (path) => { const dir = resolve(notes, path); return existsSync(dir) && statSync(dir).isDirectory() ? new NodeFiles(dir) : null; },
     // Search by meaning, where the model is installed (npm run model). Its vectors are a cache of this base's
     // notes, kept outside both repositories under a name made from where the notes are.
     ...(model ? { embedder: nodeEmbedder(model), cache: { files: new NodeFiles(cacheDir()), name: `vectors-${createHash("sha256").update(notes).digest("hex").slice(0, 16)}.json` } } : {}),

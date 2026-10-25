@@ -188,3 +188,14 @@ test("every stream is told how many browser pages listen; a harness's plugin, li
   expect(agent.text().lastIndexOf('"browsers":0')).toBeGreaterThan(agent.text().indexOf('"browsers":1'));
   agent.abort.abort();
 });
+
+test("a base's code links resolve against the repository its settings name, from the notes folder", async () => {
+  const at = join(root, "with-code"), base = join(at, "notes");
+  mkdirSync(join(base, ".isorite"), { recursive: true });
+  mkdirSync(join(at, "code", "src"), { recursive: true });
+  writeFileSync(join(at, "code", "src", "sim.py"), "");
+  writeFileSync(join(base, ".isorite", "settings.toml"), 'repository = "../code"\n');
+  writeFileSync(join(base, "step.md"), "---\ntype: Concept\ntitle: Step\n---\n\n[here](code:src/sim.py) and [gone](code:src/old.py)\n");
+  const api = await openEngine(locate(base), "testdev1", join(root, "config.toml"), undefined, null);
+  expect((await api.map()).notes.step!.links!.map((l) => l.broken ?? false)).toEqual([false, true]);
+});

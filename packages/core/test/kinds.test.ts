@@ -1,7 +1,7 @@
 // Open questions and problems (M12): their kind, what they are about, when they are done, and embeds.
 
 import { expect, test } from "vitest";
-import { Bundle, embedFor, embedRefs, idsOf, mapModel } from "../src/index.ts";
+import { Bundle, codeTarget, embedFor, embedRefs, idsOf, mapModel, outwardLinks, parseSettings, settingsText } from "../src/index.ts";
 
 const file = (path: string, meta: string, body = "") => ({ path, text: `---\n${meta}\n---\n\n${body}\n` });
 const base = Bundle.fromFiles([
@@ -47,4 +47,16 @@ test("on the map, a question or a problem says so, and is joined to what it is a
   expect(model.edges).toContainEqual(["global/where-is-compactness-used", "global/euler", 2]);
   expect(model.edges).toContainEqual(["global/where-is-compactness-used", "global/gauss-bonnet", 2]);
   expect(model.edges).toContainEqual(["global/angles", "global/gauss-bonnet", 2]);
+});
+
+test("links out of the base: to the web, and to code by its path and lines; a path leaving the repository is none", () => {
+  const body = "See [the paper](https://arxiv.org/abs/1) and [`step`](code:src/sim.py#L40-L52), [it](code:src/sim.py#L40-L52) again, [up](code:../etc/passwd), <https://example.org> and [a note](/a/b.md).";
+  expect(outwardLinks(body)).toEqual([
+    { kind: "web", href: "https://arxiv.org/abs/1", text: "the paper" },
+    { kind: "code", href: "code:src/sim.py#L40-L52", text: "step", path: "src/sim.py", line: 40, end: 52 },
+    { kind: "web", href: "https://example.org", text: "https://example.org" },
+  ]);
+  expect(codeTarget("code:./README.md")).toEqual({ path: "README.md" });
+  expect(parseSettings(settingsText({ repository: "../code" }))).toEqual({ repository: "../code" });
+  expect(parseSettings("not = [toml")).toEqual({});
 });

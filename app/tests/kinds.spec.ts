@@ -100,3 +100,14 @@ test("Iso asks a question back: + keeps it as an open question, yours; your word
   await remove(page, `channels/why-does-asked-${name}-hold`);
   await remove(page, n);
 });
+
+test("links out of the base: a code link set as code, struck through where its file is not in the repository; a web link dotted", async ({ page }) => {
+  await page.goto("#/n/channels/huffman-in-code");
+  const text = page.getByRole("textbox", { name: "The note", exact: true });
+  await expect(text).toContainText("Built in build");
+  await expect(page.locator(".cm-lp-codelink")).toHaveText(["build", "decode"]);
+  await expect(page.locator(".cm-lp-codelink.cm-lp-broken")).toHaveText(["decode"]);
+  await expect(page.locator(".cm-lp-codelink").first()).toHaveAttribute("title", "src/huffman.py#L1");
+  await expect(page.locator(".cm-lp-weblink")).toHaveText(["Huffman"]);
+  await page.screenshot({ path: `test-results/screens/${test.info().project.name}-code-links.png`, fullPage: true });
+});

@@ -60,6 +60,9 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     saveScratchpad: (note, scratchpad, base) => write("POST", "understanding/scratchpad" + q(note), { scratchpad, base }),
     undoTurn: (conversation, turn) => write("POST", "iso/undo", { conversation, turn }),
     takeItem: (conversation, turn, item) => write("POST", "iso/take", { conversation, turn, item }),
+    // The server's own: it names the repository when a terminal attaches, and tells the terminal's agent.
+    nameRepository: async () => false,
+    brokenNews: async () => [],
     answer: async (turn, permission, decision) => { await write("POST", "iso/answer", { turn, permission, decision }); },
     conversation: async (id) => { const c = await ask<{ id: string; turns: [] }>("conversation" + (id ? q(id) : "")); return c.id ? c : null; },
     turnContext: (request) => ask(`turn/context?turn=${encodeURIComponent(JSON.stringify(request))}`),

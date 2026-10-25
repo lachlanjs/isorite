@@ -6,7 +6,7 @@
 
 import { FrontmatterError, splitFrontmatter, type Meta } from "./frontmatter.ts";
 import { citeRefs, headings, linkRefs, rating, type Rating } from "./markdown.ts";
-import { ABOUT, doneOf, embedRefs, idsOf, kindOf, type Kind } from "./kinds.ts";
+import { ABOUT, doneOf, embedRefs, idsOf, kindOf, outwardLinks, type Kind, type Outward } from "./kinds.ts";
 import { basename, cmp, cmpTuple, dirname, join, normpath, strip, text, toTime, unquote } from "./text.ts";
 
 export const OKF_VERSION = "0.2";
@@ -67,6 +67,8 @@ export class Concept {
   cites: Cite[] = [];
   /** The notes it embeds (`[[!name]]`, M12), resolved to ids, in order. */
   embeds: string[] = [];
+  /** Its links out of the base: to the web, and to code (M12). */
+  outward: Outward[] = [];
   /** For a question or a problem: the notes it is about (or uses), from its frontmatter and from the notes that
    *  embed it. */
   attached: string[] = [];
@@ -228,6 +230,7 @@ export class Bundle {
         if (link) { link.rel = rel; links.push(link); }
       }
       concept.links = links;
+      concept.outward = outwardLinks(concept.body);
       for (const link of links) {
         if (link.broken) this.issue(concept.path, "warning", "broken-link", `broken link to ${link.target}`);
       }

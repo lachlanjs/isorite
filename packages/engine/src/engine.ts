@@ -3,7 +3,7 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  embedRefs, embedFor, slugify, spliceText, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
+  embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
 import { Conflict, EngineError, type AgentLook, type AgentChange, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
@@ -42,6 +42,9 @@ export interface EngineOptions {
   cache?: { files: Files; name: string };
   /** Or a search by meaning from elsewhere (tests). */
   similar?: Similar;
+  /** The files of a repository named in the base's settings (M12): where its code links point. Null where there
+   *  is no such folder. */
+  repository?: (path: string) => Files | null;
 }
 
 /** The longest request and the longest reply asked for, in characters and tokens. */
@@ -175,7 +178,8 @@ export class Engine implements Api {
   }
 
   async notes(): Promise<Listing> {
-    const notes = [...this.bundle.concepts.values()].map((c) => ({ id: c.id, title: c.title, description: c.description, type: c.type, dir: c.directory, ...(c.kind === "note" ? {} : { kind: c.kind, attached: c.attached }), ...(c.done ? { done: c.done } : {}) }));
+    const broken = await this.brokenCode();
+    const notes = [...this.bundle.concepts.values()].map((c) => ({ id: c.id, title: c.title, description: c.description, type: c.type, dir: c.directory, ...(c.kind === "note" ? {} : { kind: c.kind, attached: c.attached }), ...(c.done ? { done: c.done } : {}), ...(broken.has(c.id) ? { broken: broken.get(c.id) } : {}) }));
     notes.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     return { notes, dirs: [...this.bundle.directories.keys()].filter(Boolean).sort() };
   }
@@ -195,9 +199,63 @@ export class Engine implements Api {
 
   /** The base as the Atlas draws it: the model the layout takes, and what each block says. */
   async map(): Promise<MapReport> {
-    const notes: MapReport["notes"] = {};
-    for (const c of this.bundle.concepts.values()) notes[c.id] = { title: c.title, tokens: estimate(c.body.trim()), ...(c.done ? { done: c.done } : {}) };
+    const notes: MapReport["notes"] = {}, broken = await this.brokenCode();
+    for (const c of this.bundle.concepts.values()) {
+      const bad = broken.get(c.id) ?? [];
+      const links = c.outward.map((o) => ({ kind: o.kind, href: o.href, text: o.text, ...(bad.includes(o.href) ? { broken: true as const } : {}) }));
+      notes[c.id] = { title: c.title, tokens: estimate(c.body.trim()), ...(c.done ? { done: c.done } : {}), ...(links.length ? { links } : {}) };
+    }
     return { model: mapModel(this.bundle), notes };
+  }
+
+  // ------------------------------------------------------------ code links (M12)
+
+  /** The base's settings, from `.isorite/settings.toml`. */
+  async settingsOfBase(): Promise<BaseSettings> { return parseSettings(await this.opts.own.read(SETTINGS_FILE)); }
+
+  /** Name the repository code links point into, unless one is named already: `isorite term` does, the first time
+   *  it is run beside the base. `path` is relative to the notes folder, or absolute. */
+  async nameRepository(path: string): Promise<boolean> {
+    if (!path || (await this.settingsOfBase()).repository) return false;
+    await this.one(() => this.opts.own.write(SETTINGS_FILE, settingsText({ repository: path })));
+    this.codeCheck = null;
+    return true;
+  }
+
+  /** What was last found of the code links, and when: looked at again when the notes change, or after a while,
+   *  since the repository changes outside isorite. */
+  private codeCheck: { at: number; of: Bundle; broken: Map<string, string[]> } | null = null;
+  /** The code links whose file is not in the repository, by note. With no repository named, none are. */
+  private async brokenCode(): Promise<Map<string, string[]>> {
+    const now = this.opts.clock.now(), b = this.bundle;
+    if (this.codeCheck && this.codeCheck.of === b && now - this.codeCheck.at < 10_000) return this.codeCheck.broken;
+    const broken = new Map<string, string[]>(), where = (await this.settingsOfBase()).repository;
+    const repo = where ? this.opts.repository?.(where) ?? null : null;
+    if (repo) {
+      const listed = new Map<string, Promise<Set<string>>>();
+      const names = (dir: string) => { let l = listed.get(dir); if (!l) listed.set(dir, (l = repo.list(dir).then((fs) => new Set(fs.filter((f) => !f.dir).map((f) => f.name)), () => new Set<string>()))); return l; };
+      for (const c of b.concepts.values()) for (const o of c.outward) {
+        if (o.kind !== "code") continue;
+        const k = o.path.lastIndexOf("/"), dir = k < 0 ? "" : o.path.slice(0, k);
+        if (!(await names(dir)).has(o.path.slice(k + 1))) broken.set(c.id, [...(broken.get(c.id) ?? []), o.href]);
+      }
+    }
+    this.codeCheck = { at: now, of: b, broken };
+    return broken;
+  }
+
+  /** Code links broken since Iso, or the terminal's agent, was last told: each is told once (Q27). */
+  private readonly toldBroken = { iso: new Set<string>(), agent: new Set<string>() };
+  async brokenNews(to: "iso" | "agent"): Promise<{ id: string; title: string; href: string }[]> {
+    const told = this.toldBroken[to], out: { id: string; title: string; href: string }[] = [], now = new Set<string>();
+    for (const [id, hrefs] of await this.brokenCode()) for (const href of hrefs) {
+      const key = `${id} ${href}`;
+      now.add(key);
+      if (!told.has(key)) out.push({ id, title: this.bundle.concepts.get(id)?.title ?? id, href });
+    }
+    // One mended and broken again is told again.
+    this.toldBroken[to] = now;
+    return out;
   }
 
   async journal(id: string): Promise<Entry[]> {
@@ -919,7 +977,7 @@ export class Engine implements Api {
     if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
     const off = new Set(req.off ?? []), earlier = ((await this.conversation(conversation))?.turns ?? []).filter((t) => !off.has(t.id));
     const lookupOn = req.lookup !== false, mode = req.mode, sent = await this.sentOf(req.given, off), own = turnTools(mode, sent);
-    const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier, sent, asked: req.asked });
+    const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier, sent, asked: req.asked, broken: await this.brokenNews("iso") });
 
     // A turn is of the session as a journal entry is, and carries it on.
     const s = await this.stamp("you"), turn = s.id, abort = new AbortController(), path = conversationPath(conversation);

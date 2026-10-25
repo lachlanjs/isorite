@@ -3,7 +3,7 @@
 // given, JSON only), then the engine's own answer. Carried over from rdstudio.
 
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { extname, join, resolve, sep } from "node:path";
+import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
@@ -190,13 +190,18 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   // session, ask in it, stop it and answer what it asks, and never reach OpenCode themselves.
   if (terminal) {
     const Local = z.string().max(200).refine((u) => { try { const h = new URL(u).hostname; return h === "127.0.0.1" || h === "localhost" || h === "[::1]"; } catch { return false; } }, "OpenCode's server must be on this machine");
-    post("/api/terminal/attach", z.object({ url: Local, password: z.string().min(1).max(200), directory: z.string().max(4000) }).strict(), async (_c, b) => { await terminal.attach(b).catch((e: Error) => { throw new EngineError(`OpenCode's server did not answer: ${e.message}`, 502); }); });
+    post("/api/terminal/attach", z.object({ url: Local, password: z.string().min(1).max(200), directory: z.string().max(4000) }).strict(), async (_c, b) => {
+      await terminal.attach(b).catch((e: Error) => { throw new EngineError(`OpenCode's server did not answer: ${e.message}`, 502); });
+      // The folder the terminal runs in is the base's repository, the first time (Q28): code links point into it.
+      if (b.directory && notes) await api.nameRepository(isAbsolute(b.directory) ? relative(notes, b.directory) || "." : b.directory);
+    });
     post("/api/terminal/detach", z.object({}).strict(), async () => { terminal.detach(); });
     app.get("/api/terminal", (c) => answer(c, async () => terminal.view()));
     const failed = (e: Error) => { throw new EngineError(e.message, 409); };
     post("/api/terminal/prompt", z.object({ asked: z.string().min(1).max(8000), given: z.array(Given).max(40) }).strict(), async (_c, b) => {
       const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
-      const text = withGiven(b.asked, b.given, (id) => titles.get(id) ?? id);
+      const broken = await api.brokenNews("agent");
+      const text = withGiven(b.asked, b.given, (id) => titles.get(id) ?? id) + (broken.length ? `\n\n(isorite: code links in the notes that no longer resolve: ${broken.map((x) => `${x.href} in /${x.id}.md`).join("; ")}.)` : "");
       await terminal.prompt(text).catch(failed);
     });
     post("/api/terminal/stop", z.object({}).strict(), async () => { await terminal.interrupt().catch(failed); });

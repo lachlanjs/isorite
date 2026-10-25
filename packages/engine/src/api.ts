@@ -30,6 +30,8 @@ export interface NoteSummary {
   attached?: string[];
   /** When it was resolved or solved, as written. */
   done?: string;
+  /** Its code links whose file is not in the base's repository (M12). */
+  broken?: string[];
 }
 
 export interface Listing {
@@ -59,6 +61,8 @@ export interface MapReport {
     tokens: number;
     /** A question resolved or a problem solved (M12): when, as written. */
     done?: string;
+    /** Its links out of the base, to the web and to code (M12): drawn beside it on the Atlas. */
+    links?: { kind: "web" | "code"; href: string; text: string; broken?: true }[];
   }>;
 }
 
@@ -233,6 +237,10 @@ export interface Api {
   saveScratchpad(note: string, scratchpad: string, base: string | null): Promise<UnderstandingReport>;
   /** Put back every note a turn changed as it was before the turn. A note changed since is left as it is, and said. */
   undoTurn(conversation: string, turn: string): Promise<{ notes: string[]; left: string[] }>;
+  /** Name the repository the base's code links point into, unless one is named: true if it was (M12). */
+  nameRepository(path: string): Promise<boolean>;
+  /** Code links broken since Iso, or the terminal's agent, was last told; each is told once (Q27). */
+  brokenNews(to: "iso" | "agent"): Promise<{ id: string; title: string; href: string }[]>;
   /** Make a question Iso asked in a turn a question note, or insert what it offered: yours either way. */
   takeItem(conversation: string, turn: string, item: string): Promise<{ note: string }>;
   /** Your answer to what Iso asked before doing something in a turn. */

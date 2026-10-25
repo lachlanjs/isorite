@@ -13,7 +13,7 @@ import { blocksTheme, embeds, renderedBlocks, type Embeds } from "./blocks.ts";
 import { format, formatKeymap, type Format } from "./commands.ts";
 import { linkAt, linkControl } from "./linkControl.ts";
 import { linkCompletion, type LinkTarget } from "./links.ts";
-import { livePreview, livePreviewTheme } from "./livePreview.ts";
+import { livePreview, livePreviewTheme, codeBroken } from "./livePreview.ts";
 import { mathsSyntax } from "./maths.ts";
 import { noteOf } from "./noteOf.ts";
 import { overlays, touchedLines, type Mount } from "./overlays.ts";
@@ -50,6 +50,8 @@ export interface EditorOptions {
   readOnly?: boolean;
   /** What an embed (`[[!name]]`, M12) names, and how it opens: drawn as a callout in the live preview. */
   embeds?: Embeds;
+  /** Whether a code link names a file no longer in the base's repository (M12). */
+  codeBroken?: (href: string) => boolean;
 }
 
 // Plain source is set in the monospaced face; the live preview in the reading one.
@@ -101,7 +103,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       markdown({ base: markdownLanguage, extensions: [mathsSyntax], completeHTMLTags: false }),
       syntaxHighlighting(highlight),
       theme,
-      ...(opts.source ? [sourceTheme] : [livePreview, livePreviewTheme, renderedBlocks, blocksTheme, linkControl, ...(opts.embeds ? [embeds.of(opts.embeds)] : [])]),
+      ...(opts.source ? [sourceTheme] : [livePreview, livePreviewTheme, renderedBlocks, blocksTheme, linkControl, ...(opts.embeds ? [embeds.of(opts.embeds)] : []), ...(opts.codeBroken ? [codeBroken.of(opts.codeBroken)] : [])]),
       closeBrackets(),
       // Only brackets: closing quotes would get in the way of apostrophes in prose.
       EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["(", "["] } }]),

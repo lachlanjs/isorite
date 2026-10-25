@@ -26,7 +26,11 @@ A hidden folder in the notes, committed with them. Made, with its `.gitattribute
   conversations/<id>.jsonl        Iso's conversations
   understanding/<note id>.md      a note's Understanding note
   drafts/<id>.md                  notes for Iso that are not in the base yet
+  record/<device>.jsonl           section 4
+  settings.toml                   the base's settings: its repository
 ```
+
+- **`settings.toml`** has one setting so far: `repository = "../code"`, the folder code links point into, relative to the notes folder (or absolute). `isorite term` writes it, from the folder it runs in, the first time it is run beside the base; after that it is yours to change.
 
 - **A note for Iso** is a draft: `drafts/<id>.md`, an OKF note like any other, whose id is a lower-case ULID. Wherever notes are named it is `@draft/<id>`, and its journal is at `journal/@draft/<id>.jsonl`. When Iso's reply is kept as a note the draft's file is removed and its journal stays.
 - **Format 1** kept these in a study base, a separate repository beside the notes with an `isorite.toml`. isorite no longer opens one. `isorite migrate <study base>` copies its journals, conversations, Understanding notes and drafts into `.isorite/`, writes each exercise as a problem note among the notes (its journal following it), and leaves the study record behind. The study base itself is only read. With journals already in `.isorite/` it stops, unless given `--merge`: then journals are united by entry id, as two devices' are.
@@ -134,6 +138,7 @@ The proof never says.
 - **An embed** is `[[!name]]` alone on a line, outside code: `name` is the note's file name without `.md`, or its path (`[[!global/where-is-compactness-used]]`) where two notes share the name. The app draws it as a callout. One that names nothing, or a shared name, is an issue (`embed-broken`).
 - An embed counts as an `about` (or `uses`) of the note it is in: a question embedded in a note is about that note.
 - Moving a note changes the `about` and `uses` that name it, and the embeds of it, to match.
+- **Links out of the base** are ordinary Markdown links. To the web: `[the paper](https://arxiv.org/abs/…)`. To code in the base's repository: `[the step](code:src/sim.py#L40)`, or `#L40-L52` for lines; a path is within the repository, never `..`. A code link whose file is not in the repository is broken: the app strikes it through, and Iso and the terminal's agent are told once, at their next turn.
 
 ## 6. What is kept outside the notes
 

@@ -104,6 +104,12 @@ if (process.argv[1] === import.meta.filename) {
   writeFileSync(join(NOTES, "coding", "kraft-inequality.md"), coding("Kraft inequality", "coding/source-coding"));
   // The last of them also joined by weaker links: "uses", which the map draws lighter, and "see also", which it does not draw.
   writeFileSync(join(NOTES, "coding", "huffman-codes.md"), coding("Huffman codes", "coding/kraft-inequality") + `\nIt counts in [bits](/basics/bit.md "uses"). See also [surprise](/basics/surprise.md "see also").\n`);
+  // Code beside the notes (M12): the repository code links point into, named in the base's settings.
+  mkdirSync(join(ROOT, "code", "src"), { recursive: true });
+  writeFileSync(join(ROOT, "code", "src", "huffman.py"), "def build(freqs):\n    pass\n");
+  mkdirSync(STUDY, { recursive: true });
+  writeFileSync(join(STUDY, "settings.toml"), `repository = "../code"\n`);
+  writeFileSync(join(NOTES, "channels", "huffman-in-code.md"), "---\ntype: Concept\ntitle: Huffman in code\n---\n\nBuilt in [build](code:src/huffman.py#L1); decoded in [decode](code:src/decode.py). After [Huffman](https://en.wikipedia.org/wiki/Huffman_coding).\n");
   process.env.XDG_CONFIG_HOME = join(ROOT, "config");
   process.env.XDG_CACHE_HOME = join(ROOT, "cache");
   process.env.ISORITE_EMBED = "off"; // the browser tests are about the pages; the model has its own tests

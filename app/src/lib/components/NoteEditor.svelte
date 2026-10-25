@@ -50,6 +50,7 @@
       // An embedded question or problem (M12) opens in the Note pane.
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
       embeds: { find: findEmbed, open: (id) => { void goto(noteHref(id)); } },
+      codeBroken: (href) => app.listing.notes.find((n) => n.id === note.id)?.broken?.includes(href) ?? false,
       ...(iso ? {
         // Ctrl+Enter goes to Iso's pane (M10), with the text selected, if any, given to Iso.
         onAsk: (w: Where) => {

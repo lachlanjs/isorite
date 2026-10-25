@@ -49,3 +49,27 @@ test("a note moved: the questions and problems that name it, and the embeds of i
   expect(notes.files.get("global/gauss-bonnet.md")).toContain("\n[[!compactness]]\n");
   expect(engine.bundle.concepts.get("global/compactness")!.attached).toEqual(["topology/euler", "global/gauss-bonnet"]);
 });
+
+test("code links point into the repository named in the settings: a missing file is broken, and Iso is told once", async () => {
+  const clock = { t: Date.parse("2026-10-25T09:00:00Z"), now() { return this.t; } };
+  const repo = new MemoryFiles({ "src/sim.py": "def step(): pass\n" });
+  const notes = new MemoryFiles({ "sim/step.md": "---\ntype: Concept\ntitle: The step\n---\n\nIn [the code](code:src/sim.py#L1), and [gone](code:src/old.py); see [the paper](https://arxiv.org/abs/1).\n" });
+  const engine = await Engine.open({ notes, own: new MemoryFiles(), clock, device: "laptop1", name: "nbody", repository: (p) => (p === "../code" ? repo : null) });
+  // No repository named: nothing is broken.
+  expect((await engine.map()).notes["sim/step"]!.links).toEqual([
+    { kind: "code", href: "code:src/sim.py#L1", text: "the code" },
+    { kind: "code", href: "code:src/old.py", text: "gone" },
+    { kind: "web", href: "https://arxiv.org/abs/1", text: "the paper" },
+  ]);
+  expect(await engine.nameRepository("../code")).toBe(true);
+  expect(await engine.nameRepository("../elsewhere")).toBe(false);
+  expect((await engine.map()).notes["sim/step"]!.links![1]).toEqual({ kind: "code", href: "code:src/old.py", text: "gone", broken: true });
+  expect((await engine.notes()).notes.find((n) => n.id === "sim/step")).toMatchObject({ broken: ["code:src/old.py"] });
+  expect(await engine.brokenNews("iso")).toEqual([{ id: "sim/step", title: "The step", href: "code:src/old.py" }]);
+  expect(await engine.brokenNews("iso")).toEqual([]);
+  expect(await engine.brokenNews("agent")).toHaveLength(1);
+  // Put back, it mends at the next look (the repository changes outside isorite).
+  await repo.write("src/old.py", "");
+  clock.t += 11_000;
+  expect((await engine.map()).notes["sim/step"]!.links![1]).not.toHaveProperty("broken");
+});

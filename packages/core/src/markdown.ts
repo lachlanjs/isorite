@@ -63,6 +63,22 @@ export function linkRefs(body: string): [string, Rating | null][] {
   return refs;
 }
 
+/** Every link in a body, in order, with its text as written (marks dropped). */
+export function linkTexts(body: string): { href: string; text: string }[] {
+  const { tokens } = parse(body);
+  const out: { href: string; text: string }[] = [];
+  for (const t of tokens) {
+    if (t.type !== "inline" || !t.children) continue;
+    let open: { href: string; text: string } | null = null;
+    for (const c of t.children) {
+      if (c.type === "link_open") open = { href: c.attrGet("href") ?? "", text: "" };
+      else if (c.type === "link_close" && open) { out.push({ href: open.href, text: open.text.trim() }); open = null; }
+      else if (open && (c.type === "text" || c.type === "code_inline")) open.text += c.content;
+    }
+  }
+  return out;
+}
+
 /** Every link and image in a body, in order: where it points, its title, and whether it is an image
  *  (`![…](…)`, which for an artifact or a picture means "shown here", an embed). */
 export function citeRefs(body: string): { href: string; title: string | null; embed: boolean }[] {

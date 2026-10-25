@@ -6,6 +6,7 @@
 // A note embeds one on a line of its own, `[[!name]]`, by its file name without .md, or by its path where two
 // share the name. The embed counts as an `about` (or a `uses`) of the note it is in.
 
+import { linkTexts } from "./markdown.ts";
 import { text } from "./text.ts";
 
 export type Kind = "note" | "question" | "problem";
@@ -55,4 +56,31 @@ export function embedFor(id: string, ids: Iterable<string>): string {
   let shared = 0;
   for (const other of ids) if (other.split("/").at(-1) === name) shared++;
   return `[[!${shared > 1 ? id : name}]]`;
+}
+
+/** A link out of the base (M12, F1): to the web, or to code in the base's repository, `code:src/sim.py#L40`
+ *  (`#L40-L52` for lines), resolved against `repository` in `.isorite/settings.toml`. */
+export type Outward =
+  | { kind: "web"; href: string; text: string }
+  | { kind: "code"; href: string; text: string; path: string; line?: number; end?: number };
+
+/** A code link's file and lines, or null when it is not one, or names a path outside the repository. */
+export function codeTarget(href: string): { path: string; line?: number; end?: number } | null {
+  const m = /^code:([^#?]+)(?:#L(\d+)(?:-L?(\d+))?)?$/.exec(href.trim());
+  if (!m) return null;
+  const path = decodeURIComponent(m[1]!).replace(/^\.?\/+/, "");
+  if (!path || path.split("/").some((p) => p === ".." || !p)) return null;
+  return { path, ...(m[2] ? { line: Number(m[2]) } : {}), ...(m[3] ? { end: Number(m[3]) } : {}) };
+}
+
+/** A note's links out of the base, in order, each once. */
+export function outwardLinks(body: string): Outward[] {
+  const out: Outward[] = [], seen = new Set<string>();
+  for (const { href, text: words } of linkTexts(body)) {
+    if (seen.has(href)) continue;
+    if (/^https?:\/\//i.test(href)) out.push({ kind: "web", href, text: words || href.replace(/^https?:\/\/(www\.)?/i, "") });
+    else { const c = codeTarget(href); if (!c) continue; out.push({ kind: "code", href, text: words || c.path.split("/").at(-1)!, ...c }); }
+    seen.add(href);
+  }
+  return out;
 }

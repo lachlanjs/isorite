@@ -269,6 +269,8 @@ export interface AskedTurn {
   earlier: Turn[];
   sent: Sent[];
   asked: string;
+  /** Code links broken since Iso was last told (Q27). */
+  broken?: { id: string; title: string; href: string }[];
 }
 
 /** The messages for a turn, and what they hold, part by part. */
@@ -281,14 +283,16 @@ export function turnMessages(a: AskedTurn): { messages: Message[]; parts: Part[]
   const given = a.sent.filter((s) => s.kind !== "understanding");
   const gave = given.length ? `# What they gave you\n\n${given.map(sentText).join("\n\n")}` : "";
   const known = understood.length ? `# Their understanding, as you have recorded it\n\n${understood.map(sentText).join("\n\n")}` : "";
+  const broken = a.broken?.length ? `# Code links that no longer resolve\n\nSince you were last told, these links in their notes point to files no longer in their repository. Mention it only where it bears on what they ask.\n\n${a.broken.map((b) => `- in ${b.title} (/${b.id}.md): ${b.href}`).join("\n")}` : "";
   const request = `# What they ask now\n\n${a.asked}`;
   return {
-    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [earlier, known, gave, request].filter(Boolean).join("\n\n") }],
+    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [earlier, known, gave, broken, request].filter(Boolean).join("\n\n") }],
     parts: [
       { name: "instructions and tools", detail: `${a.mode} mode${checking ? ", checking" : ""}${a.lookup ? "" : ", no look-ups"}`, tokens: estimate(system) + (a.lookup ? 500 : 0) + turnTools(a.mode, a.sent).length * 120 },
       { name: "earlier in this conversation", detail: a.earlier.length ? `${a.earlier.length} ${a.earlier.length === 1 ? "turn" : "turns"}` : "", tokens: estimate(earlier) },
       { name: "what you gave", detail: given.length ? `${given.length} ${given.length === 1 ? "part" : "parts"}` : "nothing", tokens: estimate(gave) },
       ...(understood.length ? [{ name: "your understanding" as const, detail: `${understood.length} ${understood.length === 1 ? "note" : "notes"}`, tokens: estimate(known) }] : []),
+      ...(broken ? [{ name: "code links broken" as const, detail: `${a.broken!.length}`, tokens: estimate(broken) }] : []),
       { name: "your message", detail: "", tokens: estimate(request) },
     ],
   };

@@ -7,12 +7,31 @@
 //   .isorite/understanding/<id>.md     a note's Understanding note
 //   .isorite/drafts/<id>.md            notes Iso has written that are not in the base yet
 //   .isorite/record/<device>.jsonl     this device's record of usage: context cleared, what turns cost
+//   .isorite/settings.toml             the base's settings: its repository, where code links point (M12)
 //
 // Format 1 kept these in a study base, a second repository beside the notes; `isorite migrate` moves one in.
+
+import { parse, stringify } from "smol-toml";
 
 export const OWN_DIR = ".isorite";
 export const OWN_FORMAT = 2;
 export const GITATTRIBUTES = "*.jsonl merge=union\n";
+export const SETTINGS_FILE = "settings.toml";
+
+/** The base's settings. `repository`: the folder code links resolve against, relative to the notes folder (or
+ *  absolute); `isorite term` writes it the first time it is run beside the base. */
+export interface Settings { repository?: string }
+
+export function parseSettings(text: string | null): Settings {
+  if (!text) return {};
+  let raw: Record<string, unknown>;
+  try { raw = parse(text); } catch { return {}; }
+  return typeof raw.repository === "string" && raw.repository.trim() ? { repository: raw.repository.trim() } : {};
+}
+
+export function settingsText(s: Settings): string {
+  return `# isorite's settings for this base (format 2)\n${stringify(s)}\n`;
+}
 
 const SAFE = /^[^\0]+$/;
 function checkId(id: string): string {
