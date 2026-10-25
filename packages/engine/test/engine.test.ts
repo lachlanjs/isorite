@@ -7,11 +7,11 @@ const NOTE = "---\ntype: Concept\ntitle: Entropy\n---\n\nThe average surprise.\n
 
 async function open(notes: Record<string, string> = { "basics/entropy.md": NOTE }, study: Record<string, string> | null = {}) {
   const clock = { t: Date.parse("2026-10-13T09:00:00Z"), now() { return this.t; } };
-  const files = { notes: new MemoryFiles(notes), study: study ? new MemoryFiles(study) : null };
+  const files = { notes: new MemoryFiles(notes), own: new MemoryFiles(study ?? {}) };
   const engine = await Engine.open({ ...files, clock, device: "laptop1", name: "information-theory" });
   const events: EngineEvent[] = [];
   engine.events((e) => events.push(e));
-  const journal = (id: string) => readJournal(files.study?.files.get(`journal/${id}.jsonl`) ?? "") as Change[];
+  const journal = (id: string) => readJournal(files.own.files.get(`journal/${id}.jsonl`) ?? "") as Change[];
   return { engine, clock, events, journal, ...files };
 }
 
@@ -126,7 +126,7 @@ test("the session carries on from the study base's newest entry when the engine 
   await first.engine.readNote("basics/entropy");
   const [start] = first.journal("basics/entropy");
   const clock = { now: () => Date.parse(start!.at) + 60_000 };
-  const again = await Engine.open({ notes: first.notes, study: first.study, clock, device: "laptop1", name: "x" });
+  const again = await Engine.open({ notes: first.notes, own: first.own, clock, device: "laptop1", name: "x" });
   await again.createNote("basics/surprise", "---\ntype: Concept\n---\n");
   expect(first.journal("basics/surprise")[0]!.session).toBe(start!.session);
 });
@@ -144,19 +144,10 @@ test("saves asked for at once are written one at a time, in order", async () => 
   expect(replay(journal("basics/entropy"))).toMatchObject({ text: b, broken: [] });
 });
 
-test("with no study base, notes are read and written and no journal is kept", async () => {
-  const { engine, notes } = await open(undefined, null);
-  const { version } = await engine.readNote("basics/entropy");
-  await engine.saveNote("basics/entropy", { base: version, text: NOTE + "more\n" });
-  expect(notes.files.get("basics/entropy.md")).toBe(NOTE + "more\n");
-  expect(await engine.journal("basics/entropy")).toEqual([]);
-  expect((await engine.session()).study).toBe(false);
-});
-
 test("a study note is written into the study base's own notes, and journalled under its @study id", async () => {
-  const { engine, study, journal } = await open();
+  const { engine, own, journal } = await open();
   await engine.createNote("@study/basics/coin", "---\ntype: Exercise\n---\n");
-  expect(study!.files.has("study/basics/coin.md")).toBe(true);
+  expect(own.files.has("study/basics/coin.md")).toBe(true);
   expect(journal("@study/basics/coin")).toHaveLength(1);
 });
 
@@ -179,8 +170,8 @@ test("the map: both bases as one model, each block with its title and where you 
   expect(map.model.root.children.map((c) => c.ref)).toEqual(["basics", "@study/basics"]);
 });
 
-test("the map without a study base, and after a note gains a link", async () => {
-  const { engine } = await open({ "a.md": NOTE, "b.md": NOTE }, null);
+test("the map of a base with nothing of its own yet, and after a note gains a link", async () => {
+  const { engine } = await open({ "a.md": NOTE, "b.md": NOTE });
   expect((await engine.map()).model.edges).toEqual([]);
   const { version } = await engine.readNote("b");
   await engine.saveNote("b", { base: version, text: NOTE + '\n[a](/a.md "requires")\n' });

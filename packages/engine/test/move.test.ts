@@ -12,7 +12,7 @@ async function open() {
   const clock = { t: AT, now() { return this.t; } };
   const notes = new MemoryFiles({ "physics/gravity.md": FORCE, "integrators/leapfrog.md": LEAP });
   const study = new MemoryFiles({ "study/physics/two-bodies.md": EXERCISE, "record/laptop1.jsonl": JSON.stringify(attempt) + "\n" });
-  const engine = await Engine.open({ notes, study, clock, device: "laptop1", name: "nbody-notes" });
+  const engine = await Engine.open({ notes, own: study, clock, device: "laptop1", name: "nbody-notes" });
   return { engine, notes, study, clock };
 }
 

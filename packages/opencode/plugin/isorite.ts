@@ -35,10 +35,10 @@ export async function post<T>(path: string, body: unknown): Promise<T> {
 /** A tool the server offers an agent, as OpenAI's API describes one. */
 export interface ToolDef { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } }
 
-/** What the splash says of the base: its name, how many notes, whether it has a study base. */
-export async function base(): Promise<{ name: string; notes: number; study: boolean }> {
+/** What the splash says of the base: its name and how many notes. */
+export async function base(): Promise<{ name: string; notes: number }> {
   const [session, listing] = await Promise.all([get<Session>("/api/session"), get<Listing>("/api/notes")]);
-  return { name: session.name, notes: listing.notes.length, study: session.study };
+  return { name: session.name, notes: listing.notes.length };
 }
 
 /** The server's events, as the browser hears them, until the signal aborts; heard again after a dropped stream. */

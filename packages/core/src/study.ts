@@ -16,11 +16,11 @@ import { parse, stringify } from "smol-toml";
 import type { Bundle } from "./bundle.ts";
 import { STRENGTH } from "./graph.ts";
 import { dirname, text } from "./text.ts";
+export { GITATTRIBUTES } from "./own.ts";
 
 export const STUDY_FORMAT = 1;
 export const CONFIG_FILE = "isorite.toml";
 export const STUDY_DIR = "study";
-export const GITATTRIBUTES = "*.jsonl merge=union\n";
 
 export class StudyError extends Error {}
 

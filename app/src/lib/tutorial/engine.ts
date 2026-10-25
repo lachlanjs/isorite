@@ -15,7 +15,7 @@ export function tutorialEngine(): Promise<Api> { return (made ??= open()); }
 async function open(): Promise<Api> {
   const built = await buildExample(sources);
   return Engine.open({
-    notes: new MemoryFiles(built.notes), study: new MemoryFiles(built.study), clock: systemClock, device: "tutorial", name: NAME,
+    notes: new MemoryFiles(built.notes), own: new MemoryFiles(built.own), clock: systemClock, device: "tutorial", name: NAME,
     http: scriptedHttp(tutorialAnswer, 16), secrets: new MemorySecrets({ [KEY]: "tutorial" }),
     // No signing in for a key: there is no provider here.
     provider: { ...OPENROUTER, auth: undefined }, similar,

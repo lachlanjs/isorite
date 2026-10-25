@@ -9,7 +9,7 @@ async function open(script: Scripted[]) {
   const clock = { t: Date.parse("2026-10-22T09:00:00Z"), now() { return this.t; } };
   const notes = new MemoryFiles({ "basics/entropy.md": ENTROPY, "basics/surprise.md": SURPRISE }), study = new MemoryFiles();
   const provider = scripted(script);
-  const engine = await Engine.open({ notes, study, clock, device: "laptop1", name: "information-theory", http: provider.http, secrets: new MemorySecrets({ [KEY]: "sk-test" }) });
+  const engine = await Engine.open({ notes, own: study, clock, device: "laptop1", name: "information-theory", http: provider.http, secrets: new MemorySecrets({ [KEY]: "sk-test" }) });
   const events: EngineEvent[] = [];
   engine.events((e) => events.push(e));
   const ended = (turn: string) => new Promise<EngineEvent>((done) => {

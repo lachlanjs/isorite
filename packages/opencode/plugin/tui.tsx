@@ -449,7 +449,7 @@ export default Plugin.define({
           const b = base();
           if (!b) return " ";
           if ("error" in b) return `isorite is not answering at ${Isorite.url}`;
-          return `${b.name} · ${b.notes} ${b.notes === 1 ? "note" : "notes"} · ${b.study ? "study base found" : "no study base"}`;
+          return `${b.name} · ${b.notes} ${b.notes === 1 ? "note" : "notes"}`;
         };
         return (
           <box flexDirection="column" alignItems="center" justifyContent="center" width="100%" height="100%">

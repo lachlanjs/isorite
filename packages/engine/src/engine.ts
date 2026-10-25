@@ -25,8 +25,9 @@ const SIGN_IN_MS = 10 * 60_000;
 export interface EngineOptions {
   /** The knowledge base's folder. */
   notes: Files;
-  /** The study base's folder, or null in project mode: no journal is kept. */
-  study: Files | null;
+  /** isorite's own files for this base: its journals, conversations and Understanding notes. On disk, the notes'
+   *  `.isorite/` folder (format 2); in the tutorial and the tests, files in memory. */
+  own: Files;
   clock: Clock;
   device: string;
   name: string;
@@ -160,7 +161,7 @@ export class Engine implements Api {
   // ------------------------------------------------------------ reading
 
   async session(): Promise<Session> {
-    return { name: this.opts.name, study: this.opts.study !== null, device: this.opts.device, ...(this.opts.tutorial ? { tutorial: true } : {}) };
+    return { name: this.opts.name, study: true, device: this.opts.device, ...(this.opts.tutorial ? { tutorial: true } : {}) };
   }
 
   async notes(): Promise<Listing> {
@@ -184,8 +185,8 @@ export class Engine implements Api {
 
   /** Both bases as the Atlas draws them: the model the layout takes, and what each block says. */
   async map(): Promise<MapReport> {
-    const study = this.opts.study;
-    const exercises = study ? Bundle.fromFiles(await walk(study, STUDY_DIR)) : null;
+    const study = this.opts.own;
+    const exercises = Bundle.fromFiles(await walk(study, STUDY_DIR));
     const events = await this.records();
     const read = understanding(events, this.opts.clock.now());
     // Each exercise's last result: one last marked right is passed, and grows its folder's mark.
@@ -206,8 +207,7 @@ export class Engine implements Api {
 
   async journal(id: string): Promise<Entry[]> {
     checkNoteId(bare(id));
-    if (!this.opts.study) return [];
-    return readJournal((await this.opts.study.read(journalPath(id))) ?? "");
+    return readJournal((await this.opts.own.read(journalPath(id))) ?? "");
   }
 
   async search(query: string): Promise<SearchHit[]> {
@@ -341,7 +341,7 @@ export class Engine implements Api {
     if (!inBase(id) || !inBase(to)) throw new EngineError("only a note of the base is moved, and only within it");
     checkNoteId(to);
     if (to === id) throw new EngineError("the note is there already");
-    const notes = this.opts.notes, study = this.opts.study, from = `${checkNoteId(id)}.md`, path = `${to}.md`;
+    const notes = this.opts.notes, study = this.opts.own, from = `${checkNoteId(id)}.md`, path = `${to}.md`;
     // Who links to it, read before it moves: they are changed after.
     const linking = this.bundle.backlinks(id).filter((c) => c !== id);
     const text = await this.one(async () => {
@@ -415,8 +415,7 @@ export class Engine implements Api {
   /** Where a note's file is: study notes (`@study/…`) are in the study base's own folder of notes. */
   private where(id: string): { files: Files; path: string } {
     if (!inBase(id)) {
-      if (!this.opts.study) throw new EngineError("there is no study base open", 404);
-      return { files: this.opts.study, path: `${isDraftId(id) ? DRAFT_DIR : isUnderstandingId(id) ? UNDERSTANDING_DIR : STUDY_DIR}/${checkNoteId(bare(id))}.md` };
+      return { files: this.opts.own, path: `${isDraftId(id) ? DRAFT_DIR : isUnderstandingId(id) ? UNDERSTANDING_DIR : STUDY_DIR}/${checkNoteId(bare(id))}.md` };
     }
     return { files: this.opts.notes, path: `${checkNoteId(id)}.md` };
   }
@@ -517,7 +516,6 @@ export class Engine implements Api {
   async ask(req: AskRequest): Promise<{ request: string }> {
     const http = this.opts.http;
     if (!http) throw new EngineError("Iso cannot be asked here", 409);
-    if (!this.opts.study) throw new EngineError("Iso's text is kept in a study base until you keep it, and none is open (isorite study init)", 409);
     if (req.form === "mark" ? !isStudyId(req.note) : isStudyId(req.note) && req.form !== "insert" && req.form !== "rewrite") throw new EngineError("only an exercise is sent for marking");
     if (isDraftId(req.note) !== (req.form === "note" || req.form === "exercise")) throw new EngineError("a note for Iso is sent whole, and only a note for Iso is");
     if (!TIERS.includes(req.tier)) throw new EngineError("the tier is low, mid or max");
@@ -735,13 +733,13 @@ export class Engine implements Api {
   private async sessionEntries(session?: string): Promise<Map<string, Entry[]>> {
     session ??= await this.sessionNow();
     if (this.sessionLog?.session === session) return this.sessionLog.notes;
-    const notes = new Map<string, Entry[]>(), study = this.opts.study;
+    const notes = new Map<string, Entry[]>(), study = this.opts.own;
     const visit = async (dir: string): Promise<void> => {
-      for (const info of study ? await study.list(dir) : []) {
+      for (const info of await study.list(dir)) {
         const path = `${dir}/${info.name}`;
         if (info.dir) await visit(path);
         else if (info.name.endsWith(".jsonl")) {
-          const mine = readJournal((await study!.read(path)) ?? "").filter((e) => e.session === session);
+          const mine = readJournal((await study.read(path)) ?? "").filter((e) => e.session === session);
           if (mine.length) notes.set(path.slice("journal/".length, -".jsonl".length), mine);
         }
       }
@@ -761,7 +759,7 @@ export class Engine implements Api {
   private cleared: string | undefined;
   private async clearedAt(): Promise<string> {
     if (this.cleared === undefined) {
-      const text = this.opts.study ? await this.opts.study.read(recordPath(this.opts.device)) : null;
+      const text = await this.opts.own.read(recordPath(this.opts.device));
       this.cleared = readRecord(text ?? "").filter((e) => e.event === "context-cleared").map((e) => e.id).sort().at(-1) ?? "";
     }
     return this.cleared;
@@ -784,13 +782,12 @@ export class Engine implements Api {
   /** An event in the study record, on this device's file. */
   private async record(event: Record<string, unknown>): Promise<string> {
     const e = cleanEvent(event, { device: this.opts.device, now: this.opts.clock.now() });
-    await this.opts.study?.append(recordPath(this.opts.device), JSON.stringify(e) + "\n");
+    await this.opts.own.append(recordPath(this.opts.device), JSON.stringify(e) + "\n");
     this.publish({ type: "record", event: String(e.event) });
     return e.id;
   }
 
   async clearConversation(): Promise<void> {
-    if (!this.opts.study) return;
     this.cleared = await this.one(() => this.record({ event: "context-cleared" }));
   }
 
@@ -831,7 +828,7 @@ export class Engine implements Api {
     const session = await this.sessionNow();
     let usd = 0, requests = 0;
     for (const entries of (await this.sessionEntries()).values()) for (const e of entries) if (((e.kind === "proposal" && !e.copyOf) || e.kind === "marks") && e.cost) { usd += e.cost.usd; requests++; } // a proposal with no cost is the second of one request
-    const text = this.opts.study ? await this.opts.study.read(recordPath(this.opts.device)) : null;
+    const text = await this.opts.own.read(recordPath(this.opts.device));
     for (const e of readRecord(text ?? "")) if ((e.event === "iso-unused" || e.event === "iso-turn") && e.session === session) { usd += typeof e.usd === "number" ? e.usd : 0; requests++; }
     return { usd, requests };
   }
@@ -844,8 +841,7 @@ export class Engine implements Api {
   private readonly waitingAnswer = new Map<string, { turn: string; conversation: string; settle: (d: Decision) => void }>();
 
   async conversation(id?: string): Promise<Conversation | null> {
-    const study = this.opts.study;
-    if (!study) return null;
+    const study = this.opts.own;
     if (!id) {
       const names = await study.list(CONVERSATIONS_DIR).catch(() => []);
       id = names.filter((f) => !f.dir && f.name.endsWith(".jsonl")).map((f) => f.name.slice(0, -".jsonl".length)).sort().at(-1);
@@ -907,9 +903,8 @@ export class Engine implements Api {
   }
 
   async converse(req: TurnRequest): Promise<{ conversation: string; turn: string }> {
-    const http = this.opts.http, study = this.opts.study;
+    const http = this.opts.http, study = this.opts.own;
     if (!http) throw new EngineError("Iso cannot be asked here", 409);
-    if (!study) throw new EngineError("Iso's conversations are kept in a study base, and none is open (isorite study init)", 409);
     if (!(MODES as readonly string[]).includes(req.mode)) throw new EngineError("the mode is ask, write, build or understand");
     if (req.mode === "build") throw new EngineError("Build mode is the terminal's: start isorite term", 409);
     if (!TIERS.includes(req.tier)) throw new EngineError("the tier is low, mid or max");
@@ -927,7 +922,7 @@ export class Engine implements Api {
   }
 
   private async beginTurn(conversation: string, req: TurnRequest & { mode: Exclude<TurnRequest["mode"], "build"> }, http: Http): Promise<string> {
-    const study = this.opts.study!;
+    const study = this.opts.own;
     const key = (await this.opts.secrets?.get(KEY)) ?? null;
     if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
     const off = new Set(req.off ?? []), earlier = ((await this.conversation(conversation))?.turns ?? []).filter((t) => !off.has(t.id));
@@ -1101,7 +1096,7 @@ export class Engine implements Api {
   async understanding(note: string): Promise<UnderstandingReport> {
     if (!inBase(checkNoteId(note))) throw new EngineError("only a note of the base has an Understanding note");
     const uid = understandingId(note);
-    const source = this.opts.study ? await this.readNote(uid).catch(() => null) : null;
+    const source = await this.readNote(uid).catch(() => null);
     const read = (await this.study()).notes[note];
     return { note, ...parseUnderstanding(source?.text ?? null), version: source?.version ?? null, level: read?.level ?? 0, squares: read?.squares ?? 0, step: read?.step ?? 0, due: read?.due ?? false, evidence: read?.evidence ?? [] };
   }
@@ -1109,7 +1104,6 @@ export class Engine implements Api {
   /** Your scratchpad in a note's Understanding note: yours alone; Iso does not write it. `base` as for saveNote, or
    *  null when there is no Understanding note yet. */
   async saveScratchpad(note: string, scratchpad: string, base: string | null): Promise<UnderstandingReport> {
-    if (!this.opts.study) throw new EngineError("there is no study base open", 409);
     if (!inBase(checkNoteId(note))) throw new EngineError("only a note of the base has an Understanding note");
     const uid = understandingId(note), was = await this.readNote(uid).catch(() => null);
     const title = this.bundle.concepts.get(note)?.title ?? note;
@@ -1158,7 +1152,7 @@ export class Engine implements Api {
       } catch { left.push(key); }
     }
     const item: TurnItem = { kind: "undone", notes, left };
-    await this.one(() => this.opts.study!.append(conversationPath(conversation), JSON.stringify({ kind: "item", turn, item } satisfies TurnLine) + "\n"));
+    await this.one(() => this.opts.own.append(conversationPath(conversation), JSON.stringify({ kind: "item", turn, item } satisfies TurnLine) + "\n"));
     this.publish({ type: "iso-item", request: turn, conversation, item });
     return { notes, left };
   }
@@ -1168,7 +1162,7 @@ export class Engine implements Api {
     const w = this.waitingAnswer.get(permission);
     if (!w || w.turn !== turn) throw new EngineError("Iso is not waiting for that answer", 409);
     this.waitingAnswer.delete(permission);
-    await this.one(() => this.opts.study!.append(conversationPath(w.conversation), JSON.stringify({ kind: "answer", turn, permission, decision } satisfies TurnLine) + "\n"));
+    await this.one(() => this.opts.own.append(conversationPath(w.conversation), JSON.stringify({ kind: "answer", turn, permission, decision } satisfies TurnLine) + "\n"));
     this.publish({ type: "iso-answer", request: turn, conversation: w.conversation, permission, decision });
     w.settle(decision);
   }
@@ -1176,8 +1170,7 @@ export class Engine implements Api {
   // ------------------------------------------------------------ notes for Iso
 
   async drafts(): Promise<DraftSummary[]> {
-    const study = this.opts.study;
-    if (!study) return [];
+    const study = this.opts.own;
     const out: DraftSummary[] = [];
     for (const info of await study.list(DRAFT_DIR)) {
       if (info.dir || !info.name.endsWith(".md")) continue;
@@ -1189,7 +1182,6 @@ export class Engine implements Api {
   }
 
   async createDraft(): Promise<NoteSource> {
-    if (!this.opts.study) throw new EngineError("a note for Iso is kept in a study base until it is a note, and none is open (isorite study init)", 409);
     const id = DRAFT_PREFIX + newId(this.opts.clock.now()).toLowerCase();
     return this.createNote(id, "---\ntype: Concept\ntitle: \"\"\n---\n\n");
   }
@@ -1231,8 +1223,7 @@ export class Engine implements Api {
 
   /** Every device's record, merged, in time order. */
   private async records(): Promise<LearnerEvent[]> {
-    const study = this.opts.study;
-    if (!study) return [];
+    const study = this.opts.own;
     const files = (await study.list("record")).filter((f) => !f.dir && f.name.endsWith(".jsonl"));
     return mergeRecords(...(await Promise.all(files.map(async (f) => readRecord((await study.read(`record/${f.name}`)) ?? "")))));
   }
@@ -1293,8 +1284,7 @@ export class Engine implements Api {
 
   /** Every exercise of the study base, read. */
   private async studyExercises(): Promise<(ReturnType<typeof exercise> & { id: string })[]> {
-    const study = this.opts.study;
-    if (!study) return [];
+    const study = this.opts.own;
     const out: (ReturnType<typeof exercise> & { id: string })[] = [];
     for (const f of await walk(study, STUDY_DIR)) {
       if (f.dir || !f.path.endsWith(".md") || f.text === undefined) continue;
@@ -1308,7 +1298,6 @@ export class Engine implements Api {
   }
 
   async createExerciseDraft(folder: string, tests: string[], after: string | null = null): Promise<NoteSource> {
-    if (!this.opts.study) throw new EngineError("exercises are kept in a study base, and none is open (isorite study init)", 409);
     const dir = folder.trim().replace(/^\/+|\/+$/g, "");
     if (dir && !this.bundle.directories.has(dir)) throw new EngineError(`there is no folder ${dir} in the base`);
     for (const t of tests) if (!this.bundle.concepts.has(t)) throw new EngineError(`there is no note ${t} in the base`);
@@ -1330,7 +1319,7 @@ export class Engine implements Api {
     const name = (title || "exercise").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "") || "exercise";
     const all = await this.studyExercises(), taken = new Set(all.map((e) => e.id));
     let local = [d.folder, name].filter(Boolean).join("/");
-    for (let k = 2; taken.has(local) || (await this.opts.study!.read(`${STUDY_DIR}/${local}.md`)) !== null; k++) local = [d.folder, `${name}-${k}`].filter(Boolean).join("/");
+    for (let k = 2; taken.has(local) || (await this.opts.own.read(`${STUDY_DIR}/${local}.md`)) !== null; k++) local = [d.folder, `${name}-${k}`].filter(Boolean).join("/");
     const id = studyId(local);
     // Placed in its chain: it takes the place after the one it follows, and that one now leads to it.
     const before = d.after ? all.find((e) => e.id === d.after) : undefined;
@@ -1384,7 +1373,6 @@ export class Engine implements Api {
 
   async windBack(id: string): Promise<void> {
     if (!isStudyId(id)) throw new EngineError("wind back is done from an exercise");
-    if (!this.opts.study) throw new EngineError("there is no study base open", 409);
     const tests = exercise((await this.readNote(id)).text).tests;
     if (!tests.length) throw new EngineError("the exercise tests no note");
     await this.one(async () => { for (const note of tests) await this.record({ event: "wind-back", note }); });
@@ -1451,8 +1439,8 @@ export class Engine implements Api {
   }
 
   private async enter(id: string, entries: Entry[], entry: Entry | null): Promise<void> {
-    if (!entry || !this.opts.study) return;
-    await this.opts.study.append(journalPath(id), journalLine(entry));
+    if (!entry || !this.opts.own) return;
+    await this.opts.own.append(journalPath(id), journalLine(entry));
     entries.push(entry);
     this.last = { at: entry.at, session: entry.session };
     if (this.sessionLog?.session === entry.session) this.sessionLog.notes.set(id, [...(this.sessionLog.notes.get(id) ?? []), entry]);
@@ -1466,8 +1454,7 @@ export class Engine implements Api {
 
   /** The newest entry in any journal of the study base, found once when the engine first writes. */
   private async newest(): Promise<Pick<Stamp, "at" | "session"> | null> {
-    const study = this.opts.study;
-    if (!study) return null;
+    const study = this.opts.own;
     let newest: Entry | null = null;
     const visit = async (dir: string): Promise<void> => {
       for (const info of await study.list(dir)) {

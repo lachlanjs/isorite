@@ -1,6 +1,6 @@
 # isorite: what is on disk
 
-Format 1. The code that reads and writes each of these is in `packages/core`; the file named beside each heading is the authority where this page and the code disagree.
+Format 2 (milestone 12). The code that reads and writes each of these is in `packages/core`; the file named beside each heading is the authority where this page and the code disagree.
 
 Changing anything here means converting people's data. Change it on purpose.
 
@@ -13,37 +13,23 @@ A folder of notes in the Open Knowledge Format 0.2, as rdstudio read it. `fixtur
 - Links are absolute within the base (`/folder/note.md`).
 - A note's id is its path without `.md`: `basics/entropy`.
 
-When there is a study base, isorite writes nothing of its own into the knowledge base. No markers for unkept text, no journal, no settings.
+isorite's own files are in the notes' hidden `.isorite/` folder (section 2) and nowhere else among the notes. No markers for unkept text in a note's file.
 
-**Project mode (later, proposed).** A knowledge base opened with no study base keeps its notes' journals in itself, at `.isorite/journal/<note id>.jsonl`, in the form of section 3. Whether that folder is committed is open.
+## 2. isorite's own files (`own.ts`)
 
-## 2. The study base (`study.ts`)
-
-A separate repository beside the knowledge base. Made by `isorite study init <notes>`.
+A hidden folder in the notes, committed with them. Made, with its `.gitattributes`, the first time the base is opened.
 
 ```
-isorite.toml
-.gitattributes                  *.jsonl merge=union
-journal/<note id>.jsonl         section 3
-record/<device>.jsonl           section 4
-study/<folder>/<name>.md        section 5
-drafts/<id>.md                  notes for Iso that are not in the base yet
-```
-
-`isorite.toml`:
-
-```toml
-format = 1
-
-[base]
-path = "../information-theory"   # the folder of notes, from this folder
-remote = ""                      # where to clone it from, on a device that lacks it
-root = "9f4def6…"                # its root commit: the same in every clone
+.isorite/
+  .gitattributes                  *.jsonl merge=union
+  journal/<note id>.jsonl         section 3
+  conversations/<id>.jsonl        Iso's conversations
+  understanding/<note id>.md      a note's Understanding note
+  drafts/<id>.md                  notes for Iso that are not in the base yet
 ```
 
 - **A note for Iso** is a draft: `drafts/<id>.md`, an OKF note like any other, whose id is a lower-case ULID. Wherever notes are named it is `@draft/<id>`, and its journal is at `journal/@draft/<id>.jsonl`. When Iso's reply is kept as a note the draft's file is removed and its journal stays.
-- **A study folder** is the folder under `study/` with the same path as a folder of the knowledge base. `study/basics/` studies `basics/`. `study/` itself studies the root.
-- Wherever the two bases are spoken of together, a study note's id is prefixed: `@study/basics/entropy-of-a-coin`. Its journal is at `journal/@study/basics/entropy-of-a-coin.jsonl`.
+- **Format 1** kept these in a study base, a separate repository beside the notes with an `isorite.toml`. isorite no longer opens one. `isorite migrate <study base>` copies its journals, conversations, Understanding notes and drafts into `.isorite/`, writes each exercise as a problem note among the notes (its journal following it), and leaves the study record behind. The study base itself is only read. With journals already in `.isorite/` it stops, unless given `--merge`: then journals are united by entry id, as two devices' are.
 
 ## 3. The journal (`journal.ts`)
 
@@ -55,7 +41,7 @@ Every entry has:
 |---|---|
 | `id` | a ULID: time, then randomness. Entries are ordered by it. |
 | `at` | ISO 8601, UTC, to the second |
-| `session` | the id of the session's first entry. A session ends after 30 minutes with no entry anywhere in the study base. |
+| `session` | the id of the session's first entry. A session ends after 30 minutes with no entry anywhere in `.isorite/`. |
 | `device` | 4 to 16 lower-case letters and digits |
 | `who` | `you`, `iso:<model>`, `agent:<name>`, or `external` |
 | `kind` | `change`, `proposal`, `revise` or `discard` |
@@ -180,7 +166,7 @@ Show that the entropy of a fair coin is one bit.
 - The question is the text before `## Working`; the working is everything after it.
 - **The answer is not in the file.** It is any selection of the working, held by the app until the exercise is sent for marking, and then kept in the `attempt` event with the working as it was (section 4). Iso's marks are a `marks` entry in the exercise's journal (section 3).
 
-## 6. What is kept outside both repositories
+## 6. What is kept outside the notes
 
 | What | Where (desktop) | Why not in a repository |
 |---|---|---|

@@ -14,7 +14,7 @@ async function open(script: Scripted[], study: Record<string, string> = { "study
   const notes = new MemoryFiles({ "basics/entropy.md": ENTROPY, "basics/surprise.md": SURPRISE });
   const files = new MemoryFiles(study);
   const provider = scripted(script);
-  const engine = await Engine.open({ notes, study: files, clock, device: "laptop1", name: "information-theory", http: provider.http, secrets: new MemorySecrets({ [KEY]: "sk-test" }) });
+  const engine = await Engine.open({ notes, own: files, clock, device: "laptop1", name: "information-theory", http: provider.http, secrets: new MemorySecrets({ [KEY]: "sk-test" }) });
   const events: EngineEvent[] = [];
   engine.events((e) => events.push(e));
   const ended = (request: string) => new Promise<EngineEvent>((done) => {

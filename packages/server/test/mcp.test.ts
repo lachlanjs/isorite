@@ -22,7 +22,7 @@ test("isorite mcp: the base's tools over stdio, each look-up a step on the Atlas
   const base = await writeExample(join(root, "base"));
   const port = await freePort(), input = new PassThrough(), output = new PassThrough();
   const env = { ...process.env, XDG_CONFIG_HOME: join(root, "config"), XDG_CACHE_HOME: join(root, "cache"), ISORITE_EMBED: "off" };
-  const done = mcp(base.study, { port, agent: "claude-code", quiet: 300, input, output, env });
+  const done = mcp(base.notes, { port, agent: "claude-code", quiet: 300, input, output, env });
 
   type Reply = { id: number; result?: Record<string, unknown>; error?: { code: number } };
   const replies = new Map<number, Reply>();

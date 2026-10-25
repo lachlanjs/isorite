@@ -12,7 +12,7 @@ async function open(script: Scripted[], opts: { key?: string | null; similar?: b
   const provider = scripted(script);
   const secrets = new MemorySecrets(opts.key === null ? {} : { [KEY]: opts.key ?? "sk-test" });
   const engine = await Engine.open({
-    notes, study, clock, device: "laptop1", name: "information-theory", http: provider.http, secrets,
+    notes, own: study, clock, device: "laptop1", name: "information-theory", http: provider.http, secrets,
     ...(opts.similar ? { similar: async () => ({ ready: true, hits: [{ note: "basics/surprise", heading: "Units", body: "With base 2 the unit is the bit.", score: 0.81 }] }) } : {}),
   });
   const events: EngineEvent[] = [];
@@ -187,7 +187,7 @@ test("a key is made by signing in at the provider: PKCE, the code exchanged by t
   const secrets = new MemorySecrets({}), exchanged: { url: string; body: Record<string, string> }[] = [];
   let answer: () => Response = () => new Response(JSON.stringify({ key: "sk-or-made" }), { status: 200 });
   const fetch = (async (url: string, init?: RequestInit) => { exchanged.push({ url, body: JSON.parse(String(init?.body)) as Record<string, string> }); return answer(); }) as typeof globalThis.fetch;
-  const engine = await Engine.open({ notes: new MemoryFiles({}), study: new MemoryFiles(), clock, device: "laptop1", name: "b", http: { fetch }, secrets });
+  const engine = await Engine.open({ notes: new MemoryFiles({}), own: new MemoryFiles(), clock, device: "laptop1", name: "b", http: { fetch }, secrets });
   await expect(engine.connect("javascript:alert(1)")).rejects.toMatchObject({ status: 400 });
 
   const url = new URL((await engine.connect("http://localhost:4767/")).url);
@@ -223,7 +223,7 @@ test("a key is made by signing in at the provider: PKCE, the code exchanged by t
 });
 
 test("a provider without a sign-in page can only be given a key by pasting it", async () => {
-  const engine = await Engine.open({ notes: new MemoryFiles({}), study: new MemoryFiles(), clock: { now: () => 0 }, device: "laptop1", name: "b", secrets: new MemorySecrets({}), provider: { name: "custom", url: "http://x/v1", cacheMarks: false, tiers: { low: "a", mid: "b", max: "c" }, prices: {} } });
+  const engine = await Engine.open({ notes: new MemoryFiles({}), own: new MemoryFiles(), clock: { now: () => 0 }, device: "laptop1", name: "b", secrets: new MemorySecrets({}), provider: { name: "custom", url: "http://x/v1", cacheMarks: false, tiers: { low: "a", mid: "b", max: "c" }, prices: {} } });
   expect((await engine.settings()).connect).toBe(false);
   await expect(engine.connect("http://localhost:4767/")).rejects.toMatchObject({ status: 409 });
 });

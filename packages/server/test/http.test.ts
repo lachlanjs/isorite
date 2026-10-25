@@ -9,7 +9,6 @@ import { deviceId } from "../src/config.ts";
 import { TOKEN_HEADER, createApp } from "../src/http.ts";
 import { NodeFiles } from "../src/nodefiles.ts";
 import { locate, openEngine } from "../src/serve.ts";
-import { initStudyBase } from "../src/studybase.ts";
 
 const NOTE = "---\ntype: Concept\ntitle: Entropy\n---\n\nThe average surprise.\n";
 const TOKEN = "the-token";
@@ -20,10 +19,10 @@ beforeAll(async () => {
   notes = join(root, "information-theory");
   mkdirSync(join(notes, "basics"), { recursive: true });
   writeFileSync(join(notes, "basics", "entropy.md"), NOTE);
-  study = initStudyBase(notes).path;
+  study = join(notes, ".isorite");
   mkdirSync(join(root, "web"));
   writeFileSync(join(root, "web", "index.html"), "<!doctype html><title>isorite</title>");
-  const api = await openEngine(locate(study), "testdev1", join(root, "config.toml"), undefined, null);
+  const api = await openEngine(locate(notes),"testdev1", join(root, "config.toml"), undefined, null);
   server = nodeServe({ fetch: createApp({ api, token: TOKEN, loopback: true, web: join(root, "web") }).fetch, hostname: "127.0.0.1", port: 0 });
   await new Promise((done) => server.once("listening", done));
   url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -33,10 +32,9 @@ afterAll(() => { server.close(); rmSync(root, { recursive: true, force: true });
 const write = (path: string, body: unknown, { method = "PUT", headers = {} as Record<string, string> } = {}) =>
   fetch(url + path, { method, headers: { Origin: url, "Content-Type": "application/json", [TOKEN_HEADER]: TOKEN, ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
 
-test("a study base is found from either folder", () => {
-  expect(locate(study)).toEqual({ notes, study });
-  expect(locate(notes)).toEqual({ notes, study });
-  expect(locate(join(root, "web"))).toEqual({ notes: join(root, "web"), study: null });
+test("a folder of notes is opened with isorite's own files in its .isorite/, made the first time", () => {
+  expect(locate(notes)).toEqual({ notes });
+  expect(readFileSync(join(study, ".gitattributes"), "utf8")).toBe("*.jsonl merge=union\n");
 });
 
 test("the session, the listing and the search", async () => {

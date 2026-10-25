@@ -8,7 +8,6 @@ import { insertAt, pending, readJournal } from "@isorite/core";
 import { ConfigSecrets, providerConfig } from "../src/config.ts";
 import { TOKEN_HEADER, createApp } from "../src/http.ts";
 import { locate, openEngine } from "../src/serve.ts";
-import { initStudyBase } from "../src/studybase.ts";
 import { scripted } from "../../engine/test/scripted.ts";
 
 const NOTE = "---\ntype: Concept\ntitle: Entropy\n---\n\nThe average surprise.\n";
@@ -21,9 +20,9 @@ beforeAll(async () => {
   notes = join(root, "information-theory");
   mkdirSync(join(notes, "basics"), { recursive: true });
   writeFileSync(join(notes, "basics", "entropy.md"), NOTE);
-  study = initStudyBase(notes).path;
+  study = join(notes, ".isorite");
   config = join(root, "config.toml");
-  const api = await openEngine(locate(study), "testdev1", config, provider.http, null);
+  const api = await openEngine(locate(notes), "testdev1", config, provider.http, null);
   server = nodeServe({ fetch: createApp({ api, token: TOKEN, loopback: true, web: null }).fetch, hostname: "127.0.0.1", port: 0 });
   await new Promise((done) => server.once("listening", done));
   url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

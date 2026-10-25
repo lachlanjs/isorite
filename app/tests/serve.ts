@@ -9,7 +9,8 @@ import { join } from "node:path";
 export const PORT = 4799;
 export const ROOT = join(tmpdir(), "isorite-browser-tests");
 export const NOTES = join(ROOT, "information-theory");
-export const STUDY = NOTES + "-study";
+/** isorite's own files for the base (format 2). */
+export const STUDY = join(NOTES, ".isorite");
 
 export const PROVIDER_PORT = 4798;
 export const REPLY = "It is measured in **bits**, as [Surprise](/basics/surprise.md) is.\n\n$$\nH(X) \\le \\log_2 n\n$$";
@@ -114,10 +115,8 @@ if (process.argv[1] === import.meta.filename) {
   mkdirSync(join(ROOT, "config", "isorite"), { recursive: true });
   writeFileSync(join(ROOT, "config", "isorite", "config.toml"), `device = "browser01"\n\n[provider]\nname = "scripted"\nurl = "http://127.0.0.1:${PROVIDER_PORT}/v1"\nauth = "http://127.0.0.1:${PROVIDER_PORT}/auth"\n\n[tiers]\nlow = "scripted-low"\nmid = "scripted-mid"\nmax = "scripted-max"\n`);
   await provider();
-  const { initStudyBase } = await import("../../packages/server/src/studybase.ts");
   const { serve } = await import("../../packages/server/src/serve.ts");
-  initStudyBase(NOTES);
-  // And in the study base: one exercise on the last of them, and a record that says the first is worked through.
+  // And in isorite's own files: one exercise on the last of them, and a record that says the first is worked through.
   mkdirSync(join(STUDY, "study", "coding"), { recursive: true });
   writeFileSync(join(STUDY, "study", "coding", "a-prefix-code.md"), "---\ntype: Exercise\nkind: written\ntitle: Build a prefix code\ntests: [coding/huffman-codes]\n---\n\nFor four symbols.\n");
   mkdirSync(join(STUDY, "record"), { recursive: true });

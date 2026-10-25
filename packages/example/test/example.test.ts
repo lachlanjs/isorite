@@ -15,7 +15,7 @@ test("the notes come out as they stand in the package, every one of them journal
   expect(Object.keys(built.notes).sort()).toEqual(Object.keys(sources).sort());
   for (const [path, text] of Object.entries(sources)) {
     expect(built.notes[path], path).toBe(text);
-    const journal = readJournal(built.study[`journal/${path.replace(/\.md$/, ".jsonl")}`] ?? "");
+    const journal = readJournal(built.own[`journal/${path.replace(/\.md$/, ".jsonl")}`] ?? "");
     const head = replay(journal);
     expect(head?.text, path).toBe(text);
     expect(head?.broken, path).toEqual([]);
@@ -24,7 +24,7 @@ test("the notes come out as they stand in the package, every one of them journal
 });
 
 test("each note's understanding is spread over the Atlas's four steps", () => {
-  const events = readRecord(built.study["record/laptop1.jsonl"] ?? "");
+  const events = readRecord(built.own["record/laptop1.jsonl"] ?? "");
   const read = understanding(events, NOW);
   const step = (id: string) => read.get(id)?.step ?? 0;
   const want: Record<string, number> = {
@@ -41,23 +41,23 @@ test("each note's understanding is spread over the Atlas's four steps", () => {
 });
 
 test("today's session is five moments, and Iso's answer on softening waits", () => {
-  const journals = Object.entries(built.study).filter(([p]) => p.startsWith("journal/") && !p.includes("@"));
+  const journals = Object.entries(built.own).filter(([p]) => p.startsWith("journal/") && !p.includes("@"));
   const today = journals.flatMap(([p, text]) => moments(readJournal(text)).filter((m) => Date.parse(m.at) > NOW - 3600_000).map((m) => ({ note: p, what: m.what, asked: m.asked })));
   expect(today.map((m) => m.what)).toEqual(expect.arrayContaining(["wrote", "edited", "kept", "edited", "offered"]));
   expect(today).toHaveLength(5);
-  const soft = readJournal(built.study["journal/physics/softening.jsonl"]!);
+  const soft = readJournal(built.own["journal/physics/softening.jsonl"]!);
   expect(pending(soft).map((p) => p.asked)).toEqual(["how big should ε be?"]);
 });
 
 test("the history has every kind of moment the timeline shows", () => {
-  const all = Object.entries(built.study).filter(([p]) => p.startsWith("journal/")).flatMap(([, text]) => moments(readJournal(text)).map((m) => m.what));
+  const all = Object.entries(built.own).filter(([p]) => p.startsWith("journal/")).flatMap(([, text]) => moments(readJournal(text)).map((m) => m.what));
   for (const what of ["wrote", "edited", "kept", "offered", "discarded", "restored", "changed elsewhere", "marked"]) expect(all, what).toContain(what);
 });
 
 test("a note for Iso waits unsent, and the cost of direct summation has working, wrong, and no marking", () => {
-  const drafts = Object.keys(built.study).filter((p) => p.startsWith("drafts/"));
+  const drafts = Object.keys(built.own).filter((p) => p.startsWith("drafts/"));
   expect(drafts).toHaveLength(1);
-  expect(built.study[drafts[0]!]).toContain("Close encounters");
-  expect(built.study["study/algorithms/the-cost-of-direct-summation.md"]).toContain(COST_WORKING);
+  expect(built.own[drafts[0]!]).toContain("Close encounters");
+  expect(built.own["study/algorithms/the-cost-of-direct-summation.md"]).toContain(COST_WORKING);
   expect(built.notes["algorithms/barnes-hut.md"]).toContain("TODO:");
 });

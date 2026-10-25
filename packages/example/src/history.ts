@@ -9,7 +9,7 @@
 // softening; a note for Iso about close encounters is written and not sent; the exercise on the cost of direct
 // summation has working, wrong, and no marking yet.
 
-import { blocks, dumpStudyConfig, CONFIG_FILE, GITATTRIBUTES, type Anchor, type Passage } from "@isorite/core";
+import { blocks, GITATTRIBUTES, type Anchor, type Passage } from "@isorite/core";
 import { Engine, MemoryFiles, MemorySecrets, KEY, type Clock, type EngineEvent, type Similar } from "@isorite/engine";
 import { scriptedHttp, type Reply } from "./scripted.ts";
 import { TUTORIAL_MEANING } from "./tutorial.ts";
@@ -21,7 +21,7 @@ const DAY = 86_400_000, MIN = 60_000;
 export type Sources = Record<string, string>;
 
 /** Every file of the two bases, by path within each. */
-export interface Built { notes: Record<string, string>; study: Record<string, string> }
+export interface Built { notes: Record<string, string>; own: Record<string, string> }
 
 // ------------------------------------------------------------ text
 
@@ -153,15 +153,12 @@ export const similar: Similar = async (text) => ({
 
 export async function buildExample(sources: Sources, now = Date.now()): Promise<Built> {
   const final = (id: string): string => { const t = sources[`${id}.md`]; if (t === undefined) throw new Error(`no note ${id} in the example`); return t; };
-  const notes = new MemoryFiles(), study = new MemoryFiles({
-    [CONFIG_FILE]: dumpStudyConfig({ format: 1, base: { path: `../${NAME}`, remote: "", root: "" } }),
-    ".gitattributes": GITATTRIBUTES,
-  });
+  const notes = new MemoryFiles(), own = new MemoryFiles({ ".gitattributes": GITATTRIBUTES });
   let t = 0;
   const clock: Clock = { now: () => t++ };
   const replies: Reply[] = [];
   const http = scriptedHttp(() => { const r = replies.shift(); if (!r) throw new Error("Iso was asked more than the script says"); return r; });
-  const engine = await Engine.open({ notes, study, clock, device: DEVICE, name: NAME, http, secrets: new MemorySecrets({ [KEY]: "example" }), similar });
+  const engine = await Engine.open({ notes, own, clock, device: DEVICE, name: NAME, http, secrets: new MemorySecrets({ [KEY]: "example" }), similar });
 
   const done = new Map<string, Extract<EngineEvent, { type: "iso-done" | "iso-failed" }>>();
   const waiting = new Map<string, () => void>();
@@ -317,5 +314,5 @@ export async function buildExample(sources: Sources, now = Date.now()): Promise<
     await act();
   }
   if (replies.length) throw new Error(`${replies.length} scripted replies were never asked for`);
-  return { notes: Object.fromEntries(notes.files), study: Object.fromEntries(study.files) };
+  return { notes: Object.fromEntries(notes.files), own: Object.fromEntries(own.files) };
 }
