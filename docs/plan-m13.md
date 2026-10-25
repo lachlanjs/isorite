@@ -168,4 +168,40 @@ describe them that way.
 
 ## 6. What was built
 
-(Written as the work is done.)
+Built 2026-10-26, on `m13-setup`, in §3's order.
+
+1. **Network errors say why** (03d4c77). `unreachable()` in the engine reads Node's reason from the error's cause
+   chain, and gives one line of advice for an untrusted authority, a client certificate wanted (TLS alert, or the
+   socket closed during the handshake, which is how Node's fetch shows a missing one), an expired or misnamed
+   certificate, a name not found, a refused connection and a timeout. The codes were taken from real Node 25
+   failures against test servers.
+2. **The gateway's settings** (998609a).
+   - `[provider]` takes `headers`, `key_header`, `query`, `stream_usage = false`, and `"$NAME"` values from the
+     environment. The engine's `endpoint()` builds every request from them. A 404 on OpenRouter's names says so.
+   - **Client certificates:** `pfx` and `pfx_passphrase`, or `cert` and `cert_key`, and `ca`. Iso's requests then
+     go by `node:https` with an agent holding them; only the provider's own address is sent the certificate. A
+     wrong passphrase is said at start. Node's `https.Agent` takes the proxy too (`proxyEnv`), tried through a
+     CONNECT proxy with a client certificate.
+   - **The terminal** asks the isorite server's relay (`/api/gateway`, `/chat/completions` and `/models` only),
+     which adds the key, certificate, headers and query. OpenCode is given only the server's token, so the real key
+     no longer reaches OpenCode. The relay is offered only on 127.0.0.1. The real OpenCode 2 end-to-end test now
+     goes through it, and the scripted gateway sees the real key.
+   - Test certificates for `localhost`, valid a hundred years, are in `packages/server/test/fixtures/tls/`.
+3. **`isorite doctor [<notes>] [--report] [--offline]`** (fa1ee7e). The configuration, the proxy and authorities,
+   the provider (its models, compared with `[tiers]`; a reply from each tier, with its usage; a tool call), OpenCode
+   2, the port, the terminal's models, SSH, and the notes and their repository. `--report` hides the key,
+   passphrases, secret-looking headers, `ISORITE_GATEWAY_KEY` and proxy passwords, and keeps `"$NAME"` values.
+4. **Proxies and authorities by default** (bb6eca8), as Q56 proposed. The command trusts the system's authorities
+   in the process (`tls.setDefaultCACertificates`, Node 24), and re-runs itself once with `NODE_USE_ENV_PROXY=1`
+   when a proxy is set, adding this machine's own names to `NO_PROXY`. `ISORITE_NODE_DEFAULTS=0` turns both off.
+   Tested with a real child process through a logging proxy. `term` and `serve` print the link (OSC 8), `term` the
+   terminal's models and where they came from, and both the `ssh -L` command over SSH. A forwarded port works as
+   it was: the Origin is compared with the Host as it arrives.
+5. **The guides** (9d3c44c): `docs/terminal.md` rewritten for M12, `docs/setup.md`, `docs/setup-for-agents.md`
+   (`isorite help setup`), shipped in the npm package's `docs/`. Both READMEs no longer say `isorite study init`.
+6. **The real check was not made.** Running isorite on Lachlan's own configuration was refused by this session's
+   permission check, since it reads the key. Lachlan runs `isorite doctor`, at home and at work.
+
+Not done:
+- With `stream_usage = false`, the gauge counts nothing, and its tooltip doesn't yet say why.
+- Q54's header and Q55 (how the key is got) wait for Lachlan at work. `key_command` waits on Q55.
