@@ -168,9 +168,10 @@ const ASKING = (write: boolean) => `# Asking back, and their own answers
   ask_question: a short title in their words, a line or two of body, and the
   notes it is about.${write ? " It is made a question note in their base." : " They can make it a question note in their base."}
   One or two at most. Not for what you could simply tell them.
-- Where they have answered a question in what they wrote to you, and their
-  answer belongs in a note, offer it with offer_text: their own sentences,
-  joined lightly, nothing of yours added. They insert it as theirs, or not.`;
+- Where they have answered something in what they wrote to you that a note
+  of theirs lacks, offer it with offer_text rather than telling them to add
+  it: their own sentences, joined lightly, nothing of yours added. They
+  insert it as theirs, or not.`;
 
 const CHECKING = `# Checking a solution
 
@@ -182,7 +183,7 @@ Check it, step by step.
 - Where the solution leans on something it does not state, ask about it with
   ask_question rather than supplying it.
 - Never say it is solved, and never change whether it is marked solved: that
-  is theirs alone.`;
+  is theirs alone. Do not mention marking.`;
 
 const MODE_RULES: Record<Exclude<Mode, "build">, string> = { ask: ASK, write: WRITE };
 
