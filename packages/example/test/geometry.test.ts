@@ -22,7 +22,7 @@ test("every source note reads, and comes out as written, bar the date you marked
 test("Iso made two questions, and left them open; the others are yours", () => {
   const made = Object.keys(built.notes).filter((p) => !(p in sources));
   expect(made).toHaveLength(2);
-  const titles = made.map((p) => splitFrontmatter(built.notes[p]!)[0].title).sort();
+  const titles = made.map((p) => splitFrontmatter(built.notes[p]!)[0]?.title).sort();
   expect(titles).toEqual([ISO_QUESTIONS.disc.title, ISO_QUESTIONS.triangulation.title].sort());
   for (const p of made) {
     expect(splitFrontmatter(built.notes[p]!)[0]).toMatchObject({ type: "Question" });
