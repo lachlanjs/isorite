@@ -43,19 +43,18 @@ class Tray {
   }
   clear(): void { this.parts = []; }
 
-  /** Understanding notes taken out while in Understand mode: not put back until the mode is left. */
+  /** Understanding notes taken out: not put back until what Iso may do, or the Understanding note shown, changes. */
   private notWanted = $state.raw<string[]>([]);
-  /** Understand mode's own parts: the Understanding note of each note in the tray, and of the note open. */
+  /** The Understanding note that goes with what is given (M12): the open note's, while it is shown in the Note pane. */
   get modeParts(): Part[] {
-    if (panes.mode !== "understand") return [];
-    const ids = [...new Set([...this.parts.flatMap((p) => (p.kind === "note" || p.kind === "passage" ? [p.id] : [])), ...(app.open && !app.open.startsWith("@") ? [app.open] : [])])];
+    const ids = panes.understanding && app.open && !app.open.startsWith("@") ? [app.open] : [];
     return ids.filter((id) => !this.notWanted.includes(id)).map((id) => ({ kind: "understanding" as const, id, title: app.listing.notes.find((n) => n.id === id)?.title ?? id }));
   }
-  /** Everything a turn is sent: what you put in, and the mode's own. */
+  /** Everything a turn is sent: what you put in, and the Understanding notes that go with it. */
   get sent(): Part[] { return [...this.parts, ...this.modeParts]; }
-  /** Take one of the mode's own parts out. */
+  /** Take one of the Understanding notes out. */
   unwant(id: string): void { this.notWanted = [...this.notWanted, id]; }
-  /** Leaving Understand mode puts them all back for next time. */
+  /** They all come back for next time. */
   modeChanged(): void { this.notWanted = []; }
   keyOf = key;
 }

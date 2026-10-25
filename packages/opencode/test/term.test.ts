@@ -66,7 +66,7 @@ async function serving(port: number): Promise<boolean> {
 }
 
 describe.skipIf(!ready)("isorite term", () => {
-  let root: string, base: { notes: string; study: string }, gateway: Scripted, pane: Pane, port: number;
+  let root: string, base: { notes: string }, gateway: Scripted, pane: Pane, port: number;
   const keep = (name: string) => {
     const dir = process.env.ISORITE_PREVIEW;
     if (dir) { mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, `${name}.ans`), pane.ansi()); }
@@ -106,7 +106,7 @@ describe.skipIf(!ready)("isorite term", () => {
     // Commands ask first (your own local.json, kept over what isorite writes), so a page can answer one.
     mkdirSync(join(root, "config", "isorite", "opencode"), { recursive: true });
     writeFileSync(join(root, "config", "isorite", "opencode", "local.json"), JSON.stringify({ permissions: [{ action: "shell", resource: "*", effect: "ask" }] }));
-    pane = new Pane([process.execPath, MAIN, "term", base.study, "--port", String(port)], {
+    pane = new Pane([process.execPath, MAIN, "term", base.notes, "--port", String(port)], {
       cwd: join(root, "code"),
       env: {
         PATH: process.env.PATH ?? "",
@@ -133,7 +133,7 @@ describe.skipIf(!ready)("isorite term", () => {
   it("opens on the splash: the mark, the name, and the base as the server tells it", async () => {
     const text = await pane.waitFor("i s o r i t e", 90_000);
     const count = loadBundle(base.notes).concepts.size;
-    await pane.waitFor(`${basename(base.notes)} · ${count} notes · study base found`);
+    await pane.waitFor(`${basename(base.notes)} · ${count} notes`);
     for (const row of lines().filter((l) => l.trim())) expect(text).toContain(row.trim());
     expect(text).toContain(" [enter] open    [a] atlas in the browser   [?] keys   [q] quit");
     keep("1-splash");
@@ -241,7 +241,7 @@ describe.skipIf(!ready)("isorite term", () => {
     keep("5-changes");
     expect(readFileSync(loop, "utf8")).toContain("All the time is in `accelerations`: profile it before changing anything else.");
     expect(readFileSync(join(root, "code", "profile.py"), "utf8")).toBe("import cProfile\n");
-    const journal = readJournal(readFileSync(join(base.study, "journal", "simulation", "the-main-loop.jsonl"), "utf8"));
+    const journal = readJournal(readFileSync(join(base.notes, ".isorite", "journal", "simulation", "the-main-loop.jsonl"), "utf8"));
     expect(pending(journal)).toHaveLength(0);
     expect(journal.at(-1)).toMatchObject({ kind: "change", who: "agent:opencode", asked: "profile the loop, and note how to time it" });
     // The new note is made where it was meant.

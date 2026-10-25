@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { setSwitch } from "./switches.ts";
 
 // The tutorial on the built site, with the engine in the page and no server: each of its parts walked from the list
 // of parts to its end, by doing what each step asks, at a desktop's width and a phone's.
@@ -38,8 +39,13 @@ async function section(page: Page, key: string) {
 }
 /** The last step's "done": back to the list, every objective of the section met when `all` says how many. */
 async function finish(page: Page, key: string, all?: number) {
-  await card(page).getByRole("button", { name: "done" }).click();
-  await expect(card(page).getByRole("button", { name: new RegExp(`^${key}: .*${all ? `, ${all} of ${all} done` : ""}`) })).toBeVisible();
+  // A last step whose objective is met goes on to the list by itself; "done" is pressed only if it is still there.
+  // Exactly: the section's own button in the list ends "… done" too, and pressing it would begin the section again.
+  const done = card(page).getByRole("button", { name: "done", exact: true });
+  const listed = card(page).getByRole("button", { name: new RegExp(`^${key}: .*${all ? `, ${all} of ${all} done` : ""}`) });
+  await expect(done.or(listed)).toBeVisible();
+  if (await done.isVisible()) await done.click({ timeout: 2000 }).catch(() => undefined);
+  await expect(listed).toBeVisible({ timeout: 15_000 });
 }
 
 let failures: string[] = [];
@@ -104,7 +110,7 @@ test("L1: the three panes and a layout tried, the Atlas and its folders, a note 
   await look(page, "L1-09-kind");
   await next(page);
   await at(page, "Every change is kept");
-  await visible(page, "timeline").click();
+  await setSwitch(page, "timeline", true);
   await page.locator(".timeline .moment").first().click();
   await expect(page.locator(".atbar")).toBeVisible();
   await page.waitForTimeout(600); // the step looks four times a second: long enough to have seen the note as it was
@@ -167,7 +173,7 @@ async function send(page: Page) {
 }
 const log = (page: Page) => page.getByRole("log", { name: "The conversation with Iso" });
 
-test("L2: asked in Ask mode and watched on the Atlas, a note and a passage given, what is sent chosen, written in Write mode, marked, undone and written again", async ({ page }) => {
+test("L2: asked with the notes switch off and watched on the Atlas, a note and a passage given, what is sent chosen, written with it on, marked, undone and written again", async ({ page }) => {
   test.setTimeout(150_000);
   await section(page, "L2");
   await at(page, "Ask Iso");
@@ -199,14 +205,14 @@ test("L2: asked in Ask mode and watched on the Atlas, a note and a passage given
   await given.getByRole("button", { name: /^Take “.*” from The quadtree/ }).click();
   await at(page, "Let it write");
   await iso(page).getByRole("button", { name: "Context", exact: true }).click();
-  await iso(page).getByRole("button", { name: "Write", exact: true }).click();
+  await setSwitch(page, "notes", true);
   await expect(box(page)).toHaveValue("answer my TODO");
   await send(page);
   await at(page, "Its words, marked");
   await expect(log(page).locator(".turn").last().locator(".change")).toContainText("Barnes–Hut");
   await fold(page);
-  await log(page).locator(".turn").last().locator(".change").getByRole("button").click();
-  await expect(page.locator('[data-pane="note"] .lens[data-lens="iso"]')).toHaveAttribute("aria-pressed", "true");
+  if (phone()) await tab(page, "Note");
+  await setSwitch(page, "provenance", true);
   await expect(page.locator(".cm-iso-by-iso").first()).toBeVisible();
   await look(page, "L2-06-marked");
   await next(page);
@@ -218,11 +224,11 @@ test("L2: asked in Ask mode and watched on the Atlas, a note and a passage given
   await box(page).fill("answer my TODO");
   await send(page);
   await at(page, "Iso, in short");
-  await iso(page).getByRole("button", { name: "Ask", exact: true }).click();
+  await setSwitch(page, "notes", false);
   await finish(page, "L2", 8);
 });
 
-test("E1 (earlier): from the goal back along the chain, a question asked, an octree written by Iso in Write mode, opened and linked in", async ({ page }) => {
+test("E1 (earlier): from the goal back along the chain, a question asked, an octree written by Iso with the notes switch on, opened and linked in", async ({ page }) => {
   test.setTimeout(150_000);
   await section(page, "E1");
   await at(page, "The goal");
@@ -237,7 +243,7 @@ test("E1 (earlier): from the goal back along the chain, a question asked, an oct
   await expect(log(page).locator(".turn").last().locator(".said")).toContainText("About ten times fewer interactions");
   await next(page);
   await at(page, "Plan the octree");
-  await iso(page).getByRole("button", { name: "Write", exact: true }).click();
+  await setSwitch(page, "notes", true);
   await expect(box(page)).toHaveValue(/^write a note in algorithms on the octree/);
   await send(page);
   await at(page, "Its note");
@@ -249,48 +255,72 @@ test("E1 (earlier): from the goal back along the chain, a question asked, an oct
   await page.keyboard.press("End");
   await page.keyboard.type(" Next, the [[oct");
   await page.getByRole("option", { name: /The octree/ }).click();
-  await at(page, "Hand it on");
-  await expect(page).toHaveURL(/#\/n\/algorithms\/the-octree/);
-  await iso(page).getByRole("button", { name: "Ask", exact: true }).click();
+  await setSwitch(page, "notes", false);
   await finish(page, "E1");
 });
 
-test("L3: where you stand on the Atlas, an Understanding note and its scratchpad, Understand mode asking back and recording, and asked again without it", async ({ page }) => {
-  test.setTimeout(150_000);
+test("L3: whose words and every change seen, a question opened from its note and found on the Atlas, links out switched on, Iso given a note and asking back, your answers put together and inserted, Iso's reading opened, the question resolved", async ({ page }) => {
+  test.skip(local(), "the geometry notes are the tutorial site's; the server beside the terminal serves the N-body base");
+  test.setTimeout(240_000);
   await section(page, "L3");
-  await at(page, "Where you stand");
+  await at(page, "Whose words");
+  if (phone()) await tab(page, "Note");
+  await setSwitch(page, "provenance", true);
+  await at(page, "Every change is kept");
+  await expect(page.locator(".cm-iso-by-iso").first()).toBeVisible();
+  await look(page, "L3-01-provenance");
+  await setSwitch(page, "timeline", true);
+  await at(page, "A question in a note");
+  // The editor draws what is in view: on a phone the embed is scrolled to.
+  await expect.poll(async () => {
+    if (await page.locator(".cm-lp-embed").count()) return true;
+    await page.locator('[data-pane="note"] .pbody').first().evaluate((e) => { e.scrollTop += 300; });
+    return false;
+  }).toBe(true);
+  await page.locator(".cm-lp-embed").click();
+  await at(page, "Questions on the Atlas");
   if (phone()) await tab(page, "Atlas");
-  await page.locator('[data-pane="atlas"] .lens[data-lens="understand"]').click();
-  await at(page, "Your Understanding note");
-  if (phone()) await tab(page, "Note");
-  await page.locator('[data-pane="note"] .lens[data-lens="understand"]').click();
-  await page.locator('[data-pane="note"]').getByLabel("Scratchpad").fill("Ask about symplectic next.");
-  await at(page, "Understand mode");
-  await look(page, "L3-02-understanding");
+  await fold(page);
+  await expect(page.locator('[data-note="global/where-is-compactness-used"] .notch')).toBeVisible();
+  await page.locator('[data-note="global/where-is-compactness-used"]').click();
+  await at(page, "Links out of the base");
+  await setSwitch(page, "web", true);
+  await setSwitch(page, "code", true);
+  await expect(page.locator(".sat.code.broken")).toHaveAttribute("aria-label", "geodesics.jl, not in the repository");
+  await expect(page.locator(".sat.code:not(.broken)")).toHaveCount(1);
+  await look(page, "L3-05-links-out");
+  await at(page, "Give Iso the note");
+  const gb = (await page.locator('[data-note="global/gauss-bonnet"]').boundingBox())!;
+  await page.mouse.move(gb.x + 10, gb.y + 6);
+  await page.mouse.down();
+  await page.waitForTimeout(800);
+  await page.mouse.up();
+  await at(page, "Iso asks you back");
   if (phone()) await tab(page, "Iso");
-  await iso(page).getByRole("button", { name: "Understand", exact: true }).click();
-  await expect(box(page)).toHaveValue("help me see why leapfrog's energy error stays bounded");
+  await expect(box(page)).toHaveValue("where is compactness used in the proof?");
   await send(page);
-  await at(page, "Answer it");
-  await expect(log(page).locator(".turn").last().locator(".said")).toContainText("what happens if you run leapfrog");
-  await expect(box(page)).toHaveValue(/run backwards/);
+  await at(page, "Your answers, put together");
+  await expect(log(page).locator(".turn").last().locator(".said")).toContainText("What does that sum need");
+  await expect(log(page).locator(".turn").last().locator("[data-question]")).toBeVisible();
+  await look(page, "L3-07-asked-back");
+  await expect(box(page)).toHaveValue(/answers on compactness/);
   await send(page);
-  await at(page, "What changed it");
-  await expect(log(page).locator(".turn").last().locator(".understood")).toContainText("Leapfrog");
+  await at(page, "Inserted as yours");
+  const offer = log(page).locator("[data-offer]");
+  await expect(offer).toContainText("Compact:");
+  await fold(page);
+  await offer.getByRole("button", { name: /^Insert into/ }).click();
+  await at(page, "How Iso reads you");
   if (phone()) await tab(page, "Note");
-  await expect(page.locator('[data-pane="note"] .reading')).toContainText("time-reversible");
-  await look(page, "L3-05-changed");
-  await next(page);
-  await at(page, "Without it");
-  if (phone()) await tab(page, "Iso");
-  await iso(page).getByRole("button", { name: "Context", exact: true }).click();
-  await page.getByRole("list", { name: "What you gave Iso" }).getByRole("button", { name: /^Take your understanding of Leapfrog/ }).click();
-  await iso(page).getByRole("button", { name: "Context", exact: true }).click();
-  await box(page).fill("help me see why leapfrog's energy error stays bounded");
-  await send(page);
-  await at(page, "Understanding, in short");
-  await iso(page).getByRole("button", { name: "Ask", exact: true }).click();
-  await finish(page, "L3", 7);
+  const sprig = page.locator('[data-pane="note"]').getByRole("button", { name: "Understanding note", exact: true });
+  if ((await sprig.getAttribute("aria-pressed")) !== "true") await sprig.click();
+  await expect(page.locator('[data-pane="note"] .reading')).toContainText("you solved the torus", { timeout: 15_000 });
+  await look(page, "L3-10-reading");
+  await at(page, "Resolve it");
+  await sprig.click();
+  await page.locator('[data-pane="note"]').getByRole("button", { name: "Resolved", exact: true }).click();
+  await at(page, "Questions and problems, in short");
+  await finish(page, "L3", 12);
 });
 
 test("L4 (earlier): the terminal outlined, and the way to its replay", async ({ page }) => {
@@ -305,7 +335,7 @@ test("L4 (earlier): the terminal outlined, and the way to its replay", async ({ 
   await finish(page, "L4");
 });
 
-test("L4 (earlier), beside the terminal: the page follows the agent, and a note is sent to it", async ({ page }) => {
+test("L4 (earlier), beside the terminal: the page follows the agent", async ({ page }) => {
   test.skip(!local(), "only beside the terminal");
   await section(page, "L4");
   await at(page, "The terminal beside this page");
@@ -315,10 +345,6 @@ test("L4 (earlier), beside the terminal: the page follows the agent, and a note 
   await card(page).getByRole("button", { name: "skip" }).click();
   await at(page, "Its changes to notes wait here too");
   await next(page);
-  await at(page, "From here to there");
-  await page.locator('[data-tour="send"]').click();
-  await page.getByLabel("What you want of it").fill("use this in the loop");
-  await page.getByRole("group", { name: "Send to the terminal's agent" }).getByRole("button", { name: "send to agent" }).click();
   await at(page, "On your own notes");
   await finish(page, "L4");
 });

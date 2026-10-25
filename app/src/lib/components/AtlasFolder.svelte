@@ -1,6 +1,7 @@
 <script lang="ts">
   // A folder on the Atlas: a cut-corner frame with its name in its top edge. One too small on screen to open is
-  // a single block that says how many notes it holds.
+  // a single block that says how many notes it holds. The frame is in the map's units, in the layer scaled to the
+  // zoom (M12); what it says is held at its size on screen.
   import type { LayoutItem } from "@isorite/core/atlas";
 
   let { item, name, count, open, titled = true, held = { req: 0, bld: 0 }, dim = false, given = false, onpick }: {
@@ -34,28 +35,30 @@
   </div>
 {:else}
   <button class="folder frame closed {tone}" class:dim class:given type="button" data-folder={item.ref} style={place} onclick={onpick}>
-    <span class="name">{name}</span><span class="label">{says || `${count} ${count === 1 ? "note" : "notes"}`}</span>
+    <span class="inner"><span class="name">{name}</span><span class="label">{says || `${count} ${count === 1 ? "note" : "notes"}`}</span></span>
   </button>
 {/if}
 
 <style>
   .folder {
     position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(var(--w) * var(--u)); height: calc(var(--h) * var(--u));
-    --cut: calc(10px * var(--k)); container-type: size; /* 10 units of the map, as core's CORNER: routes meet a cut corner in its middle */
+    --cut: 10px; /* 10 units of the map, as core's CORNER: routes meet a cut corner in its middle */
   }
-  .frame-title { z-index: 1; border: 0; max-width: calc(100% - 44px); overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  /* Its name, a screen's size whatever the zoom: set in the edge, then scaled back from the layer's zoom. */
+  .frame-title { z-index: 1; border: 0; top: 0; max-width: calc((100% - 44px) * var(--k)); overflow: hidden; text-overflow: ellipsis; cursor: pointer; transform-origin: 0 0; transform: scale(var(--ik)) translateY(-50%); }
   .frame-title:hover { color: var(--text); }
-  .closed { --inside: var(--ground-2); padding: 9px 12px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; text-align: left; font-size: 12px; line-height: 1.5; overflow: hidden; color: var(--text); }
+  .closed { --inside: var(--ground-2); padding: 0; text-align: left; font-size: 12px; line-height: 1.5; overflow: hidden; color: var(--text); }
+  /* What a closed folder says, at a screen's size: the block's size at the zoom, scaled back. */
+  .closed .inner { position: absolute; left: 0; top: 0; width: calc(100% * var(--k)); height: calc(100% * var(--k)); transform-origin: 0 0; transform: scale(var(--ik)); padding: 9px 12px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; container-type: size; }
   .closed:hover { --inside: var(--ground-3); }
   .req { --edge: var(--requires); }
   .bld { --edge: var(--builds); }
-  .held { top: auto; bottom: -9px; left: auto; right: 22px; max-width: calc(100% - 44px); overflow: hidden; text-overflow: ellipsis; color: var(--edge); cursor: default; pointer-events: none; }
+  .held { top: auto; bottom: 0; left: auto; right: 22px; transform-origin: 100% 100%; transform: scale(var(--ik)) translateY(50%); max-width: calc((100% - 44px) * var(--k)); overflow: hidden; text-overflow: ellipsis; color: var(--edge); cursor: default; pointer-events: none; }
   .closed.req .label, .closed.bld .label { color: var(--edge); }
   .dim { opacity: .5; }
   .closed span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  @container (max-width: 70px) { .name, .label, .frame-title { display: none; } }
-  @container (max-width: 150px) { .held { display: none; } }
+  @container (max-width: 70px) { .name, .label { display: none; } }
   @container (max-height: 22px) { .name, .label { display: none; } }
   @container (max-height: 44px) { .closed .label { display: none; } }
-  .given { outline: 2px solid var(--growth); outline-offset: 2px; }
+  .given { outline: calc(2 * var(--px)) solid var(--growth); outline-offset: calc(2 * var(--px)); }
 </style>

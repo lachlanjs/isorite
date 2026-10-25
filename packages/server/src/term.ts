@@ -166,7 +166,7 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
  *  on the same folder, it carries on where it was left. */
 export async function tutorialTerm(folder: string | undefined, { port = 4790, env = process.env, out = console.log }: TermOptions & { out?: (line: string) => void } = {}): Promise<number> {
   const root = folder ? resolve(folder) : mkdtempSync(join(tmpdir(), "isorite-tutorial-"));
-  const base = existsSync(join(root, "base", NAME)) ? { notes: join(root, "base", NAME), study: join(root, "base", `${NAME}-study`) } : await writeExample(join(root, "base"));
+  const base = existsSync(join(root, "base", NAME)) ? { notes: join(root, "base", NAME) } : await writeExample(join(root, "base"));
   const code = join(root, "code");
   mkdirSync(code, { recursive: true });
   const model = await startScripted(tutorialScript(base.notes));
@@ -176,7 +176,7 @@ export async function tutorialTerm(folder: string | undefined, { port = 4790, en
   out(`isorite tutorial: the example base and everything the tour changes are in ${root}`);
   out("  the model is scripted: nothing is sent anywhere, and no key is needed");
   try {
-    return await term(base.study, {
+    return await term(base.notes, {
       port, cwd: code,
       // The browser's half of the tutorial, on the same base: it follows the agent as the terminal's tour goes.
       onServer: (url) => {

@@ -3,7 +3,7 @@
 // given, JSON only), then the engine's own answer. Carried over from rdstudio.
 
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { extname, join, resolve, sep } from "node:path";
+import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
@@ -44,8 +44,6 @@ const Ask = z.discriminatedUnion("form", [
   z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier, choice: ChoiceSchema.optional() }).strict(),
   z.object({ note: z.string(), form: z.literal("rewrite"), regions: z.array(Anchor).min(1).max(40), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier, choice: ChoiceSchema.optional() }).strict(),
   z.object({ note: z.string(), form: z.literal("note"), tier: Tier }).strict(),
-  z.object({ note: z.string(), form: z.literal("mark"), answer: Anchor, tier: Tier }).strict(),
-  z.object({ note: z.string(), form: z.literal("exercise"), tier: Tier }).strict(),
 ]);
 const Given = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("note"), id: z.string().max(400) }).strict(),
@@ -53,10 +51,9 @@ const Given = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("passage"), id: z.string().max(400), text: z.string().max(20_000) }).strict(),
   z.object({ kind: z.literal("understanding"), id: z.string().max(400) }).strict(),
 ]);
-const Mode = z.enum(["ask", "write", "build", "understand"]);
+const Mode = z.enum(["ask", "write", "build"]);
 const TurnAsk = z.object({ conversation: z.string().max(64).optional(), mode: Mode, asked: z.string().max(8000), given: z.array(Given).max(40), tier: Tier, lookup: z.boolean().optional(), off: z.array(z.string().max(64)).max(500).optional() }).strict();
 const TurnShape = TurnAsk.omit({ asked: true });
-const ExerciseAsk = z.object({ folder: z.string().max(400), tests: z.array(z.string().max(400)).min(1).max(20), after: z.string().max(400).nullable().optional() }).strict();
 const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
 const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
 const Key = z.object({ key: z.string().nullable() }).strict();
@@ -148,6 +145,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   post("/api/iso/converse", TurnAsk, (_c, b) => api.converse(b));
   app.get("/api/understanding", (c) => answer(c, () => api.understanding(id(c))));
   post("/api/understanding/scratchpad", z.object({ scratchpad: z.string().max(200_000), base: z.string().max(64).nullable() }).strict(), (c, b) => api.saveScratchpad(id(c), b.scratchpad, b.base));
+  post("/api/iso/take", z.object({ conversation: z.string().max(64), turn: z.string().max(64), item: z.string().max(64) }).strict(), (_c, b) => api.takeItem(b.conversation, b.turn, b.item));
   post("/api/iso/undo", z.object({ conversation: z.string().max(64), turn: z.string().max(64) }).strict(), (_c, b) => api.undoTurn(b.conversation, b.turn));
   post("/api/iso/answer", z.object({ turn: z.string().max(64), permission: z.string().max(64), decision: z.enum(["once", "always", "reject"]) }).strict(), (_c, b) => api.answer(b.turn, b.permission, b.decision));
   app.get("/api/conversation", (c) => answer(c, async () => (await api.conversation(c.req.query("id") || undefined)) ?? { id: "", turns: [] }));
@@ -160,6 +158,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   post("/api/note/restore", z.object({ entry: z.string().max(64), base: z.string().max(64) }).strict(), (c, b) => api.restore(id(c), b.entry, b.base));
   post("/api/note/move", z.object({ to: z.string().max(400), base: z.string().max(64) }).strict(), (c, b) => api.moveNote(id(c), b.to, b.base));
   post("/api/note/delete", z.object({ base: z.string().max(64) }).strict(), (c, b) => api.deleteNote(id(c), b.base));
+  post("/api/note/done", z.object({ done: z.boolean(), base: z.string().max(64) }).strict(), (c, b) => api.setDone(id(c), b.done, b.base));
   post("/api/proposal/keep", Named, (c, b) => api.keep(id(c), b.proposal, b.region));
   post("/api/proposal/revise", Revised, (c, b) => api.revise(id(c), b.proposal, b.text));
   post("/api/proposal/discard", Named, (c, b) => api.discard(id(c), b.proposal, b.region));
@@ -167,15 +166,13 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   post("/api/drafts", z.object({}).strict(), () => api.createDraft());
   post("/api/draft/keep", z.object({ proposal: z.string().max(64), folder: z.string().max(400) }).strict(), (c, b) => api.keepDraft(id(c), b.proposal, b.folder));
   post("/api/draft/discard", z.object({}).strict(), (c) => api.discardDraft(id(c)));
-  app.get("/api/study", (c) => answer(c, () => api.study()));
-  post("/api/exercise/draft", ExerciseAsk, (_c, b) => api.createExerciseDraft(b.folder, b.tests, b.after ?? null));
-  post("/api/exercise/keep", z.object({ proposal: z.string().max(64) }).strict(), (c, b) => api.keepExercise(id(c), b.proposal));
-  post("/api/exercise/wind-back", z.object({}).strict(), (c) => api.windBack(id(c)));
   app.get("/api/context", (c) => answer(c, () => api.context(c.req.query("id") || undefined, choiceOf(c.req.query("choice")))));
   post("/api/context/clear", z.object({}).strict(), () => api.clearConversation());
   // The key goes in and never comes out: settings say only whether one is held.
   app.get("/api/settings", (c) => answer(c, () => api.settings()));
   post("/api/settings/key", Key, (_c, b) => api.setKey(b.key), "put");
+  app.get("/api/spend", (c) => answer(c, () => api.spend()));
+  post("/api/settings/spend-cap", z.object({ usd: z.number().positive().max(1e6).nullable() }).strict(), (_c, b) => api.setSpendCap(b.usd), "put");
   // Or made by signing in at the provider: the page to go to, and the code it comes back with, which the engine
   // exchanges for the key itself. The page never holds the key.
   post("/api/settings/connect", z.object({ callback: z.string().max(2000) }).strict(), (_c, b) => api.connect(b.callback));
@@ -195,13 +192,18 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   // session, ask in it, stop it and answer what it asks, and never reach OpenCode themselves.
   if (terminal) {
     const Local = z.string().max(200).refine((u) => { try { const h = new URL(u).hostname; return h === "127.0.0.1" || h === "localhost" || h === "[::1]"; } catch { return false; } }, "OpenCode's server must be on this machine");
-    post("/api/terminal/attach", z.object({ url: Local, password: z.string().min(1).max(200), directory: z.string().max(4000) }).strict(), async (_c, b) => { await terminal.attach(b).catch((e: Error) => { throw new EngineError(`OpenCode's server did not answer: ${e.message}`, 502); }); });
+    post("/api/terminal/attach", z.object({ url: Local, password: z.string().min(1).max(200), directory: z.string().max(4000) }).strict(), async (_c, b) => {
+      await terminal.attach(b).catch((e: Error) => { throw new EngineError(`OpenCode's server did not answer: ${e.message}`, 502); });
+      // The folder the terminal runs in is the base's repository, the first time (Q28): code links point into it.
+      if (b.directory && notes) await api.nameRepository(isAbsolute(b.directory) ? relative(notes, b.directory) || "." : b.directory);
+    });
     post("/api/terminal/detach", z.object({}).strict(), async () => { terminal.detach(); });
     app.get("/api/terminal", (c) => answer(c, async () => terminal.view()));
     const failed = (e: Error) => { throw new EngineError(e.message, 409); };
     post("/api/terminal/prompt", z.object({ asked: z.string().min(1).max(8000), given: z.array(Given).max(40) }).strict(), async (_c, b) => {
       const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
-      const text = withGiven(b.asked, b.given, (id) => titles.get(id) ?? id);
+      const broken = await api.brokenNews("agent");
+      const text = withGiven(b.asked, b.given, (id) => titles.get(id) ?? id) + (broken.length ? `\n\n(isorite: code links in the notes that no longer resolve: ${broken.map((x) => `${x.href} in /${x.id}.md`).join("; ")}.)` : "");
       await terminal.prompt(text).catch(failed);
     });
     post("/api/terminal/stop", z.object({}).strict(), async () => { await terminal.interrupt().catch(failed); });

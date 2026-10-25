@@ -1,6 +1,6 @@
 # isorite: what is on disk
 
-Format 1. The code that reads and writes each of these is in `packages/core`; the file named beside each heading is the authority where this page and the code disagree.
+Format 2 (milestone 12). The code that reads and writes each of these is in `packages/core`; the file named beside each heading is the authority where this page and the code disagree.
 
 Changing anything here means converting people's data. Change it on purpose.
 
@@ -13,37 +13,27 @@ A folder of notes in the Open Knowledge Format 0.2, as rdstudio read it. `fixtur
 - Links are absolute within the base (`/folder/note.md`).
 - A note's id is its path without `.md`: `basics/entropy`.
 
-When there is a study base, isorite writes nothing of its own into the knowledge base. No markers for unkept text, no journal, no settings.
+isorite's own files are in the notes' hidden `.isorite/` folder (section 2) and nowhere else among the notes. No markers for unkept text in a note's file.
 
-**Project mode (later, proposed).** A knowledge base opened with no study base keeps its notes' journals in itself, at `.isorite/journal/<note id>.jsonl`, in the form of section 3. Whether that folder is committed is open.
+## 2. isorite's own files (`own.ts`)
 
-## 2. The study base (`study.ts`)
-
-A separate repository beside the knowledge base. Made by `isorite study init <notes>`.
+A hidden folder in the notes, committed with them. Made, with its `.gitattributes`, the first time the base is opened.
 
 ```
-isorite.toml
-.gitattributes                  *.jsonl merge=union
-journal/<note id>.jsonl         section 3
-record/<device>.jsonl           section 4
-study/<folder>/<name>.md        section 5
-drafts/<id>.md                  notes for Iso that are not in the base yet
+.isorite/
+  .gitattributes                  *.jsonl merge=union
+  journal/<note id>.jsonl         section 3
+  conversations/<id>.jsonl        Iso's conversations
+  understanding/<note id>.md      a note's Understanding note
+  drafts/<id>.md                  notes for Iso that are not in the base yet
+  record/<device>.jsonl           section 4
+  settings.toml                   the base's settings: its repository
 ```
 
-`isorite.toml`:
-
-```toml
-format = 1
-
-[base]
-path = "../information-theory"   # the folder of notes, from this folder
-remote = ""                      # where to clone it from, on a device that lacks it
-root = "9f4def6…"                # its root commit: the same in every clone
-```
+- **`settings.toml`** has one setting so far: `repository = "../code"`, the folder code links point into, relative to the notes folder (or absolute). `isorite term` writes it, from the folder it runs in, the first time it is run beside the base; after that it is yours to change.
 
 - **A note for Iso** is a draft: `drafts/<id>.md`, an OKF note like any other, whose id is a lower-case ULID. Wherever notes are named it is `@draft/<id>`, and its journal is at `journal/@draft/<id>.jsonl`. When Iso's reply is kept as a note the draft's file is removed and its journal stays.
-- **A study folder** is the folder under `study/` with the same path as a folder of the knowledge base. `study/basics/` studies `basics/`. `study/` itself studies the root.
-- Wherever the two bases are spoken of together, a study note's id is prefixed: `@study/basics/entropy-of-a-coin`. Its journal is at `journal/@study/basics/entropy-of-a-coin.jsonl`.
+- **Format 1** kept these in a study base, a separate repository beside the notes with an `isorite.toml`. isorite no longer opens one. `isorite migrate <study base>` copies its journals, conversations, Understanding notes and drafts into `.isorite/`, writes each exercise as a problem note among the notes (its journal following it), and leaves the study record behind. The study base itself is only read. With journals already in `.isorite/` it stops, unless given `--merge`: then journals are united by entry id, as two devices' are.
 
 ## 3. The journal (`journal.ts`)
 
@@ -55,7 +45,7 @@ Every entry has:
 |---|---|
 | `id` | a ULID: time, then randomness. Entries are ordered by it. |
 | `at` | ISO 8601, UTC, to the second |
-| `session` | the id of the session's first entry. A session ends after 30 minutes with no entry anywhere in the study base. |
+| `session` | the id of the session's first entry. A session ends after 30 minutes with no entry anywhere in `.isorite/`. |
 | `device` | 4 to 16 lower-case letters and digits |
 | `who` | `you`, `iso:<model>`, `agent:<name>`, or `external` |
 | `kind` | `change`, `proposal`, `revise` or `discard` |
@@ -110,77 +100,47 @@ Any earlier version is rebuilt by starting from the nearest `text` before it and
 
 A proposal is pending until a `discard` names it or a `change` with `why: keep` names it.
 
-### `marks`
+A journal moved in from format 1 may also hold `marks` entries (Iso's marking of an exercise). They are passed over when the journal is read.
 
-```json
-{"id":"…", …,"who":"iso:openrouter/anthropic/claude-sonnet-5.5","kind":"marks","answer":{"text":"So H = 1 bit.","nth":0},"result":"partly",
- "marks":[{"passage":{"text":"two outcomes, each with probability 1/2","nth":0},"mark":"right"},{"passage":{"text":"So H = 1 bit.","nth":0},"mark":"wrong"}],
- "dropped":0,"cost":{…}}
-```
+## 4. A device's record (`record.ts`)
 
-Iso's marking of an exercise, in the exercise's journal. Never written into the file. The newest is laid over the working; a passage edited since loses its mark. `dropped` counts passages Iso quoted that were not in the working.
-
-## 4. The study record (`record.ts`, `understanding.ts`)
-
-One file per device, so two devices never write the same file. One JSON event per line, only ever added. Each has `id` (a ULID), `at`, `device` and `event`. Records merge as a union by id.
+`.isorite/record/<device>.jsonl`: one file per device, so two devices never write the same file. One JSON event per line, only ever added. Each has `id` (a ULID), `at`, `device` and `event`. Records merge as a union by id.
 
 | `event` | Fields | Meaning |
 |---|---|---|
-| `attempt` | `exercise` (its id in the study base), `tests` (note ids), `result` (`right`, `partly`, `wrong`), `by` (`iso:<model>` or `you`), `moves`, `answer`, `working`, `marks` | an exercise was marked (below) |
-| `wind-back` | `note` | the person lowered Iso's reading of them by one |
-| `moved` | `from`, `to` | a note was moved: what the events before it say of `from` is said of `to` |
 | `context-cleared` | | Iso is no longer sent this session's exchanges from before this event. Nothing is deleted. |
 | `iso-unused` | `note`, `session`, `model`, `usd` | a reply that was paid for and offered nothing (a rewrite that changed nothing, an empty reply): counted in what the session cost |
+| `iso-turn` | `conversation`, `turn`, `session`, `model`, `usd` | a turn in Iso's pane, and what it cost |
 
-**Understanding is not stored.** It is a number from 0 to 6 worked out from these events by `understanding()`:
+Format 1 also kept what was studied here (`attempt`, `wind-back`, `understood`, `moved`), from which a level of understanding from 0 to 6 was worked out. Format 2 has no such level. `isorite migrate` leaves those events behind.
 
-- an attempt: each note it tests moves by the move Iso judged for it (−1, −½, 0, +½ or +1), and counts as tested then. The result moves nothing by itself. An attempt without `moves` moves nothing.
-- wind-back: one down.
-- Evidence at level *n* holds for 1, 3, 7, 16, 35 or 80 days. Past that the note is due. Past twice that it shows one square fewer until tested again.
-- The six squares are the level rounded down. The Atlas's four steps are 0, 1 to 2, 3 to 4, and 5 to 6 squares.
+## 5. Problems and questions
 
-The rule can change without converting anything, because only events are on disk.
-
-An `attempt`, as milestone 4 writes it:
-
-```json
-{"id":"…","at":"…","device":"91d4235f","event":"attempt","exercise":"Fundamentals/entropy-of-a-coin",
- "tests":["Fundamentals/entropy"],"result":"partly","by":"iso:openrouter/anthropic/claude-sonnet-5.5",
- "moves":{"Fundamentals/entropy":{"by":0.5,"why":"Right definition, but needed one hint to sum over both outcomes."}},
- "answer":{"text":"So H = 1 bit.","nth":0},"working":"…the working as it was sent…","marks":"01K7…"}
-```
-
-- `moves` has one entry for each note in `tests`: Iso's judgement of how far the attempt is evidence of a change in understanding, weighing its accuracy, the guidance it needed and how closely the note bears on the exercise, with a reason in a line.
-- `answer` is the passage marked as the answer, any selection of the working, named as a rewrite names its passages (`{text, nth}` through the whole file).
-- `marks` names the `marks` entry in the exercise's journal (section 3).
-
-## 5. Exercises (milestone 4)
-
-A note in `study/`, read as OKF like any other:
+A problem or an open question is a note of the base, in any folder; section 1's rules hold for them as for any note. Its kind is its OKF `type` (`kinds.ts`).
 
 ```markdown
 ---
-type: Exercise
-kind: written
-title: The entropy of a fair coin
-tests: [basics/entropy, basics/mutual-information]
-next: basics/entropy-of-a-die
-generated: { by: "iso:anthropic/claude-sonnet-5-5", at: 2026-10-13T09:00:00Z }
+type: Question
+title: Where is compactness used?
+about: [global/gauss-bonnet]
+resolved: 2026-10-25
 ---
 
-Show that the entropy of a fair coin is one bit.
-
-## Working
-
-…whatever you write…
+The proof never says.
 ```
 
-- `tests` names notes of the knowledge base by id. This is how a study note links to the base; the base never links back.
-- `next`, optional, names the exercise that follows this one in teaching order, by its id in the study base.
-- The question is the text before `## Working`; the working is everything after it.
-- **The answer is not in the file.** It is any selection of the working, held by the app until the exercise is sent for marking, and then kept in the `attempt` event with the working as it was (section 4). Iso's marks are a `marks` entry in the exercise's journal (section 3).
+| Field | |
+|---|---|
+| `type` | `Question` or `Problem` (any case) |
+| `about` (a question), `uses` (a problem) | the notes it is about or uses, by id; one, or a list |
+| `resolved` (a question), `solved` (a problem) | the day it was resolved or solved; absent while open. Written only by your own switch: a change by Iso or an agent keeps the field as it was |
 
-## 6. What is kept outside both repositories
+- **An embed** is `[[!name]]` alone on a line, outside code: `name` is the note's file name without `.md`, or its path (`[[!global/where-is-compactness-used]]`) where two notes share the name. The app draws it as a callout. One that names nothing, or a shared name, is an issue (`embed-broken`).
+- An embed counts as an `about` (or `uses`) of the note it is in: a question embedded in a note is about that note.
+- Moving a note changes the `about` and `uses` that name it, and the embeds of it, to match.
+- **Links out of the base** are ordinary Markdown links. To the web: `[the paper](https://arxiv.org/abs/…)`. To code in the base's repository: `[the step](code:src/sim.py#L40)`, or `#L40-L52` for lines; a path is within the repository, never `..`. A code link whose file is not in the repository is broken: the app strikes it through, and Iso and the terminal's agent are told once, at their next turn.
+
+## 6. What is kept outside the notes
 
 | What | Where (desktop) | Why not in a repository |
 |---|---|---|

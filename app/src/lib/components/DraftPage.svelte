@@ -2,11 +2,7 @@
   // A note written for Iso (the Desktop-Ask and Desktop-Review boards). It is not in the base: you write what
   // you understand and what you want, link the notes it should rest on, and send it. Iso's reply arrives under
   // your prompt, between the dotted rules, and is kept as a note in a folder you choose, or discarded.
-  // A request for an exercise is the same page: the notes it tests in place of linked notes, the folder it goes in,
-  // and the exercise it comes after. Its reply is one round with no tools, so it is waited for here, not on the map.
   import { onMount } from "svelte";
-  import { testsOf } from "@isorite/core";
-  import type { StudyReport } from "@isorite/engine";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { app, noteHref } from "$lib/app.svelte.ts";
@@ -39,24 +35,6 @@
   });
   const lastStep = $derived(iso.asking?.steps.at(-1)?.said ?? "");
 
-  /** A request for an exercise: what it tests, where it goes, what it follows. */
-  const asks = $derived(note.meta?.type === "Exercise");
-  const tests = $derived(asks && note.meta ? testsOf(note.meta) : []);
-  const inFolder = $derived(asks ? String(note.meta?.folder ?? "") : "");
-  const after = $derived(asks ? String(note.meta?.after ?? "") : "");
-  const titleOf = (n: string): string => app.listing.notes.find((x) => x.id === n)?.title ?? n.split("/").at(-1)!;
-  /** The folder's notes not yet tested, to add one. */
-  const offered = $derived(app.listing.notes.filter((n) => n.dir === inFolder && !tests.includes(n.id) && !n.id.startsWith("@")));
-  let study = $state.raw<StudyReport | null>(null);
-  $effect(() => { if (asks && !study) void app.api.study().then((s) => (study = s), () => undefined); });
-  const exerciseTitle = $derived(asks ? `An exercise on ${tests.map(titleOf).join(", ") || "…"}` : "");
-  /** Iso's exercise as it will be kept: its title line, then the question. */
-  const proposed = $derived.by(() => {
-    const m = /^\s*#[ \t]+(.+)\n?/.exec(said);
-    return m ? { title: m[1]!.trim(), question: said.slice(m[0].length).trim() } : { title: "", question: said.trim() };
-  });
-  const setTests = (next: string[]) => note.setMeta({ tests: next });
-
   onMount(() => {
     app.open = id;
     void note.open().then(() => iso.open());
@@ -67,14 +45,12 @@
       iso.close();
       void note.close();
       app.here = app.open = "";
-      app.studying = false;
       app.saving = null;
     };
   });
 
   $effect(() => {
-    app.here = note.loaded === "ready" ? (asks ? "an exercise" : note.fields.title || "a new note") : "";
-    app.studying = asks;
+    app.here = note.loaded === "ready" ? note.fields.title || "a new note" : "";
     app.saving = note.loaded === "ready" && writing ? { text: note.saving === "saved" ? "saved, outside your base" : note.saving === "failed" ? `not saved: ${note.message}` : "saving", bad: note.saving === "failed" } : null;
   });
 
@@ -85,7 +61,7 @@
     try {
       await note.save();
       if (editing) await iso.done(reply);
-      const kept = asks ? await app.api.keepExercise(id, reply.id) : await app.api.keepDraft(id, reply.id, folder);
+      const kept = await app.api.keepDraft(id, reply.id, folder);
       await app.refresh();
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
       await goto(noteHref(kept.id));
@@ -103,7 +79,6 @@
 
   /** Send it, and watch Iso read on the map (Desktop-Think). The note opens again when Iso is done. */
   async function send() {
-    if (asks) { await iso.send("exercise"); return; }
     const request = await iso.send();
     if (!request) return;
     app.watching = request;
@@ -114,7 +89,7 @@
     busy = true;
     try {
       await app.api.discardDraft(id);
-      await goto(resolve(asks ? "/study" : "/notes"));
+      await goto(resolve("/notes"));
     } catch (e) { problem = (e as Error).message; busy = false; }
   }
 </script>
@@ -126,20 +101,14 @@
     <div class="col"><p class="soft">This note for Iso is not here any more. It was kept as a note, or discarded.</p><p><a href={resolve("/notes")}>all notes</a></p></div>
   {:else}
     <div class="col">
-      {#if asks}
-      <div class="mark"><i class="dia open" aria-hidden="true"></i><span class="label">for Iso · an exercise, not in your study base yet</span></div>
-      <h1 class="serif title">{exerciseTitle}</h1>
-      {:else}
       <div class="mark"><i class="dia open" aria-hidden="true"></i><span class="label">for Iso · not in your base yet</span></div>
       <label class="hidden-label" for="title">Title</label>
       <textarea id="title" class="serif title" rows="1" value={note.fields.title} placeholder="a title for the note" autocomplete="off" readonly={!writing}
         oninput={(e) => note.setFields({ title: e.currentTarget.value.replace(/\s*\n\s*/g, " ") })}
         onkeydown={(e) => { if (e.key === "Enter") e.preventDefault(); }}></textarea>
-      {/if}
 
       {#if writing}
-        {#if asks}<span class="label">what you want from it · if anything</span>{/if}
-        <NoteEditor {note} source={false} placeholder={asks ? "Nothing is needed here. Or say what the exercise should ask: a calculation, a proof, your own words, how hard." : undefined} />
+        <NoteEditor {note} source={false} />
       {:else}
         <!-- What you wrote, folded while its answer is on the page. -->
         {#if note.body.trim()}
@@ -160,11 +129,6 @@
             </div>
           {:else if editing}
             <textarea class="revision" bind:value={editing.text} aria-label="Iso's text, to edit" rows={Math.max(6, editing.text.split("\n").length + 1)}></textarea>
-          {:else if asks}
-            <!-- The exercise as it will be kept: its title, its question, and its working still to write. -->
-            <h2 class="serif extitle">{proposed.title || "an exercise"}</h2><!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-            <div class="prose said question">{@html render(proposed.question)}</div>
-            <span class="label">your working</span>
           {:else}<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
             <div class="prose said">{@html render(said)}</div>
           {/if}
@@ -175,39 +139,7 @@
     </div>
 
     <div class="deck">
-      {#if writing && asks}
-        <div class="row">
-          <span class="label">tests</span>
-          {#each tests as t (t)}<span class="chip lattice">{titleOf(t)}<button class="x" type="button" aria-label={`Not ${titleOf(t)}`} onclick={() => setTests(tests.filter((x) => x !== t))}>×</button></span>{:else}<span class="faint">no notes yet</span>{/each}
-          {#if offered.length}
-            <select class="field pickone" aria-label="Add a note to test" value="" onchange={(e) => { const v = e.currentTarget.value; e.currentTarget.value = ""; if (v) setTests([...tests, v]); }}>
-              <option value="">+ a note in {inFolder || "the top of the base"}</option>
-              {#each offered as n (n.id)}<option value={n.id}>{n.title}</option>{/each}
-            </select>
-          {/if}
-          <button class="link" type="button" onclick={pickOnAtlas}>[ + pick on the atlas ]</button>
-        </div>
-        <div class="row">
-          <label class="in soft"><span>in</span>
-            <select class="field" aria-label="Folder" value={inFolder} onchange={(e) => note.setMeta({ folder: e.currentTarget.value })}>
-              <option value="">the top of the base</option>
-              {#each app.listing.dirs as dir (dir)}<option value={dir}>{dir}</option>{/each}
-            </select></label>
-          <label class="in soft"><span>comes after</span>
-            <select class="field" aria-label="Comes after" value={after} onchange={(e) => note.setMeta({ after: e.currentTarget.value || null })}>
-              <option value="">nothing</option>
-              {#each study?.exercises ?? [] as x (x.id)}<option value={x.id.slice("@study/".length)}>{x.title}</option>{/each}
-            </select></label>
-        </div>
-        <div class="row">
-          <button class="btn primary tall" type="button" disabled={!tests.length} onclick={send}><i class="dia inverse" aria-hidden="true"></i>send to Iso</button>
-          <span class="tiers" role="radiogroup" aria-label="Tier">
-            {#each ["low", "mid", "max"] as const as t (t)}<button type="button" role="radio" aria-checked={iso.tier === t} onclick={() => iso.setTier(t)}>{t}</button>{/each}
-          </span>
-          <span class="grow"></span>
-          <button class="link faint" type="button" disabled={busy} onclick={discard}>[ discard ]</button>
-        </div>
-      {:else if writing}
+      {#if writing}
         <div class="row">
           <span class="label">linked</span>
           {#each linked as n (n.id)}<span class="chip lattice">{n.title}</span>{:else}<span class="faint">no notes yet: type [[ in what you write, or</span>{/each}
@@ -223,14 +155,9 @@
         </div>
       {:else if reply}
         <div class="row">
-          {#if asks}
-          <button class="btn primary tall" type="button" disabled={busy} onclick={keep}>keep the exercise</button>
-          <span class="soft where">in {inFolder || "the top of the base"}{#if after}, after {study?.exercises.find((x) => x.id === `@study/${after}`)?.title ?? after}{/if}</span>
-          {:else}
           <button class="btn primary tall" type="button" disabled={busy} onclick={keep}>keep as a note</button>
           <label class="in soft"><span>in</span><input class="field" bind:value={folder} placeholder="the top of the base" list="folders" autocomplete="off" aria-label="Folder" /><span class="faint">/</span></label>
           <datalist id="folders">{#each app.listing.dirs as dir (dir)}<option value={dir}></option>{/each}</datalist>
-          {/if}
           <span class="grow"></span>
           {#if editing}<button class="btn edit" type="button" onclick={() => iso.done(reply)}>done</button>{:else}<button class="btn edit" type="button" onclick={() => iso.edit(reply)}>edit</button>{/if}
           <button class="btn danger tall" type="button" disabled={busy} onclick={discard}>discard</button>
@@ -289,13 +216,6 @@
   .tiers button[aria-checked="true"] { color: var(--text); border-bottom-color: var(--growth); }
   .in { display: inline-flex; align-items: center; gap: 8px; }
   .in .field { width: 180px; }
-  h1.title { margin: 0; }
-  .extitle { font-size: 22px; line-height: 1.3; font-weight: 700; margin: 0; }
-  .question { font-size: 23px; line-height: 1.45; }
-  .chip .x { background: none; border: 0; padding: 0 0 0 8px; color: inherit; opacity: 0.7; }
-  .chip .x:hover { opacity: 1; }
-  .where { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pickone { width: auto; max-width: 260px; }
   @media (max-width: 600px) {
     .col { padding: 20px 20px 24px; }
     .title { font-size: 30px; }

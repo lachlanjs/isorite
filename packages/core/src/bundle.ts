@@ -6,6 +6,7 @@
 
 import { FrontmatterError, splitFrontmatter, type Meta } from "./frontmatter.ts";
 import { citeRefs, headings, linkRefs, rating, type Rating } from "./markdown.ts";
+import { ABOUT, doneOf, embedRefs, idsOf, kindOf, outwardLinks, type Kind, type Outward } from "./kinds.ts";
 import { basename, cmp, cmpTuple, dirname, join, normpath, strip, text, toTime, unquote } from "./text.ts";
 
 export const OKF_VERSION = "0.2";
@@ -42,7 +43,7 @@ export const citeKind = (path: string): Cite["kind"] | null => (ARTIFACT.test(pa
 export type IssueCode =
   | "broken-link" | "requires-cycle" | "frontmatter-invalid" | "frontmatter-missing" | "type-missing"
   | "generated-without-by" | "verified-without-by" | "index-frontmatter" | "root-index-frontmatter"
-  | "log-heading-date";
+  | "log-heading-date" | "embed-broken";
 
 export interface Issue {
   path: string;
@@ -64,6 +65,13 @@ export class Concept {
   readonly mtime: number;
   links: Link[] = [];
   cites: Cite[] = [];
+  /** The notes it embeds (`[[!name]]`, M12), resolved to ids, in order. */
+  embeds: string[] = [];
+  /** Its links out of the base: to the web, and to code (M12). */
+  outward: Outward[] = [];
+  /** For a question or a problem: the notes it is about (or uses), from its frontmatter and from the notes that
+   *  embed it. */
+  attached: string[] = [];
 
   constructor(id: string, path: string, meta: Meta, body: string, mtime = 0) {
     this.id = id;
@@ -89,6 +97,12 @@ export class Concept {
   }
 
   get description(): string { return text(this.meta.description || ""); }
+
+  /** A note, an open question, or a problem (M12). */
+  get kind(): Kind { return kindOf(this.type); }
+
+  /** When a question was resolved or a problem solved, as written; null while open, and for a note. */
+  get done(): string | null { return doneOf(this.meta, this.kind); }
 
   get tags(): string[] {
     let tags = this.meta.tags || [];
@@ -216,6 +230,7 @@ export class Bundle {
         if (link) { link.rel = rel; links.push(link); }
       }
       concept.links = links;
+      concept.outward = outwardLinks(concept.body);
       for (const link of links) {
         if (link.broken) this.issue(concept.path, "warning", "broken-link", `broken link to ${link.target}`);
       }
@@ -227,6 +242,27 @@ export class Bundle {
         const cite: Cite = { target: path, kind, embed, broken: !this.files.has(path), rel: rating(title), align: t === "left" ? "left" : t === "center" || t === "centre" ? "center" : null };
         concept.cites.push(cite);
         if (cite.broken) this.issue(concept.path, "warning", "broken-link", `broken link to ${path}`);
+      }
+    }
+    // Embeds (M12): by file name, or by path where two share it. An embed attaches what it embeds to its note.
+    const byName = new Map<string, string[]>();
+    for (const id of this.concepts.keys()) { const n = basename(id); byName.set(n, [...(byName.get(n) ?? []), id]); }
+    for (const concept of this.concepts.values()) {
+      for (const ref of embedRefs(concept.body)) {
+        const path = ref.replace(/^\/+/, "").replace(/\.md$/, "");
+        const found = path.includes("/") ? (this.concepts.has(path) ? [path] : []) : byName.get(path) ?? [];
+        if (found.length === 1) concept.embeds.push(found[0]!);
+        else this.issue(concept.path, "warning", "embed-broken", found.length ? `two notes are named ${path}: embed one by its path` : `no note to embed: ${ref}`);
+      }
+    }
+    for (const concept of this.concepts.values()) {
+      if (concept.kind === "note") continue;
+      concept.attached = idsOf(concept.meta[ABOUT[concept.kind]]).filter((id) => this.concepts.has(id) && id !== concept.id);
+    }
+    for (const concept of this.concepts.values()) {
+      for (const id of concept.embeds) {
+        const embedded = this.concepts.get(id)!;
+        if (embedded.kind !== "note" && id !== concept.id && !embedded.attached.includes(concept.id)) embedded.attached.push(concept.id);
       }
     }
     for (const group of this.requiresCycles()) {

@@ -9,7 +9,6 @@ import { deviceId } from "../src/config.ts";
 import { TOKEN_HEADER, createApp } from "../src/http.ts";
 import { NodeFiles } from "../src/nodefiles.ts";
 import { locate, openEngine } from "../src/serve.ts";
-import { initStudyBase } from "../src/studybase.ts";
 
 const NOTE = "---\ntype: Concept\ntitle: Entropy\n---\n\nThe average surprise.\n";
 const TOKEN = "the-token";
@@ -20,10 +19,10 @@ beforeAll(async () => {
   notes = join(root, "information-theory");
   mkdirSync(join(notes, "basics"), { recursive: true });
   writeFileSync(join(notes, "basics", "entropy.md"), NOTE);
-  study = initStudyBase(notes).path;
+  study = join(notes, ".isorite");
   mkdirSync(join(root, "web"));
   writeFileSync(join(root, "web", "index.html"), "<!doctype html><title>isorite</title>");
-  const api = await openEngine(locate(study), "testdev1", join(root, "config.toml"), undefined, null);
+  const api = await openEngine(locate(notes),"testdev1", join(root, "config.toml"), undefined, null);
   server = nodeServe({ fetch: createApp({ api, token: TOKEN, loopback: true, web: join(root, "web") }).fetch, hostname: "127.0.0.1", port: 0 });
   await new Promise((done) => server.once("listening", done));
   url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -33,16 +32,15 @@ afterAll(() => { server.close(); rmSync(root, { recursive: true, force: true });
 const write = (path: string, body: unknown, { method = "PUT", headers = {} as Record<string, string> } = {}) =>
   fetch(url + path, { method, headers: { Origin: url, "Content-Type": "application/json", [TOKEN_HEADER]: TOKEN, ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
 
-test("a study base is found from either folder", () => {
-  expect(locate(study)).toEqual({ notes, study });
-  expect(locate(notes)).toEqual({ notes, study });
-  expect(locate(join(root, "web"))).toEqual({ notes: join(root, "web"), study: null });
+test("a folder of notes is opened with isorite's own files in its .isorite/, made the first time", () => {
+  expect(locate(notes)).toEqual({ notes });
+  expect(readFileSync(join(study, ".gitattributes"), "utf8")).toBe("*.jsonl merge=union\n");
 });
 
 test("the session, the listing and the search", async () => {
-  expect(await (await fetch(url + "/api/session")).json()).toEqual({ name: "information-theory", study: true, device: "testdev1", token: TOKEN });
+  expect(await (await fetch(url + "/api/session")).json()).toEqual({ name: "information-theory", device: "testdev1", token: TOKEN });
   expect(await (await fetch(url + "/api/notes")).json()).toMatchObject({ notes: [{ id: "basics/entropy", title: "Entropy" }], dirs: ["basics"] });
-  expect(await (await fetch(url + "/api/map")).json()).toMatchObject({ notes: { "basics/entropy": { title: "Entropy", step: 0 } }, model: { root: { kind: "dir" } } });
+  expect(await (await fetch(url + "/api/map")).json()).toMatchObject({ notes: { "basics/entropy": { title: "Entropy" } }, model: { root: { kind: "dir" } } });
   expect(await (await fetch(url + "/api/search?q=surprise")).json()).toMatchObject([{ id: "basics/entropy" }]);
 });
 
@@ -68,20 +66,6 @@ test("a note is made, once", async () => {
   expect(made.status).toBe(200);
   expect(statSync(join(notes, "channels", "capacity.md")).isFile()).toBe(true);
   expect((await write("/api/note?id=channels/capacity", { text: "x" }, { method: "POST" })).status).toBe(409);
-});
-
-test("exercises: a request for one is made on disk, the study page is read, and wind back is a write", async () => {
-  const made = await write("/api/exercise/draft", { folder: "basics", tests: ["basics/entropy"] }, { method: "POST" });
-  expect(made.status).toBe(200);
-  const draft = await made.json() as { id: string; text: string };
-  expect(draft.id).toMatch(/^@draft\//);
-  expect(readFileSync(join(study, "drafts", draft.id.slice("@draft/".length) + ".md"), "utf8")).toContain("type: Exercise");
-  expect((await write("/api/exercise/draft", { folder: "basics", tests: [] }, { method: "POST" })).status).toBe(400);
-  mkdirSync(join(study, "study", "basics"), { recursive: true });
-  writeFileSync(join(study, "study", "basics", "coin.md"), "---\ntype: Exercise\ntitle: A coin\ntests: [basics/entropy]\n---\n\nQ.\n\n## Working\n\n");
-  expect(await (await fetch(url + "/api/study")).json()).toMatchObject({ exercises: [{ id: "@study/basics/coin", title: "A coin", result: null }], folders: expect.arrayContaining(["", "basics"]) });
-  expect((await write("/api/exercise/wind-back?id=@study/basics/coin", {}, { method: "POST" })).status).toBe(200);
-  expect(readFileSync(join(study, "record", "testdev1.jsonl"), "utf8")).toContain('"event":"wind-back","note":"basics/entropy"');
 });
 
 test("each write that should be refused is", async () => {
@@ -203,4 +187,15 @@ test("every stream is told how many browser pages listen; a harness's plugin, li
   for (let waited = 0; !agent.text().includes('"browsers":0', agent.text().indexOf('"browsers":1')) && waited < 3000; waited += 50) await new Promise((r) => setTimeout(r, 50));
   expect(agent.text().lastIndexOf('"browsers":0')).toBeGreaterThan(agent.text().indexOf('"browsers":1'));
   agent.abort.abort();
+});
+
+test("a base's code links resolve against the repository its settings name, from the notes folder", async () => {
+  const at = join(root, "with-code"), base = join(at, "notes");
+  mkdirSync(join(base, ".isorite"), { recursive: true });
+  mkdirSync(join(at, "code", "src"), { recursive: true });
+  writeFileSync(join(at, "code", "src", "sim.py"), "");
+  writeFileSync(join(base, ".isorite", "settings.toml"), 'repository = "../code"\n');
+  writeFileSync(join(base, "step.md"), "---\ntype: Concept\ntitle: Step\n---\n\n[here](code:src/sim.py) and [gone](code:src/old.py)\n");
+  const api = await openEngine(locate(base), "testdev1", join(root, "config.toml"), undefined, null);
+  expect((await api.map()).notes.step!.links!.map((l) => l.broken ?? false)).toEqual([false, true]);
 });

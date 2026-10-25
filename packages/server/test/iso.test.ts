@@ -8,7 +8,6 @@ import { insertAt, pending, readJournal } from "@isorite/core";
 import { ConfigSecrets, providerConfig } from "../src/config.ts";
 import { TOKEN_HEADER, createApp } from "../src/http.ts";
 import { locate, openEngine } from "../src/serve.ts";
-import { initStudyBase } from "../src/studybase.ts";
 import { scripted } from "../../engine/test/scripted.ts";
 
 const NOTE = "---\ntype: Concept\ntitle: Entropy\n---\n\nThe average surprise.\n";
@@ -21,9 +20,9 @@ beforeAll(async () => {
   notes = join(root, "information-theory");
   mkdirSync(join(notes, "basics"), { recursive: true });
   writeFileSync(join(notes, "basics", "entropy.md"), NOTE);
-  study = initStudyBase(notes).path;
+  study = join(notes, ".isorite");
   config = join(root, "config.toml");
-  const api = await openEngine(locate(study), "testdev1", config, provider.http, null);
+  const api = await openEngine(locate(notes), "testdev1", config, provider.http, null);
   server = nodeServe({ fetch: createApp({ api, token: TOKEN, loopback: true, web: null }).fetch, hostname: "127.0.0.1", port: 0 });
   await new Promise((done) => server.once("listening", done));
   url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -77,13 +76,13 @@ test("asking over HTTP: the reply streams as events and ends as a proposal; keep
 
 test("the context report and clearing the conversation over HTTP", async () => {
   const report = await (await fetch(url + "/api/context?id=basics/entropy")).json() as { tokens: number; parts: { name: string; detail: string }[]; session: { requests: number } };
-  expect(report.parts.map((p) => p.name)).toEqual(["instructions and tools", "study record", "your prompts and Iso's answers", "this note", "linked notes"]);
+  expect(report.parts.map((p) => p.name)).toEqual(["instructions and tools", "your prompts and Iso's answers", "this note", "linked notes"]);
   expect(report.session.requests).toBe(1);
-  expect(report.parts[2]!.detail).toBe("1 moment");
+  expect(report.parts[1]!.detail).toBe("1 moment");
   expect((await send("/api/context/clear", {}, "POST", { [TOKEN_HEADER]: "wrong" })).status).toBe(403);
   expect((await send("/api/context/clear", {})).status).toBe(200);
   const cleared = await (await fetch(url + "/api/context")).json() as typeof report;
-  expect(cleared.parts[2]!.detail).toBe("");
+  expect(cleared.parts[1]!.detail).toBe("");
   expect(cleared.session.requests).toBe(1); // what was spent is still spent
   expect(readFileSync(join(study, "record", "testdev1.jsonl"), "utf8")).toContain("context-cleared");
 });

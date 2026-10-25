@@ -2,7 +2,7 @@
 // interface and nothing else, so it does not know whether the engine is
 // behind HTTP (the server) or in the same process (a webview, later).
 
-import type { Anchor, Cost, Entry, MapModel, Passage, Result, SessionMoment } from "@isorite/core";
+import type { Anchor, Cost, Entry, MapModel, Passage, SessionMoment } from "@isorite/core";
 import type { Part } from "./iso.ts";
 import type { AgentEdit } from "./agent.ts";
 import type { Step } from "./lookup.ts";
@@ -13,8 +13,6 @@ import type { Decision, Given, Mode, Turn, TurnItem } from "./turn.ts";
 export interface Session {
   /** The knowledge base's name, for the header's path. */
   name: string;
-  /** Whether there is a study base, and so a journal. */
-  study: boolean;
   device: string;
   /** The base is the tutorial's (`isorite --tutorial`): the app walks you through it. */
   tutorial?: boolean;
@@ -27,6 +25,13 @@ export interface NoteSummary {
   type: string;
   /** The folder's id: "" for the root. */
   dir: string;
+  /** A question or a problem (M12), and the notes it is about or uses. */
+  kind?: "question" | "problem";
+  attached?: string[];
+  /** When it was resolved or solved, as written. */
+  done?: string;
+  /** Its code links whose file is not in the base's repository (M12). */
+  broken?: string[];
 }
 
 export interface Listing {
@@ -47,23 +52,19 @@ export interface Saved extends NoteSource {
   changed: boolean;
 }
 
-/** Both bases as one map: what the layout takes, and what each block says, by the note's name in the model
- *  (a study note's begins `@study/`). */
+/** The base as the Atlas draws it: what the layout takes, and what each block says, by the note's id. */
 export interface MapReport {
   model: MapModel;
   notes: Record<string, {
     title: string;
-    /** Understanding in the Atlas's four steps: 0 not reached, 1 opened, 2 worked through, 3 understood. */
-    step: 0 | 1 | 2 | 3;
-    /** A study note's kind, as its top edge says it. */
-    kind?: string;
-    /** An exercise whose last attempt was marked right. */
-    passed?: true;
-    /** Changed by someone other than you (Iso, an agent, another editor) since your understanding of it was last
-     *  recorded: when (M10). */
-    changedSince?: string;
-    /** A note of the knowledge base: the size of its text, as an estimate in tokens (what linking it to a note for Iso adds). */
-    tokens?: number;
+    /** The size of its text, as an estimate in tokens (what linking it to a note for Iso adds). */
+    tokens: number;
+    /** A question or a problem (M12). */
+    kind?: "question" | "problem";
+    /** A question resolved or a problem solved (M12): when, as written. */
+    done?: string;
+    /** Its links out of the base, to the web and to code (M12): drawn beside it on the Atlas. */
+    links?: { kind: "web" | "code"; href: string; text: string; broken?: true }[];
   }>;
 }
 
@@ -85,11 +86,7 @@ export type AskRequest =
   /** These passages rewritten, and nothing else. What Iso says of the changes goes between `after` and `before`. */
   | { note: string; form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier; choice?: Choice }
   /** A note written for Iso (a draft, `@draft/…`): the draft is what is asked, and the reply is a note to keep in its place. */
-  | { note: string; form: "note"; tier: Tier }
-  /** An exercise (`@study/…`) sent for marking, with the passage of its working that is the answer. One round, no tools. */
-  | { note: string; form: "mark"; answer: Passage; tier: Tier }
-  /** A request for an exercise (a draft made by `createExerciseDraft`): the reply is an exercise to keep. One round, no tools. */
-  | { note: string; form: "exercise"; tier: Tier };
+  | { note: string; form: "note"; tier: Tier };
 
 /** A turn of a conversation with Iso in its pane (M10): what is asked, in which mode, with what you gave it. Without
  *  `conversation` a new conversation begins. `lookup: false` keeps Iso to what you gave. */
@@ -110,26 +107,12 @@ export type TerminalItem =
 /** The agent asks before doing: `action` (as `shell`) on `resources` (as the command). */
 export interface TerminalPermission { id: string; action: string; resources: string[]; tool?: string }
 
-/** A note for Iso that is not in the base yet. `exercise` marks a request for an exercise. */
-export interface DraftSummary { id: string; title: string; exercise?: true }
+/** A note for Iso that is not in the base yet. */
+export interface DraftSummary { id: string; title: string }
 
-/** One thing that moved a note's understanding: an attempt, with what Iso judged and why, or your wind back. */
-/** `marks` names the marking's entry in the exercise's journal. */
-export interface Evidence { id: string; at: string; event: "attempt" | "wind-back" | "understood"; by: number; why?: string; exercise?: string; result?: Result; marks?: string; conversation?: string }
-
-/** A note's Understanding note (M10): Iso's reading of your understanding, your scratchpad (`version` is the file's,
- *  null before there is one), and what the record says: the number, its squares and steps, and the evidence. */
-export interface UnderstandingReport { note: string; reading: string; scratchpad: string; version: string | null; level: number; squares: number; step: 0 | 1 | 2 | 3; due: boolean; evidence: Evidence[] }
-
-/** What the study page and the squares read. */
-export interface StudyReport {
-  /** Every exercise, in the order the study page lists them. Ids are as the app names them (`@study/…`). */
-  exercises: { id: string; title: string; kind: string; tests: string[]; next: string | null; result: Result | null; last: string | null; squares: number; due: boolean }[];
-  /** Every note the record bears on: its reading, and the evidence for it, oldest first. */
-  notes: Record<string, { level: number; squares: number; step: 0 | 1 | 2 | 3; due: boolean; evidence: Evidence[] }>;
-  /** The base's folders, the root as "", for asking for an exercise in one. */
-  folders: string[];
-}
+/** A note's Understanding note (M10): Iso's reading of your understanding, and your scratchpad (`version` is the
+ *  file's, null before there is one). */
+export interface UnderstandingReport { note: string; reading: string; scratchpad: string; version: string | null }
 
 /** What a request to Iso would be sent now, part by part, and what the session has cost. Sizes are estimates
  *  (four characters a token) until a provider's own count replaces them. */
@@ -147,8 +130,14 @@ export interface ContextReport {
   given?: { kind: Given["kind"]; id: string; text?: string; tokens: number }[];
 }
 
+/** What Iso has cost against what may be spent (M12). `per` is the period the figure covers: a calendar month
+ *  (UTC), or what the provider's key counts. `source` says where `cap` comes from: the key's own limit, the
+ *  `spend_cap` setting, or, with no cap at all, the most spent in any month so far (`cap` is null while nothing
+ *  has been spent). */
+export interface Spend { usd: number; cap: number | null; per: "day" | "week" | "month" | "total"; source: "key" | "setting" | "history" }
+
 /** One part of Iso's context that can be switched off: an earlier exchange, or a note this note links to. */
-export interface ContextItem { id: string; kind: "exchange" | "linked"; title: string; tokens: number; on: boolean }
+export interface ContextItem { id: string; kind: "exchange" | "linked" | "question"; title: string; tokens: number; on: boolean }
 
 /** What can be set, as the app may know it. The key itself is never sent back. */
 export interface Settings {
@@ -158,6 +147,8 @@ export interface Settings {
   /** Whether the provider can make a key by signing in there (connect). */
   connect: boolean;
   tiers: Record<Tier, string>;
+  /** The monthly spend cap set for Iso, in dollars; null for none. */
+  spendCap: number | null;
 }
 
 export type EngineEvent =
@@ -165,21 +156,21 @@ export type EngineEvent =
   | { type: "note-changed"; id: string; version: string | null; who: string }
   /** An entry was added to a note's journal. */
   | { type: "journal"; id: string; entry: Entry }
-  /** An event was added to the study record. */
+  /** An event was added to this device's record of usage (what was cleared from Iso's context, what turns cost). */
   | { type: "record"; event: string }
   /** Iso was asked. Every request ends in exactly one of iso-done, iso-stopped, iso-failed. */
-  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null } | { form: "note" } | { form: "mark"; answer: Passage } | { form: "exercise" } | { form: "turn"; conversation: string; mode: Mode; given: Given[] } }
+  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null } | { form: "note" } | { form: "turn"; conversation: string; mode: Mode; given: Given[] } }
   /** In a turn (M10): something it did other than look up or write its reply, as kept in the conversation. */
   | { type: "iso-item"; request: string; conversation: string; item: TurnItem }
   /** Your answer to something it asked before doing. */
   | { type: "iso-answer"; request: string; conversation: string; permission: string; decision: Decision }
+  | { type: "iso-taken"; request: string; conversation: string; item: string; note: string }
   /** Iso looked something up. */
   | { type: "iso-step"; request: string; note: string; step: Step }
   /** A piece of its reply. `again`: what came before was not the reply; start over. */
   | { type: "iso-text"; request: string; note: string; delta: string; again: boolean }
-  /** `proposal` is what it offers; for a rewrite that says something of its changes, `said` is that, a proposal of its own.
-   *  For a marking, `proposal` is the `marks` entry and `attempt` the event in the study record. */
-  | { type: "iso-done"; request: string; note: string; proposal: string; said?: string; attempt?: string; cost: Cost }
+  /** `proposal` is what it offers; for a rewrite that says something of its changes, `said` is that, a proposal of its own. */
+  | { type: "iso-done"; request: string; note: string; proposal: string; said?: string; cost: Cost }
   | { type: "iso-stopped"; request: string; note: string }
   | { type: "iso-failed"; request: string; note: string; message: string }
   /** A terminal agent (`agent` is its name, as `opencode`) began a turn in one of its sessions. Each turn ends in agent-done. */
@@ -222,13 +213,14 @@ export interface Api {
   saveNote(id: string, edit: { base: string; text: string }): Promise<Saved>;
   /** Make a note. Refuses when there is one already. */
   createNote(id: string, text: string): Promise<Saved>;
-  /** Move a note of the base to another id: a new name, or another folder (made if need be). Its journal and what
-   *  the record knows of it go with it; links to it, and exercises that test it, are changed to match, as your
-   *  own edits. `base` as for saveNote. */
+  /** Move a note of the base to another id: a new name, or another folder (made if need be). Its journal goes with
+   *  it; links to it are changed to match, as your own edits. `base` as for saveNote. */
   moveNote(id: string, to: string, base: string): Promise<Saved>;
+  /** Resolve a question or say a problem is solved, today, or open it again (M12). `base` as for saveNote. */
+  setDone(id: string, done: boolean, base: string): Promise<Saved>;
   /** Delete a note of the base. Its journal stays, and links to it are left, broken. `base` as for saveNote. */
   deleteNote(id: string, base: string): Promise<void>;
-  /** The note's journal, oldest first. Empty with no study base. */
+  /** The note's journal, oldest first. */
   journal(id: string): Promise<Entry[]>;
   /** The note's text just after one of its journal's entries. */
   version(id: string, entry: string): Promise<string>;
@@ -237,7 +229,7 @@ export interface Api {
   /** The moments of the last session across every note, in the order they began: the one going on, or the last ended. */
   timeline(): Promise<SessionMoment[]>;
   search(query: string): Promise<SearchHit[]>;
-  /** The Atlas's map of the base and, with it, the study base. */
+  /** The Atlas's map of the base. */
   map(): Promise<MapReport>;
   /** Ask Iso. Returns at once with the request's id; what follows comes as events, and ends as a proposal in the note's journal. */
   ask(request: AskRequest): Promise<{ request: string }>;
@@ -255,6 +247,12 @@ export interface Api {
   saveScratchpad(note: string, scratchpad: string, base: string | null): Promise<UnderstandingReport>;
   /** Put back every note a turn changed as it was before the turn. A note changed since is left as it is, and said. */
   undoTurn(conversation: string, turn: string): Promise<{ notes: string[]; left: string[] }>;
+  /** Name the repository the base's code links point into, unless one is named: true if it was (M12). */
+  nameRepository(path: string): Promise<boolean>;
+  /** Code links broken since Iso, or the terminal's agent, was last told; each is told once (Q27). */
+  brokenNews(to: "iso" | "agent"): Promise<{ id: string; title: string; href: string }[]>;
+  /** Make a question Iso asked in a turn a question note, or insert what it offered: yours either way. */
+  takeItem(conversation: string, turn: string, item: string): Promise<{ note: string }>;
   /** Your answer to what Iso asked before doing something in a turn. */
   answer(turn: string, permission: string, decision: Decision): Promise<void>;
   /** Stop a request. Nothing is entered. */
@@ -268,27 +266,22 @@ export interface Api {
   discard(id: string, proposal: string, region?: number): Promise<void>;
   /** The notes for Iso that are waiting outside the base, newest first. */
   drafts(): Promise<DraftSummary[]>;
-  /** Start a note for Iso. It is a file of the study base, read and saved like any note, under the id it is given. */
+  /** Start a note for Iso. It is one of isorite's own files, read and saved like any note, under the id it is given. */
   createDraft(): Promise<NoteSource>;
   /** Keep Iso's reply to a draft as a note of the knowledge base, in a folder, under the draft's title. The draft is then gone. */
   keepDraft(draft: string, proposal: string, folder: string): Promise<Saved>;
   /** Throw a draft away. Its journal stays. */
   discardDraft(draft: string): Promise<void>;
-  /** Start a request for an exercise in a folder of the base, testing these notes; `after` is an exercise (`@study/…`)
-   *  that the new one follows in teaching order. What you want from it is the draft's text, and may be empty. */
-  createExerciseDraft(folder: string, tests: string[], after?: string | null): Promise<NoteSource>;
-  /** Keep Iso's exercise as `study/<folder>/<name>.md`, and set `next` on the exercise it follows. The draft is then gone. */
-  keepExercise(draft: string, proposal: string): Promise<Saved>;
-  /** The exercises, in order, and what the record says of each note. */
-  study(): Promise<StudyReport>;
-  /** You think Iso rates you too highly: one square down for every note this exercise tests. */
-  windBack(exercise: string): Promise<void>;
   /** What Iso would be sent if asked now, in this note (or in none). */
   /** What asking Iso in a note would send, with `choice` as the request would carry it. */
   context(note?: string, choice?: Choice): Promise<ContextReport>;
   /** Leave the session's earlier exchanges out of what Iso is sent from now on. Nothing is deleted. */
   clearConversation(): Promise<void>;
   settings(): Promise<Settings>;
+  /** What Iso has cost, against the key's own limit where the provider gives one, else the `spend_cap` setting. */
+  spend(): Promise<Spend>;
+  /** Set the monthly spend cap in dollars (null: none). Where the key has a limit of its own, that is used instead. */
+  setSpendCap(usd: number | null): Promise<Settings>;
   /** Hold a provider key (null forgets it). */
   setKey(key: string | null): Promise<Settings>;
   /** Begin making a key by signing in at the provider: the page to go to, which comes back to `callback` with a code. */

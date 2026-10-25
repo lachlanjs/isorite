@@ -38,6 +38,8 @@ export const OPENROUTER: ProviderConfig = {
 
 /** The name a provider's key is kept under. */
 export const KEY = "provider.key";
+/** The monthly cap on what Iso may cost, in dollars, kept with the device's configuration. */
+export const SPEND_CAP = "provider.spend_cap";
 
 const base64url = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 

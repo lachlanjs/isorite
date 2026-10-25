@@ -1,7 +1,8 @@
 // The three panes (M10): Note, Atlas and Iso, "think, connect, build". On a desktop they stand side by side in one
-// of three layouts; on a phone one stands at a time and the others are a swipe away. Note and Atlas each have a lens
-// (what is shown); Iso's pane has a mode (what Iso may do). Remembered per browser: the layout, which panes show,
-// their widths, each lens, Iso's mode, and the note last open (what the Note pane opens to when none is).
+// of three layouts; on a phone one stands at a time and the others are a swipe away. Each pane has switches in its
+// header (M12, in place of M10's lenses and modes): what the Note pane and the Atlas show, and what Iso may do.
+// Remembered per browser: the layout, which panes show, their widths, the switches, and the note last open (what
+// the Note pane opens to when none is).
 
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
@@ -15,10 +16,15 @@ export const PANES = ["note", "atlas", "iso"] as const;
 export type Pane = (typeof PANES)[number];
 export const LAYOUTS = ["cols", "stack", "one"] as const;
 export type Layout = (typeof LAYOUTS)[number];
-export const LENSES = ["normal", "iso", "understand"] as const;
-export type Lens = (typeof LENSES)[number];
-export const MODES = ["ask", "write", "build", "understand"] as const;
-export type Mode = (typeof MODES)[number];
+/** What Iso may do, as the engine names it: worked out from Iso's switches. */
+export type Mode = "ask" | "write" | "build";
+
+/** Each pane's switches (M12). Note: whose words are whose, and the timeline. Atlas: what Iso is sent and did.
+ *  Iso: may it edit the notes, and with a terminal attached, the project's files, and run commands. */
+export const SWITCHES = { note: ["provenance", "timeline"], atlas: ["questions", "problems", "web", "code", "context"], iso: ["notes", "files", "run"] } as const;
+export type Switch = (typeof SWITCHES)[keyof typeof SWITCHES][number];
+// The Atlas's kinds (M12): open questions and problems on the map from the first, links out of it when asked for.
+const OFF: Record<Switch, boolean> = { provenance: false, timeline: false, questions: true, problems: true, web: false, code: false, context: false, notes: false, files: false, run: false };
 
 /** The panes' relative widths when side by side. */
 const WIDTHS = { note: 1.25, atlas: 1, iso: 1.05 };
@@ -28,14 +34,13 @@ class Panes {
   layout = $state<Layout>((LAYOUTS as readonly string[]).includes(read("isorite.layout", "")) ? read("isorite.layout", "") as Layout : "cols");
   show = $state<Record<Pane, boolean>>(json("isorite.show", { note: true, atlas: true, iso: true }));
   widths = $state<Record<Pane, number>>(json("isorite.widths", WIDTHS));
-  lens = $state<Record<"note" | "atlas", Lens>>(json("isorite.lens", { note: "normal" as Lens, atlas: "normal" as Lens }));
-  mode = $state<Mode>((MODES as readonly string[]).includes(read("isorite.mode", "")) ? read("isorite.mode", "") as Mode : "ask");
+  on = $state<Record<Switch, boolean>>(json("isorite.switches", OFF));
+  /** The Note pane shows the note's Understanding note in place of the note (the sprig in its header). */
+  understanding = $state(read("isorite.understanding", "") === "1");
   /** The pane keys and new things go to. */
   focus = $state<Pane>("note");
   /** A phone's width: one pane at a time. */
   narrow = $state(false);
-  /** A lens Iso would show in a pane you are working in: lit, not switched to (agreed 2026-10-22). */
-  waiting = $state<Partial<Record<"note" | "atlas", Lens>>>({});
   /** Things sent to Iso from another pane since Iso's pane was last looked at (the phone's tab shows it). */
   unseen = $state(0);
   /** The notes, open over the note in the Note pane. */
@@ -82,31 +87,27 @@ class Panes {
     this.to(s[(i + by + s.length) % s.length]!);
   }
 
-  setLens(p: "note" | "atlas", l: Lens): void { this.lens[p] = l; delete this.waiting[p]; keep("isorite.lens", JSON.stringify(this.lens)); }
-  stepLens(p: "note" | "atlas", by: number): void { this.setLens(p, LENSES[(LENSES.indexOf(this.lens[p]) + by + LENSES.length) % LENSES.length]!); }
-  /** Iso wants a pane in a lens to show what it did. A pane you are working in is lit instead of switched. */
-  want(p: "note" | "atlas", l: Lens, busy: boolean): void {
-    if (this.lens[p] === l) return;
-    if (busy) this.waiting[p] = l; else this.setLens(p, l);
+  flip(k: Switch, to = !this.on[k]): void {
+    this.on[k] = to;
+    keep("isorite.switches", JSON.stringify(this.on));
+    if (k === "notes" || k === "files" || k === "run") this.onMode?.();
   }
+  showUnderstanding(to = !this.understanding): void { this.understanding = to; keep("isorite.understanding", to ? "1" : ""); this.onMode?.(); }
 
-  /** Whether you are working in a pane: typing in it. Iso does not switch its lens then. */
+  /** Whether you are working in a pane: typing in it. */
   busy(p: Pane): boolean {
     const el = typeof document === "undefined" ? null : document.activeElement;
     return !!el && !!el.closest(`[data-pane="${p}"]`) && (el.matches("input, textarea, [contenteditable=true]") || !!el.closest(".cm-editor"));
   }
 
-  /** Modes there are: Build only while a terminal is attached (M11), its session shown in Iso's pane. */
-  modes = $state<Mode[]>(["ask", "write", "understand"]);
-  setBuild(on: boolean): void {
-    if (on !== this.modes.includes("build")) this.modes = on ? ["ask", "write", "build", "understand"] : ["ask", "write", "understand"];
-    // Kept from before, with no terminal now.
-    if (!on && this.mode === "build") this.setMode("ask");
-  }
-  setMode(m: Mode): void { this.mode = m; keep("isorite.mode", m); this.onMode?.(); }
-  /** Set by the tray: what a change of mode does to what Iso is sent. */
+  /** A terminal is attached (M11): Iso's files and run switches are offered, and with either on, what is asked
+   *  goes to the terminal's session (Q47). */
+  terminal = $state(false);
+  setTerminal(on: boolean): void { this.terminal = on; }
+  /** What Iso may do now. */
+  get mode(): Mode { return this.terminal && (this.on.files || this.on.run) ? "build" : this.on.notes ? "write" : "ask"; }
+  /** Set by the tray: what a change of what Iso may do, or of the Understanding note shown, does to what Iso is sent. */
   onMode: (() => void) | null = null;
-  stepMode(by: number): void { const ms = this.modes; this.setMode(ms[(ms.indexOf(this.mode) + by + ms.length) % ms.length]!); }
 
   setLast(id: string): void { if (id && !id.startsWith("@")) { this.last = id; keep("isorite.last", id); } }
 

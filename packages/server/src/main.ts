@@ -2,11 +2,11 @@
 // isorite's command line.
 //
 //   isorite check <notes>                  lint a folder of notes
-//   isorite study init <notes> [<where>]   make a study base beside a knowledge base
-//   isorite serve <study base | notes>     open it in the browser
+//   isorite serve <notes>                  open it in the browser
+//   isorite migrate <study base>           move a study base (format 1) into its notes' .isorite/
 //   isorite example <folder>               write the example base, partway built, into a folder
-//   isorite term [<study base | notes>]    OpenCode, with isorite's plugin, beside a knowledge base
-//   isorite mcp [<study base | notes>]     the knowledge base's tools over MCP, on stdio, for another harness
+//   isorite term [<notes>]                 OpenCode, with isorite's plugin, beside a knowledge base
+//   isorite mcp [<notes>]                    the knowledge base's tools over MCP, on stdio, for another harness
 //   isorite --tutorial [<folder>]          the tutorial: the terminal's tour, and the browser's beside it
 
 import { existsSync, realpathSync, statSync } from "node:fs";
@@ -15,10 +15,10 @@ import { pathToFileURL } from "node:url";
 import { StudyError } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { serve } from "./serve.ts";
-import { initStudyBase } from "./studybase.ts";
+import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
 import { term, tutorialTerm } from "./term.ts";
-import { writeExample } from "@isorite/example/node";
+import { writeExample, writeGeometry } from "@isorite/example/node";
 import { fetchModel, userModelDir } from "./model.ts";
 
 // The version: written into the bundle when it is built for npm (scripts/package.ts), else this checkout's.
@@ -28,15 +28,17 @@ const VERSION = typeof ISORITE_VERSION === "string" ? ISORITE_VERSION : "0.1.0 (
 const USAGE = `isorite: an agentic harness for understanding
 
   isorite check <notes>                  check a folder of notes: frontmatter, links, cycles
-  isorite study init <notes> [<where>]   make a study base for it (default: beside its repository)
-  isorite serve <study base | notes> [--port <n>] [--allow-host <name>]
+  isorite serve <notes> [--port <n>] [--allow-host <name>]
                                          open it in the browser, on this machine only
-  isorite example <folder>               write the example base (notes on an N-body simulation, three weeks
-                                         into being built) with its study base, into an empty folder
-  isorite term [<study base | notes>] [--port <n>]
+  isorite migrate <study base> [--merge] move a study base (format 1) into its notes' .isorite/; exercises
+                                         become problem notes; the study base is left as it was
+  isorite example <folder> [--geometry]  write the example base (notes on an N-body simulation, three weeks
+                                         into being built), into an empty folder; --geometry: notes on the
+                                         differential geometry of surfaces, with their questions and problems
+  isorite term [<notes>] [--port <n>]
                                          OpenCode 2 here, with the knowledge base beside it: its server is
                                          started if none is running on the port
-  isorite mcp [<study base | notes>] [--port <n>] [--agent <name>]
+  isorite mcp [<notes>] [--port <n>] [--agent <name>]
                                          the knowledge base's tools over MCP, on stdio, for Claude Code or Pi:
                                          claude mcp add isorite -- isorite mcp <base> --agent claude-code
   isorite model [--from <folder>]        fetch the model for search by meaning (53 MB, once): from npm, else
@@ -96,19 +98,21 @@ export function main(argv: string[]): number | Promise<number> {
       return fetchModel(userModelDir(), console.log, from && rest.includes("--from") ? { from } : {}).then(() => 0, (e: Error) => { console.error(e.message); return 1; });
     }
     if (command === "--version" || command === "-v") { console.log(VERSION); return 0; }
-    if (command === "example" && rest[0]) {
-      return writeExample(rest[0]).then(({ notes, study }) => {
+    if (command === "example" && rest.find((r) => !r.startsWith("--"))) {
+      const folder = rest.find((r) => !r.startsWith("--"))!;
+      return (rest.includes("--geometry") ? writeGeometry(folder) : writeExample(folder)).then(({ notes }) => {
         console.log(`the example base is at ${notes}`);
-        console.log(`  its study base is ${study}`);
-        console.log(`  open it with: isorite serve ${study}`);
+        console.log(`  open it with: isorite serve ${notes}`);
         return 0;
       }, (e: Error) => { console.error(e.message); return 2; });
     }
-    if (command === "study" && rest[0] === "init" && rest[1]) {
-      const made = initStudyBase(rest[1], rest[2]);
-      console.log(`study base made at ${made.path}`);
-      console.log(`  studies ${made.config.base.path}${made.config.base.root ? ` (root commit ${made.config.base.root.slice(0, 10)})` : " (not in git)"}`);
-      console.log(made.repository ? "  a git repository of its own; nothing committed" : "  git not found: not a repository yet");
+    if (command === "migrate" && rest[0] && !rest[0].startsWith("--")) {
+      const done = migrate(rest[0], { merge: rest.includes("--merge") });
+      console.log(`moved into ${done.notes}/.isorite/: ${done.copied.length} files`);
+      for (const p of done.problems) console.log(`  exercise ${p.from} is now the problem note ${p.to}`);
+      for (const k of done.kept) console.log(`  kept as it was: .isorite/${k}`);
+      if (done.dropped) console.log(`  the study record (${done.dropped} lines) is not carried over: format 2 has none`);
+      console.log(`  ${rest[0]} is left as it was; remove it once you are satisfied`);
       return 0;
     }
   } catch (e) {

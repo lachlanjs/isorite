@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 // A note in the terminal (`Terminal-Note`): its blocks behind a gutter of who wrote them, links underlined, maths as
 // source, code on its own ground, a figure offered in the browser; the changes waiting to be kept between dotted
-// rules, one of them current, with its keys; the step and squares at the top right.
+// rules, one of them current, with its keys.
 
 import { TextAttributes, type ScrollBoxRenderable } from "@opentui/core";
 import type { Entry } from "@isorite/core";
@@ -20,12 +20,8 @@ export interface NoteData {
   /** At a moment of the timeline: what it was, and how long ago. Read only. */
   at?: { said: string; ago: string };
   entries: Entry[];
-  /** What the study record says of it: 0 not reached … 3 understood, and its squares of 6. */
-  step: number;
-  squares: number;
 }
 
-export const STEPS = ["not reached", "opened", "worked through", "understood"];
 const DOTS = "· ".repeat(38).trim();
 /** The widest a note's column is: its gutter, rail and about 76 characters of text. */
 const MEASURE = 84;
@@ -112,10 +108,6 @@ export function NotePage(props: { note: Accessor<NoteData | undefined>; current:
               <text fg={g().text} wrapMode="none" flexShrink={1} minWidth={0}>{pathOf(note().id, note().title)}</text>
               <Show when={note().at}>{(at) => <text fg={g().growth} wrapMode="none" flexShrink={1} minWidth={0}>{`   as it was ${at().ago}: ${at().said}`}</text>}</Show>
               <box flexGrow={1} />
-              <text fg={g().soft} wrapMode="none" flexShrink={0}>{`${STEPS[note().step] ?? ""}   `}</text>
-              <text wrapMode="none" flexShrink={0}>
-                <For each={[0, 1, 2, 3, 4, 5]}>{(k) => <span style={{ fg: k < note().squares ? g().mal : g().line }}>{k < note().squares ? "■" : "□"}</span>}</For>
-              </text>
             </box>
             <scrollbox ref={props.scroll} flexGrow={1} paddingLeft={4} paddingRight={4} paddingTop={1} scrollbarOptions={{ visible: false }}>
               {/* As the board: the text in a column of reading width, not the terminal's. */}

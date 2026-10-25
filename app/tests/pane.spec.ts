@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import { setSwitch } from "./switches.ts";
 
-// Iso's pane (M10): a conversation, sent with what you gave Iso, its look-ups told as they happen, kept in the
-// study base, and stopped when asked.
+// Iso's pane (M10): a conversation, sent with what you gave Iso, its look-ups told as they happen, kept in
+// .isorite/, and stopped when asked.
 
 const pane = (page: Page) => page.locator('[data-pane="iso"]');
 const box = (page: Page) => page.getByRole("textbox", { name: "Message Iso" });
@@ -59,15 +60,18 @@ test("a turn in Ask mode: what you gave is shown with it, what Iso reads is told
   await expect(page).toHaveURL(/#\/n\/basics\/surprise$/);
 });
 
-test("a turn can be stopped, and a refusal is said plainly; Shift+Tab changes the mode", async ({ page }) => {
+test("a turn can be stopped, and a refusal is said plainly; the quill in Iso's header says whether it may edit the notes", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toIso(page);
-  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveAttribute("aria-label", "Ask");
-  await box(page).press("Shift+Tab");
-  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveAttribute("aria-label", "Write");
-  await box(page).press("Shift+Tab");
-  await box(page).press("Shift+Tab");
-  await expect(pane(page).locator(".mode[aria-pressed=true]")).toHaveAttribute("aria-label", "Ask");
+  const quill = pane(page).locator('.sw[data-switch="notes"]');
+  await expect(quill).toHaveAttribute("aria-pressed", "false");
+  await expect(quill).toHaveAttribute("title", "Iso may edit the notes (Alt+N)");
+  await quill.click();
+  await expect(quill).toHaveAttribute("aria-pressed", "true");
+  await quill.click();
+  await expect(quill).toHaveAttribute("aria-pressed", "false");
+  // No terminal is attached here: the project's files and commands are not offered.
+  await expect(pane(page).locator('.sw[data-switch="run"]')).toHaveCount(0);
 
   await box(page).fill("slow, please");
   await box(page).press("Enter");
@@ -81,7 +85,7 @@ test("a turn can be stopped, and a refusal is said plainly; Shift+Tab changes th
   await expect(log.locator(".turn").last().getByRole("alert")).toContainText("Iso could not answer");
 });
 
-test("Write mode: Iso's change goes into the note, is marked as Iso's in the note's Iso lens and on the Atlas, and the turn is undone", async ({ page }) => {
+test("with the notes switch on, Iso's change goes into the note, is marked as Iso's with provenance on and on the Atlas with Iso's context on, and the turn is undone", async ({ page }) => {
   const name = test.info().project.name, id = `basics/write-${name}`;
   const { token } = (await (await page.request.get("api/session")).json()) as { token: string };
   const headers = { "x-isorite-token": token, Origin: new URL(test.info().project.use.baseURL!).origin };
@@ -89,7 +93,8 @@ test("Write mode: Iso's change goes into the note, is marked as Iso's in the not
   await page.goto(`#/n/${id}`);
   await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Plain text. The rest");
   await toIso(page);
-  await pane(page).getByRole("button", { name: "Write", exact: true }).click();
+  await setSwitch(page, "notes", true);
+  if (!test.info().project.name.startsWith("phone")) await setSwitch(page, "context", true);
   await box(page).fill(`edit ${id}`);
   await box(page).press("Enter");
   const turn = page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last();
@@ -97,28 +102,31 @@ test("Write mode: Iso's change goes into the note, is marked as Iso's in the not
   await expect(turn).toHaveAttribute("data-state", "done");
   const file = async () => ((await (await page.request.get(`api/note?id=${id}`)).json()) as { text: string }).text;
   expect(await file()).toContain("Plain text, and Iso's words.");
-  // The Atlas came up in its Iso lens when Iso began, and shows the note as changed by Iso.
+  // With Iso's context on, the Atlas shows the note as changed by Iso.
+  if (test.info().project.name.startsWith("phone")) { await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Atlas/ }).click(); await setSwitch(page, "context", true); }
   await expect(page.locator(`[data-note="${id}"]`)).toHaveClass(/\bchanged\b/);
   await look(page, "iso-write");
 
-  // In the note's Iso lens, Iso's words are marked; yours are not. (A passage mostly Iso's would be Iso's whole.)
+  // Opened from the change, the note has provenance on: Iso's words are marked; yours are not. (A passage mostly
+  // Iso's would be Iso's whole.)
+  if (test.info().project.name.startsWith("phone")) await toIso(page);
   await turn.locator(".change").getByRole("button").click();
-  await expect(page.locator('[data-pane="note"] .lens[data-lens="iso"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('.sw[data-switch="provenance"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".cm-iso-by-iso")).toHaveText([", and Iso's words"]);
-  await look(page, "note-iso-lens");
+  await look(page, "note-provenance");
 
   // Undone: the note as it was.
   await toIso(page);
   await turn.getByRole("button", { name: "Undo this turn's changes" }).click();
   await expect(turn.locator(".undone")).toContainText(`Write ${name} put back`);
   await expect.poll(file).toContain("\nPlain text. The rest");
-  await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
+  await setSwitch(page, "notes", false);
 });
 
-test("Write mode: moving a note is asked first, and not allowed it stays", async ({ page }) => {
+test("with the notes switch on, moving a note is asked first, and not allowed it stays", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toIso(page);
-  await pane(page).getByRole("button", { name: "Write", exact: true }).click();
+  await setSwitch(page, "notes", true);
   await box(page).fill(`move basics/bit to units/bit-${test.info().project.name}`);
   await box(page).press("Enter");
   const asks = pane(page).getByRole("group", { name: "Iso asks before it does this" });
@@ -126,17 +134,20 @@ test("Write mode: moving a note is asked first, and not allowed it stays", async
   await asks.getByRole("button", { name: "Don't allow" }).click();
   await expect(asks).toContainText("Not allowed.");
   expect((await page.request.get("api/note?id=basics/bit")).ok()).toBe(true);
-  await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
+  await setSwitch(page, "notes", false);
 });
 
-test("Understand mode: your understanding of the note open goes with what you ask; what Iso records shows in the note's Understand lens, beside your scratchpad", async ({ page }) => {
+test("with a note's Understanding note open, it goes with what you ask; Iso's reading is written in it, beside your scratchpad", async ({ page }) => {
   const name = test.info().project.name, id = `channels/understand-${name}`;
   const { token } = (await (await page.request.get("api/session")).json()) as { token: string };
   await page.request.post(`api/note?id=${id}`, { data: { text: `---\ntype: Concept\ntitle: Rate ${name}\n---\n\nBits a use.\n` }, headers: { "x-isorite-token": token, Origin: new URL(test.info().project.use.baseURL!).origin } });
   await page.goto(`#/n/${id}`);
   await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Bits a use.");
+  // The sprig in the Note pane's header shows the note's Understanding note in its place.
+  const note = page.locator('[data-pane="note"]');
+  await note.getByRole("button", { name: "Understanding note", exact: true }).click();
+  await expect(note.locator(".u")).toBeVisible();
   await toIso(page);
-  await pane(page).getByRole("button", { name: "Understand", exact: true }).click();
   const tray = await showContext(page);
   await expect(tray.getByRole("listitem")).toHaveText([new RegExp(`^◇ Understanding · Rate ${name} \\d+`)]);
   await pane(page).getByRole("button", { name: "Context", exact: true }).click();
@@ -144,28 +155,21 @@ test("Understand mode: your understanding of the note open goes with what you as
   await box(page).press("Enter");
   const turn = page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last();
   await expect(turn).toHaveAttribute("data-state", "done");
-  await expect(turn.locator(".understood")).toContainText(new RegExp(`recorded\\s*Rate ${name}\\s*\\+0\\.5\\s*You said why it holds in your own words\\.`));
 
-  // The note's Understand lens: Iso's reading, what changed it, and your scratchpad, kept.
-  await turn.locator(".understood").getByRole("button").click();
-  const note = page.locator('[data-pane="note"]');
-  await expect(note.locator(".lens[data-lens=understand]")).toHaveAttribute("aria-pressed", "true");
+  // Iso's reading, and your scratchpad, kept.
+  if (test.info().project.name.startsWith("phone")) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Note/ }).click();
   await expect(note.locator(".reading")).toHaveText("You can say what it measures, and why.");
-  await expect(note.locator("ol li")).toHaveCount(1);
-  await expect(note.locator("ol li")).toContainText("+0.5You said why it holds in your own words.");
   // The scratchpad is the note editor (V9): Markdown as you type.
   await note.getByLabel("Scratchpad").fill(`Mine, **${name}**.`);
   await expect(note.locator(".u h2 .state")).toHaveText("saved", { timeout: 8000 });
-  await page.screenshot({ path: `test-results/screens/${name}-understand-lens.png`, fullPage: true });
+  await page.screenshot({ path: `test-results/screens/${name}-understanding.png`, fullPage: true });
   await page.reload();
   await expect(page.locator('[data-pane="note"]').getByLabel("Scratchpad")).toContainText(`Mine, ${name}.`);
   await expect(page.locator('[data-pane="note"] .pad .cm-lp-strong').first()).toContainText(name);
-  await page.locator('[data-pane="note"] .lens[data-lens=normal]').click();
-  await toIso(page);
-  await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
+  await page.locator('[data-pane="note"]').getByRole("button", { name: "Understanding note", exact: true }).click();
 });
 
-test("the count under Iso's box opens the Context view: what the next turn is sent, part by part; an earlier turn can be left out", async ({ page }) => {
+test("the Context button in Iso's header opens the Context view: what the next turn is sent, part by part; an earlier turn can be left out", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toIso(page);
   // The last conversation comes up as the page opens (earlier tests made one); a new one is begun.
@@ -175,7 +179,7 @@ test("the count under Iso's box opens the Context view: what the next turn is se
   await box(page).fill("what is a bit?");
   await box(page).press("Enter");
   await expect(page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last()).toHaveAttribute("data-state", "done");
-  await pane(page).getByRole("button", { name: /tokens$/ }).click();
+  await pane(page).getByRole("button", { name: "Context", exact: true }).click();
   const parts = pane(page).getByRole("region", { name: "What Iso is sent" });
   await expect(page.getByRole("log", { name: "The conversation with Iso" })).toHaveCount(0);
   await expect(parts.locator(".part").first()).toContainText("instructions and tools");
@@ -187,4 +191,17 @@ test("the count under Iso's box opens the Context view: what the next turn is se
   await expect(sw).toHaveAttribute("aria-checked", "false");
   await expect(parts).toContainText("earlier in this conversation");
   await expect(parts.locator(".part").nth(1)).not.toContainText("1 turn");
+});
+
+test("two bars in Iso's header gauge the context and the spend; the tier is chosen in the Context view; no line under the box", async ({ page }) => {
+  await page.goto("#/n/basics/bit");
+  await toIso(page);
+  const gauge = pane(page).getByRole("img", { name: /^Context: .* Spend: / });
+  await expect(gauge).toHaveAttribute("aria-label", /Context: \d[\d.]*k? of 200k tokens\. Spend: \$[\d.]+ this month/);
+  await expect(pane(page).locator(".composer .foot")).toHaveCount(0);
+  await pane(page).getByRole("button", { name: "Context", exact: true }).click();
+  const tier = pane(page).getByRole("radiogroup", { name: "How able a model" });
+  await tier.getByRole("radio", { name: "max" }).click();
+  await expect(tier.getByRole("radio", { name: "max" })).toHaveAttribute("aria-checked", "true");
+  await tier.getByRole("radio", { name: "mid" }).click();
 });

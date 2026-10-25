@@ -12,7 +12,7 @@ async function open(script: Scripted[], opts: { key?: string | null; similar?: b
   const provider = scripted(script);
   const secrets = new MemorySecrets(opts.key === null ? {} : { [KEY]: opts.key ?? "sk-test" });
   const engine = await Engine.open({
-    notes, study, clock, device: "laptop1", name: "information-theory", http: provider.http, secrets,
+    notes, own: study, clock, device: "laptop1", name: "information-theory", http: provider.http, secrets,
     ...(opts.similar ? { similar: async () => ({ ready: true, hits: [{ note: "basics/surprise", heading: "Units", body: "With base 2 the unit is the bit.", score: 0.81 }] }) } : {}),
   });
   const events: EngineEvent[] = [];
@@ -175,7 +175,7 @@ test("a second request in the session is told what was asked before and what bec
 
 test("the key is held and forgotten, and never given back", async () => {
   const { engine } = await open([], { key: null });
-  expect(await engine.settings()).toEqual({ provider: "openrouter", key: false, connect: true, tiers: { low: "anthropic/claude-haiku-4.5", mid: "anthropic/claude-sonnet-5.5", max: "anthropic/claude-opus-5.5" } });
+  expect(await engine.settings()).toEqual({ provider: "openrouter", key: false, connect: true, spendCap: null, tiers: { low: "anthropic/claude-haiku-4.5", mid: "anthropic/claude-sonnet-5.5", max: "anthropic/claude-opus-5.5" } });
   expect(JSON.stringify(await engine.setKey("  sk-or-abc  "))).not.toContain("sk-or");
   expect((await engine.settings()).key).toBe(true);
   await expect(engine.setKey("two words")).rejects.toMatchObject({ status: 400 });
@@ -187,7 +187,7 @@ test("a key is made by signing in at the provider: PKCE, the code exchanged by t
   const secrets = new MemorySecrets({}), exchanged: { url: string; body: Record<string, string> }[] = [];
   let answer: () => Response = () => new Response(JSON.stringify({ key: "sk-or-made" }), { status: 200 });
   const fetch = (async (url: string, init?: RequestInit) => { exchanged.push({ url, body: JSON.parse(String(init?.body)) as Record<string, string> }); return answer(); }) as typeof globalThis.fetch;
-  const engine = await Engine.open({ notes: new MemoryFiles({}), study: new MemoryFiles(), clock, device: "laptop1", name: "b", http: { fetch }, secrets });
+  const engine = await Engine.open({ notes: new MemoryFiles({}), own: new MemoryFiles(), clock, device: "laptop1", name: "b", http: { fetch }, secrets });
   await expect(engine.connect("javascript:alert(1)")).rejects.toMatchObject({ status: 400 });
 
   const url = new URL((await engine.connect("http://localhost:4767/")).url);
@@ -223,7 +223,7 @@ test("a key is made by signing in at the provider: PKCE, the code exchanged by t
 });
 
 test("a provider without a sign-in page can only be given a key by pasting it", async () => {
-  const engine = await Engine.open({ notes: new MemoryFiles({}), study: new MemoryFiles(), clock: { now: () => 0 }, device: "laptop1", name: "b", secrets: new MemorySecrets({}), provider: { name: "custom", url: "http://x/v1", cacheMarks: false, tiers: { low: "a", mid: "b", max: "c" }, prices: {} } });
+  const engine = await Engine.open({ notes: new MemoryFiles({}), own: new MemoryFiles(), clock: { now: () => 0 }, device: "laptop1", name: "b", secrets: new MemorySecrets({}), provider: { name: "custom", url: "http://x/v1", cacheMarks: false, tiers: { low: "a", mid: "b", max: "c" }, prices: {} } });
   expect((await engine.settings()).connect).toBe(false);
   await expect(engine.connect("http://localhost:4767/")).rejects.toMatchObject({ status: 409 });
 });
@@ -378,26 +378,26 @@ test("the conversation is the session's exchanges across its notes, until it is 
   expect(journal().filter((e) => e.kind === "proposal")).toHaveLength(1);
 });
 
-test("the context report names the five parts, sums them, and counts what the session has cost", async () => {
+test("the context report names the four parts, sums them, and counts what the session has cost", async () => {
   const { engine, ask, ended } = await open([
     { calls: [{ name: "read_note", arguments: { id: "basics/surprise" } }], usage: { prompt_tokens: 1000, completion_tokens: 10, cost: 0.01 } },
     { text: ["Bits."], usage: { prompt_tokens: 1200, completion_tokens: 5, cost: 0.02 } },
     { text: ["No marks, two paragraphs."], usage: { prompt_tokens: 900, completion_tokens: 5, cost: 0.005 } },
   ]);
   const before = await engine.context("basics/entropy");
-  expect(before.parts.map((p) => p.name)).toEqual(["instructions and tools", "study record", "your prompts and Iso's answers", "this note", "linked notes"]);
+  expect(before.parts.map((p) => p.name)).toEqual(["instructions and tools", "your prompts and Iso's answers", "this note", "linked notes"]);
   expect(before).toMatchObject({ limit: 200_000, session: { usd: 0, requests: 0 } });
   expect(before.tokens).toBe(before.parts.reduce((n, p) => n + p.tokens, 0));
-  expect(before.parts[2]).toMatchObject({ tokens: 0, detail: "" });
+  expect(before.parts[1]).toMatchObject({ tokens: 0, detail: "" });
 
   await ended((await ask()).request);
   const after = await engine.context("basics/entropy");
   expect(after.session).toEqual({ usd: 0.03, requests: 1 });
-  expect(after.parts[2]).toMatchObject({ detail: "1 moment" });
-  expect(after.parts[2]!.tokens).toBeGreaterThan(0);
-  expect(after.parts[3]).toMatchObject({ detail: "Entropy" });
+  expect(after.parts[1]).toMatchObject({ detail: "1 moment" });
+  expect(after.parts[1]!.tokens).toBeGreaterThan(0);
+  expect(after.parts[2]).toMatchObject({ detail: "Entropy" });
   // Entropy links to nothing: what Iso read with its tools is not part of what is sent (I3).
-  expect(after.parts[4]).toMatchObject({ detail: "", tokens: 0 });
+  expect(after.parts[3]).toMatchObject({ detail: "", tokens: 0 });
   expect(after.items.map((i) => i.kind)).toEqual(["exchange"]);
 
   // A reply that was paid for and offered nothing is still counted.
@@ -408,7 +408,7 @@ test("the context report names the five parts, sums them, and counts what the se
   expect(both2.requests).toBe(2);
   expect(both2.usd).toBeCloseTo(0.035, 6);
   // With no note open there is still the conversation and the cost.
-  expect(await engine.context()).toMatchObject({ session: { requests: 2 }, parts: [{}, {}, { detail: "1 moment" }, { detail: "none open", tokens: 0 }, {}] });
+  expect(await engine.context()).toMatchObject({ session: { requests: 2 }, parts: [{}, { detail: "1 moment" }, { detail: "none open", tokens: 0 }, {}] });
 });
 
 test("a long conversation is cut to its budget: the newest whole, older ones shortened, the oldest left out", () => {
@@ -513,7 +513,7 @@ test("what Iso is sent is chosen part by part: linked notes and earlier exchange
     { id: "n:basics/surprise", kind: "linked", title: "Surprise", tokens: expect.any(Number), on: true },
     { id: "n:basics/entropy", kind: "linked", title: "Entropy", tokens: expect.any(Number), on: true },
   ]);
-  expect(all.parts[4]).toMatchObject({ detail: "2 sent" });
+  expect(all.parts[3]).toMatchObject({ detail: "2 sent" });
   await ended((await ask()).request);
   let user = String(sent[0]!.messages[1]!.content);
   expect(user).toContain("## Surprise (/basics/surprise.md)");
@@ -539,5 +539,5 @@ test("what Iso is sent is chosen part by part: linked notes and earlier exchange
   expect(user).not.toContain("# Earlier in this session");
   expect(sent[2]!.tools ?? []).toEqual([]);
   expect(JSON.stringify(sent[2]!.messages[0]!.content)).toContain("You have no tools this time");
-  expect(await engine.context("basics/information", { lookup: false })).toMatchObject({ lookup: false, parts: [{ detail: "no tools" }, {}, {}, {}, {}] });
+  expect(await engine.context("basics/information", { lookup: false })).toMatchObject({ lookup: false, parts: [{ detail: "no tools" }, {}, {}, {}] });
 });

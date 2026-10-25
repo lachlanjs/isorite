@@ -14,8 +14,9 @@
   import NoteList from "$lib/components/NoteList.svelte";
   import PaneHead from "$lib/components/PaneHead.svelte";
   import { converse } from "$lib/converse.svelte.ts";
-  import { PANES, panes, type Pane } from "$lib/panes.svelte.ts";
+  import { PANES, panes, type Pane, type Switch } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
+  import IsoGauge from "$lib/components/IsoGauge.svelte";
   import IsoSettings from "$lib/components/IsoSettings.svelte";
   import NoteSettings from "$lib/components/NoteSettings.svelte";
 
@@ -100,11 +101,13 @@
     else if (k.toLowerCase() === "l" && !panes.narrow) panes.nextLayout();
     else if (inEditor) return;
     else if (k === "ArrowLeft" || k === "ArrowRight") panes.step(k === "ArrowRight" ? 1 : -1);
-    else if (k === "ArrowUp" || k === "ArrowDown") { const by = k === "ArrowDown" ? 1 : -1; if (panes.focus === "iso") panes.stepMode(by); else panes.stepLens(panes.focus, by); }
+    else if (SWITCH_KEYS[k.toLowerCase()]) panes.flip(SWITCH_KEYS[k.toLowerCase()]!);
     else return;
     e.preventDefault();
   }
   const NAME: Record<Pane, string> = { note: "Note", atlas: "Atlas", iso: "Iso" };
+  // The panes' switches (M12), each its letter with Alt.
+  const SWITCH_KEYS: Record<string, Switch> = { p: "provenance", t: "timeline", q: "questions", b: "problems", w: "web", k: "code", c: "context", n: "notes", f: "files", r: "run" };
   const inNote = $derived(page.route.id === "/n/[...id]" || page.route.id === "/draft/[id]");
   // Iso's request as the map shows it: running, or how it ended until the map lets it go.
   // A turn in Iso's pane tells itself there; the Atlas's header tells of a request in a note, Iso's of a terminal agent.
@@ -138,13 +141,11 @@
           {#if p === "note"}
             <PaneHead pane="note" name="Note" settings={noteSettings}>
               {#snippet tools()}
-                {#if app.exercise}
-                  {@const x = app.exercise}
-                  <!-- An exercise (Study-Written): its kind, Iso's read of you as six squares, wind back, and the next if it names one. -->
-                  <span class="label kind">{x.kind}</span>
-                  {#key x.flash}<button class="squares" class:flash={x.flash > 0} type="button" aria-label="understanding {x.squares} of 6{x.due ? ', due' : ''}: why" onclick={x.why}>{#each [0, 1, 2, 3, 4, 5] as k (k)}<i class="pip" class:lv={k < x.squares}></i>{/each}</button>{/key}
-                  <button class="link wind" type="button" onclick={x.windBack}>wind back</button>
-                  {#if x.next}<a class="next" href={resolve("/n/[...id]", { id: x.next })}>next</a>{/if}
+                {#if page.route.id === "/n/[...id]" && !(page.params.id ?? "").startsWith("@")}
+                  <!-- The note's Understanding note (M10), in place of the note while pressed. -->
+                  <button class="icon" type="button" data-tour="understanding" aria-label="Understanding note" title="Understanding note" aria-pressed={panes.understanding} onclick={() => panes.showUnderstanding()}>
+                    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 14.5V7.5M8 7.5L4.6 4.4M8 7.5l3.4-3.1M8 7.5V2.5M4.6 4.4L2.8 4.6M4.6 4.4L4.5 2.4M11.4 4.4l1.8.2M11.4 4.4l.1-2M8 11L5.8 9.6M8 11l2.2-1.4" /></svg>
+                  </button>
                 {/if}
                 {#if inNote && app.saving}<span class="saved" class:bad={app.saving.bad} class:busy={!app.saving.text.startsWith("saved")} title={app.saving.text} role="status"><i aria-hidden="true"></i><span class="hidden-label">{app.saving.text}</span></span>{/if}
                 <button class="icon" type="button" aria-label="All notes" title="All notes, and search" aria-pressed={page.route.id === "/notes" || panes.tree} onclick={() => { if (page.route.id !== "/notes") panes.tree = !panes.tree; }}>
@@ -171,6 +172,7 @@
                   <span class="says">{app.atlas.steps} {app.atlas.steps === 1 ? "step" : "steps"} back</span>
                 {/if}
                 {#if app.atlas?.here}<span class="where soft">{app.atlas.here}</span><button class="btn out" type="button" onclick={app.atlas.out}>↑ out</button>{/if}
+                {#if app.atlas}<button class="icon" type="button" aria-label="The whole map" title="The whole map  (0)" onclick={app.atlas.fit}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" /></svg></button>{/if}
               {/snippet}
             </PaneHead>
             <div class="pbody atlas-body"><AtlasPane /></div>
@@ -180,6 +182,7 @@
                 {#if run?.agent}
                   <span class="says" title={running ? "" : "click open ground on the Atlas to let its path go"}>{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentNamed}'s turn is done`}</span>
                 {/if}
+                <IsoGauge />
                 <!-- What the next turn is sent (I8), with how many parts you gave; a new conversation. -->
                 <button class="icon ctx" type="button" aria-label="Context" aria-pressed={converse.view === "context"} title="What Iso is sent: what you gave, and the rest" onclick={() => (converse.view = converse.view === "context" ? "chat" : "context")}>
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h6" /></svg>
@@ -201,9 +204,7 @@
 
   <nav class="tabs" aria-label="Panes">
     {#each PANES as p (p)}
-      <!-- A pane's lens, or Iso's mode, is the colour of its name: gold for the Iso lens, green for understand (W1). -->
-      {@const tint = p === "iso" ? (panes.mode === "understand" ? "m" : "") : panes.lens[p] === "iso" ? "g" : panes.lens[p] === "understand" ? "m" : ""}
-      <button type="button" class={tint} aria-current={panes.focus === p} aria-label="{NAME[p]}{p === 'iso' ? `, ${panes.mode} mode` : panes.lens[p] === 'normal' ? '' : `, ${panes.lens[p]} lens`}" onclick={() => panes.to(p)}>
+      <button type="button" aria-current={panes.focus === p} aria-label={NAME[p]} onclick={() => panes.to(p)}>
         {NAME[p]}
         {#if p === "iso" && panes.unseen}<span class="badge">{panes.unseen}</span>{/if}
       </button>
@@ -218,9 +219,8 @@
   <section class="set">
     <h2 class="label">the map</h2>
     {#if app.atlas}
-      <p class="soft">{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}{#if app.atlas.items} · {app.atlas.items} study {app.atlas.items === 1 ? "item" : "items"}{/if}</p>
+      <p class="soft">{app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</p>
     {/if}
-    <p class="faint">{panes.lens.atlas === "normal" ? "The Iso and understand lenses have a legend, shown at the foot of the map while these settings are open." : "The legend is at the foot of the map while these settings are open."}</p>
   </section>
 {/snippet}
 
@@ -237,12 +237,6 @@
   .saved i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); }
   .saved.busy i { background: var(--growth); }
   .saved.bad i { background: var(--rose); }
-  .squares { display: inline-flex; gap: 4px; background: none; border: 0; padding: 6px 2px; cursor: pointer; flex: none; }
-  .squares.flash { animation: flash 900ms ease-out; }
-  @keyframes flash { 0% { box-shadow: 0 0 0 0 var(--malachite); background: var(--malachite-soft); } 100% { box-shadow: 0 0 0 10px transparent; background: none; } }
-  .kind, .next { white-space: nowrap; font-size: 12px; }
-  /* On a phone an exercise's header is its kind and the squares (Mobile-Study): wind back is in the squares' panel. */
-  @media (max-width: 600px) { .wind, .kind { display: none; } }
   .set { display: flex; flex-direction: column; gap: var(--space-2); }
   .set h2 { font-weight: 400; }
   /* The panes (M10): a grid on a desktop, a row of full-width panes on a phone. */
@@ -275,10 +269,6 @@
     .tabs button { height: 52px; background: none; border: 0; font-family: var(--font-pixel); font-size: 14px; color: var(--text-faint); position: relative; display: grid; place-content: center; gap: 2px; cursor: pointer; }
     .tabs button[aria-current="true"] { color: var(--text); }
     .tabs button[aria-current="true"]::before { content: ""; position: absolute; top: -1px; left: 20%; right: 20%; height: 2px; background: var(--text); }
-    .tabs button.g { color: var(--growth); }
-    .tabs button.m { color: var(--malachite); }
-    .tabs button.g[aria-current="true"]::before { background: var(--growth); }
-    .tabs button.m[aria-current="true"]::before { background: var(--malachite); }
     .tabs .badge { position: absolute; top: 8px; right: calc(50% - 30px); font: 10px var(--font-ui); color: var(--ground-0); background: var(--growth); min-width: 16px; height: 16px; display: grid; place-items: center; padding: 0 3px; }
   }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; }

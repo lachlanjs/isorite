@@ -79,7 +79,8 @@ For two galaxies colliding, the first is the usual answer.`;
 /** In a turn in Iso's pane (M10): which mode, from what it was told. */
 const modeOf = (r: Request): "ask" | "write" | "understand" | null => {
   const system = JSON.stringify(r.messages.find((m) => m.role === "system")?.content ?? "");
-  return system.includes("# Write mode") ? "write" : system.includes("# Understand mode") ? "understand" : system.includes("# Ask mode") ? "ask" : null;
+  // Given an Understanding note (M12: once Understand mode), Iso asks back.
+  return system.includes("# Their understanding") ? "understand" : system.includes("# Write mode") ? "write" : system.includes("# Ask mode") ? "ask" : null;
 };
 const tools = (r: Request): number => r.messages.filter((m) => m.role === "tool").length;
 
@@ -108,7 +109,7 @@ function turnAnswer(r: Request, mode: "ask" | "write" | "understand"): Reply | n
     return { text: "I answered both questions in your TODO, from the quadtree's depth and the centre of mass, and took the TODO away.", usage: { in: 9400, out: 40, cached: 8800, usd: 0.0041 } };
   }
   if (mode === "understand" && /backwards|retrace|reverse/.test(q)) {
-    if (n === 0) return { calls: [{ name: "record_understanding", arguments: { id: "integrators/leapfrog", by: 0.5, why: "You saw that running it backwards retraces it, and that this is why its error cannot pile up." } }, { name: "write_understanding", arguments: { id: "integrators/leapfrog", reading: "You can say why leapfrog's energy error stays bounded: it is time-reversible, so it cannot drift one way. Not yet shown: what being symplectic adds to that." } }], usage: { in: 6200, out: 120, usd: 0.0068 } };
+    if (n === 0) return { calls: [{ name: "write_understanding", arguments: { id: "integrators/leapfrog", reading: "You can say why leapfrog's energy error stays bounded: it is time-reversible, so it cannot drift one way. Not yet shown: what being symplectic adds to that." } }], usage: { in: 6200, out: 120, usd: 0.0068 } };
     return { text: "Yes: run backwards it retraces its steps, so an error it made going forward is undone coming back, and it cannot keep growing one way. That is reversibility. Being [symplectic](/integrators/symplectic-integrators.md) is the stronger reason, and the next thing to look at.", usage: { in: 7100, out: 90, cached: 5600, usd: 0.0049 } };
   }
   if (mode === "understand" && /leapfrog|bounded|drift/.test(q)) {

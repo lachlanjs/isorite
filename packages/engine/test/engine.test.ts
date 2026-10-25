@@ -7,11 +7,11 @@ const NOTE = "---\ntype: Concept\ntitle: Entropy\n---\n\nThe average surprise.\n
 
 async function open(notes: Record<string, string> = { "basics/entropy.md": NOTE }, study: Record<string, string> | null = {}) {
   const clock = { t: Date.parse("2026-10-13T09:00:00Z"), now() { return this.t; } };
-  const files = { notes: new MemoryFiles(notes), study: study ? new MemoryFiles(study) : null };
+  const files = { notes: new MemoryFiles(notes), own: new MemoryFiles(study ?? {}) };
   const engine = await Engine.open({ ...files, clock, device: "laptop1", name: "information-theory" });
   const events: EngineEvent[] = [];
   engine.events((e) => events.push(e));
-  const journal = (id: string) => readJournal(files.study?.files.get(`journal/${id}.jsonl`) ?? "") as Change[];
+  const journal = (id: string) => readJournal(files.own.files.get(`journal/${id}.jsonl`) ?? "") as Change[];
   return { engine, clock, events, journal, ...files };
 }
 
@@ -126,7 +126,7 @@ test("the session carries on from the study base's newest entry when the engine 
   await first.engine.readNote("basics/entropy");
   const [start] = first.journal("basics/entropy");
   const clock = { now: () => Date.parse(start!.at) + 60_000 };
-  const again = await Engine.open({ notes: first.notes, study: first.study, clock, device: "laptop1", name: "x" });
+  const again = await Engine.open({ notes: first.notes, own: first.own, clock, device: "laptop1", name: "x" });
   await again.createNote("basics/surprise", "---\ntype: Concept\n---\n");
   expect(first.journal("basics/surprise")[0]!.session).toBe(start!.session);
 });
@@ -144,43 +144,20 @@ test("saves asked for at once are written one at a time, in order", async () => 
   expect(replay(journal("basics/entropy"))).toMatchObject({ text: b, broken: [] });
 });
 
-test("with no study base, notes are read and written and no journal is kept", async () => {
-  const { engine, notes } = await open(undefined, null);
-  const { version } = await engine.readNote("basics/entropy");
-  await engine.saveNote("basics/entropy", { base: version, text: NOTE + "more\n" });
-  expect(notes.files.get("basics/entropy.md")).toBe(NOTE + "more\n");
-  expect(await engine.journal("basics/entropy")).toEqual([]);
-  expect((await engine.session()).study).toBe(false);
-});
-
-test("a study note is written into the study base's own notes, and journalled under its @study id", async () => {
-  const { engine, study, journal } = await open();
-  await engine.createNote("@study/basics/coin", "---\ntype: Exercise\n---\n");
-  expect(study!.files.has("study/basics/coin.md")).toBe(true);
-  expect(journal("@study/basics/coin")).toHaveLength(1);
-});
-
-test("the map: both bases as one model, each block with its title and where you stand", async () => {
-  const exercise = "---\ntype: Exercise\nkind: written\ntitle: A fair coin\ntests: [basics/entropy]\n---\n\nShow it is one bit.\n";
-  const attempt = (id: string, result: string) => JSON.stringify({ id, at: "2026-10-12T09:00:00Z", device: "laptop1", event: "attempt", exercise: "basics/a-fair-coin", tests: ["basics/entropy"], result, by: "iso:m", moves: { "basics/entropy": { by: 1, why: "" } } }) + "\n";
-  const { engine } = await open(
-    { "basics/entropy.md": NOTE, "basics/coding.md": NOTE.replace("Entropy", "Coding") + '\n[entropy](/basics/entropy.md "requires")\n' },
-    { "study/basics/a-fair-coin.md": exercise, "record/laptop1.jsonl": attempt("01K7A000000000000000000001", "right"), "record/phone1.jsonl": attempt("01K7A000000000000000000002", "right") + attempt("01K7A000000000000000000003", "right") },
-  );
+test("the map: the base as one model, each block with its title and its size", async () => {
+  const { engine } = await open({ "basics/entropy.md": NOTE, "basics/coding.md": NOTE.replace("Entropy", "Coding") + '\n[entropy](/basics/entropy.md "requires")\n' });
   const map = await engine.map();
   expect(map.notes).toEqual({
-    "basics/entropy": { title: "Entropy", step: 2, tokens: expect.any(Number) },
-    "basics/coding": { title: "Coding", step: 0, tokens: expect.any(Number) },
-    "@study/basics/a-fair-coin": { title: "A fair coin", step: 0, kind: "written", passed: true },
+    "basics/entropy": { title: "Entropy", tokens: expect.any(Number) },
+    "basics/coding": { title: "Coding", tokens: expect.any(Number) },
   });
   expect(map.notes["basics/entropy"]!.tokens).toBeGreaterThan(0); // its size, for the notes linked to a note for Iso
   expect(map.model.edges).toContainEqual(["basics/coding", "basics/entropy", 3]);
-  expect(map.model.edges).toContainEqual(["@study/basics/a-fair-coin", "basics/entropy", 2]);
-  expect(map.model.root.children.map((c) => c.ref)).toEqual(["basics", "@study/basics"]);
+  expect(map.model.root.children.map((c) => c.ref)).toEqual(["basics"]);
 });
 
-test("the map without a study base, and after a note gains a link", async () => {
-  const { engine } = await open({ "a.md": NOTE, "b.md": NOTE }, null);
+test("the map of a base with nothing of its own yet, and after a note gains a link", async () => {
+  const { engine } = await open({ "a.md": NOTE, "b.md": NOTE });
   expect((await engine.map()).model.edges).toEqual([]);
   const { version } = await engine.readNote("b");
   await engine.saveNote("b", { base: version, text: NOTE + '\n[a](/a.md "requires")\n' });

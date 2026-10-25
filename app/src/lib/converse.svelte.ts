@@ -63,17 +63,18 @@ class Converse {
     this.problem = "";
     try { await app.api.undoTurn(this.id, turn); } catch (e) { this.problem = (e as Error).message; }
   }
+  /** Make a question Iso asked yours, as a question note, or insert what it offered: yours either way. */
+  async take(turn: string, item: string): Promise<void> {
+    this.problem = "";
+    try { await app.api.takeItem(this.id, turn, item); } catch (e) { this.problem = (e as Error).message; }
+  }
   async answer(permission: string, decision: Decision): Promise<void> { const t = this.running; if (t) await app.api.answer(t.id, permission, decision); }
 
   private follow(e: EngineEvent): void {
-    // A terminal agent's look-ups are drawn as Iso's are, in the Atlas's Iso lens.
-    if (e.type === "agent-start") { panes.want("atlas", "iso", panes.busy("atlas")); return; }
     if (e.type === "iso-start" && e.place.form === "turn") {
       if (this.id && e.place.conversation !== this.id) return;
       this.id = e.place.conversation;
       this.streaming = "";
-      // What Iso reads is shown on the Atlas in its Iso lens: brought up, unless you are working there.
-      panes.want("atlas", "iso", panes.busy("atlas"));
       this.turns = [...this.turns.filter((t) => t.id !== e.request), { id: e.request, conversation: e.place.conversation, at: new Date().toISOString(), mode: e.place.mode, asked: e.asked, given: e.place.given, tier: e.tier, items: [], state: "running" }];
       return;
     }
@@ -85,12 +86,9 @@ class Converse {
     if (e.type === "iso-text") this.streaming = e.again ? e.delta : this.streaming + e.delta;
     else if (e.type === "iso-item") {
       if (e.item.kind === "text") this.streaming = "";
-      // A change to the note open is shown in the note's Iso lens: brought up, unless you are typing in it.
-      if (e.item.kind === "change" && (e.item.note === app.open || e.item.to === app.open)) panes.want("note", "iso", panes.busy("note"));
-      // What Iso keeps of your understanding of the note open is shown in its Understand lens.
-      if ((e.item.kind === "change" && e.item.note === `@understanding/${app.open}`) || (e.item.kind === "understood" && e.item.note === app.open)) panes.want("note", "understand", panes.busy("note"));
       put({ ...t, items: [...t.items, e.item] });
     }
+    else if (e.type === "iso-taken") put({ ...t, items: t.items.map((i): TurnItem => (i.kind === "question" && i.id === e.item ? { ...i, made: e.note } : i.kind === "offer" && i.id === e.item ? { ...i, taken: true } : i)) });
     else if (e.type === "iso-answer") put({ ...t, items: t.items.map((i): TurnItem => (i.kind === "permission" && i.id === e.permission ? { ...i, answer: e.decision } : i)) });
     else if (e.type === "iso-done") { put({ ...t, state: "done", cost: e.cost }); this.streaming = ""; this.measure(); }
     else if (e.type === "iso-stopped") { put({ ...t, state: "stopped", ...(this.streaming ? { items: [...t.items, { kind: "text" as const, text: this.streaming }] } : {}) }); this.streaming = ""; }

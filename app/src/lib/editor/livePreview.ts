@@ -4,7 +4,7 @@
 // changed. Only decorations: the text, and so the file, is never altered.
 
 import { syntaxTree } from "@codemirror/language";
-import { RangeSetBuilder, type EditorState, type Range } from "@codemirror/state";
+import { Facet, RangeSetBuilder, type EditorState, type Range } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import katex from "katex";
 import { formula } from "./maths.ts";
@@ -141,7 +141,11 @@ function build(view: EditorView): DecorationSet {
               if (c.name === "URL") url = true;
             }
             const open = marks[0], close = marks[1];
-            if (open && close && close.from > open.to) decos.push(mark("cm-lp-link").range(open.to, close.from));
+            // Out of the base (M12): to the web, or to code in its repository, which may be gone.
+            const u = n.getChild("URL"), href = u ? state.sliceDoc(u.from, u.to) : "";
+            const code = href.startsWith("code:"), web = /^https?:/i.test(href);
+            const cls = code ? (state.facet(codeBroken)(href) ? "cm-lp-link cm-lp-codelink cm-lp-broken" : "cm-lp-link cm-lp-codelink") : web ? "cm-lp-link cm-lp-weblink" : "cm-lp-link";
+            if (open && close && close.from > open.to) decos.push((code ? Decoration.mark({ class: cls, attributes: { title: state.facet(codeBroken)(href) ? `${href.slice(5)}: not in the repository` : href.slice(5) } }) : mark(cls)).range(open.to, close.from));
             if (!isActive(node.from) && url && open && close) {
               decos.push(hide.range(open.from, open.to));
               decos.push(hide.range(close.from, node.to));
@@ -185,6 +189,9 @@ function build(view: EditorView): DecorationSet {
   return builder.finish();
 }
 
+/** Whether a code link (`code:path#L1`, M12) names a file no longer in the base's repository. */
+export const codeBroken = Facet.define<(href: string) => boolean, (href: string) => boolean>({ combine: (all) => all[0] ?? (() => false) });
+
 export const livePreview = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
@@ -219,6 +226,9 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-lp-strike": { textDecoration: "line-through" },
   ".cm-lp-code": { fontFamily: "var(--font-mono)", fontSize: ".86em", background: "color-mix(in srgb, var(--text) 8%, transparent)", padding: ".1em .2em" },
   ".cm-lp-link": { color: "var(--lattice)", textDecoration: "underline", textUnderlineOffset: "2px" },
+  ".cm-lp-weblink": { textDecorationStyle: "dotted" },
+  ".cm-lp-codelink": { fontFamily: "var(--font-mono)", fontSize: ".86em", textDecoration: "none", borderBottom: "1px solid color-mix(in srgb, var(--lattice) 50%, transparent)" },
+  ".cm-lp-broken": { color: "var(--rose)", textDecoration: "line-through", borderBottomColor: "transparent" },
   ".cm-lp-bullet": { color: "var(--text-faint)", display: "inline-block", minWidth: "1ch" },
   ".cm-lp-listmark, .cm-lp-task": { color: "var(--text-faint)", fontFamily: "var(--font-mono)" },
   ".cm-lp-quote": { borderLeft: "3px solid var(--lattice)", paddingLeft: "14px !important", color: "var(--text-soft)" },

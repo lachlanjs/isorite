@@ -170,7 +170,7 @@ function hash(str) {
 }
 
 // Bump whenever the layout changes what it returns, so nothing keeps an old one.
-export const LAYOUT_VERSION = 12;
+export const LAYOUT_VERSION = 14;
 const grainOf = (o) => (o.grain === "coarse" || o.grain === "coarser" ? o.grain : "fine");
 /** What a kept layout is filed under: the version, the direction, the grid, and what the map contains. */
 export function layoutKey(plain, o = {}) {

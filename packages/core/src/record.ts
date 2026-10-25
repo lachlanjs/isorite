@@ -1,6 +1,6 @@
-// The learner record: what a person has done to learn a project, one JSON
-// event per line, only ever appended. Where the record
-// lives and how it is written stay with the caller.
+// A device's record: what happened on it that belongs to no one note (Iso's context cleared, what each turn
+// cost), one JSON event per line, only ever appended. Where the record lives and how it is written stay with
+// the caller (own.ts says where).
 //
 // Every event has an `id`, a ULID (a millisecond timestamp, then randomness,
 // in 26 sortable characters), and the `device` that wrote it. Records from

@@ -71,7 +71,7 @@ test("a few missing pieces are made before the search; many are left to the back
 test("in the engine: the base is embedded when opened and after a save, and Iso is offered the second tool", async () => {
   const model = fake(), cache = new MemoryFiles(), provider = scripted([{ calls: [{ name: "find_similar", arguments: { text: "capacity of a channel with noise" } }] }, { text: ["See capacity."] }]);
   const notes = new MemoryFiles(FILES);
-  const engine = await Engine.open({ notes, study: new MemoryFiles(), clock: { now: () => Date.parse("2026-10-13T09:00:00Z") }, device: "laptop1", name: "it", http: provider.http, secrets: new MemorySecrets({ [KEY]: "k" }), embedder: model, cache: { files: cache, name: "it.json" } });
+  const engine = await Engine.open({ notes, own: new MemoryFiles(), clock: { now: () => Date.parse("2026-10-13T09:00:00Z") }, device: "laptop1", name: "it", http: provider.http, secrets: new MemorySecrets({ [KEY]: "k" }), embedder: model, cache: { files: cache, name: "it.json" } });
   await engine.meaning!.refresh(engine.bundle);
   expect(await engine.meaning!.state(engine.bundle)).toEqual({ pieces: 4, missing: 0 });
 

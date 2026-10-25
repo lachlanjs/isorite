@@ -4,6 +4,7 @@
 import { resolve } from "$app/paths";
 import type { Api, EngineEvent, Listing, Session, Step } from "@isorite/engine";
 import { httpApi } from "./api.ts";
+import type { Embedded } from "./editor/blocks.ts";
 
 class AppState {
   api!: Api;
@@ -17,13 +18,8 @@ class AppState {
   here = $state("");
   /** How the open note's saving stands, for the Note pane's header. */
   saving = $state<{ text: string; bad: boolean } | null>(null);
-  /** The Atlas: how many study items it shows, and where it is, for its header and settings. */
-  atlas = $state.raw<{ items: number; chosen: string; chosenId: string; steps: number; pick: boolean; here: string; out: () => void } | null>(null);
-  /** An exercise, while one is open: what the header shows of it (Study-Written): its kind, the squares for what it
-   *  tests, whether they flash, and the two things done from there. */
-  exercise = $state.raw<{ kind: string; squares: number; due: boolean; flash: number; windBack: () => void; why: () => void; next: string | null } | null>(null);
-  /** A page of study that is not an exercise (a request for one): the view switch shows study. */
-  studying = $state(false);
+  /** The Atlas: what is chosen on it, and where it is, for its header and settings. */
+  atlas = $state.raw<{ chosen: string; chosenId: string; steps: number; pick: boolean; here: string; out: () => void; fit: () => void } | null>(null);
   /** Back from signing in at the provider for a key: how it went, for the settings to say. */
   signIn = $state.raw<{ ok: boolean; message: string } | null>(null);
   /** Iso's latest request, from any page or tab, as the Atlas draws its path: the note asking, each step, and how
@@ -138,4 +134,12 @@ export const noteHref = (id: string): string => resolve("/n/[...id]", { id });
 /** A file name for a title: lower case, hyphens, nothing a path cannot hold. */
 export function slug(title: string): string {
   return title.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "");
+}
+
+/** What an embed names (`[[!name]]`, M12), as the bundle resolves it: by file name, or by path where two share it. */
+export function findEmbed(ref: string): Embedded | null {
+  const path = ref.trim().replace(/^\/+/, "").replace(/\.md$/, "");
+  const found = path.includes("/") ? app.listing.notes.filter((n) => n.id === path) : app.listing.notes.filter((n) => n.id.split("/").at(-1) === path);
+  const n = found.length === 1 ? found[0]! : null;
+  return n ? { id: n.id, title: n.title, kind: n.kind ?? "note", done: !!n.done } : null;
 }

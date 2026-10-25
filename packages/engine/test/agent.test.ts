@@ -9,10 +9,10 @@ const NOTES = {
   "codes/huffman.md": note("Huffman codes", "Shortest prefix codes for known probabilities."),
 };
 
-async function open(similar = false, withStudy = true) {
+async function open(similar = false) {
   const clock = { t: Date.parse("2026-10-18T09:00:00Z"), now() { return this.t; } };
   const engine = await Engine.open({
-    notes: new MemoryFiles(NOTES), study: withStudy ? new MemoryFiles() : null, clock, device: "laptop1", name: "information-theory",
+    notes: new MemoryFiles(NOTES), own: new MemoryFiles(), clock, device: "laptop1", name: "information-theory",
     ...(similar ? { similar: async () => ({ ready: true, hits: [{ note: "codes/huffman", heading: "", body: "Shortest prefix codes", score: 0.8 }] }) } : {}),
   });
   const events: EngineEvent[] = [];

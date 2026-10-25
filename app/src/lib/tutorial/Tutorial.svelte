@@ -8,12 +8,14 @@
   import { app } from "$lib/app.svelte.ts";
   import { restore, snapshot } from "./redo.ts";
   import { PARTS as ALL, remember, type Step } from "./steps.ts";
-  import { begun, tick, tour } from "./tour.svelte.ts";
+  import { baseNow, withBase } from "./base.ts";
+  import { begun, keep, resume, tick, tour } from "./tour.svelte.ts";
 
   // Beside the terminal's tour (isorite --tutorial, on a server), not the tutorial's own site: some sections read
   // differently there.
   const local = import.meta.env.MODE !== "tutorial" && Boolean(app.session?.tutorial);
-  const PARTS = ALL.map((p) => (local && p.local ? { ...p, ...p.local } : p));
+  // The geometry section is on the other example base, which the server does not serve.
+  const PARTS = ALL.filter((p) => !(local && p.base)).map((p) => (local && p.local ? { ...p, ...p.local } : p));
   // Where the tutorial is lives outside the card, so it carries on if the card is drawn again.
   const left = $derived(tour.left);
   const part = $derived(tour.part >= 0 ? PARTS[tour.part]! : null);
@@ -39,7 +41,17 @@
   let small = $state(false);
   const FOOT = '.seed, .foot, .changes, .deck, [data-pane="iso"] .composer';
 
+  /** A step on the other example base: the page is loaded again with it, and the tutorial carries on there. The
+   *  card is not moved first, so nothing is done in a page that is about to go. */
+  async function elsewhere(part: number, k: number): Promise<boolean> {
+    const s = PARTS[part]!.steps[k]!, go = (narrow ? s.phone?.go : undefined) ?? s.go, base = PARTS[part]!.base ?? "nbody";
+    if (local || base === baseNow()) return false;
+    keep(part, k);
+    location.assign(withBase(base, go ? (typeof go === "string" ? go : await go()) : "/"));
+    return true;
+  }
   async function enter(k: number) {
+    if (await elsewhere(tour.part, k)) return;
     tour.at = k; tour.mistake = ""; small = false;
     easing = true; setTimeout(() => (easing = false), 200);
     const s = PARTS[tour.part]!.steps[k]!, go = (narrow ? s.phone?.go : undefined) ?? s.go;
@@ -47,8 +59,9 @@
     if (go) await goto(`#${typeof go === "string" ? go : await go()}`);
     begun.snap = snapshot().catch(() => null as never);
   }
-  function begin(k: number) {
+  async function begin(k: number) {
     remember();
+    if (await elsewhere(k, 0)) return;
     tour.part = k; tour.left = false;
     void enter(0);
   }
@@ -73,6 +86,8 @@
   }
 
   onMount(() => {
+    // Loaded again for a section's other base: back to the step it was at.
+    if (resume()) { remember(); void enter(tour.at); }
     const media = matchMedia("(max-width: 600px)");
     narrow = media.matches;
     const changed = () => { narrow = media.matches; };
@@ -132,7 +147,7 @@
 {:else if !part}
   <div class="coach frame parts" role="dialog" aria-label="The tutorial" aria-live="polite">
     <span class="label">isorite, tutorial</span>
-    <p>This is a demo of isorite on an example N-body simulation project. Explore and read the knowledge base as you like, or follow the sections below for an interactive walkthrough.</p>
+    <p>This is a demo of isorite on example projects: an N-body simulation, and notes on the geometry of surfaces. Explore and read the knowledge base as you like, or follow the sections below for an interactive walkthrough.</p>
     <p class="faint">{#if local}Iso and the agent are scripted, and nothing leaves your machine; what you change is kept in the tutorial's folder.{:else}Iso is scripted, and nothing leaves this page; a reload starts it all again.{/if}</p>
     <ol class="list">
       {#each PARTS as p, k (p.key)}

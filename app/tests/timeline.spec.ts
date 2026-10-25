@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { NOTES } from "./serve.ts";
+import { setSwitch } from "./switches.ts";
 
 const editor = (page: Page) => page.getByRole("textbox", { name: "The note", exact: true });
 const onDisk = (id: string) => readFileSync(join(NOTES, `${id}.md`), "utf8");
@@ -11,19 +12,19 @@ async function look(page: Page, name: string) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} is no wider than the window`).toBe(true);
 }
 
-/** Iso changes the note in Write mode, from its pane ("edit <id>" makes the test provider change "Plain text.").
- *  The note's lens is put back to normal after, and Iso's mode to Ask. */
+/** Iso changes the note with the notes switch on, from its pane ("edit <id>" makes the test provider change
+ *  "Plain text."). The switch is put off again after, and provenance too. */
 async function isoEdits(page: Page, id: string) {
   if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
   const pane = page.locator('[data-pane="iso"]');
-  await pane.getByRole("button", { name: "Write", exact: true }).click();
+  await setSwitch(page, "notes", true);
   const box = page.getByRole("textbox", { name: "Message Iso" });
   await box.fill(`edit ${id}`);
   await box.press("Enter");
   await expect(page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last()).toHaveAttribute("data-state", "done");
-  await pane.getByRole("button", { name: "Ask", exact: true }).click();
+  await setSwitch(page, "notes", false);
   if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Note/ }).click();
-  await page.locator('[data-pane="note"] .lens[data-lens="normal"]').click();
+  await setSwitch(page, "provenance", false);
 }
 
 test.beforeAll(() => { mkdirSync(join(NOTES, "iso"), { recursive: true }); });
@@ -44,8 +45,8 @@ test("the timeline: marks only, pointing marks what each changed, a version show
   await expect(editor(page)).toContainText("Plain text, and Iso's words.");
   const edited = onDisk(id);
 
-  // Closed until opened, by its button alone; open, it stays open over a reload.
-  const button = page.getByRole("button", { name: "timeline", exact: true });
+  // Closed until opened, by its switch in the Note pane's header; open, it stays open over a reload.
+  const button = page.locator('.sw[data-switch="timeline"]');
   await expect(page.locator('[data-pane="note"] .timeline')).toHaveCount(0);
   await button.click();
   await expect(button).toHaveAttribute("aria-pressed", "true");

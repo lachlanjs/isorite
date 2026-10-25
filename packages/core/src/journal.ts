@@ -109,20 +109,10 @@ export interface Discard extends Stamp {
   /** For a rewrite: the one region removed. Without it, all that are still open. */
   region?: number;
 }
-/** Iso's marking of an exercise's working: passages marked right or wrong, laid over the working until they are
- *  edited away. Never written into the file. The `attempt` event in the study record names it by id, and holds what
- *  the marking moves (understanding.ts). */
-export interface Marks extends Stamp {
-  kind: "marks";
-  /** The passage marked as the answer when it was sent. */
-  answer: Passage;
-  result: "right" | "partly" | "wrong";
-  marks: { passage: Passage; mark: "right" | "wrong" }[];
-  /** Passages Iso quoted that were not in the working. */
-  dropped?: number;
-  cost?: Cost;
-}
-export type Entry = Change | Proposal | Revise | Discard | Marks;
+export type Entry = Change | Proposal | Revise | Discard;
+/** The kinds an entry may be. Format 1 also wrote `marks` (Iso's marking of an exercise): a journal moved in by
+ *  `isorite migrate` may hold them, and they are passed over. */
+const KINDS: readonly string[] = ["change", "proposal", "revise", "discard"];
 
 export const SNAPSHOT_EVERY = 40;
 export const SESSION_GAP_MS = 30 * 60 * 1000;
@@ -145,7 +135,7 @@ export function readJournal(text: string): Entry[] {
     try { e = JSON.parse(line); } catch { continue; }
     if (typeof e !== "object" || e === null) continue;
     const entry = e as Entry;
-    if (typeof entry.id !== "string" || typeof entry.kind !== "string" || byId.has(entry.id)) continue;
+    if (typeof entry.id !== "string" || !KINDS.includes(entry.kind) || byId.has(entry.id)) continue;
     byId.set(entry.id, entry);
   }
   return [...byId.keys()].sort().map((k) => byId.get(k)!);
@@ -413,11 +403,9 @@ export interface Moment {
   at: string;
   session: string;
   who: Who;
-  what: "wrote" | "found" | "edited" | "kept" | "offered" | "discarded" | "restored" | "moved" | "changed elsewhere" | "marked";
+  what: "wrote" | "found" | "edited" | "kept" | "offered" | "discarded" | "restored" | "moved" | "changed elsewhere";
   /** What was asked, where the moment came from a proposal. */
   asked?: string;
-  /** How a marking came out. */
-  result?: "right" | "partly" | "wrong";
 }
 
 /** The journal as the timeline shows it. Your own edits in a row within a session are one moment; a proposal is
@@ -430,8 +418,6 @@ export function moments(entries: readonly Entry[]): Moment[] {
       const m: Moment = { ...base, what: "offered", asked: e.asked };
       offered.set(e.id, m); asked.set(e.id, e.asked);
       out.push(m);
-    } else if (e.kind === "marks") {
-      out.push({ ...base, what: "marked", result: e.result });
     } else if (e.kind === "discard") {
       const m = offered.get(e.proposal);
       if (m) { m.what = "discarded"; m.ids.push(e.id); }

@@ -4,23 +4,23 @@
   // its marks. The marks are plain maps from a note to a mark, looked up while drawing.
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { reach, withoutStudy } from "@isorite/core";
+  import { reach } from "@isorite/core";
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
   import type { How, MapReport, NoteSource } from "@isorite/engine";
-  import { linkedIn, placeOf, testsIn, titleIn, withLink, withoutLink, withTest } from "$lib/atlas/picks.ts";
+  import { linkedIn, placeOf, titleIn, withLink, withoutLink } from "$lib/atlas/picks.ts";
+  import { makeKind as makeNew, untitled } from "$lib/make.ts";
   import { tick } from "svelte";
   import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
   import { converse } from "$lib/converse.svelte.ts";
-  import { CELL, LABELS_AT, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
+  import { CELL, MAX_ZOOM, MIN_ZOOM, TITLE_UNITS, TITLE_PX, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
+  import { satellites, withoutNotes } from "$lib/atlas/kinds.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
   import AtlasFolder from "./AtlasFolder.svelte";
   import AtlasRoutes from "./AtlasRoutes.svelte";
-  import AtlasStudyFolder from "./AtlasStudyFolder.svelte";
-  import AtlasStudyItem from "./AtlasStudyItem.svelte";
 
   let { pick = "", moment = null }: {
     /** A note for Iso (`@draft/…`) that notes are being picked for: a click then links a note to it. */
@@ -69,9 +69,9 @@
   }
   async function load(): Promise<void> {
     try {
-      const got = await app.api.map();
-      // Study folders are drawn in the Understand lens only (M10).
-      const next = studyShown ? got : { ...got, model: withoutStudy(got.model) };
+      const all = await app.api.map();
+      // The kinds switched off are not on the map (M12), and a resolved question leaves it.
+      const next = { ...all, model: withoutNotes(all.model, (ref) => { const n = all.notes[ref]; return n?.kind === "question" ? !panes.on.questions || !!n.done : n?.kind === "problem" ? !panes.on.problems : false; }) };
       // A changed base is laid out from where things stood (V5), on the same grid and the same way.
       const on = `${flow}|${grain}`, from = laid && laidOn === on ? laid.layout.orders ?? null : null;
       const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from });
@@ -103,10 +103,13 @@
     } catch (e) { failed = (e as Error).message; }
   }
 
-  const studyShown = $derived(panes.lens.atlas === "understand");
-  // Into or out of the Understand lens, the map is laid out again with or without the study folders.
-  let shownBefore: boolean | null = null;
-  $effect(() => { const s = studyShown; if (shownBefore !== null && shownBefore !== s) void load(); shownBefore = s; });
+  // A kind switched on or off lays the map out again, from where things stood (V5).
+  let kindsWere = "";
+  $effect(() => {
+    const now = `${panes.on.questions}|${panes.on.problems}`;
+    if (kindsWere && kindsWere !== now) void load();
+    kindsWere = now;
+  });
   $effect(() => {
     void load();
     let again: ReturnType<typeof setTimeout> | undefined;
@@ -163,7 +166,7 @@
   }
   /** A straight way from one block's side to another's, as a note for Iso's lines are drawn. */
   function between(o: { gx: number; gy: number; w: number; h: number }, n: { gx: number; gy: number; w: number; h: number }): string {
-    const dx = n.gx + n.w / 2 - (o.gx + o.w / 2), dy = n.gy + n.h / 2 - (o.gy + o.h / 2), across = Math.abs(dx) * (5 / 18) >= Math.abs(dy);
+    const dx = n.gx + n.w / 2 - (o.gx + o.w / 2), dy = n.gy + n.h / 2 - (o.gy + o.h / 2), across = Math.abs(dx) * (11 / 18) >= Math.abs(dy);
     const p: [number, number] = across ? [dx < 0 ? o.gx : o.gx + o.w, o.gy + o.h / 2] : [o.gx + o.w / 2, dy < 0 ? o.gy : o.gy + o.h];
     const q: [number, number] = across ? [dx < 0 ? n.gx + n.w : n.gx, n.gy + n.h / 2] : [n.gx + n.w / 2, dy < 0 ? n.gy + n.h : n.gy];
     return linePath(directLine(p, q, across), 0, L!.cell);
@@ -187,7 +190,7 @@
   const notes = $derived(L ? L.items.flatMap((item, i) => (item.kind === "note" && open[i] === "s" ? [{ item, i }] : [])) : []);
   // The routes at rest, merged where they overlap. A line between folders is labelled with its count, as on the boards,
   // where it is long enough to carry it (5 cells); one inside a folder, only where it is long (30 cells).
-  const rest = $derived(L ? mergeRoutes(restRoutes(L, open, idx!.strong, leaves)).map((r) => ({ key: r.key, pts: r.pts, d: linePath(r.pts, 0, L.cell), count: r.count, study: r.study, strong: r.strong, trunk: r.trunk, ...countAt(r) })).map((r, i, all) => ({ ...r, label: r.label && !all.some((o, j) => j !== i && o.label && o.count === r.count && Math.hypot(o.mid[0] - r.mid[0], o.mid[1] - r.mid[1]) < 10 && (o.length > r.length || (o.length === r.length && j < i))) })) : []);
+  const rest = $derived(L ? mergeRoutes(restRoutes(L, open, idx!.strong, leaves)).map((r) => ({ key: r.key, pts: r.pts, d: linePath(r.pts, 0, L.cell), count: r.count, strong: r.strong, trunk: r.trunk, ...countAt(r) })).map((r, i, all) => ({ ...r, label: r.label && !all.some((o, j) => j !== i && o.label && o.count === r.count && Math.hypot(o.mid[0] - r.mid[0], o.mid[1] - r.mid[1]) < 10 && (o.length > r.length || (o.length === r.length && j < i))) })) : []);
   // A count: on a line between folders only, where it carries more than one link, once along its longest straight
   // stretch of 3 cells or more, beside the line (to the right of an upright one, above any other). Where a highway
   // is cut in two by a line joining it, the same count close by is shown once, on the longer piece.
@@ -288,7 +291,7 @@
   });
   // The Iso lens (M10): what Iso is sent, what it changed in this conversation, what it points to, and the order
   // it read in during its last turn. Iso's path is drawn only in this lens.
-  const isoLens = $derived(panes.lens.atlas === "iso" || !!pick);
+  const isoLens = $derived(panes.on.context || !!pick);
   const givenNotes = $derived(new Set(tray.parts.filter((p) => p.kind === "note").map((p) => p.id)));
   const givenFolders = $derived(new Set(tray.parts.filter((p) => p.kind === "folder").map((p) => p.id)));
   const lastTurn = $derived(converse.turns.at(-1));
@@ -325,7 +328,7 @@
       const s = L.items[shownAs(idx, open, i)]!;
       return { gx: s.gx, gy: s.gy, w: s.w, h: s.h, draft: false, title: title(run.note) };
     }
-    const w = Math.round(126 / L.cell), h = Math.round(35 / L.cell), name = asking ? titleIn(asking.text) || "a new note" : "";
+    const w = Math.round(126 / L.cell), h = Math.round(77 / L.cell), name = asking ? titleIn(asking.text) || "a new note" : "";
     const held = placeOf(run.note), at = held ? { gx: Math.round((held.gx * CELL) / L.cell), gy: Math.round((held.gy * CELL) / L.cell) } : null;
     const clear = at && !L.items.some((n) => n.kind === "note" && at.gx < n.gx + n.w + 1 && n.gx < at.gx + w + 1 && at.gy < n.gy + n.h + 1 && n.gy < at.gy + h + 1);
     if (clear) return { ...at, w, h, draft: true, title: name };
@@ -378,14 +381,14 @@
     app.api.readNote(pick).then((d) => { if (!stale) draft = d; }, () => { if (!stale) notice = "that note for Iso is not here any more"; });
     return () => { stale = true; };
   });
-  const picked = $derived(draft ? (testsIn(draft.text) ?? linkedIn(draft.text)).filter((id) => report?.notes[id] && !id.startsWith("@")) : []);
+  const picked = $derived(draft ? linkedIn(draft.text).filter((id) => report?.notes[id] && !id.startsWith("@")) : []);
   let writing: Promise<void> = Promise.resolve();
   /** Link a note to the draft, or take away a link picked here. One at a time, each on the file as the last left it. */
   function toggle(ref: string): void {
     writing = writing.then(async () => {
       if (!draft || ref.startsWith("@")) return;
       // A request for an exercise is picked for what it tests; any other note for Iso, for what it links.
-      const change = (text: string): string | null => (testsIn(text) ? withTest(text, ref) : linkedIn(text).includes(ref) ? withoutLink(text, ref) : withLink(text, ref, title(ref)));
+      const change = (text: string): string | null => (linkedIn(text).includes(ref) ? withoutLink(text, ref) : withLink(text, ref, title(ref)));
       const next = change(draft.text);
       if (next === null) { notice = "linked in what you wrote: take it out there"; return; }
       notice = "";
@@ -429,7 +432,7 @@
     if (offered && !(e.target instanceof Element && e.target.closest(".offer"))) offered = null;
     if (pick || making || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock")) return;
     const on = e.target.closest<HTMLElement>("[data-note]")?.dataset.note ?? "";
-    if (on.startsWith("@")) return; // a study item is not a place in the base
+    if (on.startsWith("@")) return; // a note for Iso is not a place in the base
     if (on) {
       // A mouse gives it straight away; a finger is offered a choice there, since a phone has no Iso beside the map (Q16).
       const touch = e.pointerType !== "mouse";
@@ -463,13 +466,6 @@
     gripped = null;
     void make(grasp);
   }
-  /** The first of `base`, `base-2`, `base-3`… free under `dir`, and its number. */
-  function untitled(dir: string, base: string, free: (id: string) => boolean): { slug: string; n: number } {
-    for (let n = 1; ; n++) {
-      const name = n === 1 ? base : `${base}-${n}`;
-      if (free([dir, name].filter(Boolean).join("/"))) return { slug: name, n };
-    }
-  }
   async function make(g: NonNullable<typeof grasp>): Promise<void> {
     making = true;
     const ids = app.listing.notes.map((n) => n.id);
@@ -489,8 +485,13 @@
     finally { making = false; grasp = null; }
   }
 
+  /** A question about a note, or a problem using it (M12). */
+  async function makeKind(kind: "question" | "problem", about: string): Promise<void> {
+    try { await makeNew(kind, about); } catch (err) { notice = (err as Error).message; }
+  }
+
   const title = (ref: string): string => report?.notes[ref]?.title ?? ref.split("/").at(-1) ?? ref;
-  const folderName = (ref: string): string => (ref.startsWith("@study") ? ref.replace(/^@study\/?/, "").split("/").at(-1) || app.session?.name || "the base" : ref.split("/").at(-1) ?? ref);
+  const folderName = (ref: string): string => ref.split("/").at(-1) || app.session?.name || "the base";
 
   // ------------------------------------------------------------ moving about
 
@@ -498,6 +499,7 @@
   /** Go to a view, over a moment unless motion is unwanted. */
   function fly(to: View): void {
     cancelAnimationFrame(flying);
+    still();
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) { view = to; return; }
     const from = view, t0 = performance.now(), ms = 320;
     const step = (now: number): void => {
@@ -545,6 +547,7 @@
   function down(e: PointerEvent): void {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     cancelAnimationFrame(flying);
+    still();
     if (!pointers.size) { dragged = false; press = pressed(e); }
     pointers.set(e.pointerId, local(e));
     regrip();
@@ -576,14 +579,30 @@
     else if (holdDone !== undefined) unhold(); // let go before the hold was long enough
     regrip();
   }
+  // The wheel and a trackpad's pinch set a zoom to go to, about the pointer; each frame goes part of the way there,
+  // as a ratio, so the map grows smoothly however the wheel ticks (M12).
+  let goal: { k: number; x: number; y: number } | null = null, easing = 0;
   function wheel(e: WheelEvent): void {
     e.preventDefault();
     cancelAnimationFrame(flying);
     moved = true;
     const p = local(e), unit = e.deltaMode === 1 ? 16 : 1;
     // A pinch on a trackpad arrives as a wheel with ctrl held, in finer steps.
-    view = zoomAbout(view, Math.exp(-e.deltaY * unit * (e.ctrlKey ? 0.01 : 0.0015)), p.x, p.y);
+    const by = Math.exp(-e.deltaY * unit * (e.ctrlKey ? 0.01 : 0.0015));
+    const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, (goal?.k ?? view.k) * by));
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { view = zoomAbout(view, k / view.k, p.x, p.y); return; }
+    goal = { k, x: p.x, y: p.y };
+    if (!easing) easing = requestAnimationFrame(ease);
   }
+  function ease(): void {
+    easing = 0;
+    if (!goal) return;
+    const r = goal.k / view.k;
+    if (Math.abs(Math.log(r)) < 0.004) { view = zoomAbout(view, r, goal.x, goal.y); goal = null; return; }
+    view = zoomAbout(view, r ** 0.3, goal.x, goal.y);
+    easing = requestAnimationFrame(ease);
+  }
+  function still(): void { cancelAnimationFrame(easing); easing = 0; goal = null; }
   // A wheel that zooms must be able to stop the page scrolling, which a listener added in the markup may not.
   $effect(() => {
     if (!viewport) return;
@@ -601,7 +620,7 @@
     if (dragged) return;
     if (pick) { toggle(ref); return; }
     // In the Iso lens a note is brought into what Iso is sent, or taken out (M10).
-    if (panes.lens.atlas === "iso" && !ref.startsWith("@")) { tray.toggle({ kind: "note", id: ref, title: title(ref) }); return; }
+    if (panes.on.context && !ref.startsWith("@")) { tray.toggle({ kind: "note", id: ref, title: title(ref) }); return; }
     // Chosen already: open it, beside the Atlas on a desktop (V1).
     if (chosen === ref) { void panes.open(ref); return; }
     const back: string[] = [];
@@ -612,7 +631,7 @@
   function enter(i: number): void {
     if (dragged || !L) return;
     const ref = L.items[i]!.ref;
-    if (panes.lens.atlas === "iso" && !ref.startsWith("@")) { tray.toggle({ kind: "folder", id: ref, title: folderName(ref) }); return; }
+    if (panes.on.context && !ref.startsWith("@")) { tray.toggle({ kind: "folder", id: ref, title: folderName(ref) }); return; }
     moved = true;
     const to = fit(L.items[i]!, size.w, size.h, 1.5, L.cell), there = Math.abs(to.k - view.k) < 0.01 * to.k && Math.hypot(to.x - view.x, to.y - view.y) < 4;
     const parent = L.items[i]!.parent;
@@ -666,10 +685,14 @@
     fly(parent < 0 ? whole() : fit(L.items[parent]!, size.w, size.h, 1.5, L.cell));
   }
 
-  const labels = $derived(view.k >= LABELS_AT);
-  const count = $derived(L ? L.items.filter((n) => n.kind === "note" && n.ref.startsWith("@study")).length : 0);
+  // Titles are set once, in the map's units (M12): shown while they are big enough on screen to read.
+  const labels = $derived(TITLE_UNITS * view.k >= TITLE_PX);
+  /** The links out of the base switched on, beside their notes. */
+  const sats = $derived(L && report ? satellites(notes.map((n) => n.item), report.notes, { web: panes.on.web, code: panes.on.code }) : []);
+  /** What a note's block stands on: its folder's inside, which a kind's glyph in its top edge cuts the edge with. */
+  const behind = (parent: number): string => (parent >= 0 && L!.items[parent]!.depth % 2 ? "var(--ground-1)" : "var(--ground-0)");
   $effect(() => {
-    app.atlas = { items: count, chosen: chosen ? title(chosen) : "", chosenId: chosen, steps: walk.length - 1, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out };
+    app.atlas = { chosen: chosen ? title(chosen) : "", chosenId: chosen, steps: walk.length - 1, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out, fit: () => { moved = false; fly(whole()); } };
     return () => { app.atlas = null; };
   });
 </script>
@@ -684,31 +707,38 @@
     <p class="said">The map could not be drawn: {failed}</p>
   {:else if L && report}
     {#if !L.items.length}<p class="said faint">There are no notes yet. The map draws itself as you write them.</p>{/if}
-    <div class="atlas-world" class:labels class:shifting data-open={open} style="transform: translate({view.x}px, {view.y}px); --u: {(L?.cell ?? 7) * view.k}px; --k: {view.k}; --fs: {(10.5 * Math.min(1.5, Math.max(0.8, view.k))).toFixed(2)}px; --lines: {view.k < 0.9 ? 1 : 2}">
+    <!-- One move for the whole map (M12): the folders and the notes are scaled as they stand, in the map's units;
+         what is drawn round them (routes, counts, Iso's note) is placed at the zoom. -->
+    <div class="atlas-world" class:labels class:shifting data-open={open} style="transform: translate({view.x}px, {view.y}px); --u: {(L?.cell ?? 7) * view.k}px; --k: {view.k}">
+      <div class="scaled" style="transform: scale({view.k}); --u: {L.cell}px; --px: {1 / view.k}px; --ik: {1 / view.k}">
       {#each folders as f (f.item.id)}
-        {#if f.item.ref.startsWith("@study")}
-          <AtlasStudyFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} passes={L.items.filter((x) => x.parent === f.i && report?.notes[x.ref]?.passed).length} onpick={() => enter(f.i)} />
-        {:else}
           <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * view.k >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} onpick={() => enter(f.i)} />
-        {/if}
       {/each}
+      </div>
       <AtlasRoutes k={view.k} {rest} hot={[...(isoLens ? isoHot : []), ...hot]} counts={litCount} sent={sentLines} {grown} {beat} {retracting} />
       {#if labels && !beat}
         {#each rest as r (r.key)}
           {#if r.label}<span class="count {r.side}" style="--x:{r.mid[0]};--y:{r.mid[1]}">{r.count}</span>{/if}
         {/each}
       {/if}
+      <div class="scaled" style="transform: scale({view.k}); --u: {L.cell}px; --px: {1 / view.k}px; --ik: {1 / view.k}">
       {#each notes as n (n.item.id)}
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
-        {#if n.item.ref.startsWith("@study")}
-          <AtlasStudyItem item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? "note"} {mark} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
+      {/each}
+      {#each sats as s (s.key)}
+        {#if s.kind === "web"}
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- an address on the web, not in the app -->
+          <a class="sat web" href={s.href} target="_blank" rel="noopener noreferrer" title={`${s.text} · ${s.href}`} aria-label={s.text} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}" onclick={(e) => { if (dragged) e.preventDefault(); e.stopPropagation(); }}>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" /><path d="M2.5 8h11M8 2.5c-2 2.8-2 8.2 0 11M8 2.5c2 2.8 2 8.2 0 11" /></svg></a>
         {:else}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} step={studyShown ? (report.notes[n.item.ref]?.step ?? 0) : 1} since={studyShown ? (report.notes[n.item.ref]?.changedSince ?? "") : ""} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
-            onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
+          <span class="sat code" class:broken={s.broken} role="img" title={`${s.text} · ${s.href.slice(5)}${s.broken ? " · not in the repository" : ""}`} aria-label={`${s.text}${s.broken ? ", not in the repository" : ""}`} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5M9 3l-2 10" /></svg></span>
         {/if}
       {/each}
+      </div>
       {#if origin}
         <div class="asker" class:draft={origin.draft} style="--x:{origin.gx};--y:{origin.gy};--w:{origin.w};--h:{origin.h}">
           {#if origin.draft}<a class="eph" href={resolve("/draft/[id]", { id: run!.note.slice("@draft/".length) })} aria-label="{origin.title}: your note for Iso"><span class="t">{origin.title}</span></a>{/if}
@@ -726,16 +756,13 @@
       {/if}
     </div>
     {#if pick}
-      <AtlasDock title={draft ? (testsIn(draft.text) ? "an exercise" : titleIn(draft.text)) : ""} tests={draft ? testsIn(draft.text) !== null : false} picked={picked.map((id) => ({ id, title: title(id), tokens: report!.notes[id]?.tokens ?? 0 }))} budget={LINKED_BUDGET} {notice}
+      <AtlasDock title={draft ? titleIn(draft.text) : ""} picked={picked.map((id) => ({ id, title: title(id), tokens: report!.notes[id]?.tokens ?? 0 }))} budget={LINKED_BUDGET} {notice}
         href={resolve("/draft/[id]", { id: pick.slice("@draft/".length) })} />
     {:else if notice}
       <p class="notice" role="alert">{notice}</p>
     {/if}
     {#if given}<p class="given" role="status">◆ {given}</p>{/if}
-    {#if studyShown && !pick && !given && panes.settings === "atlas"}
-      <p class="legend" aria-hidden="true"><span><i class="k s0"></i>not reached</span><span><i class="k s1"></i>opened</span><span><i class="k s2"></i>worked through</span><span><i class="k s3"></i>understood</span><span><i class="k ch"></i>changed since</span></p>
-    {/if}
-    {#if panes.lens.atlas === "iso" && !pick && !given && panes.settings === "atlas"}
+    {#if panes.on.context && !pick && !given && panes.settings === "atlas"}
       <p class="legend" aria-hidden="true"><span><i class="k g"></i>in Iso's context</span><span><i class="k d"></i>Iso changed it</span><span><i class="k p"></i>Iso points to it</span><span><i class="k n">1</i>read, in order</span><span class="faint">tap to give or take back</span></p>
     {/if}
     {#if offered}
@@ -743,6 +770,8 @@
       <div class="offer frame" role="menu" aria-label={title(o.ref)} style="left:{Math.min(o.x, size.w - 170)}px;top:{o.y + 14}px">
         <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); give(o.ref); offered = null; }}><i aria-hidden="true">◆</i>Give to Iso</button>
         <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void panes.open(o.ref, true); }}><i aria-hidden="true">▣</i>Open</button>
+        <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void makeKind("question", o.ref); }}><i class="q" aria-hidden="true">?</i>A question about it</button>
+        <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void makeKind("problem", o.ref); }}><i aria-hidden="true">△</i>A problem using it</button>
       </div>
     {/if}
     {#if tray.carrying}
@@ -756,6 +785,12 @@
   .atlas { position: relative; height: 100%; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: grab; outline-offset: -2px; }
   .atlas:active { cursor: grabbing; }
   .atlas-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+  .scaled { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+  /* A link out of the base (M12): a small block beside its note, in the map's units. */
+  .sat { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(3 * var(--u)); height: calc(3 * var(--u)); display: grid; place-items: center; background: var(--ground-1); border: var(--px) solid var(--line-strong); color: var(--lattice); }
+  .sat svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+  .sat.web:hover, .sat.web:focus-visible { border-color: var(--lattice); }
+  .sat.broken { color: var(--rose); border-color: var(--rose); border-style: dashed; }
   /* Only while a changed base settles (K3): at any other time, a zoom changes the same places and must not ease. */
   .shifting :global(:is(.n, .sn, .folder)) { transition: left 0.45s ease, top 0.45s ease, width 0.45s ease, height 0.45s ease; }
   @media (prefers-reduced-motion: reduce) { .shifting :global(:is(.n, .sn, .folder)) { transition: none; } }
@@ -780,11 +815,6 @@
   .legend .g { background: var(--growth-soft); border: 1px solid var(--growth); }
   .legend .d { width: 7px; height: 7px; background: var(--growth); transform: rotate(45deg); }
   .legend .p { border: 1.5px dashed var(--growth); }
-  .legend .s0 { border: 1px dotted var(--line-strong); }
-  .legend .s1 { border: 1px solid var(--line-strong); background: var(--ground-1); }
-  .legend .s2 { border: 1px solid var(--line-strong); background: var(--ground-3); }
-  .legend .s3 { border: 3px double var(--lattice); background: var(--ground-3); }
-  .legend .ch { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid var(--builds); }
   .legend .n { width: 14px; height: 14px; background: var(--growth); color: var(--ground-0); font-size: 9px; font-weight: 700; }
   /* A note carried out of the Atlas towards Iso's pane. */
   .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font-size: 12px; white-space: nowrap; }
@@ -793,8 +823,8 @@
   /* Iso's note while it is answered (Desktop-Think): the draft's block, dotted gold, and under it (or under the
      note asking) a marching gold line and what Iso is doing. */
   .asker { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(var(--w) * var(--u)); height: calc(var(--h) * var(--u)); pointer-events: none; z-index: 1; }
-  .eph { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 min(7px, calc(var(--u) * .8)); overflow: hidden; font-size: var(--fs); line-height: 1.2; color: var(--text); text-decoration: none; background: var(--growth-soft); border: 1.5px dotted var(--growth); pointer-events: auto; }
-  .eph .t { display: none; overflow: hidden; -webkit-line-clamp: var(--lines, 2); line-clamp: var(--lines, 2); -webkit-box-orient: vertical; }
+  .eph { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 calc(11px * var(--k)); overflow: hidden; font-size: calc(12px * var(--k)); line-height: 1.25; color: var(--text); text-decoration: none; background: var(--growth-soft); border: 1.5px dotted var(--growth); pointer-events: auto; }
+  .eph .t { display: none; overflow: hidden; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; }
   :global(.atlas-world.labels) .eph .t { display: -webkit-box; }
   .loader { position: absolute; left: 0; top: calc(100% + 10px); width: 100%; height: 2px; overflow: hidden; }
   .loader path { stroke: var(--growth); stroke-width: 2.5; stroke-dasharray: 2 3; animation: march .6s linear infinite; }

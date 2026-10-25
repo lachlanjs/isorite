@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { setSwitch } from "./switches.ts";
 
 const note = (page: Page, id: string) => page.locator(`[data-note="${id}"]`);
 const folder = (page: Page, id: string) => page.locator(`[data-folder="${id}"]`);
@@ -15,8 +16,6 @@ async function atlas(page: Page) {
   if ((page.viewportSize()?.width ?? 1280) <= 760) await expect.poll(() => page.locator('[data-pane="atlas"]').evaluate((el) => Math.round(el.getBoundingClientRect().left))).toBe(0);
 }
 
-/** The Atlas's lens (M10). */
-const lens = (page: Page, l: "normal" | "iso" | "understand") => page.locator(`[data-pane="atlas"] .lens[data-lens="${l}"]`).click();
 
 /** Iso's pane in its Context view: what you gave Iso, listed. On a phone, back to where you were after. */
 async function showContext(page: Page, back?: "Note" | "Atlas") {
@@ -32,20 +31,13 @@ async function showContext(page: Page, back?: "Note" | "Atlas") {
   return page.getByRole("list", { name: "What you gave Iso" });
 }
 
-test("the map draws the base; its Understand lens draws where you stand, and the study folders and their items", async ({ page }) => {
+test("the map draws the base: its folders, its notes, and the routes between them", async ({ page }) => {
   await atlas(page);
   await expect(folder(page, "basics")).toBeVisible();
   await expect(folder(page, "coding")).toBeVisible();
-  await expect(note(page, "basics/surprise")).not.toHaveClass(/\bs[023]\b/);
-  await expect(folder(page, "@study/coding")).toHaveCount(0);
-  await lens(page, "understand");
-  await expect(note(page, "basics/surprise")).toHaveClass(/\bs0\b/);
-  await expect(note(page, "coding/source-coding")).toHaveClass(/\bs2\b/); // three right answers: worked through
-  await expect(folder(page, "@study/coding")).toContainText("study · coding");
-  await expect(page.getByRole("link", { name: "written: Build a prefix code" })).toBeVisible();
-  await expect.poll(() => page.locator(".routes path.base, .routes path.study").count()).toBeGreaterThan(2);
+  await expect(note(page, "basics/surprise")).toBeVisible();
+  await expect.poll(() => page.locator(".routes path.base").count()).toBeGreaterThan(2);
   await look(page, "atlas");
-  await lens(page, "normal");
 });
 
 test("choosing a note outlines what it requires, all the way back, and what builds on it; again opens it", async ({ page }) => {
@@ -106,15 +98,6 @@ test("the chain is walked a step at a time, the way kept", async ({ page }) => {
   await expect(page.getByText("1 step back")).toBeVisible();
   await expect(lines).toHaveAttribute("data-requires", "2");
 
-});
-
-test("a study item lights the note it tests and what that requires", async ({ page }) => {
-  await atlas(page);
-  await lens(page, "understand");
-  await note(page, "@study/coding/a-prefix-code").click();
-  await expect(note(page, "coding/huffman-codes")).toHaveClass(/\breq\b/);
-  await expect(note(page, "basics/surprise")).toHaveClass(/\breq\b/);
-  await lens(page, "normal");
 });
 
 test("a folder is zoomed to, open ground steps out, and the map is dragged and zoomed by hand", async ({ page }) => {
@@ -233,7 +216,7 @@ test("holding makes an untitled note in the folder held in, its title chosen to 
 test("a new layout comes in three beats: the lines retract, the notes move with no line drawn, then the lines draw out", async ({ page }) => {
   await atlas(page);
   await expect(page.locator(".routes path.base").first()).toBeAttached();
-  // Into the Understand lens the study folders join the map, so it is laid out again.
+  // A note joins the base, linked to another, so the map is laid out again.
   const seen: string[] = [];
   await page.exposeFunction("beatSeen", (b: string) => { if (seen.at(-1) !== b) seen.push(b); });
   await page.evaluate(() => {
@@ -245,12 +228,15 @@ test("a new layout comes in three beats: the lines retract, the notes move with 
     };
     look();
   });
-  await lens(page, "understand");
+  const headers = await session(page), id = "coding/three-beats";
+  expect((await page.request.post(`api/note?id=${id}`, { headers, data: { text: "---\ntype: Concept\ntitle: Beats\n---\n\nIt rests on [the bit](/basics/bit.md \"requires\").\n" } })).ok()).toBe(true);
   await expect.poll(() => seen.join(" ")).toContain("retract none draw rest");
-  await lens(page, "normal");
+  // Gone again, so the rest of the tests find the base as they expect.
+  const { version } = (await (await page.request.get(`api/note?id=${id}`)).json()) as { version: string };
+  expect((await page.request.post(`api/note/delete?id=${id}`, { headers, data: { base: version } })).ok()).toBe(true);
 });
 
-test("held with a finger, a note offers to go to Iso or to open (Q16)", async ({ page }) => {
+test("held with a finger, a note offers to go to Iso, to open, or a question or problem of its own (Q16, M12)", async ({ page }) => {
   await atlas(page);
   const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
   const at = { pointerId: 9, pointerType: "touch", isPrimary: true, button: 0, clientX: huffman.x + 10, clientY: huffman.y + 6 };
@@ -258,7 +244,7 @@ test("held with a finger, a note offers to go to Iso or to open (Q16)", async ({
   await page.waitForTimeout(800);
   await page.locator(".atlas").dispatchEvent("pointerup", at);
   const offer = page.getByRole("menu", { name: "Huffman codes" });
-  await expect(offer.getByRole("menuitem")).toHaveText(["◆Give to Iso", "▣Open"]);
+  await expect(offer.getByRole("menuitem")).toHaveText(["◆Give to Iso", "▣Open", "?A question about it", "△A problem using it"]);
   await look(page, "atlas-offer");
   await offer.getByRole("menuitem", { name: "Give to Iso" }).click();
   await expect(offer).toHaveCount(0);
@@ -316,7 +302,7 @@ test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given t
 });
 
 test("notes are picked on the map for a request: numbered in order, sized in the dock, and taken away again", async ({ page }) => {
-  // Only an exercise is asked for this way now (no note for Iso is started from the app): one made by the Api.
+  // No note for Iso is started from the app now: one made by the Api.
   await atlas(page);
   const made = (await (await page.request.post("api/drafts", { headers: await session(page), data: {} })).json()) as { id: string };
   await page.goto(`#/draft/${made.id.slice("@draft/".length)}`);
@@ -389,6 +375,8 @@ test("the grid is fine, coarse or coarser (key c), and the map draws on each", a
 
 test("a terminal agent's look-ups are drawn as Iso's are: what it searched, what it reached along a link, what it reads; its turn ends idle", async ({ page, request, baseURL }) => {
   await atlas(page);
+  // Drawn with Iso's context on, the diamond in the Atlas's header (M12).
+  await setSwitch(page, "context", true);
   // As isorite term's plugin asks: from the server's origin, with the token it hands out.
   const { token } = await (await request.get("api/session")).json() as { token: string };
   const headers = { Origin: new URL(baseURL!).origin, "x-isorite-token": token };
@@ -413,4 +401,54 @@ test("a terminal agent's look-ups are drawn as Iso's are: what it searched, what
   const box = (await page.locator(".atlas").boundingBox())!;
   await page.mouse.click(box.x + 4, box.y + 4);
   await expect(note(page, "coding/source-coding")).not.toHaveClass(/\bp-/);
+});
+
+test("the kinds by their switches (M12): links out of the base beside their note, a broken code link marked; questions off the map and back", async ({ page }) => {
+  const name = `${test.info().project.name}-${Date.now().toString(36)}`, q = `coding/why-${name}`;
+  const { token } = (await (await page.request.get("api/session")).json()) as { token: string };
+  const headers = { "x-isorite-token": token, Origin: new URL(test.info().project.use.baseURL!).origin };
+  await page.request.post(`api/note?id=${q}`, { data: { text: `---\ntype: Question\ntitle: Why ${name}?\nabout: [coding/source-coding]\n---\n` }, headers });
+  await atlas(page);
+  await expect(note(page, q)).toBeVisible();
+  await expect(note(page, q).locator(".notch")).toBeVisible();
+  await expect(note(page, q)).toHaveAttribute("aria-label", `Question: Why ${name}?`);
+  // Links out of the base, beside their note: code, one of them not in the repository; then the web.
+  await setSwitch(page, "code", true);
+  await expect(page.locator(".sat.code")).toHaveCount(2);
+  await expect(page.locator(".sat.code.broken")).toHaveAttribute("aria-label", "decode, not in the repository");
+  await setSwitch(page, "web", true);
+  await expect(page.locator(".sat.web")).toHaveAttribute("href", "https://en.wikipedia.org/wiki/Huffman_coding");
+  await look(page, "atlas-kinds");
+  await setSwitch(page, "web", false);
+  await setSwitch(page, "code", false);
+  await expect(page.locator(".sat")).toHaveCount(0);
+  // Questions switched off leave the map, and come back.
+  await setSwitch(page, "questions", false);
+  await expect(note(page, q)).toHaveCount(0);
+  await expect(note(page, "coding/source-coding")).toBeVisible();
+  await setSwitch(page, "questions", true);
+  await expect(note(page, q)).toBeVisible();
+  const { version } = (await (await page.request.get(`api/note?id=${q}`)).json()) as { version: string };
+  await page.request.post(`api/note/delete?id=${q}`, { data: { base: version }, headers });
+});
+
+test("the wheel zooms smoothly: the map goes to the zoom the wheel asks for over several frames, about the pointer", async ({ page }) => {
+  test.skip(test.info().project.name.startsWith("phone"), "a wheel is a desktop's");
+  await atlas(page);
+  const before = await cell(page), box = (await page.locator(".atlas").boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -400);
+  // Part of the way first, then all of it: e^(400 × 0.0015) ≈ 1.82 times.
+  const soon = await cell(page);
+  expect(soon).toBeLessThan(before * 1.8);
+  await expect.poll(() => cell(page)).toBeCloseTo(before * Math.exp(0.6), 1);
+  // The title stays as it was set: the same lines at any zoom.
+  const lines = () => note(page, "coding/huffman-codes").locator(".t").evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight) / Number(getComputedStyle(el.closest(".scaled")!).transform.split(",")[0]!.slice(7))));
+  await page.mouse.wheel(0, -400);
+  await expect.poll(() => cell(page)).toBeCloseTo(before * Math.exp(1.2), 1);
+  const at = await lines();
+  expect(at).toBeGreaterThan(0);
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => cell(page)).toBeCloseTo(before * Math.exp(0.75), 1);
+  expect(await lines()).toBe(at);
 });

@@ -107,6 +107,14 @@ export class NoteSession {
     return moved.id;
   }
 
+  /** Resolve the question, or say the problem is solved, today; or open it again (M12). Anything unsaved is saved
+   *  first. */
+  async setDone(done: boolean): Promise<void> {
+    await this.settle();
+    this.take(await app.api.setDone(this.id, done, this.base));
+    await app.refresh();
+  }
+
   /** Delete the note, anything unsaved saved first, so that its journal has the last of it. */
   async remove(): Promise<void> {
     await this.settle();

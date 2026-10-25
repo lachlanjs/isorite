@@ -1,5 +1,6 @@
-// Blocks the live preview draws rendered: display maths ($$…$$, \[…\]) and
-// tables. Away from the cursor a block is replaced by its rendering; with the
+// Blocks the live preview draws rendered: display maths ($$…$$, \[…\]),
+// tables, and embeds of a question or a problem ([[!name]] on a line of its
+// own, M12), drawn as a callout that opens it. Away from the cursor a block is replaced by its rendering; with the
 // cursor in it, its source shows for editing, and maths keeps its rendering
 // beneath it, updated as you type. Clicking a rendering puts the cursor in
 // its source. Carried over from rdstudio; pictures, artifacts and Mermaid
@@ -8,11 +9,50 @@
 // view plugin, so this is separate from livePreview.ts.)
 
 import { syntaxTree } from "@codemirror/language";
-import { StateField, type EditorState, type Range } from "@codemirror/state";
+import { Facet, StateField, type EditorState, type Range } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType, type DecorationSet } from "@codemirror/view";
 import { render } from "$lib/markdown.ts";
 
 type Kind = "maths" | "table";
+
+/** A note an embed names, as the callout draws it. */
+export interface Embedded { id: string; title: string; kind: "note" | "question" | "problem"; done: boolean }
+/** How the editor finds what an embed names, and opens it. */
+export interface Embeds { find: (ref: string) => Embedded | null; open: (id: string) => void }
+export const embeds = Facet.define<Embeds, Embeds | null>({ combine: (all) => all[0] ?? null });
+
+const EMBED = /^[ \t]*\[\[!([^\]\n]+)\]\][ \t]*$/;
+const GLYPH: Record<Embedded["kind"], string> = {
+  question: '<path d="M5.6 5.6a2.4 2.4 0 1 1 3.4 2.2c-.6.3-1 .8-1 1.5v.9"/><path d="M8 12v1.2"/>',
+  problem: '<path d="M8 2.5l5.8 10.5H2.2z"/>',
+  note: '<rect x="3.5" y="2.5" width="9" height="11"/>',
+};
+const DONE_GLYPH = '<path d="M3 8.5l3 3 7-7"/>';
+
+class EmbedWidget extends WidgetType {
+  constructor(readonly ref: string, readonly found: Embedded | null, readonly at: number) { super(); }
+  eq(other: EmbedWidget): boolean { return other.ref === this.ref && JSON.stringify(other.found) === JSON.stringify(this.found) && other.at === this.at; }
+  toDOM(view: EditorView): HTMLElement {
+    const f = this.found, el = document.createElement("div");
+    el.className = `cm-lp-embed${f ? ` cm-lp-embed-${f.kind}` : " cm-lp-embed-broken"}${f?.done ? " cm-lp-embed-done" : ""}`;
+    el.title = `[[!${this.ref}]]`;
+    const glyph = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    glyph.setAttribute("viewBox", "0 0 16 16"); glyph.setAttribute("width", "16"); glyph.setAttribute("height", "16"); glyph.setAttribute("aria-hidden", "true");
+    glyph.innerHTML = f?.done ? DONE_GLYPH : GLYPH[f?.kind ?? "question"];
+    const t = document.createElement("span");
+    t.textContent = f ? f.title : this.ref;
+    el.append(glyph, t);
+    el.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      // A click opens what it names; with Alt, or naming nothing, the cursor goes to its source.
+      if (f && !e.altKey) view.state.facet(embeds)?.open(f.id);
+      else { view.dispatch({ selection: { anchor: this.at }, scrollIntoView: true }); view.focus(); }
+    });
+    return el;
+  }
+  ignoreEvent(): boolean { return true; }
+  get estimatedHeight(): number { return 44; }
+}
 
 class BlockWidget extends WidgetType {
   constructor(readonly kind: Kind, readonly source: string, readonly at: number, readonly beneath: boolean) { super(); }
@@ -67,6 +107,19 @@ function build(state: EditorState): DecorationSet {
       return false;
     },
   });
+  // Embeds: a line of their own, outside code; drawn unless the cursor is on it.
+  const lookup = state.facet(embeds);
+  if (lookup) {
+    let fenced = false;
+    for (let n = 1; n <= state.doc.lines; n++) {
+      const line = state.doc.line(n);
+      if (/^\s*(```|~~~)/.test(line.text)) { fenced = !fenced; continue; }
+      const m = fenced ? null : EMBED.exec(line.text);
+      if (!m || sel.some((r) => r.to >= line.from && r.from <= line.to)) continue;
+      const ref = m[1]!.trim();
+      decos.push(Decoration.replace({ widget: new EmbedWidget(ref, lookup.find(ref), line.from), block: true }).range(line.from, line.to));
+    }
+  }
   return Decoration.set(decos, true);
 }
 
@@ -88,4 +141,14 @@ export const blocksTheme = EditorView.theme({
   ".cm-lp-block .katex-display": { margin: "0" },
   ".cm-lp-beneath": { borderLeft: "2px solid var(--line)", paddingLeft: "12px", marginTop: "4px", opacity: ".9" },
   ".cm-lp-block:not(.cm-lp-beneath):hover": { outline: "1px dashed var(--line)", outlineOffset: "2px" },
+  // An embedded question (rose) or problem, as a callout (M12): green with a check once resolved or solved.
+  ".cm-lp-embed": { display: "flex", alignItems: "center", gap: "10px", padding: "9px 12px", border: "1px solid var(--rose)", borderLeftWidth: "3px", background: "var(--rose-soft)", fontFamily: "var(--font-text)", fontSize: "16px", lineHeight: "1.45", cursor: "pointer" },
+  ".cm-lp-embed svg": { flex: "none", fill: "none", stroke: "var(--rose)", strokeWidth: "1.4" },
+  ".cm-lp-embed-problem": { borderColor: "var(--line-strong)", background: "var(--ground-1)" },
+  ".cm-lp-embed-problem svg": { stroke: "var(--text-soft)" },
+  ".cm-lp-embed-done": { borderColor: "var(--malachite)", background: "var(--malachite-soft)" },
+  ".cm-lp-embed-done svg": { stroke: "var(--malachite)" },
+  ".cm-lp-embed-broken": { borderStyle: "dashed", borderColor: "var(--line-strong)", background: "none", color: "var(--text-faint)" },
+  ".cm-lp-embed-broken svg": { stroke: "var(--text-faint)" },
+  ".cm-lp-embed:hover": { borderColor: "var(--text-soft)" },
 });

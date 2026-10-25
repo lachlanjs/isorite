@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { Engine, KEY, MemoryFiles, MemorySecrets, readTurns, type EngineEvent } from "../src/index.ts";
+import { Engine, KEY, MemoryFiles, MemorySecrets, readTurns, type EngineEvent, type TurnItem } from "../src/index.ts";
 import { scripted, type Scripted } from "./scripted.ts";
 
 const ENTROPY = "---\ntype: Concept\ntitle: Entropy\n---\n\nThe average surprise of a source.\n\nIt is largest when every symbol is equally likely.\n";
@@ -9,7 +9,7 @@ async function open(script: Scripted[]) {
   const clock = { t: Date.parse("2026-10-22T09:00:00Z"), now() { return this.t; } };
   const notes = new MemoryFiles({ "basics/entropy.md": ENTROPY, "basics/surprise.md": SURPRISE }), study = new MemoryFiles();
   const provider = scripted(script);
-  const engine = await Engine.open({ notes, study, clock, device: "laptop1", name: "information-theory", http: provider.http, secrets: new MemorySecrets({ [KEY]: "sk-test" }) });
+  const engine = await Engine.open({ notes, own: study, clock, device: "laptop1", name: "information-theory", http: provider.http, secrets: new MemorySecrets({ [KEY]: "sk-test" }) });
   const events: EngineEvent[] = [];
   engine.events((e) => events.push(e));
   const ended = (turn: string) => new Promise<EngineEvent>((done) => {
@@ -37,7 +37,7 @@ test("a turn in Ask mode: what was given is sent, what Iso looks up and points t
   expect(user).toContain("## Entropy (/basics/entropy.md)");
   expect(user).toContain("## A passage they chose in Surprise (/basics/surprise.md)\n\n> An outcome of probability $p$ carries $-\\log p$.");
   expect(user).toContain("# What they ask now\n\nwhat is it measured in?");
-  expect(sent[0]!.tools!.map((t) => t.function.name)).toEqual(["search_notes", "outline_note", "read_note", "point_to_note"]);
+  expect(sent[0]!.tools!.map((t) => t.function.name)).toEqual(["search_notes", "outline_note", "read_note", "point_to_note", "ask_question", "offer_text"]);
 
   // Kept in the conversation's file, in order; the notes are as they were.
   const [t] = readTurns(study.files.get(`conversations/${conversation}.jsonl`)!);
@@ -59,7 +59,7 @@ test("a second turn is sent the first; one turn at a time; Iso kept from looking
   await ended(second.turn);
   const user = String(sent[1]!.messages[1]!.content);
   expect(user).toContain("# Earlier in this conversation\n\nIn ask mode they asked: what is it measured in?\n\nYou wrote:\n\nBits.");
-  expect(sent[1]!.tools!.map((t) => t.function.name)).toEqual(["point_to_note"]);
+  expect(sent[1]!.tools!.map((t) => t.function.name)).toEqual(["point_to_note", "ask_question", "offer_text"]);
   expect((await engine.conversation(first.conversation))!.turns.map((t) => t.asked)).toEqual(["what is it measured in?", "always?"]);
   // What a turn would send, part by part.
   const ctx = await engine.turnContext({ conversation: first.conversation, mode: "ask", tier: "mid", given: [{ kind: "folder", id: "basics" }] });
@@ -141,29 +141,105 @@ test("Write mode: an edit whose passage is not found is said to Iso; moving asks
   expect(notes.files.get("basics/entropy.md")).toContain("Mine.");
 });
 
-test("Understand mode: Iso is sent your understanding of the note, records evidence that moves its squares, writes its reading, and leaves your scratchpad alone", async () => {
+test("given an Understanding note, Iso is sent its reading of you, asks before it explains, may rewrite it, and leaves your scratchpad alone", async () => {
   const { engine, ended, sent, study } = await open([
-    { calls: [{ name: "record_understanding", arguments: { id: "basics/entropy", by: 1, why: "You derived it unaided." } }] },
-    { calls: [{ name: "record_understanding", arguments: { id: "basics/entropy", by: 1, why: "Again." } }, { name: "write_understanding", arguments: { id: "basics/entropy", reading: "You can derive it." } }] },
+    { calls: [{ name: "write_understanding", arguments: { id: "basics/entropy", reading: "You can derive it." } }] },
     { text: ["Well done."] },
     { text: ["Where were we?"] },
   ]);
   await engine.saveScratchpad("basics/entropy", "My own words.", null);
-  const { conversation, turn } = await engine.converse({ mode: "understand", asked: "why is it largest when even?", tier: "mid", given: [{ kind: "understanding", id: "basics/entropy" }] });
+  const { conversation, turn } = await engine.converse({ mode: "ask", asked: "why is it largest when even?", tier: "mid", given: [{ kind: "understanding", id: "basics/entropy" }] });
   await ended(turn);
-  expect(JSON.stringify(sent[0]!.messages[0]!.content)).toContain("Understand mode");
-  expect(String(sent[0]!.messages[1]!.content)).toContain("## Their understanding of Entropy (/basics/entropy.md): 0 of 6 squares\n\nYour reading so far: none yet.");
-  expect(sent[0]!.tools!.map((t) => t.function.name)).toEqual(["search_notes", "outline_note", "read_note", "record_understanding", "write_understanding", "point_to_note"]);
-  // Once a note a turn.
-  expect(JSON.stringify(sent[2]!.messages)).toContain("You recorded Entropy once this turn already.");
-  const u = await engine.understanding("basics/entropy");
-  expect(u).toMatchObject({ reading: "You can derive it.", scratchpad: "My own words.", squares: 1, evidence: [{ event: "understood", by: 1, why: "You derived it unaided.", conversation }] });
+  expect(JSON.stringify(sent[0]!.messages[0]!.content)).toContain("# Their understanding");
+  expect(String(sent[0]!.messages[1]!.content)).toContain("## Their understanding of Entropy (/basics/entropy.md)\n\nYour reading so far: none yet.");
+  expect(sent[0]!.tools!.map((t) => t.function.name)).toEqual(["search_notes", "outline_note", "read_note", "point_to_note", "ask_question", "offer_text", "write_understanding"]);
+  expect(await engine.understanding("basics/entropy")).toMatchObject({ reading: "You can derive it.", scratchpad: "My own words." });
   expect(study.files.get("understanding/basics/entropy.md")).toContain("## Iso's reading\n\nYou can derive it.\n\n## Scratchpad\n\nMy own words.");
   expect((await engine.journal("@understanding/basics/entropy")).at(-1)).toMatchObject({ who: "iso:openrouter/anthropic/claude-sonnet-5.5" });
-  // The next turn is told the reading and what changed it.
-  const next = await engine.converse({ conversation, mode: "understand", asked: "go on", tier: "mid", given: [{ kind: "understanding", id: "basics/entropy" }] });
+  // The next turn is told the reading.
+  const next = await engine.converse({ conversation, mode: "ask", asked: "go on", tier: "mid", given: [{ kind: "understanding", id: "basics/entropy" }] });
   await ended(next.turn);
-  expect(String(sent[3]!.messages[1]!.content)).toMatch(/1 of 6 squares\n\nYour reading so far: You can derive it\.\n\nWhat changed it, newest first:\n- 2026-10-22: \+1, You derived it unaided\./);
-  // The map says nothing has changed it since.
-  expect((await engine.map()).notes["basics/entropy"]).not.toHaveProperty("changedSince");
+  expect(String(sent[2]!.messages[1]!.content)).toContain("## Their understanding of Entropy (/basics/entropy.md)\n\nYour reading so far: You can derive it.");
+});
+
+test("a conversation from before M12 reads: Understand mode as Ask, and what it recorded passed over", () => {
+  const lines = [
+    { kind: "turn", id: "01K7A000000000000000000001", conversation: "01K7A000000000000000000000", at: "2026-10-22T09:00:00Z", session: "s", mode: "understand", asked: "why?", given: [], tier: "mid" },
+    { kind: "item", turn: "01K7A000000000000000000001", item: { kind: "understood", note: "basics/entropy", event: "e", by: 1, why: "w" } },
+    { kind: "item", turn: "01K7A000000000000000000001", item: { kind: "text", text: "Because." } },
+    { kind: "end", turn: "01K7A000000000000000000001", state: "done" },
+  ].map((l) => JSON.stringify(l)).join("\n");
+  const [t] = readTurns(lines);
+  expect(t).toMatchObject({ mode: "ask", state: "done", items: [{ kind: "text", text: "Because." }] });
+});
+
+const PROBLEM = "---\ntype: Problem\ntitle: Entropy of two coins\nuses: [basics/entropy]\n---\n\nTwo fair coins: what is the entropy?\n\nEach is 1 bit, so 2 bits.\n";
+const OPEN_Q = "---\ntype: Question\ntitle: Why is even largest?\nabout: [basics/entropy]\n---\n";
+
+test("Iso asks a question back: put to you in Ask mode and made yours with +; made by Iso where it may write", async () => {
+  const { engine, ended, notes, events } = await open([
+    { calls: [{ name: "ask_question", arguments: { title: "What if one symbol is certain?", text: "", about: ["basics/entropy"] } }] },
+    { text: ["Think about that."] },
+    { calls: [{ name: "ask_question", arguments: { title: "Is surprise ever negative?", text: "For p at most 1.", about: ["/basics/surprise.md", "nothing/here"] } }] },
+    { text: ["Asked."] },
+  ]);
+  const first = await engine.converse({ mode: "ask", asked: "explain entropy", tier: "mid", given: [] });
+  await ended(first.turn);
+  let [t] = (await engine.conversation(first.conversation))!.turns;
+  const q = t!.items[0] as Extract<TurnItem, { kind: "question" }>;
+  expect(q).toMatchObject({ kind: "question", title: "What if one symbol is certain?", about: ["basics/entropy"] });
+  expect(q.made).toBeUndefined();
+  expect(notes.files.has("basics/what-if-one-symbol-is-certain.md")).toBe(false);
+  // Taken: a question note, yours, about the note.
+  expect(await engine.takeItem(first.conversation, first.turn, q.id)).toEqual({ note: "basics/what-if-one-symbol-is-certain" });
+  expect(notes.files.get("basics/what-if-one-symbol-is-certain.md")).toBe("---\ntype: Question\ntitle: \"What if one symbol is certain?\"\nabout: [basics/entropy]\n---\n\n");
+  expect((await engine.journal("basics/what-if-one-symbol-is-certain")).at(-1)).toMatchObject({ who: "you" });
+  expect(events.at(-1)).toMatchObject({ type: "iso-taken", item: q.id });
+  [t] = (await engine.conversation(first.conversation))!.turns;
+  expect(t!.items[0]).toMatchObject({ made: "basics/what-if-one-symbol-is-certain" });
+  await expect(engine.takeItem(first.conversation, first.turn, q.id)).rejects.toMatchObject({ status: 409 });
+
+  const second = await engine.converse({ conversation: first.conversation, mode: "write", asked: "ask me something", tier: "mid", given: [] });
+  await ended(second.turn);
+  const made = (await engine.conversation(first.conversation))!.turns[1]!.items;
+  expect(made.map((i) => i.kind)).toEqual(["question", "change", "text"]);
+  expect(made[0]).toMatchObject({ about: ["basics/surprise"], made: "basics/is-surprise-ever-negative" });
+  expect(notes.files.get("basics/is-surprise-ever-negative.md")).toContain("about: [basics/surprise]\n---\n\nFor p at most 1.\n");
+  expect((await engine.journal("basics/is-surprise-ever-negative")).at(-1)!.who).toMatch(/^iso:/);
+});
+
+test("your answers offered back are inserted at the end of the note as yours", async () => {
+  const { engine, ended, notes } = await open([
+    { calls: [{ name: "offer_text", arguments: { id: "basics/entropy", text: "When one symbol is certain, there is no surprise: 0 bits." } }] },
+    { text: ["That is your answer."] },
+  ]);
+  const { conversation, turn } = await engine.converse({ mode: "ask", asked: "if one is certain there's no surprise, so 0 bits", tier: "mid", given: [{ kind: "note", id: "basics/entropy" }] });
+  await ended(turn);
+  const offer = (await engine.conversation(conversation))!.turns[0]!.items[0]!;
+  expect(offer).toMatchObject({ kind: "offer", note: "basics/entropy" });
+  expect(notes.files.get("basics/entropy.md")).toBe(ENTROPY);
+  await engine.takeItem(conversation, turn, (offer as { id: string }).id);
+  expect(notes.files.get("basics/entropy.md")).toBe(ENTROPY + "\nWhen one symbol is certain, there is no surprise: 0 bits.\n");
+  expect((await engine.journal("basics/entropy")).at(-1)).toMatchObject({ who: "you" });
+  expect((await engine.conversation(conversation))!.turns[0]!.items[0]).toMatchObject({ taken: true });
+});
+
+test("a problem given is checked, never marked; a note goes with its open questions, each of which can be taken out", async () => {
+  const { engine, ended, notes, sent } = await open([{ text: ["Each coin is independent, so the bits add."] }]);
+  await engine.createNote("basics/two-coins", PROBLEM);
+  await engine.createNote("basics/why-even", OPEN_Q);
+  const ctx = await engine.turnContext({ mode: "ask", tier: "mid", given: [{ kind: "note", id: "basics/entropy" }] });
+  expect(ctx.items).toEqual([{ id: "q:basics/why-even", kind: "question", title: "Why is even largest?", tokens: expect.any(Number), on: true }]);
+  const off = await engine.turnContext({ mode: "ask", tier: "mid", given: [{ kind: "note", id: "basics/entropy" }], off: ["q:basics/why-even"] });
+  expect(off.items[0]).toMatchObject({ on: false });
+  expect(off.parts[2]!.tokens).toBeLessThan(ctx.parts[2]!.tokens);
+
+  const { turn } = await engine.converse({ mode: "write", asked: "check my solution", tier: "mid", given: [{ kind: "note", id: "basics/two-coins" }, { kind: "note", id: "basics/entropy" }] });
+  await ended(turn);
+  const system = JSON.stringify(sent[0]!.messages[0]!.content), user = String(sent[0]!.messages[1]!.content);
+  expect(system).toContain("# Checking a solution");
+  expect(system).toContain("Never say it is solved");
+  expect(user).toContain("## A problem: Entropy of two coins (/basics/two-coins.md)");
+  expect(user).toContain("Open questions about it:\n- Why is even largest? (/basics/why-even.md)");
+  expect(notes.files.get("basics/two-coins.md")).toBe(PROBLEM);
 });

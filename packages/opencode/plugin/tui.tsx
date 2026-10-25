@@ -7,7 +7,7 @@ import { BoxRenderable, fg, ImageRenderable, RGBA, StyledText, TextAttributes, T
 import { Plugin } from "@opencode/plugin/tui";
 import { createEffect, createResource, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { ago, anchorOf, blocks, describe, isStudyId, momentKey, moments, reach, type Entry, type MapModel } from "@isorite/core";
+import { ago, anchorOf, blocks, describe, momentKey, moments, reach, type Entry, type MapModel } from "@isorite/core";
 import { drawAtlas, runsOf, type Role } from "./oneatlas.ts";
 import { noteView, type ViewChange } from "./noteview.ts";
 import { NotePage, fromWhom, type NoteData } from "./notepage.tsx";
@@ -107,12 +107,9 @@ export default Plugin.define({
     };
     const loadNote = async (id: string, at: { key: string; said: string; ago: string } | null): Promise<NoteData> => {
       const q = `?id=${encodeURIComponent(id)}`;
-      const [note, entries, study] = await Promise.all([
-        Isorite.get<{ text: string }>(`/api/note${q}`), Isorite.get<Entry[]>(`/api/journal${q}`),
-        Isorite.get<{ notes: Record<string, { step: number; squares: number }> }>("/api/study").catch(() => null),
-      ]);
-      const reading = study?.notes[id], title = titles().get(id) ?? id.split("/").at(-1)!;
-      const common = { id, title, entries, step: reading?.step ?? 0, squares: reading?.squares ?? 0 };
+      const [note, entries] = await Promise.all([Isorite.get<{ text: string }>(`/api/note${q}`), Isorite.get<Entry[]>(`/api/journal${q}`)]);
+      const title = titles().get(id) ?? id.split("/").at(-1)!;
+      const common = { id, title, entries };
       if (!at) return { ...common, text: note.text, items: noteView(note.text, entries) };
       // At a moment of the timeline: the note as it was then, read only, its changes then waiting left out.
       const then = await Isorite.get<{ text: string }>(`/api/version${q}&entry=${encodeURIComponent(at.key)}`);
@@ -198,7 +195,7 @@ export default Plugin.define({
           const model = map(), id = focal();
           if (!model || !id) return null;
           const r = reach(model, id), direct = r.requires.filter((n) => r.depth[n] === 1);
-          return { direct, further: r.requires.length - direct.length, builds: r.builds.filter((n) => !isStudyId(n)) };
+          return { direct, further: r.requires.length - direct.length, builds: r.builds };
         };
         const grid = () => {
           const n = near(), id = focal();
@@ -449,7 +446,7 @@ export default Plugin.define({
           const b = base();
           if (!b) return " ";
           if ("error" in b) return `isorite is not answering at ${Isorite.url}`;
-          return `${b.name} · ${b.notes} ${b.notes === 1 ? "note" : "notes"} · ${b.study ? "study base found" : "no study base"}`;
+          return `${b.name} · ${b.notes} ${b.notes === 1 ? "note" : "notes"}`;
         };
         return (
           <box flexDirection="column" alignItems="center" justifyContent="center" width="100%" height="100%">
@@ -517,7 +514,9 @@ export default Plugin.define({
             id: "isorite.atlas.show", title: "One note's atlas, beside the chat", palette: true, slash: { name: "atlas", arguments: true },
             run: async (input) => {
               const words = input?.trim();
-              const id = words ? (await Isorite.get<{ id: string }[]>(`/api/search?q=${encodeURIComponent(words)}`).catch(() => []))[0]?.id : "";
+              // A note titled with exactly these words comes before the search's first hit, which may only mention them.
+              const hits = words ? await Isorite.get<{ id: string; title: string }[]>(`/api/search?q=${encodeURIComponent(words)}`).catch(() => []) : [];
+              const id = words ? (hits.find((h) => h.title.toLowerCase() === words.toLowerCase()) ?? hits[0])?.id : "";
               if (words && !id) { ctx.ui.toast?.show?.({ message: `no note matches “${words}”`, variant: "warning" }); return; }
               openAtlas(id ?? "");
             },

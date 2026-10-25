@@ -17,7 +17,7 @@ if (process.argv[1] === import.meta.filename) {
   const model = await startScripted(tutorialScript(base.notes));
   mkdirSync(join(root, "config", "isorite"), { recursive: true });
   writeFileSync(join(root, "config", "isorite", "config.toml"), `[provider]\nname = "tutorial"\nurl = "${model.url}"\nkey = "tutorial"\n`);
-  const server = spawn(process.execPath, [join(import.meta.dirname, "..", "..", "packages", "server", "src", "main.ts"), "serve", base.study, "--port", String(LOCAL_PORT)], {
+  const server = spawn(process.execPath, [join(import.meta.dirname, "..", "..", "packages", "server", "src", "main.ts"), "serve", base.notes, "--port", String(LOCAL_PORT)], {
     stdio: "inherit",
     env: { ...process.env, ISORITE_TUTORIAL: "1", XDG_CONFIG_HOME: join(root, "config"), XDG_DATA_HOME: join(root, "data"), XDG_STATE_HOME: join(root, "state") },
   });

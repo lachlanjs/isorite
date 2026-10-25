@@ -37,7 +37,7 @@ describe("routes", () => {
   test("at rest, closed: only the trunk between the two folders", () => {
     const rest = restRoutes(L, openAt(L, 0.05));
     expect(rest).toHaveLength(1);
-    expect(rest[0]).toMatchObject({ feed: false, study: false, count: 1 });
+    expect(rest[0]).toMatchObject({ feed: false, count: 1 });
   });
   test("at rest, open: a route for each link drawn inside a folder as well", () => {
     expect(restRoutes(L, openAt(L, 1)).filter((r) => r.key.startsWith("t")).length).toBeGreaterThanOrEqual(4);
