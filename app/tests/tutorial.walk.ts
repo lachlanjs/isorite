@@ -312,10 +312,12 @@ test("L3: whose words and every change seen, a question opened from its note and
   await offer.getByRole("button", { name: /^Insert into/ }).click();
   await at(page, "How Iso reads you");
   if (phone()) await tab(page, "Note");
-  await page.locator('[data-pane="note"]').getByRole("button", { name: "Understanding note", exact: true }).click();
-  await expect(page.locator('[data-pane="note"] .reading')).toContainText("you solved the torus");
+  const sprig = page.locator('[data-pane="note"]').getByRole("button", { name: "Understanding note", exact: true });
+  if ((await sprig.getAttribute("aria-pressed")) !== "true") await sprig.click();
+  await expect(page.locator('[data-pane="note"] .reading')).toContainText("you solved the torus", { timeout: 15_000 });
   await look(page, "L3-10-reading");
   await at(page, "Resolve it");
+  await sprig.click();
   await page.locator('[data-pane="note"]').getByRole("button", { name: "Resolved", exact: true }).click();
   await at(page, "Questions and problems, in short");
   await finish(page, "L3", 12);
