@@ -3,7 +3,7 @@
 Written 2026-10-25. It follows the understanding mockup Lachlan approved on 2026-10-25 ("much better, go ahead").
 The mockup is https://claude.ai/artifact/KLr7fU9GrjpTYgxdcSX6oK (version 4), built from `.refine/understand/src.html`.
 
-On the refinement page this is U1–U6, with Q36–Q46 answered, and Q47–Q53 below waiting for answers. This plan
+On the refinement page this is U7, which replaces U1–U6; Q36–Q46 and Q47–Q53 are answered (§8). This plan
 replaces M10's lenses and modes, and the study base of M4 and M10. Branch `m12-understanding`, from `main`.
 
 **Design sources.** The mockup is the reference for every screen here. The mood boards are behind on all of it, so
@@ -205,9 +205,17 @@ It is kept (Q43), in `.isorite/understanding/<note id>.md`.
     gives one, else 200k.
   - The bottom bar fills toward the spend cap, and turns rose past 80%.
   - The tooltip gives the figures.
-- **The cap** is a new setting in Iso's settings, `spend_cap` in `config.toml` (dollars per calendar month, Q52),
-  with no cap by default. Spend is summed from the conversations' recorded costs. With no cap, the bar shows this
-  month's spend against the most spent in any month so far.
+- **The cap comes from the key where it can.**
+  - With OpenRouter (Lachlan's note on Q52), the server asks `GET https://openrouter.ai/api/v1/key` with the key it
+    already holds. The answer gives `limit`, `limit_remaining`, `limit_reset` (daily, weekly, monthly or none) and
+    `usage_monthly`.
+  - The bar then fills to the key's own limit, over the key's own period, and the tooltip names that period.
+  - It is asked when the pane opens and after each turn, at most once a minute. The key never goes to the browser.
+- **Otherwise,** for another provider or an OpenRouter key with no limit:
+  - The cap is a setting in Iso's settings, `spend_cap` in `config.toml`, in dollars per calendar month (Q52), with
+    no cap by default.
+  - Spend is summed from the conversations' recorded costs.
+  - With no cap at all, the bar shows this month's spend against the most spent in any month so far.
 - **The quiet line under Iso's input** (tokens, tier, cost) goes. The tier moves into the context view, where it is
   chosen now.
 
@@ -235,23 +243,16 @@ Each step is a commit with its tests, as before. Svelte files go through `svelte
 - **The real-model check** runs once, at step 5, on a temporary copy: a question asked back, a solution checked, and
   an Understanding note written. It should cost under $0.15, and I'll report the figure.
 
-## 8. Questions for Lachlan (on the page as Q47–Q53)
+## 8. Answers (2026-10-25)
 
-- **Q47. The files and run switches:** do Iso's turns go to the terminal agent, with its permissions matching the
-  switches?
-  - *Recommended: yes.* The engine never edits code or runs commands itself; the terminal session does, as Build
-    mode did. With both switches off, the turn goes to the engine.
-- **Q48. Iso's context on the Atlas:** a fifth Atlas switch (*recommended*), or shown only while the Context view is
-  open in Iso's pane?
-- **Q49. A question's or problem's kind:** OKF's `type: Question` and `type: Problem` (*recommended*), or a new
-  `kind:` field as in the mockup?
-- **Q50. Embeds:** `[[!name]]` by file name, with the path only when two files share the name (*recommended*), or
-  always by path?
-- **Q51. Web links:** one node per link (*recommended*, now that each kind has a switch), or one per note with a
-  count, as Q25 chose before the switches?
-- **Q52. The spend cap:** per calendar month (*recommended*), or per conversation?
-- **Q53. M10d's tutorial items (T9–T11, V11, V12):** do they wait for the next milestone (*recommended*), or join this
-  one?
+All seven were answered as recommended:
+- **Q47:** files and run go to the terminal agent, with its permissions matching the switches.
+- **Q48:** Iso's context is a fifth Atlas switch.
+- **Q49:** `type: Question` and `type: Problem`.
+- **Q50:** `[[!name]]` by file name, with the path only when two files share it.
+- **Q51:** one node per web link, which replaces Q25's answer.
+- **Q52:** a monthly cap, taken from the OpenRouter key's own limit where there is one (§6).
+- **Q53:** M10d's items wait for the next milestone.
 
 ## 9. What was built
 
