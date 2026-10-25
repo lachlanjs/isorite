@@ -23,7 +23,7 @@
 // on where things stood, but does not wander from it (M12: with taller blocks, a low temperature alone let one new
 // note turn a third of the top level round).
 
-export const PLAN_COSTS = { bend: 4, flow: 1, area: 0.01, aspect: 1, shape: 1.4, effort: 1000, seed: 0, cross: 20, stay: 5 };
+export const PLAN_COSTS = { bend: 4, flow: 1, area: 0.01, aspect: 1, shape: 1.0, effort: 1000, seed: 0, cross: 20, stay: 5 };
 
 /**
  * @param sizes [[w, h], ...] in cells

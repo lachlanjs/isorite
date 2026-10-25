@@ -1,6 +1,8 @@
 <script lang="ts">
   // Iso's usage in two 3px bars in its header: how full the context is for the model's window, and how much of what
   // may be spent has been. The figures are in the tooltip.
+  import { panes } from "$lib/panes.svelte.ts";
+  import { terminal } from "$lib/terminal.svelte.ts";
   import { converse } from "$lib/converse.svelte.ts";
   import { spend } from "$lib/spend.svelte.ts";
 
@@ -9,11 +11,14 @@
   const PER = { day: "today", week: "this week", month: "this month", total: "in all" } as const;
 
   const report = $derived(converse.report);
-  const fill = $derived(report ? Math.min(1, report.tokens / report.limit) : 0);
+  const build = $derived(panes.mode === "build");
+  const view = $derived(terminal.view);
+  const fill = $derived(!build && report ? Math.min(1, report.tokens / report.limit) : 0);
   const s = $derived(spend.value);
   const spent = $derived(s && s.cap ? Math.min(1, s.usd / s.cap) : 0);
   const over = $derived(spent > 0.8);
-  const context = $derived(report ? `Context: ${short(report.tokens)} of ${short(report.limit)} tokens` : "Context: not measured yet");
+  // In Build the session is the terminal's: its model, its tokens and what OpenCode says they cost (0 for a gateway's model it has no price for).
+  const context = $derived(build ? `${view?.model || "OpenCode"}${view ? `, ${short(view.tokens.input + view.tokens.output)} tokens` : ""}${view?.cost ? `, ${money(view.cost)}` : ""}` : report ? `Context: ${short(report.tokens)} of ${short(report.limit)} tokens` : "Context: not measured yet");
   const money_ = $derived(!s ? "Spend: not known yet"
     : s.source === "key" ? `Spend: ${money(s.usd)} of the key's ${money(s.cap!)} limit, ${PER[s.per]}`
     : s.source === "setting" ? `Spend: ${money(s.usd)} of ${money(s.cap!)} this month (the cap set in settings)`

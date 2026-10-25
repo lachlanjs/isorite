@@ -22,7 +22,6 @@
   const HOW: Record<Step["how"], string> = { keyword: "searched", meaning: "by meaning", link: "followed", read: "read" };
   const TIERS: Tier[] = ["low", "mid", "max"];
   const short = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
-  const money = (usd: number): string => `$${usd.toFixed(usd > 0 && usd < 0.1 ? 3 : 2)}`;
 
   let text = $state("");
   let list = $state<HTMLElement>();
@@ -208,16 +207,6 @@
       {/if}
     </div>
     {#if (build ? terminal.problem : converse.problem)}<p class="bad" role="alert">{build ? terminal.problem : converse.problem}</p>{/if}
-    {#if build}
-      <!-- The terminal's own model, and what the session has cost so far. -->
-      <div class="foot">
-        <span>{terminal.view?.model || "OpenCode"}</span>
-        {#if terminal.view}<span>{short(terminal.view.tokens.input + terminal.view.tokens.output)} tokens</span>{/if}
-        <span class="grow"></span>
-        <!-- OpenCode knows no price for a gateway's model, and says 0: then the tokens are all there is to say. -->
-        {#if terminal.view?.cost}<span>{money(terminal.view.cost)}</span>{/if}
-      </div>
-    {/if}
   </div>
 </div>
 
@@ -295,7 +284,6 @@
   .given li.fresh { animation: fresh 1.6s ease-out; }
   @keyframes fresh { 0% { background: color-mix(in srgb, var(--growth) 30%, var(--ground-0)); } }
   textarea:focus { border-color: var(--line-strong); outline: none; }
-  .foot { display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--text-faint); flex-wrap: wrap; }
   .parts { display: grid; gap: 4px; font-size: 11.5px; }
   .part { display: flex; gap: 8px; align-items: center; min-width: 0; }
   .part .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
