@@ -71,8 +71,7 @@
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
       <div class="reading prose">{@html render(report.reading)}</div>
     {:else}
-      <p class="faint">Iso has no reading of this note yet. Talk it through in Understand mode, and Iso writes one here.</p>
-      <button class="link" type="button" onclick={() => { panes.setMode("understand"); panes.to("iso"); }}>Understand mode ›</button>
+      <p class="faint">No reading yet.</p>
     {/if}
   </section>
 
@@ -94,7 +93,6 @@
   .pad { min-height: 140px; background: var(--ground-1); border: 1px solid var(--line); padding: 6px 12px; }
   .pad:focus-within { border-color: var(--line-strong); }
   .pad :global(.cm-editor) { min-height: 126px; }
-  .link { background: none; border: 0; padding: 0; margin-top: 8px; color: var(--lattice); font: inherit; font-size: 12px; cursor: pointer; }
   .bad { color: var(--rose); }
   @media (max-width: 600px) { .u { padding: 20px 20px 48px; } }
 </style>

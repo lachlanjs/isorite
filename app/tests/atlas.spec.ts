@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { setSwitch } from "./switches.ts";
 
 const note = (page: Page, id: string) => page.locator(`[data-note="${id}"]`);
 const folder = (page: Page, id: string) => page.locator(`[data-folder="${id}"]`);
@@ -15,8 +16,6 @@ async function atlas(page: Page) {
   if ((page.viewportSize()?.width ?? 1280) <= 760) await expect.poll(() => page.locator('[data-pane="atlas"]').evaluate((el) => Math.round(el.getBoundingClientRect().left))).toBe(0);
 }
 
-/** The Atlas's lens (M10). */
-const lens = (page: Page, l: "normal" | "iso" | "understand") => page.locator(`[data-pane="atlas"] .lens[data-lens="${l}"]`).click();
 
 /** Iso's pane in its Context view: what you gave Iso, listed. On a phone, back to where you were after. */
 async function showContext(page: Page, back?: "Note" | "Atlas") {
@@ -376,6 +375,8 @@ test("the grid is fine, coarse or coarser (key c), and the map draws on each", a
 
 test("a terminal agent's look-ups are drawn as Iso's are: what it searched, what it reached along a link, what it reads; its turn ends idle", async ({ page, request, baseURL }) => {
   await atlas(page);
+  // Drawn with Iso's context on, the diamond in the Atlas's header (M12).
+  await setSwitch(page, "context", true);
   // As isorite term's plugin asks: from the server's origin, with the token it hands out.
   const { token } = await (await request.get("api/session")).json() as { token: string };
   const headers = { Origin: new URL(baseURL!).origin, "x-isorite-token": token };

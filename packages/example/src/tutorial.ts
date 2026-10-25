@@ -79,7 +79,8 @@ For two galaxies colliding, the first is the usual answer.`;
 /** In a turn in Iso's pane (M10): which mode, from what it was told. */
 const modeOf = (r: Request): "ask" | "write" | "understand" | null => {
   const system = JSON.stringify(r.messages.find((m) => m.role === "system")?.content ?? "");
-  return system.includes("# Write mode") ? "write" : system.includes("# Understand mode") ? "understand" : system.includes("# Ask mode") ? "ask" : null;
+  // Given an Understanding note (M12: once Understand mode), Iso asks back.
+  return system.includes("# Their understanding") ? "understand" : system.includes("# Write mode") ? "write" : system.includes("# Ask mode") ? "ask" : null;
 };
 const tools = (r: Request): number => r.messages.filter((m) => m.role === "tool").length;
 

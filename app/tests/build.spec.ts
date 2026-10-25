@@ -7,8 +7,9 @@ import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { findOpenCode, lastAsked, openCodeConfig, startScripted, type Scripted } from "@isorite/opencode";
 import { PORT } from "./serve.ts";
+import { setSwitch } from "./switches.ts";
 
-// Build mode (M11): the terminal's session in Iso's pane. A real OpenCode 2 server, against a scripted model, is
+// The terminal's session in Iso's pane (M11; M12: while Iso may edit files or run commands). A real OpenCode 2 server, against a scripted model, is
 // attached to the test server for these tests only (as `isorite term` attaches one), and let go after. Skipped
 // where OpenCode 2 is not installed.
 
@@ -64,10 +65,10 @@ async function toIso(page: Page) {
   if ((page.viewportSize()?.width ?? 1280) <= 760) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
 }
 
-test("with a terminal attached, Build mode shows its session: asked from here, answered, and a command allowed here", async ({ page }) => {
+test("with a terminal attached and Iso allowed to run commands, the pane is its session: asked from here, answered, and a command allowed here", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toIso(page);
-  await pane(page).getByRole("button", { name: "Build", exact: true }).click();
+  await setSwitch(page, "run", true);
   const log = page.getByRole("log", { name: "The terminal's session" });
   await expect(log).toBeVisible();
   const name = test.info().project.name;
@@ -91,9 +92,9 @@ test("with a terminal attached, Build mode shows its session: asked from here, a
   await ran.locator(".tool summary").click();
   await expect(ran.locator(".tool pre")).toHaveText("tests pass");
   await page.screenshot({ path: `test-results/screens/${name}-build-ran.png`, fullPage: true });
-  // Back to Iso's own conversation, and to Build again: the session is kept.
-  await pane(page).getByRole("button", { name: "Ask", exact: true }).click();
+  // Back to Iso's own conversation, and to the terminal's again: the session is kept.
+  await setSwitch(page, "run", false);
   await expect(page.getByRole("log", { name: "The conversation with Iso" })).toBeVisible();
-  await pane(page).getByRole("button", { name: "Build", exact: true }).click();
+  await setSwitch(page, "run", true);
   await expect(turn.locator(".said")).toHaveText(`Built: hello from ${name}`);
 });

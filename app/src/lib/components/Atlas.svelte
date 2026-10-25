@@ -280,7 +280,7 @@
   });
   // The Iso lens (M10): what Iso is sent, what it changed in this conversation, what it points to, and the order
   // it read in during its last turn. Iso's path is drawn only in this lens.
-  const isoLens = $derived(panes.lens.atlas === "iso" || !!pick);
+  const isoLens = $derived(panes.on.context || !!pick);
   const givenNotes = $derived(new Set(tray.parts.filter((p) => p.kind === "note").map((p) => p.id)));
   const givenFolders = $derived(new Set(tray.parts.filter((p) => p.kind === "folder").map((p) => p.id)));
   const lastTurn = $derived(converse.turns.at(-1));
@@ -593,7 +593,7 @@
     if (dragged) return;
     if (pick) { toggle(ref); return; }
     // In the Iso lens a note is brought into what Iso is sent, or taken out (M10).
-    if (panes.lens.atlas === "iso" && !ref.startsWith("@")) { tray.toggle({ kind: "note", id: ref, title: title(ref) }); return; }
+    if (panes.on.context && !ref.startsWith("@")) { tray.toggle({ kind: "note", id: ref, title: title(ref) }); return; }
     // Chosen already: open it, beside the Atlas on a desktop (V1).
     if (chosen === ref) { void panes.open(ref); return; }
     const back: string[] = [];
@@ -604,7 +604,7 @@
   function enter(i: number): void {
     if (dragged || !L) return;
     const ref = L.items[i]!.ref;
-    if (panes.lens.atlas === "iso" && !ref.startsWith("@")) { tray.toggle({ kind: "folder", id: ref, title: folderName(ref) }); return; }
+    if (panes.on.context && !ref.startsWith("@")) { tray.toggle({ kind: "folder", id: ref, title: folderName(ref) }); return; }
     moved = true;
     const to = fit(L.items[i]!, size.w, size.h, 1.5, L.cell), there = Math.abs(to.k - view.k) < 0.01 * to.k && Math.hypot(to.x - view.x, to.y - view.y) < 4;
     const parent = L.items[i]!.parent;
@@ -714,7 +714,7 @@
       <p class="notice" role="alert">{notice}</p>
     {/if}
     {#if given}<p class="given" role="status">◆ {given}</p>{/if}
-    {#if panes.lens.atlas === "iso" && !pick && !given && panes.settings === "atlas"}
+    {#if panes.on.context && !pick && !given && panes.settings === "atlas"}
       <p class="legend" aria-hidden="true"><span><i class="k g"></i>in Iso's context</span><span><i class="k d"></i>Iso changed it</span><span><i class="k p"></i>Iso points to it</span><span><i class="k n">1</i>read, in order</span><span class="faint">tap to give or take back</span></p>
     {/if}
     {#if offered}

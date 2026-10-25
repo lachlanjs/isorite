@@ -1,8 +1,8 @@
 <script lang="ts">
   // Iso's pane (M10): the conversation, or what the next turn is sent (its Context, M10b), and Iso's box. Each turn
   // shows what you asked and gave, what Iso looked up, what it pointed you to, and what it said. Notes named in it
-  // open in the Note pane. Enter sends; Shift+Enter is a new line; Shift+Tab is the next mode, as in OpenCode;
-  // Escape stops. Iso always reads the knowledge base as it needs. In Build mode (M11) the pane is the terminal's
+  // open in the Note pane. Enter sends; Shift+Enter is a new line; Escape stops. Iso always reads the knowledge base
+  // as it needs. While it may edit the project's files or run commands (M11, M12), the pane is the terminal's
   // session instead: what is asked goes to OpenCode there, with what you gave.
   import type { Step, Tier, Turn, TurnItem } from "@isorite/engine";
   import { onMount, tick } from "svelte";
@@ -38,7 +38,7 @@
   });
 
   onMount(() => { converse.start(); terminal.start(); });
-  // What is sent is measured again when what you give, the mode, the tier or the switch changes.
+  // What is sent is measured again when what you give, what Iso may do, or the tier changes.
   $effect(() => { void tray.sent; void panes.mode; void context.tier; converse.measure(); });
   // Kept at the newest as the conversation grows.
   $effect(() => { void converse.turns; void converse.streaming; void tick().then(() => { if (list) list.scrollTop = list.scrollHeight; }); });
@@ -50,17 +50,15 @@
   const stop = (): Promise<void> => (build ? terminal.stop() : converse.stop());
   function keys(e: KeyboardEvent): void {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); void send(); }
-    else if (e.key === "Tab" && e.shiftKey) { e.preventDefault(); panes.stepMode(1); }
     else if (e.key === "Escape" && busy) { e.preventDefault(); void stop(); }
   }
   function open(id: string): void { void panes.open(id, true); }
-  /** A note Iso changed opens in the note's Iso lens, where its words are marked; an Understanding note in the
-   *  note's Understand lens. */
+  /** A note Iso changed opens with provenance on, where its words are marked; an Understanding note as itself. */
   function openChanged(id: string): void {
     if (id.startsWith("@understanding/")) { openUnderstanding(id.slice("@understanding/".length)); return; }
-    panes.setLens("note", "iso"); void panes.open(id, true);
+    panes.flip("provenance", true); panes.showUnderstanding(false); void panes.open(id, true);
   }
-  function openUnderstanding(id: string): void { panes.setLens("note", "understand"); void panes.open(id, true); }
+  function openUnderstanding(id: string): void { panes.showUnderstanding(true); void panes.open(id, true); }
   const changes = (t: Turn): boolean => t.items.some((i) => i.kind === "change") && !t.items.some((i) => i.kind === "undone");
 </script>
 
@@ -151,7 +149,7 @@
     <div class="chat" bind:this={list} role="log" aria-label="The conversation with Iso" aria-live="polite">
       {#each converse.turns as t (t.id)}
         <article class="turn" data-state={t.state}>
-          <div class="you"><p class="asked">{t.asked}</p>{@render given(t)}{#if t.mode !== "ask"}<span class="tmode" class:m={t.mode === "understand"}>{t.mode}</span>{/if}</div>
+          <div class="you"><p class="asked">{t.asked}</p>{@render given(t)}{#if t.mode === "write"}<span class="tmode" title="Iso could edit the notes"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 13.5l2.5-2.5M5 11c.6-4.2 3.6-7.4 8.5-8.5C12.6 7.2 9.4 10.4 5 11zM7.2 8.8l2.6-.3M8.8 6.6l2.4-.4" /></svg><span class="hidden-label">write</span></span>{/if}</div>
           {#each t.items as i, k (k)}{@render item(i)}{/each}
           {#if t.state === "running"}
             {#if converse.streaming}
@@ -174,7 +172,7 @@
   <div class="composer">
     <div class="box">
       <label class="hidden-label" for="iso-box">Message Iso</label>
-      <textarea id="iso-box" bind:value={text} rows="2" placeholder={build ? "Ask in the terminal's session" : `Ask Iso, in ${panes.mode} mode`} onkeydown={keys}></textarea>
+      <textarea id="iso-box" bind:value={text} rows="2" placeholder={build ? "Ask in the terminal's session" : "Ask Iso"} onkeydown={keys}></textarea>
       {#if busy}
         <button class="corner stop" type="button" aria-label={build ? "Stop the terminal's agent" : "Stop Iso"} title="Stop  (Escape)" onclick={() => void stop()}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="4" y="4" width="8" height="8" fill="currentColor" /></svg></button>
       {:else if text.trim()}
@@ -218,7 +216,6 @@
   .you::before { content: "›"; position: absolute; left: 0; top: 0; color: var(--lattice); }
   .asked { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
   .tmode { align-self: flex-start; font-size: 11px; color: var(--growth); }
-  .tmode.m { color: var(--malachite); }
   .gave { display: flex; flex-wrap: wrap; gap: 4px; }
   .said { padding-left: 16px; position: relative; font: 15px/1.6 var(--font-text); overflow-wrap: anywhere; min-width: 0; }
   .said::before { content: "◆"; position: absolute; left: 0; top: 2px; font: 10px var(--font-ui); color: var(--growth); }

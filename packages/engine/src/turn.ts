@@ -1,5 +1,5 @@
 // A conversation with Iso in its own pane (M10): what a turn is, how it is kept, and what Iso is told in each mode.
-// The conversation is kept in the study base, one file each, `conversations/<id>.jsonl`, a line per turn, per thing
+// The conversation is kept in .isorite/, one file each, `conversations/<id>.jsonl`, a line per turn, per thing
 // that happened in it and per ending, only ever added to, like a journal. What Iso changes in a note is in that
 // note's journal; the conversation names the entry.
 
@@ -9,8 +9,10 @@ import { ROUNDS } from "./loop.ts";
 import type { Step } from "./lookup.ts";
 import type { Message, Tier, ToolDef } from "./provider.ts";
 
-/** What Iso may do. Build needs a project and a shell, and is the terminal's (M11). */
-export const MODES = ["ask", "write", "build", "understand"] as const;
+/** What Iso may do (M12: worked out in the app from the switches in Iso's pane): read only, change the notes, or
+ *  change and run the project, which is the terminal's (M11). Conversations from before M12 may name a fourth,
+ *  "understand"; it is read as ask. */
+export const MODES = ["ask", "write", "build"] as const;
 export type Mode = (typeof MODES)[number];
 
 /** Something you gave Iso: a note, a folder, or a passage of a note. */
@@ -18,7 +20,7 @@ export type Given =
   | { kind: "note"; id: string }
   | { kind: "folder"; id: string }
   | { kind: "passage"; id: string; text: string }
-  /** The note's Understanding note: Iso's reading of you, and what changed it (Understand mode). */
+  /** The note's Understanding note: Iso's reading of you. Given, Iso asks before it explains, and may rewrite it. */
   | { kind: "understanding"; id: string };
 
 /** One thing that happened in a turn, in order. */
@@ -35,6 +37,8 @@ export type TurnItem =
   | { kind: "point"; note: string; why: string }
   /** You undid the turn's changes: the notes put back, and those that had changed since and were left. */
   | { kind: "undone"; notes: string[]; left: string[] }
+
+const ITEMS: readonly string[] = ["text", "look", "change", "permission", "point", "undone"];
 
 export type Decision = "once" | "always" | "reject";
 
@@ -71,10 +75,16 @@ export function readTurns(text: string): Turn[] {
     if (!raw.trim()) continue;
     let line: TurnLine;
     try { line = JSON.parse(raw) as TurnLine; } catch { continue; }
-    if (line.kind === "turn") { const { kind: _, ...t } = line; turns.set(t.id, { ...t, items: [], state: "running" }); continue; }
+    if (line.kind === "turn") {
+      const { kind: _, ...t } = line;
+      // Understand mode, before M12, could change nothing in the notes: as Ask mode now.
+      turns.set(t.id, { ...t, mode: (MODES as readonly string[]).includes(t.mode) ? t.mode : "ask", items: [], state: "running" });
+      continue;
+    }
     const t = turns.get(line.turn);
     if (!t) continue;
-    if (line.kind === "item") t.items.push(line.item);
+    // Items of kinds there are no longer (what Understand mode recorded, before M12) are passed over.
+    if (line.kind === "item") { if (ITEMS.includes(line.item.kind)) t.items.push(line.item); }
     else if (line.kind === "answer") { for (const i of t.items) if (i.kind === "permission" && i.id === line.permission) i.answer = line.decision; }
     else { t.state = line.state; if (line.message) t.message = line.message; if (line.cost) t.cost = line.cost; }
   }
@@ -126,15 +136,13 @@ change marked as yours, and can undo it.
   repeat the text you wrote: they see it in the note.
 - Never invent a note, a link or a quotation.`;
 
-const UNDERSTAND = `# Understand mode: what you may do
+const UNDERSTANDING = `# Their understanding
 
-You help them understand: what is in their notes, what changed in them, or
-something they want to understand more deeply. You do not change their notes.
-You keep a record of their understanding, note by note, in their study base.
+Below, for each note in hand, is your reading of their understanding of it so
+far, from its Understanding note.
 
-- Start from where they are. Below, for each note in hand, is your reading of
-  their understanding of it so far and what changed it. Use it: do not explain
-  what they have shown they know; go to what they have not yet shown.
+- Start from where they are: do not explain what they have shown they know; go
+  to what they have not yet shown.
 - Ask before you explain, where a question would show you where they stand.
   One question at a time. Short turns.
 - At the end of a conversation about a note, or when your reading of them has
@@ -143,7 +151,7 @@ You keep a record of their understanding, note by note, in their study base.
   shown. It is theirs to read.
 - Never invent a note, a link or a quotation.`;
 
-const MODE_RULES: Record<Exclude<Mode, "build">, string> = { ask: ASK, write: WRITE, understand: UNDERSTAND };
+const MODE_RULES: Record<Exclude<Mode, "build">, string> = { ask: ASK, write: WRITE };
 
 const LOOKING = (rounds: number, meaning: boolean, lookup: boolean) => lookup ? `# Looking things up
 
@@ -177,8 +185,12 @@ export const WRITE_UNDERSTANDING = fn("write_understanding", "Rewrite your readi
 export const MODE_TOOLS: Record<Exclude<Mode, "build">, ToolDef[]> = {
   ask: [POINT_TO_NOTE],
   write: [EDIT_NOTE, WRITE_NOTE, MOVE_NOTE, DELETE_NOTE, POINT_TO_NOTE],
-  understand: [WRITE_UNDERSTANDING, POINT_TO_NOTE],
 };
+
+/** A turn's own tools: its mode's, and with an Understanding note given, the one that rewrites Iso's reading. */
+export function turnTools(mode: Exclude<Mode, "build">, sent: readonly Sent[]): ToolDef[] {
+  return [...MODE_TOOLS[mode], ...(sent.some((s) => s.kind === "understanding") ? [WRITE_UNDERSTANDING] : [])];
+}
 
 /** A note, folder or passage as it is sent: what was given, read now. */
 export type Sent =
@@ -218,10 +230,10 @@ export interface AskedTurn {
 
 /** The messages for a turn, and what they hold, part by part. */
 export function turnMessages(a: AskedTurn): { messages: Message[]; parts: Part[] } {
-  const system = [WHO, MODE_RULES[a.mode], FORMAT_RULES, LOOKING(ROUNDS[a.tier], a.meaning, a.lookup)].join("\n\n");
+  const understood = a.sent.filter((s) => s.kind === "understanding");
+  const system = [WHO, MODE_RULES[a.mode], ...(understood.length ? [UNDERSTANDING] : []), FORMAT_RULES, LOOKING(ROUNDS[a.tier], a.meaning, a.lookup)].join("\n\n");
   const talk = conversation(a.earlier.map(turnExchange));
   const earlier = talk ? `# Earlier in this conversation\n\n${talk}` : "";
-  const understood = a.sent.filter((s) => s.kind === "understanding");
   const given = a.sent.filter((s) => s.kind !== "understanding");
   const gave = given.length ? `# What they gave you\n\n${given.map(sentText).join("\n\n")}` : "";
   const known = understood.length ? `# Their understanding, as you have recorded it\n\n${understood.map(sentText).join("\n\n")}` : "";
@@ -229,10 +241,10 @@ export function turnMessages(a: AskedTurn): { messages: Message[]; parts: Part[]
   return {
     messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [earlier, known, gave, request].filter(Boolean).join("\n\n") }],
     parts: [
-      { name: "instructions and tools", detail: `${a.mode} mode${a.lookup ? "" : ", no look-ups"}`, tokens: estimate(system) + (a.lookup ? 500 : 0) + MODE_TOOLS[a.mode].length * 120 },
+      { name: "instructions and tools", detail: `${a.mode} mode${a.lookup ? "" : ", no look-ups"}`, tokens: estimate(system) + (a.lookup ? 500 : 0) + turnTools(a.mode, a.sent).length * 120 },
       { name: "earlier in this conversation", detail: a.earlier.length ? `${a.earlier.length} ${a.earlier.length === 1 ? "turn" : "turns"}` : "", tokens: estimate(earlier) },
       { name: "what you gave", detail: given.length ? `${given.length} ${given.length === 1 ? "part" : "parts"}` : "nothing", tokens: estimate(gave) },
-      ...(a.mode === "understand" ? [{ name: "your understanding" as const, detail: `${understood.length} ${understood.length === 1 ? "note" : "notes"}`, tokens: estimate(known) }] : []),
+      ...(understood.length ? [{ name: "your understanding" as const, detail: `${understood.length} ${understood.length === 1 ? "note" : "notes"}`, tokens: estimate(known) }] : []),
       { name: "your message", detail: "", tokens: estimate(request) },
     ],
   };

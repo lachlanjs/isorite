@@ -51,7 +51,7 @@ const Given = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("passage"), id: z.string().max(400), text: z.string().max(20_000) }).strict(),
   z.object({ kind: z.literal("understanding"), id: z.string().max(400) }).strict(),
 ]);
-const Mode = z.enum(["ask", "write", "build", "understand"]);
+const Mode = z.enum(["ask", "write", "build"]);
 const TurnAsk = z.object({ conversation: z.string().max(64).optional(), mode: Mode, asked: z.string().max(8000), given: z.array(Given).max(40), tier: Tier, lookup: z.boolean().optional(), off: z.array(z.string().max(64)).max(500).optional() }).strict();
 const TurnShape = TurnAsk.omit({ asked: true });
 const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();

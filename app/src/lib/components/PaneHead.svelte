@@ -1,31 +1,21 @@
 <script lang="ts">
-  // A pane's header: its name, then its lenses (Note, Atlas) or Iso's modes, its own tools, and at its right the
-  // pane's settings (M10b: there is no header above the panes). On a phone a swipe up or down on the header changes
-  // the lens or mode; never on the pane's body, which scrolls (agreed 2026-10-22).
+  // A pane's header: its name, then its switches (M12: in place of M10's lenses and Iso's modes), its own tools, and
+  // at its right the pane's settings (M10b: there is no header above the panes). A switch says what it is on hover;
+  // when on, its icon takes its colour, with a bar under it.
   import type { Snippet } from "svelte";
-  import { LENSES, panes, type Lens, type Pane } from "$lib/panes.svelte.ts";
+  import { SWITCHES, panes, type Pane, type Switch } from "$lib/panes.svelte.ts";
 
   let { pane, name, tools, settings }: { pane: Pane; name: string; tools?: Snippet; settings?: Snippet } = $props();
 
-  const SYM: Record<Lens, string> = { normal: "○", iso: "◆", understand: "◇" };
-  const WORD: Record<Lens, string> = { normal: "normal", iso: "Iso", understand: "understand" };
-  const MODE_NAME: Record<string, string> = { ask: "Ask", write: "Write", build: "Build", understand: "Understand" };
-  const MODE_SAYS: Record<string, string> = { ask: "reads the knowledge base, changes nothing", write: "reads and writes the knowledge base", build: "reads, writes and runs the project", understand: "reads the knowledge base, writes its Understanding notes" };
+  const SAYS: Record<Switch, string> = {
+    provenance: "Provenance: whose words are whose (Alt+P)", timeline: "Timeline (Alt+T)", context: "Iso's context: what it is sent, what it read and changed (Alt+C)",
+    notes: "Iso may edit the notes (Alt+N)", files: "Iso may edit the project's files (Alt+F)", run: "Iso may run commands (Alt+R)",
+  };
+  const COLOUR: Record<Switch, string> = { provenance: "growth", timeline: "lattice", context: "growth", notes: "growth", files: "growth", run: "growth" };
+  // The project's files and commands are the terminal's: offered only while one is attached (M11).
+  const shown = $derived((SWITCHES[pane] as readonly Switch[]).filter((k) => (k !== "files" && k !== "run") || panes.terminal));
   const open = $derived(panes.settings === pane);
   let menu = $state<HTMLElement>();
-
-  function step(by: number): void {
-    if (pane === "iso") panes.stepMode(by);
-    else panes.stepLens(pane, by);
-  }
-  let start: { x: number; y: number } | null = null;
-  function down(e: TouchEvent): void { const t = e.touches[0]!; start = { x: t.clientX, y: t.clientY }; }
-  function up(e: TouchEvent): void {
-    if (!start) return;
-    const t = e.changedTouches[0]!, dx = t.clientX - start.x, dy = t.clientY - start.y;
-    start = null;
-    if (Math.abs(dy) > 28 && Math.abs(dy) > Math.abs(dx) * 1.3) step(dy < 0 ? 1 : -1);
-  }
   $effect(() => { if (open) menu?.focus(); });
   // A press outside the settings, and not on their button, closes them.
   function outside(e: PointerEvent): void {
@@ -37,34 +27,22 @@
 
 <svelte:window onpointerdown={outside} onkeydown={(e) => { if (open && e.key === "Escape") panes.settings = null; }} />
 
-<!-- The swipe only adds to the buttons, which do the same. -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<header class="phead" ontouchstart={down} ontouchend={up}>
+<header class="phead">
   <span class="pname">{name}</span>
-  {#if pane === "iso"}
-    <span class="modes" role="group" aria-label="Iso's mode">
-      {#each panes.modes as m (m)}
-        <!-- A speech bubble, a scribe's quill, an L-system's sprig (I7). -->
-        <button type="button" class="mode" data-mode={m} aria-pressed={panes.mode === m} aria-label={MODE_NAME[m]} title="{MODE_NAME[m]}: {MODE_SAYS[m]}  (Shift+Tab in Iso's box)" onclick={() => panes.setMode(m)}>
-          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-            {#if m === "ask"}<path d="M2.5 3.5h11v7.5h-6.5l-3 2.5v-2.5h-1.5z" />
-            {:else if m === "write"}<path d="M2.5 13.5l2.5-2.5M5 11c.6-4.2 3.6-7.4 8.5-8.5C12.6 7.2 9.4 10.4 5 11zM7.2 8.8l2.6-.3M8.8 6.6l2.4-.4" />
-            {:else if m === "understand"}<path d="M8 14.5V7.5M8 7.5L4.6 4.4M8 7.5l3.4-3.1M8 7.5V2.5M4.6 4.4L2.8 4.6M4.6 4.4L4.5 2.4M11.4 4.4l1.8.2M11.4 4.4l.1-2M8 11L5.8 9.6M8 11l2.2-1.4" />
-            {:else}<path d="M3 4.5l3 3.5-3 3.5M7.5 12h5.5" />{/if}
-          </svg>
-        </button>
-      {/each}
-    </span>
-  {:else}
-    {@const p = pane}
-    <span class="lenses" role="group" aria-label="{name}'s lens">
-      {#each LENSES as l (l)}
-        <button type="button" class="lens" data-lens={l} class:waiting={panes.waiting[p] === l} aria-pressed={panes.lens[p] === l} aria-label="{WORD[l]} lens" title="{WORD[l]} lens  (Alt+↑ / Alt+↓)" onclick={() => panes.setLens(p, l)}>
-          <span class="sym" aria-hidden="true">{SYM[l]}</span><span class="word">{WORD[l]}</span>
-        </button>
-      {/each}
-    </span>
-  {/if}
+  <span class="switches" role="group" aria-label="{name}'s switches">
+    {#each shown as k (k)}
+      <button type="button" class="sw" data-switch={k} aria-pressed={panes.on[k]} aria-label={SAYS[k].replace(/ \(Alt\+.\)$/, "")} title={SAYS[k]} style:--c="var(--{COLOUR[k]})" onclick={() => panes.flip(k)}>
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+          {#if k === "provenance"}<rect x="2.5" y="2.5" width="11" height="11" /><path d="M8 2.5v11" /><rect x="8.6" y="3.1" width="4.3" height="9.8" fill="currentColor" stroke="none" />
+          {:else if k === "timeline"}<path d="M8 1v14" stroke-width="1.2" /><rect x="5.5" y="2" width="5" height="3.2" fill="currentColor" stroke="none" /><path d="M8 6.3l2.3 2.3L8 10.9 5.7 8.6z" fill="currentColor" stroke="none" /><rect x="5.5" y="12" width="5" height="3" stroke-width="1.2" />
+          {:else if k === "context"}<path d="M8 2.5l5.5 5.5L8 13.5 2.5 8z" /><path d="M8 5.5l2.5 2.5L8 10.5 5.5 8z" fill="currentColor" stroke="none" />
+          {:else if k === "notes"}<path d="M2.5 13.5l2.5-2.5M5 11c.6-4.2 3.6-7.4 8.5-8.5C12.6 7.2 9.4 10.4 5 11zM7.2 8.8l2.6-.3M8.8 6.6l2.4-.4" />
+          {:else if k === "files"}<path d="M3.5 2.5h5.5l3.5 3.5v7.5h-9z" /><path d="M9 2.5V6h3.5" />
+          {:else}<path d="M3 4.5l3 3.5-3 3.5M7.5 12h5.5" />{/if}
+        </svg>
+      </button>
+    {/each}
+  </span>
   <span class="grow"></span>
   {@render tools?.()}
   {#if settings}
@@ -87,22 +65,11 @@
   .pname::before { content: ""; width: 6px; height: 6px; background: var(--line-strong); }
   :global(.pane.focus) .pname { color: var(--text); }
   :global(.pane.focus) .pname::before { background: var(--lattice); }
-  .lenses, .modes { display: flex; align-items: center; gap: 2px; }
-  .lens, .mode { height: 24px; padding: 0 7px; background: none; border: 0; color: var(--text-faint); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-  .lens:hover, .mode:hover { color: var(--text); }
-  .lens .sym { font-size: 11px; }
-  .lens .word { display: none; }
-  .lens[aria-pressed="true"] { color: var(--text); background: var(--ground-2); }
-  .lens[aria-pressed="true"] .word { display: inline; }
-  .lens[data-lens="iso"][aria-pressed="true"] .sym { color: var(--growth); }
-  .lens[data-lens="understand"][aria-pressed="true"] .sym { color: var(--malachite); }
-  /* Iso has something to show in this lens, and you are working in the pane: lit, not switched to. */
-  .lens.waiting .sym { color: var(--growth); animation: blink 1s steps(2) infinite; }
-  @keyframes blink { 50% { opacity: 0.3; } }
-  /* The mode is the strongest mark in a header, so it is never taken for a lens. */
-  .mode { width: 28px; height: 26px; padding: 0; justify-content: center; }
-  .mode[aria-pressed="true"] { color: var(--ground-0); background: var(--growth); }
-  .mode[data-mode="understand"][aria-pressed="true"] { background: var(--malachite); }
+  .switches { display: flex; align-items: center; gap: 1px; margin-left: -4px; }
+  .sw { position: relative; width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
+  .sw:hover, .sw:focus-visible { color: var(--text); }
+  .sw[aria-pressed="true"] { color: var(--c); }
+  .sw[aria-pressed="true"]::after { content: ""; position: absolute; left: 7px; right: 7px; bottom: 1px; height: 2px; background: var(--c); }
   .grow { flex: 1 1 auto; }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; background: none; border: 0; padding: 0; cursor: pointer; }
   .icon:hover, .icon:focus-visible { color: var(--text); }
@@ -112,12 +79,8 @@
   .inner { max-height: calc(100dvh - 140px); overflow: auto; padding: 24px 18px 14px; display: flex; flex-direction: column; gap: var(--space-6); }
   .settings:focus-visible { outline: none; }
   @media (max-width: 760px) {
-    .phead { height: 48px; touch-action: pan-x; }
-    /* The handle says the header can be swiped up and down. */
-    .phead::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 28px; height: 3px; margin-left: -14px; background: var(--line); }
-    .lens .word, .lens[aria-pressed="true"] .word { display: none; }
+    .phead { height: 48px; }
     .settings { top: 62px; }
     .inner { max-height: calc(100dvh - 210px); }
   }
-  @media (prefers-reduced-motion: reduce) { .lens.waiting .sym { animation: none; } }
 </style>

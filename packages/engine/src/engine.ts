@@ -10,7 +10,7 @@ import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fi
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, noteId, type Similar } from "./lookup.ts";
 import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
-import { CONVERSATIONS_DIR, MODES, MODE_TOOLS, conversationPath, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
+import { CONVERSATIONS_DIR, MODES, conversationPath, turnTools, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
 import { KEY, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
@@ -846,7 +846,7 @@ export class Engine implements Api {
   async converse(req: TurnRequest): Promise<{ conversation: string; turn: string }> {
     const http = this.opts.http, study = this.opts.own;
     if (!http) throw new EngineError("Iso cannot be asked here", 409);
-    if (!(MODES as readonly string[]).includes(req.mode)) throw new EngineError("the mode is ask, write, build or understand");
+    if (!(MODES as readonly string[]).includes(req.mode)) throw new EngineError("the mode is ask, write or build");
     if (req.mode === "build") throw new EngineError("Build mode is the terminal's: start isorite term", 409);
     if (!TIERS.includes(req.tier)) throw new EngineError("the tier is low, mid or max");
     const asked = String(req.asked ?? "").trim();
@@ -867,8 +867,8 @@ export class Engine implements Api {
     const key = (await this.opts.secrets?.get(KEY)) ?? null;
     if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
     const off = new Set(req.off ?? []), earlier = ((await this.conversation(conversation))?.turns ?? []).filter((t) => !off.has(t.id));
-    const lookupOn = req.lookup !== false, mode = req.mode;
-    const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier, sent: await this.sentOf(req.given), asked: req.asked });
+    const lookupOn = req.lookup !== false, mode = req.mode, sent = await this.sentOf(req.given), own = turnTools(mode, sent);
+    const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier, sent, asked: req.asked });
 
     // A turn is of the session as a journal entry is, and carries it on.
     const s = await this.stamp("you"), turn = s.id, abort = new AbortController(), path = conversationPath(conversation);
@@ -884,12 +884,12 @@ export class Engine implements Api {
     const lookup = new Lookup(this.bundle, req.given.find((g) => g.kind !== "folder")?.id ?? "", this.similar);
     const looks = new Set(lookup.defs().map((d) => d.function.name));
     const tools: Tools = {
-      defs: () => [...(lookupOn ? lookup.defs() : []), ...MODE_TOOLS[mode]],
+      defs: () => [...(lookupOn ? lookup.defs() : []), ...own],
       call: async (name, raw) => {
         if (looks.has(name)) return lookupOn ? lookup.call(name, raw) : { text: "Looking things up is off: they chose what you are sent." };
         let args: Record<string, unknown> = {};
         try { const parsed: unknown = raw.trim() ? JSON.parse(raw) : {}; if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) args = parsed as Record<string, unknown>; } catch { /* no arguments */ }
-        if (!MODE_TOOLS[mode].some((d) => d.function.name === name)) return { text: `There is no tool ${name} in ${mode} mode.` };
+        if (!own.some((d) => d.function.name === name)) return { text: `There is no tool ${name} in ${mode} mode.` };
         return { text: await this.turnTool(name, args, { turn, conversation, mode, item, signal: abort.signal, who, asked: req.asked }) };
       },
     };

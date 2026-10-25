@@ -35,9 +35,9 @@
   // Frontmatter that cannot be read is mended in the source, where all of the file shows.
   const asSource = $derived(source || note.meta === null);
 
-  // The timeline (Desktop-Editor): open or not is remembered on this device. A moment pointed at marks what it
+  // The timeline (Desktop-Editor): its switch is in the pane's header (M12). A moment pointed at marks what it
   // changed; one chosen shows the note as it was just after it, to step from or restore.
-  let timeline = $state(remembered("isorite.timeline"));
+  const timeline = $derived(panes.on.timeline);
   let pointed = $state.raw<Moment | null>(null);
   let at = $state.raw<Moment | null>(null);
   let restoring = $state(false), restoreProblem = $state("");
@@ -48,7 +48,7 @@
   // kept or written.
   const live = $derived.by((): Touched | null => {
     if (!timeline || at || asSource) return null;
-    // In the Iso lens Iso's words are marked already, so only the moment pointed at is.
+    // With provenance on, Iso's words are marked already, so only the moment pointed at is.
     const m = pointed ?? (isoLens ? undefined : all.findLast((x) => isos(x) && (x.what === "kept" || x.what === "edited")));
     if (!m) return null;
     const got = lines(touchedBy(iso.entries, m.ids).runs);
@@ -76,11 +76,11 @@
     const m = all.find((x) => x.ids.includes(wanted!));
     if (!m) return;
     wanted = null;
-    timeline = true; at = m;
+    panes.flip("timeline", true); at = m;
   });
-  // The note's Iso lens (M10): the timeline shows, the words Iso wrote are marked, and so is what was given to Iso.
-  const isoLens = $derived(panes.lens.note === "iso");
-  $effect(() => { timeline = isoLens || remembered("isorite.timeline"); });
+  // Provenance (M12; M10's Iso lens): the words Iso wrote are marked, and so is what was given to Iso.
+  const isoLens = $derived(panes.on.provenance);
+  $effect(() => { if (!timeline) { at = null; pointed = null; } });
   const lensMarks = $derived.by((): Mark[] => {
     if (!isoLens || note.loaded !== "ready") return [];
     const out: Mark[] = [];
@@ -100,7 +100,6 @@
     }
     return out;
   });
-  function toggleTimeline() { timeline = !timeline; remember("isorite.timeline", timeline); if (!timeline) { at = null; pointed = null; } }
   function pick(m: Moment) { restoreProblem = ""; at = at === m ? null : m; }
   function step(by: number) {
     if (!at) return;
@@ -196,9 +195,6 @@
 
 <svelte:window onkeydown={keys} />
 
-{#snippet clockIcon()}
-  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1v14" stroke="currentColor" stroke-width="1.2" fill="none" /><rect x="5.5" y="2" width="5" height="3.2" fill="currentColor" /><path d="M8 6.3l2.3 2.3L8 10.9 5.7 8.6z" fill="currentColor" /><rect x="5.5" y="12" width="5" height="3" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
-{/snippet}
 
 <article class="note" bind:this={noteEl} class:timed={timeline && note.loaded === "ready" && !asSource}>
   {#if note.loaded === "loading"}
@@ -233,7 +229,6 @@
       {/if}
       <div class="side">
       <div class="tools">
-        {#if !asSource}<button class="icon" type="button" aria-label="timeline" title="timeline" aria-pressed={timeline} onclick={toggleTimeline}>{@render clockIcon()}</button>{/if}
         {#if !asSource}<button class="btn quiet" type="button" aria-pressed={details} onclick={() => { details = !details; remember("isorite.details", details); }}>details</button>{/if}
         <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => (source = !source)}>source</button>
       </div>
@@ -298,16 +293,13 @@
   /* The quiet icon buttons: the timeline's, and with a version shown, restore and back to now. Faint until pointed at. */
   .icon { width: 28px; height: 28px; display: inline-grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .icon:hover:not(:disabled), .icon:focus-visible { color: var(--text); }
-  .icon[aria-pressed="true"] { color: var(--text-soft); }
   .icon:disabled { opacity: 0.35; cursor: default; }
-  .tools .icon { margin-right: 4px; }
   .atbar { display: flex; align-items: center; gap: 6px; min-height: 28px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
-  /* The timeline sits in the page's left margin, its button at the top level with the title (Desktop-Editor), its
-     marks under it; where there is no margin, it is a narrow column at the note's left (Mobile-Timeline). */
+  /* The timeline sits in the page's left margin, level with the title (Desktop-Editor); where there is no margin,
+     it is a narrow column at the note's left (Mobile-Timeline). */
   .tl-col { position: absolute; z-index: 4; }
   @container page (min-width: 1100px) {
-    .tools .icon { position: absolute; top: 52px; right: calc(100% + 14px); margin: 0; }
-    .tl-col { top: 92px; right: calc(100% + 14px); }
+    .tl-col { top: 52px; right: calc(100% + 14px); }
   }
   @container page (max-width: 1099px) {
     .note.timed { padding-left: calc(var(--space-4) + 40px); }

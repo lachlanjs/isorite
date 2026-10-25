@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { setSwitch } from "./switches.ts";
 
 // The tutorial on the built site, with the engine in the page and no server: each of its parts walked from the list
 // of parts to its end, by doing what each step asks, at a desktop's width and a phone's.
@@ -104,7 +105,7 @@ test("L1: the three panes and a layout tried, the Atlas and its folders, a note 
   await look(page, "L1-09-kind");
   await next(page);
   await at(page, "Every change is kept");
-  await visible(page, "timeline").click();
+  await setSwitch(page, "timeline", true);
   await page.locator(".timeline .moment").first().click();
   await expect(page.locator(".atbar")).toBeVisible();
   await page.waitForTimeout(600); // the step looks four times a second: long enough to have seen the note as it was
@@ -167,7 +168,7 @@ async function send(page: Page) {
 }
 const log = (page: Page) => page.getByRole("log", { name: "The conversation with Iso" });
 
-test("L2: asked in Ask mode and watched on the Atlas, a note and a passage given, what is sent chosen, written in Write mode, marked, undone and written again", async ({ page }) => {
+test("L2: asked with the notes switch off and watched on the Atlas, a note and a passage given, what is sent chosen, written with it on, marked, undone and written again", async ({ page }) => {
   test.setTimeout(150_000);
   await section(page, "L2");
   await at(page, "Ask Iso");
@@ -199,14 +200,14 @@ test("L2: asked in Ask mode and watched on the Atlas, a note and a passage given
   await given.getByRole("button", { name: /^Take “.*” from The quadtree/ }).click();
   await at(page, "Let it write");
   await iso(page).getByRole("button", { name: "Context", exact: true }).click();
-  await iso(page).getByRole("button", { name: "Write", exact: true }).click();
+  await setSwitch(page, "notes", true);
   await expect(box(page)).toHaveValue("answer my TODO");
   await send(page);
   await at(page, "Its words, marked");
   await expect(log(page).locator(".turn").last().locator(".change")).toContainText("Barnes–Hut");
   await fold(page);
-  await log(page).locator(".turn").last().locator(".change").getByRole("button").click();
-  await expect(page.locator('[data-pane="note"] .lens[data-lens="iso"]')).toHaveAttribute("aria-pressed", "true");
+  if (phone()) await tab(page, "Note");
+  await setSwitch(page, "provenance", true);
   await expect(page.locator(".cm-iso-by-iso").first()).toBeVisible();
   await look(page, "L2-06-marked");
   await next(page);
@@ -218,11 +219,11 @@ test("L2: asked in Ask mode and watched on the Atlas, a note and a passage given
   await box(page).fill("answer my TODO");
   await send(page);
   await at(page, "Iso, in short");
-  await iso(page).getByRole("button", { name: "Ask", exact: true }).click();
+  await setSwitch(page, "notes", false);
   await finish(page, "L2", 8);
 });
 
-test("E1 (earlier): from the goal back along the chain, a question asked, an octree written by Iso in Write mode, opened and linked in", async ({ page }) => {
+test("E1 (earlier): from the goal back along the chain, a question asked, an octree written by Iso with the notes switch on, opened and linked in", async ({ page }) => {
   test.setTimeout(150_000);
   await section(page, "E1");
   await at(page, "The goal");
@@ -237,7 +238,7 @@ test("E1 (earlier): from the goal back along the chain, a question asked, an oct
   await expect(log(page).locator(".turn").last().locator(".said")).toContainText("About ten times fewer interactions");
   await next(page);
   await at(page, "Plan the octree");
-  await iso(page).getByRole("button", { name: "Write", exact: true }).click();
+  await setSwitch(page, "notes", true);
   await expect(box(page)).toHaveValue(/^write a note in algorithms on the octree/);
   await send(page);
   await at(page, "Its note");
@@ -249,21 +250,20 @@ test("E1 (earlier): from the goal back along the chain, a question asked, an oct
   await page.keyboard.press("End");
   await page.keyboard.type(" Next, the [[oct");
   await page.getByRole("option", { name: /The octree/ }).click();
-  await iso(page).getByRole("button", { name: "Ask", exact: true }).click();
+  await setSwitch(page, "notes", false);
   await finish(page, "E1");
 });
 
-test("L3: an Understanding note and its scratchpad, Understand mode asking back and rewriting its reading, and asked again without it", async ({ page }) => {
+test("L3: an Understanding note and its scratchpad, Iso given it asking back and rewriting its reading, and asked again without it", async ({ page }) => {
   test.setTimeout(150_000);
   await section(page, "L3");
   await at(page, "Your Understanding note");
   if (phone()) await tab(page, "Note");
-  await page.locator('[data-pane="note"] .lens[data-lens="understand"]').click();
+  await page.locator('[data-pane="note"]').getByRole("button", { name: "Understanding note", exact: true }).click();
   await page.locator('[data-pane="note"]').getByLabel("Scratchpad").fill("Ask about symplectic next.");
-  await at(page, "Understand mode");
+  await at(page, "Ask about it");
   await look(page, "L3-02-understanding");
   if (phone()) await tab(page, "Iso");
-  await iso(page).getByRole("button", { name: "Understand", exact: true }).click();
   await expect(box(page)).toHaveValue("help me see why leapfrog's energy error stays bounded");
   await send(page);
   await at(page, "Answer it");
@@ -283,7 +283,7 @@ test("L3: an Understanding note and its scratchpad, Understand mode asking back 
   await box(page).fill("help me see why leapfrog's energy error stays bounded");
   await send(page);
   await at(page, "Understanding, in short");
-  await iso(page).getByRole("button", { name: "Ask", exact: true }).click();
+  await setSwitch(page, "notes", false);
   await finish(page, "L3", 6);
 });
 

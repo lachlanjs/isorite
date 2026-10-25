@@ -17,7 +17,7 @@
     search_notes: "searched", find_similar: "by meaning", outline_note: "outlined", read_note: "read", brief_base: "looked over", edit_note: "changed", write_note: "wrote" };
   /** A note it changed opens in the note's Iso lens, where its words are marked (and the timeline undoes them). */
   const CHANGES = new Set(["edit_note", "write_note"]);
-  function open(name: string, id: string): void { if (CHANGES.has(name)) panes.setLens("note", "iso"); void panes.open(id, true); }
+  function open(name: string, id: string): void { if (CHANGES.has(name)) panes.flip("provenance", true); void panes.open(id, true); }
   const verb = (name: string): string => VERB[name] ?? name.replaceAll("_", " ");
   const WHAT: Record<string, string> = { shell: "run", edit: "edit", write: "write", read: "read", webfetch: "fetch", external_directory: "reach outside the project" };
   const asks = (p: TerminalPermission): string => `${WHAT[p.action] ?? p.action} ${p.resources.join(", ")}`.trim();

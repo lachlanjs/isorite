@@ -66,14 +66,10 @@ class Converse {
   async answer(permission: string, decision: Decision): Promise<void> { const t = this.running; if (t) await app.api.answer(t.id, permission, decision); }
 
   private follow(e: EngineEvent): void {
-    // A terminal agent's look-ups are drawn as Iso's are, in the Atlas's Iso lens.
-    if (e.type === "agent-start") { panes.want("atlas", "iso", panes.busy("atlas")); return; }
     if (e.type === "iso-start" && e.place.form === "turn") {
       if (this.id && e.place.conversation !== this.id) return;
       this.id = e.place.conversation;
       this.streaming = "";
-      // What Iso reads is shown on the Atlas in its Iso lens: brought up, unless you are working there.
-      panes.want("atlas", "iso", panes.busy("atlas"));
       this.turns = [...this.turns.filter((t) => t.id !== e.request), { id: e.request, conversation: e.place.conversation, at: new Date().toISOString(), mode: e.place.mode, asked: e.asked, given: e.place.given, tier: e.tier, items: [], state: "running" }];
       return;
     }
@@ -85,10 +81,6 @@ class Converse {
     if (e.type === "iso-text") this.streaming = e.again ? e.delta : this.streaming + e.delta;
     else if (e.type === "iso-item") {
       if (e.item.kind === "text") this.streaming = "";
-      // A change to the note open is shown in the note's Iso lens: brought up, unless you are typing in it.
-      if (e.item.kind === "change" && (e.item.note === app.open || e.item.to === app.open)) panes.want("note", "iso", panes.busy("note"));
-      // What Iso keeps of your understanding of the note open is shown in its Understand lens.
-      if (e.item.kind === "change" && e.item.note === `@understanding/${app.open}`) panes.want("note", "understand", panes.busy("note"));
       put({ ...t, items: [...t.items, e.item] });
     }
     else if (e.type === "iso-answer") put({ ...t, items: t.items.map((i): TurnItem => (i.kind === "permission" && i.id === e.permission ? { ...i, answer: e.decision } : i)) });
