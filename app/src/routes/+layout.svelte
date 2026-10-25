@@ -106,7 +106,7 @@
   }
   const NAME: Record<Pane, string> = { note: "Note", atlas: "Atlas", iso: "Iso" };
   // The panes' switches (M12), each its letter with Alt.
-  const SWITCH_KEYS: Record<string, Switch> = { p: "provenance", t: "timeline", c: "context", n: "notes", f: "files", r: "run" };
+  const SWITCH_KEYS: Record<string, Switch> = { p: "provenance", t: "timeline", q: "questions", b: "problems", w: "web", k: "code", c: "context", n: "notes", f: "files", r: "run" };
   const inNote = $derived(page.route.id === "/n/[...id]" || page.route.id === "/draft/[id]");
   // Iso's request as the map shows it: running, or how it ended until the map lets it go.
   // A turn in Iso's pane tells itself there; the Atlas's header tells of a request in a note, Iso's of a terminal agent.
@@ -171,6 +171,7 @@
                   <span class="says">{app.atlas.steps} {app.atlas.steps === 1 ? "step" : "steps"} back</span>
                 {/if}
                 {#if app.atlas?.here}<span class="where soft">{app.atlas.here}</span><button class="btn out" type="button" onclick={app.atlas.out}>↑ out</button>{/if}
+                {#if app.atlas}<button class="icon" type="button" aria-label="The whole map" title="The whole map  (0)" onclick={app.atlas.fit}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" /></svg></button>{/if}
               {/snippet}
             </PaneHead>
             <div class="pbody atlas-body"><AtlasPane /></div>

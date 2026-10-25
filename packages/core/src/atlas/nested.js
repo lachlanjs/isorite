@@ -47,7 +47,7 @@
 import { KEEP } from "./cells.js";
 import { floorplan, PLAN_COSTS } from "./floorplan.js";
 
-export const NOTE_W = 18, NOTE_H = 5; // room for a whole title, on two or three lines, before the map is zoomed far in
+export const NOTE_W = 18, NOTE_H = 11; // a golden block (M12): 126 by 77 units, a title of up to four lines fitted once, whatever the zoom
 // Room: 6 cells between neighbours and between layers, half as much again as the first grid's 4. A route
 // keeps KEEP (2) clear of what it passes, so a third of each gap is left for routes to run in.
 // Folders stand 8 apart, a quarter more again: feeders run between them and never through them (T72).
@@ -64,11 +64,11 @@ const FINE = {
   keep: KEEP,
 };
 // The coarse grid (the Atlas's `c`): cells twice the size, so a route has half as many places to bend, and
-// folders half as far apart again as on the fine grid (84 units against 56). A note is 126 by 42 units, not 35.
-const COARSE = { cell: 14, note: [9, 3], gap: 3, gapFolders: 6, channel: 3, channelFolders: 6, pad: 3, head: 1, margin: 6, minFolder: 6, slant: 4, keep: 1 };
-// The coarser grid: cells of 18 units, so a note is 7 by 2 of them (126 by 36 units, the boards' 126 by 35), and
-// the room between things about as on the coarse grid, in fewer cells.
-const COARSER = { cell: 18, note: [7, 2], gap: 2, gapFolders: 5, channel: 2, channelFolders: 5, pad: 2, head: 1, margin: 5, minFolder: 5, slant: 3, keep: 1 };
+// folders half as far apart again as on the fine grid (84 units against 56). A note is 126 by 84 units.
+const COARSE = { cell: 14, note: [9, 6], gap: 3, gapFolders: 6, channel: 3, channelFolders: 6, pad: 3, head: 1, margin: 6, minFolder: 6, slant: 4, keep: 1 };
+// The coarser grid: cells of 18 units, so a note is 7 by 4 of them (126 by 72 units), and the room between things
+// about as on the coarse grid, in fewer cells.
+const COARSER = { cell: 18, note: [7, 4], gap: 2, gapFolders: 5, channel: 2, channelFolders: 5, pad: 2, head: 1, margin: 5, minFolder: 5, slant: 3, keep: 1 };
 const ROOMS = { fine: FINE, coarse: COARSE, coarser: COARSER };
 export const PAD = FINE.pad;
 const SHAPE = 1.4; // a folder's contents aim to be this much wider than tall

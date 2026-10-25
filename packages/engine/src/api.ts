@@ -59,6 +59,8 @@ export interface MapReport {
     title: string;
     /** The size of its text, as an estimate in tokens (what linking it to a note for Iso adds). */
     tokens: number;
+    /** A question or a problem (M12). */
+    kind?: "question" | "problem";
     /** A question resolved or a problem solved (M12): when, as written. */
     done?: string;
     /** Its links out of the base, to the web and to code (M12): drawn beside it on the Atlas. */

@@ -21,9 +21,10 @@ export type Mode = "ask" | "write" | "build";
 
 /** Each pane's switches (M12). Note: whose words are whose, and the timeline. Atlas: what Iso is sent and did.
  *  Iso: may it edit the notes, and with a terminal attached, the project's files, and run commands. */
-export const SWITCHES = { note: ["provenance", "timeline"], atlas: ["context"], iso: ["notes", "files", "run"] } as const;
+export const SWITCHES = { note: ["provenance", "timeline"], atlas: ["questions", "problems", "web", "code", "context"], iso: ["notes", "files", "run"] } as const;
 export type Switch = (typeof SWITCHES)[keyof typeof SWITCHES][number];
-const OFF: Record<Switch, boolean> = { provenance: false, timeline: false, context: false, notes: false, files: false, run: false };
+// The Atlas's kinds (M12): open questions and problems on the map from the first, links out of it when asked for.
+const OFF: Record<Switch, boolean> = { provenance: false, timeline: false, questions: true, problems: true, web: false, code: false, context: false, notes: false, files: false, run: false };
 
 /** The panes' relative widths when side by side. */
 const WIDTHS = { note: 1.25, atlas: 1, iso: 1.05 };

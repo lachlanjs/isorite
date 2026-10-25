@@ -2,7 +2,7 @@
 
 import type { Page } from "@playwright/test";
 
-export type Switch = "provenance" | "timeline" | "context" | "notes" | "files" | "run";
+export type Switch = "provenance" | "timeline" | "questions" | "problems" | "web" | "code" | "context" | "notes" | "files" | "run";
 
 export async function setSwitch(page: Page, key: Switch, on: boolean): Promise<void> {
   const button = page.locator(`.sw[data-switch="${key}"]`);

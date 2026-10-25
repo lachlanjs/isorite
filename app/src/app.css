@@ -155,7 +155,8 @@ a.btn:hover { text-decoration: none; color: var(--text); }
   --k: var(--cut);
   clip-path: polygon(var(--k) 0, calc(100% - var(--k)) 0, 100% var(--k), 100% calc(100% - var(--k)), calc(100% - var(--k)) 100%, var(--k) 100%, 0 calc(100% - var(--k)), 0 var(--k));
 }
-.frame::after { z-index: -1; inset: 1px; background: var(--inside); --k: max(0px, calc(var(--cut) - .586px)); }
+/* --px: a screen pixel, where the frame is in a layer scaled to a zoom (the Atlas, M12); else a pixel. */
+.frame::after { z-index: -1; inset: var(--px, 1px); background: var(--inside); --k: max(0px, calc(var(--cut) - .586 * var(--px, 1px))); }
 /* A frame's title sits in its top edge. */
 .frame > .frame-title { position: absolute; top: -9px; left: 22px; padding: 0 6px; font-size: 12px; line-height: 18px; color: var(--text-faint); background: var(--behind, var(--ground-0)); white-space: nowrap; }
 

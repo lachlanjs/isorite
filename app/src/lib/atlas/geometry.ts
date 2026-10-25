@@ -4,13 +4,14 @@
 
 import type { Layout, Point } from "@isorite/core/atlas";
 
-/** A cell's side at zoom 1, as the boards draw it: a note's block is 18 by 5 cells, 126 by 35 px. */
+/** A cell's side at zoom 1: a note's block is 18 by 11 cells, 126 by 77 px, a golden block (M12). */
 export const CELL = 7;
 /** A folder opens when it is this many pixels across on screen, and a cell at least this big. 53, not 60: a folder's
  *  padding went from 8 cells to 6, so a folder of one note is 30 cells across, not 34, and opens at the same zoom. */
 export const OPEN_AT = 53, MIN_CELL = 1.2;
-/** Notes carry their titles from this zoom up. */
-export const LABELS_AT = 0.55;
+/** A note's title is set once in the map's units, TITLE_UNITS high (M12): it shows while it is at least TITLE_PX on
+ *  screen, and is never set again as the map zooms. */
+export const TITLE_UNITS = 12, TITLE_PX = 4.5;
 export const MIN_ZOOM = 0.04, MAX_ZOOM = 3;
 
 export interface View { x: number; y: number; k: number }

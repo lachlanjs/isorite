@@ -203,7 +203,7 @@ export class Engine implements Api {
     for (const c of this.bundle.concepts.values()) {
       const bad = broken.get(c.id) ?? [];
       const links = c.outward.map((o) => ({ kind: o.kind, href: o.href, text: o.text, ...(bad.includes(o.href) ? { broken: true as const } : {}) }));
-      notes[c.id] = { title: c.title, tokens: estimate(c.body.trim()), ...(c.done ? { done: c.done } : {}), ...(links.length ? { links } : {}) };
+      notes[c.id] = { title: c.title, tokens: estimate(c.body.trim()), ...(c.kind !== "note" ? { kind: c.kind } : {}), ...(c.done ? { done: c.done } : {}), ...(links.length ? { links } : {}) };
     }
     return { model: mapModel(this.bundle), notes };
   }

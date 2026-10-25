@@ -19,9 +19,11 @@
 // The search is seeded from the blocks and joins, so the same folder is always placed the same way. Given `pair`
 // (the two orders a search found), the blocks are packed in that arrangement again without searching: with
 // other room between them, say. Given `start` (the arrangement a layout before this one found, say), the search
-// begins there and cools from a low temperature: it improves on it, but does not wander far from it.
+// begins there and cools from a low temperature, and each pair of blocks it turns round costs `stay`: it improves
+// on where things stood, but does not wander from it (M12: with taller blocks, a low temperature alone let one new
+// note turn a third of the top level round).
 
-export const PLAN_COSTS = { bend: 4, flow: 1, area: 0.01, aspect: 1, shape: 1.4, effort: 1000, seed: 0, cross: 20 };
+export const PLAN_COSTS = { bend: 4, flow: 1, area: 0.01, aspect: 1, shape: 1.4, effort: 1000, seed: 0, cross: 20, stay: 5 };
 
 /**
  * @param sizes [[w, h], ...] in cells
@@ -31,7 +33,7 @@ export const PLAN_COSTS = { bend: 4, flow: 1, area: 0.01, aspect: 1, shape: 1.4,
  * @returns { x: [], y: [], w, h }
  */
 export function floorplan(sizes, joins, space, way, o = {}) {
-  const { bend, flow, area, aspect, shape, effort, seed: salt, cross } = { ...PLAN_COSTS, ...o };
+  const { bend, flow, area, aspect, shape, effort, seed: salt, cross, stay } = { ...PLAN_COSTS, ...o };
   const n = sizes.length, w = sizes.map((s) => s[0]), h = sizes.map((s) => s[1]);
   if (!n) return { x: [], y: [], w: 0, h: 0 };
   const gap = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => space(i, j)));
@@ -73,6 +75,11 @@ export function floorplan(sizes, joins, space, way, o = {}) {
       if (p === r || p === t || q === r || q === t) continue;
       if (crosses(mid(p), mid(q), mid(r), mid(t))) c += cross * Math.min(m, k);
     }
+    // From a layout before (`start`): `stay` for each pair of blocks no longer the same way round in either order,
+    // so the search improves on where things stood without wandering from it (V5).
+    if (was) for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      if ((at[i] < at[j]) !== (was[0][i] < was[0][j]) || (bt[i] < bt[j]) !== (was[1][i] < was[1][j])) c += stay;
+    }
     const off = Math.log(W / H / shape);
     return c + area * W * H * (1 + aspect * off * off);
   };
@@ -83,7 +90,12 @@ export function floorplan(sizes, joins, space, way, o = {}) {
   B.splice(0, n, ...A);
   if (way === "up") A.reverse(); // later first in the first order and last in the second: later above
   if (o.pair) { A.splice(0, n, ...o.pair[0]); B.splice(0, n, ...o.pair[1]); pack(); return { x: [...x], y: [...y], w: W, h: H, pair: o.pair }; } // packed again as it was
-  if (o.start) { A.splice(0, n, ...o.start[0]); B.splice(0, n, ...o.start[1]); }
+  let was = null;
+  if (o.start) {
+    A.splice(0, n, ...o.start[0]); B.splice(0, n, ...o.start[1]);
+    was = [new Int32Array(n), new Int32Array(n)];
+    A.forEach((v, k) => { was[0][v] = k; }); B.forEach((v, k) => { was[1][v] = k; });
+  }
   let now = cost(), best = now, bestA = [...A], bestB = [...B];
   if (n < 2) { pack(); return { x: [...x], y: [...y], w: W, h: H, pair: [[...A], [...B]] }; }
 

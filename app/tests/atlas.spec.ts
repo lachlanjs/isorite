@@ -402,3 +402,53 @@ test("a terminal agent's look-ups are drawn as Iso's are: what it searched, what
   await page.mouse.click(box.x + 4, box.y + 4);
   await expect(note(page, "coding/source-coding")).not.toHaveClass(/\bp-/);
 });
+
+test("the kinds by their switches (M12): links out of the base beside their note, a broken code link marked; questions off the map and back", async ({ page }) => {
+  const name = `${test.info().project.name}-${Date.now().toString(36)}`, q = `coding/why-${name}`;
+  const { token } = (await (await page.request.get("api/session")).json()) as { token: string };
+  const headers = { "x-isorite-token": token, Origin: new URL(test.info().project.use.baseURL!).origin };
+  await page.request.post(`api/note?id=${q}`, { data: { text: `---\ntype: Question\ntitle: Why ${name}?\nabout: [coding/source-coding]\n---\n` }, headers });
+  await atlas(page);
+  await expect(note(page, q)).toBeVisible();
+  await expect(note(page, q).locator(".notch")).toBeVisible();
+  await expect(note(page, q)).toHaveAttribute("aria-label", `Question: Why ${name}?`);
+  // Links out of the base, beside their note: code, one of them not in the repository; then the web.
+  await setSwitch(page, "code", true);
+  await expect(page.locator(".sat.code")).toHaveCount(2);
+  await expect(page.locator(".sat.code.broken")).toHaveAttribute("aria-label", "decode, not in the repository");
+  await setSwitch(page, "web", true);
+  await expect(page.locator(".sat.web")).toHaveAttribute("href", "https://en.wikipedia.org/wiki/Huffman_coding");
+  await look(page, "atlas-kinds");
+  await setSwitch(page, "web", false);
+  await setSwitch(page, "code", false);
+  await expect(page.locator(".sat")).toHaveCount(0);
+  // Questions switched off leave the map, and come back.
+  await setSwitch(page, "questions", false);
+  await expect(note(page, q)).toHaveCount(0);
+  await expect(note(page, "coding/source-coding")).toBeVisible();
+  await setSwitch(page, "questions", true);
+  await expect(note(page, q)).toBeVisible();
+  const { version } = (await (await page.request.get(`api/note?id=${q}`)).json()) as { version: string };
+  await page.request.post(`api/note/delete?id=${q}`, { data: { base: version }, headers });
+});
+
+test("the wheel zooms smoothly: the map goes to the zoom the wheel asks for over several frames, about the pointer", async ({ page }) => {
+  test.skip(test.info().project.name.startsWith("phone"), "a wheel is a desktop's");
+  await atlas(page);
+  const before = await cell(page), box = (await page.locator(".atlas").boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -400);
+  // Part of the way first, then all of it: e^(400 × 0.0015) ≈ 1.82 times.
+  const soon = await cell(page);
+  expect(soon).toBeLessThan(before * 1.8);
+  await expect.poll(() => cell(page)).toBeCloseTo(before * Math.exp(0.6), 1);
+  // The title stays as it was set: the same lines at any zoom.
+  const lines = () => note(page, "coding/huffman-codes").locator(".t").evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight) / Number(getComputedStyle(el.closest(".scaled")!).transform.split(",")[0]!.slice(7))));
+  await page.mouse.wheel(0, -400);
+  await expect.poll(() => cell(page)).toBeCloseTo(before * Math.exp(1.2), 1);
+  const at = await lines();
+  expect(at).toBeGreaterThan(0);
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => cell(page)).toBeCloseTo(before * Math.exp(0.75), 1);
+  expect(await lines()).toBe(at);
+});

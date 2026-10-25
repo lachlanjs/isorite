@@ -15,7 +15,8 @@
   import { panes } from "$lib/panes.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
   import { converse } from "$lib/converse.svelte.ts";
-  import { CELL, LABELS_AT, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
+  import { CELL, MAX_ZOOM, MIN_ZOOM, TITLE_UNITS, TITLE_PX, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
+  import { satellites, withoutNotes } from "$lib/atlas/kinds.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
   import AtlasFolder from "./AtlasFolder.svelte";
@@ -68,7 +69,9 @@
   }
   async function load(): Promise<void> {
     try {
-      const next = await app.api.map();
+      const all = await app.api.map();
+      // The kinds switched off are not on the map (M12), and a resolved question leaves it.
+      const next = { ...all, model: withoutNotes(all.model, (ref) => { const n = all.notes[ref]; return n?.kind === "question" ? !panes.on.questions || !!n.done : n?.kind === "problem" ? !panes.on.problems : false; }) };
       // A changed base is laid out from where things stood (V5), on the same grid and the same way.
       const on = `${flow}|${grain}`, from = laid && laidOn === on ? laid.layout.orders ?? null : null;
       const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from });
@@ -100,6 +103,13 @@
     } catch (e) { failed = (e as Error).message; }
   }
 
+  // A kind switched on or off lays the map out again, from where things stood (V5).
+  let kindsWere = "";
+  $effect(() => {
+    const now = `${panes.on.questions}|${panes.on.problems}`;
+    if (kindsWere && kindsWere !== now) void load();
+    kindsWere = now;
+  });
   $effect(() => {
     void load();
     let again: ReturnType<typeof setTimeout> | undefined;
@@ -156,7 +166,7 @@
   }
   /** A straight way from one block's side to another's, as a note for Iso's lines are drawn. */
   function between(o: { gx: number; gy: number; w: number; h: number }, n: { gx: number; gy: number; w: number; h: number }): string {
-    const dx = n.gx + n.w / 2 - (o.gx + o.w / 2), dy = n.gy + n.h / 2 - (o.gy + o.h / 2), across = Math.abs(dx) * (5 / 18) >= Math.abs(dy);
+    const dx = n.gx + n.w / 2 - (o.gx + o.w / 2), dy = n.gy + n.h / 2 - (o.gy + o.h / 2), across = Math.abs(dx) * (11 / 18) >= Math.abs(dy);
     const p: [number, number] = across ? [dx < 0 ? o.gx : o.gx + o.w, o.gy + o.h / 2] : [o.gx + o.w / 2, dy < 0 ? o.gy : o.gy + o.h];
     const q: [number, number] = across ? [dx < 0 ? n.gx + n.w : n.gx, n.gy + n.h / 2] : [n.gx + n.w / 2, dy < 0 ? n.gy + n.h : n.gy];
     return linePath(directLine(p, q, across), 0, L!.cell);
@@ -318,7 +328,7 @@
       const s = L.items[shownAs(idx, open, i)]!;
       return { gx: s.gx, gy: s.gy, w: s.w, h: s.h, draft: false, title: title(run.note) };
     }
-    const w = Math.round(126 / L.cell), h = Math.round(35 / L.cell), name = asking ? titleIn(asking.text) || "a new note" : "";
+    const w = Math.round(126 / L.cell), h = Math.round(77 / L.cell), name = asking ? titleIn(asking.text) || "a new note" : "";
     const held = placeOf(run.note), at = held ? { gx: Math.round((held.gx * CELL) / L.cell), gy: Math.round((held.gy * CELL) / L.cell) } : null;
     const clear = at && !L.items.some((n) => n.kind === "note" && at.gx < n.gx + n.w + 1 && n.gx < at.gx + w + 1 && at.gy < n.gy + n.h + 1 && n.gy < at.gy + h + 1);
     if (clear) return { ...at, w, h, draft: true, title: name };
@@ -489,6 +499,7 @@
   /** Go to a view, over a moment unless motion is unwanted. */
   function fly(to: View): void {
     cancelAnimationFrame(flying);
+    still();
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) { view = to; return; }
     const from = view, t0 = performance.now(), ms = 320;
     const step = (now: number): void => {
@@ -536,6 +547,7 @@
   function down(e: PointerEvent): void {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     cancelAnimationFrame(flying);
+    still();
     if (!pointers.size) { dragged = false; press = pressed(e); }
     pointers.set(e.pointerId, local(e));
     regrip();
@@ -567,14 +579,30 @@
     else if (holdDone !== undefined) unhold(); // let go before the hold was long enough
     regrip();
   }
+  // The wheel and a trackpad's pinch set a zoom to go to, about the pointer; each frame goes part of the way there,
+  // as a ratio, so the map grows smoothly however the wheel ticks (M12).
+  let goal: { k: number; x: number; y: number } | null = null, easing = 0;
   function wheel(e: WheelEvent): void {
     e.preventDefault();
     cancelAnimationFrame(flying);
     moved = true;
     const p = local(e), unit = e.deltaMode === 1 ? 16 : 1;
     // A pinch on a trackpad arrives as a wheel with ctrl held, in finer steps.
-    view = zoomAbout(view, Math.exp(-e.deltaY * unit * (e.ctrlKey ? 0.01 : 0.0015)), p.x, p.y);
+    const by = Math.exp(-e.deltaY * unit * (e.ctrlKey ? 0.01 : 0.0015));
+    const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, (goal?.k ?? view.k) * by));
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { view = zoomAbout(view, k / view.k, p.x, p.y); return; }
+    goal = { k, x: p.x, y: p.y };
+    if (!easing) easing = requestAnimationFrame(ease);
   }
+  function ease(): void {
+    easing = 0;
+    if (!goal) return;
+    const r = goal.k / view.k;
+    if (Math.abs(Math.log(r)) < 0.004) { view = zoomAbout(view, r, goal.x, goal.y); goal = null; return; }
+    view = zoomAbout(view, r ** 0.3, goal.x, goal.y);
+    easing = requestAnimationFrame(ease);
+  }
+  function still(): void { cancelAnimationFrame(easing); easing = 0; goal = null; }
   // A wheel that zooms must be able to stop the page scrolling, which a listener added in the markup may not.
   $effect(() => {
     if (!viewport) return;
@@ -657,9 +685,14 @@
     fly(parent < 0 ? whole() : fit(L.items[parent]!, size.w, size.h, 1.5, L.cell));
   }
 
-  const labels = $derived(view.k >= LABELS_AT);
+  // Titles are set once, in the map's units (M12): shown while they are big enough on screen to read.
+  const labels = $derived(TITLE_UNITS * view.k >= TITLE_PX);
+  /** The links out of the base switched on, beside their notes. */
+  const sats = $derived(L && report ? satellites(notes.map((n) => n.item), report.notes, { web: panes.on.web, code: panes.on.code }) : []);
+  /** What a note's block stands on: its folder's inside, which a kind's glyph in its top edge cuts the edge with. */
+  const behind = (parent: number): string => (parent >= 0 && L!.items[parent]!.depth % 2 ? "var(--ground-1)" : "var(--ground-0)");
   $effect(() => {
-    app.atlas = { chosen: chosen ? title(chosen) : "", chosenId: chosen, steps: walk.length - 1, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out };
+    app.atlas = { chosen: chosen ? title(chosen) : "", chosenId: chosen, steps: walk.length - 1, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out, fit: () => { moved = false; fly(whole()); } };
     return () => { app.atlas = null; };
   });
 </script>
@@ -674,22 +707,38 @@
     <p class="said">The map could not be drawn: {failed}</p>
   {:else if L && report}
     {#if !L.items.length}<p class="said faint">There are no notes yet. The map draws itself as you write them.</p>{/if}
-    <div class="atlas-world" class:labels class:shifting data-open={open} style="transform: translate({view.x}px, {view.y}px); --u: {(L?.cell ?? 7) * view.k}px; --k: {view.k}; --fs: {(10.5 * Math.min(1.5, Math.max(0.8, view.k))).toFixed(2)}px; --lines: {view.k < 0.9 ? 1 : 2}">
+    <!-- One move for the whole map (M12): the folders and the notes are scaled as they stand, in the map's units;
+         what is drawn round them (routes, counts, Iso's note) is placed at the zoom. -->
+    <div class="atlas-world" class:labels class:shifting data-open={open} style="transform: translate({view.x}px, {view.y}px); --u: {(L?.cell ?? 7) * view.k}px; --k: {view.k}">
+      <div class="scaled" style="transform: scale({view.k}); --u: {L.cell}px; --px: {1 / view.k}px; --ik: {1 / view.k}">
       {#each folders as f (f.item.id)}
           <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * view.k >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} onpick={() => enter(f.i)} />
       {/each}
+      </div>
       <AtlasRoutes k={view.k} {rest} hot={[...(isoLens ? isoHot : []), ...hot]} counts={litCount} sent={sentLines} {grown} {beat} {retracting} />
       {#if labels && !beat}
         {#each rest as r (r.key)}
           {#if r.label}<span class="count {r.side}" style="--x:{r.mid[0]};--y:{r.mid[1]}">{r.count}</span>{/if}
         {/each}
       {/if}
+      <div class="scaled" style="transform: scale({view.k}); --u: {L.cell}px; --px: {1 / view.k}px; --ik: {1 / view.k}">
       {#each notes as n (n.item.id)}
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
       {/each}
+      {#each sats as s (s.key)}
+        {#if s.kind === "web"}
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- an address on the web, not in the app -->
+          <a class="sat web" href={s.href} target="_blank" rel="noopener noreferrer" title={`${s.text} · ${s.href}`} aria-label={s.text} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}" onclick={(e) => { if (dragged) e.preventDefault(); e.stopPropagation(); }}>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" /><path d="M2.5 8h11M8 2.5c-2 2.8-2 8.2 0 11M8 2.5c2 2.8 2 8.2 0 11" /></svg></a>
+        {:else}
+          <span class="sat code" class:broken={s.broken} role="img" title={`${s.text} · ${s.href.slice(5)}${s.broken ? " · not in the repository" : ""}`} aria-label={`${s.text}${s.broken ? ", not in the repository" : ""}`} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5M9 3l-2 10" /></svg></span>
+        {/if}
+      {/each}
+      </div>
       {#if origin}
         <div class="asker" class:draft={origin.draft} style="--x:{origin.gx};--y:{origin.gy};--w:{origin.w};--h:{origin.h}">
           {#if origin.draft}<a class="eph" href={resolve("/draft/[id]", { id: run!.note.slice("@draft/".length) })} aria-label="{origin.title}: your note for Iso"><span class="t">{origin.title}</span></a>{/if}
@@ -736,6 +785,12 @@
   .atlas { position: relative; height: 100%; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: grab; outline-offset: -2px; }
   .atlas:active { cursor: grabbing; }
   .atlas-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+  .scaled { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+  /* A link out of the base (M12): a small block beside its note, in the map's units. */
+  .sat { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(3 * var(--u)); height: calc(3 * var(--u)); display: grid; place-items: center; background: var(--ground-1); border: var(--px) solid var(--line-strong); color: var(--lattice); }
+  .sat svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+  .sat.web:hover, .sat.web:focus-visible { border-color: var(--lattice); }
+  .sat.broken { color: var(--rose); border-color: var(--rose); border-style: dashed; }
   /* Only while a changed base settles (K3): at any other time, a zoom changes the same places and must not ease. */
   .shifting :global(:is(.n, .sn, .folder)) { transition: left 0.45s ease, top 0.45s ease, width 0.45s ease, height 0.45s ease; }
   @media (prefers-reduced-motion: reduce) { .shifting :global(:is(.n, .sn, .folder)) { transition: none; } }
@@ -768,8 +823,8 @@
   /* Iso's note while it is answered (Desktop-Think): the draft's block, dotted gold, and under it (or under the
      note asking) a marching gold line and what Iso is doing. */
   .asker { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(var(--w) * var(--u)); height: calc(var(--h) * var(--u)); pointer-events: none; z-index: 1; }
-  .eph { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 min(7px, calc(var(--u) * .8)); overflow: hidden; font-size: var(--fs); line-height: 1.2; color: var(--text); text-decoration: none; background: var(--growth-soft); border: 1.5px dotted var(--growth); pointer-events: auto; }
-  .eph .t { display: none; overflow: hidden; -webkit-line-clamp: var(--lines, 2); line-clamp: var(--lines, 2); -webkit-box-orient: vertical; }
+  .eph { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 calc(11px * var(--k)); overflow: hidden; font-size: calc(12px * var(--k)); line-height: 1.25; color: var(--text); text-decoration: none; background: var(--growth-soft); border: 1.5px dotted var(--growth); pointer-events: auto; }
+  .eph .t { display: none; overflow: hidden; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; }
   :global(.atlas-world.labels) .eph .t { display: -webkit-box; }
   .loader { position: absolute; left: 0; top: calc(100% + 10px); width: 100%; height: 2px; overflow: hidden; }
   .loader path { stroke: var(--growth); stroke-width: 2.5; stroke-dasharray: 2 3; animation: march .6s linear infinite; }
