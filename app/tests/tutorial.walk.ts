@@ -130,9 +130,9 @@ test("L1: the three panes and a layout tried, the Atlas and its folders, a note 
   await page.getByLabel("tags").press("Enter");
   await at(page, "A new note, where you hold");
   // On a phone the card is folded to its title, out of the Atlas's way.
-  if (phone()) { await expect(page.locator('[data-pane="atlas"]')).toBeInViewport(); await fold(page); }
-  const physics = (await page.locator('[data-folder="physics"]').first().boundingBox())!;
-  await holdAt(page, physics.x + 10, physics.y + physics.height - 10);
+  if (phone()) { await expect.poll(async () => Math.round((await page.locator('[data-pane="atlas"]').boundingBox())?.x ?? -1)).toBe(0); await fold(page); }
+  const empty = await emptyIn(page, "physics");
+  await holdAt(page, empty.x, empty.y);
   await expect(page.getByLabel("Title")).toBeFocused();
   await look(page, "L1-14-untitled");
   await page.keyboard.type("Plummer sphere");
@@ -151,6 +151,17 @@ test("L1: the three panes and a layout tried, the Atlas and its folders, a note 
   await finish(page, "L1", 17);
 });
 
+/** A place inside a folder on the Atlas with no note on it, at least 12px from any, scanned from the bottom left. */
+async function emptyIn(page: Page, folder: string): Promise<{ x: number; y: number }> {
+  const at = await page.locator(`[data-folder="${folder}"]`).first().evaluate((el) => {
+    const r = el.getBoundingClientRect(), free = (x: number, y: number) => [[0, 0], [12, 0], [-12, 0], [0, 12], [0, -12]]
+      .every(([dx, dy]) => { const hit = document.elementFromPoint(x + dx!, y + dy!); return hit && el.contains(hit) && !hit.closest("[data-note]"); });
+    for (let y = r.bottom - 10; y > r.top + 20; y -= 4) for (let x = r.left + 10; x < r.right - 10; x += 4) if (free(x, y)) return { x, y };
+    return null;
+  });
+  expect(at, `an empty place in ${folder}`).not.toBeNull();
+  return at!;
+}
 /** Hold still on the map until a new note is marked, and let go: an untitled note is made there, and opens. */
 async function holdAt(page: Page, x: number, y: number) {
   await page.mouse.move(x, y);
