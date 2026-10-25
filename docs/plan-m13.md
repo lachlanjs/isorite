@@ -80,7 +80,8 @@ Found by reading the code at `fbb6434`.
      says, in its tooltip, that the gateway doesn't report usage.
    - The 404 advice names where the model's name came from: the tier set in `config.toml`, or OpenRouter's
      default.
-   - **A client certificate (mTLS).** Lachlan's gateway asks for one (2026-10-26). `cert = "…pem"` and
+   - **A client certificate (mTLS).** Many company gateways ask for one; Lachlan's does (a
+     `.pfx`, on Linux, 2026-10-26). `cert = "…pem"` and
      `cert_key = "…pem"` (or `pfx = "…p12"`), with `cert_passphrase = "$NAME"` when the key has one, and
      `ca = "…pem"` for the gateway's own authority. Node's `fetch` can't be given a client certificate without
      the `undici` package, so Iso's requests to the gateway go through `node:https` with them (`complete()`
@@ -97,7 +98,14 @@ Found by reading the code at `fbb6434`.
    command runs with `NODE_USE_ENV_PROXY=1`. It always runs with `--use-system-ca` (Node 24 has both). It re-runs
    itself once with them set, and passes them on to the server it starts. OpenCode runs on Bun, which reads the
    proxy variables itself. Q56 asks whether to do this by default.
-5. **`isorite term` says which models it uses** at start, with where they came from: `config.toml`, the
+5. **`isorite term` says where isorite is, and which models it uses.**
+   - Before OpenCode takes the screen, it prints the address of isorite in the browser as a link (OSC 8, which
+     most terminals let you click), and prints it again when OpenCode exits. `isorite serve` does the same.
+   - Over SSH (`SSH_CONNECTION` is set), it also prints the forwarding command to run on your own machine,
+     `ssh -L 4767:localhost:4767 <host>`, since `localhost` there isn't this machine. Lachlan ran the terminal
+     this way at work. A forwarded port arrives as `localhost`, which the server already accepts, and a
+     different local port is fine because the Origin is checked against the Host as it arrives. A test covers it.
+   - The models are said at start, with where they came from: `config.toml`, the
    `ISORITE_GATEWAY_*` variables, or OpenCode's own because no key was found.
 6. **The guides.**
    - `docs/terminal.md` rewritten for M12: `.isorite/`, the switches, the gauge; no `study init`.
@@ -132,6 +140,11 @@ No new npm packages are needed. Proxies, certificates and the checks all use wha
 
 ## 4. What is not in it
 
+Nothing here is particular to one workplace. Each setting is one that company gateways commonly need (other
+headers, a query, a client certificate, a proxy, the company's own authority), named as such, and the guides
+describe them that way.
+
+
 - **Signing in through the company** (OAuth, SSO, short-lived tokens refreshed by a command). Q55 asks whether
   the gateway needs it. If it does, a `key_command` setting would run a command for the key before each session.
 - **Any gateway that isn't OpenAI-compatible**, such as Bedrock's or Vertex's own APIs. A gateway like LiteLLM in
@@ -150,9 +163,8 @@ No new npm packages are needed. Proxies, certificates and the checks all use wha
 - **Q57: What went wrong with the terminal?** Did it start at all? Did OpenCode reach the gateway? Did Iso's pane
   show the session? If you don't remember, `doctor --report` at work will tell us.
 
-- **Q58: The client certificate.** Is it a file you were given (`.pem` and `.key`, or `.p12`/`.pfx`), or is it
-  only installed in the system's store (Windows' certificate store, the macOS keychain)? Node can't use one from
-  the store directly; it would need exporting once. Which system is the work machine?
+- **Q58: The client certificate.** *Answered 2026-10-26: a `.pfx`, on Linux. Node reads `.pfx` with its
+  passphrase as it is, so nothing needs converting.*
 
 ## 6. What was built
 
