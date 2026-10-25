@@ -2,3 +2,4 @@ export { buildExample, block, drop, similar, PROBLEMS, NAME, DEVICE, COST_WORKIN
 export { scriptedHttp, type Reply, type Request } from "./scripted.ts";
 export { tutorialAnswer, PROMPTS, UNSCRIPTED } from "./tutorial.ts";
 export { buildGeometry, GEOMETRY_NAME, GEOMETRY_DEVICE, GEOMETRY_REPOSITORY, GEOMETRY_PROBLEMS, SOLVED, ISO_QUESTIONS, READING, BONNET, COMPACT, TRIANGLE, TORUS, EGREGIUM, GAUSSIAN, GEODESIC, SECOND, IISIGN, type GeometryBuilt } from "./geometry.ts";
+export { geometryAnswer, GEOMETRY_PROMPTS, REMARK } from "./tutorial-geometry.ts";

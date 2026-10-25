@@ -53,3 +53,16 @@ test("the problems are all there, and the code link in the base's repository res
   expect(built.own["settings.toml"]).toContain('repository = "../code"');
   expect(hashText(built.notes[`${BONNET}.md`]!)).toBe(replay(readJournal(built.own[`journal/${BONNET}.jsonl`]!))!.hash);
 });
+
+import { geometryAnswer, GEOMETRY_PROMPTS, REMARK, UNSCRIPTED } from "../src/index.ts";
+const user = (content: string, tool = 0) => ({ model: "m", messages: [{ role: "user", content }, ...Array.from({ length: tool }, () => ({ role: "tool", content: "x" }))] });
+
+test("the tutorial's Iso looks, asks back, and says so; joins your answers into a remark; anything else is answered plainly", () => {
+  const ask = `# What they ask now\n\n${GEOMETRY_PROMPTS.back}`;
+  expect(geometryAnswer(user(ask)).calls?.map((c) => c.name)).toEqual(["read_note", "read_note"]);
+  expect(geometryAnswer(user(ask, 2)).calls?.map((c) => c.name)).toEqual(["ask_question"]);
+  expect(geometryAnswer(user(ask, 3)).text).toContain("What does that sum need");
+  const remark = `# What they ask now\n\n${GEOMETRY_PROMPTS.remark}`;
+  expect(geometryAnswer(user(remark, 2)).calls?.[0]).toMatchObject({ name: "offer_text", arguments: { text: REMARK } });
+  expect(geometryAnswer(user("# What they ask now\n\nwrite me a poem")).text).toBe(UNSCRIPTED);
+});

@@ -11,6 +11,22 @@ export const tour = $state({
   mistake: "",
 });
 
+// A section on the other example base loads the page again: where the tutorial is carries across, for the tab's life.
+const KEPT = "isorite.tour";
+export function keep(part: number, at: number): void {
+  try { sessionStorage.setItem(KEPT, JSON.stringify({ part, at, left: false, ticks: tour.ticks })); } catch { /* not kept */ }
+}
+/** Where the tutorial was before the page was loaded again, once; whether it was in a section. */
+export function resume(): boolean {
+  try {
+    const kept = JSON.parse(sessionStorage.getItem(KEPT) ?? "null") as { part: number; at: number; left: boolean; ticks: Record<string, number[]> } | null;
+    sessionStorage.removeItem(KEPT);
+    if (!kept) return false;
+    Object.assign(tour, { part: kept.part, at: kept.at, left: kept.left, ticks: kept.ticks });
+    return kept.part >= 0;
+  } catch { return false; }
+}
+
 /** The base as the step found it, for redo (T3). Not reactive: only redo reads it. */
 export const begun: { snap: Promise<Snapshot> | null } = { snap: null };
 

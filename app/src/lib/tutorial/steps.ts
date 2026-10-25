@@ -5,7 +5,7 @@
 // by isorite --tutorial, beside the terminal's tour, a part may read differently again (`local`).
 
 import type { EngineEvent } from "@isorite/engine";
-import { BH, COST, ENERGY, GALAXY, LEAP, LOOP, PROBLEMS, PROMPTS, QUAD, SOFT } from "@isorite/example";
+import { BH, BONNET, COMPACT, COST, ENERGY, GALAXY, GEOMETRY_PROMPTS, LEAP, LOOP, PROBLEMS, PROMPTS, QUAD, SOFT } from "@isorite/example";
 import { app, noteHref } from "$lib/app.svelte.ts";
 import { converse } from "$lib/converse.svelte.ts";
 import { panes } from "$lib/panes.svelte.ts";
@@ -39,6 +39,8 @@ export interface Part {
   /** What the section is for, on the list of sections. */
   about: string;
   steps: Step[];
+  /** On the geometry example's base, not the N-body simulation's: the page is loaded again with it. */
+  base?: "geometry";
   /** An earlier version, until the section is rewritten: shown as such on the list. */
   earlier?: boolean;
   /** As it is beside the terminal, served by isorite --tutorial, where that differs. */
@@ -56,6 +58,8 @@ const turnDone = (mode: string, asked: RegExp, also: (t: { understanding: boolea
   const t = turns.get(e.request);
   return !!t && t.mode === mode && asked.test(t.asked.toLowerCase()) && also(t);
 };
+/** A turn of any kind that ends, when it was asked something that matches. */
+const turnDoneAny = (asked: RegExp) => (e: EngineEvent) => e.type === "iso-done" && asked.test(turns.get(e.request)?.asked.toLowerCase() ?? "");
 /** L2's writes in Barnes–Hut, counted so its undo step can see the TODO answered again. */
 let todoWrites = 0;
 const here = (hash: string) => () => decodeURIComponent(location.hash).startsWith(hash);
@@ -92,8 +96,6 @@ let looked = false;
 /** L1's first step: another layout tried, and back to the one you had (counted, however quickly it was done). */
 let layoutFrom = "", layoutChanges = 0;
 const layoutRound = (): boolean => panes.layoutChanges > layoutChanges && panes.layout === layoutFrom;
-/** The scratchpad of the Understanding note open, saved. */
-const padSaved = () => document.querySelector('[data-pane="note"] .u h2 .state')?.textContent === "saved";
 /** Stepped into a folder and out again, however it was done: clicked into, scrolled or pinched. In, when the Atlas
  *  says it is in the folder or the folder fills half the Atlas; out, when it no longer is and the folder is back
  *  near the size it was first seen at. */
@@ -196,7 +198,7 @@ export const PARTS: Part[] = [
       { target: () => [...document.querySelectorAll(`${ISO} button[aria-label="Undo this turn's changes"], [data-pane="note"] .cm-content`)], check: () => undone > 0 && todoWrites >= 2 && !/TODO:/.test(textOf(BH)), title: "Undo, and again",
         text: "Under Iso's reply, ↺ puts back everything the turn changed: the TODO is back. Then send the request again, and leave the answer this time." },
       { title: "Iso, in short",
-        text: "With the quill off Iso reads; on, it writes, and every change it makes is marked and can be undone. What it is sent is yours to choose. Next: L3, your understanding." },
+        text: "With the quill off Iso reads; on, it writes, and every change it makes is marked and can be undone. What it is sent is yours to choose. Next: L3, questions and problems." },
     ],
   },
   {
@@ -219,20 +221,35 @@ export const PARTS: Part[] = [
     ],
   },
   {
-    key: "L3", title: "Understanding", about: "isorite keeps track of your understanding, note by note, so you can see where you stand and how it grew. Iso uses it: given your Understanding note, it starts from where you are.",
+    key: "L3", base: "geometry", title: "Questions and problems", about: "Open questions and problems are notes of their own, beside the notes they are about. See who wrote what, follow them on the Atlas, let Iso ask you back and put your own answers together, and read how Iso reads you. On notes about the geometry of surfaces.",
     steps: [
-      { go: `/n/${LEAP}`, target: '[data-tour="understanding"], [data-pane="note"] .u', check: () => panes.understanding && padSaved(), title: "Your Understanding note",
-        text: "Every note has an Understanding note: open Leapfrog's with the sprig in the Note pane's header. Iso's reading of you, and a scratchpad Iso does not write. Write a line in the scratchpad." },
-      { target: "#iso-box", fill: PROMPTS.understand, until: turnDone("ask", /bounded|leapfrog/, (t) => t.understanding), title: "Ask about it",
-        text: "While Leapfrog's Understanding note is open, it goes with what you ask Iso (the Context icon shows it). The question is written for you: send it. Iso asks you something back." },
-      { target: ISO, fill: PROMPTS.answer, until: turnDone("ask", /backwards|retrace|reverse/), title: "Answer it",
-        text: "Answer Iso's question: an answer is written for you, or say it your own way, with backwards in it. Iso rewrites its reading of you." },
-      { target: '[data-pane="note"] .u', title: "Its reading of you",
-        text: "In Leapfrog's Understanding note, Iso's reading is new: what you can do with the note, and what you have not yet shown." },
-      { target: `${ISO} .ctx, ${ISO} .context`, until: turnDone("ask", /bounded|leapfrog/, (t) => !t.understanding), title: "Without it",
-        text: "Open the Context icon and take your Understanding of Leapfrog out with its ×. Then ask the first question again: Iso starts from the beginning, as it would for anyone." },
-      { title: "Understanding, in short",
-        text: "Iso keeps a reading of your understanding, note by note, from what you say and do; it is yours to read, and to take out of what Iso is sent. It is kept beside your notes, in their .isorite folder." },
+      { go: `/n/${BONNET}`, target: () => [...document.querySelectorAll('[data-pane="note"] .sw[data-switch="provenance"], [data-pane="note"] .cm-content')], check: () => panes.on.provenance, title: "Whose words",
+        text: "These are notes on the geometry of surfaces. Gauss–Bonnet is open. Switch on provenance, the half-filled square in the Note pane's header: the proof sketch is Iso's, untouched, and the examples are yours." },
+      { target: () => [...document.querySelectorAll('[data-pane="note"] .sw[data-switch="timeline"], .timeline')], check: () => panes.on.timeline, title: "Every change is kept",
+        text: "Switch on the timeline, beside it: each mark is a moment in the note's life, Iso's sketch among them." },
+      { target: ".cm-lp-embed", check: here(`#/n/${COMPACT}`), title: "A question in a note",
+        text: "After Compact: stands a question of yours, embedded. Click it: it opens as a note of its own.",
+        phone: { text: "After Compact: stands a question of yours, embedded. Tap it: it opens as a note of its own." } },
+      { go: "/atlas", target: ".atlas a.n.question", check: chosen(COMPACT), title: "Questions on the Atlas",
+        text: "Open questions are blocks on the Atlas with a ? in the notch, each beside what it is about. Click Where is compactness used?: its note lights, and the note it asks about.",
+        phone: { text: "Open questions are blocks on the Atlas with a ? in the notch, each beside what it is about. Tap Where is compactness used?: its note lights, and the note it asks about." } },
+      { target: () => [...document.querySelectorAll('[data-pane="atlas"] .sw[data-switch="web"], [data-pane="atlas"] .sw[data-switch="code"], .sat')], check: () => panes.on.web && panes.on.code, title: "Links out of the base",
+        text: "Switch on web and code in the Atlas's header: links to a page and to code stand beside their note as small blocks. geodesics.jl is struck through: it is not in the repository." },
+      { go: "/atlas", target: `[data-note="${BONNET}"]`, check: () => tray.parts.some((p) => p.kind === "note" && p.id === BONNET), title: "Give Iso the note",
+        text: "Hold Gauss–Bonnet on the Atlas (or drag it onto Iso's pane). Its open questions go with it.",
+        phone: { text: "On the Atlas, hold Gauss–Bonnet and choose Give to Iso. Its open questions go with it." } },
+      { target: ISO, fill: GEOMETRY_PROMPTS.back, until: turnDoneAny(/compactness is used|compactness used/), title: "Iso asks you back",
+        text: "Gauss–Bonnet is in Iso's context with its question. The request is written for you: send it. Given an open question, Iso asks before it explains." },
+      { target: ISO, fill: GEOMETRY_PROMPTS.remark, until: turnDoneAny(/answers on compactness/), title: "Your answers, put together",
+        text: "Under Where is compactness used? are two answers of yours. Ask Iso to put them together: the request is written for you." },
+      { target: () => [...document.querySelectorAll(`${ISO} [data-offer]`)], check: () => count(textOf(BONNET), /\*\*Compact:\*\*/g) >= 2, title: "Inserted as yours",
+        text: "Iso offers the remark in your words. The arrow inserts it at the end of Gauss–Bonnet, as yours: Iso's offer is not in the note until you say." },
+      { go: `/n/${BONNET}`, target: '[data-tour="understanding"], [data-pane="note"] .u', check: () => panes.understanding, title: "How Iso reads you",
+        text: "Open Gauss–Bonnet's Understanding note, the sprig in the Note pane's header. Each sentence of Iso's reading rests on something you can open: your examples, the torus you solved, the question still open." },
+      { go: async () => { panes.showUnderstanding(false); return `/n/${COMPACT}`; }, target: '[data-pane="note"] .titlerow', check: () => /^resolved:/m.test(textOf(COMPACT)), title: "Resolve it",
+        text: "Your remark is in the note. In the question's title row, the ✓ resolves it: yours to press, never Iso's." },
+      { title: "Questions and problems, in short",
+        text: "A question or a problem is a note with a type, kept beside the notes it is about. Iso asks you back, checks a solution without marking it, and offers your own answers for you to insert. Resolving and solving are yours." },
     ],
   },
   { key: "E2", title: "Learning with isorite", steps: [],

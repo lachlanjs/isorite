@@ -18,7 +18,7 @@ import { serve } from "./serve.ts";
 import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
 import { term, tutorialTerm } from "./term.ts";
-import { writeExample } from "@isorite/example/node";
+import { writeExample, writeGeometry } from "@isorite/example/node";
 import { fetchModel, userModelDir } from "./model.ts";
 
 // The version: written into the bundle when it is built for npm (scripts/package.ts), else this checkout's.
@@ -32,8 +32,9 @@ const USAGE = `isorite: an agentic harness for understanding
                                          open it in the browser, on this machine only
   isorite migrate <study base> [--merge] move a study base (format 1) into its notes' .isorite/; exercises
                                          become problem notes; the study base is left as it was
-  isorite example <folder>               write the example base (notes on an N-body simulation, three weeks
-                                         into being built), into an empty folder
+  isorite example <folder> [--geometry]  write the example base (notes on an N-body simulation, three weeks
+                                         into being built), into an empty folder; --geometry: notes on the
+                                         differential geometry of surfaces, with their questions and problems
   isorite term [<notes>] [--port <n>]
                                          OpenCode 2 here, with the knowledge base beside it: its server is
                                          started if none is running on the port
@@ -97,8 +98,9 @@ export function main(argv: string[]): number | Promise<number> {
       return fetchModel(userModelDir(), console.log, from && rest.includes("--from") ? { from } : {}).then(() => 0, (e: Error) => { console.error(e.message); return 1; });
     }
     if (command === "--version" || command === "-v") { console.log(VERSION); return 0; }
-    if (command === "example" && rest[0]) {
-      return writeExample(rest[0]).then(({ notes }) => {
+    if (command === "example" && rest.find((r) => !r.startsWith("--"))) {
+      const folder = rest.find((r) => !r.startsWith("--"))!;
+      return (rest.includes("--geometry") ? writeGeometry(folder) : writeExample(folder)).then(({ notes }) => {
         console.log(`the example base is at ${notes}`);
         console.log(`  open it with: isorite serve ${notes}`);
         return 0;

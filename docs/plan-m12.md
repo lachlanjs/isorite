@@ -256,4 +256,51 @@ All seven were answered as recommended:
 
 ## 9. What was built
 
-Written at the end.
+Steps 1–9, as committed on `m12-understanding`. Where it differs from the plan above:
+
+- **The record is kept as a usage log.** Only what turns cost, and what was cleared from Iso's context.
+- **Only the open note's Understanding note goes to Iso.**
+- **New questions and problems** are made from the Atlas hold menu and the Note settings.
+- **Turns don't flip switches,** except provenance, which opens when you open a change.
+- **Blocks are 126 × 77** (the mockup's size), not 13 × 8 or 91 × 56. On the differential geometry base the map is
+  about 38% larger in area than with the old 18 × 5 blocks, and more links ran backwards (14% against 9%).
+- **The floorplan's `stay` cost** keeps a warm layout where it stood (adding one note had turned a third of the
+  folders round).
+- **E1's flake** was the test: its `finish()` matched "done" inexactly and pressed the section's own button in the
+  list, which began the section again.
+- **Real-model check** (step 5, on a temporary copy): 4 turns, $0.093 in all. It caught a slip in a written
+  solution, made a question note, wrote an Understanding reading that links its evidence, and offered answers
+  back in the person's own words. Two rules in Iso's instructions were tightened after it.
+
+**Layout shape (step 7).** Swept on the 78-note differential geometry base, 6 seeds, golden blocks. Shape 1.4:
+line 40.5k ± 3.7k, bends 365, area 5.15M ± 0.83, back links 0.14 ± 0.17, straight highways 0.78. Shape 1.0: line
+40.3k ± 1.3k, bends 377, area 4.77M ± 0.34, back 0.09 ± 0.04, straight 0.86. Shape 1.2 is about the same as 1.0.
+Area .005/.02, flow 2, bend 8 and cross 40 were no better. `PLAN_COSTS.shape` is now 1.0 (the whole map on a phone
+takes 1 / shape, so 1.0 too) and `LAYOUT_VERSION` is 14. The rdstudio base was not checked. `nested.js`'s own `SHAPE`
+(1.4), which sizes the simple packing rather than the floorplan, was not part of the sweep and is unchanged.
+
+**Iso's usage gauge (step 8).** Two 3px bars in Iso's header: the context against the model's window (from
+OpenRouter's model list, else 200k), and spend against, in turn, the key's own limit and period (`GET /key`, asked
+at most once a minute, the key never leaves the server), the `provider.spend_cap` setting (dollars a calendar
+month, UTC), or the most spent in any month so far. The lines under Iso's box are gone: the tier moved into the
+Context view, and Build mode's model, tokens and cost are in the gauge's tooltip. Spend counts what the journals
+and records hold; the terminal agent's own spend is not in it. The path through OpenRouter's real `/key` was
+tested against a stubbed answer only.
+
+**The second example (step 9).** `packages/example/geometry/`: eleven notes on surfaces, curvature and global
+geometry, six questions (two made by Iso), nine problems (four solved), a web link and two code links (one file is
+missing on purpose), and a small `code/` folder named by the base's `repository`. `buildGeometry` makes its history
+by driving the engine with a scripted Iso, as the first example's is made: Iso's proof sketch in Gauss–Bonnet,
+untouched; your examples; two questions Iso asked; a solution Iso read and did not mark; Iso's reading of you.
+`isorite example <folder> --geometry` writes it. Iso-made questions take their ids from their titles
+(`global/what-makes-t-a-disc`), not the mockup's.
+
+L3 is now "Questions and problems" (twelve steps), on that base: whose words, the timeline, a question in a note,
+questions on the Atlas, links out, giving Iso a note, Iso asking back, your answers put together and inserted,
+Iso's reading, resolving. The tutorial site loads the page again with `?base=geometry` when a section needs the
+other base, carrying where the tutorial is in the tab's session storage; `isorite --tutorial` serves one base, so
+L3 is not offered beside the terminal. L1 and L2 name no lens or mode and were not changed beyond L2's closing
+line. The old L3 (Understanding) is gone; its Understanding-note step is folded into the new one.
+
+**Not done:** T9–T11 and V11–V12 (Q53), the rdstudio layout check, and screenshots against the mockup (the mockup
+is not in the repository).
