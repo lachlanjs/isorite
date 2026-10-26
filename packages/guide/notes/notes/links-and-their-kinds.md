@@ -18,6 +18,6 @@ The word in quotes is the link's kind, and says how this note stands on the othe
 
 The kinds are what [the Atlas](/atlas/the-atlas.md "see also") is drawn from: notes are placed so that what a note requires stands before it, and the links are lines between them. So a link's kind is worth choosing: it is how the map, and Iso, know what rests on what.
 
-Type `[` and the start of a note's title to link it, or follow a link with a click. A link to a note that is not there is shown struck through.
+Type `[[` and the start of a note's title to link it, and choose the kind with the button that comes beside the link (or Alt+1, 2, 3). Ctrl+click a link (⌘+click on a Mac) to follow it. A link to a note that is not there is shown struck through.
 
 Links to the web and to code are [links out of the base](/out-of-the-base/web-and-code-links.md "see also").

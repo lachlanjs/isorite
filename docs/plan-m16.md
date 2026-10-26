@@ -207,3 +207,76 @@ All of these are cheap. None walks the app step by step.
   before steps 2–6. The alternative is a page on the refinement artifact. *Recommended: the notes themselves.*
 - **Q77: a first-run screen?** One screen naming the three panes and their headers, shown once. Or none, with
   Start here saying it. *Recommended: none to begin with.* It can be added if reading the guide shows a need.
+
+## 8. What was built
+
+Built 2026-10-26 on `m16-guide` in the order of §6, with Q72–Q77 as recommended. Version 0.5.0.
+
+1. **The guide's notes** (`a7b006e`), in `packages/guide/notes/`.
+   - **What's in it:** 21 concepts, 13 problems you mark solved, one open question, and the guide's own AGENTS.md.
+   - **Its tests:** it loads with no issues, no link is broken, everything is reached from Start here, and its advice
+     on keeping a base agrees with PRACTICE and LEARNING (now exported from the engine).
+   - **Read by Lachlan:** "looks good"; they'll read more as work goes on.
+2. **The finder** (`1d3673a`), `packages/guide/src/finder.ts`.
+   - **What it does:** it is the provider in place of a model. It searches, reads the best concept, and answers with
+     that note's description, links to two more, and the problem to try. It says once per conversation that it
+     isn't a model.
+   - **In Write mode** it adds a "see also" link at the end of the note given, which the turn's undo takes out.
+   - **When a conversation is summed up** it keeps nothing.
+   - **Cost:** nothing.
+3. **`isorite guide [<folder>]`** (`13928ed`), `packages/server/src/guide.ts`.
+   - **The folder:** it writes the guide into `~/isorite-guide`, or the folder named. Run again, it opens it as you
+     left it, and it refuses a folder holding other files.
+   - **Iso:** your model when a key or a provider of your own is set up, and the finder when not. `serve` takes a
+     stand-in provider for this, and no key is sent to it.
+   - **The browser** opens at Start here.
+   - **Other names:** `isorite --tutorial` and `isorite tutorial`. `isorite term --tutorial` says the tour is
+     retired.
+   - **In the npm package** the guide is in `guide/`.
+4. **The site** (`2290cb2`).
+   - **The build:** `npm run build:guide` (was `build:tutorial`) runs the engine in the page over the guide. It's kept
+     in IndexedDB (`app/src/lib/guide/kept.ts`), or in memory where storage is blocked.
+   - **Iso** is the finder, and the site opens on Start here.
+   - **Starting again:** "start the guide again" is in the Note pane's settings, and asks once more before it acts.
+   - **The workflow** is `guide.yml`.
+   - **Its tests:** `npm run test:site` runs 6 browser tests on the built site, on a desktop and a phone.
+5. **The removals** (`69ebe7a`), as §4 listed:
+   - the coach card;
+   - the `/terminal` replay of the tour, which only the old tutorial linked to;
+   - the scripted answers for the tour;
+   - the plugin's tour and `tutorialTerm`, with their tests;
+   - the session's `tutorial` flag.
+
+   The READMEs, `setup.md`, `setup-for-agents.md` and `architecture.md` now name `isorite guide`. The guide's Atlas
+   note now describes M17's marks.
+
+**The real-model check**, on temporary copies of the guide, $0.059 in all:
+- **The new eval case,** `guide-answers-about-isorite` (`base: "guide"`, a new field of the eval's cases), on the
+  mid tier: 5 of 5 checks passed, for $0.0332.
+  - **The answer:** it explained age-off against given parts from "What Iso is sent", with resolving links.
+  - **The AGENTS.md:** it followed the guide's own, by pointing to the problem "Give and switch off".
+- **Three questions on the low tier,** for $0.0257:
+  - **The Atlas, and the problems:** both answered from the guide's notes, with links.
+  - **Where your instructions go:** it answered from the AGENTS.md it was sent, without looking anything up. What it
+    said was right (AGENTS.md at the top of the base, given to the terminal's agent too), but vaguer than the
+    guide's note.
+  - **Mistakes of mine it found:** it said "click a note to open it", which it took from the guide, and that was
+    wrong. A click chooses a note, and a second click opens it (M14).
+  - **Two more, found checking the rest:**
+    - a click on a folder brings it to the screen; it doesn't open or close it;
+    - links are made with `[[` and followed with Ctrl+click.
+
+    All three are corrected in the guide.
+
+**Tests.** All pass:
+- every package's unit tests, including 9 in the guide and 3 more in the server;
+- the type checks;
+- 186 browser tests, with 18 skipped;
+- the 6 site tests.
+
+The svelte-autofixer found no issues.
+
+**Not done.**
+- **The lock file:** `package-lock.json` doesn't list the new workspace, so `npm ci` refuses it, and the Pages
+  workflow would fail. It needs `npm install` (Lachlan's say), before merging.
+- **The live site:** the site is built and tested here, but not yet seen as Pages serves it.

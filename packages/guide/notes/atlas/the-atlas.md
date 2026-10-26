@@ -6,8 +6,8 @@ description: The map of the base, drawn from what rests on what.
 
 The Atlas is the base as a map. Each note is a block, each folder a frame, and each [link](/notes/links-and-their-kinds.md "requires") a line. Notes are placed so that what a note requires stands before it, along its folder's way, and the lines between folders run as trunks along the gaps.
 
-- **Click a note** to open it in the Note pane. Its links light: the notes it rests on and the notes that rest on it.
-- **Click a folder** to close it, and again to open it in place: see [folders](/notes/folders.md "see also").
+- **Click a note** to choose it: it lights with its links, the notes it rests on and the notes that rest on it, and the rest dims. **Click it again** to open it in the Note pane. Click one it rests on to step back to it, the way kept lit; click open ground to let go.
+- **Click a folder** to bring it to the screen, and again to step out to the folder it is in. Folders open as you zoom in on them and close to one block as you zoom out: see [folders](/notes/folders.md "see also").
 - **Shift+click a note**, or hold on it, to give it to [Iso](/iso/iso.md "see also"). On a phone, a long press offers it.
 - **Hold on open ground** to make a note there.
 - Drag the ground to move about, and pinch or scroll to zoom.

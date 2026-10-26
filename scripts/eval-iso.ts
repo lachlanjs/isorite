@@ -1,5 +1,5 @@
 // npm run eval:iso [-- --tier low|mid|max] [--only <case>]: Iso's eval (M15). Each case in eval/iso/ is run on a
-// fresh copy of the example base (the N-body notes), against the provider in ~/.config/isorite/config.toml: its
+// fresh copy of the example base (the N-body notes), or of the guide where it says so, against the provider in ~/.config/isorite/config.toml: its
 // earlier turns are written into the conversation as they are, so only the judged turn (and a compaction, where a
 // case asks for one) is asked of the model. Each check passes or fails without a judge. A table of them, what each
 // case cost, and each case's transcript go to .eval/iso-<when>/, which git ignores.
@@ -12,6 +12,7 @@ import type { Engine, EngineEvent, Given, HandLine, Tier, Turn, TurnItem } from 
 import { readHand, readTurns } from "@isorite/engine";
 import { writeExample } from "../packages/example/src/node.ts";
 import { openEngine } from "../packages/server/src/serve.ts";
+import { writeGuide } from "../packages/server/src/guide.ts";
 
 type Check =
   | { called: string[] } | { notCalled: string[] } | { says: string } | { saysNot: string } | { linksResolve: true }
@@ -19,6 +20,8 @@ type Check =
   | { notRead: string[] } | { briefing: { open?: string; notes?: string[] } } | { words: number } | { unchanged: string[] } | { asks: true };
 interface Case {
   name: string;
+  /** The base it is run on: the N-body example, unless the guide (M16). */
+  base?: "guide";
   agents?: string;
   understanding?: Record<string, string>;
   history?: { asked: string; said: string; read?: string[] }[];
@@ -70,7 +73,7 @@ const LINK = /\]\(\/([^)\s#]+?)\.md(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/g;
 async function run(key: string, c: Case): Promise<{ results: [string, boolean, string][]; usd: number; transcript: string }> {
   const root = mkdtempSync(join(tmpdir(), "isorite-eval-"));
   try {
-    const { notes } = await writeExample(join(root, "base"));
+    const { notes } = c.base === "guide" ? writeGuide(join(root, "base")) : await writeExample(join(root, "base"));
     if (c.agents) writeFileSync(join(notes, "AGENTS.md"), c.agents);
     const engine: Engine = await openEngine({ notes }, "eval0000", undefined, scripted, null);
     for (const [id, reading] of Object.entries(c.understanding ?? {})) {
