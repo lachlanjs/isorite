@@ -1,10 +1,11 @@
 // The guide on disk: its files read from this package.
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import type { GuideFiles } from "./index.ts";
 
-export const GUIDE_DIR = join(import.meta.dirname, "..", "notes");
+/** In a checkout, the package's notes/; in the npm package, where this is bundled into dist/, the guide/ beside it. */
+export const GUIDE_DIR = [join(import.meta.dirname, "..", "guide"), join(import.meta.dirname, "..", "notes")].find((d) => existsSync(join(d, "start-here.md"))) ?? join(import.meta.dirname, "..", "notes");
 
 /** The guide's files as they stand in the package: its notes and its AGENTS.md, by path. */
 export function loadGuide(dir = GUIDE_DIR): GuideFiles {

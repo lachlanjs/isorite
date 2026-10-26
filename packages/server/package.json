@@ -17,6 +17,7 @@
     "@isorite/core": "*",
     "@isorite/engine": "^0.1.0",
     "@isorite/example": "*",
+    "@isorite/guide": "*",
     "@isorite/opencode": "*",
     "@opencode/client": "2.0.32",
     "hono": "^4.13.13",

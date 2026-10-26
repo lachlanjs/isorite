@@ -22,10 +22,10 @@ const textOf = (content: unknown): string =>
   typeof content === "string" ? content : Array.isArray(content) ? content.map((c) => (typeof c === "string" ? c : String((c as { text?: unknown }).text ?? ""))).join("\n") : String(content ?? "");
 
 /** A hit of search_notes, as the engine writes it: `- Title (/id.md), Type: description`. */
-interface Hit { id: string; title: string; description: string }
+interface Hit { id: string; title: string; type: string; description: string }
 function hitsOf(result: string): Hit[] {
   const out: Hit[] = [];
-  for (const m of result.matchAll(/^- (.+?) \(\/([^)\s]+)\.md\), [A-Za-z]+(?:: (.*))?$/gm)) out.push({ title: m[1]!, id: m[2]!, description: (m[3] ?? "").trim() });
+  for (const m of result.matchAll(/^- (.+?) \(\/([^)\s]+)\.md\), ([A-Za-z]+)(?:: (.*))?$/gm)) out.push({ title: m[1]!, id: m[2]!, type: m[3]!.toLowerCase(), description: (m[4] ?? "").trim() });
   return out;
 }
 
@@ -71,7 +71,9 @@ export function finderAnswer(r: FinderRequest): FinderReply {
   const given = givenNote(user);
   const hits = hitsOf(searched).filter((h) => h.id !== given?.id);
   if (!hits.length) return said(["Nothing in the guide matches that. Try other words, or start from [Start here](/start-here.md)."]);
-  const best = hits[0]!;
+  // A concept answers; a problem is what to try, named after it.
+  const concepts = hits.filter((h) => h.type !== "problem"), problem = hits.find((h) => h.type === "problem");
+  const best = concepts[0] ?? hits[0]!;
   // Then read the note that matches best, so it is in hand as Iso's reads are.
   const read = results.some((t) => t.startsWith(`# ${best.title} (/${best.id}.md)`) || /is in hand already/.test(t));
   if (!read && tools.has("read_note")) return { calls: [{ name: "read_note", arguments: { id: best.id } }], usage: FREE };
@@ -82,7 +84,9 @@ export function finderAnswer(r: FinderRequest): FinderReply {
     return { calls: [{ name: "edit_note", arguments: { id: given.id, old: end, new: `${end}\n\nSee also [${best.title}](/${best.id}.md "see also").` } }], usage: FREE };
   }
   const answer = [`The note that answers it best is ${link(best)}${best.description ? `: ${best.description.replace(/\.?$/, ".")}` : "."}`];
-  if (hits.length > 1) answer.push(`See also ${hits.slice(1, 3).map(link).join(" and ")}.`);
+  const also = concepts.filter((h) => h !== best).slice(0, 2);
+  if (also.length) answer.push(`See also ${also.map(link).join(" and ")}.`);
+  if (problem && problem !== best) answer.push(`To try it: ${link(problem)}.`);
   if (edited?.startsWith("Changed ")) answer.push(`I added a link to ${link(best)} at the end of [${given!.title}](/${given!.id}.md), marked as mine: undo the turn to take it out.`);
   return said(answer);
 }

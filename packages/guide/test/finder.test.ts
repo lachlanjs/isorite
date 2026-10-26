@@ -55,3 +55,10 @@ test("nothing found is said plainly, and summing up a conversation keeps nothing
   await engine.compact(conversation);
   expect((await engine.turnContext({ conversation, mode: "ask", tier: "mid", given: [] })).rows!.some((r) => r.kind === "briefing")).toBe(true);
 });
+
+test("a concept answers, and the problem that practises it is named as the thing to try", async () => {
+  const { ask } = await guide();
+  const { said } = await ask("how do I give Iso a note?");
+  expect(said).toMatch(/The note that answers it best is \[(?!Give and switch off)[^\]]+\]/);
+  expect(said).toContain("To try it: [Give and switch off](/iso/give-and-switch-off.md).");
+});
