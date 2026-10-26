@@ -2,7 +2,7 @@
   "name": "Asked to link a note as required, it writes the link with its kind",
   "turn": {
     "mode": "write",
-    "asked": "In Barnes–Hut, link the quadtree as something it requires.",
+    "asked": "In Barnes–Hut, link softening as something it uses.",
     "given": [
       {
         "kind": "note",
@@ -17,7 +17,7 @@
       ]
     },
     {
-      "changedSays": "\\(/algorithms/the-quadtree\\.md \"requires\"\\)"
+      "changedSays": "\\(/physics/softening\\.md \"uses\"\\)"
     }
   ]
 }

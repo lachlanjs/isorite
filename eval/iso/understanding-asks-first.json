@@ -19,7 +19,7 @@
   },
   "checks": [
     {
-      "says": "\\?"
+      "asks": true
     },
     {
       "words": 220

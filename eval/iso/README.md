@@ -23,4 +23,5 @@ note); `{"changed": [ids]}` (exactly these notes changed, none other; `[]` for n
 note made, in that folder, with frontmatter type and title, and a link that resolves); `{"createdNot": "regex"}`
 (no note made whose title matches); `{"editLines": n}` (at most n lines changed in all); `{"changedSays": "regex"}`
 (the changed text matches); `{"notRead": [ids]}` (not read again in the judged turn); `{"briefing": {"open":
-"regex", "notes": [ids]}}` (the compaction picked these); `{"words": n}` (the reply is at most n words).
+"regex", "notes": [ids]}}` (the compaction picked these); `{"words": n}` (the reply is at most n words); `{"unchanged": [ids]}` (these notes not touched); `{"asks": true}`
+(it asks back: ask_question, or a question in its reply).

@@ -16,7 +16,7 @@ import { openEngine } from "../packages/server/src/serve.ts";
 type Check =
   | { called: string[] } | { notCalled: string[] } | { says: string } | { saysNot: string } | { linksResolve: true }
   | { changed: string[] } | { created: string } | { createdNot: string } | { editLines: number } | { changedSays: string }
-  | { notRead: string[] } | { briefing: { open?: string; notes?: string[] } } | { words: number };
+  | { notRead: string[] } | { briefing: { open?: string; notes?: string[] } } | { words: number } | { unchanged: string[] } | { asks: true };
 interface Case {
   name: string;
   agents?: string;
@@ -146,6 +146,8 @@ async function run(key: string, c: Case): Promise<{ results: [string, boolean, s
           const ok = !!briefing && (!w.open || re(w.open).test(briefing.open.join(" "))) && (w.notes ?? []).every((n) => briefing!.notes.includes(n));
           return [name, ok, briefing ? `open: ${briefing.open.join("; ") || "none"}; notes: ${briefing.notes.join(", ") || "none"}` : "no briefing"];
         }
+        case "unchanged": { const touched = (v as string[]).filter((id) => changed.includes(id)); return [name, !touched.length, touched.length ? `changed ${touched.join(", ")}` : "untouched"]; }
+        case "asks": return [name, calls.includes("ask_question") || /\?/.test(reply), calls.includes("ask_question") ? "asked with ask_question" : /\?/.test(reply) ? "asked in the reply" : "asked nothing"];
         case "words": { const n = reply.split(/\s+/).filter(Boolean).length; return [name, n <= (v as number), `${n} words`]; }
         default: return [name, false, "not a check"];
       }
