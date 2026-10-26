@@ -276,6 +276,9 @@ export interface Api {
   compact(conversation: string, keep?: number): Promise<{ briefing: string; usd: number }>;
   /** A new conversation that starts from a briefing of this one ("a new conversation from here"). */
   branch(conversation: string): Promise<{ conversation: string }>;
+  /** The base's own instructions, AGENTS.md at the top of the notes (M15): null while there is none. */
+  agents(): Promise<{ text: string | null }>;
+  saveAgents(text: string): Promise<void>;
   /** A note's Understanding note. */
   understanding(note: string): Promise<UnderstandingReport>;
   /** Save your scratchpad in a note's Understanding note. */

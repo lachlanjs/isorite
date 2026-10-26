@@ -116,7 +116,7 @@
     <div class="offer" data-offer={i.id}>
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
       <div class="prose yours">{@html render(i.text)}</div>
-      <p class="for"><button type="button" class="note-link" onclick={() => open(i.note)}>{titleOf(i.note)}</button>
+      <p class="for">{#if i.note === "AGENTS.md"}<span title="Your instructions for this base, in Iso's settings">AGENTS.md</span>{:else}<button type="button" class="note-link" onclick={() => open(i.note)}>{titleOf(i.note)}</button>{/if}
         {#if i.taken}<svg class="in" viewBox="0 0 16 16" width="14" height="14" role="img" aria-label="Inserted" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8.5l3 3 7-7" /></svg>
         {:else}<button class="icon" type="button" aria-label="Insert into {titleOf(i.note)} as yours" title="Insert at the end of {titleOf(i.note)}, as yours" onclick={() => void converse.take(t.id, i.id)}><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13 3v6H4" /><path d="M7 6L4 9l3 3" /></svg></button>{/if}</p>
     </div>

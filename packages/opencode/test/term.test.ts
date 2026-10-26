@@ -75,6 +75,8 @@ describe.skipIf(!ready)("isorite term", () => {
   beforeAll(async () => {
     root = mkdtempSync(join(tmpdir(), "isorite-term-"));
     base = await writeExample(join(root, "base"));
+    // The base's own instructions, which OpenCode is to be given (M15).
+    writeFileSync(join(base.notes, "AGENTS.md"), "Write vectors in bold.\n");
     mkdirSync(join(root, "code"));
     gateway = await startScripted((request) => {
       // Iso, asked in place from the note view: its requests carry no edit tool, as OpenCode's do.
@@ -164,6 +166,8 @@ describe.skipIf(!ready)("isorite term", () => {
     pane.keys("Enter");
     await pane.waitFor("Leapfrog keeps the energy bounded.", 60_000);
     expect(gateway.requests.at(-1)?.authorization).toBe("Bearer iso-key");
+    // OpenCode was given the base's AGENTS.md, and sends it with its own instructions.
+    expect(JSON.stringify(gateway.requests.at(-1)?.messages ?? [])).toContain("Write vectors in bold.");
     keep("3-session");
   }, 90_000);
 

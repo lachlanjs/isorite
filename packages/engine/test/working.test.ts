@@ -144,3 +144,18 @@ test("a new conversation from here starts from a briefing of the old one, and is
   expect(userOf(sent[2]!)).toContain("Settled:\n- They use bits.\n\nStill open:\n- Nats?");
   expect(userOf(sent[2]!)).not.toContain("what unit?");
 });
+
+test("a way of working they state is offered for AGENTS.md, and inserted there when they take it; the file is edited whole too", async () => {
+  const { engine, ask, notes } = await open([
+    { calls: [{ name: "offer_text", arguments: { id: "AGENTS.md", text: "Write logarithms in base 2." } }] }, { text: ["Offered."] },
+  ], { files: { "AGENTS.md": "Use SI units.\n" } });
+  const c = await ask("from now on, always use base 2 for logs");
+  const t = (await engine.conversation(c))!.turns[0]!;
+  const offer = t.items.find((i) => i.kind === "offer")!;
+  expect(offer).toMatchObject({ kind: "offer", note: "AGENTS.md" });
+  await engine.takeItem(c, t.id, (offer as { id: string }).id);
+  expect(notes.files.get("AGENTS.md")).toBe("Use SI units.\n\nWrite logarithms in base 2.\n");
+  expect(await engine.agents()).toEqual({ text: "Use SI units.\n\nWrite logarithms in base 2.\n" });
+  await engine.saveAgents("Only SI.  \n\n");
+  expect(notes.files.get("AGENTS.md")).toBe("Only SI.\n");
+});

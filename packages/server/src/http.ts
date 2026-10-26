@@ -159,6 +159,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   post("/api/iso/take", z.object({ conversation: z.string().max(64), turn: z.string().max(64), item: z.string().max(64) }).strict(), (_c, b) => api.takeItem(b.conversation, b.turn, b.item));
   post("/api/iso/context", z.object({ conversation: z.string().max(64), part: z.string().max(320), on: z.boolean() }).strict(), (_c, b) => api.setContext(b.conversation, b.part, b.on));
   post("/api/iso/compact", z.object({ conversation: z.string().max(64), keep: z.number().int().min(0).max(1000).optional() }).strict(), (_c, b) => api.compact(b.conversation, b.keep));
+  app.get("/api/agents", (c) => answer(c, () => api.agents()));
+  post("/api/agents", z.object({ text: z.string().max(50_000) }).strict(), (_c, b) => api.saveAgents(b.text));
   post("/api/iso/branch", z.object({ conversation: z.string().max(64) }).strict(), (_c, b) => api.branch(b.conversation));
   post("/api/iso/undo", z.object({ conversation: z.string().max(64), turn: z.string().max(64) }).strict(), (_c, b) => api.undoTurn(b.conversation, b.turn));
   post("/api/iso/answer", z.object({ turn: z.string().max(64), permission: z.string().max(64), decision: z.enum(["once", "always", "reject"]) }).strict(), (_c, b) => api.answer(b.turn, b.permission, b.decision));

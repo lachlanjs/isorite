@@ -62,6 +62,8 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     setContext: (conversation, part, on) => write("POST", "iso/context", { conversation, part, on }),
     compact: (conversation, keep) => write("POST", "iso/compact", { conversation, ...(keep === undefined ? {} : { keep }) }),
     branch: (conversation) => write("POST", "iso/branch", { conversation }),
+    agents: () => ask("agents"),
+    saveAgents: (text) => write("POST", "agents", { text }),
     takeItem: (conversation, turn, item) => write("POST", "iso/take", { conversation, turn, item }),
     // The server's own: it names the repository when a terminal attaches, and tells the terminal's agent.
     nameRepository: async () => false,

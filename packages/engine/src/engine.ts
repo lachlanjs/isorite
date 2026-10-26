@@ -11,7 +11,7 @@ import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, noteId, type Similar } from "./lookup.ts";
 import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
 import { AGE_OFF, briefingText, handOf, readHand, type Briefing, type Hand, type HandLine } from "./hand.ts";
-import { COMPACT, CONVERSATIONS_DIR, MODES, conversationPath, turnTools, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
+import { COMPACT, CONVERSATIONS_DIR, ISORITE, PRACTICE, MODES, conversationPath, turnTools, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
 import { KEY, SPEND_CAP, OPENROUTER, TIERS, complete, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
@@ -379,6 +379,8 @@ export class Engine implements Api {
       `# ${this.opts.name}: a knowledge base of ${b.concepts.size} notes in ${dirs.filter(Boolean).length} folders`,
       `Folders, with the notes directly in each:\n${lines.join("\n")}${dirs.length > 60 ? `\n(and ${dirs.length - 60} more)` : ""}`,
       `To look: search_notes by the words a note would use${this.similar ? ", find_similar by meaning when the words are unknown" : ""}; outline_note to see a note's headings and links; read_note for one section. Follow a note's links to what it rests on before searching again. Cite a note by its title and section.`,
+      // How the base is kept, so what the terminal's agent writes in it matches (M15).
+      `${ISORITE}\n\n${PRACTICE}`,
     ].join("\n\n");
   }
 
@@ -1166,6 +1168,13 @@ export class Engine implements Api {
     return { briefing: briefingText(b, (id) => this.bundle.concepts.get(id)?.title ?? id), usd };
   }
 
+  async agents(): Promise<{ text: string | null }> { return { text: await this.agentsFile() }; }
+
+  async saveAgents(text: string): Promise<void> {
+    if (typeof text !== "string" || text.length > 50_000) throw new EngineError("AGENTS.md is text, of 50,000 characters at most", 413);
+    await this.one(() => this.opts.notes.write(AGENTS_FILE, text.replace(/\s*$/, "") + (text.trim() ? "\n" : "")));
+  }
+
   async branch(conversation: string): Promise<{ conversation: string }> {
     if (!TURN_ID.test(conversation)) throw new EngineError("not a conversation's id");
     const { turns, hand } = await this.handFor(conversation);
@@ -1369,12 +1378,14 @@ export class Engine implements Api {
       return `Made the question ${asked} (/${made.id}.md).`;
     }
     if (name === "offer_text") {
-      const id = noteId(this.bundle, args.id);
+      // A line for the base's own instructions (M15): what they said they want, offered for AGENTS.md.
+      const agents = /^\/?AGENTS(\.md)?$/i.test(String(args.id ?? "").trim());
+      const id = agents ? AGENTS_FILE : noteId(this.bundle, args.id);
       if (!id) return `There is no note ${String(args.id ?? "")}.`;
       const text = String(args.text ?? "").trim().slice(0, 8000);
       if (!text) return "Give the passage, in text.";
       await t.item({ kind: "offer", id: newId(this.opts.clock.now()), note: id, text });
-      return `It is offered to them for ${title(id)}.`;
+      return `It is offered to them for ${agents ? "their AGENTS.md" : title(id)}.`;
     }
     if (name === "write_understanding") {
       const id = noteId(this.bundle, args.id);
@@ -1429,7 +1440,12 @@ export class Engine implements Api {
     if (i.kind === "question" ? i.made : i.taken) throw new EngineError(i.kind === "question" ? "that question is a note already" : "that was inserted already", 409);
     let note: string;
     if (i.kind === "question") note = (await this.one(() => this.makeQuestion(i, "you"))).id;
-    else {
+    else if (i.note === AGENTS_FILE) {
+      // The base's instructions are a file, not a note: added to, or begun.
+      const now = (await this.agentsFile()) ?? "";
+      await this.one(() => this.opts.notes.write(AGENTS_FILE, `${now.replace(/\s*$/, "")}${now.trim() ? "\n\n" : ""}${i.text}\n`));
+      note = AGENTS_FILE;
+    } else {
       if (!this.bundle.concepts.has(i.note)) throw new EngineError("the note it was for is gone", 409);
       const now = await this.readNote(i.note);
       await this.one(() => this.put(i.note, `${now.text.replace(/\s*$/, "")}\n\n${i.text}\n`, now.version));

@@ -3,12 +3,22 @@
   // device's configuration and is never shown again: this only says whether one is held.
   import type { Settings } from "@isorite/engine";
   import { app } from "$lib/app.svelte.ts";
+  import { converse } from "$lib/converse.svelte.ts";
   import { spend } from "$lib/spend.svelte.ts";
 
   let settings = $state.raw<Settings | null>(null);
   let key = $state("");
   let problem = $state("");
   let cap = $state("");
+  /** The base's AGENTS.md (M15), as it is on disk, and as it is being written here. */
+  let agents = $state<string | null>(null);
+  let saved = "";
+  $effect(() => { void app.api.agents().then((a) => { agents = a.text ?? ""; saved = agents; }, () => undefined); });
+  async function keepAgents() {
+    if (agents === null || agents === saved) return;
+    problem = "";
+    try { await app.api.saveAgents(agents); saved = agents; converse.measure(); } catch (e) { problem = (e as Error).message; }
+  }
 
   $effect(() => { void app.api.settings().then((s) => (settings = s), (e) => (problem = (e as Error).message)); });
   // What the last sign-in said is let go with the settings.
@@ -60,6 +70,11 @@
       {#each ["low", "mid", "max"] as const as t (t)}<dt>{t}</dt><dd class="faint">{settings.tiers[t]}</dd>{/each}
     </dl>
   {/if}
+  {#if agents !== null}
+    <h2 class="label">AGENTS.md</h2>
+    <label class="hidden-label" for="agents">AGENTS.md: your instructions for this base</label>
+    <textarea id="agents" class="agents" bind:value={agents} rows="6" spellcheck="true" placeholder="notation, level, language, how notes are named" title="Your instructions for this base: sent with every turn, to Iso and to the terminal's agent. Kept at the top of your notes, as AGENTS.md." onblur={() => void keepAgents()}></textarea>
+  {/if}
   {#if problem}<p class="bad" role="alert">{problem}</p>{/if}
 </section>
 
@@ -70,4 +85,6 @@
   .tiers { display: grid; grid-template-columns: auto 1fr; gap: 2px var(--space-3); margin: var(--space-1) 0 0; font-size: 12px; }
   .tiers dd { margin: 0; overflow-wrap: anywhere; }
   .bad { color: var(--rose); }
+  .agents { width: 100%; min-height: 96px; resize: vertical; field-sizing: content; background: var(--ground-1); border: 1px solid var(--line); padding: 8px 10px; font: 12.5px/1.55 var(--font-mono); color: var(--text); }
+  .agents:focus { border-color: var(--line-strong); outline: none; }
 </style>

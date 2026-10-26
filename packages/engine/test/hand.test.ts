@@ -51,3 +51,15 @@ test("a briefing is written from what was picked, with the notes as links", () =
   const text = briefingText({ id: "b", at: "", turns: [], settled: ["Entropy is in bits."], open: ["Why base 2?"], preferences: ["Use H(X)."], notes: ["basics/entropy"] }, () => "Entropy");
   expect(text).toBe("Settled:\n- Entropy is in bits.\n\nStill open:\n- Why base 2?\n\nWhat they said they want:\n- Use H(X).\n\nThe notes it turned on: [Entropy](/basics/entropy.md)");
 });
+
+test("what Iso is told of the base is what isorite reads: its example note loads as the question it says it is", async () => {
+  const { ISORITE } = await import("../src/turn.ts");
+  const { Bundle } = await import("@isorite/core");
+  const example = /```markdown\n([\s\S]*?)```/.exec(ISORITE)![1]!;
+  const b = Bundle.fromFiles([{ path: "basics/why.md", text: example }, { path: "basics/entropy.md", text: "---\ntype: Concept\ntitle: Entropy\n---\n" }, { path: "basics/surprise.md", text: "---\ntype: Concept\ntitle: Surprise\n---\n" }]);
+  const q = b.concepts.get("basics/why")!;
+  expect(q.kind).toBe("question");
+  expect(q.attached).toEqual(["basics/entropy"]);
+  expect(q.links.map((l) => [l.target, l.rel, l.broken])).toEqual([["basics/surprise", "requires", false]]);
+  for (const word of ['"requires"', '"uses"', '"see also"', "`about`", "`uses`", "`resolved`", "`solved`", "[[!name]]"]) expect(ISORITE).toContain(word);
+});
