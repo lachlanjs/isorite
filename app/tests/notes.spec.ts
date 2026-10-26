@@ -28,7 +28,7 @@ async function showContext(page: Page, back?: "Note" | "Atlas") {
     // The row has scrolled back to the pane before anything is pressed in it.
     await expect.poll(async () => (await page.locator(`[data-pane="${back.toLowerCase()}"]`).boundingBox())?.x).toBe(0);
   }
-  return page.getByRole("list", { name: "What you gave Iso" });
+  return page.getByRole("list", { name: "The notes Iso has" });
 }
 
 test("a note with maths and a typed link is written, saved, and there when reopened", async ({ page }) => {

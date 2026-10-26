@@ -151,6 +151,8 @@ export interface HandRow {
   aged?: boolean;
   /** A turn a briefing stands for: the briefing's key. */
   under?: string;
+  /** A part you gave: what it is, so the page can take it out of what it gives. */
+  given?: Given;
 }
 
 /** What Iso has cost against what may be spent (M12). `per` is the period the figure covers: a calendar month

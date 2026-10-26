@@ -1087,7 +1087,7 @@ export class Engine implements Api {
       const s = sentAll.find((x) => x.id === g.id && x.kind === g.kind && (g.kind !== "passage" || (x.kind === "passage" && x.text === g.text)));
       if (!s) continue;
       const k = givenKey(g);
-      rows.push({ key: k, group: "notes", kind: g.kind, title: g.kind === "folder" ? g.id || "the top of the base" : title(g.id), detail: g.kind === "passage" ? "a passage" : g.kind === "folder" ? `${s.kind === "folder" ? s.notes.length : 0} notes listed` : g.kind === "understanding" ? "your understanding" : "", tokens: scaled(estimate(sentText(s))), on: !w.off.has(k), by: "you" });
+      rows.push({ key: k, group: "notes", kind: g.kind, title: g.kind === "folder" ? g.id || "the top of the base" : title(g.id), detail: g.kind === "passage" ? "a passage" : g.kind === "folder" ? `${s.kind === "folder" ? s.notes.length : 0} notes listed` : g.kind === "understanding" ? "your understanding" : "", tokens: scaled(estimate(sentText(s))), on: !w.off.has(k), by: "you", given: g });
     }
     for (const h of w.hand.held) {
       if (!this.bundle.concepts.has(h.id) || w.givenOn.some((g) => g.kind === "note" && g.id === h.id)) continue;

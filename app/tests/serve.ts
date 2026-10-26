@@ -45,6 +45,15 @@ async function provider(): Promise<void> {
       return;
     }
     const sent = JSON.parse(body) as { messages: { role: string; content: unknown }[] };
+    // Summing up earlier turns (M15): what it picked, as the typed fields compaction asks for.
+    if (JSON.stringify(sent.messages[0]?.content ?? "").includes("You sum up the earlier turns")) {
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      const picked = { settled: ["A bit is the unit of information."], open: ["How surprise relates to it."], preferences: [], notes: ["basics/bit"] };
+      res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: JSON.stringify(picked) } }] })}\n\n`);
+      res.write(`data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 600, completion_tokens: 40, cost: 0.0004 } })}\n\n`);
+      res.end("data: [DONE]\n\n");
+      return;
+    }
     const user = String(sent.messages.find((m) => m.role === "user")?.content ?? "");
     const asked = user.split("# What they ask now").at(-1) ?? "";
     const looked = sent.messages.some((m) => m.role === "tool");

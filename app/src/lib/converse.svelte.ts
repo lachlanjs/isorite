@@ -1,7 +1,7 @@
 // The conversation in Iso's pane (M10): its turns as the engine keeps them, the turn running now as its events
 // come, and what is sent with the next. One conversation at a time; a new one is begun from the pane.
 
-import type { ContextReport, Conversation, Decision, EngineEvent, Turn, TurnItem } from "@isorite/engine";
+import type { ContextReport, Conversation, Decision, EngineEvent, HandRow, Turn, TurnItem } from "@isorite/engine";
 import { app } from "./app.svelte.ts";
 import { context } from "./context.svelte.ts";
 import { panes } from "./panes.svelte.ts";
@@ -21,9 +21,45 @@ class Converse {
   report = $state.raw<ContextReport | null>(null);
   /** What Iso's pane shows: the conversation, or what the next turn is sent (M10b). */
   view = $state<"chat" | "context">("chat");
-  /** Earlier turns left out of what the next is sent. */
+  /** The parts switched off that the page keeps (M15): what you gave (`g:…`), open questions (`q:…`) and AGENTS.md.
+   *  What Iso read, the turns and the briefings are switched in the conversation itself. */
   off = $state.raw<string[]>([]);
-  toggleTurn(id: string): void { this.off = this.off.includes(id) ? this.off.filter((x) => x !== id) : [...this.off, id]; this.measure(); }
+  /** A compaction or a new conversation from here is being made. */
+  summing = $state(false);
+  /** A row of the Context view switched on or off. */
+  async toggle(r: HandRow): Promise<void> {
+    this.problem = "";
+    if (/^[rtb]:/.test(r.key)) {
+      if (!this.id) return;
+      try { await app.api.setContext(this.id, r.key, !r.on); } catch (e) { this.problem = (e as Error).message; }
+    } else this.off = this.off.includes(r.key) ? this.off.filter((x) => x !== r.key) : [...this.off, r.key];
+    this.measure();
+  }
+  /** A part you gave, taken out of what you give. */
+  takeOut(r: HandRow): void {
+    const g = r.given;
+    if (!g) return;
+    const part = tray.parts.find((p) => p.kind === g.kind && p.id === g.id && (g.kind !== "passage" || (p.kind === "passage" && p.text === g.text)));
+    if (part) tray.remove(part);
+    this.off = this.off.filter((x) => x !== r.key);
+  }
+  /** Sum up the earlier turns, all but the last, into a briefing that stands for them. */
+  async compact(): Promise<void> {
+    if (!this.id || this.running || this.summing) return;
+    this.problem = ""; this.summing = true;
+    try { await app.api.compact(this.id); } catch (e) { this.problem = (e as Error).message; } finally { this.summing = false; }
+    this.measure();
+  }
+  /** A new conversation that starts from a briefing of this one; what you gave goes on being given. */
+  async branch(): Promise<void> {
+    if (!this.id || this.running || this.summing) return;
+    this.problem = ""; this.summing = true;
+    try {
+      const { conversation } = await app.api.branch(this.id);
+      this.id = conversation; this.turns = []; this.streaming = ""; this.off = this.off.filter((x) => !/^[rtb]:/.test(x));
+    } catch (e) { this.problem = (e as Error).message; } finally { this.summing = false; }
+    this.measure();
+  }
   /** As much as a part given adds to the next turn, once measured. */
   sizeOf(p: Part): number | null {
     const g = this.report?.given?.find((x) => x.kind === p.kind && x.id === p.id && (p.kind !== "passage" || x.text === p.text));
@@ -93,7 +129,7 @@ class Converse {
       this.turns = [...this.turns.filter((t) => t.id !== e.request), { id: e.request, conversation: e.place.conversation, at: new Date().toISOString(), mode: e.place.mode, asked: e.asked, given: e.place.given, tier: e.tier, items: [], state: "running" }];
       return;
     }
-    if (!("request" in e)) { if (e.type === "note-changed" || e.type === "journal") this.measure(); return; }
+    if (!("request" in e)) { if (e.type === "note-changed" || e.type === "journal" || (e.type === "context" && e.conversation === this.id)) this.measure(); return; }
     const k = this.turns.findIndex((t) => t.id === e.request);
     if (k < 0) return;
     const t = this.turns[k]!;
