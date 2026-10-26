@@ -69,7 +69,7 @@ test("a key is made by signing in at the provider, and comes back to where you w
   await toIso(page);
   await page.getByRole("button", { name: "Iso settings" }).click();
   const menu = page.getByRole("dialog", { name: "Iso settings" });
-  await menu.getByRole("button", { name: "sign in at scripted for a new key" }).click();
+  await menu.getByRole("button", { name: "sign in for a key" }).click();
   // The scripted sign-in sends you straight back with a code; the engine exchanges it for the key.
   await expect(menu).toContainText("Signed in at scripted: a key was made for isorite");
   await expect(menu).toContainText("A key is held on this device.");

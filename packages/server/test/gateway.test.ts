@@ -120,7 +120,7 @@ describe("the relay at /api/gateway, for OpenCode", () => {
   let app: ReturnType<typeof createApp>;
   beforeAll(() => {
     const p = provider({ keyHeader: "api-key", headers: { "X-Team": "notes" } });
-    app = createApp({ api: {} as never, token: "the-token", loopback: true, web: null, gateway: relay(p, gatewayHttp(p, person), async () => "sk-work") });
+    app = createApp({ api: {} as never, token: "the-token", loopback: true, web: null, gateway: relay(() => ({ provider: p, http: gatewayHttp(p, person) }), async () => "sk-work") });
   });
   const ask = (path: string, token = "the-token") => app.request(`http://localhost:4767/api/gateway${path}`, { method: "POST", headers: { Host: "localhost:4767", Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: "m", messages: [], stream: true }) });
 
@@ -154,7 +154,7 @@ describe("the relay, when the provider is down for a moment", () => {
       const p: ProviderConfig = { ...OPENROUTER, name: "work", url: "https://gw.example/v1" };
       const answers = [503, 502, 200];
       const http = { fetch: (async () => { const s = answers.shift() ?? 503; return new Response(s === 200 ? '{"data":[]}' : '{"error":{"message":"upstream"}}', { status: s, headers: { "content-type": "application/json" } }); }) as typeof fetch };
-      const pass = relay(p, http, async () => "k");
+      const pass = relay(() => ({ provider: p, http }), async () => "k");
       const ok = await pass("/models", new Request("http://127.0.0.1/api/gateway/models"));
       expect(ok.status).toBe(200);
       expect(answers).toEqual([]);
@@ -168,7 +168,7 @@ describe("the relay, when the provider is down for a moment", () => {
     // Hono's Node adapter puts its own Response in place of the global one; what fetch returns is not an instance of it.
     const reply = new Response('{"data":[]}', { status: 200, headers: { "content-type": "application/json" } });
     const foreign = { status: reply.status, ok: true, headers: reply.headers, body: reply.body };
-    const pass = relay({ ...OPENROUTER, name: "work", url: "https://gw.example/v1" }, { fetch: (async () => foreign) as unknown as typeof fetch }, async () => "k");
+    const pass = relay(() => ({ provider: { ...OPENROUTER, name: "work", url: "https://gw.example/v1" }, http: { fetch: (async () => foreign) as unknown as typeof fetch } }), async () => "k");
     const res = await pass("/models", new Request("http://127.0.0.1/api/gateway/models"));
     expect(res.status).toBe(200);
     expect(await res.text()).toBe('{"data":[]}');

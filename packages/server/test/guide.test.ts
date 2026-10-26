@@ -2,7 +2,9 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
+import { finderHttp } from "@isorite/guide";
 import { hasModel, writeGuide } from "../src/guide.ts";
+import { liveProvider } from "../src/serve.ts";
 
 // isorite guide (M16): the guide written into a folder once, opened as you left it after; Iso is the finder
 // until a model is set up.
@@ -35,4 +37,16 @@ test("Iso has a model with a key kept, or a provider of your own; with neither i
   mkdirSync(join(dir, "b"));
   writeFileSync(join(dir, "b", "config.toml"), '[provider]\nname = "work"\nurl = "https://gateway.example/v1"\n');
   expect(await hasModel(join(dir, "b", "config.toml"))).toBe(true);
+});
+
+test("the finder answers until a model is set up, then the model does, without a restart (M18)", async () => {
+  const dir = temp(), config = join(dir, "config.toml"), finder = finderHttp();
+  const before = await liveProvider(config, finder);
+  expect(before.provider.name).toBe("finder");
+  expect(before.provider.auth).toBeUndefined();
+  expect(before.http).toBe(finder);
+  writeFileSync(config, '[provider]\nkey = "sk-or-test"\n');
+  const after = await liveProvider(config, finder);
+  expect(after.provider.name).toBe("openrouter");
+  expect(after.http).not.toBe(finder);
 });

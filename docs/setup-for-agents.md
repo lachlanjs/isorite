@@ -41,11 +41,15 @@ isorite never reads or changes the person's own OpenCode settings (`~/.config/op
 
 ## config.toml
 
+The person can set all of this from Iso's settings in the browser (M18: on `localhost` only; checked as `doctor`
+checks it, kept into use without a restart). The page writes the same fields; it drops comments, keeping the file
+as it was once as `config.toml.bak`. Writing it by hand needs the server restarted.
+
 ```toml
 [provider]
 name = "work"                         # optional; what isorite calls the provider in messages
 url = "https://…/v1"                  # OpenAI-compatible; /chat/completions and /models are added. Absent: OpenRouter
-key = "…"                             # the key; also settable in the browser (behind the logo)
+key = "…"                             # the key; also settable in Iso's settings in the browser
 key_header = "api-key"                # send the key in this header, as it is, instead of Authorization: Bearer
 stream_usage = false                  # don't send stream_options (some gateways answer 400 to it)
 max_tokens = 16000                    # the least output budget any call gets, for models that think at length

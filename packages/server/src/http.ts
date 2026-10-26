@@ -8,6 +8,7 @@ import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { Conflict, EngineError, MAX_NOTE_BYTES, type Api, type Choice } from "@isorite/engine";
+import type { Setup } from "./setup.ts";
 import { given as withGiven, type Terminal } from "./terminal.ts";
 
 export const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -28,6 +29,8 @@ export interface ServerOptions {
   terminal?: Terminal;
   /** The provider, relayed at /api/gateway for OpenCode: it asks with the token as its key (M13). */
   gateway?: (path: string, req: Request) => Promise<Response>;
+  /** The provider's setup, from Iso's settings (M18). */
+  setup?: Setup;
 }
 
 const TYPES: Record<string, string> = {
@@ -59,6 +62,14 @@ const TurnShape = TurnAsk.omit({ asked: true });
 const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
 const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
 const Key = z.object({ key: z.string().nullable() }).strict();
+const Pair = z.object({ name: z.string().max(200), value: z.string().max(4000), held: z.boolean().optional() }).strict();
+const Path = z.string().max(1000);
+const SetupDraft = z.object({
+  kind: z.enum(["openrouter", "gateway"]), name: z.string().max(100), url: z.string().max(2000), keyHeld: z.boolean(), keyHeader: z.string().max(200),
+  headers: z.array(Pair).max(40), query: z.array(Pair).max(40), pfx: Path, passphraseHeld: z.boolean(), cert: Path, certKey: Path, ca: Path,
+  streamUsage: z.boolean(), maxTokens: z.number().int().positive().max(1_000_000).nullable(), tiers: z.object({ low: z.string().max(200), mid: z.string().max(200), max: z.string().max(200) }).strict(),
+  key: z.string().max(400).nullable().optional(), passphrase: z.string().max(1000).nullable().optional(),
+}).strict();
 const AgentName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/);
 const AgentLook = z.object({ agent: AgentName, session: z.string().min(1).max(200), tool: z.string().max(64), args: z.record(z.string(), z.unknown()), asked: z.string().max(4000).optional() }).strict();
 const AgentEdit = z.union([
@@ -68,7 +79,7 @@ const AgentEdit = z.union([
 const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal, gateway }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal, gateway, setup }: ServerOptions): Hono {
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -80,6 +91,14 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     try { host = new URL("http://" + (c.req.header("host") ?? "")).hostname.replace(/^\[|\]$/g, "").toLowerCase(); } catch { /* none */ }
     // A tailnet's names (tailscale serve) are yours: nobody outside the tailnet can point one at this machine.
     return !loopback || LOOPBACK.has(host) || host.endsWith(".ts.net") || allowed.has(host);
+  };
+  /** Asked from this machine itself: its own name, and (where the connection says) from its own address. A
+   *  tailnet's name is not, even through tailscale serve, whose connections come from this machine. */
+  const local = (c: Context): boolean => {
+    let host = "";
+    try { host = new URL("http://" + (c.req.header("host") ?? "")).hostname.replace(/^\[|\]$/g, "").toLowerCase(); } catch { /* none */ }
+    const from = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming?.socket?.remoteAddress;
+    return LOOPBACK.has(host) && (from === undefined || /^(127\.|::1$|::ffff:127\.)/.test(from));
   };
   const NOT_HERE = "isorite answers only to this machine's own names (localhost) and to a tailnet's (….ts.net). To be reached by another name, start it with: isorite serve <base> --allow-host <that name>";
   /** Why a write is refused, or null. */
@@ -186,13 +205,25 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   post("/api/context/clear", z.object({}).strict(), () => api.clearConversation());
   // The key goes in and never comes out: settings say only whether one is held.
   app.get("/api/settings", (c) => answer(c, () => api.settings()));
-  post("/api/settings/key", Key, (_c, b) => api.setKey(b.key), "put");
+  post("/api/settings/key", Key, async (_c, b) => { const s = await api.setKey(b.key); await setup?.changed(); return api.settings().catch(() => s); }, "put");
   app.get("/api/spend", (c) => answer(c, () => api.spend()));
   post("/api/settings/spend-cap", z.object({ usd: z.number().positive().max(1e6).nullable() }).strict(), (_c, b) => api.setSpendCap(b.usd), "put");
   // Or made by signing in at the provider: the page to go to, and the code it comes back with, which the engine
   // exchanges for the key itself. The page never holds the key.
   post("/api/settings/connect", z.object({ callback: z.string().max(2000) }).strict(), (_c, b) => api.connect(b.callback));
-  post("/api/settings/connected", z.object({ code: z.string().min(1).max(2000), state: z.string().min(1).max(200) }).strict(), (_c, b) => api.connected(b.code, b.state));
+  post("/api/settings/connected", z.object({ code: z.string().min(1).max(2000), state: z.string().min(1).max(200) }).strict(), async (_c, b) => { const s = await api.connected(b.code, b.state); await setup?.changed(); return api.settings().catch(() => s); });
+  // The provider's setup (M18): shown anywhere, changed only from this machine, since the key goes where it says.
+  // From elsewhere, only the setup as kept is checked.
+  if (setup) {
+    const FROM_HERE = "The provider's setup is changed only from this machine (localhost): the key goes where it says.";
+    const here = (c: Context) => { if (!local(c)) throw new EngineError(FROM_HERE, 403); };
+    app.get("/api/settings/provider", (c) => answer(c, async () => setup.view(local(c))));
+    post("/api/settings/provider", SetupDraft, (c, b) => { here(c); return setup.keep(b, true); }, "put");
+    post("/api/settings/provider/check", z.object({ draft: SetupDraft.nullable() }).strict(), (c, b) => setup.check(local(c) ? b.draft : null));
+    post("/api/settings/provider/models", z.object({ draft: SetupDraft.nullable() }).strict(), async (c, b) => ({ models: await setup.models(local(c) ? b.draft : null) }));
+    // A post, as the check is: it asks the provider, which costs, so another site's page may not set it off.
+    post("/api/settings/report", z.object({}).strict(), async () => ({ text: await setup.report() }));
+  }
 
   // A terminal agent (isorite term, or another harness through MCP) looks things up with Iso's tools; the Atlas
   // draws its steps. It is a process on this machine, and asks as the page does: the Origin and the token.

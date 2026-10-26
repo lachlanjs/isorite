@@ -44,7 +44,20 @@ async function provider(): Promise<void> {
       res.writeHead(ok ? 200 : 403, { "content-type": "application/json" }).end(JSON.stringify(ok ? { key: `sk-scripted-made-${code}` } : { error: { message: "Invalid code or code_verifier" } }));
       return;
     }
-    const sent = JSON.parse(body) as { messages: { role: string; content: unknown }[] };
+    // Its models, for the tiers to be chosen from (M18).
+    if (at.pathname === "/v1/models") {
+      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ data: ["scripted-low", "scripted-mid", "scripted-max", "scripted-other"].map((id) => ({ id })) }));
+      return;
+    }
+    const sent = JSON.parse(body) as { messages: { role: string; content: unknown }[]; tools?: { function: { name: string } }[] };
+    // The setup's check (M18), as isorite doctor asks: "ping, using the ping tool".
+    if (sent.tools?.some((t) => t.function.name === "ping")) {
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      res.write(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "ping", arguments: "{}" } }] }, finish_reason: "tool_calls" }] })}\n\n`);
+      res.write(`data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 20, completion_tokens: 5, cost: 0.0001 } })}\n\n`);
+      res.end("data: [DONE]\n\n");
+      return;
+    }
     // Summing up earlier turns (M15): what it picked, as the typed fields compaction asks for.
     if (JSON.stringify(sent.messages[0]?.content ?? "").includes("You sum up the earlier turns")) {
       res.writeHead(200, { "content-type": "text/event-stream" });

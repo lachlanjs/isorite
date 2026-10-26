@@ -16,16 +16,30 @@ run `isorite doctor`: it checks each step and says what to change.
 Iso and the terminal need an OpenAI-compatible provider. isorite's settings are in `~/.config/isorite/config.toml`
 (or `$XDG_CONFIG_HOME/isorite/config.toml`), a file only you can read.
 
-**OpenRouter** is the default. Open isorite in the browser, and set the key behind the logo (or sign in there with
-OpenRouter, which makes one). Nothing else is needed.
+**OpenRouter** is the default. Open isorite in the browser, open Iso's settings (the icon at the right of Iso's
+pane head), and paste a key there, or sign in with OpenRouter, which makes one. Nothing else is needed.
 
-**Any other provider or gateway** is named under `[provider]`, with its models under `[tiers]`:
+**Any other provider or gateway** is set up in the same place: choose *a gateway of your own*, give its address and
+key, and open *what else it asks for* for its key's header, headers, query values, client certificate, and whether
+it reports usage. Each tier's model is picked from the gateway's own list. The pulse icon checks the setup before
+it is kept, as `isorite doctor` would, and says what to change; the tick keeps it, in use at once, without a
+restart. The clipboard icon copies `isorite doctor --report` for someone helping.
+
+- The setup is changed only from this machine (`localhost`). From a phone over a tailnet it is shown and checked,
+  and the key can be changed, but not the address it goes to.
+- Keeping a new address forgets the key held for the old one, unless a key is given with it.
+- Secrets (the key, the `.pfx`'s password, a header whose name looks secret) are written and never shown again.
+- The page writes `config.toml` again without its comments; the first time, the file as it was is kept beside it
+  as `config.toml.bak`.
+- A running `isorite term` keeps the models it started with, but asks through the new address at once.
+
+The same setup can be written by hand in `config.toml`, under `[provider]`, with the models under `[tiers]`:
 
 ```toml
 [provider]
 name = "work"                              # what isorite calls it
 url = "https://llm.example.com/v1"         # /chat/completions is added to it
-key = "…"                                  # or set it behind the logo in the browser
+key = "…"                                  # or set it in Iso's settings in the browser
 
 [tiers]                                    # the provider's own names for its models
 low = "small-model"                        # quick replies
