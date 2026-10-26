@@ -22,7 +22,7 @@ import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
 import { term, tutorialTerm } from "./term.ts";
 import { writeExample, writeGeometry } from "@isorite/example/node";
-import { fetchModel, userModelDir } from "./model.ts";
+import { modelCommand } from "./model.ts";
 
 // The version: written into the bundle when it is built for npm (scripts/package.ts), else this checkout's.
 declare const ISORITE_VERSION: string | undefined;
@@ -105,7 +105,7 @@ export function main(argv: string[]): number | Promise<number> {
     if (command === "model") {
       const from = rest[rest.indexOf("--from") + 1];
       if (rest.includes("--from") && !from) { console.error("--from takes a folder"); return 2; }
-      return fetchModel(userModelDir(), console.log, from && rest.includes("--from") ? { from } : {}).then(() => 0, (e: Error) => { console.error(e.message); return 1; });
+      return modelCommand(rest.includes("--from") ? from : undefined);
     }
     if (command === "--version" || command === "-v") { console.log(VERSION); return 0; }
     if (command === "help" && rest[0] === "setup") {

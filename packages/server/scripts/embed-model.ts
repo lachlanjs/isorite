@@ -7,4 +7,4 @@
 import { fileURLToPath } from "node:url";
 import { fetchModel } from "../src/model.ts";
 
-await fetchModel(fileURLToPath(new URL("../../model/", import.meta.url)), console.log, { pkg: null });
+await fetchModel(fileURLToPath(new URL("../../model/", import.meta.url)), console.log, { pkg: null, release: null });

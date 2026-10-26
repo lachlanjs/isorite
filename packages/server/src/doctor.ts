@@ -3,7 +3,8 @@
 // issue: versions, the platform, the configuration with its secrets replaced by their lengths, the environment
 // isorite reads, and the checks.
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { arch, platform, release } from "node:os";
 import { getCACertificates } from "node:tls";
 import { join, resolve } from "node:path";
@@ -11,7 +12,9 @@ import { OWN_DIR, SETTINGS_FILE, parseSettings } from "@isorite/core";
 import { KEY, ModelError, complete, endpoint, unreachable, type Http, type ProviderConfig, type ToolDef } from "@isorite/engine";
 import { findOpenCode, gatewayFrom, type Probe } from "@isorite/opencode";
 import { ConfigSecrets, configPath, gatewayTls, providerConfig, readConfig } from "./config.ts";
+import { cacheDir } from "./embedder.ts";
 import { gatewayHttp } from "./gateway.ts";
+import { modelDir, modelInfo, modelPlaces, type ModelInfo } from "./model.ts";
 import { locate } from "./serve.ts";
 import { serving } from "./term.ts";
 
@@ -39,7 +42,7 @@ export interface DoctorOptions {
 const MARK: Record<Outcome, string> = { ok: "✓", fail: "✗", warn: "!", skip: "–" };
 
 /** The environment variables isorite and Node read for it; the secret ones are shown only by length. */
-const READ = ["ISORITE_GATEWAY_URL", "ISORITE_GATEWAY_MODELS", "ISORITE_GATEWAY_KEY", "ISORITE_OPENCODE", "XDG_CONFIG_HOME", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "NODE_TLS_REJECT_UNAUTHORIZED", "ISORITE_NODE_DEFAULTS", "SSH_CONNECTION"];
+const READ = ["ISORITE_GATEWAY_URL", "ISORITE_GATEWAY_MODELS", "ISORITE_GATEWAY_KEY", "ISORITE_OPENCODE", "XDG_CONFIG_HOME", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "NODE_TLS_REJECT_UNAUTHORIZED", "ISORITE_NODE_DEFAULTS", "SSH_CONNECTION", "ISORITE_EMBED", "ISORITE_EMBED_DIR", "XDG_DATA_HOME", "XDG_CACHE_HOME"];
 const SECRET = /key|token|secret|pass|auth|cookie/i;
 
 const hidden = (v: string) => `<${v.length} characters>`;
@@ -88,7 +91,7 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
   const system = getCACertificates("system"), trusted = new Set(getCACertificates("default"));
   const withSystem = flags.includes("--use-system-ca") || (system.length > 0 && system.every((c) => trusted.has(c)));
   say("authorities", withSystem ? "ok" : "warn", [withSystem ? `the system's (${system.length}), as well as Node's own` : env.ISORITE_NODE_DEFAULTS === "0" ? "Node's own only (ISORITE_NODE_DEFAULTS=0)" : "Node's own only: the system's could not be read", env.NODE_EXTRA_CA_CERTS ? `and ${env.NODE_EXTRA_CA_CERTS}` : ""].filter(Boolean).join(", "));
-  if (env.NODE_TLS_REJECT_UNAUTHORIZED === "0") say("authorities", "warn", "NODE_TLS_REJECT_UNAUTHORIZED=0 turns off checking certificates altogether: name the company's authority instead");
+  if (env.NODE_TLS_REJECT_UNAUTHORIZED === "0") say("authorities", "warn", "NODE_TLS_REJECT_UNAUTHORIZED=0 turns off checking certificates for everything, and isorite doesn't need it: unset it, and if a certificate is then refused, name the company's authority (ca under [provider], or NODE_EXTRA_CA_CERTS)");
 
   // The provider, asked.
   if (o.offline) say("provider", "skip", "not asked (--offline)");
@@ -149,6 +152,16 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
   say("terminal", known ? "ok" : "warn", terminal);
   if (env.SSH_CONNECTION) say("browser", "ok", `over SSH: on your own machine, ssh -L ${port}:localhost:${port} <this host>, then http://localhost:${port}/`);
 
+  // Search by meaning: a warning, not a failure, without it, as search by words works alone.
+  let model: ModelInfo | null = null;
+  if (env.ISORITE_EMBED === "off") say("search by meaning", "skip", "switched off (ISORITE_EMBED=off)");
+  else {
+    const dir = modelDir(env);
+    try { model = dir ? modelInfo(dir) : null; } catch (e) { say("search by meaning", "fail", `${dir}: ${(e as Error).message}`); }
+    if (model) say("search by meaning", "ok", `${model.name} at ${model.dir}`);
+    else if (!dir) say("search by meaning", "warn", `no model in ${modelPlaces(env).map((p) => p.dir).join(" or ")}: isorite model fetches it (53 MB). Search by words works without it`);
+  }
+
   // The notes.
   if (folder) {
     try {
@@ -159,6 +172,14 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
       if (repository) {
         const at = resolve(notes, repository);
         say("repository", existsSync(at) && statSync(at).isDirectory() ? "ok" : "fail", existsSync(at) ? at : `${OWN_DIR}/${SETTINGS_FILE} names ${repository}, and there is no folder at ${at}`);
+      }
+      // The base's vectors, if made: by the model there is now, or made again when it is next opened.
+      const vectors = join(cacheDir(env), `vectors-${createHash("sha256").update(notes).digest("hex").slice(0, 16)}.json`);
+      if (model && existsSync(vectors)) {
+        const head = Buffer.alloc(300), fd = openSync(vectors, "r");
+        try { readSync(fd, head, 0, 300, 0); } finally { closeSync(fd); }
+        const by = /"model":"([^"]*)"/.exec(head.toString("utf8"))?.[1];
+        if (by) say("vectors", by === model.id ? "ok" : "warn", by === model.id ? `the base's, made by ${model.name}` : `the base's were made by ${by}: they are made again by ${model.name} when it is next opened`);
       }
     } catch (e) {
       say("notes", "fail", (e as Error).message);

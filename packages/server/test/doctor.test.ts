@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { doctor, type DoctorOptions } from "../src/doctor.ts";
+import { modelDir } from "../src/model.ts";
 
 /** A gateway as OpenAI's API answers, which can be told to refuse stream_options or to drop tools. */
 let gateway: Server, url: string;
@@ -130,4 +131,22 @@ describe("isorite help setup", () => {
     expect(said.startsWith("# Setting isorite up: for an AI helping someone")).toBe(true);
     expect(said).toContain("isorite doctor --report");
   });
+});
+
+describe("search by meaning", () => {
+  it("is a warning, not a failure, without a model: search by words works alone", async () => {
+    const { code, text } = await run(work(), { offline: true, env: { ISORITE_EMBED_DIR: "/nowhere/model" } });
+    expect(text).toContain("! search by meaning: no model in /nowhere/model: isorite model fetches it (53 MB). Search by words works without it");
+    expect(code).toBe(0);
+  });
+  it("names the model and where it is, and is skipped when switched off", async () => {
+    const real = modelDir({});
+    if (real) expect((await run(work(), { offline: true, env: { ISORITE_EMBED_DIR: real } })).text).toContain(`✓ search by meaning: granite-embedding-small-english-r2 at ${real}`);
+    expect((await run(work(), { offline: true, env: { ISORITE_EMBED: "off" } })).text).toContain("– search by meaning: switched off (ISORITE_EMBED=off)");
+  });
+});
+
+it("warns when certificate checks are off for everything, and says isorite doesn't need it", async () => {
+  const { text } = await run(work(), { offline: true, env: { NODE_TLS_REJECT_UNAUTHORIZED: "0" } });
+  expect(text).toContain("! authorities: NODE_TLS_REJECT_UNAUTHORIZED=0 turns off checking certificates for everything, and isorite doesn't need it");
 });

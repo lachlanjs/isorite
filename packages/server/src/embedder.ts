@@ -3,34 +3,24 @@
 // model's files are not installed there is no embedder, and Iso has keyword
 // search and links alone.
 
-import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import type { Embedder } from "@isorite/engine";
-import { NAME, userModelDir } from "./model.ts";
+import { DIM, MODEL, modelDir, modelInfo } from "./model.ts";
 
-export const MODEL = `${NAME}-q8`;
-export const DIM = 384;
-
-/** Where the model's files are (npm run model in a checkout, into packages/model; isorite model when installed), or
- *  null when they are not there. */
-export function modelDir(env: NodeJS.ProcessEnv = process.env): string | null {
-  if (env.ISORITE_EMBED === "off") return null;
-  const dirs = env.ISORITE_EMBED_DIR ? [env.ISORITE_EMBED_DIR] : [join(dirname(fileURLToPath(import.meta.url)), "..", "..", "model"), userModelDir(env)];
-  return dirs.find((dir) => existsSync(join(dir, "model.onnx")) && existsSync(join(dir, "tokenizer.json"))) ?? null;
-}
+export { DIM, MODEL, modelDir };
 
 /** The folder caches are kept in: outside both repositories, rebuilt from the notes whenever it is lost. */
 export const cacheDir = (env: NodeJS.ProcessEnv = process.env): string => join(env.XDG_CACHE_HOME || join(homedir(), ".cache"), "isorite");
 
 export function nodeEmbedder(dir: string): Embedder & { close(): Promise<void> } {
+  const info = modelInfo(dir);
   let worker: Worker | null = null, next = 0;
   const waiting = new Map<number, { done: (v: Float32Array) => void; fail: (e: Error) => void }>();
   const start = (): Worker => {
     // Beside this file: embed-worker.ts in a checkout, embed-worker.js as built for npm.
-    const w = new Worker(new URL(`./embed-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`, import.meta.url), { workerData: { dir, dim: DIM } });
+    const w = new Worker(new URL(`./embed-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`, import.meta.url), { workerData: { dir, dim: DIM, pooling: info.pooling } });
     w.on("message", (m: { id: number; vector?: Float32Array; error?: string }) => {
       const asked = waiting.get(m.id);
       waiting.delete(m.id);
@@ -42,7 +32,7 @@ export function nodeEmbedder(dir: string): Embedder & { close(): Promise<void> }
     return w;
   };
   return {
-    model: MODEL, dim: DIM,
+    model: info.id, dim: DIM,
     embed: (text) => new Promise((done, fail) => {
       worker ??= start();
       const id = next++;
