@@ -7,7 +7,7 @@
 //   isorite example <folder>               write the example base, partway built, into a folder
 //   isorite term [<notes>]                 OpenCode, with isorite's plugin, beside a knowledge base
 //   isorite mcp [<notes>]                    the knowledge base's tools over MCP, on stdio, for another harness
-//   isorite --tutorial [<folder>]          the tutorial: the terminal's tour, and the browser's beside it
+//   isorite guide [<folder>]               the guide: a knowledge base about isorite, to read in isorite
 //   isorite doctor [<notes>] [--report]    whether isorite can work here, a step at a time
 
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
@@ -20,7 +20,8 @@ import { proxied, rerun, trustSystem } from "./network.ts";
 import { newBase, serve } from "./serve.ts";
 import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
-import { term, tutorialTerm } from "./term.ts";
+import { term } from "./term.ts";
+import { guide } from "./guide.ts";
 import { writeExample, writeGeometry } from "@isorite/example/node";
 import { modelCommand } from "./model.ts";
 
@@ -55,11 +56,10 @@ const USAGE = `isorite: an agentic harness for understanding
                                          to someone (or an AI) helping
   isorite help setup                     how isorite is set up, every setting and failure: written for an AI
                                          helping you set it up (docs/setup.md is for people)
-  isorite --tutorial [<folder>] [--port <n>]
-                                         the tutorial, on the example base, with a scripted model (no key,
-                                         nothing sent anywhere): the terminal's tour in OpenCode 2, and the
-                                         browser's opened beside it on the same base; kept in the folder, to
-                                         carry on later (also: isorite tutorial term)
+  isorite guide [<folder>] [--port <n>]  the guide: a knowledge base about isorite, with things to do in it,
+                                         written into a folder (~/isorite-guide unless named) and opened in
+                                         the browser; run again, as you left it. Iso is your model, or with
+                                         none set up, the guide's finder (also: isorite --tutorial)
 `;
 
 export function check(notes: string, out: (line: string) => void = console.log): number {
@@ -93,14 +93,15 @@ export function main(argv: string[]): number | Promise<number> {
         throw e;
       });
     }
-    // The terminal's tour: `isorite --tutorial`, or `isorite tutorial term`, or `isorite term --tutorial`.
-    const tour = command === "--tutorial" ? rest : command === "tutorial" && rest[0] === "term" ? rest.slice(1) : command === "term" && rest.includes("--tutorial") ? rest.filter((a) => a !== "--tutorial") : null;
-    if (tour) {
-      const at = tour.indexOf("--port"), port = at < 0 ? undefined : Number(tour[at + 1]);
+    // The guide (M16): `isorite guide`, and by its old names, `isorite --tutorial` and `isorite tutorial`.
+    if (command === "guide" || command === "--tutorial" || command === "tutorial") {
+      const args = command === "tutorial" && rest[0] === "term" ? rest.slice(1) : rest;
+      const at = args.indexOf("--port"), port = at < 0 ? undefined : Number(args[at + 1]);
       if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
-      const folder = tour.find((a, i, all) => !a.startsWith("--") && all[i - 1] !== "--port");
-      return tutorialTerm(folder, port === undefined ? {} : { port }).catch((e: Error) => { console.error(e.message); return 2; });
+      const folder = args.find((a, i, all) => !a.startsWith("--") && all[i - 1] !== "--port");
+      return guide(folder, port === undefined ? {} : { port }).then(() => new Promise<number>(() => undefined), (e: Error) => { console.error(e.message); return 2; });
     }
+    if (command === "term" && rest.includes("--tutorial")) { console.error("The terminal's tour is retired: isorite guide opens the guide, whose note on isorite term says how to try it."); return 2; }
     if (command === "term" || command === "mcp") {
       const flag = (name: string) => { const at = rest.indexOf(name); return at < 0 ? undefined : rest[at + 1]; };
       const port = flag("--port") === undefined ? undefined : Number(flag("--port")), agent = flag("--agent");

@@ -19,7 +19,7 @@ turn off certificate checking (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
 | `isorite serve <notes> [--port <n>]` | The browser app at `http://localhost:4767/`, on 127.0.0.1 only. |
 | `isorite term [<notes>] [--port <n>]` | OpenCode 2 in this terminal, in the current folder (the code), with the notes beside it. Starts the isorite server if none answers on the port, and stops it on exit. |
 | `isorite check <notes>` | Lints the notes: frontmatter, links, cycles. |
-| `isorite --tutorial` | A tour on an example base with a scripted model: no key or network needed. Good to check the install alone. |
+| `isorite guide [<folder>]` | The guide, a knowledge base about isorite, written into `~/isorite-guide` (or the folder named) and served. With no provider set up, Iso is the guide's finder: no key or network needed. Good to check the install alone. `isorite --tutorial` is another name for it. |
 | `isorite model [--from <folder>]` | Optional: the model for search by meaning. Says which is installed and where, else fetches it (53 MB) from npm, a GitHub release, then Hugging Face, saying why each failed. `--from`: granite's files, or any compatible model (below). |
 | `isorite help setup` | Prints this. |
 

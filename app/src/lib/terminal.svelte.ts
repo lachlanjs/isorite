@@ -1,6 +1,6 @@
 // The terminal's session in Iso's pane (M11): what `isorite term` shows, followed by the isorite server, drawn while
 // Iso may edit the project's files or run commands (M12, Q47). Asking, stopping and answering go through the server;
-// the page never reaches OpenCode itself. With no terminal attached (or in the tutorial, which has no server), those
+// the page never reaches OpenCode itself. With no terminal attached (or on the guide's site, which has no server), those
 // switches are not offered.
 
 import type { Decision, EngineEvent, TerminalView } from "@isorite/engine";

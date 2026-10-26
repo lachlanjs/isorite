@@ -1,0 +1,16 @@
+{
+  "name": "On the guide, it answers about isorite from the guide's notes, and links them",
+  "base": "guide",
+  "turn": {
+    "mode": "ask",
+    "asked": "Iso read a note three turns ago and now it says it set it aside. What happened, and how is that different from a note I gave it?",
+    "given": []
+  },
+  "checks": [
+    { "called": ["read_note"] },
+    { "says": "what-iso-is-sent" },
+    { "says": "three turns|3 turns|age|aside" },
+    { "says": "you gave|given|take it out|✕" },
+    { "linksResolve": true }
+  ]
+}

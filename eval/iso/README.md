@@ -7,6 +7,7 @@ N-body notes), against the provider in `~/.config/isorite/config.toml`. Plain JS
 ```jsonc
 {
   "name": "…",                       // what is being checked, in a line
+  "base": "guide",                   // optional: run on the guide (M16), not the N-body example
   "agents": "…",                     // optional: AGENTS.md at the top of the base
   "history": [                       // optional: earlier turns, written into the conversation as they are
     { "asked": "…", "said": "…", "read": ["integrators/leapfrog"] }  // read: notes Iso read in it, whole

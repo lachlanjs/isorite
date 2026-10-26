@@ -3,17 +3,17 @@
 // the static adapter into app/build, where isorite serve finds it.
 import adapter from "@sveltejs/adapter-static";
 
-// The tutorial (npm run build:tutorial) is the same app with the engine in the page, over the example base, built into
+// The guide's site (npm run build:guide) is the same app with the engine in the page, over the guide, built into
 // site/ at the repository's root for GitHub Pages.
-const out = process.env.ISORITE_TUTORIAL ? "../site" : "build";
+const out = process.env.ISORITE_GUIDE ? "../site" : "build";
 
 /** @type {import('@sveltejs/kit').Config} */
 export default {
   kit: {
     adapter: adapter({ pages: out, assets: out, strict: false }),
     router: { type: "hash" },
-    // The tutorial is one page that SvelteKit serves as its fallback, whose links are absolute however `relative` is
+    // The site is one page that SvelteKit serves as its fallback, whose links are absolute however `relative` is
     // set: on GitHub Pages it is served under the repository's name (/isorite/), which BASE_PATH gives.
-    paths: { relative: true, base: process.env.ISORITE_TUTORIAL ? (process.env.BASE_PATH ?? "") : "" },
+    paths: { relative: true, base: process.env.ISORITE_GUIDE ? (process.env.BASE_PATH ?? "") : "" },
   },
 };

@@ -9,7 +9,7 @@ run `isorite doctor`: it checks each step and says what to change.
 - **isorite**: `npm i -g isorite`.
 - For the terminal, **OpenCode 2**: `npm i -g @opencode/cli`.
 
-`isorite --tutorial` now shows you around, on an example base, with a scripted model: no key, nothing sent anywhere.
+`isorite guide` now opens the guide, a knowledge base about isorite with things to do in it. Until a provider is set up, Iso there is the guide's finder: no key, nothing sent anywhere.
 
 ## 2. A model provider
 

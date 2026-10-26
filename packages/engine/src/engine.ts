@@ -34,13 +34,11 @@ export interface EngineOptions {
   /** The knowledge base's folder. */
   notes: Files;
   /** isorite's own files for this base: its journals, conversations and Understanding notes. On disk, the notes'
-   *  `.isorite/` folder (format 2); in the tutorial and the tests, files in memory. */
+   *  `.isorite/` folder (format 2); on the guide's site and in the tests, files in memory. */
   own: Files;
   clock: Clock;
   device: string;
   name: string;
-  /** The base is the tutorial's: the session says so, and the app walks you through it. */
-  tutorial?: boolean;
   /** For Iso: the network, where the key is kept, and which provider. Without `http`, Iso cannot be asked. */
   http?: Http;
   secrets?: Secrets;
@@ -183,7 +181,7 @@ export class Engine implements Api {
   // ------------------------------------------------------------ reading
 
   async session(): Promise<Session> {
-    return { name: this.opts.name, device: this.opts.device, ...(this.opts.tutorial ? { tutorial: true } : {}) };
+    return { name: this.opts.name, device: this.opts.device };
   }
 
   async notes(): Promise<Listing> {
