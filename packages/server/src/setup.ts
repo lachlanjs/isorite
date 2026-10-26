@@ -48,7 +48,9 @@ export function applySetup(config: Table, draft: SetupDraft): { config: Table; f
     p.url = url.replace(/\/+$/, "");
     if (draft.name.trim()) p.name = draft.name.trim();
   }
-  const moved = text(old.url).replace(/\/+$/, "") !== text(p.url);
+  // Where the key goes, before and after: OpenRouter's address where none is named.
+  const at = (url: string) => (url || OPENROUTER.url).replace(/\/+$/, "");
+  const moved = at(text(old.url)) !== at(text(p.url));
   if (!moved && old.auth !== undefined) p.auth = old.auth;
   // The key, kept only for the address it was given for.
   let forgot = false;

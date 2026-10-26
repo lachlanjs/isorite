@@ -134,3 +134,60 @@ a named departure: the layout is mine, to be judged from the screenshots.
 - **From M13, still open:** Q54's header (which header the work gateway wants the key in) and Q55 (a long-lived
   key, or one from signing in that expires). M18's form takes either header. A key got by a command (`key_command`)
   waits on Q55's answer and isn't in M18.
+
+## 8. What was built
+
+Built 2026-10-26 on `m18-setup`, as planned, with Q83–Q86 as recommended. Version 0.6.0.
+
+- **The form** (`packages/server/src/setup.ts`): `readSetup` turns `config.toml`'s `[provider]` and `[tiers]` into
+  the form with its secrets held (the key, the `.pfx`'s password, a header or query value whose name looks secret,
+  as doctor judges it). `applySetup` writes the form back: what is held is kept when sent back without a value,
+  and fields the form doesn't hold (`spend_cap`, `cache_marks`, …) are left alone. The types are in
+  `@isorite/engine` (`ProviderSetup`, `SetupDraft`, `SetupView`, `SetupCheck`).
+- **The key stays with its address:** a new address, given no key, forgets the key and any secret header.
+  The address compared is the one the key goes to, so OpenRouter written as a gateway at its own address keeps it.
+- **The check:** doctor's provider steps are `checkProvider` in `doctor.ts`, used by `isorite doctor` and by
+  the page. The page checks the draft as if kept (`providerFrom` and `gatewayTlsFrom` read a configuration not
+  yet written), or the setup kept when the page isn't on this machine.
+- **Kept into use at once:** `Engine.setProvider`. The server holds the provider by reference (`liveProvider`),
+  so the relay for `isorite term` uses the new address, key and certificate at once. A key held or forgotten in
+  the settings is taken into use the same way. `isorite guide` passes the finder always: it answers while there is
+  no model, as a provider named `finder`, and the model answers once one is set up.
+- **The routes:** `GET/PUT /api/settings/provider`, and `POST …/provider/check`, `…/provider/models` and
+  `/api/settings/report`. The posts need the page's token, because they ask the provider, which costs. Changing the setup
+  is refused (403) unless the Host is this machine's own name, and the connection is from this machine.
+- **The section** (`ProviderSetup.svelte`, in `IsoSettings.svelte`): OpenRouter or a gateway, the address and
+  key, with the rest under *what else it asks for*. The tiers are chosen from the provider's list (a datalist, asked
+  when a tier is first chosen). There are three icon buttons: check, keep, and copy the report. The check's lines
+  are shown as doctor's. The notes under the key and the cap are tooltips now. The engine in the page (the guide's
+  site) has no setup and shows the key as before. "Behind the logo" in messages and guides is now "Iso's
+  settings".
+- **Docs:** `docs/setup.md`, `docs/setup-for-agents.md`, the npm README, and the guide's *Starting a base*.
+
+**Tests.**
+- Server: `test/setup.test.ts` (10). It covers the form both ways, the key forgotten or kept, refusals, a check
+  and the model list against a gateway that wants `api-key`, keeping (0600, `.bak` once), and 403 from a
+  tailnet's name. One more test in `guide.test.ts`: the finder until a model is set up.
+- Browser: `app/tests/setup.spec.ts` (2 × 4 projects). A gateway is set up, checked (5 ✓), kept and asked; its
+  secret header is held after a reload and not in the page; a change from a tailnet's name is refused. The test
+  provider now lists models and answers doctor's ping.
+- All pass: 194 browser tests (18 skipped), the 6 site tests, every package's unit tests, and the type checks. The
+  svelte-autofixer found no issues.
+
+**Real check** (≈ $0.01, Lachlan's `config.toml` neither read by me nor written). A server on a copy of the guide
+was run with the real setup.
+- The setup as kept was checked: 467 models listed, a reply from each tier, and the tool called.
+- The same setup was checked as a draft, OpenRouter written as a gateway at its own address. It used the held key
+  and was not kept.
+- One Iso turn on the low tier: 7,173 tokens in and 192 out, $0.0081.
+
+The page's own Keep button was tested only against the scripted provider, so your config stayed as it was.
+
+**Found on the way.** The check showed that moving between OpenRouter and a gateway at OpenRouter's address
+forgot the key. Addresses are now compared as the key sees them.
+
+**Not done.**
+- Signing in for an OpenRouter key from the guide while its finder answers: the finder has no sign-in page, so a
+  key is pasted there.
+- The page isn't tried against the work gateway: that is Lachlan's to do.
+- Q54's header and Q55 (`key_command`) are still open.

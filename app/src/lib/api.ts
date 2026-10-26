@@ -2,7 +2,7 @@
 // against the Api interface (@isorite/engine), so a webview can later hand it
 // the engine itself instead of this.
 
-import type { Api, Decision, EngineEvent, Given, NoteSource, Session, TerminalView } from "@isorite/engine";
+import type { Api, Decision, EngineEvent, Given, NoteSource, Session, SetupCheck, SetupDraft, SetupView, TerminalView } from "@isorite/engine";
 
 /** A request the server refused. For a save that lost a race, `current` is the note as it is now (null: gone). */
 export class ApiError extends Error {
@@ -23,7 +23,20 @@ export interface TerminalApi {
   reply(id: string, decision: Decision): Promise<void>;
 }
 
-export function httpApi(root: string = new URL("api/", document.baseURI).href): Api & { terminal: TerminalApi } {
+/** The provider's setup (M18), through the isorite server: there is none for the engine in the page (the guide's site). */
+export interface SetupApi {
+  view(): Promise<SetupView>;
+  /** Keep it, and take it into use. Only from this machine. */
+  keep(draft: SetupDraft): Promise<SetupView>;
+  /** Doctor's checks of the provider, on the draft (null: as kept). Nothing is written. */
+  check(draft: SetupDraft | null): Promise<SetupCheck[]>;
+  /** The models the provider lists. */
+  models(draft: SetupDraft | null): Promise<string[]>;
+  /** isorite doctor --report: one block, its secrets hidden. */
+  report(): Promise<string>;
+}
+
+export function httpApi(root: string = new URL("api/", document.baseURI).href): Api & { terminal: TerminalApi; setup: SetupApi } {
   let token: Promise<string> | null = null;
   const ask = async <T>(path: string, init?: RequestInit): Promise<T> => {
     let res: Response;
@@ -94,6 +107,13 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     agentSend: (sent) => write("POST", "agent/send", sent),
     agentReceived: async (id, agent) => { await write("POST", "agent/received", { id, agent }); },
     agentStatus: async (agent, session, busy) => { await write("POST", "agent/status", { agent, session, busy }); },
+    setup: {
+      view: () => ask<SetupView>("settings/provider"),
+      keep: (draft) => write("PUT", "settings/provider", draft),
+      check: (draft) => write("POST", "settings/provider/check", { draft }),
+      models: async (draft) => (await write<{ models: string[] }>("POST", "settings/provider/models", { draft })).models,
+      report: async () => (await write<{ text: string }>("POST", "settings/report", {})).text,
+    },
     terminal: {
       view: () => ask<TerminalView>("terminal"),
       prompt: async (asked, given) => { await write("POST", "terminal/prompt", { asked, given }); },

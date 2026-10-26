@@ -696,7 +696,7 @@ export class Engine implements Api {
   private async begin(req: AskRequest, http: Http, asked: string): Promise<{ request: string }> {
     if (asked.length > MAX_ASKED) throw new EngineError("that is too long to ask at once", 413);
     const key = (await this.opts.secrets?.get(KEY)) ?? null;
-    if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
+    if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in Iso's settings.", 409);
 
     const { messages, olds } = await this.compose(req, asked);
     const maxTokens = req.form === "insert" ? REPLY_TOKENS : req.form === "note" ? NOTE_TOKENS : Math.max(REPLY_TOKENS, Math.ceil(olds.join("").length / 3) + 1000);
@@ -1217,7 +1217,7 @@ export class Engine implements Api {
   private async beginTurn(conversation: string, req: TurnRequest & { mode: Exclude<TurnRequest["mode"], "build"> }, http: Http): Promise<string> {
     const study = this.opts.own;
     const key = (await this.opts.secrets?.get(KEY)) ?? null;
-    if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
+    if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in Iso's settings.", 409);
     const lookupOn = req.lookup !== false, mode = req.mode;
     let w = await this.working({ ...req, conversation });
     // Over the model's limit: the earliest turns are summed up first (M15); still over, the turn is not sent.

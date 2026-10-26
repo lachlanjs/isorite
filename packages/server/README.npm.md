@@ -12,7 +12,7 @@ isorite guide               # the guide: a knowledge base about isorite, with th
 On your own notes, a folder of Markdown files (`isorite new <notes>` starts one):
 
 ```sh
-isorite serve <notes>       # the browser, at http://localhost:4767/; set Iso's provider key behind the logo
+isorite serve <notes>       # the browser, at http://localhost:4767/; set up Iso's provider in Iso's settings
 cd <your code> && isorite term <notes>   # OpenCode here, with the notes beside it
 isorite model               # optional: search by meaning (fetches a 53 MB model, once)
 ```

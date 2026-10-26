@@ -76,6 +76,12 @@ describe("the setup as a form", () => {
     expect(out).not.toHaveProperty("tiers");
   });
 
+  it("keeps the key when only the way it is named changes: OpenRouter, written as a gateway at its own address", () => {
+    const { config: out, forgot } = applySetup({ provider: { key: "sk-or" } }, { ...readSetup({ provider: { key: "sk-or" } }), kind: "gateway", url: `${OPENROUTER.url}/` });
+    expect(forgot).toBe(false);
+    expect(out.provider).toMatchObject({ key: "sk-or", url: OPENROUTER.url });
+  });
+
   it("refuses what cannot be kept, saying what", () => {
     const base = draftOf(WORK);
     expect(() => applySetup({}, { ...base, url: "gw.example" })).toThrow("not an address");

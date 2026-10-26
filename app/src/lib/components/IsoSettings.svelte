@@ -1,12 +1,17 @@
 <script lang="ts">
-  // Iso's settings, under its pane's header: the provider key, and what each tier asks. The key goes to the
-  // device's configuration and is never shown again: this only says whether one is held.
+  // Iso's settings, under its pane's header: the provider (set up here where isorite serves the page, M18), the
+  // spend cap and AGENTS.md. The key goes to the device's configuration and is never shown again: this only says
+  // whether one is held.
   import type { Settings } from "@isorite/engine";
+  import type { SetupApi } from "$lib/api.ts";
   import { app } from "$lib/app.svelte.ts";
+  import ProviderSetup from "./ProviderSetup.svelte";
   import { converse } from "$lib/converse.svelte.ts";
   import { spend } from "$lib/spend.svelte.ts";
 
   let settings = $state.raw<Settings | null>(null);
+  /** The provider's setup, where a server is there to keep it (not for the engine in the page). */
+  const setup = (app.api as { setup?: SetupApi } | undefined)?.setup ?? null;
   let key = $state("");
   let problem = $state("");
   let cap = $state("");
@@ -41,34 +46,30 @@
 </script>
 
 <section>
-  <h2 class="label">the provider</h2>
-  {#if settings}
+  {#if settings && setup}
+    <ProviderSetup api={setup} {settings} onsettings={(s) => { settings = s; void spend.refresh(); }} />
+  {:else if settings}
+    <h2 class="label">the provider</h2>
     <p class="soft">Asked through {settings.provider}. {settings.key ? "A key is held on this device." : "No key is held yet, so Iso cannot be asked."}</p>
     <form class="row" onsubmit={(e) => { e.preventDefault(); if (key.trim()) void setKey(key); }}>
       <label class="hidden-label" for="key">Provider key</label>
-      <input id="key" class="field grow" type="password" bind:value={key} placeholder={settings.key ? "paste another key to replace it" : "paste a key"} autocomplete="off" spellcheck="false" />
+      <input id="key" class="field grow" type="password" bind:value={key} placeholder={settings.key ? "paste another key to replace it" : "paste a key"} title="kept in this device's configuration, never in a base, and not shown again" autocomplete="off" spellcheck="false" />
       <button class="btn primary" type="submit" disabled={!key.trim()}>hold it</button>
       {#if settings.key}<button class="btn" type="button" onclick={() => setKey(null)}>forget it</button>{/if}
+      {#if settings.connect}<button class="btn" type="button" onclick={signIn} title="you sign in at {settings.provider}, and the key it makes comes straight here; a spending limit for it is set on its page of keys">sign in for a key</button>{/if}
     </form>
-    {#if settings.connect}
-      <div class="row">
-        <span class="faint">or</span>
-        <button class="btn" type="button" onclick={signIn}>sign in at {settings.provider} for a new key</button>
-      </div>
-      <p class="faint">You sign in there, and the key it makes comes straight here. A spending limit for it is set on the provider's page of keys.</p>
-    {/if}
     {#if app.signIn}<p class={app.signIn.ok ? "soft" : "bad"} role="status">{app.signIn.message}</p>{/if}
-    <p class="faint">The key is kept in this device's configuration, never in a base, and is not shown again.</p>
-    <form class="row" onsubmit={(e) => { e.preventDefault(); const n = Number(cap); if (n > 0) void setCap(n); }}>
-      <label class="hidden-label" for="cap">Monthly spend cap in dollars</label>
-      <input id="cap" class="field grow" type="number" min="0.01" step="any" bind:value={cap} placeholder={settings.spendCap ? `$${settings.spendCap} a month; another amount replaces it` : "a monthly cap in dollars"} autocomplete="off" />
-      <button class="btn" type="submit" disabled={!(Number(cap) > 0)}>set it</button>
-      {#if settings.spendCap}<button class="btn" type="button" onclick={() => setCap(null)}>no cap</button>{/if}
-    </form>
-    <p class="faint">The lower bar in Iso's header fills toward this, over a calendar month. A key with a limit of its own at {settings.provider} is measured by that instead.</p>
     <dl class="tiers">
       {#each ["low", "mid", "max"] as const as t (t)}<dt>{t}</dt><dd class="faint">{settings.tiers[t]}</dd>{/each}
     </dl>
+  {/if}
+  {#if settings}
+    <form class="row" onsubmit={(e) => { e.preventDefault(); const n = Number(cap); if (n > 0) void setCap(n); }}>
+      <label class="hidden-label" for="cap">Monthly spend cap in dollars</label>
+      <input id="cap" class="field grow" type="number" min="0.01" step="any" bind:value={cap} placeholder={settings.spendCap ? `$${settings.spendCap} a month; another amount replaces it` : "a monthly cap in dollars"} title="the lower bar in Iso's header fills toward this, over a calendar month; a key with a limit of its own at {settings.provider} is measured by that instead" autocomplete="off" />
+      <button class="btn" type="submit" disabled={!(Number(cap) > 0)}>set it</button>
+      {#if settings.spendCap}<button class="btn" type="button" onclick={() => setCap(null)}>no cap</button>{/if}
+    </form>
   {/if}
   {#if agents !== null}
     <h2 class="label">AGENTS.md</h2>

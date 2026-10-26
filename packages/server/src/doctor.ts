@@ -105,7 +105,7 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
 
   // The configuration.
   let provider: ProviderConfig | null = null, http: Http | null = o.http ?? null, key: string | null = null;
-  if (!existsSync(path)) say("config", "warn", `there is no ${path}: Iso uses OpenRouter, and needs a key (settings, behind the logo, or key under [provider] there)`);
+  if (!existsSync(path)) say("config", "warn", `there is no ${path}: Iso uses OpenRouter, and needs a key (in Iso's settings, or key under [provider] there)`);
   try {
     readConfig(path);
     provider = providerConfig(path, env);
@@ -113,7 +113,7 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
     const tls = gatewayTls(path, env);
     http ??= gatewayHttp(provider, tls, env);
     if (existsSync(path)) say("config", "ok", `${path}: ${provider.name} at ${provider.url}`);
-    say("key", key ? "ok" : tls ? "warn" : "fail", key ? `${hidden(key)}, sent ${provider.keyHeader ? `in ${provider.keyHeader}` : "as Authorization: Bearer"}` : tls ? "none; the client certificate alone is sent" : "none: set one in settings (behind the logo), or as key under [provider]");
+    say("key", key ? "ok" : tls ? "warn" : "fail", key ? `${hidden(key)}, sent ${provider.keyHeader ? `in ${provider.keyHeader}` : "as Authorization: Bearer"}` : tls ? "none; the client certificate alone is sent" : "none: set one in Iso's settings, or as key under [provider]");
     if (tls) say("certificate", "ok", `${tls.files.join(", ")}${tls.pfx || tls.cert ? "" : " (an authority only, no client certificate)"}`);
     const tiers = `low ${provider.tiers.low}, mid ${provider.tiers.mid}, max ${provider.tiers.max}`;
     say("models", provider.defaultTiers ? "warn" : "ok", provider.defaultTiers ? `${tiers}: OpenRouter's names, kept because [tiers] names none for ${provider.name}; a gateway usually calls its models otherwise` : tiers);
