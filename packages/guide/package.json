@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@isorite/core": "*",
-    "@isorite/engine": "*"
+    "@isorite/engine": "*",
+    "@isorite/example": "*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

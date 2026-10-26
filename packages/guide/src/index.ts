@@ -11,3 +11,11 @@ export const YOURS = "your-notes";
 
 /** The guide's files, by path within the base: its notes and its AGENTS.md. */
 export type GuideFiles = Record<string, string>;
+
+export { finderAnswer, NOT_A_MODEL, type FinderReply, type FinderRequest } from "./finder.ts";
+import type { Http } from "@isorite/engine";
+import { scriptedHttp } from "@isorite/example";
+import { finderAnswer } from "./finder.ts";
+
+/** The finder as the engine's provider: `pace` is the wait between pieces of its text, so it is seen arriving. */
+export const finderHttp = (pace = 0): Http => scriptedHttp(finderAnswer, pace);
