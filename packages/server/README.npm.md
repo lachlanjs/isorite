@@ -1,6 +1,6 @@
 # isorite
 
-An agentic harness for understanding: your notes as a knowledge base, an Atlas of them, Iso (an agent that reads them and writes in them only where you ask, and only what you keep), study with exercises Iso marks, and the terminal, where an agent writing code has your notes beside it.
+An agentic harness for understanding: your notes as a knowledge base, an Atlas of them, Iso (an agent that reads them and writes in them only where you ask, and only what you keep), questions and problems of your own, and the terminal, where an agent writing code has your notes beside it.
 
 Needs Node 24 or later. For the terminal, OpenCode 2: `npm i -g @opencode/cli`.
 
@@ -9,7 +9,8 @@ npm install -g isorite
 isorite guide               # the guide: a knowledge base about isorite, with things to do, in ~/isorite-guide
 ```
 
-On your own notes, a folder of Markdown files (`isorite new <notes>` starts one):
+On your own notes, a folder of Markdown files (`isorite new <notes>` starts one). They're drawn as you write them:
+maths, code coloured by its language, and Mermaid diagrams.
 
 ```sh
 isorite serve <notes>       # the browser, at http://localhost:4767/; set up Iso's provider in Iso's settings

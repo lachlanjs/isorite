@@ -4,6 +4,7 @@
 // case asks for one) is asked of the model. Each check passes or fails without a judge. A table of them, what each
 // case cost, and each case's transcript go to .eval/iso-<when>/, which git ignores.
 
+import { parse as parseDiagram } from "pele";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -17,7 +18,7 @@ import { writeGuide } from "../packages/server/src/guide.ts";
 type Check =
   | { called: string[] } | { notCalled: string[] } | { says: string } | { saysNot: string } | { linksResolve: true }
   | { changed: string[] } | { created: string } | { createdNot: string } | { editLines: number } | { changedSays: string }
-  | { notRead: string[] } | { briefing: { open?: string; notes?: string[] } } | { words: number } | { unchanged: string[] } | { asks: true };
+  | { notRead: string[] } | { briefing: { open?: string; notes?: string[] } } | { words: number } | { unchanged: string[] } | { asks: true } | { diagram: boolean };
 interface Case {
   name: string;
   /** The base it is run on: the N-body example, unless the guide (M16). */
@@ -151,6 +152,13 @@ async function run(key: string, c: Case): Promise<{ results: [string, boolean, s
         }
         case "unchanged": { const touched = (v as string[]).filter((id) => changed.includes(id)); return [name, !touched.length, touched.length ? `changed ${touched.join(", ")}` : "untouched"]; }
         case "asks": return [name, calls.includes("ask_question") || /\?/.test(reply), calls.includes("ask_question") ? "asked with ask_question" : /\?/.test(reply) ? "asked in the reply" : "asked nothing"];
+        case "diagram": {
+          // A mermaid block Pele can draw (M19), or none at all when the case says false.
+          const blocks = [...reply.matchAll(/```mermaid\n([\s\S]*?)```/g)].map((m) => m[1]!);
+          if (!v) return [name, !blocks.length, blocks.length ? "drew one unasked" : "none"];
+          const bad = blocks.map((b) => { try { parseDiagram(b); return ""; } catch (e) { return (e as Error).message.split("\n")[0]!; } }).filter(Boolean);
+          return [name, blocks.length > 0 && !bad.length, !blocks.length ? "no diagram" : bad.length ? bad[0]! : `${blocks.length} drawable`];
+        }
         case "words": { const n = reply.split(/\s+/).filter(Boolean).length; return [name, n <= (v as number), `${n} words`]; }
         default: return [name, false, "not a check"];
       }

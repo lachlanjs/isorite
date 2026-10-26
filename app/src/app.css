@@ -185,6 +185,45 @@ a.btn:hover { text-decoration: none; color: var(--text); }
 .prose eqn, .prose section.eqno { display: block; }
 .prose section.eqno { display: flex; align-items: center; }
 .prose section.eqno > eqn { flex: 1; }
+/* ------------------------------------------------------------ code (M19: code.ts) */
+
+/* In colour from the four accents, or in ink as on the boards (the Note pane's setting, data-code="ink"). */
+:root { --tok-k: var(--lattice); --tok-k-weight: 400; --tok-s: var(--malachite); --tok-n: var(--growth); --tok-t: var(--requires); --tok-c: var(--text-faint); }
+:root[data-code="ink"] { --tok-k: var(--text); --tok-k-weight: 700; --tok-s: var(--text-soft); --tok-n: var(--text); --tok-t: var(--text); }
+.tok-k { color: var(--tok-k); font-weight: var(--tok-k-weight); }
+.tok-s { color: var(--tok-s); }
+.tok-n { color: var(--tok-n); }
+.tok-t { color: var(--tok-t); }
+.tok-c { color: var(--tok-c); font-style: normal; }
+/* A code block rendered from Markdown: its language at the top right, and a copy icon where a pane offers one. */
+.code-block { position: relative; }
+.code-block > pre { margin: 0; font: 13px/20px var(--font-mono); background: var(--ground-1); border-left: 2px solid var(--line-strong); padding: 12px 16px; overflow-x: auto; }
+.code-block > pre > code { font: inherit; }
+.prose > .code-block, .prose > .diagram { margin: 0 0 20px; }
+.code-block > .code-lang { position: absolute; top: 8px; right: 12px; font: 12px/16px var(--font-ui); color: var(--text-faint); pointer-events: none; }
+.code-block > .code-copy { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 0; background: var(--ground-1); color: var(--text-faint); cursor: pointer; opacity: 0; }
+.code-block > .code-copy svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; }
+.code-block:hover > .code-copy, .code-block > .code-copy:focus-visible { opacity: 1; }
+.code-block:hover > .code-copy + .code-lang, .code-block:has(> .code-copy:focus-visible) > .code-lang { visibility: hidden; }
+.code-block > .code-copy:hover { color: var(--text); }
+.code-block > .code-copy.done { color: var(--malachite); opacity: 1; }
+@media (hover: none) { .code-block > .code-copy { opacity: 1; } .code-block > .code-copy + .code-lang { visibility: hidden; } }
+
+/* A diagram (diagram.ts), drawn by Pele in the boards' figure: boxes on the raised ground with the strong line, the
+   interface's face at 12px. Its colours follow the ground without being drawn again. */
+.diagram {
+  --pele-bg: var(--ground-0); --pele-fg: var(--text); --pele-muted: var(--text-faint); --pele-line: var(--line-strong);
+  --pele-surface: var(--ground-1); --pele-surface-alt: var(--ground-3); --pele-border: var(--line-strong);
+  --pele-accent: var(--lattice); --pele-font: var(--font-ui); --pele-font-mono: var(--font-mono); --pele-radius: 0;
+  --pele-error: var(--rose); --pele-critical: var(--rose);
+  --pele-series-1: var(--lattice); --pele-series-2: var(--growth); --pele-series-3: var(--malachite); --pele-series-4: var(--rose);
+  --pele-series-5: var(--requires); --pele-series-6: var(--builds); --pele-series-7: var(--lattice-deep); --pele-series-8: var(--growth-deep);
+  max-width: 100%; overflow-x: auto; overflow-y: hidden; font: 12px/1.4 var(--font-ui);
+}
+.diagram svg { display: block; max-width: none; }
+.prose .diagram { margin: 0 0 1em; }
+.diagram > pre { margin: 0; font: 13px/20px var(--font-mono); white-space: pre-wrap; color: var(--text-soft); }
+
 .katex { font-size: 1.05em; }
 .katex, .katex .mathit, .katex .mathbf, .katex .mainrm { font-family: "Math Charter", KaTeX_Main, serif; }
 .katex .mathnormal, .katex .boldsymbol { font-family: "Math Charter", KaTeX_Math, serif; }

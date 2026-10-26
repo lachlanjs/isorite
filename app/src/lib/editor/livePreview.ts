@@ -28,6 +28,18 @@ class RuleWidget extends WidgetType {
   }
 }
 
+// The language a code block is written in, at its top right.
+class LangWidget extends WidgetType {
+  constructor(readonly name: string) { super(); }
+  eq(other: LangWidget): boolean { return other.name === this.name; }
+  toDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "cm-lp-lang";
+    span.textContent = this.name;
+    return span;
+  }
+}
+
 // Inline maths, set by KaTeX as on the note page.
 class MathsWidget extends WidgetType {
   constructor(readonly source: string) { super(); }
@@ -169,7 +181,23 @@ function build(view: EditorView): DecorationSet {
           case "HorizontalRule":
             if (!isActive(node.from)) { decos.push(rule.range(node.from, node.to)); lineClass(node.from, node.to, "cm-lp-ruleline"); }
             break;
-          case "FencedCode":
+          case "FencedCode": {
+            // As on the boards: the fences hidden off their lines, leaving the block's padding, and the language's
+            // name at the top right. Its code is coloured by the language (code.ts).
+            lineClass(node.from, node.to, "cm-lp-codeblock");
+            const n = node.node, first = state.doc.lineAt(node.from), last = state.doc.lineAt(node.to);
+            const info = n.getChild("CodeInfo"), close = n.lastChild?.name === "CodeMark" && n.lastChild.from >= last.from ? n.lastChild : null;
+            if (!isActive(first.from)) {
+              decos.push(line("cm-lp-fence").range(first.from));
+              const name = info ? state.sliceDoc(info.from, info.to).trim().split(/\s/)[0]! : "";
+              decos.push((name ? Decoration.replace({ widget: new LangWidget(name) }) : hide).range(first.from, first.to));
+            }
+            if (close && last.number > first.number && !isActive(last.from)) {
+              decos.push(line("cm-lp-fence").range(last.from));
+              if (last.to > last.from) decos.push(hide.range(last.from, last.to));
+            }
+            return false;
+          }
           case "CodeBlock":
             lineClass(node.from, node.to, "cm-lp-codeblock");
             return false;
@@ -235,6 +263,9 @@ export const livePreviewTheme = EditorView.theme({
   // A code block as on the boards: the interface's face on a raised ground, one line down its left side. The ground
   // is translucent, because the selection is drawn beneath the text and an opaque one would hide it.
   ".cm-lp-codeblock": { fontFamily: "var(--font-mono)", fontSize: "13px", lineHeight: "20px", background: "color-mix(in srgb, var(--line) 38%, transparent)", borderLeft: "2px solid var(--line-strong)", padding: "0 16px !important" },
+  // The hidden fences are the block's padding, 12px above and below, as on the boards.
+  ".cm-lp-codeblock.cm-lp-fence": { lineHeight: "12px", position: "relative" },
+  ".cm-lp-lang": { position: "absolute", top: "8px", right: "12px", fontFamily: "var(--font-ui)", fontSize: "12px", lineHeight: "16px", color: "var(--text-faint)", pointerEvents: "none" },
   ".cm-lp-mathsrc": { fontFamily: "var(--font-mono)", fontSize: ".86em", color: "var(--text-soft)" },
   ".cm-lp-imaths .katex": { fontSize: "1.05em" },
   // A displayed equation written on a line of its own inside a paragraph ($$…$$ with no empty line round it) is

@@ -93,6 +93,12 @@ const FORMAT = `# How notes work here
 - Maths is LaTeX between dollar signs: $p(x)$ in a line, and a displayed
   equation as a paragraph of its own, with $$ alone on the line before it
   and $$ alone on the line after.
+- Code is a fenced block named with its language (\`\`\`python), so it is
+  coloured by it.
+- A diagram is a fenced block in the language mermaid (Mermaid's syntax), and
+  is drawn as the diagram. Draw one where a picture of how things stand to
+  each other helps, or when asked; not by habit. Maths in a label goes
+  between $$ and $$.
 - Ordinary Markdown otherwise. No HTML.`;
 
 /** How notes are written, for any request that writes or quotes them. */

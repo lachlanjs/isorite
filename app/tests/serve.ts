@@ -13,6 +13,8 @@ export const NOTES = join(ROOT, "information-theory");
 export const STUDY = join(NOTES, ".isorite");
 
 export const PROVIDER_PORT = 4798;
+/** What the scripted Iso answers when asked to draw (M19): a diagram and a code block. */
+export const DRAWN = "Here is how they stand:\n\n```mermaid\nflowchart LR\n  s[Surprise] --> e[Entropy]\n```\n\nAnd in code:\n\n```python\ndef surprise(p):\n    return -log2(p)  # in bits\n```";
 export const REPLY = "It is measured in **bits**, as [Surprise](/basics/surprise.md) is.\n\n$$\nH(X) \\le \\log_2 n\n$$";
 
 /** A provider that speaks the chat completions protocol (and makes keys by signing in) and says what the prompt's words call for:
@@ -108,7 +110,7 @@ async function provider(): Promise<void> {
     } else if (asked.includes("look") && !looked) {
       data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "read_note", arguments: JSON.stringify({ id: "/basics/surprise.md" }) } }] } }] });
     } else {
-      const pieces = REPLY.match(/[\s\S]{1,12}/g)!;
+      const pieces = (asked.includes("draw") ? DRAWN : REPLY).match(/[\s\S]{1,12}/g)!;
       for (const [k, piece] of pieces.entries()) {
         data({ choices: [{ delta: { content: piece } }] });
         await wait(asked.includes("slow") && k === 1 ? 60_000 : asked.includes("look") ? 60 : 15);

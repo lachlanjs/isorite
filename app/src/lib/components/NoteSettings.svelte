@@ -4,7 +4,7 @@
   import { onMount } from "svelte";
   import { resolve } from "$app/paths";
   import { app } from "$lib/app.svelte.ts";
-  import { GROUNDS, ground } from "$lib/ground.svelte.ts";
+  import { CODE_LOOKS, GROUNDS, codeLook, ground } from "$lib/ground.svelte.ts";
   import { LAYOUTS, PANES, panes, type Pane } from "$lib/panes.svelte.ts";
   import { makeKind } from "$lib/make.ts";
 
@@ -66,6 +66,15 @@
   <div class="row" role="radiogroup" aria-label="Ground">
     {#each GROUNDS as [value, name] (value)}
       <button class="btn" class:on={ground.chosen === value} type="button" role="radio" aria-checked={ground.chosen === value} onclick={() => ground.choose(value)}>{name}</button>
+    {/each}
+  </div>
+</section>
+
+<section>
+  <h2 class="label">the code</h2>
+  <div class="row" role="radiogroup" aria-label="Code">
+    {#each CODE_LOOKS as [value, name] (value)}
+      <button class="btn" class:on={codeLook.chosen === value} type="button" role="radio" aria-checked={codeLook.chosen === value} title={value ? "keywords bold, comments faint, as in print" : "coloured by what each word is"} onclick={() => codeLook.choose(value)}>{name}</button>
     {/each}
   </div>
 </section>

@@ -6,6 +6,7 @@
   import { tick } from "svelte";
   import { app } from "$lib/app.svelte.ts";
   import { render } from "$lib/markdown.ts";
+  import { drawn } from "$lib/drawn.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
 
@@ -39,7 +40,7 @@
 {#snippet item(i: TerminalItem)}
   {#if i.kind === "text"}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-    <div class="said prose">{@html render(i.text)}</div>
+    <div class="said prose" use:drawn={{ given: i.text, copy: true }}>{@html render(i.text)}</div>
   {:else}
     <div class="tool" data-status={i.status}>
       {#if i.output || i.diff}
