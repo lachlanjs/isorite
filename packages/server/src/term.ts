@@ -48,31 +48,58 @@ export async function serving(url: string): Promise<string | null> {
   }
 }
 
-/** The isorite server on the port, and how to let it go: one already running for this base (or for any, when
- *  no base is named), or one started for the base, its output kept in a log, stopped when let go. */
+/** The isorite server on the port, and how to let it go: one already running (for this base, or holding it as
+ *  well from now on, M20; or for any, when no base is named), or one started for the base, its output kept in a
+ *  log. `url` is the base's own address there. A server this started stops once the last of those using it lets it
+ *  go; one you started yourself goes on. */
 export async function ensureServer(path: string | undefined, { port = 4767, env = process.env, wait = 120_000 } = {}): Promise<{ url: string; release: () => void }> {
-  const url = `http://127.0.0.1:${port}`;
+  const root = `http://127.0.0.1:${port}`;
   const opened = path === undefined ? null : locate(path);
-  const name = await serving(url);
-  if (name !== null) {
-    if (opened && name !== basename(opened.notes))
-      throw new StudyError(`port ${port} is serving ${name}, not ${basename(opened.notes)}: stop it, or use another port (--port <n>)`);
-    return { url, release: () => undefined };
-  }
-  if (!opened) throw new StudyError(`nothing is serving on port ${port}: name a base`);
-  const log = join(tmpdir(), `isorite-term-${port}.log`);
-  const out = openSync(log, "w");
-  const server = spawn(process.execPath, [MAIN, "serve", path!, "--port", String(port)], { stdio: ["ignore", out, out], env });
-  const exited = new Promise<void>((done) => server.once("exit", () => done()));
-  const started = Date.now();
-  while ((await serving(url)) === null) {
-    if (server.exitCode !== null || Date.now() - started > wait) {
-      server.kill();
-      throw new StudyError(`the isorite server did not start; its output is in ${log}`);
+  let name = await serving(root), started: ReturnType<typeof spawn> | null = null;
+  if (name === null) {
+    if (!opened) throw new StudyError(`nothing is serving on port ${port}: name a base`);
+    const log = join(tmpdir(), `isorite-term-${port}.log`);
+    const out = openSync(log, "w");
+    // Apart from this process, so that a second terminal using it keeps it when this one is done.
+    started = spawn(process.execPath, [MAIN, "serve", path!, "--port", String(port), "--held"], { stdio: ["ignore", out, out], env, detached: true });
+    const exited = new Promise<void>((done) => started!.once("exit", () => done()));
+    const begun = Date.now();
+    while ((name = await serving(root)) === null) {
+      if (started.exitCode !== null || Date.now() - begun > wait) {
+        started.kill();
+        throw new StudyError(`the isorite server did not start; its output is in ${log}`);
+      }
+      await Promise.race([exited, new Promise((r) => setTimeout(r, 250))]);
     }
-    await Promise.race([exited, new Promise((r) => setTimeout(r, 250))]);
+    started.unref();
   }
-  return { url, release: () => { server.kill(); } };
+  let url = root;
+  if (opened) {
+    // The base, by its name among those the server holds: opened there if it is not yet.
+    const at = await fetch(`${root}/api/bases/open`, { method: "POST", headers: { "Content-Type": "application/json", "x-isorite-token": await tokenOf(root), Origin: root }, body: JSON.stringify({ path: opened.notes }) }).catch(() => null);
+    if (at?.ok) {
+      const base = (await at.json()) as { name: string; first: boolean };
+      if (!base.first) url = `${root}/b/${base.name}`;
+    } else if (name !== basename(opened.notes)) {
+      // An isorite from before M20, serving one base only.
+      throw new StudyError(`port ${port} is serving ${name}, not ${basename(opened.notes)}: stop it, or use another port (--port <n>)`);
+    }
+  }
+  // Held while this is using it.
+  const holding = new AbortController();
+  // Read to its end: a stream left unread is let go by fetch once nothing holds it, and the server with it.
+  const held = fetch(`${root}/api/server/hold`, { signal: holding.signal }).then((r) => {
+    if (r.ok && r.body) void (async () => { try { for await (const _ of r.body!) { /* held */ } } catch { /* let go */ } })();
+    return r.ok;
+  }, () => false);
+  return {
+    url,
+    release: () => {
+      holding.abort();
+      // A server this started that cannot be held (an older isorite) is stopped as before.
+      void held.then((ok) => { if (!ok && started) started.kill(); });
+    },
+  };
 }
 
 /** A port nobody is listening on, on this machine. */
@@ -88,7 +115,7 @@ async function freePort(): Promise<number> {
 /** A POST to the isorite server, made as its page makes one: from its origin, with the token it hands out. */
 async function tell(url: string, path: string, body: unknown): Promise<void> {
   const token = await tokenOf(url);
-  const response = await fetch(url + path, { method: "POST", headers: { "Content-Type": "application/json", "x-isorite-token": token, Origin: url }, body: JSON.stringify(body) });
+  const response = await fetch(url + path, { method: "POST", headers: { "Content-Type": "application/json", "x-isorite-token": token, Origin: new URL(url).origin }, body: JSON.stringify(body) });
   if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error ?? `${response.status} from ${path}`);
 }
 
@@ -133,10 +160,10 @@ export async function modelsFor(env: NodeJS.ProcessEnv, server: { url: string; t
 
 /** What `isorite term` says before OpenCode takes the screen, and again when it gives it back: where isorite is in
  *  the browser, which models the terminal uses and where they come from, and, over SSH, how to reach the browser. */
-export function where(port: number, models: Awaited<ReturnType<typeof modelsFor>>, env: NodeJS.ProcessEnv, tty?: boolean): string[] {
+export function where(port: number, models: Awaited<ReturnType<typeof modelsFor>>, env: NodeJS.ProcessEnv, tty?: boolean, page = "/"): string[] {
   const names = models.gateway?.models.join(", ");
   const lines = [
-    `isorite: ${link(`http://localhost:${port}/`, tty)}`,
+    `isorite: ${link(`http://localhost:${port}${page}`, tty)}`,
     models.from === "environment" ? `  the terminal's models: ${names}, at ${models.gateway!.url} (ISORITE_GATEWAY_URL)`
       : models.from === "config" ? `  the terminal's models: ${names}, as config.toml names them, through the isorite server`
       : "  the terminal's models: OpenCode's own, as no key or certificate is named in config.toml",
@@ -157,7 +184,7 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
   let models: Awaited<ReturnType<typeof modelsFor>>;
   try { models = await modelsFor(given, { url: server.url, token: await tokenOf(server.url) }); } catch (e) { server.release(); throw e; }
   const { gateway, env } = models;
-  const said = where(port, models, given);
+  const said = where(port, models, given, undefined, new URL(server.url).pathname.replace(/\/?$/, "/"));
   for (const line of said) console.log(line);
   // The base's own instructions go to the terminal's agent as to Iso, when the base is named here.
   const agents = path === undefined ? null : join(locate(path).notes, AGENTS_FILE);

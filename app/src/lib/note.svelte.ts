@@ -8,6 +8,7 @@ import { hashText, spliceText, splitFrontmatter, splitSource } from "@isorite/co
 import type { EngineEvent, NoteSource } from "@isorite/engine";
 import { ApiError } from "./api.ts";
 import { app } from "./app.svelte.ts";
+import { kept } from "./here.ts";
 
 /** How long after the last keystroke a note is saved. */
 export const SAVE_AFTER_MS = 1500;
@@ -19,7 +20,7 @@ export type Saving = "saved" | "unsaved" | "saving" | "conflict" | "failed";
 export interface Fields { title: string; type: string; description: string; tags: string }
 
 type Draft = { base: string; text: string };
-const draftKey = (id: string) => `isorite.draft.${id}`;
+const draftKey = (id: string) => kept(`isorite.draft.${id}`);
 function draft(id: string, value?: Draft | null): Draft | null {
   try {
     if (value === undefined) return JSON.parse(localStorage.getItem(draftKey(id)) ?? "null") as Draft | null;

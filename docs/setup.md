@@ -118,6 +118,26 @@ isorite term ~/notes/my-project
 It prints the same link, and which models the terminal uses. OpenCode uses the provider above, through isorite. More
 is in [terminal.md](terminal.md).
 
+## 5. Several bases, and the agent's memory (optional)
+
+```sh
+isorite memory              # ~/isorite-memory: a base of its own, a private git repository, lent to every session
+isorite bases               # the bases this machine knows: each one is listed the first time it is opened
+isorite bases lend <name>   # lend one to every session (isorite bases keep <name> stops)
+```
+
+One isorite server holds every base it is asked for. Each base's page is the same link with `?base=<name>`, and the
+base's name before the first pane's name switches between them; Ctrl-click opens one in a tab of its own. A base
+**lent** to every session can be read by every base's agent and Iso, and written by the agent, its words marked as
+its own. The memory is one: what the agent learns about you and your tools, kept across projects, as its
+`AGENTS.md` says. The list is in `~/.config/isorite/bases.toml`, beside `config.toml`:
+
+```toml
+[memory]
+path = "~/isorite-memory"
+lend = true
+```
+
 ## Search by meaning (optional)
 
 ```sh

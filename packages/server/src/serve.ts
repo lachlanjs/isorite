@@ -8,8 +8,9 @@ import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
 import { serve as nodeServe } from "@hono/node-server";
 import { CONFIG_FILE, GITATTRIBUTES, OWN_DIR, StudyError } from "@isorite/core";
-import { Engine, KEY, OPENROUTER, systemClock, type Http, type ProviderConfig, type Secrets } from "@isorite/engine";
-import { ConfigSecrets, configPath, deviceId, gatewayTls, hasModel, providerConfig } from "./config.ts";
+import { Engine, KEY, OPENROUTER, systemClock, type Elsewhere, type Embedder, type Http, type ProviderConfig, type Secrets } from "@isorite/engine";
+import { ConfigSecrets, configPath, deviceId, gatewayTls, hasModel, providerConfig, rememberBase } from "./config.ts";
+import { Bases } from "./bases.ts";
 import { gatewayHttp, relay } from "./gateway.ts";
 import { cacheDir, modelDir, nodeEmbedder } from "./embedder.ts";
 import { LOOPBACK, createApp } from "./http.ts";
@@ -57,18 +58,29 @@ export function newBase(path: string): string {
   return at;
 }
 
-export async function openEngine({ notes }: Opened, device = deviceId(), config = configPath(), http?: Http, model: string | null = modelDir(), secrets: Secrets = new ConfigSecrets(config)): Promise<Engine> {
+export interface EngineExtras {
+  /** Its name, as the bases have it (M20); the folder's when not given. */
+  name?: string;
+  /** The other bases lent to it. */
+  elsewhere?: Elsewhere;
+  /** One embedder for every base a server holds: the model is loaded once. */
+  embedder?: Embedder | null;
+}
+
+export async function openEngine({ notes }: Opened, device = deviceId(), config = configPath(), http?: Http, model: string | null = modelDir(), secrets: Secrets = new ConfigSecrets(config), extras: EngineExtras = {}): Promise<Engine> {
   const provider = providerConfig(config);
   const own = makeOwn(notes);
+  const embedder = extras.embedder !== undefined ? extras.embedder : model ? nodeEmbedder(model) : null;
   // The provider is OpenRouter unless the configuration names another. The engine compares against OPENROUTER to know.
   return Engine.open({
-    notes: new NodeFiles(notes), own: new NodeFiles(own), clock: systemClock, device, name: basename(notes),
+    notes: new NodeFiles(notes), own: new NodeFiles(own), clock: systemClock, device, name: extras.name ?? basename(notes),
     http: http ?? gatewayHttp(provider, gatewayTls(config)), secrets, provider,
     // The repository code links point into (M12): named in .isorite/settings.toml, from the notes folder.
     repository: (path) => { const dir = resolve(notes, path); return existsSync(dir) && statSync(dir).isDirectory() ? new NodeFiles(dir) : null; },
     // Search by meaning, where the model is installed (npm run model). Its vectors are a cache of this base's
     // notes, kept outside both repositories under a name made from where the notes are.
-    ...(model ? { embedder: nodeEmbedder(model), cache: { files: new NodeFiles(cacheDir()), name: `vectors-${createHash("sha256").update(notes).digest("hex").slice(0, 16)}.json` } } : {}),
+    ...(embedder ? { embedder, cache: { files: new NodeFiles(cacheDir()), name: `vectors-${createHash("sha256").update(notes).digest("hex").slice(0, 16)}.json` } } : {}),
+    ...(extras.elsewhere ? { elsewhere: extras.elsewhere } : {}),
   });
 }
 
@@ -87,32 +99,51 @@ export async function liveProvider(config: string, stand?: Http): Promise<{ prov
 /** A link most terminals let you click (OSC 8), when the output is a terminal; the address as it is otherwise. */
 export const link = (url: string, tty = Boolean(process.stdout.isTTY)): string => (tty ? `\x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\` : url);
 
-/** `stand`: in place of the provider, an answerer of its own, as the guide's finder is when no model is set up
- *  (M16). It is asked while there is no model here (no key, no provider of your own), and needs no key. */
-export async function serve(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], stand }: { host?: string; port?: number; allowHosts?: string[]; stand?: Http } = {}): Promise<void> {
+/** The server's bases, opened: the one named (remembered in bases.toml, M20) and every lent one, each with its
+ *  engine and app, and the server's answer to a request for any of them. `stand`: in place of the provider, an
+ *  answerer of its own, as the guide's finder is when no model is set up (M16), asked while there is no model here.
+ *  `idle`: what to do once the last of those holding the server lets it go. */
+export async function openServer(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], stand, idle, config = configPath(), model = modelDir() }: { host?: string; port?: number; allowHosts?: string[]; stand?: Http; idle?: () => void; config?: string; model?: string | null } = {}): Promise<{ notes: string; bases: Bases; embedder: boolean; fetch: (req: Request, env?: unknown) => Promise<Response> }> {
   const opened = locate(path);
-  const config = configPath();
   const current = () => liveProvider(config, stand);
   let live = await current();
-  const secrets = new ConfigSecrets(config);
-  const api = await openEngine(opened, deviceId(config), config, live.http, modelDir(), secrets);
-  api.setProvider(live.provider, live.http);
-  const setup = new Setup({ config, notes: opened.notes, version: VERSION, port, kept: async () => { live = await current(); api.setProvider(live.provider, live.http); } });
+  const secrets = new ConfigSecrets(config), device = deviceId(config);
+  const first = rememberBase(opened.notes, { path: config });
+  const embedder = model ? nodeEmbedder(model) : null;
+  const token = randomBytes(24).toString("base64url"), loopback = LOOPBACK.has(host);
   // The provider is relayed to OpenCode only on this machine: from a tailnet it would be anyone's to use.
-  const gateway = LOOPBACK.has(host) ? relay(() => live, () => secrets.get(KEY)) : undefined;
+  const gateway = loopback ? relay(() => live, () => secrets.get(KEY)) : undefined;
   const web = existsSync(join(WEB_DIR, "index.html")) ? WEB_DIR : null;
-  const terminal = new Terminal();
-  const app = createApp({ api, token: randomBytes(24).toString("base64url"), loopback: LOOPBACK.has(host), web, allowHosts, notes: opened.notes, terminal, gateway, setup });
-  const server = nodeServe({ fetch: app.fetch, hostname: host, port });
+  const bases: Bases = new Bases({
+    config, first, ...(idle ? { idle } : {}),
+    make: async (known) => {
+      const api = await openEngine({ notes: known.path }, device, config, live.http, model, secrets, { name: known.name, elsewhere: bases, embedder });
+      api.setProvider(live.provider, live.http);
+      const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, terminal: new Terminal(), gateway, setup, bases, base: known.name });
+      return { engine: api, fetch: app.fetch };
+    },
+  });
+  const setup = new Setup({ config, notes: opened.notes, version: VERSION, port, kept: async () => { live = await current(); bases.each((api) => api.setProvider(live.provider, live.http)); } });
+  await bases.start();
+  return { notes: opened.notes, bases, embedder: Boolean(embedder), fetch: (req, env) => bases.fetch(req, env) };
+}
+
+/** `held`: started by isorite term or mcp, it stops once the last of them lets it go. */
+export async function serve(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], stand, held = false }: { host?: string; port?: number; allowHosts?: string[]; stand?: Http; held?: boolean } = {}): Promise<void> {
+  let stop = () => undefined as void;
+  const { notes, bases, embedder, fetch } = await openServer(path, { host, port, allowHosts, ...(stand ? { stand } : {}), ...(held ? { idle: () => stop() } : {}) });
+  const server = nodeServe({ fetch, hostname: host, port });
   server.on("error", (e: NodeJS.ErrnoException) => {
     console.error(e.code === "EADDRINUSE" ? `port ${port} is in use (isorite serve --port <n>)` : e.message);
     process.exit(1);
   });
-  console.log(`isorite: ${opened.notes}`);
-  console.log(api.meaning ? "  search by meaning: on" : "  search by meaning: off (isorite model fetches its model)");
-  console.log(web ? `  ${link(`http://localhost:${port}/`)}` : `  the app is not built (npm run build); the engine alone is at http://localhost:${port}/api/`);
+  console.log(`isorite: ${notes}`);
+  console.log(embedder ? "  search by meaning: on" : "  search by meaning: off (isorite model fetches its model)");
+  const lent = bases.lent().filter((l) => l.name !== bases.first).map((l) => l.name);
+  if (lent.length) console.log(`  lent to every session: ${lent.join(", ")} (isorite bases)`);
+  console.log(existsSync(join(WEB_DIR, "index.html")) ? `  ${link(`http://localhost:${port}/`)}` : `  the app is not built (npm run build); the engine alone is at http://localhost:${port}/api/`);
   if (process.env.SSH_CONNECTION && LOOPBACK.has(host)) console.log(`  over SSH, the link opens on this machine; from your own, first run: ssh -L ${port}:localhost:${port} ${hostname()}`);
-  const stop = () => { server.close(); process.exit(0); };
+  stop = () => { server.close(); process.exit(0); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
 }

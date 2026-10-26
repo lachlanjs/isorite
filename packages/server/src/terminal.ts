@@ -4,7 +4,7 @@
 // The pages never reach OpenCode, and never see the password.
 
 import { OpenCode } from "@opencode/client";
-import type { Given, TerminalItem, TerminalPermission, TerminalTurn, TerminalView } from "@isorite/engine";
+import { baseOf, type Given, type TerminalItem, type TerminalPermission, type TerminalTurn, type TerminalView } from "@isorite/engine";
 
 /** OpenCode's messages, as far as the pane reads them (seen from 2.0.32, `spike/probe.ts`). */
 export type Message =
@@ -21,6 +21,7 @@ const OUTPUT = 4000;
 const LOOKUPS = new Set(["search_notes", "find_similar", "outline_note", "read_note", "brief_base"]);
 /** isorite's tools that change a note: their line opens it, where the agent's words are marked. */
 const CHANGES = new Set(["edit_note", "write_note"]);
+const isorite = (name: string) => LOOKUPS.has(name) || CHANGES.has(name);
 
 /** What a tool call acted on, in a line. */
 export function titleOf(name: string, input: Record<string, unknown> = {}): string {
@@ -62,9 +63,12 @@ export function toTurns(messages: Message[], { live = new Map<string, string>(),
         const input = c.state.input ?? {};
         const output = (c.state.content ?? []).map((x) => x.text ?? "").join("").slice(0, OUTPUT);
         const status = c.state.status === "completed" ? "done" : /error|fail/.test(c.state.status) ? "failed" : "running";
-        const item: TerminalItem = { kind: "tool", id: c.id, name: c.name, title: titleOf(c.name, input), status, output };
-        const named = LOOKUPS.has(c.name) ? input.id : CHANGES.has(c.name) ? input.note : undefined;
+        // A tool used in another base names it (M20): the note it opened is that base's.
+        const { base, args } = isorite(c.name) ? baseOf(input) : { base: "", args: input };
+        const item: TerminalItem = { kind: "tool", id: c.id, name: c.name, title: (base ? `${base}: ` : "") + titleOf(c.name, args), status, output };
+        const named = LOOKUPS.has(c.name) ? args.id : CHANGES.has(c.name) ? args.note : undefined;
         if (typeof named === "string" && named) item.note = named.replace(/^\//, "").replace(/\.md$/, "");
+        if (base) item.base = base;
         const diff = diffOf(c.name, input);
         if (diff) item.diff = diff;
         turn.items.push(item);

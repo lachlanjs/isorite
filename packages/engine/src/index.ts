@@ -5,13 +5,13 @@ export type { AgentLook, AgentChange, Api, AskRequest, Choice, ContextItem, Cont
 export { DRAFT_PREFIX, Engine, MAX_NOTE_BYTES, checkNoteId, givenKey, isDraftId } from "./engine.ts";
 export { AGE_OFF, briefingText, handOf, readHand } from "./hand.ts";
 export type { Briefing, Hand, HandLine } from "./hand.ts";
-export type { EngineOptions } from "./engine.ts";
+export type { Elsewhere, EngineOptions } from "./engine.ts";
 export { MemoryFiles, MemorySecrets, systemClock } from "./ports.ts";
 export type { Clock, FileInfo, Files, Http, Secrets } from "./ports.ts";
 export { KEY, SPEND_CAP, ModelError, OPENROUTER, RETRY, TIERS, codeOf, complete, endpoint, isResponse, retryWait, unreachable } from "./provider.ts";
 export type { Call, Failure, Message, ProviderConfig, Reply, Tier, ToolCall, ToolDef, Usage } from "./provider.ts";
-export { Lookup } from "./lookup.ts";
-export type { How, Similar, Step } from "./lookup.ts";
+export { Lookup, baseOf } from "./lookup.ts";
+export type { Away, How, Similar, Step } from "./lookup.ts";
 export { ROUNDS } from "./loop.ts";
 export { CLOSE, CONVERSATION_BUDGET, HERE, NOTE_BUDGET, OPEN, conversation, estimate, fitted, parseRewrite, windowed } from "./iso.ts";
 export type { Exchange, Part } from "./iso.ts";

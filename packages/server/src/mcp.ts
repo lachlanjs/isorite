@@ -42,7 +42,7 @@ export async function mcp(path: string | undefined, { port = 4767, agent = "mcp"
     token ??= get<{ token: string }>("/api/session").then((s) => s.token);
     const response = await fetch(url + path, {
       method: "POST",
-      headers: { "Content-Type": "application/json", [TOKEN_HEADER]: await token, Origin: url },
+      headers: { "Content-Type": "application/json", [TOKEN_HEADER]: await token, Origin: new URL(url).origin },
       body: JSON.stringify(body),
     });
     const answer = (await response.json()) as T & { error?: string };
@@ -65,7 +65,7 @@ export async function mcp(path: string | undefined, { port = 4767, agent = "mcp"
         protocolVersion: asked,
         capabilities: { tools: {} },
         serverInfo: { name: "isorite", version: "0.1.0" },
-        instructions: "A knowledge base of notes. Call brief_base first, then look things up with search_notes, outline_note and read_note, following a note's links before searching again. Cite a note by its title and section.",
+        instructions: "A knowledge base of notes. Call brief_base first, then look things up with search_notes, outline_note and read_note, following a note's links before searching again. Cite a note by its title and section. Other knowledge bases lent to you (the agent's memory among them) are named by brief_base: pass base to the same tools to look or write there, and follow the practice each one's brief gives.",
       };
     }
     if (rpc.method === "ping") return {};

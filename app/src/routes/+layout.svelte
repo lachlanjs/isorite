@@ -137,7 +137,7 @@
             <div class="divider" role="separator" aria-orientation="vertical" aria-label="Resize {NAME[p]}" tabindex="0" onpointerdown={(e) => drag(e, p)} onkeydown={(e) => nudge(e, p)}></div>
           {/if}
           {#if p === "note"}
-            <PaneHead pane="note" name="Note" settings={noteSettings}>
+            <PaneHead pane="note" first={panes.narrow || standing[0] === "note"} name="Note" settings={noteSettings}>
               {#snippet tools()}
                 {#if page.route.id === "/n/[...id]" && !(page.params.id ?? "").startsWith("@")}
                   <!-- The note's Understanding note (M10), in place of the note while pressed. -->
@@ -154,7 +154,7 @@
             <div class="pbody note-body">{@render children()}</div>
             {#if panes.tree && page.route.id !== "/notes"}<div class="tree"><NoteList /></div>{/if}
           {:else if p === "atlas"}
-            <PaneHead pane="atlas" name="Atlas" settings={atlasSettings}>
+            <PaneHead pane="atlas" first={panes.narrow || standing[0] === "atlas"} name="Atlas" settings={atlasSettings}>
               {#snippet tools()}
                 <!-- Iso's request in a note, as the Atlas draws it: not for the note open beside it, which says so itself. -->
                 {#if run && !run.agent && (!app.open || run.note !== app.open) && (running || !app.atlas?.chosen)}
@@ -175,7 +175,7 @@
             </PaneHead>
             <div class="pbody atlas-body"><AtlasPane /></div>
           {:else}
-            <PaneHead pane="iso" name="Iso" settings={isoSettings}>
+            <PaneHead pane="iso" first={panes.narrow || standing[0] === "iso"} name="Iso" settings={isoSettings}>
               {#snippet tools()}
                 {#if run?.agent}
                   <span class="says" title={running ? "" : "click open ground on the Atlas to let its path go"}>{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentNamed}'s turn is done`}</span>

@@ -360,6 +360,8 @@ export interface AskedTurn {
   asked: string;
   /** Code links broken since Iso was last told (Q27). */
   broken?: { id: string; title: string; href: string }[];
+  /** Other bases lent to Iso to read (M20), each with a line on what it holds. */
+  lent?: { name: string; about: string }[];
 }
 
 /** The messages for a turn, and what they hold, part by part. */
@@ -378,14 +380,16 @@ export function turnMessages(a: AskedTurn): { messages: Message[]; parts: Part[]
   const held = reads.length ? `# Notes you read earlier in this conversation\n\n${reads.map(sentText).join("\n\n")}` : "";
   const aside = a.aside?.length ? `# Read earlier, set aside\n\n${a.aside.map((n) => `- ${n.title} (/${n.id}.md)`).join("\n")}` : "";
   const agents = a.agents?.trim() ? `# Their instructions for this knowledge base (AGENTS.md)\n\n${a.agents.trim()}` : "";
+  // Other bases lent to Iso (M20): the agent's memory, read before asking what it may say.
+  const lent = a.lookup && a.lent?.length ? `# Other knowledge bases lent to you\n\nYou may read these with the same look-up tools, giving their base; you change notes only in this one. Look in them where what is asked may be there: how the person works, their tools, what was settled before.\n\n${a.lent.map((l) => `- ${l.name}: ${l.about}`).join("\n")}` : "";
   const known = understood.length ? `# Their understanding, as you have recorded it\n\n${understood.map(sentText).join("\n\n")}` : "";
   const broken = a.broken?.length ? `# Code links that no longer resolve\n\nSince you were last told, these links in their notes point to files no longer in their repository. Mention it only where it bears on what they ask.\n\n${a.broken.map((b) => `- in ${b.title} (/${b.id}.md): ${b.href}`).join("\n")}` : "";
   const request = `# What they ask now\n\n${a.asked}`;
   return {
     // In the order least likely to change first, so the provider's cache holds as far as it can.
-    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [agents, earlier, known, gave, held, aside, broken, request].filter(Boolean).join("\n\n") }],
+    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [agents, lent, earlier, known, gave, held, aside, broken, request].filter(Boolean).join("\n\n") }],
     parts: [
-      { name: "instructions and tools", detail: `${a.mode} mode${checking ? ", checking" : ""}${a.lookup ? "" : ", no look-ups"}`, tokens: estimate(system) + (a.lookup ? 500 : 0) + turnTools(a.mode, a.sent).length * 120 },
+      { name: "instructions and tools", detail: `${a.mode} mode${checking ? ", checking" : ""}${a.lookup ? "" : ", no look-ups"}`, tokens: estimate(system) + estimate(lent) + (a.lookup ? 500 : 0) + turnTools(a.mode, a.sent).length * 120 },
       { name: "earlier in this conversation", detail: a.earlier.length ? `${a.earlier.length} ${a.earlier.length === 1 ? "turn" : "turns"}` : "", tokens: estimate(earlier) },
       ...(agents ? [{ name: "their instructions" as const, detail: "AGENTS.md", tokens: estimate(agents) }] : []),
       { name: "what you gave", detail: given.length ? `${given.length} ${given.length === 1 ? "part" : "parts"}` : "nothing", tokens: estimate(gave) },

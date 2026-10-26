@@ -5,6 +5,7 @@
   import type { TerminalItem, TerminalPermission, TerminalTurn } from "@isorite/engine";
   import { tick } from "svelte";
   import { app } from "$lib/app.svelte.ts";
+  import { basePage } from "$lib/here.ts";
   import { render } from "$lib/markdown.ts";
   import { drawn } from "$lib/drawn.ts";
   import { panes } from "$lib/panes.svelte.ts";
@@ -45,12 +46,14 @@
     <div class="tool" data-status={i.status}>
       {#if i.output || i.diff}
         <details>
-          <summary><span class="v">{verb(i.name)}</span>{#if i.note}<button type="button" class="note-link" onclick={(e) => { e.preventDefault(); open(i.name, i.note!); }}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}{#if i.diff}<span class="n"><span class="add">+{i.diff.filter((l) => l.startsWith("+")).length}</span> <span class="del">−{i.diff.filter((l) => l.startsWith("-")).length}</span></span>{/if}</summary>
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- another base's page, not in this app -->
+          <summary><span class="v">{verb(i.name)}</span>{#if i.note && i.base}<a class="note-link" href={basePage(i.base, `#/n/${i.note}`)} data-sveltekit-reload target="_blank" rel="noopener" title="In {i.base}, in a tab of its own"><span class="in">{i.base}:</span> {i.note}</a>{:else if i.note}<button type="button" class="note-link" onclick={(e) => { e.preventDefault(); open(i.name, i.note!); }}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}{#if i.diff}<span class="n"><span class="add">+{i.diff.filter((l) => l.startsWith("+")).length}</span> <span class="del">−{i.diff.filter((l) => l.startsWith("-")).length}</span></span>{/if}</summary>
           {#if i.diff}<pre class="diff">{#each i.diff as l, k (k)}<span class:add={l.startsWith("+")} class:del={l.startsWith("-")}>{l}</span>{/each}</pre>
           {:else}<pre class="out">{i.output}</pre>{/if}
         </details>
       {:else}
-        <p class="line"><span class="v">{verb(i.name)}</span>{#if i.note}<button type="button" class="note-link" onclick={() => open(i.name, i.note!)}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}</p>
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- another base's page, not in this app -->
+        <p class="line"><span class="v">{verb(i.name)}</span>{#if i.note && i.base}<a class="note-link" href={basePage(i.base, `#/n/${i.note}`)} data-sveltekit-reload target="_blank" rel="noopener" title="In {i.base}, in a tab of its own"><span class="in">{i.base}:</span> {i.note}</a>{:else if i.note}<button type="button" class="note-link" onclick={() => open(i.name, i.note!)}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}</p>
       {/if}
       {#each askingFor(i.id) as p (p.id)}{@render permit(p)}{/each}
     </div>
@@ -109,6 +112,8 @@
   .del { color: var(--rose); }
   pre { margin: 6px 0 0; padding: 8px 10px; background: var(--ground-1); border: 1px solid var(--line); font: 11.5px/1.45 var(--font-mono); color: var(--text-soft); overflow: auto; max-height: 280px; white-space: pre; }
   .diff span { display: block; }
+  .in { color: var(--text-faint); }
+  a.note-link { text-decoration: none; }
   .note-link { background: none; border: 0; padding: 0; font: inherit; color: var(--text-soft); cursor: pointer; text-align: left; overflow-wrap: anywhere; }
   .note-link:hover, .note-link:focus-visible { color: var(--lattice); }
   .permit { margin-left: 16px; border: 1px solid var(--growth); padding: 10px 12px; display: grid; gap: 8px; font-size: 12.5px; color: var(--text-soft); }

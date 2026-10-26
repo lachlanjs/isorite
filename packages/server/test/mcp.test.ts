@@ -74,7 +74,6 @@ test("isorite mcp: the base's tools over stdio, each look-up a step on the Atlas
 
   input.end();
   expect(await done).toBe(0);
-  // It started the server, so it stopped it.
-  await new Promise((r) => setTimeout(r, 300));
-  expect(await fetch(`http://127.0.0.1:${port}/api/session`).then(() => true, () => false)).toBe(false);
+  // It started the server, so the server stops once it has let it go.
+  await expect.poll(() => fetch(`http://127.0.0.1:${port}/api/session`).then(() => true, () => false), { timeout: 5000 }).toBe(false);
 }, 120_000);

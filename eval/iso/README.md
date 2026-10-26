@@ -13,6 +13,7 @@ N-body notes), against the provider in `~/.config/isorite/config.toml`. Plain JS
     { "asked": "…", "said": "…", "read": ["integrators/leapfrog"] }  // read: notes Iso read in it, whole
   ],
   "compact": true,                   // optional: sum up the history before the judged turn
+  "memory": { "path.md": "…" },      // optional: notes of the agent's memory, a second base lent to this one (M20)
   "turn": { "mode": "ask" | "write", "asked": "…", "given": [{ "kind": "note", "id": "…" }] },
   "checks": [ … ]                    // each passes or fails; see below
 }
@@ -25,4 +26,5 @@ note made, in that folder, with frontmatter type and title, and a link that reso
 (no note made whose title matches); `{"editLines": n}` (at most n lines changed in all); `{"changedSays": "regex"}`
 (the changed text matches); `{"notRead": [ids]}` (not read again in the judged turn); `{"briefing": {"open":
 "regex", "notes": [ids]}}` (the compaction picked these); `{"words": n}` (the reply is at most n words); `{"unchanged": [ids]}` (these notes not touched); `{"asks": true}`
-(it asks back: ask_question, or a question in its reply); `{"diagram": true}` (its reply has a mermaid block that Pele can draw; `false`: none).
+(it asks back: ask_question, or a question in its reply); `{"diagram": true}` (its reply has a mermaid block that Pele can draw; `false`: none); `{"lookedIn": "memory"}` (it
+looked in that lent base).

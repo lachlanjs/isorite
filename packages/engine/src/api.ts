@@ -101,7 +101,7 @@ export interface TerminalTurn { id: string; asked: string; from: "terminal" | "h
 export type TerminalItem =
   | { kind: "text"; text: string }
   /** A tool call. `title` is what it acted on (a command, a file, a note); `diff` an edit's lines, `-` and `+`. */
-  | { kind: "tool"; id: string; name: string; title: string; status: "running" | "done" | "failed"; output: string; note?: string; diff?: string[] };
+  | { kind: "tool"; id: string; name: string; title: string; status: "running" | "done" | "failed"; output: string; note?: string; diff?: string[]; base?: string };
 /** The agent asks before doing: `action` (as `shell`) on `resources` (as the command). */
 export interface TerminalPermission { id: string; action: string; resources: string[]; tool?: string }
 

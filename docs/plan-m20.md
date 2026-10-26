@@ -191,7 +191,7 @@ use isorite's memory as well as its own.
 ## 5. Docs and the guide
 
 - **The guide:** a new note, *Several bases, and the agent's memory* (`notes/terminal/memory.md`), with a problem
-  note, *Give the agent a memory*, to mark solved. The *isorite term* note links to it.
+  note, *Let the agent remember*, to mark solved. The *isorite term* note links to it.
 - **`docs/setup.md`:** the `[bases]` table and `lend`.
 - **`docs/terminal.md`:** `isorite memory` and the `base` argument.
 - **`isorite help setup`** (`setup-for-agents.md`): the same, for an AI helping you.
@@ -240,3 +240,67 @@ use isorite's memory as well as its own.
   - a provider for each base (for keeping a base away from a work gateway);
   - mounting a shared team base read-only (rdstudio's T47).
   - Each of these can follow once you've used several bases.
+
+## 8. What was built
+
+On branch `m20-bases`, version 0.8.0.
+
+- **The list of bases** is `~/.config/isorite/bases.toml`, beside `config.toml`, not a table inside it (a
+  departure). `config.toml` is written by hand, holds the key and has comments, and adding a row each time a base
+  is opened would have rewritten it.
+  - `knownBases`, `rememberBase` (under the folder's name, `-2` for a second folder of that name) and `lendBase`
+    are in `config.ts`.
+  - `isorite bases` lists the bases; `isorite bases lend <name>` lends one and `keep <name>` stops.
+- **One server, several bases** (`server/src/bases.ts`):
+  - `Bases` opens a base's engine and app the first time it's asked for, and the lent ones at the start. Every
+    base shares one embedder, one token and the provider's relay, and the provider's setup is kept into use in all
+    of them.
+  - `openServer` is the testable half of `serve`.
+  - The routes: `/api/bases` (the list), `/api/bases/lend` and `/api/bases/open` (from this machine only), and
+    `/api/server/hold`, a stream that holds a server open while `isorite term` or `mcp` is using it.
+- **A base's page** is the app's own page with `?base=<name>`, and its API is `/b/<name>/api/` (a departure from
+  `/b/<name>/` as the page).
+  - SvelteKit's hash router puts a slash after its base, but its links have none, so every link would have
+    reloaded the page.
+  - `/b/<name>` sends you to `?base=<name>`.
+  - What the browser keeps for a base (the note last open, unsaved text, drafts' places on the Atlas) is kept
+    under its name (`here.ts`).
+- **`isorite term` and `mcp`** add their base to a server that's already running, and say its page. A server they
+  start is `--held`: it stops a second after the last one using it lets go.
+  - That stream has to be read for as long as it's held. Node's fetch lets an unread body go once nothing refers
+    to it, and the server stopped mid-session (the terminal's end-to-end tests caught it).
+- **The tools:**
+  - every agent tool takes `base`, and a note can be named `memory:<id>`;
+  - a look in another base is drawn on that base's Atlas, and ends with the turn;
+  - the agent writes there under its name;
+  - `brief_base` lists the lent bases, each with the first line of its `AGENTS.md`;
+  - an unknown or unlent base is refused, naming the bases that are lent.
+  - Iso gets the same `base` on its look-ups, a section naming the lent bases, and a step with `away` (not drawn on
+    this base's Atlas). A change to another base is refused.
+  - OpenCode's plugin and the MCP bridge tell the agent which bases are lent.
+- **The app:**
+  - `BaseSwitch` shows the base's name before the first pane's name (each pane's, on a phone). It opens the list,
+    where each base is a link (Ctrl-click for a new tab), the one here is ticked, and each has a lent switch (only
+    from this machine).
+  - Iso's steps, and the terminal's tool lines in another base, link to that note in its own page, in a new tab.
+- **`isorite memory`** (`server/src/memory.ts`) makes `~/isorite-memory`: the base, `git init`, its `AGENTS.md`
+  (the practice in §2.5) and its row, lent. Run again, it says where the memory is and changes nothing.
+- **The guide:** *Several bases, and the agent's memory* (`terminal/memory`) and the problem *Let the agent remember*
+  (renamed from *Give the agent a memory*, which the finder took for the answer to "how do I give Iso a note?").
+- **The eval:** `look-in-the-memory`, with a memory holding how they like numbers given. Mid tier, one run: 3/3,
+  $0.035.
+- **The docs:** `setup.md` §5, `terminal.md` (*The agent's memory, and other bases*), `setup-for-agents.md`
+  (commands and files), and the npm README.
+- **Not done:** the real check of the terminal's agent on a temporary copy.
+  - It needs the provider's key under a temporary configuration, and the key isn't to be copied. Under the real
+    configuration it would write the temporary bases into your `bases.toml`.
+  - The agent's side is tested end to end with the scripted gateway instead: the OpenCode tests and
+    `bases.spec.ts`.
+  - Your own use of `isorite memory` with `isorite term` is the real check.
+- **Tests:**
+  - unit: core 303, engine 125 (5 new, `bases.test.ts`), example 11, guide 9, OpenCode 43, server 100 (7 new in
+    `bases.test.ts`, 1 in `terminal.test.ts`), app 51;
+  - browser: 226 passed and 18 skipped (16 new in `bases.spec.ts`);
+  - site: 8 passed;
+  - `svelte-check` is clean, and the autofixer reports no issues.
+- **Real-model spend:** $0.035, for the eval case.

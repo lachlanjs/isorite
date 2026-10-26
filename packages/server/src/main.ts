@@ -24,6 +24,7 @@ import { term } from "./term.ts";
 import { guide } from "./guide.ts";
 import { writeExample, writeGeometry } from "@isorite/example/node";
 import { modelCommand } from "./model.ts";
+import { bases, memory } from "./memory.ts";
 import { VERSION } from "./version.ts";
 
 
@@ -52,6 +53,10 @@ const USAGE = `isorite: an agentic harness for understanding
                                          provider (asked a few words, a few hundred tokens), the terminal and
                                          the notes; --report gives it as one block, secrets hidden, to paste
                                          to someone (or an AI) helping
+  isorite memory [<folder>]              the agent's memory: a knowledge base (~/isorite-memory unless named),
+                                         a git repository of its own, lent to every session's agent and Iso
+  isorite bases [lend|keep <name>]       the bases this device knows, each listed as it is opened; lend one to
+                                         every session, or keep it to itself
   isorite help setup                     how isorite is set up, every setting and failure: written for an AI
                                          helping you set it up (docs/setup.md is for people)
   isorite guide [<folder>] [--port <n>]  the guide: a knowledge base about isorite, with things to do in it,
@@ -86,7 +91,7 @@ export function main(argv: string[]): number | Promise<number> {
       if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
       // Runs until stopped; what it refuses at the start is reported like any other command's.
       const allowHosts = rest.flatMap((a, i) => (a === "--allow-host" && rest[i + 1] ? [rest[i + 1]!] : []));
-      return serve(rest[0], { ...(port === undefined ? {} : { port }), allowHosts }).then(() => new Promise<number>(() => undefined), (e) => {
+      return serve(rest[0], { ...(port === undefined ? {} : { port }), allowHosts, held: rest.includes("--held") }).then(() => new Promise<number>(() => undefined), (e) => {
         if (e instanceof StudyError) { console.error(e.message); return 2; }
         throw e;
       });
@@ -114,6 +119,8 @@ export function main(argv: string[]): number | Promise<number> {
       if (rest.includes("--from") && !from) { console.error("--from takes a folder"); return 2; }
       return modelCommand(rest.includes("--from") ? from : undefined);
     }
+    if (command === "memory") return memory(rest.find((a) => !a.startsWith("--")));
+    if (command === "bases") return bases(rest);
     if (command === "--version" || command === "-v") { console.log(VERSION); return 0; }
     if (command === "help" && rest[0] === "setup") {
       // From the npm package (dist/main.js, docs/ beside it) or a checkout (packages/server/src/main.ts).
