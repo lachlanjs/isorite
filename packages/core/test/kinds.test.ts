@@ -60,3 +60,13 @@ test("links out of the base: to the web, and to code by its path and lines; a pa
   expect(parseSettings(settingsText({ repository: "../code" }))).toEqual({ repository: "../code" });
   expect(parseSettings("not = [toml")).toEqual({});
 });
+
+test("AGENTS.md at the top of a base is the base's instructions, a file, not a note; elsewhere it is a note", () => {
+  const b = Bundle.fromFiles([
+    { path: "AGENTS.md", text: "Write logarithms in base 2.\n" },
+    { path: "basics/AGENTS.md", text: "---\ntype: Concept\ntitle: Agents\n---\n\nA note.\n" },
+  ]);
+  expect([...b.concepts.keys()]).toEqual(["basics/AGENTS"]);
+  expect(b.files.has("AGENTS.md")).toBe(true);
+  expect(b.issues.filter((i) => i.path === "AGENTS.md")).toEqual([]);
+});

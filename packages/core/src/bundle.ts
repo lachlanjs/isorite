@@ -9,6 +9,9 @@ import { citeRefs, headings, linkRefs, rating, type Rating } from "./markdown.ts
 import { ABOUT, doneOf, embedRefs, idsOf, kindOf, outwardLinks, type Kind, type Outward } from "./kinds.ts";
 import { basename, cmp, cmpTuple, dirname, join, normpath, strip, text, toTime, unquote } from "./text.ts";
 
+/** The base's own instructions, for Iso and any other agent, at the top of the notes (M15). Not a note. */
+export const AGENTS_FILE = "AGENTS.md";
+
 export const OKF_VERSION = "0.2";
 
 /** One file of a bundle: its path from the bundle root, and its text if it is Markdown. */
@@ -209,7 +212,8 @@ export class Bundle {
       if (f.text !== undefined) f.text = f.text.replace(/\r\n?/g, "\n");
       if (rel.split("/").some((part) => part.startsWith("."))) continue;
       if (f.dir) { this.ensureDir(rel); continue; }
-      if (!rel.endsWith(".md")) { this.files.add(rel); continue; }
+      // AGENTS.md at the top is the base's instructions for Iso and other agents (M15): a file, not a note.
+      if (!rel.endsWith(".md") || rel === AGENTS_FILE) { this.files.add(rel); continue; }
       const directory = dirname(rel);
       this.ensureDir(directory);
       const name = basename(rel);

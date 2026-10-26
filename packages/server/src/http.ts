@@ -54,7 +54,7 @@ const Given = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("understanding"), id: z.string().max(400) }).strict(),
 ]);
 const Mode = z.enum(["ask", "write", "build"]);
-const TurnAsk = z.object({ conversation: z.string().max(64).optional(), mode: Mode, asked: z.string().max(8000), given: z.array(Given).max(40), tier: Tier, lookup: z.boolean().optional(), off: z.array(z.string().max(64)).max(500).optional() }).strict();
+const TurnAsk = z.object({ conversation: z.string().max(64).optional(), mode: Mode, asked: z.string().max(8000), given: z.array(Given).max(40), tier: Tier, lookup: z.boolean().optional(), off: z.array(z.string().max(320)).max(500).optional() }).strict();
 const TurnShape = TurnAsk.omit({ asked: true });
 const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
 const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
@@ -157,6 +157,9 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   app.get("/api/understanding", (c) => answer(c, () => api.understanding(id(c))));
   post("/api/understanding/scratchpad", z.object({ scratchpad: z.string().max(200_000), base: z.string().max(64).nullable() }).strict(), (c, b) => api.saveScratchpad(id(c), b.scratchpad, b.base));
   post("/api/iso/take", z.object({ conversation: z.string().max(64), turn: z.string().max(64), item: z.string().max(64) }).strict(), (_c, b) => api.takeItem(b.conversation, b.turn, b.item));
+  post("/api/iso/context", z.object({ conversation: z.string().max(64), part: z.string().max(320), on: z.boolean() }).strict(), (_c, b) => api.setContext(b.conversation, b.part, b.on));
+  post("/api/iso/compact", z.object({ conversation: z.string().max(64), keep: z.number().int().min(0).max(1000).optional() }).strict(), (_c, b) => api.compact(b.conversation, b.keep));
+  post("/api/iso/branch", z.object({ conversation: z.string().max(64) }).strict(), (_c, b) => api.branch(b.conversation));
   post("/api/iso/undo", z.object({ conversation: z.string().max(64), turn: z.string().max(64) }).strict(), (_c, b) => api.undoTurn(b.conversation, b.turn));
   post("/api/iso/answer", z.object({ turn: z.string().max(64), permission: z.string().max(64), decision: z.enum(["once", "always", "reject"]) }).strict(), (_c, b) => api.answer(b.turn, b.permission, b.decision));
   app.get("/api/conversation", (c) => answer(c, async () => (await api.conversation(c.req.query("id") || undefined)) ?? { id: "", turns: [] }));
