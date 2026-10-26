@@ -318,4 +318,111 @@ two things are done here so that a later experiment could use it:
 
 ## 6. What was built
 
-To be written.
+Built 2026-10-26 on `m15-context` (`dc64cfe` … `0c80b46`), then version 0.4.0.
+
+1. **The working set** (`dc64cfe`, `engine/src/hand.ts`). It's worked out in code from the conversation's file:
+   its turns, and three kinds of line beside them:
+   - `context`: a part switched, and at which turn;
+   - `briefing`: a compaction's typed fields, and the turns it stands for;
+   - `counted`: what the provider counted against the estimate.
+
+   Older files have none of these, and read as before.
+   - What Iso reads with `read_note` stays in hand at the sections it read, or whole.
+   - A note in hand and unused for 3 turns is set aside as a pointer line ("Read earlier, set aside"). Used means
+     read again, linked in its reply, or changed. Switched back on, it ages from then.
+   - What you gave, the turns and AGENTS.md never age off.
+   - `conversation()`'s shortening and `windowed()`'s cut of given notes are gone from turns. Drafts in the Note
+     pane keep theirs (§4).
+   - Sizes are the estimate times the last turn's count over it. On the real check, the provider counted about 24%
+     more than estimated.
+2. **Compaction** (`dc64cfe`): a call on the low tier for typed fields, `settled`, `open`, `preferences` and
+   `notes`, from which code writes the briefing.
+   - It runs by hand: all turns but the last.
+   - It runs on its own when a turn would pass the model's limit. Still over, the turn is refused (413), naming
+     the largest part.
+   - "A new conversation from here" (`branch`) starts a conversation from a briefing of the old one.
+   - **Departure:** the post's two steps (filter, then summarise) are one call. Its typed fields are the filter,
+     and code writes the summary from them.
+   - **Departure:** "a new conversation from here" is an icon at the head of the Context view's conversation, not
+     a second choice under +. It sits beside compaction, where the conversation's context is managed.
+3. **AGENTS.md** at the top of the notes (`dc64cfe`, `7d7d720`).
+   - It's a file, not a note, so it's not on the Atlas and not linted.
+   - It's sent with every turn, as a fixed row that can be switched off.
+   - It's edited in Iso's settings. **Departure:** in a plain text box, not the notes' editor.
+   - Iso can offer a line for it with `offer_text`, inserted when you take it.
+   - OpenCode is given it in its `instructions`. The end-to-end test checks that OpenCode 2.0.32 sends it in its
+     own request.
+4. **The Context view** (`4dafd7d`, `ContextView.svelte`), after the Header-Context board.
+   - A row per part: its mark (◆ you gave, ◇ Iso read, ? an open question, › a turn, ≡ a briefing), name, faint
+     detail, size, and a bar of its share of the limit.
+   - It's grouped under notes, conversation and fixed. A click switches a row, ✕ takes out a part you gave, and a
+     briefing folds the turns it stands for under it.
+   - The compact and new-conversation icons are at the head of the conversation group. What each control does is
+     in its tooltip; the view has no sentences.
+5. **The header** (`4dafd7d`).
+   - The tier is low · mid · max beside the gauges, or on a phone the one letter of the tier chosen, which cycles.
+     Its tooltips name the models.
+   - The gauge is a button that opens the Context view. It takes the warning colour from 100k tokens (or half the
+     limit), and the rose over the limit.
+6. **The Atlas** (`4dafd7d`): with Iso's context shown, a note Iso read and holds is lattice-blue, and one set
+   aside is dashed. Shift+click sets one aside, or holds it again.
+7. **The prompt in layers** (`7d7d720`), sent with every turn in the same order, so the provider's cache holds:
+   1. Iso;
+   2. their knowledge base (a note's file, link kinds, questions and problems, embeds, undo; its example note is
+      loaded by `core` in a test);
+   3. keeping it well (one idea a note; look before writing; extend, don't duplicate; where a note goes; split and
+      merge are theirs);
+   4. their learning (their words; their notation; ask first when asked to explain; a question or a problem over a
+      summary; check, don't solve);
+   5. the mode's rules, asking back (now with the AGENTS.md offer), checking, understanding (trimmed to the reading
+      itself), the format, and looking things up (now with what is in hand).
+
+   `brief_base` gives the terminal's agent the second and third layers.
+8. **`npm run eval:iso`** (`12f4a1a`, `ab881fb`).
+   - Twelve cases in `eval/iso/*.json`, in a plain format a prompt optimiser could use, with 14 kinds of check and
+     no judge.
+   - Each case runs on a fresh copy of the example base. Its history is written into the conversation, so only the
+     judged turn (and a compaction) is asked of the model.
+   - `--scripted` tries the runner for nothing.
+   - Two cases were wrong in the first run, and were fixed before the baseline counted: a link that was there
+     already, and "nothing changed" where the point was that the problem was untouched.
+9. **Found in the real check** (`0c80b46`): the low tier read a note in hand again, despite the prompt. The fix is
+   in code, not a louder prompt, as the post advises. `read_note` on a note or section in hand answers that it is
+   in hand, and still counts as a use.
+10. **The tutorial walk tests are retired** (`b9ce0e1`), with their configs and npm scripts. The coach's L2 step
+    that names the Context view was updated by hand, and its check reads the new rows.
+
+**The eval (mid tier, Sonnet 5.5 on OpenRouter):**
+
+| | checks passed | cost |
+|---|---|---|
+| before the layers | 25 of 27 | $0.30 (with the two cases rerun after fixing them) |
+| after | 27 of 27 | $0.20 |
+
+The two that failed before:
+- **extend-not-duplicate:** Iso wrote a second note on why leapfrog's energy stays bounded. After, it pointed to the
+  three places that say it, offered a section for the missing step, and asked.
+- **understanding-asks-first:** it explained in 248 words before asking. After, it asked one question and stopped.
+
+**The real check** (low tier, a copy of the example base, through the server's API), **$0.045**:
+1. Iso searched.
+2. It read Leapfrog.
+3. It read Leapfrog again, before the fix.
+4. A compaction ($0.0009) gave a briefing that named the settled points and the note.
+5. A turn after it carried on from the briefing.
+
+After the fix, in a new conversation, the second turn's read answered "in hand already".
+
+**All told:** about $0.54 on the OpenRouter key: the eval $0.50 and the real check $0.045.
+
+**Tests:**
+- Unit tests: 303 core, 120 engine (`hand.test.ts`, `working.test.ts`), 15, 51 OpenCode end to end (AGENTS.md
+  included), 78 server, 45.
+- Browser: 168 passed, 8 skipped. New and rewritten: the Context view's rows, a note in hand, a compaction, the
+  tier and the gauge.
+- `svelte-check` and `tsc` are clean, and the autofixer reports no issues.
+
+**Not checked:**
+- The Atlas's held and set-aside marks, by eye: the tests check the rows they come from, not their colour.
+- Compaction at a real model's limit (200k): the scripted tests cover it at a small one.
+- `term` attaching to a running server without the notes named: it can't name AGENTS.md then.
