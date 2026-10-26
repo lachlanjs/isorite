@@ -14,12 +14,13 @@ turn off certificate checking (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
 
 | Command | What it does |
 |---|---|
+| `isorite new <folder>` | Makes the folder (and its parents), empty but for `.isorite/`. Refuses one with files in it already: that is opened as it is. |
 | `isorite doctor [<notes>] [--report] [--offline]` | Checks the setup a step at a time (below). Exit 1 if anything failed. `--offline`: asks the provider nothing. |
 | `isorite serve <notes> [--port <n>]` | The browser app at `http://localhost:4767/`, on 127.0.0.1 only. |
 | `isorite term [<notes>] [--port <n>]` | OpenCode 2 in this terminal, in the current folder (the code), with the notes beside it. Starts the isorite server if none answers on the port, and stops it on exit. |
 | `isorite check <notes>` | Lints the notes: frontmatter, links, cycles. |
 | `isorite --tutorial` | A tour on an example base with a scripted model: no key or network needed. Good to check the install alone. |
-| `isorite model [--from <folder>]` | Optional: fetches the model for search by meaning (53 MB). |
+| `isorite model [--from <folder>]` | Optional: the model for search by meaning. Says which is installed and where, else fetches it (53 MB) from npm, a GitHub release, then Hugging Face, saying why each failed. `--from`: granite's files, or any compatible model (below). |
 | `isorite help setup` | Prints this. |
 
 ## Files
@@ -30,6 +31,8 @@ turn off certificate checking (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
 | `~/.config/isorite/opencode/` | OpenCode's settings as isorite writes them at each `isorite term` start (`opencode.json`, theme, plugin link). Rewritten; don't edit. |
 | `~/.config/isorite/opencode/local.json` | The person's own OpenCode settings, laid over isorite's. Never rewritten. |
 | `<notes>/.isorite/` | isorite's own folder in the notes: journals of every change, `settings.toml` (`repository = "<path>"`, where code links point). Made on first open; commit it with the notes. |
+| `~/.local/share/isorite/models/` (or `$XDG_DATA_HOME/isorite/models/`) | The models for search by meaning, a folder each: `granite-embedding-small-english-r2/`, and any other installed with `--from`. `use` names the one used, if not granite. |
+| `~/.cache/isorite/vectors-<hash>.json` | Each base's vectors, made by the model; made again when the model changes. |
 | `$TMPDIR/isorite-term-<port>.log` | The isorite server's output, when `isorite term` started it. Look here when "the isorite server did not start". |
 | `$TMPDIR/isorite-opencode-<port>.log` | OpenCode's server's output, under `isorite term`. |
 
@@ -44,6 +47,7 @@ url = "https://…/v1"                  # OpenAI-compatible; /chat/completions a
 key = "…"                             # the key; also settable in the browser (behind the logo)
 key_header = "api-key"                # send the key in this header, as it is, instead of Authorization: Bearer
 stream_usage = false                  # don't send stream_options (some gateways answer 400 to it)
+max_tokens = 16000                    # the least output budget any call gets, for models that think at length
 cache_marks = true                    # send Anthropic cache marks (OpenRouter-style gateways only)
 pfx = "~/certs/me.pfx"                # client certificate (mTLS), PKCS#12; or cert + cert_key (PEM)
 pfx_passphrase = "$PFX_PASS"          # "$NAME": read from that environment variable
@@ -82,6 +86,8 @@ Rules:
 | `ISORITE_NODE_DEFAULTS=0` | Leave Node as it is: no system authorities, no proxy unless Node is told. |
 | `NODE_EXTRA_CA_CERTS` | A .pem of extra authorities, read by Node at start. |
 | `ISORITE_GATEWAY_URL`, `ISORITE_GATEWAY_MODELS`, `ISORITE_GATEWAY_KEY` | The terminal only: OpenCode asks this OpenAI-compatible address directly, with these models (comma-separated) and key, instead of `config.toml`'s provider. No certificate or headers apply. |
+| `ISORITE_EMBED_DIR` | The model for search by meaning is in this folder (and nowhere else is looked). |
+| `ISORITE_EMBED=off` | No search by meaning, whatever is installed. |
 | `ISORITE_OPENCODE` | The OpenCode 2 binary to run. Otherwise `opencode2`, then `opencode`, must be version 2. |
 | `XDG_CONFIG_HOME` | Where `isorite/config.toml` is looked for. |
 | `SSH_CONNECTION` | Set over SSH: `term`, `serve` and `doctor` print the `ssh -L` command for the browser. |
@@ -96,6 +102,12 @@ Rules:
   server's relay, and with the server's token as its key. The relay adds the real key, certificate, headers and
   query, and passes `/chat/completions` and `/models` on. So whatever works for Iso works for the terminal. The
   relay answers only on 127.0.0.1, and only that token.
+- **Retries.** A 502, 503 or 504, a dropped connection or a timeout is asked again up to 3 times (after about 1, 2
+  and 4 s), and a 429 once (after its `Retry-After`, if 10 s or less), but only before any of the reply has come.
+  The relay does the same before it passes anything to OpenCode (which retries on its own as well). 4xx answers
+  and names not found are the settings', and are not asked again.
+- **An empty reply.** A reply cut off at its length limit with nothing written (a reasoning model that spent the
+  budget thinking) is asked once more with three times the room.
 - With no key and no certificate in `config.toml`, and no `ISORITE_GATEWAY_*`, OpenCode uses its own models.
   `isorite term` prints which models it uses, and from where.
 
@@ -131,12 +143,24 @@ Rules:
 | `ETIMEDOUT`, `UND_ERR_CONNECT_TIMEOUT` | No answer: often a proxy is needed. | Set `HTTPS_PROXY` (and `NO_PROXY` for internal hosts reached directly). |
 | `said 401` / `said 403` | The key, or where it's sent, isn't accepted. | Check the key, `key_header`, and any header the gateway wants. The gateway's own message usually names it. |
 | `said 404 … no model called X, which is OpenRouter's name for it` | No `[tiers]`. | Name the gateway's models under `[tiers]`. `doctor` lists the models `/models` offers. |
+| `… is unavailable (503 …), tried 4 times over N s: it is likely …, not your settings` | The gateway, or the model behind it, is down. | Wait, and send it again (↻ under the turn). If it lasts, the gateway's status page or owner. |
+| `… used its whole output budget (N tokens) thinking, and wrote nothing` | A reasoning model ran out of room before it wrote. | A lower tier, or `max_tokens` under `[provider]`. |
+| `! search by meaning: no model …` | Not installed (optional). | `isorite model`. Its failures name each source; offline, `isorite model --from <folder>` with a copy. |
+| `The model could not be fetched:` and a line for npm, GitHub, Hugging Face | None reachable from here. | Copy the model's folder from a machine that has it (`isorite model` there says where), then `isorite model --from <folder>`; or any compatible model. |
 | `said 400: … stream_options` | The gateway refuses `stream_options`. | `stream_usage = false`. |
 | `✗ tools: … answered without calling the tool` | The model or gateway drops tools. | Choose a model that supports tool calls. Iso and the terminal need them. |
 | `isorite term needs OpenCode 2` | OpenCode 1, or none. | `npm i -g @opencode/cli`, or `ISORITE_OPENCODE=…`. |
 | `port 4767 is serving <other>, not <notes>` | Another base is served there. | Stop it, or `--port`. |
 | The link doesn't open, over SSH | `localhost` is the remote machine. | `ssh -L 4767:localhost:4767 <host>` from the person's own machine. |
 | The terminal works but uses an unexpected model | Check the line `isorite term` prints: `config.toml`, `ISORITE_GATEWAY_URL`, or OpenCode's own (no key or certificate). | Fix what it names. |
+
+## Another model for search by meaning
+
+Any ONNX model that gives 384 numbers for a text, with its `tokenizer.json`, can stand in for granite:
+`isorite model --from <folder>`. It's checked by use (loaded, and asked for one vector), copied into the models
+folder, and used from then on; each base's vectors are made again with it. An optional `isorite-model.json` beside
+its files gives `{"name": "…", "pooling": "cls" | "mean"}`: `cls` (the default) takes the first token's state, as
+granite is used; `mean` averages them all, as sentence-transformers models such as all-MiniLM-L6-v2 are used.
 
 If the gateway isn't OpenAI-compatible (Bedrock's or Vertex's own APIs, for example), isorite can't use it directly.
 An OpenAI-compatible proxy in front of it, such as LiteLLM, can.

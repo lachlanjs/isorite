@@ -9,7 +9,7 @@ npm install -g isorite
 isorite --tutorial          # the tutorial: the terminal's tour, and the browser's beside it, on an example base
 ```
 
-On your own notes, a folder of Markdown files (empty is fine):
+On your own notes, a folder of Markdown files (`isorite new <notes>` starts one):
 
 ```sh
 isorite serve <notes>       # the browser, at http://localhost:4767/; set Iso's provider key behind the logo

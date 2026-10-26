@@ -45,6 +45,7 @@ url = "https://llm-gateway.corp.example/v1"
 key = "…"
 key_header = "api-key"                     # the header the key goes in, as it is, instead of Authorization: Bearer
 stream_usage = false                       # for a gateway that refuses stream_options; the gauge then counts nothing
+max_tokens = 16000                         # the least room a reply is given, for models that think at length
 
 # A client certificate (mTLS), for a gateway that asks for one: a .pfx (or .p12) ...
 pfx = "~/certs/me.pfx"
@@ -77,11 +78,15 @@ If the company's authority isn't installed on the machine, name its certificate 
 
 ## 3. Your notes
 
-A folder of Markdown files; empty is fine.
+A folder of Markdown files. To start from nothing:
 
 ```sh
+isorite new ~/notes/my-project
 isorite serve ~/notes/my-project
 ```
+
+`isorite new` makes the folder, empty but for isorite's own `.isorite/`. A folder of notes you have already is
+opened as it is, with `isorite serve`.
 
 It prints a link to click: `http://localhost:4767/`. isorite keeps what it needs in the folder's `.isorite/`.
 
@@ -95,7 +100,24 @@ isorite term ~/notes/my-project
 It prints the same link, and which models the terminal uses. OpenCode uses the provider above, through isorite. More
 is in [terminal.md](terminal.md).
 
+## Search by meaning (optional)
+
+```sh
+isorite model
+```
+
+It says which model is installed and where, or fetches it (53 MB, once): from npm, else from a release on GitHub,
+else from Hugging Face. Without it, Iso searches by words and follows links. Where none of those can be reached,
+copy the model's folder from a machine that has it (`isorite model` there says where it is) and run
+`isorite model --from <folder>`. Any compatible model works the same way: an ONNX model that gives 384 numbers,
+with its `tokenizer.json` (for example all-MiniLM-L6-v2, with `{"pooling": "mean"}` in an `isorite-model.json`
+beside it).
+
 ## When something fails
+
+If a gateway is down for a moment (it answers 502, 503 or 504, or drops the connection), Iso and the terminal ask
+it again, up to three times. When it stays down, Iso says it's likely the gateway, not your settings, and the ↻
+under the turn sends it again.
 
 ```sh
 isorite doctor ~/notes/my-project
