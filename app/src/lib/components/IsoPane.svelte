@@ -11,6 +11,7 @@
   import { converse } from "$lib/converse.svelte.ts";
   import { render } from "$lib/markdown.ts";
   import { panes } from "$lib/panes.svelte.ts";
+  import { pointedBy, pointing } from "$lib/pointing.svelte.ts";
   import { spend } from "$lib/spend.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
@@ -20,6 +21,15 @@
   const SYM: Record<Part["kind"], string> = { note: "▣", folder: "▭", passage: "“", understanding: "◇" };
   const titleOf = (id: string): string => app.listing.notes.find((n) => n.id === id)?.title ?? id.split("/").at(-1) ?? id;
   const HOW: Record<Step["how"], string> = { keyword: "searched", meaning: "by meaning", link: "followed", read: "read" };
+
+  /** A note named in the conversation, under the mouse, is lit on the Atlas (M17): a link in what Iso said, or a
+   *  note it read, changed or pointed to. */
+  function pointAt(e: PointerEvent): void {
+    if (e.pointerType !== "mouse" || !(e.target instanceof Element)) return;
+    const el = e.target.closest<HTMLElement>("[data-to], a[href]");
+    const to = el?.dataset.to ? { id: el.dataset.to, folder: false } : el instanceof HTMLAnchorElement ? pointedBy(el.getAttribute("href") ?? "") : null;
+    pointing.set("iso", to ? { ...to, who: "you" } : null);
+  }
 
   let text = $state("");
   let list = $state<HTMLElement>();
@@ -82,13 +92,13 @@
   {:else if i.kind === "look"}
     <p class="look" class:failed={i.step.failed}>
       <span class="v">{HOW[i.step.how]}</span>
-      {#if i.step.opened}<button type="button" class="note-link" onclick={() => open(i.step.opened!)}>{titleOf(i.step.opened)}{i.step.section ? ` · ${i.step.section}` : ""}</button>
+      {#if i.step.opened}<button type="button" class="note-link" data-to={i.step.opened} onclick={() => open(i.step.opened!)}>{titleOf(i.step.opened)}{i.step.section ? ` · ${i.step.section}` : ""}</button>
       {:else}<span class="q">{i.step.query ? `“${i.step.query}”` : i.step.said}</span>{#if i.step.notes.length}<span class="n">{i.step.notes.length} found</span>{/if}{/if}
     </p>
   {:else if i.kind === "change"}
     <p class="change">
       <span class="v">{i.note.startsWith("@understanding/") ? "wrote" : i.why === "create" ? "made" : i.why === "delete" ? "deleted" : i.why === "move" ? "moved" : "changed"}</span>
-      {#if i.why === "delete"}<span class="q">{i.title}</span>{:else}<button type="button" class="note-link" onclick={() => openChanged(i.why === "move" ? i.to! : i.note)}>{i.why === "move" ? `${i.title} → ${i.to}` : i.note.startsWith("@") ? i.title : titleOf(i.note)}</button>{/if}
+      {#if i.why === "delete"}<span class="q">{i.title}</span>{:else}<button type="button" class="note-link" data-to={i.why === "move" ? i.to : i.note} onclick={() => openChanged(i.why === "move" ? i.to! : i.note)}>{i.why === "move" ? `${i.title} → ${i.to}` : i.note.startsWith("@") ? i.title : titleOf(i.note)}</button>{/if}
       {#if i.added || i.removed}<span class="n"><span class="add">+{i.added}</span> <span class="del">−{i.removed}</span></span>{/if}
     </p>
   {:else if i.kind === "permission"}
@@ -103,11 +113,11 @@
   {:else if i.kind === "undone"}
     <p class="faint undone">{i.notes.length ? `Undone: ${i.notes.map(titleOf).join(", ")} put back.` : "Nothing was put back."}{i.left.length ? ` Left as they are, changed since: ${i.left.map(titleOf).join(", ")}.` : ""}</p>
   {:else if i.kind === "point"}
-    <p class="point"><span class="dia" aria-hidden="true">◆</span><span class="v">look at</span><button type="button" class="note-link" onclick={() => open(i.note)}>{titleOf(i.note)}</button>{#if i.why}<span class="why">{i.why}</span>{/if}</p>
+    <p class="point"><span class="dia" aria-hidden="true">◆</span><span class="v">look at</span><button type="button" class="note-link" data-to={i.note} onclick={() => open(i.note)}>{titleOf(i.note)}</button>{#if i.why}<span class="why">{i.why}</span>{/if}</p>
   {:else if i.kind === "question"}
     <!-- A question Iso asks back (M12): a question note once made; until then, + makes it one, yours. -->
     <div class="asks" data-question={i.id}>
-      <p>{@render qmark()}{#if i.made}<button type="button" class="note-link" onclick={() => open(i.made!)}>{i.title}</button>{:else}<span class="qt">{i.title}</span>
+      <p>{@render qmark()}{#if i.made}<button type="button" class="note-link" data-to={i.made} onclick={() => open(i.made!)}>{i.title}</button>{:else}<span class="qt">{i.title}</span>
         <button class="icon plus" type="button" aria-label="Keep “{i.title}” as an open question" title="Keep as an open question about {i.about.map(titleOf).join(", ")}" onclick={() => void converse.take(t.id, i.id)}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10" /></svg></button>{/if}</p>
       {#if i.text}<p class="qb">{i.text}</p>{/if}
     </div>
@@ -116,7 +126,7 @@
     <div class="offer" data-offer={i.id}>
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
       <div class="prose yours">{@html render(i.text)}</div>
-      <p class="for">{#if i.note === "AGENTS.md"}<span title="Your instructions for this base, in Iso's settings">AGENTS.md</span>{:else}<button type="button" class="note-link" onclick={() => open(i.note)}>{titleOf(i.note)}</button>{/if}
+      <p class="for">{#if i.note === "AGENTS.md"}<span title="Your instructions for this base, in Iso's settings">AGENTS.md</span>{:else}<button type="button" class="note-link" data-to={i.note} onclick={() => open(i.note)}>{titleOf(i.note)}</button>{/if}
         {#if i.taken}<svg class="in" viewBox="0 0 16 16" width="14" height="14" role="img" aria-label="Inserted" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8.5l3 3 7-7" /></svg>
         {:else}<button class="icon" type="button" aria-label="Insert into {titleOf(i.note)} as yours" title="Insert at the end of {titleOf(i.note)}, as yours" onclick={() => void converse.take(t.id, i.id)}><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13 3v6H4" /><path d="M7 6L4 9l3 3" /></svg></button>{/if}</p>
     </div>
@@ -129,7 +139,7 @@
   {:else if build}
     <TerminalTurns />
   {:else}
-    <div class="chat" bind:this={list} role="log" aria-label="The conversation with Iso" aria-live="polite">
+    <div class="chat" bind:this={list} role="log" aria-label="The conversation with Iso" aria-live="polite" onpointerover={pointAt} onpointerleave={() => pointing.set("iso", null)}>
       {#each converse.turns as t (t.id)}
         <article class="turn" data-state={t.state}>
           <div class="you"><p class="asked">{t.asked}</p>{@render given(t)}{#if t.mode === "write"}<span class="tmode" title="Iso could edit the notes"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 13.5l2.5-2.5M5 11c.6-4.2 3.6-7.4 8.5-8.5C12.6 7.2 9.4 10.4 5 11zM7.2 8.8l2.6-.3M8.8 6.6l2.4-.4" /></svg><span class="hidden-label">write</span></span>{/if}</div>

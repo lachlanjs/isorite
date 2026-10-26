@@ -8,6 +8,8 @@
   import { createEditor, setText, type Where } from "$lib/editor/codemirror.ts";
   import { setMarks, setOverlays, setTouched, type Inline, type Mark, type Overlay, type Touched } from "$lib/editor/overlays.ts";
   import { panes } from "$lib/panes.svelte.ts";
+  import { pointing } from "$lib/pointing.svelte.ts";
+  import { setPointedNote } from "$lib/editor/pointing.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import type { NoteIso } from "$lib/iso.svelte.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
@@ -50,6 +52,8 @@
       // An embedded question or problem (M12) opens in the Note pane.
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
       embeds: { find: findEmbed, open: (id) => { void goto(noteHref(id)); } },
+      // A link under the mouse is lit on the Atlas (M17).
+      onPoint: (to) => pointing.set("note", to ? { ...to, who: "you" } : null),
       codeBroken: (href) => app.listing.notes.find((n) => n.id === note.id)?.broken?.includes(href) ?? false,
       ...(iso ? {
         // Ctrl+Enter goes to Iso's pane (M10), with the text selected, if any, given to Iso.
@@ -72,7 +76,7 @@
       } : { placeholder: untrack(() => placeholder) ?? "Write what you understand, what you do not, and what you want from Iso. [[ links a note it should rest on." }),
     });
     view = made;
-    return () => made.destroy();
+    return () => { made.destroy(); pointing.set("note", null); };
   });
 
   // The text was replaced from outside the editor (their version, a change made elsewhere, a proposal kept).
@@ -85,6 +89,12 @@
   $effect(() => {
     const t = touched, lines = head.lines;
     if (view) view.dispatch({ effects: setTouched.of(t ? { who: t.who, lines: t.lines.map((l) => l - lines) } : null) });
+  });
+
+  // The note pointed at on the Atlas: its links here are marked (M17).
+  $effect(() => {
+    const id = pointing.onAtlas;
+    if (view) view.dispatch({ effects: setPointedNote.of(id) });
   });
 
   // The blocks are placed again whenever the note or what Iso has in it changes.
