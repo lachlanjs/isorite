@@ -1221,6 +1221,9 @@ export class Engine implements Api {
       throw new EngineError(`This turn would be sent about ${k(size())} tokens, more than the ${k(limit)} the model takes. The largest part is ${big.name} (${k(w.scaled(big.tokens))}): switch parts off in the Context view.`, 413);
     }
     const sent = [...w.sent, ...w.reads], own = turnTools(mode, sent);
+    // What is in hand as it was read, for the look-ups not to send it twice; and what you gave whole.
+    const inHand = new Map<string, string[] | "whole">(w.reads.flatMap((r) => (r.kind === "read" ? [[r.id, r.sections] as const] : [])));
+    for (const g of w.givenOn) if (g.kind === "note") inHand.set(g.id, "whole");
     const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier: w.earlier, briefings: w.briefings, sent, aside: w.aside, ...(w.agentsText ? { agents: w.agentsText } : {}), asked: req.asked, broken: await this.brokenNews("iso") });
 
     // A turn is of the session as a journal entry is, and carries it on.
@@ -1239,7 +1242,19 @@ export class Engine implements Api {
     const tools: Tools = {
       defs: () => [...(lookupOn ? lookup.defs() : []), ...own],
       call: async (name, raw) => {
-        if (looks.has(name)) return lookupOn ? lookup.call(name, raw) : { text: "Looking things up is off: they chose what you are sent." };
+        if (looks.has(name) && !lookupOn) return { text: "Looking things up is off: they chose what you are sent." };
+        // A note already in hand is not sent twice (M15): the read is told so, and still counts as using the note.
+        if (name === "read_note") {
+          let args: { id?: unknown; section?: unknown } = {};
+          try { args = JSON.parse(raw || "{}") as typeof args; } catch { /* as it comes */ }
+          const id = noteId(this.bundle, args.id), want = typeof args.section === "string" ? args.section.replace(/^#+\s*/, "").trim() : "";
+          const held = id ? inHand.get(id) : undefined;
+          if (id && held && (held === "whole" || (want && held.includes(want)))) {
+            const step = { tool: "read_note", said: `${this.bundle.concepts.get(id)!.title}: in hand already`, how: "read" as const, notes: [id], opened: id, ...(want ? { section: want } : {}) };
+            return { text: `${this.bundle.concepts.get(id)!.title}${want ? `, the section "${want}",` : ""} is in hand already, as it is now: under "Notes you read earlier". Answer from it.`, step };
+          }
+        }
+        if (looks.has(name)) return lookup.call(name, raw);
         let args: Record<string, unknown> = {};
         try { const parsed: unknown = raw.trim() ? JSON.parse(raw) : {}; if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) args = parsed as Record<string, unknown>; } catch { /* no arguments */ }
         if (!own.some((d) => d.function.name === name)) return { text: `There is no tool ${name} in ${mode} mode.` };

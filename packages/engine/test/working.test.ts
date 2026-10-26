@@ -159,3 +159,19 @@ test("a way of working they state is offered for AGENTS.md, and inserted there w
   await engine.saveAgents("Only SI.  \n\n");
   expect(notes.files.get("AGENTS.md")).toBe("Only SI.\n");
 });
+
+test("a note in hand read again is not sent twice: the look-up says it is in hand, and it still counts as used", async () => {
+  const { engine, ask, sent } = await open([
+    { calls: [{ name: "read_note", arguments: { id: "basics/entropy", section: "Units" } }] }, { text: ["In bits."] },
+    { calls: [{ name: "read_note", arguments: { id: "basics/entropy", section: "Units" } }] }, { text: ["Still bits."] },
+    { calls: [{ name: "read_note", arguments: { id: "basics/entropy", section: "Bounds" } }] }, { text: ["At most log n."] },
+  ]);
+  const c = await ask("unit?");
+  await ask("unit, again?", c);
+  const tool = sent[3]!.messages.find((m) => (m as { role: string }).role === "tool")!;
+  expect(String(tool.content)).toBe('Entropy, the section "Units", is in hand already, as it is now: under "Notes you read earlier". Answer from it.');
+  // A section not in hand is read as usual, and joins it.
+  await ask("and its bound?", c);
+  expect(String(sent[5]!.messages.find((m) => (m as { role: string }).role === "tool")!.content)).toContain("At most log n.");
+  expect((await engine.turnContext({ conversation: c, mode: "ask", tier: "low", given: [] })).rows!.find((r) => r.key === "r:basics/entropy")).toMatchObject({ detail: "Units, Bounds", on: true });
+});
