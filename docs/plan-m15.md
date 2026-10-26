@@ -118,7 +118,8 @@ writing in place, in the Note pane, are in `iso.ts`. What they say is accurate, 
    - **Letting Iso choose for itself** (a tool to set a note aside, or keep it) is left out (§4). The rule is
      there to see, and the same each time.
 4. **Compaction** (Q65): earlier turns summed up into a briefing that stands for them.
-   - **A turn to Iso of its own, on the low tier**, in the post's two steps:
+   - **A turn to Iso of its own, on the low tier**, with typed output (a JSON schema: `settled`, `open`,
+     `preferences`, `notes`), in the post's two steps:
      1. From the turns to be summed up, it picks what still matters: what was asked and settled, the threads still
         open, preferences said along the way, and the notes the talk turned on.
      2. It writes that as a briefing. The notes appear as links, which are pointers into the base.
@@ -305,11 +306,15 @@ Answered 2026-10-26:
 - **Q68.** A switch for each section is too granular: whole notes only.
 - **Q69.** Yes: the eval on the mid tier, twice, about $0.60 a run.
 
-Left to confirm:
-- **Q70. The age-off rule:** 3 turns unused, a pointer line left. *Recommended.* The other way: only at
-  compaction, so the provider's cache is never broken between compactions.
-- **Q71. `AGENTS.md`, not `ISO.md`.** *Recommended*: other agents find it, Claude Code and OpenCode included.
-  `ISO.md` would say it's Iso's, but nothing else reads it.
+- **Q70.** The age-off rule as recommended: 3 turns unused, a pointer line left.
+- **Q71.** `AGENTS.md`.
+
+Asked alongside: whether DSPy has a bearing. Not as a dependency: it is Python, and Iso's turn is open-ended. But
+two things are done here so that a later experiment could use it:
+- The eval's cases and checks are kept as plain JSON (`eval/iso/*.json`), so DSPy's optimizers (GEPA) could tune a
+  prompt against them offline, unchanged.
+- Compaction is a call with typed output: a JSON schema of `settled`, `open`, `preferences` and `notes`, from
+  which the briefing is put together. This is DSPy's signature idea, in TypeScript.
 
 ## 6. What was built
 
