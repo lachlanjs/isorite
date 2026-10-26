@@ -277,6 +277,5 @@ Built 2026-10-26 on `m16-guide` in the order of §6, with Q72–Q77 as recommend
 The svelte-autofixer found no issues.
 
 **Not done.**
-- **The lock file:** `package-lock.json` doesn't list the new workspace, so `npm ci` refuses it, and the Pages
-  workflow would fail. It needs `npm install` (Lachlan's say), before merging.
+- **The lock file** was updated with `npm install` (Lachlan's say), before merging: it lists the new workspace, and `npm ci` takes it.
 - **The live site:** the site is built and tested here, but not yet seen as Pages serves it.
