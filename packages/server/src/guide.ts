@@ -11,6 +11,7 @@ import { finderHttp, START } from "@isorite/guide";
 import { loadGuide } from "@isorite/guide/node";
 import { ConfigSecrets, configPath, providerConfig } from "./config.ts";
 import { serve } from "./serve.ts";
+import { openBrowser } from "./term.ts";
 
 export const GUIDE_FOLDER = join(homedir(), "isorite-guide");
 
@@ -40,4 +41,5 @@ export async function guide(folder = GUIDE_FOLDER, { port = 4767, out = console.
   out(model ? "  Iso: your provider's model" : "  Iso: the guide's finder, which answers with the notes that match (no model is set up)");
   out(`  start at http://localhost:${port}/#/n/${START}`);
   await serve(notes, { port, ...(model ? {} : { stand: finderHttp(16) }) });
+  if (process.env.ISORITE_NO_BROWSER !== "1") openBrowser(`http://localhost:${port}/#/n/${START}`);
 }

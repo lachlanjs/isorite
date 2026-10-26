@@ -1,5 +1,5 @@
 // A scripted OpenAI-compatible endpoint: what `isorite term` is pointed at as its gateway in the
-// tests and in the tutorial, so they need no network and no key. Each request is answered by the
+// tests, so they need no network and no key. Each request is answered by the
 // script with the conversation so far; it replies with text, a tool call, or several at once (as Iso asks for
 // its look-ups), streamed as the API streams.
 

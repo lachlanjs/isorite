@@ -1,7 +1,7 @@
 {
   "name": "@isorite/example",
   "version": "0.1.0",
-  "description": "An example base on dynamical mean-field theory, partway through being built, and its history made by driving the engine with a scripted Iso. Used by `isorite example` and by the tutorial.",
+  "description": "An example base on an N-body simulation, partway through being built, and its history made by driving the engine with a scripted Iso; and one on the differential geometry of surfaces. Used by `isorite example` and by the browser tests.",
   "license": "MIT",
   "type": "module",
   "exports": {

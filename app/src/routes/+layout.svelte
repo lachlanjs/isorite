@@ -22,9 +22,6 @@
   import NoteSettings from "$lib/components/NoteSettings.svelte";
 
   let { children }: { children: Snippet } = $props();
-  // The tutorial walks through the app with a coach card (lib/tutorial): in the tutorial's own build, and on the base
-  // isorite --tutorial serves, which the session names as the tutorial's. Loaded only then.
-  const tutorial = $derived(import.meta.env.MODE === "tutorial" || app.session?.tutorial ? import("$lib/tutorial/Tutorial.svelte") : null);
   // Back from signing in at the provider: Iso's settings open to say how it went.
   if (app.signIn !== null) panes.settings = "iso";
 
@@ -201,8 +198,6 @@
       {/each}
     {/if}
   </main>
-  <!-- Not over the terminal's replay, which has a card of its own. -->
-  {#if tutorial && page.route.id !== "/terminal"}{#await tutorial then t}<t.default />{/await}{/if}
 
   <nav class="tabs" aria-label="Panes">
     {#each PANES as p (p)}

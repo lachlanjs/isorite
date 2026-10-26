@@ -14,8 +14,6 @@ export interface Session {
   /** The knowledge base's name, for the header's path. */
   name: string;
   device: string;
-  /** The base is the tutorial's (`isorite --tutorial`): the app walks you through it. */
-  tutorial?: boolean;
 }
 
 export interface NoteSummary {

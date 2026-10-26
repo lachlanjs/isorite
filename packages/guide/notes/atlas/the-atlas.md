@@ -12,6 +12,8 @@ The Atlas is the base as a map. Each note is a block, each folder a frame, and e
 - **Hold on open ground** to make a note there.
 - Drag the ground to move about, and pinch or scroll to zoom.
 
+The note open in the Note pane has a bar inside its left edge. When it is off the screen, a pip at the Atlas's edge points to it: click the pip to bring it into view. A link under the mouse, in a note or in Iso's answer, is outlined on the map with its line lit, and a note under the mouse on the map marks the open note's links to it.
+
 The layout changes as the base does, but starts from where it was, so the map you know moves as little as it can.
 
 Open [questions](/questions-and-problems/questions.md "see also") and [problems](/questions-and-problems/problems.md "see also") are on the map too, each beside the notes it is about, and a solved problem shows it.

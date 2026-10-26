@@ -6,7 +6,7 @@ Needs Node 24 or later. For the terminal, OpenCode 2: `npm i -g @opencode/cli`.
 
 ```sh
 npm install -g isorite
-isorite --tutorial          # the tutorial: the terminal's tour, and the browser's beside it, on an example base
+isorite guide               # the guide: a knowledge base about isorite, with things to do, in ~/isorite-guide
 ```
 
 On your own notes, a folder of Markdown files (`isorite new <notes>` starts one):
@@ -21,6 +21,6 @@ Setting it up, at work too (a company's gateway, a client certificate, a proxy):
 When something fails, `isorite doctor` says what to change; `isorite doctor --report` gives it as one block, its
 secrets hidden, to paste to someone helping. For an AI helping you: `isorite help setup`.
 
-The tutorial in a browser alone: https://lachlanjs.github.io/isorite/
+The guide in a browser alone: https://lachlanjs.github.io/isorite/
 
 Source, and what is on disk: https://github.com/lachlanjs/isorite

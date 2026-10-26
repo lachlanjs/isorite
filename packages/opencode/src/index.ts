@@ -2,4 +2,3 @@ export { defaultHome, gatewayFrom, GATEWAY_KEY, openCodeConfig, pluginDir, write
 export { findOpenCode, parseVersion, MAJOR, type Found, type Probe } from "./opencode.ts";
 export { theme } from "./theme.ts";
 export { lastAsked, startScripted, type Reply, type Request, type Script, type Scripted } from "./scripted.ts";
-export { tutorialScript, UNSCRIPTED } from "./tutorial.ts";

@@ -238,7 +238,7 @@ The interface plays sound (later) by listening to this same stream and to its ow
 ### Mobile and desktop application
 
 - Tauri, with the engine in the webview behind the in-process `Api`.
-- **The engine has run in a page** (milestone 5): the tutorial is the app with an `Engine` over `MemoryFiles`, a `MemorySecrets` and a scripted `Http`, handed to the app as its `Api`. No adapter was needed; the app had only ever talked to `Api`.
+- **The engine has run in a page** (milestone 5): the tutorial was the app with an `Engine` over `MemoryFiles`, a `MemorySecrets` and a scripted `Http`, handed to the app as its `Api`. No adapter was needed; the app had only ever talked to `Api`. Since M16 the guide's site is the same, over files kept in IndexedDB (`app/src/lib/guide/`), with the guide's finder as its `Http`.
 - The named risk is git inside Tauri on Android. One day's test before any mobile work.
 - **What the slice must hold to:** no `node:` import in the engine or the core; every screen checked at 390 px as well as 1280; nothing that needs a hover to be reachable.
 
@@ -266,8 +266,9 @@ The interface plays sound (later) by listening to this same stream and to its ow
 | engine | vitest with an in-memory `Files`, a fixed `Clock` and a scripted provider, so Iso's loop and the journal's writer are tested without a model or a disk |
 | server | vitest against the real HTTP routes on a temporary folder |
 | app | `@playwright/test`, selecting by text and role; each streamed state has a name a test can wait on; every screen at 1280 and 390 px on both grounds |
-| example | vitest: the example (nbody-notes) replays to the notes as written, every hash holds, each note's understanding is spread over the Atlas's four steps, and the tutorial's Iso answers as scripted |
-| tutorial | Retired in M15: the walks, which did what each step asked at a desktop's width and a phone's, cost more than they caught. M16 replaces the tutorial with a knowledge base about isorite |
+| example | vitest: the example (nbody-notes) replays to the notes as written, every hash holds, each note's understanding is spread over the Atlas's four steps |
+| guide | vitest: the guide loads as a base with no issues, every note reached from Start here, its advice agreeing with Iso's prompt; the finder's turns through the engine. Playwright (`npm run test:site`): the built site, as Pages serves it |
+| tutorial | Retired in M15: the walks, which did what each step asked at a desktop's width and a phone's, cost more than they caught. M16 replaced the tutorial with the guide, a knowledge base about isorite |
 
 ## 14. Questions
 

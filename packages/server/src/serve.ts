@@ -61,8 +61,6 @@ export async function openEngine({ notes }: Opened, device = deviceId(), config 
   // The provider is OpenRouter unless the configuration names another. The engine compares against OPENROUTER to know.
   return Engine.open({
     notes: new NodeFiles(notes), own: new NodeFiles(own), clock: systemClock, device, name: basename(notes),
-    // Started by isorite --tutorial: the app walks you through the base.
-    tutorial: process.env.ISORITE_TUTORIAL === "1",
     http: http ?? gatewayHttp(provider, gatewayTls(config)), secrets, provider,
     // The repository code links point into (M12): named in .isorite/settings.toml, from the notes folder.
     repository: (path) => { const dir = resolve(notes, path); return existsSync(dir) && statSync(dir).isDirectory() ? new NodeFiles(dir) : null; },

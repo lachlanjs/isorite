@@ -3,7 +3,7 @@
 <p align="center"><b>An agentic harness for understanding.</b><br>
 Your project's notes as a map, an agent that reads and writes them with you, and the coding agent in your terminal working from them.</p>
 
-<p align="center"><a href="https://lachlanjs.github.io/isorite/">Try the tutorial in your browser</a> · <a href="docs/terminal.md">Use it beside your code</a> · <a href="https://www.npmjs.com/package/isorite">npm</a></p>
+<p align="center"><a href="https://lachlanjs.github.io/isorite/">Read the guide in your browser</a> · <a href="docs/terminal.md">Use it beside your code</a> · <a href="https://www.npmjs.com/package/isorite">npm</a></p>
 
 ---
 
@@ -27,10 +27,10 @@ To update later, run the same `npm install -g isorite`.
 ## Try it
 
 ```sh
-isorite --tutorial
+isorite guide
 ```
 
-This writes an example project (notes on an N-body simulation) into a folder, opens the terminal's tour, and opens the browser beside it. The model is scripted: no key is needed, and nothing is sent anywhere.
+This writes the guide, a knowledge base about isorite with things to do in it, into `~/isorite-guide`, and opens it in the browser. Iso is your provider's model once one is set up; until then it is the guide's finder, which answers with the notes that match, needs no key, and sends nothing anywhere. The same guide is on the [public site](https://lachlanjs.github.io/isorite/), kept in your browser.
 
 ## Use it on your own project
 

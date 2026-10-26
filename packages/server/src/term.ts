@@ -9,16 +9,14 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createServer, type AddressInfo } from "node:net";
-import { existsSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from "node:fs";
+import { existsSync, openSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AGENTS_FILE, StudyError } from "@isorite/core";
-import { NAME } from "@isorite/example";
-import { writeExample } from "@isorite/example/node";
-import { defaultHome, findOpenCode, GATEWAY_KEY, gatewayFrom, startScripted, tutorialScript, writeHome, type Gateway } from "@isorite/opencode";
+import { defaultHome, findOpenCode, GATEWAY_KEY, gatewayFrom, writeHome, type Gateway } from "@isorite/opencode";
 import { ConfigSecrets, configPath, gatewayTls, providerConfig } from "./config.ts";
-import { link, locate, WEB_DIR } from "./serve.ts";
+import { link, locate } from "./serve.ts";
 
 // The command itself, to start a server with: main.ts in a checkout, or the one file it is built into for npm.
 const MAIN = import.meta.url.endsWith(".ts") ? fileURLToPath(new URL("./main.ts", import.meta.url)) : fileURLToPath(import.meta.url);
@@ -188,38 +186,4 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
   backend.stop();
   server.release();
   return code;
-}
-
-/** `isorite --tutorial` (or `isorite tutorial term`): the example base, a scripted model in place of a provider, and `isorite term` on them,
- *  its tour shown. Everything is kept in `folder` (by default a new one in the temporary folder): the base, the
- *  code it opens in, and OpenCode's and isorite's settings, so that nothing of yours is used or changed. Run again
- *  on the same folder, it carries on where it was left. */
-export async function tutorialTerm(folder: string | undefined, { port = 4790, env = process.env, out = console.log }: TermOptions & { out?: (line: string) => void } = {}): Promise<number> {
-  const root = folder ? resolve(folder) : mkdtempSync(join(tmpdir(), "isorite-tutorial-"));
-  const base = existsSync(join(root, "base", NAME)) ? { notes: join(root, "base", NAME) } : await writeExample(join(root, "base"));
-  const code = join(root, "code");
-  mkdirSync(code, { recursive: true });
-  const model = await startScripted(tutorialScript(base.notes));
-  // Iso, in the isorite server, is answered by the same script.
-  mkdirSync(join(root, "config", "isorite"), { recursive: true });
-  writeFileSync(join(root, "config", "isorite", "config.toml"), `[provider]\nname = "tutorial"\nurl = "${model.url}"\nkey = "tutorial"\n`);
-  out(`isorite tutorial: the example base and everything the tour changes are in ${root}`);
-  out("  the model is scripted: nothing is sent anywhere, and no key is needed");
-  try {
-    return await term(base.notes, {
-      port, cwd: code,
-      // The browser's half of the tutorial, on the same base: it follows the agent as the terminal's tour goes.
-      onServer: (url) => {
-        out(existsSync(join(WEB_DIR, "index.html")) ? `  the browser's half: ${url}/` : "  the app is not built (npm run build), so the browser's half cannot be shown");
-        if (env.ISORITE_NO_BROWSER !== "1" && existsSync(join(WEB_DIR, "index.html"))) openBrowser(`${url}/`);
-      },
-      env: {
-        ...env,
-        ISORITE_TUTORIAL: "1", ISORITE_GATEWAY_URL: model.url, ISORITE_GATEWAY_MODELS: "scripted", ISORITE_GATEWAY_KEY: "tutorial",
-        XDG_CONFIG_HOME: join(root, "config"), XDG_DATA_HOME: join(root, "data"), XDG_STATE_HOME: join(root, "state"),
-      },
-    });
-  } finally {
-    await model.close();
-  }
 }

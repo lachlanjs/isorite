@@ -1,6 +1,6 @@
 // A provider that answers from a script instead of a model: the network port the engine is given, so Iso's
 // requests go through every part of the engine as they would to a real one. The example's history is made with
-// it, and the tutorial's Iso is one.
+// it.
 
 import type { Http } from "@isorite/engine";
 
@@ -19,7 +19,7 @@ export interface Request {
 }
 
 /** `answer` is asked for each request in turn. `pace` is the wait between pieces of streamed text, in milliseconds:
- *  none for the history, a little for the tutorial, so the reply is seen arriving. */
+ *  none for the history, a little for an answerer seen at work (the guide's finder), so the reply is seen arriving. */
 export function scriptedHttp(answer: (request: Request) => Reply, pace = 0): Http {
   const fetch = (async (_url: unknown, init?: RequestInit) => {
     const request = JSON.parse(String(init?.body)) as Request;

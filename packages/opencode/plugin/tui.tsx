@@ -5,7 +5,7 @@
 import { spawn } from "node:child_process";
 import { BoxRenderable, fg, ImageRenderable, RGBA, StyledText, TextAttributes, TextRenderable, type Renderable, type TextChunk } from "@opentui/core";
 import { Plugin } from "@opencode/plugin/tui";
-import { createEffect, createResource, createSignal, For, onCleanup, Show, untrack } from "solid-js";
+import { createEffect, createResource, createSignal, For, onCleanup, Show } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { ago, anchorOf, blocks, describe, momentKey, moments, reach, type Entry, type MapModel } from "@isorite/core";
 import { drawAtlas, runsOf, type Role } from "./oneatlas.ts";
@@ -15,7 +15,6 @@ import * as Isorite from "./isorite.ts";
 import * as Logo from "./logo.ts";
 import { lapis, quartz, routeColours } from "./palette.ts";
 import { Play, type Step } from "./play.ts";
-import { TOUR, type TourState } from "./tour.ts";
 import { parseSources } from "./sources.ts";
 import * as Wordmark from "./wordmark.ts";
 
@@ -265,9 +264,6 @@ export default Plugin.define({
         </text>
       ),
     });
-    // What the tour (isorite --tutorial) waits on that nothing else counts: the agent's turns ended, Iso's answers,
-    // and notes sent from here.
-    const [turns, setTurns] = createSignal(0), [isoAnswers, setIsoAnswers] = createSignal(0), [sent, setSent] = createSignal(0);
 
     /** [s]: a note, or a passage of it, sent to the agent from the terminal, as from the browser: under "from you". */
     const sendToAgent = async (note: string, passage?: string) => {
@@ -275,7 +271,7 @@ export default Plugin.define({
       const said = await ctx.ui.dialog.prompt({ title: "Send to the agent", description: passage ? "the passage the cursor is on" : `the note “${(titles().get(note) ?? note).toLowerCase()}”`, placeholder: "what you want of it (optional)" });
       if (said === undefined) return;
       await Isorite.post("/api/agent/send", { note, ...(passage ? { passage } : {}), said: said.trim() })
-        .then(() => setSent((n) => n + 1), (e: Error) => ctx.ui.toast?.show?.({ message: e.message, variant: "error" }));
+        .catch((e: Error) => ctx.ui.toast?.show?.({ message: e.message, variant: "error" }));
     };
 
     const stop = new AbortController();
@@ -293,8 +289,7 @@ export default Plugin.define({
         if (sessionID) void deliver(sessionID);
         return;
       }
-      if (type === "agent-done" && typeof data.session === "string") { reading.delete(data.session); hear((n) => n + 1); setTurns((n) => n + 1); }
-      if (type === "iso-done") setIsoAnswers((n) => n + 1);
+      if (type === "agent-done" && typeof data.session === "string") { reading.delete(data.session); hear((n) => n + 1); }
       if (type === "note-changed") bumpMap((n) => n + 1);
       if (type !== "agent-step" || data.agent !== Isorite.AGENT || typeof data.session !== "string") return;
       const play = plays.get(data.session) ?? new Play();
@@ -322,75 +317,6 @@ export default Plugin.define({
         if (play?.cite(sources.map((s) => s.note))) hear((n) => n + 1);
       });
       return new TextRenderable(ctx.renderer, { content: new StyledText(chunks) });
-    });
-
-    // ------------------------------------------------------------ the tour (isorite --tutorial)
-    const TUTORIAL = process.env.ISORITE_TUTORIAL === "1";
-    const [stepAt, setStepAt] = createSignal(TUTORIAL ? 0 : TOUR.length);
-    const [cardShown, setCardShown] = createSignal(true);
-    const tourState = (): TourState => {
-      heard();
-      const route = ctx.ui.router.current(), shown = note();
-      return {
-        page: route.type === "plugin" ? (route.name === SPLASH ? "splash" : route.name === NOTE ? "note" : route.name) : route.type,
-        turns: turns(),
-        inPlay: route.type === "session" ? plays.get(route.sessionID)?.size ?? 0 : 0,
-        atlasOpen: ctx.ui.panel.current()?.name === ATLAS,
-        note: shownNote(),
-        // Not known until the note is read: no step moves on for a note still opening.
-        waiting: shown && shown.id === shownNote() ? shown.items.filter((i) => i.type === "change").length : -1,
-        past: moment() !== null,
-        isoAnswers: isoAnswers(),
-        sent: sent(),
-      };
-    };
-    /** Puts the step's prompt in the prompt being typed in, once it has focus and while it is empty. */
-    const fillPrompt = (text: string) => {
-      let tries = 0;
-      const timer = setInterval(() => {
-        const editor = ctx.renderer.currentFocusedEditor;
-        if (editor && !editor.plainText.trim()) editor.insertText(text);
-        if (editor || ++tries > 50) clearInterval(timer);
-      }, 100);
-    };
-    ctx.ui.slot({
-      append: "app",
-      render() {
-        if (!TUTORIAL) return null;
-        // A step moves on when what it waits for holds, judged against what held when it began.
-        let at = -1, began = untrack(tourState);
-        createEffect(() => {
-          const i = stepAt(), now = tourState(), step = TOUR[i];
-          if (i !== at) { at = i; began = now; if (step?.fill) fillPrompt(step.fill); return; }
-          if (step?.until?.(now, began)) setStepAt(i + 1);
-        });
-        ctx.keymap.layer(() => ({
-          mode: "global",
-          commands: [
-            { id: "isorite.tour.next", title: "Tour: the next step", palette: true, slash: { name: "next" }, run: () => { setStepAt((i) => Math.min(i + 1, TOUR.length)); } },
-            { id: "isorite.tour.card", title: "Tour: hide or show the card", palette: true, slash: { name: "tour" }, run: () => { setCardShown((v) => !v); } },
-          ],
-        }));
-        return (
-          <Show when={cardShown() && TOUR[stepAt()]}>
-            {(step) => (
-              <box position="absolute" right={2} bottom={4} width={48} zIndex={3000} flexDirection="column" paddingLeft={1} paddingRight={1}
-                border borderStyle="rounded" borderColor={ground().growth} backgroundColor={ground().g0} title={` tour · ${stepAt() + 1} of ${TOUR.length} `}>
-                <text fg={ground().text} wrapMode="word"><b>{step().title}</b></text>
-                <text fg={ground().soft} wrapMode="word">{step().text}</text>
-                <text> </text>
-                <box flexDirection="row">
-                  <text wrapMode="none">
-                    <For each={TOUR}>{(_, k) => <span style={{ fg: k() <= stepAt() ? ground().growth : ground().line }}>{k() <= stepAt() ? "■" : "□"}</span>}</For>
-                  </text>
-                  <box flexGrow={1} />
-                  <text fg={ground().faint} wrapMode="none">{step().until ? "/tour hides" : "/next   /tour hides"}</text>
-                </box>
-              </box>
-            )}
-          </Show>
-        );
-      },
     });
 
     ctx.ui.slot({

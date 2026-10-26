@@ -5,7 +5,7 @@
 // its embedding worker, each one file, every @isorite/* package inlined and the npm dependencies left as
 // dependencies. Beside them go what they read at run time, where they look for it: the built app (web/), the
 // example base's notes (notes/), the OpenCode plugin (plugin/, run by OpenCode's Bun as TypeScript, its
-// @isorite/core turned into dist/core.js), the tutorial agent's code (dist/tutorial/), and onnxruntime's one
+// @isorite/core turned into dist/core.js), the guide (guide/), and onnxruntime's one
 // WebAssembly file, in place of the whole of onnxruntime-web (139 MB).
 
 import { execFileSync } from "node:child_process";
@@ -52,7 +52,6 @@ for (const [entry, name] of [["packages/server/src/main.ts", "main"], ["packages
 cpSync(at("app/build"), join(OUT, "web"), { recursive: true });
 cpSync(at("packages/example/notes"), join(OUT, "notes"), { recursive: true });
 cpSync(at("packages/guide/notes"), join(OUT, "guide"), { recursive: true, filter: (p) => !p.includes(".isorite") && !p.endsWith(".gitignore") });
-cpSync(at("packages/opencode/src/tutorial"), join(OUT, "dist", "tutorial"), { recursive: true });
 const ort = dirname(createRequire(at("packages/server/package.json")).resolve("onnxruntime-web"));
 cpSync(join(ort, "ort-wasm-simd-threaded.wasm"), join(OUT, "dist", "ort-wasm-simd-threaded.wasm"));
 cpSync(at("packages/opencode/plugin"), join(OUT, "plugin"), { recursive: true });
