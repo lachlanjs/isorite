@@ -50,7 +50,7 @@ Found by reading the code at `5b6837f`.
   - The name and the folder are fixed in the code.
 - `isorite doctor` says nothing about the model, so a base without one reports "nothing failed".
 
-**Certificates.** Lachlan still sets `NODE_TLS_REJECT_UNAUTHORIZED=0`, which turns certificate checking off for
+**Certificates.** (Settled by Q63: nothing to fix. As first written:) Lachlan still sets `NODE_TLS_REJECT_UNAUTHORIZED=0`, which turns certificate checking off for
 everything. The `isorite` command already trusts the system's authorities, for the whole process
 (`network.ts:17`). Some other part must be failing, and it isn't known which yet. The possibilities:
 - OpenCode reaching the gateway itself, through `ISORITE_GATEWAY_URL`. It runs on Bun, not Node, so it doesn't
@@ -122,19 +122,10 @@ everything. The `isorite` command already trusts the system's authorities, for t
    - Or "! search by meaning: no model; `isorite model` fetches it (53 MB). Search by words works without it". It's
      a warning, not a failure, as search works without it.
    - With a notes folder, it also says whether the base's vectors are from the same model.
-8. **Certificates.**
-   - `doctor` warns when `NODE_TLS_REJECT_UNAUTHORIZED=0` is set: "! certificate checks are off for everything:
-     find what needs it, then unset it".
-   - It checks each place that connects on its own:
-     - the gateway, through Node;
-     - the model's sources;
-     - with `ISORITE_GATEWAY_URL`, the address OpenCode will reach itself.
-
-     For that last one, `term` also gives OpenCode the system's authorities when it starts it: Bun reads
-     `NODE_EXTRA_CA_CERTS`, so `term` writes the system store to a file and names it there.
-
-   With Lachlan's `doctor --report`, run without the setting (§5, Q63), the cause will be known before this step
-   is built. If it's something other than the above, this item changes to fix that.
+8. **Certificates.** Lachlan's report (Q63) showed there is nothing to fix: the client certificate and the
+   company's authority work with certificate checking on. `NODE_TLS_REJECT_UNAUTHORIZED=0` was a setting of
+   their own, for the whole machine. `doctor` warns when it is set: "! certificate checks are off for everything
+   (NODE_TLS_REJECT_UNAUTHORIZED=0): isorite doesn't need it".
 9. **`isorite new <folder>`.**
    - It makes the folder (and its parents) and `.isorite/` in format 2.
    - It prints the commands that come next: `isorite serve <folder>`, and `cd <your code> && isorite term
@@ -148,7 +139,7 @@ everything. The `isorite` command already trusts the system's authorities, for t
 2. Retries and who failed (items 3, 4), with tests against a scripted gateway that fails, then recovers.
 3. Empty replies (item 5).
 4. The model (items 6, 7).
-5. Certificates (item 8), once the report is in.
+5. The certificate warning (item 8).
 6. `isorite new` (item 9) and the guides.
 7. A real check on Lachlan's OpenRouter key, against a temporary copy of a base: one turn, and one forced retry
    through a failing proxy in front of it. Cost reported.
@@ -172,17 +163,12 @@ pane board's icon buttons and status line, as the Undo button does.
 
 ## 5. Questions
 
-- **Q59. The click.** A click opens a note; shift+click gives it to Iso or takes it back; on a phone, the hold menu.
-  *Recommended.* The other way: alt+click, leaving shift+click to the browser.
-- **Q60. `isorite new`.** It makes the folder and `.isorite/` only, with no starter note. *Recommended*: the notes
-  are yours. The other way: a "Start here" note that points to the tutorial.
-- **Q61. Another model.** Any 384-dimension model from `--from`, checked by use, with its pooling named in
-  `isorite-model.json`. *Recommended.* The other way: the known export only, from more sources.
-- **Q62. The model on GitHub Releases.** Attaching the model's `.tgz` to each release adds 53 MB to it. Is
-  github.com reachable at work when npm's allow-list isn't? If not, item 6's second source isn't worth it.
-- **Q63. Please run `isorite doctor --report` at work without `NODE_TLS_REJECT_UNAUTHORIZED=0`, and paste it.**
-  Leave out anything about the workplace you'd rather not share; the secrets are already hidden. It names which
-  connection fails, and item 8 is built on that.
+Answered 2026-10-26:
+- **Q59.** Shift+click gives a note to Iso or takes it back. Dragging it to Iso's pane works as now.
+- **Q60.** `isorite new` writes no notes.
+- **Q61.** Any compatible model.
+- **Q62.** github.com should be reachable at work: the model goes on each GitHub Release.
+- **Q63.** No bug: mTLS and the company's authority work with certificate checking on. The setting was Lachlan's own.
 - Still open from M13: Q54 (which header the gateway wants the key in) and Q55 (how the key is got).
 
 ## 6. What was built
