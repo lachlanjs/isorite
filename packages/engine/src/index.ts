@@ -19,6 +19,6 @@ export { INLINE, Meaning, pieces } from "./meaning.ts";
 export type { Embedder, Found, Hit, Piece } from "./meaning.ts";
 export { editRegions, regionsOf, writeRegions } from "./agent.ts";
 export { UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
-export { CONVERSATIONS_DIR, MODES, conversationPath, readTurns, turnMessages } from "./turn.ts";
+export { CONVERSATIONS_DIR, LEARNING, MODES, PRACTICE, conversationPath, readTurns, turnMessages } from "./turn.ts";
 export type { Decision, Given, Mode, Sent, Turn, TurnItem, TurnLine } from "./turn.ts";
 export type { AgentEdit, Region } from "./agent.ts";

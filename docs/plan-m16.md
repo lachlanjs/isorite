@@ -85,7 +85,7 @@ problem sits beside its concept, and one marked *local* needs your own isorite, 
   - *Every change is kept.* The timeline, and whose words are whose.
     - *Problem:* go back to an earlier version of "Your notes" and restore it.
 - **atlas/**
-  - *The Atlas.* What rests on what. Trunks, and folders that open in place.
+  - *The Atlas.* What rests on what. Trunks, and folders that close and open in place.
   - *The switches.* Each pane's header switches, after "Switches, not modes".
     - *Problem:* find what "Iso's context" rests on, from the Atlas only, and open it.
 - **iso/**

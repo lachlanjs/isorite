@@ -153,7 +153,7 @@ export const PRACTICE = `# Keeping it well
 - An open question marks where their understanding stops. Leave it open.`;
 
 /** How Iso helps them learn, in every mode. */
-const LEARNING = `# Their learning
+export const LEARNING = `# Their learning
 
 - Their notes are in their words. Put no words in them they did not ask for.
 - Explain in their notation, at the level of their notes.
