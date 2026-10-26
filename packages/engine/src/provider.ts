@@ -33,6 +33,9 @@ export interface ProviderConfig {
   query?: Record<string, string>;
   /** false for a gateway that refuses `stream_options`: the turns then cost what the prices say, or nothing. */
   streamUsage?: boolean;
+  /** The least output budget a call is given (`max_tokens` under [provider]): for models that think at length
+   *  before they write a word. */
+  maxTokens?: number;
   /** The tiers are OpenRouter's, kept because none were named for this provider: a 404 says so. */
   defaultTiers?: boolean;
 }
@@ -243,7 +246,7 @@ export async function complete(http: Http, p: ProviderConfig, key: string | null
 async function completeOnce(http: Http, p: ProviderConfig, key: string | null, call: Call, heard: { any: boolean }): Promise<Reply> {
   const body = JSON.stringify({
     model: call.model, messages: call.messages.map(wire(p.cacheMarks)), stream: true, ...(p.streamUsage === false ? {} : { stream_options: { include_usage: true } }),
-    ...(call.maxTokens ? { max_tokens: call.maxTokens } : {}),
+    ...(call.maxTokens ? { max_tokens: Math.max(call.maxTokens, p.maxTokens ?? 0) } : {}),
     ...(call.tools?.length ? { tools: call.tools, tool_choice: call.toolChoice ?? "auto" } : {}),
   });
   let res: Response;

@@ -73,7 +73,8 @@ const textTable = (field: string, v: unknown, env: NodeJS.ProcessEnv): Record<st
 
 /** The provider, as the configuration has it: OpenRouter unless `[provider] url` names another (and `auth` its
  *  sign-in page, if it makes keys as OpenRouter does), and `[tiers]` for the models. A gateway's own needs are
- *  `headers`, `key_header`, `query` and `stream_usage = false`; its client certificate is `gatewayTls`'s. */
+ *  `headers`, `key_header`, `query` and `stream_usage = false`; `max_tokens` for models that think at length; its
+ *  client certificate is `gatewayTls`'s. */
 export function providerConfig(path = configPath(), env: NodeJS.ProcessEnv = process.env): ProviderConfig {
   const config = readConfig(path), p = table(config.provider), tiers = table(config.tiers), prices = table(config.prices);
   const custom = typeof p.url === "string" && p.url !== "";
@@ -83,6 +84,7 @@ export function providerConfig(path = configPath(), env: NodeJS.ProcessEnv = pro
     ...(headers ? { headers } : {}), ...(query ? { query } : {}),
     ...(typeof p.key_header === "string" && p.key_header ? { keyHeader: p.key_header } : {}),
     ...(p.stream_usage === false ? { streamUsage: false } : {}),
+    ...(typeof p.max_tokens === "number" && p.max_tokens > 0 ? { maxTokens: Math.floor(p.max_tokens) } : {}),
   };
   if (!custom && !Object.keys(tiers).length && !Object.keys(own).length) return OPENROUTER;
   const out: ProviderConfig = { ...base, ...own, tiers: { ...base.tiers }, prices: { ...base.prices } };

@@ -26,6 +26,10 @@ const config = (toml: string): string => {
 };
 
 describe("a gateway's settings in config.toml", () => {
+  it("take max_tokens, the least output budget any call is given, for models that think at length", () => {
+    expect(providerConfig(config(`[provider]\nurl = "https://gw.example/v1"\nmax_tokens = 16000\n`), {}).maxTokens).toBe(16000);
+    expect(providerConfig(config(`[provider]\nurl = "https://gw.example/v1"\n`), {}).maxTokens).toBeUndefined();
+  });
   it("are its headers, the header its key goes in, its query, and no usage asked for", () => {
     const p = providerConfig(config(`[provider]\nurl = "https://gw.example/v1"\nkey_header = "api-key"\nstream_usage = false\n[provider.headers]\nX-Team = "notes"\nX-Project = "$PROJECT_ID"\n[provider.query]\napi-version = "2024-10-21"\n[tiers]\nlow = "a"\nmid = "b"\nmax = "c"\n`), { PROJECT_ID: "p-42" });
     expect(p).toMatchObject({ url: "https://gw.example/v1", keyHeader: "api-key", streamUsage: false, headers: { "X-Team": "notes", "X-Project": "p-42" }, query: { "api-version": "2024-10-21" } });

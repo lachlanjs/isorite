@@ -4,8 +4,13 @@
 // agent.ts.
 
 import type { Step } from "./lookup.ts";
-import { complete, type Message, type ProviderConfig, type Tier, type ToolDef, type Usage } from "./provider.ts";
+import { ModelError, complete, type Message, type ProviderConfig, type Reply, type Tier, type ToolDef, type Usage } from "./provider.ts";
 import type { Http } from "./ports.ts";
+
+/** How many times as much room a reply that ran out of it before it wrote anything is given, asked again. */
+export const WIDER = 3;
+/** Cut off with nothing written, nor any tool called: its whole budget went on thinking. */
+const empty = (r: Reply) => r.cut && !r.text.trim() && !r.calls.length;
 
 /** How many times it may use its tools before it must reply, by tier. */
 export const ROUNDS: Record<Tier, number> = { low: 3, mid: 6, max: 8 };
@@ -49,12 +54,20 @@ export async function rounds(o: Run): Promise<Ran> {
   const usage: Usage = { model, tokensIn: 0, tokensOut: 0, tokensCached: 0, usd: 0 };
   for (let round = 0, calls = 1; ; round++, calls++) {
     let first = true;
-    const r = await complete(o.http, o.provider, o.key, {
-      model, messages, maxTokens: o.maxTokens, tools: most ? o.lookup.defs() : [], toolChoice: round < most ? "auto" : "none", signal: o.signal,
+    const ask = (maxTokens: number) => complete(o.http, o.provider, o.key, {
+      model, messages, maxTokens, tools: most ? o.lookup.defs() : [], toolChoice: round < most ? "auto" : "none", signal: o.signal,
       onText: (piece) => { o.onText(piece, first && round > 0); first = false; },
       ...(o.onRetry ? { onRetry: o.onRetry } : {}),
     });
-    usage.tokensIn += r.usage.tokensIn; usage.tokensOut += r.usage.tokensOut; usage.tokensCached += r.usage.tokensCached; usage.usd += r.usage.usd;
+    const add = (r: Reply) => { usage.tokensIn += r.usage.tokensIn; usage.tokensOut += r.usage.tokensOut; usage.tokensCached += r.usage.tokensCached; usage.usd += r.usage.usd; };
+    let r = await ask(o.maxTokens);
+    add(r);
+    // A model that thinks before it writes can spend the whole budget thinking: asked once more with more room.
+    if (empty(r)) {
+      r = await ask(o.maxTokens * WIDER);
+      add(r);
+      if (empty(r)) throw new ModelError(`${model} used its whole output budget (${Math.max(o.maxTokens * WIDER, o.provider.maxTokens ?? 0)} tokens) thinking, and wrote nothing. Try a lower tier, or raise max_tokens under [provider] in config.toml.`, 502, { kind: "cut" });
+    }
     if (!r.calls.length || round >= most) return { text: r.text, usage, calls, cut: r.cut };
     messages.push({ role: "assistant", content: r.text, calls: r.calls });
     for (const c of r.calls) {

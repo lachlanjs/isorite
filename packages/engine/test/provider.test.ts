@@ -1,6 +1,7 @@
 import { createServer } from "node:net";
 import { expect, test } from "vitest";
 import { ModelError, OPENROUTER, RETRY, complete, unreachable } from "../src/index.ts";
+import { rounds } from "../src/loop.ts";
 
 /** A fetch error as Node's fetch throws it: "fetch failed", the reason in its cause (shapes seen on Node 25). */
 const failed = (code: string | undefined, message: string) => Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(message), code ? { code } : {}) });
@@ -125,4 +126,25 @@ test("stopping while it waits to ask again stops at once", async () => {
   const run = complete(g.http, work, "k", { ...ask, signal: stop.signal, onRetry: () => stop.abort() });
   await expect(run).rejects.toMatchObject({ name: "AbortError" });
   expect(g.asked).toHaveLength(1);
+});
+
+test("a reply cut off before it wrote anything is asked once more with three times the room; empty again, it says why", async () => {
+  const thought = () => new Response(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "length" }], usage: { prompt_tokens: 10, completion_tokens: 2500 } })}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
+  const run = (answers: (() => Response)[], p = work) => {
+    const budgets: number[] = [];
+    const http = { fetch: (async (_u: unknown, init?: RequestInit) => { budgets.push((JSON.parse(String(init!.body)) as { max_tokens: number }).max_tokens); return answers.shift()!(); }) as typeof fetch };
+    const tools = { defs: () => [], call: async () => ({ text: "" }) };
+    return { budgets, ran: rounds({ http, provider: { ...p, tiers: { low: "thinker", mid: "thinker", max: "thinker" } }, key: "k", tier: "mid", messages: ask.messages, lookup: tools, maxTokens: 2500, signal: new AbortController().signal, onText: () => {}, onStep: () => {}, most: 0 }) };
+  };
+  const recovered = run([thought, () => sse("fine")]);
+  expect((await recovered.ran).text).toBe("fine");
+  expect(recovered.budgets).toEqual([2500, 7500]);
+  const empty = run([thought, thought]);
+  const err = await empty.ran.catch((e: unknown) => e) as ModelError;
+  expect(err.kind).toBe("cut");
+  expect(err.message).toBe("thinker used its whole output budget (7500 tokens) thinking, and wrote nothing. Try a lower tier, or raise max_tokens under [provider] in config.toml.");
+  // max_tokens under [provider] is the least any call is given.
+  const roomy = run([() => sse("fine")], { ...work, maxTokens: 16000 });
+  await roomy.ran;
+  expect(roomy.budgets).toEqual([16000]);
 });
