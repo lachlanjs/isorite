@@ -4,8 +4,10 @@
   // when on, its icon takes its colour, with a bar under it.
   import type { Snippet } from "svelte";
   import { SWITCHES, panes, type Pane, type Switch } from "$lib/panes.svelte.ts";
+  import BaseSwitch from "./BaseSwitch.svelte";
 
-  let { pane, name, tools, settings }: { pane: Pane; name: string; tools?: Snippet; settings?: Snippet } = $props();
+  // `first`: the pane that stands first, whose name follows the base's (M20).
+  let { pane, name, tools, settings, first = false }: { pane: Pane; name: string; tools?: Snippet; settings?: Snippet; first?: boolean } = $props();
 
   const SAYS: Record<Switch, string> = {
     provenance: "Provenance: whose words are whose (Alt+P)", timeline: "Timeline (Alt+T)", context: "Iso's context: what it is sent, what it read and changed (Alt+C)",
@@ -29,6 +31,7 @@
 <svelte:window onpointerdown={outside} onkeydown={(e) => { if (open && e.key === "Escape") panes.settings = null; }} />
 
 <header class="phead">
+  {#if first}<BaseSwitch />{/if}
   <span class="pname">{name}</span>
   <span class="switches" role="group" aria-label="{name}'s switches">
     {#each shown as k (k)}

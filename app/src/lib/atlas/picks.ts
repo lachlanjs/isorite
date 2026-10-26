@@ -2,6 +2,7 @@
 // own at the foot of what was written, so it can be taken away again without touching the prose. And where a
 // draft's block sits on the map, which is remembered in this browser only.
 
+import { kept } from "../here.ts";
 
 const LINK = /\]\(\/([^)\s#]+)\.md(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/g;
 const escaped = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -40,7 +41,7 @@ export function titleIn(text: string): string {
 /** Tokens, short: 940, 1.2k, 14k. */
 export const short = (n: number): string => (n < 1000 ? String(n) : n < 10_000 ? `${(n / 1000).toFixed(1)}k` : `${Math.round(n / 1000)}k`);
 
-const KEY = "isorite.atlas.drafts";
+const KEY = kept("isorite.atlas.drafts");
 type Places = Record<string, { gx: number; gy: number }>;
 const places = (): Places => { try { return JSON.parse(localStorage.getItem(KEY) ?? "{}") as Places; } catch { return {}; } };
 /** Where a draft's block was put: the cell held on. */

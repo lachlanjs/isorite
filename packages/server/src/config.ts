@@ -5,7 +5,7 @@
 import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { KEY, OPENROUTER, TIERS, type ProviderConfig, type Secrets } from "@isorite/engine";
 
@@ -132,4 +132,58 @@ export function gatewayTlsFrom(config: Table, dir: string, env: NodeJS.ProcessEn
 /** Whether Iso has a model here: a key kept, or a provider of your own (a gateway may need no key). */
 export async function hasModel(config = configPath()): Promise<boolean> {
   return (await new ConfigSecrets(config).get(KEY)) !== null || providerConfig(config).url !== OPENROUTER.url;
+}
+
+/** A knowledge base this device knows, by name (M20): `[<name>]` in bases.toml, beside config.toml, with its `path`,
+ *  and `lend` when it is lent to every session's agent and Iso as well as the base the session is for (the agent's
+ *  memory is). A file of its own, so that config.toml, written by hand and holding the key, is left as it is. */
+export interface KnownBase { name: string; path: string; lend: boolean }
+
+const BASE_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const expand = (p: string): string => (p === "~" ? homedir() : p.startsWith("~/") ? join(homedir(), p.slice(2)) : resolve(p));
+/** A path as written in the file: under the home folder, with ~. */
+const written = (p: string): string => { const home = homedir(); return p === home ? "~" : p.startsWith(home + "/") ? "~" + p.slice(home.length) : p; };
+
+/** Where the bases are listed, beside the configuration. */
+export const basesPath = (config = configPath()): string => join(dirname(config), "bases.toml");
+
+/** The bases listed, in the order written. A row without a path, or with a name isorite
+ *  would not give one, is passed over. */
+export function knownBases(config = configPath()): KnownBase[] {
+  return Object.entries(readConfig(basesPath(config))).flatMap(([name, v]) => {
+    const row = table(v);
+    return BASE_NAME.test(name) && typeof row.path === "string" && row.path ? [{ name, path: expand(row.path), lend: row.lend === true }] : [];
+  });
+}
+
+/** A name for a base from its folder: small letters, digits and dashes. */
+export function baseName(folder: string): string {
+  const name = basename(folder).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+  return name || "base";
+}
+
+/** The base at `folder` by its name in the configuration, listed first if it is not: under its folder's name, or
+ *  that name with -2, -3… where another folder has it. `as` names it, and `lend` lends it. */
+export function rememberBase(folder: string, { path = configPath(), as, lend }: { path?: string; as?: string; lend?: boolean } = {}): string {
+  const at = resolve(folder), known = knownBases(path), had = known.find((b) => b.path === at);
+  if (had && lend === undefined) return had.name;
+  const bases = readConfig(basesPath(path));
+  let name = had?.name;
+  if (!name) {
+    const stem = as && BASE_NAME.test(as) ? as : baseName(at), taken = new Set(Object.keys(bases));
+    name = stem;
+    for (let n = 2; taken.has(name); n++) name = `${stem.slice(0, 36)}-${n}`;
+  }
+  bases[name] = { ...table(bases[name]), path: written(at), ...(lend === undefined ? {} : { lend }) };
+  writeConfig(bases, basesPath(path));
+  return name;
+}
+
+/** Lend a known base to every session, or stop lending it. False when there is no base of that name. */
+export function lendBase(name: string, lend: boolean, path = configPath()): boolean {
+  const bases = readConfig(basesPath(path));
+  if (!BASE_NAME.test(name) || !bases[name]) return false;
+  bases[name] = { ...table(bases[name]), lend };
+  writeConfig(bases, basesPath(path));
+  return true;
 }

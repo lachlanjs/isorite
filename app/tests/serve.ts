@@ -9,6 +9,8 @@ import { join } from "node:path";
 export const PORT = 4799;
 export const ROOT = join(tmpdir(), "isorite-browser-tests");
 export const NOTES = join(ROOT, "information-theory");
+/** The agent's memory (M20): a second base on the same server, lent to every session. */
+export const MEMORY = join(ROOT, "memory");
 /** isorite's own files for the base (format 2). */
 export const STUDY = join(NOTES, ".isorite");
 
@@ -107,6 +109,9 @@ async function provider(): Promise<void> {
     } else if (/\bmove (\S+) to (\S+)/.test(asked) && !looked) {
       const [, id, to] = /\bmove (\S+) to (\S+)/.exec(asked)!;
       data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "move_note", arguments: JSON.stringify({ id, to }) } }] } }] });
+    } else if (asked.includes("recall") && !looked) {
+      // M20: "recall" looks in the memory lent to Iso.
+      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "read_note", arguments: JSON.stringify({ id: "tools/opencode", base: "memory" }) } }] } }] });
     } else if (asked.includes("look") && !looked) {
       data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "read_note", arguments: JSON.stringify({ id: "/basics/surprise.md" }) } }] } }] });
     } else {
@@ -146,6 +151,13 @@ if (process.argv[1] === import.meta.filename) {
   process.env.ISORITE_EMBED = "off"; // the browser tests are about the pages; the model has its own tests
   mkdirSync(join(ROOT, "config", "isorite"), { recursive: true });
   writeFileSync(join(ROOT, "config", "isorite", "config.toml"), `device = "browser01"\n\n[provider]\nname = "scripted"\nurl = "http://127.0.0.1:${PROVIDER_PORT}/v1"\nauth = "http://127.0.0.1:${PROVIDER_PORT}/auth"\n\n[tiers]\nlow = "scripted-low"\nmid = "scripted-mid"\nmax = "scripted-max"\n`);
+  // The agent's memory, lent to every session, and a base known but not lent.
+  mkdirSync(join(MEMORY, "tools"), { recursive: true });
+  writeFileSync(join(MEMORY, "AGENTS.md"), "# What you keep across projects.\n");
+  writeFileSync(join(MEMORY, "tools", "opencode.md"), "---\ntype: Concept\ntitle: OpenCode's config\n---\n\nKept in ~/.config/opencode.\n");
+  mkdirSync(join(ROOT, "elsewhere"));
+  writeFileSync(join(ROOT, "elsewhere", "a.md"), "---\ntype: Concept\ntitle: A note elsewhere\n---\n\nElsewhere.\n");
+  writeFileSync(join(ROOT, "config", "isorite", "bases.toml"), `[memory]\npath = "${MEMORY}"\nlend = true\n\n[elsewhere]\npath = "${join(ROOT, "elsewhere")}"\n`);
   await provider();
   // Retries come quickly here, but slowly enough to be seen.
   const { RETRY } = await import("../../packages/engine/src/index.ts");

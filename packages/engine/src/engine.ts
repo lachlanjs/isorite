@@ -8,7 +8,7 @@ import {
 import { Conflict, EngineError, type AgentLook, type AgentChange, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
-import { FIND_SIMILAR, Lookup, TOOLS, noteId, type Similar } from "./lookup.ts";
+import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Away, type Similar } from "./lookup.ts";
 import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
 import { AGE_OFF, briefingText, handOf, readHand, type Briefing, type Hand, type HandLine } from "./hand.ts";
 import { COMPACT, CONVERSATIONS_DIR, ISORITE, PRACTICE, MODES, conversationPath, turnTools, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
@@ -52,7 +52,19 @@ export interface EngineOptions {
   /** The files of a repository named in the base's settings (M12): where its code links point. Null where there
    *  is no such folder. */
   repository?: (path: string) => Files | null;
+  /** The other bases lent to this one's sessions (M20), where a server holds several. */
+  elsewhere?: Elsewhere;
 }
+
+/** The other bases a server holds that are lent to this base's sessions: their names, each with a line on what it
+ *  holds, and each one's engine. */
+export interface Elsewhere {
+  lent(): { name: string; about: string }[];
+  base(name: string): Engine | null;
+}
+
+/** What is said before an answer from another base, so its ids are not taken for this one's. */
+const fromBase = (base: string, text: string): string => `(From the base ${base}: name its notes ${base}:<id>, or give base "${base}".)\n${text}`;
 
 /** The longest request and the longest reply asked for, in characters and tokens. */
 export const MAX_ASKED = 4000, REPLY_TOKENS = 2500, NOTE_TOKENS = 6000;
@@ -278,11 +290,50 @@ export class Engine implements Api {
   // ------------------------------------------------------------ terminal agents
 
   async agentTools(): Promise<ToolDef[]> {
-    return [BRIEF, TOOLS[0]!, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1), EDIT_NOTE, WRITE_NOTE];
+    const tools = [BRIEF, TOOLS[0]!, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1), EDIT_NOTE, WRITE_NOTE];
+    // While a server holds other bases, every tool takes one (M20); which are lent is asked at each call.
+    return this.opts.elsewhere ? withBase(tools, this.lent().map((l) => l.name), true) : tools;
+  }
+
+  /** The bases lent to this one's sessions, not this one. */
+  private lent(): { name: string; about: string }[] {
+    return (this.opts.elsewhere?.lent() ?? []).filter((l) => l.name !== this.opts.name);
+  }
+
+  /** Another base lent here, by name, or why there is none of that name. */
+  private other(base: string): Engine {
+    const lent = this.lent();
+    const engine = lent.some((l) => l.name === base) ? this.opts.elsewhere?.base(base) : null;
+    if (!engine) throw new EngineError(lent.length ? `there is no base ${base} lent here: the bases are ${lent.map((l) => l.name).join(", ")}; leave base out for ${this.opts.name}` : `there is no base ${base} lent here: leave base out`, 404);
+    return engine;
+  }
+
+  /** For Iso: a look in the other bases lent here, as their own look-ups give it, drawn on no Atlas. */
+  private get away(): Away | null {
+    if (!this.opts.elsewhere) return null;
+    return {
+      lent: () => this.lent(),
+      look: async (base, tool, args) => fromBase(base, (await new Lookup(this.other(base).bundle, "", this.other(base).similar).call(tool, JSON.stringify(args))).text),
+    };
+  }
+
+  /** What this base is, in a line: its AGENTS.md's first line of text, else its name and size. */
+  async about(): Promise<string> {
+    const first = ((await this.agents()).text ?? "").split("\n").map((l) => l.replace(/^#+\s*/, "").trim()).find((l) => l && !l.startsWith("---"));
+    return first ?? `${this.bundle.concepts.size} notes`;
   }
 
   async agentLook({ agent, session, tool, args, asked = "" }: AgentLook): Promise<{ text: string }> {
-    if (tool === BRIEF.function.name) return { text: this.brief() };
+    const there = baseOf(args);
+    if (there.base && there.base !== this.opts.name) {
+      const done = await this.other(there.base).agentLook({ agent, session, tool, args: there.args, asked });
+      return { text: fromBase(there.base, done.text) };
+    }
+    args = there.args;
+    if (tool === BRIEF.function.name) {
+      const lent = this.lent();
+      return { text: this.brief() + (lent.length ? `\n\nOther knowledge bases lent to you, each with its own practice (brief_base with its base, before you use it):\n${lent.map((l) => `- ${l.name}: ${l.about}`).join("\n")}\nPass base to any tool to look or write there.` : "") };
+    }
     if (tool === EDIT_NOTE.function.name || tool === WRITE_NOTE.function.name) {
       const str = (v: unknown, name: string) => { if (typeof v !== "string") throw new EngineError(`${tool} needs ${name}, as text`, 400); return v; };
       const edit = tool === WRITE_NOTE.function.name ? { content: str(args.content, "content") }
@@ -299,6 +350,8 @@ export class Engine implements Api {
     const key = `${agent}/${session}`, turn = this.turns.get(key);
     if (busy && !turn) this.startTurn(agent, session);
     if (!busy && turn) { this.turns.delete(key); this.publish({ type: "agent-done", request: turn.request, agent, session }); }
+    // Its looks in other bases were turns there: they end with this one.
+    if (!busy) for (const l of this.lent()) await this.opts.elsewhere?.base(l.name)?.agentStatus(agent, session, false);
   }
 
   async agentWrite({ agent, session, note, asked, edit }: AgentChange): Promise<{ text: string }> {
@@ -708,7 +761,7 @@ export class Engine implements Api {
     this.asking.set(req.note, request);
     const place = req.form === "insert" ? { form: req.form, after: req.after, before: req.before } : req.form === "rewrite" ? { form: req.form, regions: req.regions, after: req.after, before: req.before } : { form: req.form };
     this.publish({ type: "iso-start", request, note: req.note, asked, tier: req.tier, place });
-    const lookup = new Lookup(this.bundle, req.note, this.similar);
+    const lookup = new Lookup(this.bundle, req.note, this.similar, this.away);
     // The request returns at once; the rest happens as events, and ends in exactly one of done, stopped, failed.
     void (async () => {
       let ran: Awaited<ReturnType<typeof rounds>> | null = null, offered = false;
@@ -1078,7 +1131,7 @@ export class Engine implements Api {
     const earlier = hand.turns.filter((t) => t.on && !off.has(t.id)).map((t) => byId.get(t.id)!).filter((t) => t.state !== "running");
     const briefings = hand.briefings.filter((b) => b.on).map((b) => briefingText(b.briefing, title));
     const agentsText = off.has("agents") ? null : await this.agentsFile();
-    const built = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: req.lookup !== false, earlier, briefings, sent: [...sent, ...reads], aside, ...(agentsText ? { agents: agentsText } : {}), asked: req.asked ?? "" });
+    const built = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: req.lookup !== false, earlier, briefings, sent: [...sent, ...reads], aside, ...(agentsText ? { agents: agentsText } : {}), ...(this.lent().length ? { lent: this.lent() } : {}), asked: req.asked ?? "" });
     const ratio = hand.ratio ?? 1, scaled = (n: number) => Math.round(n * ratio);
     const estimated = built.parts.reduce((n, p) => n + p.tokens, 0);
     return { mode, turns, lines, hand, given, givenOn, sent, reads, aside, earlier, briefings, agentsText, built, off, ratio, scaled, estimated, title };
@@ -1231,7 +1284,7 @@ export class Engine implements Api {
     // What is in hand as it was read, for the look-ups not to send it twice; and what you gave whole.
     const inHand = new Map<string, string[] | "whole">(w.reads.flatMap((r) => (r.kind === "read" ? [[r.id, r.sections] as const] : [])));
     for (const g of w.givenOn) if (g.kind === "note") inHand.set(g.id, "whole");
-    const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier: w.earlier, briefings: w.briefings, sent, aside: w.aside, ...(w.agentsText ? { agents: w.agentsText } : {}), asked: req.asked, broken: await this.brokenNews("iso") });
+    const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier: w.earlier, briefings: w.briefings, sent, aside: w.aside, ...(w.agentsText ? { agents: w.agentsText } : {}), ...(this.lent().length ? { lent: this.lent() } : {}), asked: req.asked, broken: await this.brokenNews("iso") });
 
     // A turn is of the session as a journal entry is, and carries it on.
     const s = await this.stamp("you"), turn = s.id, abort = new AbortController(), path = conversationPath(conversation);
@@ -1244,7 +1297,7 @@ export class Engine implements Api {
     const item = async (i: TurnItem): Promise<void> => { await line({ kind: "item", turn, item: i }); this.publish({ type: "iso-item", request: turn, conversation, item: i }); };
     const who = `iso:${this.provider.name}/${this.provider.tiers[req.tier]}`;
 
-    const lookup = new Lookup(this.bundle, req.given.find((g) => g.kind !== "folder")?.id ?? "", this.similar);
+    const lookup = new Lookup(this.bundle, req.given.find((g) => g.kind !== "folder")?.id ?? "", this.similar, this.away);
     const looks = new Set(lookup.defs().map((d) => d.function.name));
     const tools: Tools = {
       defs: () => [...(lookupOn ? lookup.defs() : []), ...own],
@@ -1252,9 +1305,9 @@ export class Engine implements Api {
         if (looks.has(name) && !lookupOn) return { text: "Looking things up is off: they chose what you are sent." };
         // A note already in hand is not sent twice (M15): the read is told so, and still counts as using the note.
         if (name === "read_note") {
-          let args: { id?: unknown; section?: unknown } = {};
+          let args: { id?: unknown; section?: unknown; base?: unknown } = {};
           try { args = JSON.parse(raw || "{}") as typeof args; } catch { /* as it comes */ }
-          const id = noteId(this.bundle, args.id), want = typeof args.section === "string" ? args.section.replace(/^#+\s*/, "").trim() : "";
+          const id = args.base ? null : noteId(this.bundle, args.id), want = typeof args.section === "string" ? args.section.replace(/^#+\s*/, "").trim() : "";
           const held = id ? inHand.get(id) : undefined;
           if (id && held && (held === "whole" || (want && held.includes(want)))) {
             const step = { tool: "read_note", said: `${this.bundle.concepts.get(id)!.title}: in hand already`, how: "read" as const, notes: [id], opened: id, ...(want ? { section: want } : {}) };
@@ -1265,6 +1318,9 @@ export class Engine implements Api {
         let args: Record<string, unknown> = {};
         try { const parsed: unknown = raw.trim() ? JSON.parse(raw) : {}; if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) args = parsed as Record<string, unknown>; } catch { /* no arguments */ }
         if (!own.some((d) => d.function.name === name)) return { text: `There is no tool ${name} in ${mode} mode.` };
+        // Iso changes notes only in the base it is in (M20, Q94): other bases are lent to it to read.
+        const there = baseOf(args);
+        if (there.base && there.base !== this.opts.name) return { text: `Notes are changed only in ${this.opts.name}, the base you are in: ${there.base} is lent to you to read.` };
         return { text: await this.turnTool(name, args, { turn, conversation, mode, item, signal: abort.signal, who, asked: req.asked }) };
       },
     };

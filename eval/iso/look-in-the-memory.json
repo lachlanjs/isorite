@@ -1,0 +1,31 @@
+{
+  "name": "With the agent's memory lent, Iso looks there for how they work, and changes nothing in it",
+  "memory": {
+    "AGENTS.md": "# What you keep across projects: the person, their tools, and what you have learned working with them.\n",
+    "you/units-in-answers.md": "---\ntype: Concept\ntitle: Units in answers\n---\n\nThey want every quantity in an answer given in SI units as well as in the simulation's own units (G = 1), in that order.\n\n**Why:** they compare against papers that use SI.\n\n**When it applies:** any answer with a number in it.\n"
+  },
+  "turn": {
+    "mode": "ask",
+    "asked": "What time step does the leapfrog note suggest? Give it the way I like numbers given.",
+    "given": [
+      {
+        "kind": "note",
+        "id": "integrators/leapfrog"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "lookedIn": "memory"
+    },
+    {
+      "says": "SI"
+    },
+    {
+      "notCalled": [
+        "edit_note",
+        "write_note"
+      ]
+    }
+  ]
+}

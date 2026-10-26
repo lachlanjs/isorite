@@ -16,7 +16,7 @@ const SETTLE = 500;
 export default Plugin.define({
   id: "isorite",
   async setup(ctx) {
-    const [tools, base] = await Promise.all([Isorite.get<Isorite.ToolDef[]>("/api/agent/tools"), Isorite.get<{ notes: string | null }>("/api/agent/base")]);
+    const [tools, base] = await Promise.all([Isorite.get<Isorite.ToolDef[]>("/api/agent/tools"), Isorite.get<{ notes: string | null; name?: string | null; lent?: string[] }>("/api/agent/base")]);
     /** What the person last asked in each session: a change to a note says what it answers. */
     const asked = new Map<string, string>();
 
@@ -40,10 +40,12 @@ export default Plugin.define({
     // The agent is told where the notes are, and that they are changed only with isorite's tools.
     if (base.notes) {
       const notes = base.notes;
+      // Other bases lent to every session (M20): the agent's memory among them. Each says how it is kept.
+      const lent = base.lent?.length ? `\n\nOther knowledge bases are lent to you: ${base.lent.join(", ")}. Pass base to the same tools to look or write in one; brief_base with its base first, and follow the practice it gives. A note there is named <base>:folder/name.` : "";
       await ctx.session.hook("context", (request) => {
         request.system.push({
           type: "text",
-          text: `The person's knowledge base is the folder ${notes}: notes in Markdown with YAML frontmatter, linked to each other. Look things up in it with brief_base, search_notes, outline_note and read_note rather than reading its files. Never edit or write its files directly: change a note with edit_note or write_note, which write it at once and mark your words as yours for the person to see. Your edits to code and other files are yours to make as usual. In a note, and in what you say, a fenced block in the language mermaid is drawn as a diagram in isorite, and code fenced with its language is coloured: draw a diagram where it helps or when asked.\n\n${CITING}`,
+          text: `The person's knowledge base is the folder ${notes}: notes in Markdown with YAML frontmatter, linked to each other. Look things up in it with brief_base, search_notes, outline_note and read_note rather than reading its files. Never edit or write its files directly: change a note with edit_note or write_note, which write it at once and mark your words as yours for the person to see. Your edits to code and other files are yours to make as usual. In a note, and in what you say, a fenced block in the language mermaid is drawn as a diagram in isorite, and code fenced with its language is coloured: draw a diagram where it helps or when asked.${lent}\n\n${CITING}`,
         });
       });
       // A write or an edit to a note anyway is made the same change through isorite, so it is entered and marked.

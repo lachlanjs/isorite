@@ -79,6 +79,21 @@ can read again. A click switches a row on or off. At the head of the conversatio
 up into a briefing sent instead of them, and another starts a new conversation from that briefing. Iso sums up on
 its own only when a turn would be more than the model takes.
 
+## The agent's memory, and other bases
+
+`isorite memory` makes a base for the agent's memory, lent to every session (see [setup.md](setup.md), §5). Every
+tool the agent has takes an optional `base`: one of the bases lent to it, named by `brief_base`. Without it, a tool
+acts on the base the terminal is for. A note in another base can also be named `memory:tools/opencode`. The agent is
+told which bases are lent, and each base's `AGENTS.md` says how it is kept; the memory's says what to keep, and how.
+
+A second `isorite term`, for another project, on the same port, adds its base to the server that is running rather
+than starting another; a server `isorite term` started stops when the last terminal using it is done. Over MCP
+(`isorite mcp`) the tools are the same.
+
+To watch the memory learn, open it beside the project: choose `memory` from the base's name at the left of the
+first pane's header (Ctrl-click for a tab of its own). What the agent reads there lights on its Atlas; what it
+writes appears, marked as the agent's.
+
 ## The models
 
 The terminal uses Iso's provider, as `config.toml` names it ([setup.md](setup.md)): the `[tiers]` models, `mid` its

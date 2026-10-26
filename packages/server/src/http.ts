@@ -8,6 +8,7 @@ import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { Conflict, EngineError, MAX_NOTE_BYTES, type Api, type Choice } from "@isorite/engine";
+import type { BasesPort } from "./bases.ts";
 import type { Setup } from "./setup.ts";
 import { given as withGiven, type Terminal } from "./terminal.ts";
 
@@ -31,6 +32,9 @@ export interface ServerOptions {
   gateway?: (path: string, req: Request) => Promise<Response>;
   /** The provider's setup, from Iso's settings (M18). */
   setup?: Setup;
+  /** The other bases the server holds (M20), and this one's name among them. */
+  bases?: BasesPort;
+  base?: string;
 }
 
 const TYPES: Record<string, string> = {
@@ -79,7 +83,7 @@ const AgentEdit = z.union([
 const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal, gateway, setup }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal, gateway, setup, bases, base }: ServerOptions): Hono {
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -225,11 +229,40 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     post("/api/settings/report", z.object({}).strict(), async () => ({ text: await setup.report() }));
   }
 
+  // The bases this server holds (M20): listed for the switcher; lent, opened by folder and held open only from this
+  // machine, as the provider's setup is (M18).
+  if (bases) {
+    app.get("/api/bases", (c) => answer(c, async () => ({ here: base ?? "", local: local(c), bases: bases.list() })));
+    const mine = (c: Context) => { if (!local(c)) throw new EngineError("the bases are changed only from this machine", 403); };
+    post("/api/bases/lend", z.object({ name: z.string().max(40), lend: z.boolean() }).strict(), async (c, b) => {
+      mine(c);
+      if (!(await bases.lend(b.name, b.lend))) throw new EngineError(`no base ${b.name} is known here`, 404);
+      return { bases: bases.list() };
+    });
+    post("/api/bases/open", z.object({ path: z.string().min(1).max(4000) }).strict(), async (c, b) => {
+      mine(c);
+      if (!isAbsolute(b.path) || !existsSync(b.path) || !statSync(b.path).isDirectory()) throw new EngineError(`no folder at ${b.path}`, 404);
+      return bases.open(b.path);
+    });
+    // Held open while the stream is: isorite term and mcp hold a server they started until they are done with it.
+    app.get("/api/server/hold", (c) => {
+      if (!local(c)) return refuse(c, 403, "held only from this machine");
+      return streamSSE(c, async (stream) => {
+        const release = bases.hold();
+        const beat = setInterval(() => { void stream.write(": held\n\n"); }, 25_000);
+        await stream.writeSSE({ event: "held", data: "{}" });
+        await new Promise<void>((done) => stream.onAbort(done));
+        clearInterval(beat);
+        release();
+      });
+    });
+  }
+
   // A terminal agent (isorite term, or another harness through MCP) looks things up with Iso's tools; the Atlas
   // draws its steps. It is a process on this machine, and asks as the page does: the Origin and the token.
   app.get("/api/agent/tools", (c) => answer(c, () => api.agentTools()));
   post("/api/agent/look", AgentLook, (_c, b) => api.agentLook(b));
-  app.get("/api/agent/base", (c) => answer(c, async () => ({ notes: notes ?? null })));
+  app.get("/api/agent/base", (c) => answer(c, async () => ({ notes: notes ?? null, name: base ?? null, lent: (bases?.list() ?? []).filter((b) => b.lend && b.name !== base).map((b) => b.name) })));
   post("/api/agent/write", AgentChange, (_c, b) => api.agentWrite(b));
   post("/api/agent/send", z.object({ note: z.string().max(400), passage: z.string().max(10_000).optional(), said: z.string().max(4000) }).strict(), (_c, b) => api.agentSend(b));
   post("/api/agent/received", z.object({ id: z.string().max(64), agent: AgentName }).strict(), (_c, b) => api.agentReceived(b.id, b.agent));

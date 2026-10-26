@@ -374,6 +374,7 @@ describe.skipIf(!ready)("isorite term", () => {
     expect(await serving(port)).toBe(true);
     pane.keys("C-c");
     await pane.waitFor(/\[exited \d+\]/, 30_000);
-    expect(await serving(port)).toBe(false);
+    // Once the last terminal using it has let it go, after a moment's grace (M20).
+    await expect.poll(() => serving(port), { timeout: 5000 }).toBe(false);
   }, 60_000);
 });

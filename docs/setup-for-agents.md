@@ -19,6 +19,8 @@ turn off certificate checking (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
 | `isorite serve <notes> [--port <n>]` | The browser app at `http://localhost:4767/`, on 127.0.0.1 only. |
 | `isorite term [<notes>] [--port <n>]` | OpenCode 2 in this terminal, in the current folder (the code), with the notes beside it. Starts the isorite server if none answers on the port, and stops it on exit. |
 | `isorite check <notes>` | Lints the notes: frontmatter, links, cycles. |
+| `isorite memory [<folder>]` | The agent's memory: a base (`~/isorite-memory` unless named), a git repository of its own, with its practice in `AGENTS.md`, listed in `bases.toml` as `memory`, lent. Run again, says where it is and changes nothing. |
+| `isorite bases [lend\|keep <name>]` | The bases this machine knows, as `bases.toml` lists them; `lend` lends one to every session, `keep` stops. |
 | `isorite guide [<folder>]` | The guide, a knowledge base about isorite, written into `~/isorite-guide` (or the folder named) and served. With no provider set up, Iso is the guide's finder: no key or network needed. Good to check the install alone. `isorite --tutorial` is another name for it. |
 | `isorite model [--from <folder>]` | Optional: the model for search by meaning. Says which is installed and where, else fetches it (53 MB) from npm, a GitHub release, then Hugging Face, saying why each failed. `--from`: granite's files, or any compatible model (below). |
 | `isorite help setup` | Prints this. |
@@ -28,6 +30,7 @@ turn off certificate checking (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
 | Where | What |
 |---|---|
 | `~/.config/isorite/config.toml` (or `$XDG_CONFIG_HOME/isorite/`) | isorite's settings for this machine: `device`, `[provider]`, `[tiers]`, `[prices]`. Mode 600. Holds the key. |
+| `~/.config/isorite/bases.toml` | The bases this machine knows, a table each: `[<name>] path = "…"`, `lend = true` to lend it to every session. Each base opened is added, under its folder's name. Separate from config.toml, which is never rewritten for it. |
 | `~/.config/isorite/opencode/` | OpenCode's settings as isorite writes them at each `isorite term` start (`opencode.json`, theme, plugin link). Rewritten; don't edit. |
 | `~/.config/isorite/opencode/local.json` | The person's own OpenCode settings, laid over isorite's. Never rewritten. |
 | `<notes>/AGENTS.md` | The base's own instructions (notation, level, how notes are named), sent to Iso with every turn and named in OpenCode's `instructions`. Not a note: not on the Atlas, not linted. |

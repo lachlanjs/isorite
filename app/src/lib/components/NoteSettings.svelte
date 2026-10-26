@@ -7,6 +7,7 @@
   import { CODE_LOOKS, GROUNDS, codeLook, ground } from "$lib/ground.svelte.ts";
   import { LAYOUTS, PANES, panes, type Pane } from "$lib/panes.svelte.ts";
   import { makeKind } from "$lib/make.ts";
+  import { kept } from "$lib/here.ts";
 
   const NAME: Record<Pane, string> = { note: "Note", atlas: "Atlas", iso: "Iso" };
   const LAYOUT_NAME: Record<string, string> = { cols: "Three columns", stack: "The note beside the Atlas over Iso", one: "One pane: the one in focus" };
@@ -28,7 +29,7 @@
     if (!sure) { sure = true; return; }
     const { forgetKept } = await import("$lib/guide/kept.ts");
     await forgetKept();
-    try { localStorage.removeItem("isorite.last"); } catch { /* not kept */ }
+    try { localStorage.removeItem(kept("isorite.last")); } catch { /* not kept */ }
     location.hash = "";
     location.reload();
   }

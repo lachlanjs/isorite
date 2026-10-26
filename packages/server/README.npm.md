@@ -16,6 +16,7 @@ maths, code coloured by its language, and Mermaid diagrams.
 isorite serve <notes>       # the browser, at http://localhost:4767/; set up Iso's provider in Iso's settings
 cd <your code> && isorite term <notes>   # OpenCode here, with the notes beside it
 isorite model               # optional: search by meaning (fetches a 53 MB model, once)
+isorite memory              # optional: the agent's memory, a base of its own lent to every session
 ```
 
 Setting it up, at work too (a company's gateway, a client certificate, a proxy): `docs/setup.md` in this package.

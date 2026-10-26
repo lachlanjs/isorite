@@ -7,6 +7,7 @@
   import type { Step, Turn, TurnItem } from "@isorite/engine";
   import { onMount, tick } from "svelte";
   import { app } from "$lib/app.svelte.ts";
+  import { basePage } from "$lib/here.ts";
   import { context } from "$lib/context.svelte.ts";
   import { converse } from "$lib/converse.svelte.ts";
   import { render } from "$lib/markdown.ts";
@@ -93,7 +94,11 @@
   {:else if i.kind === "look"}
     <p class="look" class:failed={i.step.failed}>
       <span class="v">{HOW[i.step.how]}</span>
-      {#if i.step.opened}<button type="button" class="note-link" data-to={i.step.opened} onclick={() => open(i.step.opened!)}>{titleOf(i.step.opened)}{i.step.section ? ` · ${i.step.section}` : ""}</button>
+      <!-- A note of another base lent to Iso (M20): opened in that base's page, in a tab of its own. -->
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- another base's page, not in this app -->
+      {#if i.step.away?.note}<a class="note-link away" href={basePage(i.step.away.base, `#/n/${i.step.away.note}`)} data-sveltekit-reload target="_blank" rel="noopener" title="In {i.step.away.base}, in a tab of its own"><span class="in">{i.step.away.base}:</span> {i.step.away.note}{i.step.away.section ? ` · ${i.step.away.section}` : ""}</a>
+      {:else if i.step.away}<span class="q"><span class="in">{i.step.away.base}:</span> {i.step.query ? `“${i.step.query}”` : i.step.said}</span>
+      {:else if i.step.opened}<button type="button" class="note-link" data-to={i.step.opened} onclick={() => open(i.step.opened!)}>{titleOf(i.step.opened)}{i.step.section ? ` · ${i.step.section}` : ""}</button>
       {:else}<span class="q">{i.step.query ? `“${i.step.query}”` : i.step.said}</span>{#if i.step.notes.length}<span class="n">{i.step.notes.length} found</span>{/if}{/if}
     </p>
   {:else if i.kind === "change"}
@@ -204,6 +209,8 @@
   .look .v { color: var(--text-soft); min-width: 5.5em; }
   .look.failed .q { color: var(--rose); }
   .look .n { color: var(--text-faint); }
+  .away { text-decoration: none; }
+  .in { color: var(--text-faint); }
   .note-link { background: none; border: 0; padding: 0; font: inherit; color: var(--text-soft); cursor: pointer; text-align: left; overflow-wrap: anywhere; }
   .note-link:hover, .note-link:focus-visible { color: var(--lattice); }
   .point { color: var(--text-faint); }

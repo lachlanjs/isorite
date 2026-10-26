@@ -7,7 +7,7 @@
 import { parse as parseDiagram } from "pele";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { newId } from "@isorite/core";
 import type { Engine, EngineEvent, Given, HandLine, Tier, Turn, TurnItem } from "@isorite/engine";
 import { readHand, readTurns } from "@isorite/engine";
@@ -18,7 +18,7 @@ import { writeGuide } from "../packages/server/src/guide.ts";
 type Check =
   | { called: string[] } | { notCalled: string[] } | { says: string } | { saysNot: string } | { linksResolve: true }
   | { changed: string[] } | { created: string } | { createdNot: string } | { editLines: number } | { changedSays: string }
-  | { notRead: string[] } | { briefing: { open?: string; notes?: string[] } } | { words: number } | { unchanged: string[] } | { asks: true } | { diagram: boolean };
+  | { notRead: string[] } | { briefing: { open?: string; notes?: string[] } } | { words: number } | { unchanged: string[] } | { asks: true } | { diagram: boolean } | { lookedIn: string };
 interface Case {
   name: string;
   /** The base it is run on: the N-body example, unless the guide (M16). */
@@ -27,6 +27,8 @@ interface Case {
   understanding?: Record<string, string>;
   history?: { asked: string; said: string; read?: string[] }[];
   compact?: boolean;
+  /** Notes of the agent's memory, a second base lent to this one (M20), by path. */
+  memory?: Record<string, string>;
   turn: { mode: "ask" | "write"; asked: string; given: Given[] };
   checks: Check[];
 }
@@ -76,7 +78,16 @@ async function run(key: string, c: Case): Promise<{ results: [string, boolean, s
   try {
     const { notes } = c.base === "guide" ? writeGuide(join(root, "base")) : await writeExample(join(root, "base"));
     if (c.agents) writeFileSync(join(notes, "AGENTS.md"), c.agents);
-    const engine: Engine = await openEngine({ notes }, "eval0000", undefined, scripted, null);
+    // The memory, lent: a base of its own beside this one, as a server holding both lends it.
+    let memory: Engine | null = null;
+    if (c.memory) {
+      const at = join(root, "memory");
+      for (const [path, text] of Object.entries(c.memory)) { mkdirSync(dirname(join(at, path)), { recursive: true }); writeFileSync(join(at, path), text); }
+      memory = await openEngine({ notes: at }, "eval0000", undefined, scripted, null, undefined, { name: "memory", embedder: null });
+    }
+    const about = memory ? await memory.about() : "";
+    const elsewhere = memory ? { lent: () => [{ name: "memory", about }], base: (name: string) => (name === "memory" ? memory : null) } : undefined;
+    const engine: Engine = await openEngine({ notes }, "eval0000", undefined, scripted, null, undefined, { name: "base", ...(elsewhere ? { elsewhere } : {}) });
     for (const [id, reading] of Object.entries(c.understanding ?? {})) {
       mkdirSync(join(notes, ".isorite", "understanding", id.split("/").slice(0, -1).join("/")), { recursive: true });
       const title = /title:\s*"?([^"\n]+)"?/.exec(readFileSync(join(notes, `${id}.md`), "utf8"))?.[1] ?? id;
@@ -131,6 +142,10 @@ async function run(key: string, c: Case): Promise<{ results: [string, boolean, s
       const re = (s: string) => new RegExp(s, "i");
       switch (name) {
         case "called": return [name, (v as string[]).every((x) => calls.includes(x)), `called ${calls.join(", ") || "nothing"}`];
+        case "lookedIn": {
+          const away = t.items.flatMap((i) => (i.kind === "look" && i.step.away ? [i.step.away.base] : []));
+          return [name, away.includes(v as string), `looked in ${[...new Set(away)].join(", ") || "no other base"}`];
+        }
         case "notCalled": return [name, !(v as string[]).some((x) => calls.includes(x)), `called ${calls.join(", ") || "nothing"}`];
         case "says": return [name, re(v as string).test(reply), `/${v as string}/`];
         case "saysNot": return [name, !re(v as string).test(reply), `/${v as string}/`];

@@ -80,3 +80,23 @@ describe("the terminal's models", () => {
     expect(await modelsFor(home(`device = "abcd1234"\n`), server)).toMatchObject({ gateway: null, from: "opencode" });
   });
 });
+
+describe("a tool used in another base (M20)", () => {
+  it("names the base, and its note is that base's", () => {
+    const messages: Message[] = [
+      { id: "u1", type: "user", text: "remember this" },
+      { id: "a1", type: "assistant", content: [
+        { type: "tool", id: "t1", name: "read_note", state: { status: "completed", input: { id: "memory:tools/opencode" } } },
+        { type: "tool", id: "t2", name: "write_note", state: { status: "completed", input: { base: "memory", note: "you/likes", content: "x" } } },
+        { type: "tool", id: "t3", name: "read_note", state: { status: "completed", input: { id: "basics/entropy" } } },
+      ] },
+    ];
+    const [turn] = toTurns(messages);
+    expect(turn!.items).toMatchObject([
+      { kind: "tool", title: "memory: tools/opencode", note: "tools/opencode", base: "memory" },
+      { kind: "tool", title: "memory: you/likes", note: "you/likes", base: "memory" },
+      { kind: "tool", title: "basics/entropy", note: "basics/entropy" },
+    ]);
+    expect("base" in turn!.items[2]!).toBe(false);
+  });
+});

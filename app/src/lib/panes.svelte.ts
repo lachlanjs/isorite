@@ -7,6 +7,7 @@
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import { noteHref } from "./app.svelte.ts";
+import { kept } from "./here.ts";
 
 const read = (key: string, fallback: string): string => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
 const keep = (key: string, value: string): void => { try { localStorage.setItem(key, value); } catch { /* not kept */ } };
@@ -50,7 +51,7 @@ class Panes {
   /** The pane whose settings are open, under its header (M10b: the header's menu, split by pane). */
   settings = $state<Pane | null>(null);
   /** The note last open: what the Note pane opens to when none is. */
-  last = $state(read("isorite.last", ""));
+  last = $state(read(kept("isorite.last"), ""));
 
   /** Which panes stand: on a desktop the layout decides, on a phone all three are in the row. */
   get standing(): Pane[] {
@@ -107,7 +108,7 @@ class Panes {
   /** Set by the tray: what a change of what Iso may do, or of the Understanding note shown, does to what Iso is sent. */
   onMode: (() => void) | null = null;
 
-  setLast(id: string): void { if (id && !id.startsWith("@")) { this.last = id; keep("isorite.last", id); } }
+  setLast(id: string): void { if (id && !id.startsWith("@")) { this.last = id; keep(kept("isorite.last"), id); } }
 
   /** Open a note in the Note pane; on a phone the Note pane comes into view. */
   async open(id: string, focus = this.narrow): Promise<void> {

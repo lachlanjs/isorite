@@ -2,6 +2,7 @@
 // against the Api interface (@isorite/engine), so a webview can later hand it
 // the engine itself instead of this.
 
+import { baseHere } from "./here.ts";
 import type { Api, Decision, EngineEvent, Given, NoteSource, Session, SetupCheck, SetupDraft, SetupView, TerminalView } from "@isorite/engine";
 
 /** A request the server refused. For a save that lost a race, `current` is the note as it is now (null: gone). */
@@ -36,7 +37,15 @@ export interface SetupApi {
   report(): Promise<string>;
 }
 
-export function httpApi(root: string = new URL("api/", document.baseURI).href): Api & { terminal: TerminalApi; setup: SetupApi } {
+/** The bases the server holds (M20), as the switcher lists them. */
+export interface BaseRow { name: string; path: string; lend: boolean; open: boolean }
+export interface BasesApi {
+  list(): Promise<{ here: string; local: boolean; bases: BaseRow[] }>;
+  /** Lend a base to every session, or stop (from this machine only). */
+  lend(name: string, lend: boolean): Promise<BaseRow[]>;
+}
+
+export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURIComponent(baseHere())}/api/` : "api/", document.baseURI).href): Api & { terminal: TerminalApi; setup: SetupApi; bases: BasesApi } {
   let token: Promise<string> | null = null;
   const ask = async <T>(path: string, init?: RequestInit): Promise<T> => {
     let res: Response;
@@ -113,6 +122,10 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
       check: (draft) => write("POST", "settings/provider/check", { draft }),
       models: async (draft) => (await write<{ models: string[] }>("POST", "settings/provider/models", { draft })).models,
       report: async () => (await write<{ text: string }>("POST", "settings/report", {})).text,
+    },
+    bases: {
+      list: () => ask("bases"),
+      lend: async (name, lend) => (await write<{ bases: BaseRow[] }>("POST", "bases/lend", { name, lend })).bases,
     },
     terminal: {
       view: () => ask<TerminalView>("terminal"),

@@ -28,6 +28,9 @@ export interface Step {
   query?: string;
   scores?: Record<string, number>;
   failed?: boolean;
+  /** A look in another base lent to the request (M20): which, and the note it opened there. The Atlas of this base
+   *  does not draw it. */
+  away?: { base: string; note?: string; section?: string };
 }
 
 /** Search by meaning, when the device can run it. */
@@ -46,6 +49,32 @@ export const TOOLS: ToolDef[] = [
 ];
 export const FIND_SIMILAR: ToolDef = fn("find_similar", "Find notes by meaning: notes that say something like the text you give, even in quite other words. Slower and vaguer than search_notes: use it after search_notes and the links of the notes in hand have not found what you need, or when you cannot guess the words a note would use. Give a question or a sentence, not keywords. Returns each note's nearest section, with how alike it is (0 to 1).",
   { text: { ...str, description: "A question, or a sentence saying what you are looking for." }, under: { ...str, description: "Only notes in this folder." }, limit: { type: "integer", description: "How many, 6 unless said, 15 at most." } }, ["text"]);
+
+/** Other bases a request may look in (M20): their names, each with a line on what it holds, and a look in one, which
+ *  gives what that base's own look-up gives. */
+export interface Away {
+  lent(): { name: string; about: string }[];
+  look(base: string, tool: string, args: Record<string, unknown>): Promise<string>;
+}
+
+/** Which base a call names, and its arguments for that base: `base`, or a note's id written `memory:tools/x`. */
+export function baseOf(args: Record<string, unknown>): { base: string; args: Record<string, unknown> } {
+  const { base, ...rest } = args;
+  let named = typeof base === "string" ? base.trim() : "";
+  for (const k of ["id", "note"] as const) {
+    const m = typeof rest[k] === "string" ? /^([a-z0-9][a-z0-9-]{0,39}):(?!\/\/)(.+)$/.exec(rest[k] as string) : null;
+    if (m) { named ||= m[1]!; if (m[1] === named) rest[k] = m[2]; }
+  }
+  return { base: named, args: rest };
+}
+
+/** The tools' definitions with `base`, for a request that has other bases lent to it. */
+export function withBase(defs: ToolDef[], names: string[], always = false): ToolDef[] {
+  if (!names.length && !always) return defs;
+  const which = names.length ? names.join(", ") : "one brief_base names";
+  const base = { type: "string", description: `Another knowledge base lent to you, by name: ${which}. This base when not given. A note there may also be named <base>:folder/name.` };
+  return defs.map((d) => ({ ...d, function: { ...d.function, parameters: { ...d.function.parameters, properties: { ...(d.function.parameters.properties as Record<string, unknown>), base } } } }));
+}
 
 const MAX_READ = 8000;
 const cut = (s: string, n: number) => (s.length > n ? s.slice(0, n).trimEnd() + "\n[…cut: read a section of it for the rest]" : s);
@@ -70,10 +99,11 @@ export class Lookup {
   private readonly named = new Map<string, "keyword" | "meaning">();
   private readonly b: Bundle;
   private readonly similar: Similar | null;
+  private readonly away: Away | null;
 
-  constructor(b: Bundle, note: string, similar: Similar | null = null) { this.b = b; this.held = [note]; this.similar = similar; }
+  constructor(b: Bundle, note: string, similar: Similar | null = null, away: Away | null = null) { this.b = b; this.held = [note]; this.similar = similar; this.away = away; }
 
-  defs(): ToolDef[] { return this.similar ? [TOOLS[0]!, FIND_SIMILAR, ...TOOLS.slice(1)] : TOOLS; }
+  defs(): ToolDef[] { return withBase(this.similar ? [TOOLS[0]!, FIND_SIMILAR, ...TOOLS.slice(1)] : TOOLS, this.away?.lent().map((l) => l.name) ?? []); }
 
   /** The notes opened, each once, in order. */
   read(): string[] { return [...new Set(this.steps.filter((s) => s.opened && !s.failed).map((s) => s.opened!))]; }
@@ -84,12 +114,31 @@ export class Lookup {
     try { const parsed: unknown = raw.trim() ? JSON.parse(raw) : {}; if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) args = parsed as Record<string, unknown>; } catch { /* no arguments */ }
     const step: Step = { tool: name, said: "", how: "read", notes: [] };
     let text: string;
+    const there = baseOf(args);
+    if (there.base) {
+      try { text = await this.elsewhere(name, there.base, there.args, step); } catch (err) { text = this.fail(step, `That could not be looked up: ${(err as Error).message}`); }
+      this.steps.push(step);
+      return { text, step };
+    }
     try {
       text = name === "search_notes" ? this.search(args, step) : name === "find_similar" ? await this.meaning(args, step)
         : name === "outline_note" ? this.outline(args, step) : name === "read_note" ? this.section(args, step) : this.fail(step, `There is no tool ${name}.`);
     } catch (err) { text = this.fail(step, `That could not be looked up: ${(err as Error).message}`); }
     this.steps.push(step);
     return { text, step };
+  }
+
+  /** A look in another base lent to the request: what that base gives, said as being from there. */
+  private async elsewhere(name: string, base: string, args: Record<string, unknown>, step: Step): Promise<string> {
+    const lent = this.away?.lent().map((l) => l.name) ?? [];
+    if (!lent.includes(base)) return this.fail(step, lent.length ? `There is no base ${base} lent here: the bases are ${lent.join(", ")}. Leave base out for this one.` : `There is no base ${base} lent here: leave base out.`);
+    const note = typeof args.id === "string" ? args.id.replace(/^\/+/, "").replace(/\.md$/i, "") : undefined;
+    step.how = name === "search_notes" ? "keyword" : name === "find_similar" ? "meaning" : "read";
+    step.away = { base, ...(note ? { note } : {}), ...(typeof args.section === "string" && args.section ? { section: args.section } : {}) };
+    const query = String(args.query ?? args.text ?? "").trim();
+    if (query) step.query = query;
+    step.said = note ? `Read ${note} in ${base}` : query ? `Searched ${base} for "${query}"` : `Looked in ${base}`;
+    return this.away!.look(base, name, args);
   }
 
   private fail(step: Step, why: string): string { step.failed = true; step.said = why; return why; }
