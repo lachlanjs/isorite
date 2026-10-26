@@ -88,6 +88,10 @@ isorite serve ~/notes/my-project
 `isorite new` makes the folder, empty but for isorite's own `.isorite/`. A folder of notes you have already is
 opened as it is, with `isorite serve`.
 
+How you want the base kept (your notation, the level, the language, how notes are named) goes in `AGENTS.md` at
+the top of the notes, which Iso and the terminal's agent are both given. Edit it in Iso's settings, the icon at the
+right of its pane's header, or in any editor. Iso may offer a line for it when you say how you want things done.
+
 It prints a link to click: `http://localhost:4767/`. isorite keeps what it needs in the folder's `.isorite/`.
 
 ## 4. The terminal

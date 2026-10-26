@@ -72,7 +72,12 @@ terminal's session:
 - **Notes the agent changes** are written at once, under its name. Turn on provenance in the Note pane's header to
   see the agent's words marked, and the timeline to put a note back.
 
-With both off, the pane is Iso's own again.
+With both off, the pane is Iso's own again. The ≡ in its header, or a click on its gauge, opens what Iso is sent:
+a row for each part, with its size. These are the notes you gave and the notes Iso read, the conversation's turns,
+and what is always sent. Iso keeps a note it read in hand, and sets it aside after three turns unused, as a line it
+can read again. A click switches a row on or off. At the head of the conversation, one icon sums the earlier turns
+up into a briefing sent instead of them, and another starts a new conversation from that briefing. Iso sums up on
+its own only when a turn would be more than the model takes.
 
 ## The models
 
@@ -88,6 +93,9 @@ own models; `isorite term` says which.
 OpenCode doesn't know a gateway's prices, so Iso's pane shows the session's tokens rather than its cost.
 
 ## OpenCode's settings
+
+OpenCode is given the base's `AGENTS.md` (in its `instructions`), when `isorite term` is named the notes, and the
+knowledge base's ways through `brief_base`: how a note is written and linked, and how the base is kept.
 
 isorite keeps OpenCode's settings in `~/.config/isorite/opencode/`, rewritten at each start, so your own OpenCode
 settings are never read or changed. Anything of your own goes in `~/.config/isorite/opencode/local.json`, which is
