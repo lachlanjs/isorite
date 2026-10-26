@@ -172,6 +172,13 @@ are drawn too.
 - **Q90: diagrams in Iso's answers, and the prompt line?** *Recommended: yes to both*, since a diagram of how
   notes connect is one of the most useful answers Iso can give. The alternative is drawing them only in notes and
   leaving the prompt alone.
+- **Answered 2026-10-26:**
+  - Q87: in colour, with ink as a setting in the Note pane's settings (*code in colour*, on by default). The
+    palette is the four accents (keywords lattice, strings malachite, numbers growth, types rose, comments faint).
+    Iso's pane and the others follow the same setting, so code looks the same in every pane.
+  - Q88: all of `language-data`.
+  - Q89: yes, both installed.
+  - Q90: yes, with the prompt line saying to draw a diagram where it helps or when asked, not by habit.
 - **Not in M19: Pele's ideas for the Atlas.** These are long edges that turn once (your `sawtooth.png`), a ranked
   list of layout aims, and plain curves where a gap's edges mostly cross. They belong in an Atlas milestone of
   their own, read against `docs/atlas-layout.md`, and I'd propose one after Obsidian import.
