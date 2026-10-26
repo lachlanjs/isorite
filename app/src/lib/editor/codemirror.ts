@@ -17,6 +17,7 @@ import { livePreview, livePreviewTheme, codeBroken } from "./livePreview.ts";
 import { mathsSyntax } from "./maths.ts";
 import { noteOf } from "./noteOf.ts";
 import { overlays, touchedLines, type Mount } from "./overlays.ts";
+import { pointingLinks, type Pointed } from "./pointing.ts";
 
 export type { Format, LinkTarget };
 
@@ -52,6 +53,8 @@ export interface EditorOptions {
   embeds?: Embeds;
   /** Whether a code link names a file no longer in the base's repository (M12). */
   codeBroken?: (href: string) => boolean;
+  /** The note or folder a link under the mouse names, and null once it leaves one (M17: lit on the Atlas). */
+  onPoint?: (to: Pointed | null) => void;
 }
 
 // Plain source is set in the monospaced face; the live preview in the reading one.
@@ -109,6 +112,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["(", "["] } }]),
       ...(opts.mountOverlay ? [overlays(opts.mountOverlay)] : []),
       touchedLines,
+      pointingLinks(opts.onPoint),
       ...(opts.readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []),
       linkCompletion(opts.notes),
       placeholder(opts.placeholder ?? "Write the note here. # for a heading, [[ to link to another note, $x$ for maths."),
