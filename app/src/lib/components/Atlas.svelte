@@ -321,7 +321,7 @@
   /** The note it is reading now. */
   const reading = $derived(running ? (run!.steps.findLast((s) => s.opened && !s.failed)?.opened ?? "") : "");
   // Its steps along links, drawn as the map draws a link: from the note in hand to the one it led to.
-  const isoLinks = $derived((run?.steps ?? []).flatMap((s) => (s.how === "link" && s.from && s.opened && !s.failed ? [{ from: s.opened, to: s.from, kind: "iso" as const }] : [])));
+  const isoLinks = $derived((run?.steps ?? []).flatMap((s) => (s.how === "link" && s.from && s.opened && !s.failed ? [{ from: s.from, to: s.opened, kind: "iso" as const }] : [])));
   let isoHot = $state.raw<Hot[]>([]);
   $effect(() => light(isoLinks, (h) => { isoHot = h; }));
 
@@ -473,6 +473,15 @@
   function give(ref: string, kind: "note" | "folder" = "note"): void {
     const put = tray.add({ kind, id: ref, title: kind === "note" ? title(ref) : folderName(ref) });
     given = put ? `${kind === "note" ? title(ref) : folderName(ref)} is in Iso's context` : `${kind === "note" ? title(ref) : folderName(ref)} is in Iso's context already`;
+    clearTimeout(givenTimer);
+    givenTimer = setTimeout(() => (given = ""), 2200);
+  }
+  /** Given to Iso if it isn't, else taken back. */
+  function giveOrTake(ref: string, kind: "note" | "folder" = "note"): void {
+    if (!tray.has(kind, ref)) { give(ref, kind); return; }
+    const name = kind === "note" ? title(ref) : folderName(ref);
+    tray.remove({ kind, id: ref, title: name });
+    given = `${name} is out of Iso's context`;
     clearTimeout(givenTimer);
     givenTimer = setTimeout(() => (given = ""), 2200);
   }
@@ -630,13 +639,13 @@
   /** A click on a note chooses it; on the chosen note, opens it. On a note the chosen one requires it steps
    *  back to it, the way there kept; on one already walked, returns to it. */
   function choose(e: MouseEvent, ref: string): void {
-    if (e.metaKey || e.ctrlKey || e.shiftKey) return; // a new tab is the browser's
+    if (e.metaKey || e.ctrlKey) return; // a new tab is the browser's
     e.preventDefault();
     e.stopPropagation();
     if (dragged) return;
     if (pick) { toggle(ref); return; }
-    // In the Iso lens a note is brought into what Iso is sent, or taken out (M10).
-    if (panes.on.context && !ref.startsWith("@")) { tray.toggle({ kind: "note", id: ref, title: title(ref) }); return; }
+    // Shift+click gives a note to Iso, or takes it back, with Iso's context shown or not (M14).
+    if (e.shiftKey) { if (!ref.startsWith("@")) giveOrTake(ref); return; }
     // Chosen already: open it, beside the Atlas on a desktop (V1).
     if (chosen === ref) { void panes.open(ref); return; }
     const back: string[] = [];
@@ -644,10 +653,10 @@
     walk = walk.includes(ref) ? walk.slice(0, walk.indexOf(ref) + 1) : back.length ? [...walk, ...back] : [ref];
   }
   /** A click on a folder frames it; on one already framed, the folder it is in. */
-  function enter(i: number): void {
+  function enter(i: number, e?: MouseEvent): void {
     if (dragged || !L) return;
     const ref = L.items[i]!.ref;
-    if (panes.on.context && !ref.startsWith("@")) { tray.toggle({ kind: "folder", id: ref, title: folderName(ref) }); return; }
+    if (e?.shiftKey) { if (!ref.startsWith("@")) giveOrTake(ref, "folder"); return; }
     moved = true;
     const to = fit(L.items[i]!, size.w, size.h, 1.5, L.cell), there = Math.abs(to.k - view.k) < 0.01 * to.k && Math.hypot(to.x - view.x, to.y - view.y) < 4;
     const parent = L.items[i]!.parent;
@@ -660,7 +669,7 @@
     if (e.target.closest("a, button")) return;
     if (chosen) walk = [];
     else if (run && !running) app.iso = null; // Iso's path is let go once it has ended
-    else if (folder && L) enter(L.items.findIndex((n) => n.kind === "folder" && n.ref === folder.dataset.folder));
+    else if (folder && L) enter(L.items.findIndex((n) => n.kind === "folder" && n.ref === folder.dataset.folder), e);
     else fly(whole());
   }
   function key(e: KeyboardEvent): void {
@@ -728,7 +737,7 @@
     <div class="atlas-world" class:labels class:shifting data-open={open} style="transform: translate({view.x}px, {view.y}px) scale({view.k / drawnK}); --u: {(L?.cell ?? 7) * drawnK}px; --k: {drawnK}">
       <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each folders as f (f.item.id)}
-          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} onpick={() => enter(f.i)} />
+          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} onpick={(e) => enter(f.i, e)} />
       {/each}
       </div>
       <AtlasRoutes k={drawnK} {rest} hot={[...(isoLens ? isoHot : []), ...hot]} counts={litCount} sent={sentLines} {grown} {beat} {retracting} />
@@ -779,12 +788,16 @@
     {/if}
     {#if given}<p class="given" role="status">◆ {given}</p>{/if}
     {#if panes.on.context && !pick && !given && panes.settings === "atlas"}
-      <p class="legend" aria-hidden="true"><span><i class="k g"></i>in Iso's context</span><span><i class="k d"></i>Iso changed it</span><span><i class="k p"></i>Iso points to it</span><span><i class="k n">1</i>read, in order</span><span class="faint">tap to give or take back</span></p>
+      <p class="legend" aria-hidden="true"><span><i class="k g"></i>in Iso's context</span><span><i class="k d"></i>Iso changed it</span><span><i class="k p"></i>Iso points to it</span><span><i class="k n">1</i>read, in order</span></p>
     {/if}
     {#if offered}
       {@const o = offered}
       <div class="offer frame" role="menu" aria-label={title(o.ref)} style="left:{Math.min(o.x, size.w - 170)}px;top:{o.y + 14}px">
-        <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); give(o.ref); offered = null; }}><i aria-hidden="true">◆</i>Give to Iso</button>
+        {#if tray.has("note", o.ref)}
+          <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); giveOrTake(o.ref); offered = null; }}><i aria-hidden="true">◇</i>Take back from Iso</button>
+        {:else}
+          <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); give(o.ref); offered = null; }}><i aria-hidden="true">◆</i>Give to Iso</button>
+        {/if}
         <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void panes.open(o.ref, true); }}><i aria-hidden="true">▣</i>Open</button>
         <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void makeKind("question", o.ref); }}><i class="q" aria-hidden="true">?</i>A question about it</button>
         <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void makeKind("problem", o.ref); }}><i aria-hidden="true">△</i>A problem using it</button>

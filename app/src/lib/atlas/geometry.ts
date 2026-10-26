@@ -229,7 +229,9 @@ export function litRoutes(L: Layout, idx: Index, open: string, links: { a: numbe
     const sa = shownAs(idx, open, a), sb = shownAs(idx, open, b), key = `${kind}:${sa}|${sb}`;
     if (sa === sb || seen.has(key)) continue;
     seen.add(key);
-    const own = sa === a && sb === b ? idx.ownPath.get(`${a}|${b}`) ?? tracePath(L, idx, a, b) : idx.ownPath.get(`${sa}|${sb}`) ?? null;
+    const way = (x: number, y: number): Point[] | null => (sa === a && sb === b ? idx.ownPath.get(`${x}|${y}`) ?? tracePath(L, idx, x, y) : idx.ownPath.get(`${x}|${y}`) ?? null);
+    // A link followed against the way the map draws it takes the map's route, turned round.
+    const own = way(sa, sb) ?? way(sb, sa)?.slice().reverse() ?? null;
     if (own) fixed.push({ key, kind, pts: own });
     else asks.push({ key, kind, a: sa, b: sb });
   }

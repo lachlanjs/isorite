@@ -50,6 +50,15 @@ describe("routes", () => {
     expect(first[0]).toBeGreaterThanOrEqual(A.gx);
     expect(first[0]).toBeLessThanOrEqual(A.gx + A.w);
   });
+  test("a link followed against the way the map draws it takes the map's own way, turned round (M14)", () => {
+    const open = openAt(L, 1);
+    for (const [from, to] of [["basics/b", "basics/a"], ["coding/c", "basics/b"]] as const) {
+      const along = litRoutes(L, idx, open, [{ a: at(from), b: at(to), kind: "requires" }]);
+      const against = litRoutes(L, idx, open, [{ a: at(to), b: at(from), kind: "iso" }]);
+      expect(against.asks).toHaveLength(along.asks.length);
+      if (along.fixed.length) expect(against.fixed[0]!.pts).toEqual([...along.fixed[0]!.pts].reverse());
+    }
+  });
   test("a lit link between folders is found or asked for, and one inside a closed folder is not drawn", () => {
     const open = openAt(L, 1), link = { a: at("coding/c"), b: at("basics/b"), kind: "requires" as const };
     const { fixed, asks } = litRoutes(L, idx, open, [link, link]);

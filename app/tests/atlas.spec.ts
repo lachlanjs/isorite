@@ -251,6 +251,44 @@ test("held with a finger, a note offers to go to Iso, to open, or a question or 
   await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
 });
 
+test("with Iso's context shown, a click still opens a note; shift+click gives it to Iso and takes it back (M14)", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) <= 760, "a phone has no shift: its hold menu gives and takes back");
+  await atlas(page);
+  await setSwitch(page, "context", true);
+  await note(page, "coding/huffman-codes").click({ modifiers: ["Shift"] });
+  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
+  await expect(note(page, "coding/huffman-codes")).toHaveClass(/\bgiven\b/);
+  await expect(note(page, "coding/huffman-codes")).toHaveAttribute("title", /shift\+click takes it back/);
+  await expect(page.getByText("tap to give or take back")).toHaveCount(0);
+  await note(page, "coding/huffman-codes").click({ modifiers: ["Shift"] });
+  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is out of Iso's context" })).toBeVisible();
+  await expect(note(page, "coding/huffman-codes")).not.toHaveClass(/\bgiven\b/);
+  const basics = folder(page, "basics"), closed = (await basics.evaluate((el) => el.tagName)) === "BUTTON";
+  await (closed ? basics : basics.locator("button.frame-title")).click({ modifiers: ["Shift"] });
+  await expect(page.getByRole("status").filter({ hasText: /basics is in Iso's context/i })).toBeVisible();
+  await note(page, "coding/kraft-inequality").click();
+  await note(page, "coding/kraft-inequality").click();
+  await expect(page).toHaveURL(/#\/n\/coding\/kraft-inequality$/);
+});
+
+test("held with a finger, a note already given offers to take it back (M14)", async ({ page }) => {
+  await atlas(page);
+  const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
+  const at = { pointerId: 9, pointerType: "touch", isPrimary: true, button: 0, clientX: huffman.x + 10, clientY: huffman.y + 6 };
+  const hold = async () => {
+    await note(page, "coding/huffman-codes").dispatchEvent("pointerdown", at);
+    await page.waitForTimeout(800);
+    await page.locator(".atlas").dispatchEvent("pointerup", at);
+  };
+  await hold();
+  await page.getByRole("menu", { name: "Huffman codes" }).getByRole("menuitem", { name: "Give to Iso" }).click();
+  await hold();
+  const offer = page.getByRole("menu", { name: "Huffman codes" });
+  await expect(offer.getByRole("menuitem").first()).toHaveText("◇Take back from Iso");
+  await offer.getByRole("menuitem", { name: "Take back from Iso" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is out of Iso's context" })).toBeVisible();
+});
+
 test("a drag from a note never moves the map; a drag from open ground does", async ({ page }) => {
   await atlas(page);
   const world = page.locator(".atlas-world");
