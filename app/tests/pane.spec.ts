@@ -85,6 +85,24 @@ test("a turn can be stopped, and a refusal is said plainly; the quill in Iso's h
   await expect(log.locator(".turn").last().getByRole("alert")).toContainText("Iso could not answer");
 });
 
+test("a provider down for a moment is asked again, said so; down for good, the turn says whose it likely is, and is sent again with a click (M14)", async ({ page }) => {
+  await page.goto("#/n/basics/bit");
+  await page.locator('[data-note="basics/surprise"]').waitFor();
+  await toIso(page);
+  const fresh = pane(page).getByRole("button", { name: "A new conversation" });
+  if (await fresh.isEnabled()) await fresh.click();
+  await box(page).fill(`the gateway is down until sent again (${test.info().project.name})`);
+  await box(page).press("Enter");
+  const log = page.getByRole("log", { name: "The conversation with Iso" }), turn = log.locator(".turn").last();
+  await expect(turn.locator(".doing")).toContainText("asking again (1 of 3)");
+  await expect(turn.getByRole("alert")).toContainText(/scripted is unavailable \(503: the scripted provider is down\), tried 4 times over \d+ s: it is likely scripted, not your settings/);
+  await look(page, "iso-down");
+  await turn.getByRole("button", { name: "Send it again" }).click();
+  await expect(log.locator(".turn").last()).toHaveAttribute("data-state", "done");
+  await expect(log.locator(".turn").last()).toContainText("measured in bits");
+  await expect(log.locator(".turn")).toHaveCount(2);
+});
+
 test("with the notes switch on, Iso's change goes into the note, is marked as Iso's with provenance on and on the Atlas with Iso's context on, and the turn is undone", async ({ page }) => {
   const name = test.info().project.name, id = `basics/write-${name}`;
   const { token } = (await (await page.request.get("api/session")).json()) as { token: string };

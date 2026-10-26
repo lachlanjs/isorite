@@ -187,7 +187,7 @@ export const PARTS: Part[] = [
         text: "Switch on Iso's context, the diamond in the Atlas's header: what Iso reads is numbered on the map in order, as it reads it. In Iso's pane, each note it read opens with a click.",
         phone: { target: ISO, text: "Each note Iso reads is said in its pane as it reads it. On the Atlas, with the diamond in its header on, what it read is numbered in order." } },
       { go: `/n/${QUAD}`, target: () => [...document.querySelectorAll(`[data-note="${BH}"], [data-pane="note"] .cm-content`)], check: () => tray.parts.some((p) => p.kind === "note" && p.id === BH) && tray.parts.some((p) => p.kind === "passage" && p.id === QUAD), title: "Give Iso a note, and a passage",
-        text: "Iso answers from what it finds. To give it what you mean: hold Barnes–Hut on the Atlas (or drag it onto Iso's pane). Then select a sentence of the quadtree, and click send to Iso beside it.",
+        text: "Iso answers from what it finds. To give it what you mean: hold Barnes–Hut on the Atlas (or shift+click it, or drag it onto Iso's pane). Then select a sentence of the quadtree, and click send to Iso beside it.",
         phone: { text: "Iso answers from what it finds. To give it what you mean: on the Atlas, hold Barnes–Hut and choose Give to Iso. Then select a sentence of the quadtree, and tap send to Iso under it." } },
       { target: `${ISO} .ctx, ${ISO} .context`, check: () => converse.view === "context" && converse.off.length > 0 && !tray.parts.some((p) => p.kind === "passage"), title: "What Iso is sent",
         text: "The icon in Iso's header counts what you gave: click it. Here is what Iso is sent, part by part, each with its size. Switch off your first question, and take the sentence out with its ×." },

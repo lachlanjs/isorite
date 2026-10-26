@@ -173,6 +173,8 @@ export type EngineEvent =
   | { type: "iso-done"; request: string; note: string; proposal: string; said?: string; cost: Cost }
   | { type: "iso-stopped"; request: string; note: string }
   | { type: "iso-failed"; request: string; note: string; message: string }
+  /** The provider failed for a moment: it is asked again, the `retry`th time of `of`. */
+  | { type: "iso-retry"; request: string; note: string; retry: number; of: number }
   /** A terminal agent (`agent` is its name, as `opencode`) began a turn in one of its sessions. Each turn ends in agent-done. */
   | { type: "agent-start"; request: string; agent: string; session: string }
   /** It looked something up in the base, with Iso's own tools. */

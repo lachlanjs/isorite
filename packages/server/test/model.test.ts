@@ -1,10 +1,13 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, expect, test } from "vitest";
-import { fetchModel, type FILES } from "../src/model.ts";
+import { nodeEmbedder } from "../src/embedder.ts";
+import { ModelFetchError, fetchModel, installFrom, modelCommand, modelDir, type FILES } from "../src/model.ts";
 
 // Fetching the model, with two small stand-in files in place of the model's: from a package npm unpacks (a .tgz
 // here, as a registry would serve it), from a folder, and refused when a file is not the one expected.
@@ -32,3 +35,73 @@ test("from a folder, and a file that is not the one expected is refused", async 
   expect(readFileSync(join(out, "tokenizer.json"), "utf8")).toBe("words");
   await expect(fetchModel(join(root, "wrong"), quiet, { from: src, files: [["a", "model.onnx", sha("another graph")]] })).rejects.toThrow(/not the file expected/);
 });
+
+// A port nothing listens on, and a server that hands out the package's .tgz, as the GitHub release would.
+const closedPort = () => new Promise<number>((done) => { const s = createServer().listen(0, "127.0.0.1", () => { const p = (s.address() as AddressInfo).port; s.close(() => done(p)); }); });
+const serveTgz = () => new Promise<{ url: string; close: () => void }>((done) => {
+  const s = createServer((_req, res) => res.end(readFileSync(tgz))).listen(0, "127.0.0.1", () => done({ url: `http://127.0.0.1:${(s.address() as AddressInfo).port}/isorite-model-granite-1.0.0.tgz`, close: () => s.close() }));
+});
+
+test("npm refusing, the package comes from the GitHub release", async () => {
+  const out = join(root, "release"), said: string[] = [], release = await serveTgz();
+  try {
+    await fetchModel(out, (l) => said.push(l), { pkg: join(root, "no-such.tgz"), release: release.url, hub: null, files });
+    expect(readFileSync(join(out, "model.onnx"), "utf8")).toBe("graph");
+    expect(said.some((l) => l.startsWith("From npm ("))).toBe(true);
+  } finally { release.close(); }
+});
+
+test("from nowhere, it says each source it tried and why each failed", async () => {
+  const port = await closedPort();
+  const err = await fetchModel(join(root, "nowhere"), quiet, { pkg: join(root, "no-such.tgz"), release: `http://127.0.0.1:${port}/m.tgz`, hub: `http://127.0.0.1:${port}/hub`, files }).catch((e: unknown) => e) as ModelFetchError;
+  expect(err).toBeInstanceOf(ModelFetchError);
+  expect(err.tried).toHaveLength(3);
+  expect(err.tried[0]).toMatch(/^npm \(/);
+  expect(err.tried[1]).toContain(`ECONNREFUSED 127.0.0.1:${port}`);
+  expect(err.tried[2]).toMatch(/^Hugging Face \(127\.0\.0\.1:\d+\): connect ECONNREFUSED/);
+});
+
+test("isorite model says what is installed and where, and fetches nothing", async () => {
+  const data = join(root, "data-found");
+  mkdirSync(join(data, "isorite", "models", "granite-embedding-small-english-r2"), { recursive: true });
+  for (const f of ["model.onnx", "tokenizer.json"]) writeFileSync(join(data, "isorite", "models", "granite-embedding-small-english-r2", f), f);
+  const said: string[] = [];
+  expect(await modelCommand(undefined, (l) => said.push(l), { XDG_DATA_HOME: data, ISORITE_EMBED_DIR: join(data, "isorite", "models", "granite-embedding-small-english-r2") })).toBe(0);
+  expect(said[0]).toMatch(/^search by meaning: granite-embedding-small-english-r2 at .* \(sha256 [0-9a-f]{12}, cls pooling\), found by ISORITE_EMBED_DIR$/);
+  expect(said.at(-1)).toBe("Nothing to fetch.");
+});
+
+test("isorite model with nothing installed and nothing reachable says where it looked, what it tried, and what to do", async () => {
+  const port = await closedPort(), said: string[] = [];
+  const code = await modelCommand(undefined, (l) => said.push(l), { ISORITE_EMBED_DIR: join(root, "empty") }, { pkg: join(root, "no-such.tgz"), release: `http://127.0.0.1:${port}/m.tgz`, hub: null });
+  expect(code).toBe(1);
+  const text = said.join("\n");
+  expect(text).toContain(`No model in ${join(root, "empty")}`);
+  expect(text).toContain("The model could not be fetched:");
+  expect(text).toContain("isorite model --from <folder>");
+  expect(text).toContain("Search by words works without it.");
+});
+
+test("a folder without a model is refused, saying what it needs", async () => {
+  await expect(installFrom(src.replace(/src$/, "nothing"), quiet, { XDG_DATA_HOME: join(root, "d") })).rejects.toThrow(/needs model\.onnx and tokenizer\.json/);
+});
+
+// The real model, where it is installed (npm run model): granite, told to pool by the mean, is another model.
+const real = modelDir({});
+test.skipIf(!real)("any compatible model is checked by use, kept beside granite, used from then on, and its vectors are its own", async () => {
+  const other = join(root, "granite-mean"), data = join(root, "data-other");
+  mkdirSync(other);
+  for (const f of readdirSync(real!)) if (/onnx|tokenizer/.test(f)) copyFileSync(join(real!, f), join(other, f));
+  rmSync(join(other, "tokenizer_config.json"));
+  writeFileSync(join(other, "isorite-model.json"), JSON.stringify({ name: "granite-mean", pooling: "mean" }));
+  const info = await installFrom(other, quiet, { XDG_DATA_HOME: data });
+  expect(info).toMatchObject({ name: "granite-mean", pooling: "mean", dir: join(data, "isorite", "models", "granite-mean") });
+  expect(info.id).toMatch(/^granite-mean-[0-9a-f]{12}-mean$/);
+  expect(readFileSync(join(data, "isorite", "models", "use"), "utf8").trim()).toBe("granite-mean");
+  expect(modelDir({ XDG_DATA_HOME: data })).toBe(info.dir);
+  const e = nodeEmbedder(info.dir);
+  try {
+    expect(e.model).toBe(info.id);
+    expect((await e.embed("entropy")).length).toBe(384);
+  } finally { await e.close(); }
+}, 120_000);

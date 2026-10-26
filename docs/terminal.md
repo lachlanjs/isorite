@@ -17,7 +17,8 @@ Setting isorite up the first time, or at work behind a company's gateway, is in 
 
 ## Your notes for the project
 
-Keep the project's notes in a folder of their own, for example `~/notes/<project>`. It can start empty. isorite
+Keep the project's notes in a folder of their own, for example `~/notes/<project>`. It can start empty:
+`isorite new ~/notes/<project>` makes it. isorite
 keeps what it needs in the folder's `.isorite/` (the journals of every change, and its settings), made the first
 time the folder is opened. Commit `.isorite/` with the notes, if they're in git.
 
@@ -104,8 +105,11 @@ gateway, or a model served on your own machine). What it fetches, it fetches onc
 
 - isorite and OpenCode, from npm: through your company's npm mirror, if it has one.
 - The model for search by meaning (optional): `isorite model` gets it from npm too (`isorite-model-granite`), so the
-  same mirror serves it; else from Hugging Face. On a machine with neither, copy its files from one that has them:
-  `isorite model --from <folder>`. Every file is checked against its SHA-256.
+  same mirror serves it; else from its release on GitHub, else from Hugging Face. On a machine with none of them,
+  copy its folder from one that has it (`isorite model` there says where), or download the package from
+  `https://github.com/lachlanjs/isorite/releases/tag/model-granite-1.0.0` and unpack it, then
+  `isorite model --from <folder>`. Granite's files are checked against their SHA-256; any other compatible model is
+  checked by use ([setup-for-agents.md](setup-for-agents.md) says which).
 
 ## Who can reach it
 

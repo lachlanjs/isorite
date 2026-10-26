@@ -4,15 +4,23 @@
 // the npm package `isorite-model-granite` (packages/model), through whatever registry npm is set to use, so a
 // company's mirror serves it; else Hugging Face, pinned to one revision; or a folder you copied them into.
 // In a checkout `npm run model` fetches them into packages/model, for the package and the server; installed,
-// `isorite model` puts them in the user's data folder.
+// `isorite model` puts them in the user's data folder. Any compatible model (an ONNX one that gives 384 numbers)
+// can be used instead: `isorite model --from <folder>` checks it by using it, and keeps it beside granite.
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { unreachable } from "@isorite/engine";
 
 export const NAME = "granite-embedding-small-english-r2";
+/** What the search index calls granite's vectors: a base's vectors are made again when the model changes. */
+export const MODEL = `${NAME}-q8`;
+export const DIM = 384;
+/** The model's .tgz, as npm packs it, on a GitHub release of its own: for a machine whose npm can't reach it. */
+export const RELEASE = "https://github.com/lachlanjs/isorite/releases/download/model-granite-1.0.0/isorite-model-granite-1.0.0.tgz";
 /** The npm package that carries the files, and the version this isorite expects. */
 export const PACKAGE = "isorite-model-granite@1.0.0";
 const REVISION = "1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8";
@@ -27,9 +35,46 @@ export const FILES: [from: string, to: string, sha256: string][] = [
 ];
 const sha = (buf: Uint8Array) => createHash("sha256").update(buf).digest("hex");
 
-/** Where `isorite model` keeps the model: the user's data folder, outside any repository. */
-export const userModelDir = (env: NodeJS.ProcessEnv = process.env): string =>
-  join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "isorite", "models", NAME);
+/** Where `isorite model` keeps models: the user's data folder, outside any repository. Each model is in a folder
+ *  of its own; `use` names the one to use, if not granite. */
+export const userModelsDir = (env: NodeJS.ProcessEnv = process.env): string =>
+  join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "isorite", "models");
+export const userModelDir = (env: NodeJS.ProcessEnv = process.env): string => join(userModelsDir(env), NAME);
+
+/** Where the server looks for the model, in order, and why each place is there. */
+export function modelPlaces(env: NodeJS.ProcessEnv = process.env): { dir: string; why: string }[] {
+  if (env.ISORITE_EMBED_DIR) return [{ dir: env.ISORITE_EMBED_DIR, why: "ISORITE_EMBED_DIR" }];
+  let use = "";
+  try { use = readFileSync(join(userModelsDir(env), "use"), "utf8").trim(); } catch { /* granite */ }
+  return [
+    ...(use && use !== NAME && !/[/\\]/.test(use) ? [{ dir: join(userModelsDir(env), use), why: "isorite model --from" }] : []),
+    // Beside the package: packages/model in a checkout.
+    { dir: join(dirname(fileURLToPath(import.meta.url)), "..", "..", "model"), why: "beside isorite" },
+    { dir: userModelDir(env), why: "isorite model" },
+  ];
+}
+
+const hasModel = (dir: string) => existsSync(join(dir, "model.onnx")) && existsSync(join(dir, "tokenizer.json"));
+
+/** Where the model is, or null when it is not installed or is switched off (ISORITE_EMBED=off). */
+export function modelDir(env: NodeJS.ProcessEnv = process.env): string | null {
+  if (env.ISORITE_EMBED === "off") return null;
+  return modelPlaces(env).find((p) => hasModel(p.dir))?.dir ?? null;
+}
+
+/** A model as found: its name, the SHA-256 of its graph, how its vectors are pooled, and what the index calls them. */
+export interface ModelInfo { dir: string; name: string; sha: string; pooling: "cls" | "mean"; id: string }
+
+/** What is in a model's folder. `isorite-model.json` beside the files may give its `name` and `pooling` ("cls",
+ *  the first token's state, as granite is used; or "mean", the average of them all, as all-MiniLM is). */
+export function modelInfo(dir: string): ModelInfo {
+  let own: { name?: unknown; pooling?: unknown } = {};
+  try { own = JSON.parse(readFileSync(join(dir, "isorite-model.json"), "utf8")) as typeof own; } catch { /* none */ }
+  const graph = sha(readFileSync(join(dir, "model.onnx"))), granite = graph === FILES[0]![2];
+  const pooling = own.pooling === "mean" ? "mean" : "cls";
+  const name = typeof own.name === "string" && own.name ? own.name : granite ? NAME : basename(dir);
+  return { dir, name, sha: graph, pooling, id: granite && pooling === "cls" ? MODEL : `${name}-${graph.slice(0, 12)}-${pooling}` };
+}
 
 type Say = (line: string) => void;
 export interface Fetch {
@@ -37,6 +82,8 @@ export interface Fetch {
   from?: string;
   /** The npm package to fetch them from (a name@version, or a .tgz), or null to go straight to Hugging Face. */
   pkg?: string | null;
+  /** The package's .tgz on the web (a GitHub release), tried after npm; null to skip it. */
+  release?: string | null;
   files?: typeof FILES;
 }
 
@@ -62,35 +109,134 @@ function unpack(pkg: string): string {
   return tmp;
 }
 
+/** The model could not be fetched from anywhere: each source, and why it failed. */
+export class ModelFetchError extends Error {
+  readonly tried: string[];
+  constructor(tried: string[]) {
+    super(`The model could not be fetched:\n${tried.map((t) => `  ${t}`).join("\n")}`);
+    this.tried = tried;
+  }
+}
+
 /** Fetch the model's files into `out`, keeping only files whose SHA-256 is the one expected: from a folder if one is
- *  named, else from npm, else from Hugging Face. */
-export async function fetchModel(out: string, say: Say = console.log, { from, pkg = PACKAGE, files = FILES }: Fetch = {}): Promise<void> {
+ *  named; else from npm, then the GitHub release, then Hugging Face, each tried in turn. */
+export async function fetchModel(out: string, say: Say = console.log, { from, pkg = PACKAGE, release = RELEASE, hub = HUB, files = FILES }: Fetch & { hub?: string | null } = {}): Promise<void> {
   mkdirSync(out, { recursive: true });
-  const missing = files.filter(([, to, want]) => !(existsSync(join(out, to)) && sha(readFileSync(join(out, to))) === want));
-  for (const [, to] of files) if (!missing.some((f) => f[1] === to)) say(`${to}: already here`);
-  if (missing.length && from) {
-    for (const [, to, want] of missing) {
+  const missing = () => files.filter(([, to, want]) => !(existsSync(join(out, to)) && sha(readFileSync(join(out, to))) === want));
+  for (const [, to] of files) if (!missing().some((f) => f[1] === to)) say(`${to}: already here`);
+  if (from) {
+    for (const [, to, want] of missing()) {
       if (!existsSync(join(from, to))) throw new Error(`${to} is not in ${from}`);
       keep(out, to, want, readFileSync(join(from, to)), say);
     }
-  } else if (missing.length && pkg) {
+    say(`The model is in ${out}`);
+    return;
+  }
+  const tried: string[] = [];
+  const fromPackage = (tgz: string) => {
     let dir: string | null = null;
     try {
-      dir = unpack(pkg);
-      for (const [, to, want] of missing) keep(out, to, want, readFileSync(join(dir, "package", to)), say);
-      missing.length = 0;
-    } catch (e) {
-      say(`From npm (${pkg}): ${(e as Error).message}. Trying Hugging Face.`);
+      dir = unpack(tgz);
+      for (const [, to, want] of missing()) {
+        if (!existsSync(join(dir, "package", to))) throw new Error(`the package has no ${to}`);
+        keep(out, to, want, readFileSync(join(dir, "package", to)), say);
+      }
     } finally {
       if (dir) rmSync(dir, { recursive: true, force: true });
     }
+  };
+  const why = (e: unknown, url: string) => ((e as Error).message === "fetch failed" || (e as { cause?: unknown }).cause ? unreachable(e, url) : (e as Error).message);
+  if (missing().length && pkg) {
+    try { fromPackage(pkg); } catch (e) { tried.push(`npm (${pkg}): ${(e as Error).message}`); say(`From npm (${pkg}): ${(e as Error).message}`); }
   }
-  if (missing.length && !from) {
-    for (const [hub, to, want] of missing.filter(([, to, want]) => !(existsSync(join(out, to)) && sha(readFileSync(join(out, to))) === want))) {
-      const res = await fetch(`${HUB}/${hub}`);
-      if (!res.ok) throw new Error(`${hub}: ${res.status} ${res.statusText}`);
-      keep(out, to, want, new Uint8Array(await res.arrayBuffer()), say);
+  if (missing().length && release) {
+    const tmp = mkdtempSync(join(tmpdir(), "isorite-model-release-"));
+    try {
+      say(`From GitHub: ${release}`);
+      const res = await fetch(release);
+      if (!res.ok) throw new Error(`it said ${res.status}`);
+      const tgz = join(tmp, basename(new URL(release).pathname));
+      writeFileSync(tgz, new Uint8Array(await res.arrayBuffer()));
+      fromPackage(tgz);
+    } catch (e) {
+      tried.push(`GitHub (${release}): ${why(e, release)}`);
+      say(`From GitHub: ${why(e, release)}`);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
     }
   }
+  if (missing().length && hub) {
+    say("From Hugging Face");
+    try {
+      for (const [at, to, want] of missing()) {
+        const res = await fetch(`${hub}/${at}`);
+        if (!res.ok) throw new Error(`${at}: it said ${res.status}`);
+        keep(out, to, want, new Uint8Array(await res.arrayBuffer()), say);
+      }
+    } catch (e) {
+      tried.push(`Hugging Face (${new URL(hub).host}): ${why(e, hub)}`);
+    }
+  }
+  if (missing().length) throw new ModelFetchError(tried);
   say(`The model is in ${out}`);
+}
+
+/** The files of a model that go with it from a folder: its graph and weights, its tokenizer, and what it says of
+ *  itself. */
+const modelFiles = (dir: string): string[] => readdirSync(dir).filter((f) => /^(model\.onnx|.*\.onnx_data|tokenizer\.json|tokenizer_config\.json|isorite-model\.json)$/.test(f));
+
+/** `isorite model --from <folder>`: granite's files, checked against their SHA-256 as fetched; or any other model,
+ *  checked by using it: it must load, and give DIM numbers for a sentence. Kept in the user's models, and used from
+ *  then on. */
+export async function installFrom(from: string, say: Say = console.log, env: NodeJS.ProcessEnv = process.env): Promise<ModelInfo> {
+  if (!hasModel(from)) throw new Error(`${from} has no model: it needs model.onnx and tokenizer.json`);
+  const granite = !existsSync(join(from, "isorite-model.json")) && FILES.every(([, to, want]) => existsSync(join(from, to)) && sha(readFileSync(join(from, to))) === want);
+  let out = userModelDir(env);
+  if (granite) await fetchModel(out, say, { from });
+  else {
+    const info = modelInfo(from);
+    say(`${info.name} is not the model isorite fetches; checking it by use`);
+    const { nodeEmbedder } = await import("./embedder.ts");
+    const e = nodeEmbedder(from);
+    try {
+      const v = await e.embed("A sentence to see that the model works.");
+      if (v.length !== DIM || !v.every(Number.isFinite) || v.every((x) => x === 0)) throw new Error(`it gives ${v.length} numbers, not ${DIM} that are of use`);
+    } catch (err) {
+      throw new Error(`${from} could not be used: ${(err as Error).message}. isorite needs a model that gives ${DIM} numbers (granite-embedding-small, all-MiniLM-L6-v2, bge-small); name its pooling ("cls" or "mean") in isorite-model.json beside it`);
+    } finally { await e.close(); }
+    out = join(userModelsDir(env), info.name.replace(/[^A-Za-z0-9._-]+/g, "-"));
+    mkdirSync(out, { recursive: true });
+    for (const f of modelFiles(from)) copyFileSync(join(from, f), join(out, f));
+    say(`${info.name}: ${modelFiles(out).join(", ")}`);
+  }
+  writeFileSync(join(userModelsDir(env), "use"), basename(out) + "\n");
+  return modelInfo(out);
+}
+
+/** `isorite model [--from <folder>]`: says which model is installed and where, or installs one, and on failure
+ *  where it looked, what it tried, and what to do. */
+export async function modelCommand(from: string | undefined, say: Say = console.log, env: NodeJS.ProcessEnv = process.env, sources: Fetch & { hub?: string | null } = {}): Promise<number> {
+  const told = (i: ModelInfo, why: string) => say(`search by meaning: ${i.name} at ${i.dir} (sha256 ${i.sha.slice(0, 12)}, ${i.pooling} pooling), found by ${why}`);
+  if (env.ISORITE_EMBED === "off") say("ISORITE_EMBED=off: search by meaning is switched off, whatever is installed");
+  if (from) {
+    try { const i = await installFrom(from, say, env); told(i, env.ISORITE_EMBED_DIR ? "isorite model, but ISORITE_EMBED_DIR names another" : "isorite model"); return 0; }
+    catch (e) { say((e as Error).message); return 1; }
+  }
+  const places = modelPlaces(env), found = places.find((p) => hasModel(p.dir));
+  if (found) { told(modelInfo(found.dir), found.why); say("Nothing to fetch."); return 0; }
+  say(`No model in ${places.map((p) => p.dir).join(", ")}`);
+  try {
+    await fetchModel(userModelDir(env), say, sources);
+    return 0;
+  } catch (e) {
+    say((e as Error).message);
+    say([
+      "What to do:",
+      `  - copy the model's files from a machine that has them (${userModelDir()} there), then: isorite model --from <folder>`,
+      `  - or the package's .tgz, from ${RELEASE}: unpack it, then isorite model --from <its package folder>`,
+      `  - or any compatible model (ONNX, ${DIM} numbers out, with its tokenizer.json): isorite model --from <folder>, or ISORITE_EMBED_DIR=<folder>`,
+      "Search by words works without it.",
+    ].join("\n"));
+    return 1;
+  }
 }

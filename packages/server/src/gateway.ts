@@ -6,7 +6,7 @@
 import { Agent, request } from "node:https";
 import { Readable } from "node:stream";
 import { createSecureContext, getCACertificates } from "node:tls";
-import { endpoint, unreachable, type Http, type ProviderConfig } from "@isorite/engine";
+import { endpoint, isResponse, retryWait, unreachable, type Http, type ProviderConfig } from "@isorite/engine";
 import type { GatewayTls } from "./config.ts";
 
 const nativeFetch: Http = { fetch: (input, init) => fetch(input, init) };
@@ -56,12 +56,25 @@ export function relay(provider: ProviderConfig, http: Http, key: () => Promise<s
   return async (path, req) => {
     if (!RELAYED.has(path)) return json(404, `isorite relays only ${[...RELAYED].join(" and ")}`);
     const to = endpoint(provider, await key(), path), type = req.headers.get("content-type");
+    const body = req.method === "POST" ? await req.text() : undefined;
+    // A provider down for a moment is asked again, as Iso's turns ask it, before anything is passed on.
     let res: Response;
-    try {
-      res = await http.fetch(to.url, { method: req.method, headers: { ...(type ? { "Content-Type": type } : {}), ...to.headers }, signal: req.signal, ...(req.method === "POST" ? { body: await req.text() } : {}) });
-    } catch (e) {
-      if ((e as Error).name === "AbortError") throw e;
-      return json(502, `${provider.name} could not be reached: ${unreachable(e, provider.url)}`);
+    for (let retry = 0; ; retry++) {
+      let failed: unknown;
+      try {
+        failed = await http.fetch(to.url, { method: req.method, headers: { ...(type ? { "Content-Type": type } : {}), ...to.headers }, signal: req.signal, ...(body === undefined ? {} : { body }) });
+      } catch (e) {
+        if ((e as Error).name === "AbortError") throw e;
+        failed = e;
+      }
+      const wait = retryWait(retry, failed);
+      if (wait === null) {
+        if (isResponse(failed)) { res = failed; break; }
+        return json(502, `${provider.name} could not be reached: ${unreachable(failed, provider.url)}${retry ? ` (tried ${retry + 1} times)` : ""}`);
+      }
+      if (isResponse(failed)) await failed.body?.cancel();
+      await new Promise((done) => setTimeout(done, wait));
+      if (req.signal.aborted) throw Object.assign(new Error("stopped"), { name: "AbortError" });
     }
     return new Response(res.body, { status: res.status, headers: { "Content-Type": res.headers.get("content-type") ?? "application/json", "Cache-Control": "no-store" } });
   };

@@ -699,6 +699,7 @@ export class Engine implements Api {
           http, provider: this.provider, key, tier: req.tier, messages, lookup, maxTokens, signal: abort.signal, most,
           onText: (delta, again) => this.publish({ type: "iso-text", request, note: req.note, delta, again }),
           onStep: (step) => this.publish({ type: "iso-step", request, note: req.note, step }),
+          onRetry: (retry, of) => this.publish({ type: "iso-retry", request, note: req.note, retry, of }),
         });
         if (abort.signal.aborted) throw Object.assign(new Error("stopped"), { name: "AbortError" });
         const notices: string[] = got.cut ? ["The reply was cut off at its length limit. Ask for less at once."] : [];
@@ -1093,6 +1094,7 @@ export class Engine implements Api {
           http, provider: this.provider, key, tier: req.tier, messages, lookup: tools, maxTokens: REPLY_TOKENS * 2, signal: abort.signal, most: ROUNDS[req.tier],
           onText: (delta, again) => this.publish({ type: "iso-text", request: turn, note: "", delta, again }),
           onStep: (step) => { void item({ kind: "look", step }); this.publish({ type: "iso-step", request: turn, note: "", step }); },
+          onRetry: (retry, of) => this.publish({ type: "iso-retry", request: turn, note: "", retry, of }),
         });
         if (abort.signal.aborted) throw Object.assign(new Error("stopped"), { name: "AbortError" });
         const cost: Cost = { model: got.usage.model, tier: req.tier, tokensIn: got.usage.tokensIn, tokensOut: got.usage.tokensOut, tokensCached: got.usage.tokensCached, usd: got.usage.usd };

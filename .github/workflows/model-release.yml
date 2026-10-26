@@ -1,0 +1,22 @@
+# The model for search by meaning, on a GitHub release of its own (model-granite-1.0.0), for machines whose npm
+# can't reach isorite-model-granite: `isorite model` tries npm, then this, then Hugging Face. Run by hand, once,
+# from the Actions tab; it packs the package as npm serves it, so its files are the ones isorite checks against.
+name: Model release
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Pack isorite-model-granite as npm serves it
+        run: npm pack isorite-model-granite@1.0.0
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create model-granite-1.0.0 isorite-model-granite-1.0.0.tgz --repo "$GITHUB_REPOSITORY" --title "The model for search by meaning (granite, 1.0.0)" --notes "isorite-model-granite 1.0.0, as npm serves it. \`isorite model\` fetches it from here when npm can't reach it; or download it, unpack it, and run \`isorite model --from <its package folder>\`." --latest=false

@@ -2,7 +2,7 @@
 // engine on this machine.
 
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
@@ -29,18 +29,35 @@ const moveIt = (study: string) => `${study} is a study base, which this isorite 
  *  no journals of their own yet, is refused with how to move it in. */
 export function locate(path: string): Opened {
   const at = resolve(path);
-  if (!existsSync(at) || !statSync(at).isDirectory()) throw new StudyError(`no folder at ${at}`);
+  if (!existsSync(at) || !statSync(at).isDirectory()) throw new StudyError(`no folder at ${at}: isorite new ${path} makes one`);
   if (existsSync(join(at, CONFIG_FILE))) throw new StudyError(moveIt(at));
   const beside = defaultStudyPath(at);
   if (!existsSync(join(at, OWN_DIR, "journal")) && existsSync(join(beside, CONFIG_FILE)) && openStudyBase(beside).notes === at) throw new StudyError(moveIt(beside));
   return { notes: at };
 }
 
-export async function openEngine({ notes }: Opened, device = deviceId(), config = configPath(), http?: Http, model: string | null = modelDir()): Promise<Engine> {
-  const provider = providerConfig(config);
-  // isorite's own folder, made the first time a base is opened, with what lets two devices' journals merge.
+/** isorite's own folder in the notes, made the first time a base is opened, with what lets two devices' journals
+ *  merge. */
+function makeOwn(notes: string): string {
   const own = join(notes, OWN_DIR);
   if (!existsSync(own)) { mkdirSync(own, { recursive: true }); writeFileSync(join(own, ".gitattributes"), GITATTRIBUTES); }
+  return own;
+}
+
+/** `isorite new <folder>`: the folder (and its parents), empty, with isorite's own folder in it. No notes are
+ *  written: they are yours. A folder that already holds anything but .isorite/ is refused. */
+export function newBase(path: string): string {
+  const at = resolve(path);
+  if (existsSync(at) && !statSync(at).isDirectory()) throw new StudyError(`${at} is a file`);
+  if (existsSync(at) && readdirSync(at).some((f) => f !== OWN_DIR)) throw new StudyError(`${at} has files in it already: open it as it is, with isorite serve ${path}`);
+  mkdirSync(at, { recursive: true });
+  makeOwn(at);
+  return at;
+}
+
+export async function openEngine({ notes }: Opened, device = deviceId(), config = configPath(), http?: Http, model: string | null = modelDir()): Promise<Engine> {
+  const provider = providerConfig(config);
+  const own = makeOwn(notes);
   // The provider is OpenRouter unless the configuration names another. The engine compares against OPENROUTER to know.
   return Engine.open({
     notes: new NodeFiles(notes), own: new NodeFiles(own), clock: systemClock, device, name: basename(notes),

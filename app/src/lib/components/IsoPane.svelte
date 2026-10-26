@@ -32,6 +32,7 @@
   /** Where Iso is in the turn running: what it reads now, or that it is writing. */
   const doing = $derived.by(() => {
     if (!running) return "";
+    if (converse.retrying) return `Iso's provider did not answer: asking again (${converse.retrying.retry} of ${converse.retrying.of})`;
     if (converse.streaming) return "Iso is writing";
     const last = running.items.findLast((i): i is Extract<TurnItem, { kind: "look" }> => i.kind === "look");
     return last?.step.opened ? `Iso is reading ${titleOf(last.step.opened)}` : "Iso is thinking";
@@ -188,6 +189,9 @@
           {/if}
           {#if t.state === "failed"}
             <p class="bad" role="alert">Iso could not answer: {t.message}</p>
+            {#if t === converse.turns.at(-1)}
+              <p class="undo"><button class="icon" type="button" aria-label="Send it again" title="Send it again, with what was given" onclick={() => void converse.again(t)}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M12.8 9.5A5 5 0 1 1 11.4 4.3" /><path d="M13 1.8v3.4H9.6" /></svg></button></p>
+            {/if}
           {:else if t.state === "stopped"}
             <p class="faint end">stopped</p>
           {/if}

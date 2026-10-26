@@ -17,12 +17,12 @@ import { StudyError } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { doctor } from "./doctor.ts";
 import { proxied, rerun, trustSystem } from "./network.ts";
-import { serve } from "./serve.ts";
+import { newBase, serve } from "./serve.ts";
 import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
 import { term, tutorialTerm } from "./term.ts";
 import { writeExample, writeGeometry } from "@isorite/example/node";
-import { fetchModel, userModelDir } from "./model.ts";
+import { modelCommand } from "./model.ts";
 
 // The version: written into the bundle when it is built for npm (scripts/package.ts), else this checkout's.
 declare const ISORITE_VERSION: string | undefined;
@@ -30,6 +30,7 @@ const VERSION = typeof ISORITE_VERSION === "string" ? ISORITE_VERSION : "0.1.0 (
 
 const USAGE = `isorite: an agentic harness for understanding
 
+  isorite new <folder>                   start a knowledge base: the folder, empty, with isorite's .isorite/
   isorite check <notes>                  check a folder of notes: frontmatter, links, cycles
   isorite serve <notes> [--port <n>] [--allow-host <name>]
                                          open it in the browser, on this machine only
@@ -44,8 +45,9 @@ const USAGE = `isorite: an agentic harness for understanding
   isorite mcp [<notes>] [--port <n>] [--agent <name>]
                                          the knowledge base's tools over MCP, on stdio, for Claude Code or Pi:
                                          claude mcp add isorite -- isorite mcp <base> --agent claude-code
-  isorite model [--from <folder>]        fetch the model for search by meaning (53 MB, once): from npm, else
-                                         Hugging Face; or from a folder its files were copied into
+  isorite model [--from <folder>]        the model for search by meaning: which is installed, and where; else
+                                         fetched (53 MB, once) from npm, GitHub or Hugging Face; or from a
+                                         folder: its files copied there, or any compatible model
   isorite doctor [<notes>] [--report] [--offline]
                                          whether isorite can work here: the configuration, the network, the
                                          provider (asked a few words, a few hundred tokens), the terminal and
@@ -75,6 +77,12 @@ export function main(argv: string[]): number | Promise<number> {
   const [command, ...rest] = argv;
   try {
     if (command === "check" && rest[0]) return check(rest[0]);
+    if (command === "new" && rest[0]) {
+      const made = newBase(rest[0]);
+      // The commands that come next, with the whole path: term is run from the code's folder.
+      console.log(`${made}: a knowledge base, empty. Open it in the browser, or beside your code in the terminal:\n  isorite serve ${made}\n  cd <your code> && isorite term ${made}`);
+      return 0;
+    }
     if (command === "serve" && rest[0]) {
       const at = rest.indexOf("--port"), port = at < 0 ? undefined : Number(rest[at + 1]);
       if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
@@ -105,7 +113,7 @@ export function main(argv: string[]): number | Promise<number> {
     if (command === "model") {
       const from = rest[rest.indexOf("--from") + 1];
       if (rest.includes("--from") && !from) { console.error("--from takes a folder"); return 2; }
-      return fetchModel(userModelDir(), console.log, from && rest.includes("--from") ? { from } : {}).then(() => 0, (e: Error) => { console.error(e.message); return 1; });
+      return modelCommand(rest.includes("--from") ? from : undefined);
     }
     if (command === "--version" || command === "-v") { console.log(VERSION); return 0; }
     if (command === "help" && rest[0] === "setup") {

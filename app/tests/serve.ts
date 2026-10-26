@@ -16,11 +16,13 @@ export const PROVIDER_PORT = 4798;
 export const REPLY = "It is measured in **bits**, as [Surprise](/basics/surprise.md) is.\n\n$$\nH(X) \\le \\log_2 n\n$$";
 
 /** A provider that speaks the chat completions protocol (and makes keys by signing in) and says what the prompt's words call for:
- *  "look" looks a note up first, "slow" never finishes, "fail" refuses; anything else is answered with REPLY. */
+ *  "look" looks a note up first, "slow" never finishes, "fail" refuses; "down until sent again" answers 503 to its
+ *  first four requests (a turn and its three retries); anything else is answered with REPLY. */
 async function provider(): Promise<void> {
   const { createServer } = await import("node:http");
   const { createHash } = await import("node:crypto");
   const codes = new Map<string, string>();
+  const downs = new Map<string, number>();
   createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
@@ -46,6 +48,11 @@ async function provider(): Promise<void> {
     const user = String(sent.messages.find((m) => m.role === "user")?.content ?? "");
     const asked = user.split("# What they ask now").at(-1) ?? "";
     const looked = sent.messages.some((m) => m.role === "tool");
+    if (asked.includes("down until sent again")) {
+      const n = (downs.get(asked) ?? 0) + 1;
+      downs.set(asked, n);
+      if (n <= 4) { res.writeHead(503, { "content-type": "application/json" }).end(JSON.stringify({ error: { message: "the scripted provider is down" } })); return; }
+    }
     if (asked.includes("fail")) { res.writeHead(500, { "content-type": "application/json" }).end(JSON.stringify({ error: { message: "the scripted provider was told to fail" } })); return; }
     res.writeHead(200, { "content-type": "text/event-stream" });
     const data = (o: unknown) => res.write(`data: ${JSON.stringify(o)}\n\n`);
@@ -116,6 +123,9 @@ if (process.argv[1] === import.meta.filename) {
   mkdirSync(join(ROOT, "config", "isorite"), { recursive: true });
   writeFileSync(join(ROOT, "config", "isorite", "config.toml"), `device = "browser01"\n\n[provider]\nname = "scripted"\nurl = "http://127.0.0.1:${PROVIDER_PORT}/v1"\nauth = "http://127.0.0.1:${PROVIDER_PORT}/auth"\n\n[tiers]\nlow = "scripted-low"\nmid = "scripted-mid"\nmax = "scripted-max"\n`);
   await provider();
+  // Retries come quickly here, but slowly enough to be seen.
+  const { RETRY } = await import("../../packages/engine/src/index.ts");
+  Object.assign(RETRY, { waits: [400, 400, 400], jitter: 0 });
   const { serve } = await import("../../packages/server/src/serve.ts");
   await serve(NOTES, { port: PORT });
 }

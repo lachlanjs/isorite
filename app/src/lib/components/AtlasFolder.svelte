@@ -17,7 +17,7 @@
     dim?: boolean;
     /** In what Iso is sent (the Iso lens, M10). */
     given?: boolean;
-    onpick: () => void;
+    onpick: (e: MouseEvent) => void;
   } = $props();
 
   // A tone apart from the folder it is in: the ground and the surface, turn about.
@@ -30,11 +30,11 @@
 
 {#if open}
   <div class="folder frame {tone}" class:given data-folder={item.ref} style="{place};--inside:{inside};--behind:{behind};--ground-here:{inside}">
-    {#if titled}<button class="frame-title" type="button" onclick={onpick}>{name}</button>{/if}
+    {#if titled}<button class="frame-title" type="button" title={given ? "In Iso's context: shift+click takes it back" : undefined} onclick={onpick}>{name}</button>{/if}
     {#if says}<span class="frame-title held">{says}</span>{/if}
   </div>
 {:else}
-  <button class="folder frame closed {tone}" class:dim class:given type="button" data-folder={item.ref} style={place} onclick={onpick}>
+  <button class="folder frame closed {tone}" class:dim class:given type="button" data-folder={item.ref} style={place} title={given ? "In Iso's context: shift+click takes it back" : undefined} onclick={onpick}>
     <span class="inner"><span class="name">{name}</span><span class="label">{says || `${count} ${count === 1 ? "note" : "notes"}`}</span></span>
   </button>
 {/if}
