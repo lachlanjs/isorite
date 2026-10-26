@@ -1,0 +1,16 @@
+{
+  "name": "Asked what the base does not hold, it says so, and invents no note",
+  "turn": {
+    "mode": "ask",
+    "asked": "What is a Verlet neighbour list, and do my notes cover it?",
+    "given": []
+  },
+  "checks": [
+    {
+      "says": "(not|don't|do not|no note|isn't|aren't)[^.]*(cover|mention|note|base)"
+    },
+    {
+      "linksResolve": true
+    }
+  ]
+}

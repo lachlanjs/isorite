@@ -25,7 +25,7 @@ async function showContext(page: Page, back?: "Note" | "Atlas") {
     // The row has scrolled back to the pane before anything is pressed in it.
     await expect.poll(async () => (await page.locator(`[data-pane="${back.toLowerCase()}"]`).boundingBox())?.x).toBe(0);
   }
-  return page.getByRole("list", { name: "What you gave Iso" });
+  return page.getByRole("list", { name: "The notes Iso has" });
 }
 
 test("a turn in Ask mode: what you gave is shown with it, what Iso reads is told and opens the note, and the conversation is kept", async ({ page }) => {
@@ -167,7 +167,7 @@ test("with a note's Understanding note open, it goes with what you ask; Iso's re
   await expect(note.locator(".u")).toBeVisible();
   await toIso(page);
   const tray = await showContext(page);
-  await expect(tray.getByRole("listitem")).toHaveText([new RegExp(`^◇ Understanding · Rate ${name} \\d+`)]);
+  await expect(tray.locator('li[data-key^="g:"]')).toHaveText([new RegExp(`^◇\\s*Rate ${name}\\s*your understanding\\s*\\d+`)]);
   await pane(page).getByRole("button", { name: "Context", exact: true }).click();
   await box(page).fill(`understand ${id}`);
   await box(page).press("Enter");
@@ -187,39 +187,71 @@ test("with a note's Understanding note open, it goes with what you ask; Iso's re
   await page.locator('[data-pane="note"]').getByRole("button", { name: "Understanding note", exact: true }).click();
 });
 
-test("the Context button in Iso's header opens the Context view: what the next turn is sent, part by part; an earlier turn can be left out", async ({ page }) => {
+test("the Context view lists what the next turn is sent, a row each with its size and share: a turn left out, a note Iso read kept in hand, earlier turns summed up (M15)", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toIso(page);
-  // The last conversation comes up as the page opens (earlier tests made one); a new one is begun.
-  await expect(page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").first()).toBeVisible();
-  await pane(page).getByRole("button", { name: "A new conversation" }).click();
-  await expect(page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn")).toHaveCount(0);
+  const log = page.getByRole("log", { name: "The conversation with Iso" });
+  // The last conversation, if there is one, comes up as the page opens: given time to, then a new one is begun.
+  const fresh = pane(page).getByRole("button", { name: "A new conversation" });
+  await expect.poll(() => fresh.isEnabled(), { timeout: 2000 }).toBe(true).catch(() => undefined);
+  if (await fresh.isEnabled()) await fresh.click();
+  await expect(log.locator(".turn")).toHaveCount(0);
+  // Iso reads Surprise in the first turn; it stays in hand.
+  await box(page).fill(`look it up (${test.info().project.name})`);
+  await box(page).press("Enter");
+  await expect(log.locator(".turn").last()).toHaveAttribute("data-state", "done");
   await box(page).fill("what is a bit?");
   await box(page).press("Enter");
-  await expect(page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last()).toHaveAttribute("data-state", "done");
+  await expect(log.locator(".turn").last()).toHaveAttribute("data-state", "done");
   await pane(page).getByRole("button", { name: "Context", exact: true }).click();
-  const parts = pane(page).getByRole("region", { name: "What Iso is sent" });
-  await expect(page.getByRole("log", { name: "The conversation with Iso" })).toHaveCount(0);
-  await expect(parts.locator(".part").first()).toContainText("instructions and tools");
-  await expect(parts).toContainText("earlier in this conversation1 turn");
+  const view = pane(page).getByRole("region", { name: "What Iso is sent" });
+  await expect(log).toHaveCount(0);
+  const notes = view.getByRole("list", { name: "The notes Iso has" }), talk = view.getByRole("list", { name: "The conversation" }), always = view.getByRole("list", { name: "Always sent" });
+  await expect(notes.getByRole("switch", { name: "Send: Surprise" })).toHaveAttribute("aria-checked", "true");
+  await expect(notes.getByRole("switch", { name: "Send: Surprise" })).toHaveAttribute("title", /Read by Iso, and kept in hand/);
+  await expect(always.getByRole("switch")).toHaveText([/instructions and tools/, /your message/]);
+  await expect(view.locator(".total")).toHaveText(/^\d[\d.]*k?of \d+k/);
+  // No sentence explains a control.
+  await expect(view).not.toContainText("Nothing yet");
+  await expect(view).not.toContainText("how able a model");
   await look(page, "iso-context");
-  const sw = parts.getByRole("switch", { name: "Send: what is a bit?" });
-  await expect(sw).toHaveAttribute("aria-checked", "true");
-  await sw.click();
-  await expect(sw).toHaveAttribute("aria-checked", "false");
-  await expect(parts).toContainText("earlier in this conversation");
-  await expect(parts.locator(".part").nth(1)).not.toContainText("1 turn");
+  // A turn left out, and back.
+  const first = talk.getByRole("switch", { name: `Send: look it up (${test.info().project.name})` });
+  await first.click();
+  await expect(first).toHaveAttribute("aria-checked", "false");
+  await first.click();
+  await expect(first).toHaveAttribute("aria-checked", "true");
+  // Summed up: a briefing stands for the first turn, which folds under it.
+  await view.getByRole("button", { name: "Sum up the earlier turns" }).click();
+  await expect(talk.getByRole("switch", { name: "Send: summed up" })).toHaveAttribute("aria-checked", "true");
+  await expect(talk.getByRole("switch", { name: `Send: look it up (${test.info().project.name})` })).toHaveCount(0);
+  await talk.getByRole("button", { name: "The turns it sums up" }).click();
+  await expect(talk.getByRole("switch", { name: `Send: look it up (${test.info().project.name})` })).toHaveAttribute("aria-checked", "false");
+  await look(page, "iso-context-summed");
 });
 
-test("two bars in Iso's header gauge the context and the spend; the tier is chosen in the Context view; no line under the box", async ({ page }) => {
+test("two bars in Iso's header gauge the context and the spend, and open the Context view; the tier is chosen in the header; no line under the box", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toIso(page);
-  const gauge = pane(page).getByRole("img", { name: /^Context: .* Spend: / });
+  const gauge = pane(page).getByRole("button", { name: /^Context: .* Spend: / });
   await expect(gauge).toHaveAttribute("aria-label", /Context: \d[\d.]*k? of 200k tokens\. Spend: \$[\d.]+ this month/);
   await expect(pane(page).locator(".composer .foot")).toHaveCount(0);
-  await pane(page).getByRole("button", { name: "Context", exact: true }).click();
+  await gauge.click();
+  await expect(pane(page).getByRole("region", { name: "What Iso is sent" })).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1280) <= 760) {
+    // Narrow: the one letter of the tier, which steps to the next.
+    const tier = pane(page).getByRole("button", { name: /^How able a model: / });
+    await expect(tier).toHaveText("m");
+    await tier.click();
+    await expect(tier).toHaveAttribute("aria-label", "How able a model: max");
+    await tier.click(); await tier.click();
+    await expect(tier).toHaveAttribute("aria-label", "How able a model: mid");
+    return;
+  }
   const tier = pane(page).getByRole("radiogroup", { name: "How able a model" });
   await tier.getByRole("radio", { name: "max" }).click();
   await expect(tier.getByRole("radio", { name: "max" })).toHaveAttribute("aria-checked", "true");
+  await expect(tier.getByRole("radio", { name: "max" })).toHaveAttribute("title", /^max: the most able, scripted-max$/);
   await tier.getByRole("radio", { name: "mid" }).click();
 });
+

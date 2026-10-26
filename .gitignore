@@ -26,3 +26,4 @@ packages/model/*.tgz
 
 # The npm package, built by npm run package
 /.npm/
+.eval/

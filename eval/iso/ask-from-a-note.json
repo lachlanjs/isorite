@@ -1,0 +1,30 @@
+{
+  "name": "Asked about a note given, it answers from it and links what it used",
+  "turn": {
+    "mode": "ask",
+    "asked": "What does leapfrog do, in a few sentences?",
+    "given": [
+      {
+        "kind": "note",
+        "id": "integrators/leapfrog"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "notCalled": [
+        "edit_note",
+        "write_note"
+      ]
+    },
+    {
+      "says": "kick"
+    },
+    {
+      "linksResolve": true
+    },
+    {
+      "says": "\\]\\(/integrators/"
+    }
+  ]
+}

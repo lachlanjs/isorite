@@ -4,7 +4,7 @@
 // note's journal; the conversation names the entry.
 
 import type { Cost } from "@isorite/core";
-import { FORMAT_RULES, conversation, estimate, windowed, type Exchange, type Part } from "./iso.ts";
+import { FORMAT_RULES, estimate, type Exchange, type Part } from "./iso.ts";
 import { ROUNDS } from "./loop.ts";
 import type { Step } from "./lookup.ts";
 import type { Message, Tier, ToolDef } from "./provider.ts";
@@ -108,6 +108,62 @@ with links between them. They are talking with you in isorite's Iso pane,
 beside their notes and the Atlas, the map of their base. What you look up and
 what you change is shown to them there as you do it.`;
 
+/** What isorite is, as the notes on disk have it (docs/format.md). The example is loaded by core in a test, so
+ *  what Iso is told stays what isorite reads. */
+export const ISORITE = `# Their knowledge base
+
+- A note is a Markdown file with frontmatter: \`type\` (Concept, Question or
+  Problem), \`title\`, and a \`description\` of one line. Its id is its path
+  without .md, as basics/entropy, and it is linked as /basics/entropy.md.
+- A link says what it is by its title: "requires" (it cannot be understood
+  without the other), "uses" (it draws on it), "see also". A link with no title
+  is "uses". The Atlas draws the base from these links.
+- A question note is an open question, \`about\` the notes it asks of. A
+  problem note is practice that \`uses\` notes. Theirs alone to mark:
+  \`resolved\` or \`solved\`, with the day. \`[[!name]]\` alone on a line
+  embeds one in a note.
+- Every change you make is marked as yours, in the note's history, and they
+  can undo it.
+
+For example, a question note (made up, not one of theirs):
+
+\`\`\`markdown
+---
+type: Question
+title: Why is entropy largest when all outcomes are equally likely?
+about: [basics/entropy]
+---
+
+It follows from [surprise](/basics/surprise.md "requires"), but how?
+\`\`\``;
+
+/** How a knowledge base is kept well: what Iso does in it, and suggests. */
+export const PRACTICE = `# Keeping it well
+
+- One idea a note, with a title that names the idea and a description that
+  says it in a line.
+- Before you write a note, look for one that holds the idea already, by its
+  words and its headings. If a note, or a section of one, says it, extend that
+  note or point them to it, and say why. Make a second note only if they ask
+  for it after that.
+- A new note goes in the folder of the notes beside it, and links what it rests
+  on with "requires" and what it draws on with "uses".
+- A note that holds two ideas, or two that hold one, is theirs to split or
+  merge: suggest it, do not do it unasked.
+- An open question marks where their understanding stops. Leave it open.`;
+
+/** How Iso helps them learn, in every mode. */
+const LEARNING = `# Their learning
+
+- Their notes are in their words. Put no words in them they did not ask for.
+- Explain in their notation, at the level of their notes.
+- When they ask you to explain or teach something, find out where they stand
+  first: reply with one short question about it, in a few lines at most, and
+  stop. Explain once they have answered. When they ask for a fact, a check or
+  a change, just answer.
+- Prefer a question back, or a problem to try, to a summary.
+- Check a solution; never solve it for them.`;
+
 const ASK = `# Ask mode: what you may do
 
 You read their notes and answer. You cannot change anything in this mode: no
@@ -150,9 +206,7 @@ Below, for each note in hand, is your reading of their understanding of it so
 far, from its Understanding note.
 
 - Start from where they are: do not explain what they have shown they know; go
-  to what they have not yet shown.
-- Ask before you explain, where a question would show you where they stand.
-  One question at a time. Short turns.
+  to what they have not yet shown, and ask about that first.
 - At the end of a conversation about a note, or when your reading of them has
   changed, rewrite your reading with write_understanding: a few plain
   sentences on what they can do with the note and what they have not yet
@@ -171,7 +225,10 @@ const ASKING = (write: boolean) => `# Asking back, and their own answers
 - Where they have answered something in what they wrote to you that a note
   of theirs lacks, offer it with offer_text rather than telling them to add
   it: their own sentences, joined lightly, nothing of yours added. They
-  insert it as theirs, or not.`;
+  insert it as theirs, or not.
+- Where they say how they want their notes kept, or you kept (a notation, a
+  level, a way of working), offer it as a line for their AGENTS.md: offer_text
+  with the id AGENTS.md, in their words.`;
 
 const CHECKING = `# Checking a solution
 
@@ -193,12 +250,35 @@ const LOOKING = (rounds: number, meaning: boolean, lookup: boolean) => lookup ? 
   words; outline_note shows a note's headings and links; read_note reads one
   section. Prefer a section to a whole note. Follow links one step at a time.${meaning ? `
 - find_similar finds notes by meaning, when their words have not found them.` : ""}
+- What is under "Notes you read earlier" is in hand already, as you read it:
+  do not read it again. A note "set aside" can be read again if you need it.
 - You may call several tools at once, over ${rounds} rounds at most; then reply.
 - Say nothing between tool calls. Only the reply is shown.` : `# Looking things up
 
 They chose what you are sent and asked you not to look further: you have no
 tools for searching or reading. Answer from what is below, and say plainly what
 you would need to look at to say more.`;
+
+/** What a compaction is told (M15): to pick, as typed fields, what of the earlier turns still matters. The
+ *  briefing is written from them in code (briefingText). */
+export const COMPACT = `You sum up the earlier turns of a conversation in isorite, between a person and
+Iso, about their knowledge base of notes. What you write stands for those turns
+from now on: Iso will be sent it instead of them.
+
+Answer with one JSON object and nothing else:
+{"settled": [], "open": [], "preferences": [], "notes": []}
+
+- settled: what was asked and answered or decided that still matters, a
+  sentence each, in the terms they used.
+- open: threads not finished: a question not answered, a change not made, a
+  doubt raised.
+- preferences: what they said they want from Iso or for their notes (a
+  notation, a level, a way of working), in their words.
+- notes: the ids of the notes the talk turned on (as basics/entropy), eight at
+  most.
+
+Four items at most in each list, and none where there are none. Never add what
+was not said.`;
 
 const str = { type: "string" } as const;
 const fn = (name: string, description: string, properties: Record<string, unknown>, required: string[]): ToolDef => ({ type: "function", function: { name, description, parameters: { type: "object", properties, required, additionalProperties: false } } });
@@ -217,7 +297,7 @@ export const WRITE_UNDERSTANDING = fn("write_understanding", "Rewrite your readi
 export const ASK_QUESTION = fn("ask_question", "Ask them a question back, kept as an open question in their base, about one or more of their notes.",
   { title: { ...str, description: "The question, short, ending in a question mark." }, text: { ...str, description: "A line or two on what is asked, or empty." }, about: { type: "array", items: str, description: "The ids of the notes it is about." } }, ["title", "text", "about"]);
 export const OFFER_TEXT = fn("offer_text", "Offer them their own answers, lightly joined, to insert at the end of a note as their writing. Only their words.",
-  { id: { ...str, description: "The note's id." }, text: { ...str, description: "The passage, in Markdown." } }, ["id", "text"]);
+  { id: { ...str, description: "The note's id, or AGENTS.md for a line of their instructions for the base." }, text: { ...str, description: "The passage, in Markdown." } }, ["id", "text"]);
 
 /** The tools each mode adds to looking things up. */
 export const MODE_TOOLS: Record<Exclude<Mode, "build">, ToolDef[]> = {
@@ -237,14 +317,17 @@ export type Sent =
   | { kind: "folder"; id: string; notes: { id: string; title: string; description: string }[] }
   | { kind: "passage"; id: string; title: string; text: string }
   /** Iso's reading of their understanding of a note (its Understanding note). */
-  | { kind: "understanding"; id: string; title: string; reading: string };
+  | { kind: "understanding"; id: string; title: string; reading: string }
+  /** A note Iso read earlier in the conversation, as it read it: the sections, or all of it (M15). */
+  | { kind: "read"; id: string; title: string; text: string; sections: string[] | "whole" };
 
 export function sentText(s: Sent): string {
   if (s.kind === "note") {
     const open = s.open?.length ? `\n\nOpen questions about it:\n${s.open.map((q) => `- ${q.title} (/${q.id}.md)`).join("\n")}` : "";
-    return `## ${s.of === "problem" ? "A problem: " : s.of === "question" ? "A question: " : ""}${s.title} (/${s.id}.md)\n\n${windowed(s.text.split("\n"), [0])}${open}`;
+    return `## ${s.of === "problem" ? "A problem: " : s.of === "question" ? "A question: " : ""}${s.title} (/${s.id}.md)\n\n${s.text}${open}`;
   }
   if (s.kind === "passage") return `## A passage they chose in ${s.title} (/${s.id}.md)\n\n${s.text.split("\n").map((l) => `> ${l}`).join("\n")}`;
+  if (s.kind === "read") return `## ${s.title} (/${s.id}.md)${s.sections === "whole" ? "" : `, ${s.sections.length === 1 ? "the section" : "the sections"} ${s.sections.map((x) => `"${x}"`).join(", ")}`}\n\n${s.text}`;
   if (s.kind === "folder") return `## The folder ${s.id || "at the top of the base"}: its notes\n\n${s.notes.map((n) => `- ${n.title} (/${n.id}.md)${n.description ? `: ${n.description}` : ""}`).join("\n") || "(empty)"}`;
   return `## Their understanding of ${s.title} (/${s.id}.md)\n\nYour reading so far: ${s.reading || "none yet."}`;
 }
@@ -267,7 +350,13 @@ export interface AskedTurn {
   meaning: boolean;
   lookup: boolean;
   earlier: Turn[];
+  /** Briefings that stand for earlier turns (compaction), as written, oldest first. */
+  briefings?: string[];
   sent: Sent[];
+  /** Notes Iso read earlier and set aside (aged off, or switched off): one line each, to be read again if needed. */
+  aside?: { id: string; title: string }[];
+  /** The base's own instructions (AGENTS.md at the top of the notes), when on. */
+  agents?: string;
   asked: string;
   /** Code links broken since Iso was last told (Q27). */
   broken?: { id: string; title: string; href: string }[];
@@ -277,20 +366,30 @@ export interface AskedTurn {
 export function turnMessages(a: AskedTurn): { messages: Message[]; parts: Part[] } {
   const understood = a.sent.filter((s) => s.kind === "understanding");
   const checking = a.sent.some((s) => s.kind === "note" && s.of === "problem");
-  const system = [WHO, MODE_RULES[a.mode], ASKING(a.mode === "write"), ...(checking ? [CHECKING] : []), ...(understood.length ? [UNDERSTANDING] : []), FORMAT_RULES, LOOKING(ROUNDS[a.tier], a.meaning, a.lookup)].join("\n\n");
-  const talk = conversation(a.earlier.map(turnExchange));
-  const earlier = talk ? `# Earlier in this conversation\n\n${talk}` : "";
-  const given = a.sent.filter((s) => s.kind !== "understanding");
+  // In layers, the same for every turn but the mode's and the parts given: so the provider's cache holds.
+  const system = [WHO, ISORITE, PRACTICE, LEARNING, MODE_RULES[a.mode], ASKING(a.mode === "write"), ...(checking ? [CHECKING] : []), ...(understood.length ? [UNDERSTANDING] : []), FORMAT_RULES, LOOKING(ROUNDS[a.tier], a.meaning, a.lookup)].join("\n\n");
+  // Every earlier turn that is on, whole, after the briefings that stand for the ones before them: nothing is
+  // shortened or left out here that the person did not switch off.
+  const briefed = a.briefings?.length ? `# Earlier in this conversation, summed up\n\n${a.briefings.join("\n\n---\n\n")}` : "";
+  const talk = a.earlier.map((t) => turnExchange(t).text).join("\n\n---\n\n");
+  const earlier = [briefed, talk ? `# Earlier in this conversation\n\n${talk}` : ""].filter(Boolean).join("\n\n");
+  const given = a.sent.filter((s) => s.kind !== "understanding" && s.kind !== "read"), reads = a.sent.filter((s) => s.kind === "read");
   const gave = given.length ? `# What they gave you\n\n${given.map(sentText).join("\n\n")}` : "";
+  const held = reads.length ? `# Notes you read earlier in this conversation\n\n${reads.map(sentText).join("\n\n")}` : "";
+  const aside = a.aside?.length ? `# Read earlier, set aside\n\n${a.aside.map((n) => `- ${n.title} (/${n.id}.md)`).join("\n")}` : "";
+  const agents = a.agents?.trim() ? `# Their instructions for this knowledge base (AGENTS.md)\n\n${a.agents.trim()}` : "";
   const known = understood.length ? `# Their understanding, as you have recorded it\n\n${understood.map(sentText).join("\n\n")}` : "";
   const broken = a.broken?.length ? `# Code links that no longer resolve\n\nSince you were last told, these links in their notes point to files no longer in their repository. Mention it only where it bears on what they ask.\n\n${a.broken.map((b) => `- in ${b.title} (/${b.id}.md): ${b.href}`).join("\n")}` : "";
   const request = `# What they ask now\n\n${a.asked}`;
   return {
-    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [earlier, known, gave, broken, request].filter(Boolean).join("\n\n") }],
+    // In the order least likely to change first, so the provider's cache holds as far as it can.
+    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [agents, earlier, known, gave, held, aside, broken, request].filter(Boolean).join("\n\n") }],
     parts: [
       { name: "instructions and tools", detail: `${a.mode} mode${checking ? ", checking" : ""}${a.lookup ? "" : ", no look-ups"}`, tokens: estimate(system) + (a.lookup ? 500 : 0) + turnTools(a.mode, a.sent).length * 120 },
       { name: "earlier in this conversation", detail: a.earlier.length ? `${a.earlier.length} ${a.earlier.length === 1 ? "turn" : "turns"}` : "", tokens: estimate(earlier) },
+      ...(agents ? [{ name: "their instructions" as const, detail: "AGENTS.md", tokens: estimate(agents) }] : []),
       { name: "what you gave", detail: given.length ? `${given.length} ${given.length === 1 ? "part" : "parts"}` : "nothing", tokens: estimate(gave) },
+      ...(reads.length || aside ? [{ name: "notes Iso read" as const, detail: `${reads.length} in hand${a.aside?.length ? `, ${a.aside.length} set aside` : ""}`, tokens: estimate(held) + estimate(aside) }] : []),
       ...(understood.length ? [{ name: "your understanding" as const, detail: `${understood.length} ${understood.length === 1 ? "note" : "notes"}`, tokens: estimate(known) }] : []),
       ...(broken ? [{ name: "code links broken" as const, detail: `${a.broken!.length}`, tokens: estimate(broken) }] : []),
       { name: "your message", detail: "", tokens: estimate(request) },

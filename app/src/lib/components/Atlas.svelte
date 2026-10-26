@@ -310,6 +310,8 @@
   const isoLens = $derived(panes.on.context || !!pick);
   const givenNotes = $derived(new Set(tray.parts.filter((p) => p.kind === "note").map((p) => p.id)));
   const givenFolders = $derived(new Set(tray.parts.filter((p) => p.kind === "folder").map((p) => p.id)));
+  /** The notes Iso read in this conversation (M15): in hand, or set aside. */
+  const heldRows = $derived(new Map((converse.report?.rows ?? []).filter((r) => r.kind === "read").map((r) => [r.key.slice(2), r] as const)));
   const lastTurn = $derived(converse.turns.at(-1));
   const changedByIso = $derived(new Set(converse.turns.filter((t) => !t.items.some((i) => i.kind === "undone")).flatMap((t) => t.items.flatMap((i) => (i.kind === "change" && i.why !== "delete" ? [i.why === "move" ? i.to! : i.note] : [])))));
   const pointedTo = $derived(new Map((lastTurn?.items ?? []).flatMap((i) => (i.kind === "point" ? [[i.note, i.why] as const] : []))));
@@ -478,6 +480,15 @@
   }
   /** Given to Iso if it isn't, else taken back. */
   function giveOrTake(ref: string, kind: "note" | "folder" = "note"): void {
+    // A note Iso read and holds is set aside; one set aside is held again.
+    const held = kind === "note" && !tray.has("note", ref) ? heldRows.get(ref) : undefined;
+    if (held) {
+      void converse.toggle(held);
+      given = `${title(ref)} is ${held.on ? "set aside" : "in Iso's hand again"}`;
+      clearTimeout(givenTimer);
+      givenTimer = setTimeout(() => (given = ""), 2200);
+      return;
+    }
     if (!tray.has(kind, ref)) { give(ref, kind); return; }
     const name = kind === "note" ? title(ref) : folderName(ref);
     tray.remove({ kind, id: ref, title: name });
@@ -750,7 +761,7 @@
       {#each notes as n (n.item.id)}
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} held={isoLens && !givenNotes.has(n.item.ref) ? (heldRows.get(n.item.ref)?.on ? "on" : heldRows.has(n.item.ref) ? "aside" : "") : ""} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={moment?.note === n.item.ref ? moment.who : ""} dim={!!lit && !mark} href={noteHref(n.item.ref)}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; }} />
       {/each}
       {#each sats as s (s.key)}
@@ -788,7 +799,7 @@
     {/if}
     {#if given}<p class="given" role="status">◆ {given}</p>{/if}
     {#if panes.on.context && !pick && !given && panes.settings === "atlas"}
-      <p class="legend" aria-hidden="true"><span><i class="k g"></i>in Iso's context</span><span><i class="k d"></i>Iso changed it</span><span><i class="k p"></i>Iso points to it</span><span><i class="k n">1</i>read, in order</span></p>
+      <p class="legend" aria-hidden="true"><span><i class="k g"></i>you gave it</span><span><i class="k h"></i>Iso read it</span><span><i class="k d"></i>Iso changed it</span><span><i class="k p"></i>Iso points to it</span><span><i class="k n">1</i>read, in order</span></p>
     {/if}
     {#if offered}
       {@const o = offered}
@@ -844,6 +855,7 @@
   .legend span { display: inline-flex; align-items: center; gap: 6px; background: var(--ground-0); padding: 0 4px; }
   .legend .k { width: 10px; height: 10px; display: inline-grid; place-items: center; font-style: normal; }
   .legend .g { background: var(--growth-soft); border: 1px solid var(--growth); }
+  .legend .h { background: var(--lattice-soft); border: 1px solid var(--lattice); }
   .legend .d { width: 7px; height: 7px; background: var(--growth); transform: rotate(45deg); }
   .legend .p { border: 1.5px dashed var(--growth); }
   .legend .n { width: 14px; height: 14px; background: var(--growth); color: var(--ground-0); font-size: 9px; font-weight: 700; }

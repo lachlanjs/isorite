@@ -1,0 +1,27 @@
+{
+  "name": "It follows the base's AGENTS.md: its notation for vectors",
+  "agents": "Write vectors in bold, as $\\mathbf{r}$ and $\\mathbf{v}$: never with arrows.\n",
+  "turn": {
+    "mode": "write",
+    "asked": "Add one line to Euler's method giving its update for position, as an equation.",
+    "given": [
+      {
+        "kind": "note",
+        "id": "integrators/eulers-method"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "changed": [
+        "integrators/eulers-method"
+      ]
+    },
+    {
+      "changedSays": "\\\\mathbf\\{r\\}|\\*\\*r\\*\\*"
+    },
+    {
+      "saysNot": "\\\\vec"
+    }
+  ]
+}

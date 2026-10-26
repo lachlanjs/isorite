@@ -3,17 +3,26 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
+  AGENTS_FILE, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, type AgentLook, type AgentChange, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest, type UnderstandingReport } from "./api.ts";
+import { Conflict, EngineError, type AgentLook, type AgentChange, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, noteId, type Similar } from "./lookup.ts";
 import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
-import { CONVERSATIONS_DIR, MODES, conversationPath, turnTools, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
+import { AGE_OFF, briefingText, handOf, readHand, type Briefing, type Hand, type HandLine } from "./hand.ts";
+import { COMPACT, CONVERSATIONS_DIR, ISORITE, PRACTICE, MODES, conversationPath, turnTools, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
-import { KEY, SPEND_CAP, OPENROUTER, TIERS, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
+import { KEY, SPEND_CAP, OPENROUTER, TIERS, complete, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
+
+/** What switches a part given to Iso, in the page's `off`: `g:<kind>:<id>`, a passage by a short hash of its text. */
+export function givenKey(g: Given): string {
+  if (g.kind !== "passage") return `g:${g.kind}:${g.id}`;
+  let h = 5381;
+  for (let i = 0; i < g.text.length; i++) h = ((h * 33) ^ g.text.charCodeAt(i)) >>> 0;
+  return `g:passage:${g.id}:${h.toString(36)}`;
+}
 
 /** The largest note taken. */
 export const MAX_NOTE_BYTES = 2_000_000;
@@ -370,6 +379,8 @@ export class Engine implements Api {
       `# ${this.opts.name}: a knowledge base of ${b.concepts.size} notes in ${dirs.filter(Boolean).length} folders`,
       `Folders, with the notes directly in each:\n${lines.join("\n")}${dirs.length > 60 ? `\n(and ${dirs.length - 60} more)` : ""}`,
       `To look: search_notes by the words a note would use${this.similar ? ", find_similar by meaning when the words are unknown" : ""}; outline_note to see a note's headings and links; read_note for one section. Follow a note's links to what it rests on before searching again. Cite a note by its title and section.`,
+      // How the base is kept, so what the terminal's agent writes in it matches (M15).
+      `${ISORITE}\n\n${PRACTICE}`,
     ].join("\n\n");
   }
 
@@ -1017,23 +1028,164 @@ export class Engine implements Api {
     return out;
   }
 
-  async turnContext(req: Omit<TurnRequest, "asked">): Promise<ContextReport> {
+  /** A conversation's turns and the lines beside them about its working set. */
+  private async handFor(id: string | undefined): Promise<{ turns: Turn[]; lines: HandLine[]; hand: Hand }> {
+    const text = id ? await this.opts.own.read(conversationPath(id)) : null;
+    const turns = text ? readTurns(text).map((t) => (this.running.has(t.id) ? { ...t, state: "running" as const } : t)) : [];
+    const lines = text ? readHand(text) : [];
+    return { turns, lines, hand: handOf(turns.filter((t) => t.state !== "running"), lines) };
+  }
+
+  /** A note as Iso read it: the sections it read, under their headings, or all of it. */
+  private async asRead(id: string, sections: string[] | "whole"): Promise<string> {
+    const c = this.bundle.concepts.get(id)!;
+    if (sections === "whole") return (await this.readNote(id)).text;
+    return sections.map((h) => (section(c.body, h) ?? `## ${h}\n\n(no longer in the note)`).trim()).join("\n\n");
+  }
+
+  /** The base's own instructions, AGENTS.md at the top of the notes, if there is one. */
+  private async agentsFile(): Promise<string | null> {
+    return this.opts.notes.read(AGENTS_FILE).catch(() => null);
+  }
+
+  /** What a turn of this conversation would be sent, part by part (M15): what you gave and have not switched off,
+   *  the notes Iso read that are in hand and pointers to those set aside, the briefings and turns that are on, and
+   *  the base's instructions. Nothing else is added, and nothing is cut. */
+  private async working(req: Omit<TurnRequest, "asked"> & { asked?: string }) {
     const mode = req.mode === "build" ? "ask" : req.mode;
-    const all = req.conversation ? (await this.conversation(req.conversation))?.turns ?? [] : [];
-    const off = new Set(req.off ?? []), earlier = all.filter((t) => !off.has(t.id));
-    const given = this.given(req.given ?? []), sent = await this.sentOf(given, off);
-    const { parts } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: req.lookup !== false, earlier, sent, asked: "" });
+    const { turns, lines, hand } = await this.handFor(req.conversation);
+    const off = new Set(req.off ?? []);
+    const given = this.given(req.given ?? []), givenOn = given.filter((g) => !off.has(givenKey(g)));
+    const sent = await this.sentOf(givenOn, off);
+    const title = (id: string) => this.bundle.concepts.get(id)?.title ?? id;
+    const reads: Sent[] = [], aside: { id: string; title: string }[] = [];
+    for (const h of hand.held) {
+      if (!this.bundle.concepts.has(h.id)) continue;
+      // A note you gave is sent as you gave it: not twice.
+      if (givenOn.some((g) => g.kind === "note" && g.id === h.id)) continue;
+      if (h.on) reads.push({ kind: "read", id: h.id, title: title(h.id), text: await this.asRead(h.id, h.sections), sections: h.sections });
+      else aside.push({ id: h.id, title: title(h.id) });
+    }
+    // An old switch kept by the page (`off` with a turn's id) still holds.
+    const byId = new Map(turns.map((t) => [t.id, t]));
+    const earlier = hand.turns.filter((t) => t.on && !off.has(t.id)).map((t) => byId.get(t.id)!).filter((t) => t.state !== "running");
+    const briefings = hand.briefings.filter((b) => b.on).map((b) => briefingText(b.briefing, title));
+    const agentsText = off.has("agents") ? null : await this.agentsFile();
+    const built = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: req.lookup !== false, earlier, briefings, sent: [...sent, ...reads], aside, ...(agentsText ? { agents: agentsText } : {}), asked: req.asked ?? "" });
+    const ratio = hand.ratio ?? 1, scaled = (n: number) => Math.round(n * ratio);
+    const estimated = built.parts.reduce((n, p) => n + p.tokens, 0);
+    return { mode, turns, lines, hand, given, givenOn, sent, reads, aside, earlier, briefings, agentsText, built, off, ratio, scaled, estimated, title };
+  }
+
+  async turnContext(req: Omit<TurnRequest, "asked">): Promise<ContextReport> {
+    const w = await this.working(req), { scaled, title } = w;
+    const { parts } = w.built;
     // Each earlier turn can be left out (M9's switches, kept for the pane): what it adds, whole.
-    const items = all.map((t): ContextItem => ({ id: t.id, kind: "exchange", title: t.asked, tokens: estimate(turnExchange(t).text), on: !off.has(t.id) }));
-    // The open questions about each note given, each sent or taken out (M12).
+    const items = w.turns.map((t): ContextItem => ({ id: t.id, kind: "exchange", title: t.asked, tokens: scaled(estimate(turnExchange(t).text)), on: w.earlier.some((e) => e.id === t.id) }));
+    const rows: HandRow[] = [];
+    // The notes: what you gave, what Iso read, the questions open about what you gave.
+    const sentAll = await this.sentOf(w.given, new Set());
+    for (const g of w.given) {
+      const s = sentAll.find((x) => x.id === g.id && x.kind === g.kind && (g.kind !== "passage" || (x.kind === "passage" && x.text === g.text)));
+      if (!s) continue;
+      const k = givenKey(g);
+      rows.push({ key: k, group: "notes", kind: g.kind, title: g.kind === "folder" ? g.id || "the top of the base" : title(g.id), detail: g.kind === "passage" ? "a passage" : g.kind === "folder" ? `${s.kind === "folder" ? s.notes.length : 0} notes listed` : g.kind === "understanding" ? "your understanding" : "", tokens: scaled(estimate(sentText(s))), on: !w.off.has(k), by: "you", given: g });
+    }
+    for (const h of w.hand.held) {
+      if (!this.bundle.concepts.has(h.id) || w.givenOn.some((g) => g.kind === "note" && g.id === h.id)) continue;
+      const r = w.reads.find((x) => x.id === h.id);
+      rows.push({ key: `r:${h.id}`, group: "notes", kind: "read", title: title(h.id), detail: h.sections === "whole" ? "read whole" : h.sections.join(", "), tokens: scaled(r ? estimate(sentText(r)) : estimate(`- ${title(h.id)} (/${h.id}.md)`)), on: h.on, by: "iso", ...(h.aged ? { aged: true } : {}) });
+    }
     const asked = new Set<string>();
-    for (const g of given) if (g.kind === "note") for (const q of this.openAbout(g.id)) {
+    for (const g of w.given) if (g.kind === "note") for (const q of this.openAbout(g.id)) {
       if (asked.has(q.id)) continue;
       asked.add(q.id);
-      items.push({ id: `q:${q.id}`, kind: "question", title: q.title, tokens: estimate(`- ${q.title} (/${q.id}.md)`), on: !off.has(`q:${q.id}`) });
+      items.push({ id: `q:${q.id}`, kind: "question", title: q.title, tokens: scaled(estimate(`- ${q.title} (/${q.id}.md)`)), on: !w.off.has(`q:${q.id}`) });
+      rows.push({ key: `q:${q.id}`, group: "notes", kind: "question", title: q.title, detail: `open, about ${title(g.id)}`, tokens: scaled(estimate(`- ${q.title} (/${q.id}.md)`)), on: !w.off.has(`q:${q.id}`), by: "you" });
     }
-    return { tokens: parts.reduce((n, p) => n + p.tokens, 0), limit: await this.contextLimit(), parts, session: await this.sessionCost(), items, lookup: req.lookup !== false,
-      given: sent.map((g) => ({ kind: g.kind, id: g.id, ...(g.kind === "passage" ? { text: g.text } : {}), tokens: estimate(sentText(g)) })) };
+    // The conversation: each briefing, with the turns it stands for after it, and the turns of no briefing.
+    const byId = new Map(w.turns.map((t) => [t.id, t]));
+    for (const b of w.hand.briefings) rows.push({ key: `b:${b.briefing.id}`, group: "conversation", kind: "briefing", title: "summed up", detail: `${b.briefing.turns.length ? `${b.briefing.turns.length} ${b.briefing.turns.length === 1 ? "turn" : "turns"}` : "from an earlier conversation"}`, tokens: scaled(estimate(briefingText(b.briefing, title))), on: b.on });
+    for (const t of w.hand.turns) {
+      const turn = byId.get(t.id);
+      if (!turn || turn.state === "running") continue;
+      rows.push({ key: `t:${t.id}`, group: "conversation", kind: "turn", title: turn.asked, detail: "", tokens: scaled(estimate(turnExchange(turn).text)), on: t.on && !w.off.has(t.id), ...(t.under ? { under: `b:${t.under}` } : {}) });
+    }
+    // Fixed: the instructions, the base's own, and the message.
+    rows.push({ key: "instructions", group: "fixed", kind: "instructions", title: "instructions and tools", detail: parts[0]!.detail, tokens: scaled(parts[0]!.tokens), on: true });
+    const agents = await this.agentsFile();
+    if (agents !== null) rows.push({ key: "agents", group: "fixed", kind: "agents", title: "AGENTS.md", detail: "your instructions", tokens: scaled(estimate(agents)), on: !w.off.has("agents") });
+    rows.push({ key: "message", group: "fixed", kind: "message", title: "your message", detail: "", tokens: scaled(parts.at(-1)!.tokens), on: true });
+    return {
+      tokens: scaled(w.estimated), limit: await this.contextLimit(), parts: parts.map((p) => ({ ...p, tokens: scaled(p.tokens) })), session: await this.sessionCost(), items, lookup: req.lookup !== false,
+      given: w.sent.map((g) => ({ kind: g.kind as Given["kind"], id: g.id, ...(g.kind === "passage" ? { text: g.text } : {}), tokens: scaled(estimate(sentText(g))) })),
+      rows, counted: w.hand.ratio !== null,
+    };
+  }
+
+  async setContext(conversation: string, part: string, on: boolean): Promise<void> {
+    if (!TURN_ID.test(conversation)) throw new EngineError("not a conversation's id");
+    if (!/^[rtb]:[^\n]{1,300}$/.test(part)) throw new EngineError("a part is r:<note>, t:<turn> or b:<briefing>");
+    const { turns } = await this.handFor(conversation);
+    if (!turns.length && !part.startsWith("b:")) throw new EngineError("there is no such conversation", 404);
+    await this.one(() => this.opts.own.append(conversationPath(conversation), JSON.stringify({ kind: "context", part, on: Boolean(on), at: turns.length } satisfies HandLine) + "\n"));
+    this.publish({ type: "context", conversation });
+  }
+
+  /** Iso's summing up of some turns, as typed fields (M15): on the low tier, its cost recorded as a turn's. */
+  private async summarise(conversation: string, turns: Turn[], held: string[]): Promise<{ briefing: Omit<Briefing, "id" | "at" | "turns">; usd: number }> {
+    const http = this.opts.http;
+    if (!http) throw new EngineError("Iso cannot be asked here", 409);
+    const key = (await this.opts.secrets?.get(KEY)) ?? null;
+    const title = (id: string) => this.bundle.concepts.get(id)?.title ?? id;
+    const user = `# The turns to sum up\n\n${turns.map((t) => turnExchange(t).text).join("\n\n---\n\n")}${held.length ? `\n\n# Notes Iso read in them\n\n${held.map((id) => `- ${title(id)} (${id})`).join("\n")}` : ""}`;
+    const r = await complete(http, this.provider, key, { model: this.provider.tiers.low, maxTokens: 1500, messages: [{ role: "system", content: COMPACT }, { role: "user", content: user }] });
+    const raw = r.text.slice(r.text.indexOf("{"), r.text.lastIndexOf("}") + 1);
+    let got: Record<string, unknown> = {};
+    try { got = JSON.parse(raw) as Record<string, unknown>; } catch { throw new EngineError("Iso's summing up could not be read: nothing was changed. Try again.", 502); }
+    const list = (v: unknown, most: number) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim().slice(0, 400)).slice(0, most) : []);
+    const notes = [...new Set(list(got.notes, 8).map((n) => noteId(this.bundle, n)).filter((n): n is string => n !== null))];
+    if (r.usage.usd > 0) await this.one(async () => this.record({ event: "iso-turn", conversation, turn: newId(this.opts.clock.now()), session: this.last?.session ?? "", model: r.usage.model, usd: r.usage.usd }));
+    return { briefing: { settled: list(got.settled, 4), open: list(got.open, 4), preferences: list(got.preferences, 4), notes }, usd: r.usage.usd };
+  }
+
+  async compact(conversation: string, keep = 1): Promise<{ briefing: string; usd: number }> {
+    if (!TURN_ID.test(conversation)) throw new EngineError("not a conversation's id");
+    if (this.conversing.has(conversation)) throw new EngineError("Iso is answering in this conversation: wait for it first.", 409);
+    return this.compactNow(conversation, keep);
+  }
+
+  private async compactNow(conversation: string, keep: number): Promise<{ briefing: string; usd: number }> {
+    const { turns, hand } = await this.handFor(conversation);
+    const byId = new Map(turns.map((t) => [t.id, t]));
+    const on = hand.turns.filter((t) => t.on).map((t) => byId.get(t.id)!).filter((t) => t.state !== "running");
+    const these = on.slice(0, Math.max(0, on.length - keep));
+    if (!these.length) throw new EngineError("There is nothing earlier to sum up.", 409);
+    const { briefing, usd } = await this.summarise(conversation, these, hand.held.map((h) => h.id));
+    const b: Briefing = { id: newId(this.opts.clock.now()), at: new Date(this.opts.clock.now()).toISOString(), turns: these.map((t) => t.id), ...briefing };
+    await this.one(() => this.opts.own.append(conversationPath(conversation), JSON.stringify({ kind: "briefing", ...b } satisfies HandLine) + "\n"));
+    this.publish({ type: "context", conversation });
+    return { briefing: briefingText(b, (id) => this.bundle.concepts.get(id)?.title ?? id), usd };
+  }
+
+  async agents(): Promise<{ text: string | null }> { return { text: await this.agentsFile() }; }
+
+  async saveAgents(text: string): Promise<void> {
+    if (typeof text !== "string" || text.length > 50_000) throw new EngineError("AGENTS.md is text, of 50,000 characters at most", 413);
+    await this.one(() => this.opts.notes.write(AGENTS_FILE, text.replace(/\s*$/, "") + (text.trim() ? "\n" : "")));
+  }
+
+  async branch(conversation: string): Promise<{ conversation: string }> {
+    if (!TURN_ID.test(conversation)) throw new EngineError("not a conversation's id");
+    const { turns, hand } = await this.handFor(conversation);
+    const done = turns.filter((t) => t.state !== "running");
+    if (!done.length) throw new EngineError("There is nothing in this conversation to carry on from.", 409);
+    const { briefing } = await this.summarise(conversation, done, hand.held.map((h) => h.id));
+    const id = newId(this.opts.clock.now());
+    const b: Briefing = { id, at: new Date(this.opts.clock.now()).toISOString(), turns: [], from: conversation, ...briefing };
+    await this.one(() => this.opts.own.append(conversationPath(id), JSON.stringify({ kind: "briefing", ...b } satisfies HandLine) + "\n"));
+    this.publish({ type: "context", conversation: id });
+    return { conversation: id };
   }
 
   async converse(req: TurnRequest): Promise<{ conversation: string; turn: string }> {
@@ -1059,9 +1211,20 @@ export class Engine implements Api {
     const study = this.opts.own;
     const key = (await this.opts.secrets?.get(KEY)) ?? null;
     if (!key && /\/\/(?:[^/]*\.)?openrouter\.ai\b/.test(this.provider.url)) throw new EngineError("There is no provider key yet. Set one in settings, behind the logo.", 409);
-    const off = new Set(req.off ?? []), earlier = ((await this.conversation(conversation))?.turns ?? []).filter((t) => !off.has(t.id));
-    const lookupOn = req.lookup !== false, mode = req.mode, sent = await this.sentOf(req.given, off), own = turnTools(mode, sent);
-    const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier, sent, asked: req.asked, broken: await this.brokenNews("iso") });
+    const lookupOn = req.lookup !== false, mode = req.mode;
+    let w = await this.working({ ...req, conversation });
+    // Over the model's limit: the earliest turns are summed up first (M15); still over, the turn is not sent.
+    const limit = await this.contextLimit(), size = () => w.scaled(w.estimated);
+    if (size() > limit && w.earlier.length >= 2) { await this.compactNow(conversation, 1); w = await this.working({ ...req, conversation }); }
+    if (size() > limit) {
+      const big = [...w.built.parts].sort((a, b) => b.tokens - a.tokens)[0]!, k = (n: number) => `${Math.round(n / 1000)}k`;
+      throw new EngineError(`This turn would be sent about ${k(size())} tokens, more than the ${k(limit)} the model takes. The largest part is ${big.name} (${k(w.scaled(big.tokens))}): switch parts off in the Context view.`, 413);
+    }
+    const sent = [...w.sent, ...w.reads], own = turnTools(mode, sent);
+    // What is in hand as it was read, for the look-ups not to send it twice; and what you gave whole.
+    const inHand = new Map<string, string[] | "whole">(w.reads.flatMap((r) => (r.kind === "read" ? [[r.id, r.sections] as const] : [])));
+    for (const g of w.givenOn) if (g.kind === "note") inHand.set(g.id, "whole");
+    const { messages } = turnMessages({ mode, tier: req.tier, meaning: Boolean(this.similar), lookup: lookupOn, earlier: w.earlier, briefings: w.briefings, sent, aside: w.aside, ...(w.agentsText ? { agents: w.agentsText } : {}), asked: req.asked, broken: await this.brokenNews("iso") });
 
     // A turn is of the session as a journal entry is, and carries it on.
     const s = await this.stamp("you"), turn = s.id, abort = new AbortController(), path = conversationPath(conversation);
@@ -1079,7 +1242,19 @@ export class Engine implements Api {
     const tools: Tools = {
       defs: () => [...(lookupOn ? lookup.defs() : []), ...own],
       call: async (name, raw) => {
-        if (looks.has(name)) return lookupOn ? lookup.call(name, raw) : { text: "Looking things up is off: they chose what you are sent." };
+        if (looks.has(name) && !lookupOn) return { text: "Looking things up is off: they chose what you are sent." };
+        // A note already in hand is not sent twice (M15): the read is told so, and still counts as using the note.
+        if (name === "read_note") {
+          let args: { id?: unknown; section?: unknown } = {};
+          try { args = JSON.parse(raw || "{}") as typeof args; } catch { /* as it comes */ }
+          const id = noteId(this.bundle, args.id), want = typeof args.section === "string" ? args.section.replace(/^#+\s*/, "").trim() : "";
+          const held = id ? inHand.get(id) : undefined;
+          if (id && held && (held === "whole" || (want && held.includes(want)))) {
+            const step = { tool: "read_note", said: `${this.bundle.concepts.get(id)!.title}: in hand already`, how: "read" as const, notes: [id], opened: id, ...(want ? { section: want } : {}) };
+            return { text: `${this.bundle.concepts.get(id)!.title}${want ? `, the section "${want}",` : ""} is in hand already, as it is now: under "Notes you read earlier". Answer from it.`, step };
+          }
+        }
+        if (looks.has(name)) return lookup.call(name, raw);
         let args: Record<string, unknown> = {};
         try { const parsed: unknown = raw.trim() ? JSON.parse(raw) : {}; if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) args = parsed as Record<string, unknown>; } catch { /* no arguments */ }
         if (!own.some((d) => d.function.name === name)) return { text: `There is no tool ${name} in ${mode} mode.` };
@@ -1100,6 +1275,8 @@ export class Engine implements Api {
         const cost: Cost = { model: got.usage.model, tier: req.tier, tokensIn: got.usage.tokensIn, tokensOut: got.usage.tokensOut, tokensCached: got.usage.tokensCached, usd: got.usage.usd };
         const said = got.text.trim() + (got.cut ? "\n\n[Cut off at its length limit.]" : "");
         if (said) await item({ kind: "text", text: said });
+        // What the provider counted for what was estimated: the sizes shown from now on are as counted.
+        if (got.firstIn > 0) await this.one(() => study.append(path, JSON.stringify({ kind: "counted", turn, estimated: w.estimated, counted: got.firstIn } satisfies HandLine) + "\n"));
         await line({ kind: "end", turn, state: "done", cost });
         if (cost.usd > 0) await this.one(async () => this.record({ event: "iso-turn", conversation, turn, session: s.session, model: cost.model, usd: cost.usd }));
         // Free before it is said to be done, so a message sent at once is not refused.
@@ -1216,12 +1393,14 @@ export class Engine implements Api {
       return `Made the question ${asked} (/${made.id}.md).`;
     }
     if (name === "offer_text") {
-      const id = noteId(this.bundle, args.id);
+      // A line for the base's own instructions (M15): what they said they want, offered for AGENTS.md.
+      const agents = /^\/?AGENTS(\.md)?$/i.test(String(args.id ?? "").trim());
+      const id = agents ? AGENTS_FILE : noteId(this.bundle, args.id);
       if (!id) return `There is no note ${String(args.id ?? "")}.`;
       const text = String(args.text ?? "").trim().slice(0, 8000);
       if (!text) return "Give the passage, in text.";
       await t.item({ kind: "offer", id: newId(this.opts.clock.now()), note: id, text });
-      return `It is offered to them for ${title(id)}.`;
+      return `It is offered to them for ${agents ? "their AGENTS.md" : title(id)}.`;
     }
     if (name === "write_understanding") {
       const id = noteId(this.bundle, args.id);
@@ -1276,7 +1455,12 @@ export class Engine implements Api {
     if (i.kind === "question" ? i.made : i.taken) throw new EngineError(i.kind === "question" ? "that question is a note already" : "that was inserted already", 409);
     let note: string;
     if (i.kind === "question") note = (await this.one(() => this.makeQuestion(i, "you"))).id;
-    else {
+    else if (i.note === AGENTS_FILE) {
+      // The base's instructions are a file, not a note: added to, or begun.
+      const now = (await this.agentsFile()) ?? "";
+      await this.one(() => this.opts.notes.write(AGENTS_FILE, `${now.replace(/\s*$/, "")}${now.trim() ? "\n\n" : ""}${i.text}\n`));
+      note = AGENTS_FILE;
+    } else {
       if (!this.bundle.concepts.has(i.note)) throw new EngineError("the note it was for is gone", 409);
       const now = await this.readNote(i.note);
       await this.one(() => this.put(i.note, `${now.text.replace(/\s*$/, "")}\n\n${i.text}\n`, now.version));

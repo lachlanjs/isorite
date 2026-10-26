@@ -128,6 +128,31 @@ export interface ContextReport {
   lookup: boolean;
   /** Each part given, as much as it adds when sent (M10b: the Context view lists them). A note that is gone is not here. */
   given?: { kind: Given["kind"]; id: string; text?: string; tokens: number }[];
+  /** The working set (M15), a row per part, as the Context view draws it. Sizes are as counted once the provider
+   *  has said (`counted`): isorite's estimate times what the provider counted for it in the last turn. */
+  rows?: HandRow[];
+  counted?: boolean;
+}
+
+/** One part of what the next turn is sent (M15). `key` is what switches it: `g:<kind>:<id>` (or
+ *  `g:passage:<id>:<hash>`, givenKey), `q:<id>` and `agents` by the page's `off`; `r:<id>`, `t:<id>` and `b:<id>` by
+ *  `setContext`, kept in the conversation. */
+export interface HandRow {
+  key: string;
+  group: "notes" | "conversation" | "fixed";
+  kind: "note" | "folder" | "passage" | "understanding" | "read" | "question" | "turn" | "briefing" | "instructions" | "agents" | "message";
+  title: string;
+  detail: string;
+  tokens: number;
+  on: boolean;
+  /** Who brought a note: you gave it, or Iso read it. */
+  by?: "you" | "iso";
+  /** Set aside because it was not used for AGE_OFF turns. */
+  aged?: boolean;
+  /** A turn a briefing stands for: the briefing's key. */
+  under?: string;
+  /** A part you gave: what it is, so the page can take it out of what it gives. */
+  given?: Given;
 }
 
 /** What Iso has cost against what may be spent (M12). `per` is the period the figure covers: a calendar month
@@ -173,6 +198,8 @@ export type EngineEvent =
   | { type: "iso-done"; request: string; note: string; proposal: string; said?: string; cost: Cost }
   | { type: "iso-stopped"; request: string; note: string }
   | { type: "iso-failed"; request: string; note: string; message: string }
+  /** A conversation's working set changed: a part switched, a briefing made (M15). */
+  | { type: "context"; conversation: string }
   /** The provider failed for a moment: it is asked again, the `retry`th time of `of`. */
   | { type: "iso-retry"; request: string; note: string; retry: number; of: number }
   /** A terminal agent (`agent` is its name, as `opencode`) began a turn in one of its sessions. Each turn ends in agent-done. */
@@ -243,6 +270,15 @@ export interface Api {
   conversation(id?: string): Promise<Conversation | null>;
   /** What a turn would send now, part by part, with the session's cost. */
   turnContext(request: Omit<TurnRequest, "asked">): Promise<ContextReport>;
+  /** Switch a part of a conversation's working set on or off: `r:<note>` (read by Iso), `t:<turn>`, `b:<briefing>`. */
+  setContext(conversation: string, part: string, on: boolean): Promise<void>;
+  /** Sum up a conversation's earlier turns, all but the last `keep`, into a briefing that stands for them. */
+  compact(conversation: string, keep?: number): Promise<{ briefing: string; usd: number }>;
+  /** A new conversation that starts from a briefing of this one ("a new conversation from here"). */
+  branch(conversation: string): Promise<{ conversation: string }>;
+  /** The base's own instructions, AGENTS.md at the top of the notes (M15): null while there is none. */
+  agents(): Promise<{ text: string | null }>;
+  saveAgents(text: string): Promise<void>;
   /** A note's Understanding note. */
   understanding(note: string): Promise<UnderstandingReport>;
   /** Save your scratchpad in a note's Understanding note. */

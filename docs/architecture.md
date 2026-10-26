@@ -267,7 +267,7 @@ The interface plays sound (later) by listening to this same stream and to its ow
 | server | vitest against the real HTTP routes on a temporary folder |
 | app | `@playwright/test`, selecting by text and role; each streamed state has a name a test can wait on; every screen at 1280 and 390 px on both grounds |
 | example | vitest: the example (nbody-notes) replays to the notes as written, every hash holds, each note's understanding is spread over the Atlas's four steps, and the tutorial's Iso answers as scripted |
-| tutorial | `@playwright/test` against the built site served as plain files: one test for each of the five parts, walked by doing what each step asks, at a desktop's width and a phone's, on both grounds (`npm run test:tutorial`) |
+| tutorial | Retired in M15: the walks, which did what each step asked at a desktop's width and a phone's, cost more than they caught. M16 replaces the tutorial with a knowledge base about isorite |
 
 ## 14. Questions
 

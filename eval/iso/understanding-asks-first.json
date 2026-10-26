@@ -1,0 +1,28 @@
+{
+  "name": "With an Understanding note given, it asks before it explains, and keeps it short",
+  "understanding": {
+    "integrators/leapfrog": "They can state the kick–drift–kick steps. They have not yet shown why its energy error stays bounded."
+  },
+  "turn": {
+    "mode": "ask",
+    "asked": "Explain leapfrog to me.",
+    "given": [
+      {
+        "kind": "note",
+        "id": "integrators/leapfrog"
+      },
+      {
+        "kind": "understanding",
+        "id": "integrators/leapfrog"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "asks": true
+    },
+    {
+      "words": 220
+    }
+  ]
+}

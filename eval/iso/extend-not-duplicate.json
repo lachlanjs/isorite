@@ -1,0 +1,13 @@
+{
+  "name": "Asked to write what a note already says, it extends or points to that note instead of a second",
+  "turn": {
+    "mode": "write",
+    "asked": "Write a note explaining why leapfrog's energy error stays bounded.",
+    "given": []
+  },
+  "checks": [
+    {
+      "createdNot": "leapfrog|drift|bounded"
+    }
+  ]
+}

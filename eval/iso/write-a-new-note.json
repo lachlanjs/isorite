@@ -1,0 +1,16 @@
+{
+  "name": "Asked for a new note, it makes one beside its neighbours, with frontmatter, linked to what it rests on",
+  "turn": {
+    "mode": "write",
+    "asked": "Write a short note on the Runge–Kutta method (RK4), beside Euler's method.",
+    "given": []
+  },
+  "checks": [
+    {
+      "created": "integrators/"
+    },
+    {
+      "changedSays": "requires|uses|see also"
+    }
+  ]
+}

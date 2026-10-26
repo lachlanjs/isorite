@@ -41,11 +41,14 @@ export function gatewayFrom(env: NodeJS.ProcessEnv = process.env): Gateway | nul
   return { url, models };
 }
 
-/** opencode.json: OpenCode's free models as they come, and the gateway, the default, when there is one. */
-export function openCodeConfig(gateway: Gateway | null): object {
-  if (!gateway) return { $schema: "https://opencode.ai/config.json" };
+/** opencode.json: OpenCode's free models as they come, and the gateway, the default, when there is one; and the
+ *  base's own instructions (its AGENTS.md, M15), when it has them. */
+export function openCodeConfig(gateway: Gateway | null, instructions: string[] = []): object {
+  const told = instructions.length ? { instructions } : {};
+  if (!gateway) return { $schema: "https://opencode.ai/config.json", ...told };
   return {
     $schema: "https://opencode.ai/config.json",
+    ...told,
     providers: {
       gateway: {
         name: "Gateway",
@@ -61,11 +64,11 @@ export function openCodeConfig(gateway: Gateway | null): object {
 }
 
 /** Writes the config home and returns its path. */
-export function writeHome(dir: string, { gateway = null as Gateway | null, plugin = pluginDir } = {}): string {
+export function writeHome(dir: string, { gateway = null as Gateway | null, plugin = pluginDir, instructions = [] as string[] } = {}): string {
   mkdirSync(join(dir, "themes"), { recursive: true });
   mkdirSync(join(dir, "plugins"), { recursive: true });
   const json = (value: object) => JSON.stringify(value, null, 2) + "\n";
-  writeFileSync(join(dir, "opencode.json"), json(withLocal(openCodeConfig(gateway), join(dir, "local.json"))));
+  writeFileSync(join(dir, "opencode.json"), json(withLocal(openCodeConfig(gateway, instructions), join(dir, "local.json"))));
   writeFileSync(join(dir, "cli.json"), json({ $schema: "https://opencode.ai/cli.json", theme: { name: "isorite", mode: "system" } }));
   writeFileSync(join(dir, "themes", "isorite.json"), json(theme()));
   const link = join(dir, "plugins", "isorite");

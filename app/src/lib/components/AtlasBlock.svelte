@@ -5,7 +5,7 @@
   // or of Iso.
   import type { LayoutItem } from "@isorite/core/atlas";
 
-  let { item, title, kind = "", done = false, behind = "var(--ground-0)", mark = "", far = 0, num = 0, iso = "", linked = false, dim = false, moment = "", given = false, changed = false, pointed = "", order = 0, href, onpick, onpoint }: {
+  let { item, title, kind = "", done = false, behind = "var(--ground-0)", mark = "", far = 0, num = 0, iso = "", linked = false, dim = false, moment = "", given = false, held = "", changed = false, pointed = "", order = 0, href, onpick, onpoint }: {
     item: LayoutItem;
     title: string;
     /** A question or a problem (M12), and whether it is solved. */
@@ -29,6 +29,8 @@
     /** In the Atlas's Iso lens (M10): in what Iso is sent, changed by Iso in this conversation, pointed out by Iso
      *  (why), and the order it was read in in the last turn. */
     given?: boolean;
+    /** Read by Iso in this conversation (M15): in hand ("on"), or set aside. */
+    held?: "" | "on" | "aside";
     changed?: boolean;
     pointed?: string;
     order?: number;
@@ -39,7 +41,7 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:linked class:dim={dim && !num && !iso && !linked && !given} class:far={far > 1} class:pick={num > 0} class:given class:changed class:pointed={!!pointed} {href} aria-label={num ? `${title}: linked, number ${num}` : `${kind === "question" ? "Question: " : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in Iso's context" : ""}${changed ? ", changed by Iso" : ""}${pointed ? `, Iso points to it: ${pointed}` : ""}`} title={pointed || (given ? "In Iso's context: shift+click takes it back" : undefined)} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
+<a class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:linked class:dim={dim && !num && !iso && !linked && !given} class:far={far > 1} class:pick={num > 0} class:given class:held={held === "on"} class:aside={held === "aside"} class:changed class:pointed={!!pointed} {href} aria-label={num ? `${title}: linked, number ${num}` : `${kind === "question" ? "Question: " : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in Iso's context" : held === "on" ? ": read by Iso, in hand" : held === "aside" ? ": read by Iso, set aside" : ""}${changed ? ", changed by Iso" : ""}${pointed ? `, Iso points to it: ${pointed}` : ""}`} title={pointed || (given ? "In Iso's context: shift+click takes it back" : held === "on" ? "Read by Iso, in hand: shift+click sets it aside" : held === "aside" ? "Read by Iso, set aside: shift+click puts it in hand again" : undefined)} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
@@ -86,6 +88,8 @@
   /* The Iso lens (M10): in Iso's context, a gold fill; changed by Iso, a diamond at the corner; pointed out, a
      marching outline; the order it read in, a gold number. */
   .given { background: var(--growth-soft); border-color: var(--growth); color: var(--text); }
+  .held { background: var(--lattice-soft); border-color: var(--lattice); color: var(--text); }
+  .aside { border-style: dashed; border-color: var(--lattice); }
   .changed, .pointed, .order { overflow: visible; }
   .dia { position: absolute; top: -5px; right: -5px; width: 9px; height: 9px; background: var(--growth); transform: rotate(45deg); scale: var(--ik); }
   .pointed { outline: calc(2 * var(--px)) dashed var(--growth); outline-offset: calc(4 * var(--px)); animation: point 1.2s linear infinite; }

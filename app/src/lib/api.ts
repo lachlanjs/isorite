@@ -59,6 +59,11 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     understanding: (note) => ask("understanding" + q(note)),
     saveScratchpad: (note, scratchpad, base) => write("POST", "understanding/scratchpad" + q(note), { scratchpad, base }),
     undoTurn: (conversation, turn) => write("POST", "iso/undo", { conversation, turn }),
+    setContext: (conversation, part, on) => write("POST", "iso/context", { conversation, part, on }),
+    compact: (conversation, keep) => write("POST", "iso/compact", { conversation, ...(keep === undefined ? {} : { keep }) }),
+    branch: (conversation) => write("POST", "iso/branch", { conversation }),
+    agents: () => ask("agents"),
+    saveAgents: (text) => write("POST", "agents", { text }),
     takeItem: (conversation, turn, item) => write("POST", "iso/take", { conversation, turn, item }),
     // The server's own: it names the repository when a terminal attaches, and tells the terminal's agent.
     nameRepository: async () => false,
@@ -98,7 +103,7 @@ export function httpApi(root: string = new URL("api/", document.baseURI).href): 
     events(listener) {
       const source = new EventSource(root + "events");
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
-      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-item", "iso-answer", "iso-taken", "iso-done", "iso-stopped", "iso-failed", "iso-retry", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "terminal"] satisfies EngineEvent["type"][];
+      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-item", "iso-answer", "iso-taken", "iso-done", "iso-stopped", "iso-failed", "iso-retry", "context", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "terminal"] satisfies EngineEvent["type"][];
       for (const type of types) source.addEventListener(type, on);
       return () => source.close();
     },

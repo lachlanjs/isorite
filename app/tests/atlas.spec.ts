@@ -28,7 +28,7 @@ async function showContext(page: Page, back?: "Note" | "Atlas") {
     // The row has scrolled back to the pane before anything is pressed in it.
     await expect.poll(async () => (await page.locator(`[data-pane="${back.toLowerCase()}"]`).boundingBox())?.x).toBe(0);
   }
-  return page.getByRole("list", { name: "What you gave Iso" });
+  return page.getByRole("list", { name: "The notes Iso has" });
 }
 
 test("the map draws the base: its folders, its notes, and the routes between them", async ({ page }) => {
@@ -321,7 +321,7 @@ test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given t
   await page.waitForTimeout(800);
   await page.mouse.up();
   await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
-  await expect(tray.getByRole("listitem")).toHaveText([/^▣ Huffman codes \d+/]);
+  await expect(tray.locator('li[data-key^="g:"]')).toHaveText([/^◆\s*Huffman codes\s*\d+/]);
   await page.mouse.move(huffman.x - 60, huffman.y + 120); // off it, so it is not lit by pointing
   await expect(note(page, "coding/huffman-codes")).not.toHaveClass(/\bat\b/); // held, not chosen
   if ((page.viewportSize()?.width ?? 1280) <= 760) return; // carrying is a mouse's: a phone holds
@@ -333,10 +333,10 @@ test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given t
   await page.mouse.move(iso.x + 80, iso.y + 200, { steps: 8 });
   await expect(page.locator(".carried")).toHaveText("▣ Surprise");
   await page.mouse.up();
-  await expect(tray.getByRole("listitem")).toHaveText([/^▣ Huffman codes \d+/, /^▣ Surprise \d+/]);
+  await expect(tray.locator('li[data-key^="g:"]')).toHaveText([/^◆\s*Huffman codes\s*\d+/, /^◆\s*Surprise\s*\d+/]);
   // Taken out again.
   await tray.getByRole("button", { name: "Take Huffman codes out of Iso's context" }).click();
-  await expect(tray.getByRole("listitem")).toHaveText([/^▣ Surprise \d+/]);
+  await expect(tray.locator('li[data-key^="g:"]')).toHaveText([/^◆\s*Surprise\s*\d+/]);
 });
 
 test("notes are picked on the map for a request: numbered in order, sized in the dock, and taken away again", async ({ page }) => {

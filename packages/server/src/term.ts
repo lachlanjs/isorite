@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from "nod
 import { hostname, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { StudyError } from "@isorite/core";
+import { AGENTS_FILE, StudyError } from "@isorite/core";
 import { NAME } from "@isorite/example";
 import { writeExample } from "@isorite/example/node";
 import { defaultHome, findOpenCode, GATEWAY_KEY, gatewayFrom, startScripted, tutorialScript, writeHome, type Gateway } from "@isorite/opencode";
@@ -161,7 +161,9 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
   const { gateway, env } = models;
   const said = where(port, models, given);
   for (const line of said) console.log(line);
-  const home = writeHome(defaultHome(env), { gateway });
+  // The base's own instructions go to the terminal's agent as to Iso, when the base is named here.
+  const agents = path === undefined ? null : join(locate(path).notes, AGENTS_FILE);
+  const home = writeHome(defaultHome(env), { gateway, instructions: agents && existsSync(agents) ? [agents] : [] });
   const shared = { ...env, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url };
   let backend: Awaited<ReturnType<typeof startOpenCode>>;
   try { backend = await startOpenCode(opencode.command, { cwd, env: shared }); } catch (e) { server.release(); throw e; }

@@ -46,12 +46,15 @@ export interface Ran {
   usage: Usage;
   /** How many times the model was called. */
   calls: number;
+  /** What the provider counted as sent in the first call: the turn's context, before any look-up. */
+  firstIn: number;
   cut: boolean;
 }
 
 export async function rounds(o: Run): Promise<Ran> {
   const messages = [...o.messages], most = o.most ?? ROUNDS[o.tier], model = o.provider.tiers[o.tier];
   const usage: Usage = { model, tokensIn: 0, tokensOut: 0, tokensCached: 0, usd: 0 };
+  let firstIn = 0;
   for (let round = 0, calls = 1; ; round++, calls++) {
     let first = true;
     const ask = (maxTokens: number) => complete(o.http, o.provider, o.key, {
@@ -62,13 +65,14 @@ export async function rounds(o: Run): Promise<Ran> {
     const add = (r: Reply) => { usage.tokensIn += r.usage.tokensIn; usage.tokensOut += r.usage.tokensOut; usage.tokensCached += r.usage.tokensCached; usage.usd += r.usage.usd; };
     let r = await ask(o.maxTokens);
     add(r);
+    if (round === 0) firstIn = r.usage.tokensIn;
     // A model that thinks before it writes can spend the whole budget thinking: asked once more with more room.
     if (empty(r)) {
       r = await ask(o.maxTokens * WIDER);
       add(r);
       if (empty(r)) throw new ModelError(`${model} used its whole output budget (${Math.max(o.maxTokens * WIDER, o.provider.maxTokens ?? 0)} tokens) thinking, and wrote nothing. Try a lower tier, or raise max_tokens under [provider] in config.toml.`, 502, { kind: "cut" });
     }
-    if (!r.calls.length || round >= most) return { text: r.text, usage, calls, cut: r.cut };
+    if (!r.calls.length || round >= most) return { text: r.text, usage, calls, cut: r.cut, firstIn };
     messages.push({ role: "assistant", content: r.text, calls: r.calls });
     for (const c of r.calls) {
       const { text, step } = await o.lookup.call(c.name, c.arguments);

@@ -30,6 +30,7 @@ turn off certificate checking (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
 | `~/.config/isorite/config.toml` (or `$XDG_CONFIG_HOME/isorite/`) | isorite's settings for this machine: `device`, `[provider]`, `[tiers]`, `[prices]`. Mode 600. Holds the key. |
 | `~/.config/isorite/opencode/` | OpenCode's settings as isorite writes them at each `isorite term` start (`opencode.json`, theme, plugin link). Rewritten; don't edit. |
 | `~/.config/isorite/opencode/local.json` | The person's own OpenCode settings, laid over isorite's. Never rewritten. |
+| `<notes>/AGENTS.md` | The base's own instructions (notation, level, how notes are named), sent to Iso with every turn and named in OpenCode's `instructions`. Not a note: not on the Atlas, not linted. |
 | `<notes>/.isorite/` | isorite's own folder in the notes: journals of every change, `settings.toml` (`repository = "<path>"`, where code links point). Made on first open; commit it with the notes. |
 | `~/.local/share/isorite/models/` (or `$XDG_DATA_HOME/isorite/models/`) | The models for search by meaning, a folder each: `granite-embedding-small-english-r2/`, and any other installed with `--from`. `use` names the one used, if not granite. |
 | `~/.cache/isorite/vectors-<hash>.json` | Each base's vectors, made by the model; made again when the model changes. |

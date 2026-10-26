@@ -1,0 +1,23 @@
+{
+  "name": "Asked to link a note as required, it writes the link with its kind",
+  "turn": {
+    "mode": "write",
+    "asked": "In Barnes–Hut, link softening as something it uses.",
+    "given": [
+      {
+        "kind": "note",
+        "id": "algorithms/barnes-hut"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "changed": [
+        "algorithms/barnes-hut"
+      ]
+    },
+    {
+      "changedSays": "\\(/physics/softening\\.md \"uses\"\\)"
+    }
+  ]
+}
