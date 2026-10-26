@@ -24,10 +24,8 @@ import { term } from "./term.ts";
 import { guide } from "./guide.ts";
 import { writeExample, writeGeometry } from "@isorite/example/node";
 import { modelCommand } from "./model.ts";
+import { VERSION } from "./version.ts";
 
-// The version: written into the bundle when it is built for npm (scripts/package.ts), else this checkout's.
-declare const ISORITE_VERSION: string | undefined;
-const VERSION = typeof ISORITE_VERSION === "string" ? ISORITE_VERSION : "0.1.0 (checkout)";
 
 const USAGE = `isorite: an agentic harness for understanding
 

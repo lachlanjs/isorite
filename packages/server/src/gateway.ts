@@ -48,13 +48,15 @@ export function gatewayHttp(provider: ProviderConfig, tls: GatewayTls | null, en
 /** What OpenCode may ask of the provider through isorite. */
 const RELAYED = new Set(["/chat/completions", "/models"]);
 
-/** The provider at /api/gateway: each request is sent on with what `endpoint` adds (the key, where the provider
+/** The provider at /api/gateway, as `live` has it: each request is sent on with what `endpoint` adds (the key, where the provider
  *  wants it, its headers and query) by `http`, and the reply streamed back. A provider that can't be reached is
  *  answered as an OpenAI-compatible one answers an error, so OpenCode shows why. */
-export function relay(provider: ProviderConfig, http: Http, key: () => Promise<string | null>): (path: string, req: Request) => Promise<Response> {
+export function relay(live: () => { provider: ProviderConfig; http: Http }, key: () => Promise<string | null>): (path: string, req: Request) => Promise<Response> {
   const json = (status: number, message: string) => new Response(JSON.stringify({ error: { message } }), { status, headers: { "Content-Type": "application/json" } });
   return async (path, req) => {
     if (!RELAYED.has(path)) return json(404, `isorite relays only ${[...RELAYED].join(" and ")}`);
+    // The provider as it is now: one kept from the settings since the terminal began is used at once (M18).
+    const { provider, http } = live();
     const to = endpoint(provider, await key(), path), type = req.headers.get("content-type");
     const body = req.method === "POST" ? await req.text() : undefined;
     // A provider down for a moment is asked again, as Iso's turns ask it, before anything is passed on.

@@ -174,6 +174,46 @@ export interface Settings {
   spendCap: number | null;
 }
 
+/** A name and value the gateway is sent: a header, or a query value (M18). A value whose name looks secret is not
+ *  sent back to the page: `held` says one is kept, and a pair sent back with `held` and no value keeps it. */
+export interface SetupPair { name: string; value: string; held?: boolean }
+
+/** The provider's setup, as Iso's settings show it: config.toml's [provider] and [tiers], its secrets held, not shown. */
+export interface ProviderSetup {
+  kind: "openrouter" | "gateway";
+  name: string;
+  url: string;
+  keyHeld: boolean;
+  /** The header the key goes in, when not Authorization: Bearer. */
+  keyHeader: string;
+  headers: SetupPair[];
+  query: SetupPair[];
+  /** The client certificate: a .pfx, or a certificate and its key; and an authority. Paths on the server's machine. */
+  pfx: string;
+  passphraseHeld: boolean;
+  cert: string;
+  certKey: string;
+  ca: string;
+  streamUsage: boolean;
+  maxTokens: number | null;
+  tiers: Record<Tier, string>;
+}
+
+/** A setup sent to be checked or kept: the key and the .pfx's password as given now (a value), forgotten (null),
+ *  or as held (left out). */
+export interface SetupDraft extends ProviderSetup { key?: string | null; passphrase?: string | null }
+
+export interface SetupView {
+  setup: ProviderSetup;
+  /** Whether it may be changed from where the page is: only from this machine (M18). */
+  local: boolean;
+  /** Where it is kept. */
+  config: string;
+}
+
+/** One step of a check, as isorite doctor says it. */
+export interface SetupCheck { step: string; outcome: "ok" | "fail" | "warn" | "skip"; said: string }
+
 export type EngineEvent =
   /** A note's file was written, or found changed. `version` is null when the note is gone. */
   | { type: "note-changed"; id: string; version: string | null; who: string }

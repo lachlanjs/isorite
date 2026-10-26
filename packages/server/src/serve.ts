@@ -8,13 +8,15 @@ import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
 import { serve as nodeServe } from "@hono/node-server";
 import { CONFIG_FILE, GITATTRIBUTES, OWN_DIR, StudyError } from "@isorite/core";
-import { Engine, KEY, systemClock, type Http, type Secrets } from "@isorite/engine";
-import { ConfigSecrets, configPath, deviceId, gatewayTls, providerConfig } from "./config.ts";
+import { Engine, KEY, OPENROUTER, systemClock, type Http, type ProviderConfig, type Secrets } from "@isorite/engine";
+import { ConfigSecrets, configPath, deviceId, gatewayTls, hasModel, providerConfig } from "./config.ts";
 import { gatewayHttp, relay } from "./gateway.ts";
 import { cacheDir, modelDir, nodeEmbedder } from "./embedder.ts";
 import { LOOPBACK, createApp } from "./http.ts";
 import { Terminal } from "./terminal.ts";
 import { NodeFiles } from "./nodefiles.ts";
+import { Setup } from "./setup.ts";
+import { VERSION } from "./version.ts";
 import { defaultStudyPath, openStudyBase } from "./studybase.ts";
 
 /** The built app: in a checkout, where npm run build puts it; installed from npm, in the package's web/. */
@@ -70,22 +72,37 @@ export async function openEngine({ notes }: Opened, device = deviceId(), config 
   });
 }
 
+/** The guide's finder, as a provider: no key, no sign-in, and a name that says what it is. */
+const { auth: _auth, ...openrouter } = OPENROUTER;
+const FINDER: ProviderConfig = { ...openrouter, name: "finder", url: "http://finder.invalid/v1" };
+
+/** The provider as the configuration has it now: kept from the settings (M18), it is taken into use at once, by
+ *  Iso and the relay. With `stand`, that is asked while there is no model here. */
+export async function liveProvider(config: string, stand?: Http): Promise<{ provider: ProviderConfig; http: Http }> {
+  if (stand && !(await hasModel(config))) return { provider: FINDER, http: stand };
+  const provider = providerConfig(config);
+  return { provider, http: gatewayHttp(provider, gatewayTls(config)) };
+}
+
 /** A link most terminals let you click (OSC 8), when the output is a terminal; the address as it is otherwise. */
 export const link = (url: string, tty = Boolean(process.stdout.isTTY)): string => (tty ? `\x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\` : url);
 
 /** `stand`: in place of the provider, an answerer of its own, as the guide's finder is when no model is set up
- *  (M16). It needs no key, and the key kept, if any, is not sent to it. */
+ *  (M16). It is asked while there is no model here (no key, no provider of your own), and needs no key. */
 export async function serve(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], stand }: { host?: string; port?: number; allowHosts?: string[]; stand?: Http } = {}): Promise<void> {
   const opened = locate(path);
-  const config = configPath(), provider = providerConfig(config), http = stand ?? gatewayHttp(provider, gatewayTls(config));
-  const kept = new ConfigSecrets(config);
-  const secrets: Secrets = stand ? { get: (name) => (name === KEY ? Promise.resolve("none") : kept.get(name)), set: (name, value) => kept.set(name, value) } : kept;
-  const api = await openEngine(opened, deviceId(config), config, http, modelDir(), secrets);
+  const config = configPath();
+  const current = () => liveProvider(config, stand);
+  let live = await current();
+  const secrets = new ConfigSecrets(config);
+  const api = await openEngine(opened, deviceId(config), config, live.http, modelDir(), secrets);
+  api.setProvider(live.provider, live.http);
+  const setup = new Setup({ config, notes: opened.notes, version: VERSION, port, kept: async () => { live = await current(); api.setProvider(live.provider, live.http); } });
   // The provider is relayed to OpenCode only on this machine: from a tailnet it would be anyone's to use.
-  const gateway = LOOPBACK.has(host) ? relay(provider, http, () => secrets.get(KEY)) : undefined;
+  const gateway = LOOPBACK.has(host) ? relay(() => live, () => secrets.get(KEY)) : undefined;
   const web = existsSync(join(WEB_DIR, "index.html")) ? WEB_DIR : null;
   const terminal = new Terminal();
-  const app = createApp({ api, token: randomBytes(24).toString("base64url"), loopback: LOOPBACK.has(host), web, allowHosts, notes: opened.notes, terminal, gateway });
+  const app = createApp({ api, token: randomBytes(24).toString("base64url"), loopback: LOOPBACK.has(host), web, allowHosts, notes: opened.notes, terminal, gateway, setup });
   const server = nodeServe({ fetch: app.fetch, hostname: host, port });
   server.on("error", (e: NodeJS.ErrnoException) => {
     console.error(e.code === "EADDRINUSE" ? `port ${port} is in use (isorite serve --port <n>)` : e.message);

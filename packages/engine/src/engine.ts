@@ -538,6 +538,15 @@ export class Engine implements Api {
 
   private get provider(): ProviderConfig { return this.opts.provider ?? OPENROUTER; }
 
+  /** Take another provider into use, from the next request on: a setup kept from the settings (M18). What was
+   *  asked of the last one (its key's limit, its model's window) is asked again. */
+  setProvider(provider: ProviderConfig, http: Http): void {
+    this.opts.provider = provider;
+    this.opts.http = http;
+    this.window = undefined;
+    this.keyLimit = undefined;
+  }
+
   async settings(): Promise<Settings> {
     return { provider: this.provider.name, key: Boolean(await this.opts.secrets?.get(KEY)), connect: Boolean(this.provider.auth && this.opts.secrets), tiers: this.provider.tiers, spendCap: await this.spendCap() };
   }

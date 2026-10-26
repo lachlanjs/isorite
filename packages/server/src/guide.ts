@@ -5,13 +5,14 @@
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { OPENROUTER, KEY } from "@isorite/engine";
 import { OWN_DIR, StudyError } from "@isorite/core";
 import { finderHttp, START } from "@isorite/guide";
 import { loadGuide } from "@isorite/guide/node";
-import { ConfigSecrets, configPath, providerConfig } from "./config.ts";
+import { hasModel } from "./config.ts";
 import { serve } from "./serve.ts";
 import { openBrowser } from "./term.ts";
+
+export { hasModel };
 
 export const GUIDE_FOLDER = join(homedir(), "isorite-guide");
 
@@ -29,17 +30,12 @@ export function writeGuide(folder: string): { notes: string; fresh: boolean } {
   return { notes: at, fresh: true };
 }
 
-/** Whether Iso has a model here: a key kept, or a provider of your own (a gateway may need no key). */
-export async function hasModel(config = configPath()): Promise<boolean> {
-  return (await new ConfigSecrets(config).get(KEY)) !== null || providerConfig(config).url !== OPENROUTER.url;
-}
-
 export async function guide(folder = GUIDE_FOLDER, { port = 4767, out = console.log }: { port?: number; out?: (line: string) => void } = {}): Promise<void> {
   const { notes, fresh } = writeGuide(folder);
   const model = await hasModel();
   out(fresh ? `isorite guide: written to ${notes}; it is yours to change, and run again it opens as you left it` : `isorite guide: ${notes}, as you left it`);
   out(model ? "  Iso: your provider's model" : "  Iso: the guide's finder, which answers with the notes that match (no model is set up)");
   out(`  start at http://localhost:${port}/#/n/${START}`);
-  await serve(notes, { port, ...(model ? {} : { stand: finderHttp(16) }) });
+  await serve(notes, { port, stand: finderHttp(16) });
   if (process.env.ISORITE_NO_BROWSER !== "1") openBrowser(`http://localhost:${port}/#/n/${START}`);
 }

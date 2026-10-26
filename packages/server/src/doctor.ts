@@ -43,7 +43,7 @@ const MARK: Record<Outcome, string> = { ok: "✓", fail: "✗", warn: "!", skip:
 
 /** The environment variables isorite and Node read for it; the secret ones are shown only by length. */
 const READ = ["ISORITE_GATEWAY_URL", "ISORITE_GATEWAY_MODELS", "ISORITE_GATEWAY_KEY", "ISORITE_OPENCODE", "XDG_CONFIG_HOME", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "NODE_TLS_REJECT_UNAUTHORIZED", "ISORITE_NODE_DEFAULTS", "SSH_CONNECTION", "ISORITE_EMBED", "ISORITE_EMBED_DIR", "XDG_DATA_HOME", "XDG_CACHE_HOME"];
-const SECRET = /key|token|secret|pass|auth|cookie/i;
+export const SECRET = /key|token|secret|pass|auth|cookie/i;
 
 const hidden = (v: string) => `<${v.length} characters>`;
 /** A proxy's address without the password it may carry (http://user:pass@proxy:8080). */
@@ -58,6 +58,44 @@ function redacted(value: unknown, field = ""): unknown {
 }
 
 const TOOL: ToolDef = { type: "function", function: { name: "ping", description: "Answers pong. Call it when asked to ping.", parameters: { type: "object", properties: {}, additionalProperties: false } } };
+
+/** The provider asked, as doctor asks it and as the page's check does (M18): its list of models, a short reply from
+ *  each tier's model, and one tool call. A few hundred tokens in all. */
+export async function checkProvider(p: ProviderConfig, h: Http, key: string | null, say: (step: string, outcome: Outcome, said: string) => void): Promise<void> {
+  const models = [...new Set([p.tiers.low, p.tiers.mid, p.tiers.max])];
+  let reached = true;
+  try {
+    const to = endpoint(p, key, "/models");
+    const res = await h.fetch(to.url, { headers: to.headers, signal: AbortSignal.timeout(20_000) });
+    if (res.ok) {
+      const listed = (((await res.json().catch(() => ({}))) as { data?: { id?: string }[] }).data ?? []).map((m) => m.id ?? "");
+      const missing = models.filter((m) => !listed.includes(m));
+      say("reached", "ok", `${to.url.replace(/\?.*$/, "")} answered with ${listed.length} models`);
+      if (listed.length && missing.length) say("models", "fail", `${missing.join(", ")} not among them; it has ${listed.slice(0, 12).join(", ")}${listed.length > 12 ? ", …" : ""}. Name its models under [tiers]`);
+    } else say("reached", res.status === 401 || res.status === 403 ? "fail" : "ok", res.status === 401 || res.status === 403 ? `it said ${res.status} to the list of models: the key${p.keyHeader ? "" : ", or the header it goes in (key_header)"}, or a header it wants (headers), is not accepted` : `it answered (${res.status} for the list of models, which some gateways don't have)`);
+  } catch (e) {
+    reached = false;
+    say("reached", "fail", unreachable(e, p.url));
+  }
+  if (reached) {
+    for (const model of models) {
+      try {
+        const reply = await complete(h, p, key, { model, maxTokens: 16, messages: [{ role: "user", content: "Reply with the one word: ready" }], signal: AbortSignal.timeout(60_000) });
+        const usage = reply.usage.tokensIn + reply.usage.tokensOut > 0;
+        say(`reply from ${model}`, usage || p.streamUsage === false ? "ok" : "warn", `"${reply.text.trim().slice(0, 40)}"${usage ? `, ${reply.usage.tokensIn} tokens in and ${reply.usage.tokensOut} out` : p.streamUsage === false ? "" : ": no usage reported, so the gauge can't count it"}`);
+      } catch (e) {
+        const said = (e as Error).message;
+        say(`reply from ${model}`, "fail", /stream_options/i.test(said) ? `${said} Set stream_usage = false under [provider].` : said);
+      }
+    }
+    try {
+      const reply = await complete(h, p, key, { model: p.tiers.mid, maxTokens: 64, tools: [TOOL], messages: [{ role: "user", content: "Ping, using the ping tool." }], signal: AbortSignal.timeout(60_000) });
+      say("tools", reply.calls.length ? "ok" : "fail", reply.calls.length ? `${p.tiers.mid} called ${reply.calls[0]!.name}` : `${p.tiers.mid} answered without calling the tool: Iso and the terminal need a model, and a gateway, that pass tools on`);
+    } catch (e) {
+      say("tools", "fail", e instanceof ModelError ? e.message : String(e));
+    }
+  }
+}
 
 /** Run the checks; 0 when none failed. */
 export async function doctor(folder: string | undefined, o: DoctorOptions = {}): Promise<number> {
@@ -99,38 +137,7 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
     const p = provider, h = http;
     const models = [...new Set([p.tiers.low, p.tiers.mid, p.tiers.max])];
     if (!o.report) out(`  asking ${p.name}: its models, then ${models.length + 1} replies of a few words (a few hundred tokens in all)`);
-    let reached = true;
-    try {
-      const to = endpoint(p, key, "/models");
-      const res = await h.fetch(to.url, { headers: to.headers, signal: AbortSignal.timeout(20_000) });
-      if (res.ok) {
-        const listed = (((await res.json().catch(() => ({}))) as { data?: { id?: string }[] }).data ?? []).map((m) => m.id ?? "");
-        const missing = models.filter((m) => !listed.includes(m));
-        say("reached", "ok", `${to.url.replace(/\?.*$/, "")} answered with ${listed.length} models`);
-        if (listed.length && missing.length) say("models", "fail", `${missing.join(", ")} not among them; it has ${listed.slice(0, 12).join(", ")}${listed.length > 12 ? ", …" : ""}. Name its models under [tiers]`);
-      } else say("reached", res.status === 401 || res.status === 403 ? "fail" : "ok", res.status === 401 || res.status === 403 ? `it said ${res.status} to the list of models: the key${p.keyHeader ? "" : ", or the header it goes in (key_header)"}, or a header it wants (headers), is not accepted` : `it answered (${res.status} for the list of models, which some gateways don't have)`);
-    } catch (e) {
-      reached = false;
-      say("reached", "fail", unreachable(e, p.url));
-    }
-    if (reached) {
-      for (const model of models) {
-        try {
-          const reply = await complete(h, p, key, { model, maxTokens: 16, messages: [{ role: "user", content: "Reply with the one word: ready" }], signal: AbortSignal.timeout(60_000) });
-          const usage = reply.usage.tokensIn + reply.usage.tokensOut > 0;
-          say(`reply from ${model}`, usage || p.streamUsage === false ? "ok" : "warn", `"${reply.text.trim().slice(0, 40)}"${usage ? `, ${reply.usage.tokensIn} tokens in and ${reply.usage.tokensOut} out` : p.streamUsage === false ? "" : ": no usage reported, so the gauge can't count it"}`);
-        } catch (e) {
-          const said = (e as Error).message;
-          say(`reply from ${model}`, "fail", /stream_options/i.test(said) ? `${said} Set stream_usage = false under [provider].` : said);
-        }
-      }
-      try {
-        const reply = await complete(h, p, key, { model: p.tiers.mid, maxTokens: 64, tools: [TOOL], messages: [{ role: "user", content: "Ping, using the ping tool." }], signal: AbortSignal.timeout(60_000) });
-        say("tools", reply.calls.length ? "ok" : "fail", reply.calls.length ? `${p.tiers.mid} called ${reply.calls[0]!.name}` : `${p.tiers.mid} answered without calling the tool: Iso and the terminal need a model, and a gateway, that pass tools on`);
-      } catch (e) {
-        say("tools", "fail", e instanceof ModelError ? e.message : String(e));
-      }
-    }
+    await checkProvider(p, h, key, say);
   }
 
   // The terminal.
