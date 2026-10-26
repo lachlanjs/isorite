@@ -173,4 +173,97 @@ Answered 2026-10-26:
 
 ## 6. What was built
 
-To be written.
+Built 2026-10-26 on `m14-work-fixes`, in six commits after the plan (`4cde860` … `aaca5b4`), then version 0.3.1.
+
+1. **The Atlas's click** (`4cde860`):
+   - A click chooses a note, and a second one opens it, whether Iso's context is shown or not.
+   - Shift+click gives a note or folder to Iso, or takes it back. On a phone, the hold menu has "Take back from
+     Iso" for a note already given. Dragging works as before.
+   - The legend's "tap to give or take back" is gone. A given note or folder has a tooltip saying shift+click
+     takes it back.
+2. **Iso's path along the trunks** (`4cde860`). The cause was simpler than the plan's guess: every one of Iso's
+   steps along a link was turned round (`{from: opened, to: from}`, against the comment above it). So the map's
+   own route was never found, and the router drew each step afresh. Fixed, and `litRoutes()` also takes a route
+   found the other way round, turned round. A unit test shows that a link followed against the map's way lights
+   the map's own points.
+3. **Retries** (`e8a949c`).
+   - `complete()` asks again after about 1, 2 and 4 s (plus up to 0.25 s at random) when the provider:
+     - answers 502, 503 or 504;
+     - breaks the connection (`ECONNRESET`, `UND_ERR_SOCKET`, …) or times out;
+     - answers 429: once, after its `Retry-After` if that is 10 s or less.
+
+     It does so only before any text or tool call has come.
+   - A reply broken off after it began says "<provider> broke off its reply: …", and isn't asked again.
+   - `ModelError` now carries a kind: `unavailable`, `limited`, `settings` or `cut`.
+   - Down for good, the turn says "<provider> is unavailable (503: …), tried 4 times over N s: it is likely
+     <provider>, not your settings."
+   - The relay does the same before it passes anything to OpenCode.
+   - Iso's pane says "Iso's provider did not answer: asking again (2 of 3)". A failed last turn has ↻ (Send it
+     again), which sends its words, given parts, mode and tier, and leaves the failed turn out of what is sent.
+   - **A fault found on the way:** under the server, Hono's Node adapter puts its own `Response` in place of the
+     global one. So `instanceof Response` was false for `fetch`'s replies, and the relay took every reply for an
+     error ("could not be reached: no reason given"). Its unit test called it outside the server and passed;
+     OpenCode's end-to-end tests caught it. Replies are now told from errors by their shape (`isResponse`), and a
+     test passes the relay a reply that isn't an instance of the global `Response`.
+4. **Empty replies** (`0c4cb56`).
+   - A reply cut off with nothing written and no tool called is asked once more with 3 times the budget. Empty
+     again: "<model> used its whole output budget (N tokens) thinking, and wrote nothing. Try a lower tier, or
+     raise max_tokens under [provider] in config.toml."
+   - **Departure from the plan:** the setting is `max_tokens` under `[provider]`, not `[tiers]`. `[tiers]` holds
+     model names only. It is the least budget any call is given.
+5. **The model** (`b2dd76b`).
+   - `isorite model` first says what is installed: the name, the path, the first 12 characters of the graph's
+     SHA-256, the pooling, and which place it was found by (`ISORITE_EMBED_DIR`, `--from`, beside isorite, or
+     `isorite model`). Then it fetches nothing.
+   - Otherwise it tries npm, the GitHub release, then Hugging Face. On failure it lists each source with its
+     reason (M13's `unreachable()` for network errors) and what to do.
+   - `--from` takes granite's files, which are checked by hash, or any other model, which is checked by use: it
+     loads and gives 384 finite numbers.
+     - The other model is kept in `models/<name>/`, and `models/use` names it.
+     - `isorite-model.json` gives its name and pooling (`cls` or `mean`). The worker pools either way, and no
+       longer needs `tokenizer_config.json`.
+     - The index's model id is granite's as before (so existing vectors stay), or `<name>-<sha12>-<pooling>`, so a
+       base's vectors are made again when the model changes.
+   - **Departure from the plan:** the model goes on one release of its own, `model-granite-1.0.0`, not on every
+     isorite release (53 MB each). `.github/workflows/model-release.yml` makes it when run by hand from the Actions
+     tab. It packs the package as npm serves it, so the upload is GitHub's, not from home. **It hasn't been run.**
+     Until it is, that source fails with "it said 404", and the others are tried.
+6. **doctor** (`b2dd76b`):
+   - "✓ search by meaning: <name> at <path>", "! … no model in …: isorite model fetches it (53 MB). Search by words
+     works without it" (a warning: nothing fails), or "– switched off".
+   - With a notes folder, whether the base's vectors are the model's.
+   - Its report lists `ISORITE_EMBED`, `ISORITE_EMBED_DIR`, `XDG_DATA_HOME` and `XDG_CACHE_HOME`.
+   - The `NODE_TLS_REJECT_UNAUTHORIZED=0` warning was there from M13. It now says isorite doesn't need the
+     setting.
+7. **`isorite new <folder>`** (`aaca5b4`):
+   - It makes the folder and its parents, with `.isorite/` and its `.gitattributes`, writes no notes, and prints
+     the `serve` and `term` commands with the whole path.
+   - It refuses a folder with files in it already (open it as it is) and a file.
+   - `serve` and `term` on a missing folder say "isorite new … makes one".
+8. **The guides** (`aaca5b4`):
+   - `setup.md`: `isorite new`, the model, retries, `max_tokens`.
+   - `setup-for-agents.md`: commands, files, settings, variables, retries, empty replies, three new failures, and
+     another model.
+   - `terminal.md`: the model's sources.
+   - The npm README, and the tutorial's L2 text (shift+click).
+
+**Tests:**
+- Unit tests: 302 core, 104 engine (provider: retries, 429, broken-off replies, stopping while waiting, empty
+  replies), 15, 51, 65 server (relay retries and a foreign reply, `max_tokens`, the model's sources, `isorite
+  model`'s reports, a real compatible model with mean pooling, `isorite new`, doctor's lines), and 45.
+- OpenCode 2's end-to-end tests: 11, through the relay.
+- Browser: 168 passed, 8 skipped. New: the click and shift+click with the context shown, the hold menu's "Take
+  back", and the outage in Iso's pane with ↻.
+- Tutorial walks: 22 of 24. The two phone walks of L2 fail as they did on `main`, where the card covers Iso's Undo
+  button (§4).
+- `svelte-check` and `tsc` are clean, and the autofixer reports no issues on the changed components.
+
+**The real check:**
+- One Ask turn on the low tier (Haiku 4.5), on a copy of the example base, through the retry path: 8,591 tokens in
+  and 226 out, **$0.0097**. It searched, read Symplectic integrators, and answered with a link to it.
+- The failing proxy in front of it was left out: the scripted tests cover the retries, with the same code.
+
+**Not checked:**
+- A real gateway outage.
+- The GitHub source of the model, until the workflow is run.
+- `isorite new` from the npm package.
