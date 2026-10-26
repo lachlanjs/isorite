@@ -18,6 +18,19 @@ Lachlan's notes from work come into it:
 The direction from 2026-10-13 holds too: the person decides what Iso sees, and the automatic budgets are a
 stopgap.
 
+**Revised 2026-10-26 after Q64–Q69** (answers in §5), drawing on Drew Breunig's "The State of Context Engineering"
+(2026-10-24). Three of its points shape this plan:
+- **Decide in code what can be decided in code**, and leave to the model only what needs judgement. Here, what is
+  sent and when parts age off are code. Compaction is the model's.
+- **Of its six tactics, isorite already has some.** Tool loadout is the modes' tools. Augmentation is looking
+  things up. It needs the rest:
+  - **offloading:** the base is the store, and a note left out is a pointer, read again when needed;
+  - **pruning:** age-off;
+  - **summarisation:** compaction.
+- **Context inertia and distraction grow with length.** The post cites repeated actions beyond about 100k tokens,
+  and its author resets at 200k. Resetting while keeping what was made is the fix (Memento, "Scaling discovery
+  requires forgetting"). In isorite, what was made is in the notes already.
+
 ## 1. What is wrong today
 
 Found by reading the code at `e989a07`.
@@ -89,14 +102,45 @@ writing in place, in the Note pane, are in `iso.ts`. What they say is accurate, 
    next turn. Every turn is sent what is on, and nothing else is added or cut.
 2. **What Iso reads joins it** (Q64). A note it reads is in hand from then on, at the sections it read, or whole if
    it read the whole note. Reading more of it adds sections. Iso is told what it has in hand, so it doesn't read a
-   note again.
-3. **No automatic trimming.** `conversation()`'s shortening and dropping, and `windowed()`'s cut of given notes,
-   go.
-   - If what is on would pass the model's limit, the turn isn't sent (Q65). The gauge in Iso's header shows it
-     over, the message says by how much, and the Context view opens.
-   - Making room is yours: switch parts off.
-   - Drafts in the Note pane (insert and rewrite) keep their budgets for now. They are short and one-off, and
-     §4 leaves them out.
+   note again. The switch is per note, not per section (Q68).
+3. **Age-off, by a rule in code**, for what can be had again.
+   - **The principle.** The base is where context is offloaded to. A note Iso read is in the base, so leaving it
+     out loses nothing: it becomes a pointer, read again if needed.
+   - **What never ages off:** what you gave, your passages, Understanding notes given, the base's instructions,
+     and the turns. These can't be had again by reading.
+   - **The rule.** A note Iso read is used in a turn when Iso reads it again, links to it in what it writes, or
+     changes it. When it hasn't been used for 3 turns, it is switched off. Its row stays, dimmed and marked as
+     aged off, and one click puts it back.
+   - **What Iso is told.** While a note is off, Iso is sent one line for it: "Read earlier, set aside: <title>
+     (/id.md)".
+   - **The provider's cache.** Age-off is applied only when a turn starts, all at once. The parts in hand keep the
+     order they came in, so the provider's prompt cache holds up to the first change.
+   - **Letting Iso choose for itself** (a tool to set a note aside, or keep it) is left out (§4). The rule is
+     there to see, and the same each time.
+4. **Compaction** (Q65): earlier turns summed up into a briefing that stands for them.
+   - **A turn to Iso of its own, on the low tier**, in the post's two steps:
+     1. From the turns to be summed up, it picks what still matters: what was asked and settled, the threads still
+        open, preferences said along the way, and the notes the talk turned on.
+     2. It writes that as a briefing. The notes appear as links, which are pointers into the base.
+
+     Its cost is shown, as any turn's is.
+   - **In the Context view**, the briefing is a row under "conversation" that stands where the turns were. The
+     turns it replaces stay in the file and in the conversation, switched off and grouped under it. Switching the
+     briefing off and the turns back on undoes it.
+   - **Preferences said in the conversation** that sound like the base's ways ("always use ∂ for the boundary")
+     are offered for `AGENTS.md` with `offer_text`. The person inserts them, or not.
+   - **When it happens:**
+     - **By hand:** the Context view's compact icon, at any point. All turns but the last are summed up.
+     - **On its own, at the limit.** When a turn would pass the model's limit, the earliest turns are compacted
+       before it is sent. If what is left is still over, the turn isn't sent, and the Context view says what is
+       too large: a note, or the message.
+   - **The warning.** At 100k tokens, or half the limit if less (the post's point where repetition begins), the
+     gauge takes the warning colour and its tooltip suggests compacting. It's a warning only: nothing is done.
+   - **A new conversation from here** (the "Memento" reset): a fresh conversation that starts with the briefing
+     and the notes you gave. It's a second choice under the pane's + icon. It suits a long conversation that has
+     stuck to one track.
+   - **No other trimming.** `conversation()`'s shortening and dropping, and `windowed()`'s cut of given notes, go.
+     Drafts in the Note pane (insert and rewrite) keep their budgets for now (§4).
 4. **Sizes as counted.**
    - After each call, the provider's `prompt_tokens` against the estimate gives a ratio for the conversation.
      Every size shown is estimate × ratio, marked "counted" once there is one.
@@ -117,13 +161,17 @@ writing in place, in the Note pane, are in `iso.ts`. What they say is accurate, 
      - **fixed**: the instructions, the base's instructions (C below), and your message.
    - Each row has its name, its detail (sections, "read by Iso" as a ◇ or "given" as a ◆), its size on the right,
      and a bar of its share of the limit.
-   - A click switches a row on or off. ✕ takes it out of the conversation.
-   - A note's row opens to its sections, each switchable (Q68).
+   - A click switches a row on or off. ✕ takes it out of the conversation. A note's detail names the sections it
+     holds.
+   - Aged-off rows are dimmed, with a tooltip saying why ("not used for 3 turns").
+   - The briefing row has the turns it stands for folded under it.
+   - A compact icon is at the head of "conversation".
    - The totals stand at the top: "18.4k of 200k".
    - No sentences: what a control does goes in its tooltip.
    - Empty, the view shows only the fixed rows.
 7. **The tier** leaves the Context view for a small low · mid · max switch in Iso's header, beside the gauges
-   (Q66).
+   (Q66). If the header is too narrow (a phone, or a narrow pane), the tier is the one letter of the tier chosen,
+   which cycles through them; its tooltip names the model.
 8. **The Atlas's context switch** shows the working set:
    - ◆ given and ◇ read by Iso, held or switched off (dimmed);
    - changed by Iso and pointed to, as now;
@@ -135,13 +183,17 @@ writing in place, in the Note pane, are in `iso.ts`. What they say is accurate, 
 
 ### C. What Iso is told
 
-10. **The base's own instructions:** `.isorite/instructions.md` (Q67).
+10. **The base's own instructions:** `AGENTS.md` at the top of the notes folder (Q67), the file other agents
+    look for.
     - It's written by the person: their notation, level, language, what they're working towards, how they name
       notes.
     - It's sent with every turn as a fixed row of the Context view, switchable like any part.
-    - It's edited in Iso's settings (the icon at the right of its header), in the editor the notes use.
+    - It isn't a note: the base's loader leaves it out, so it's not on the Atlas, and `isorite check` doesn't lint
+      it. Opening it means editing it, in Iso's settings (the icon at the right of its header), in the editor the
+      notes use.
     - Iso may suggest a line for it with `offer_text`, which the person inserts or not, as now.
-    - The terminal's agent is given the same file: the plugin names it in OpenCode's `instructions`.
+    - The terminal's agent is given the same file: the plugin names it in OpenCode's `instructions`. Any other
+      agent run in the notes folder, such as Claude Code, finds it there by itself.
 11. **The system prompt, rewritten in layers.** Each layer is short and plain, and in its own constant, so a mode
     takes the ones it needs:
     1. **isorite**:
@@ -184,7 +236,9 @@ writing in place, in the Note pane, are in `iso.ts`. What they say is accurate, 
       - given a problem with a wrong step;
       - given an Understanding note;
       - a request against the base's instructions (another notation);
-      - a long conversation with notes already in hand, which mustn't be read again.
+      - a long conversation with notes already in hand, which mustn't be read again;
+      - a long conversation compacted: the briefing must name the open thread and the notes it turned on, and the
+        next turn must carry on from it.
     - Each has checks that need no judge: which tools it called, links that resolve, frontmatter that parses,
       the notes it didn't touch, no note read twice. It also keeps the transcript, to read.
     - Run on a real model, on a copy of the example base, before the rewrite and after it.
@@ -195,51 +249,67 @@ writing in place, in the Note pane, are in `iso.ts`. What they say is accurate, 
 1. **The working set in the engine** (items 1–5):
    - lines in the conversation's file;
    - reads joining it;
+   - age-off and its pointers;
    - the turn built from it;
    - trimming removed;
    - the limit, and sizes as counted.
+2. **Compaction in the engine**:
+   - its turn on the low tier;
+   - the briefing as a part;
+   - compaction on its own at the limit;
+   - a new conversation from here.
+
+   Tests with the scripted provider.
 
    Unit tests, including a conversation file from M12 read as before (its turns in hand, no reads).
-2. **The Context view, the tier switch, the Atlas and the gauge** (items 6–9).
+3. **The Context view, the tier switch, the Atlas and the gauge** (items 6–9).
    - Browser tests.
    - The autofixer on each component.
    - Screenshots compared with the Header-Context board's sizes and rows.
-3. **`npm run eval:iso`** (item 13), and a first run with today's prompt, as the baseline.
-4. **The base's instructions** (item 10), the prompt's layers (item 11) and the terminal (item 12). Then a second
+4. **`npm run eval:iso`** (item 13), and a first run with today's prompt, as the baseline.
+5. **The base's instructions** (item 10), the prompt's layers (item 11) and the terminal (item 12). Then a second
    run of the eval, against the baseline.
-5. The tutorial's L2 step on what is sent, which names the Context view, and the guides.
-6. A real check in the browser on a copy of the example base: three turns, one of them over a note Iso read in
+6. **The guides**, and the tutorial's L2 step on what is sent, whose text names the Context view.
+   - The tutorial walk tests (`npm run test:tutorial`) are retired here, and not run. They are costly, and M16
+     replaces the tutorial they test.
+   - The coach stays in the app until then. Its steps are checked by hand against this milestone's Iso pane.
+7. A real check in the browser on a copy of the example base: three turns, one of them over a note Iso read in
    the first, which it mustn't read again. Costs reported. Then the write-up in §6 and version 0.4.0.
 
 No new npm packages are needed.
 
 ## 4. What is not in it
 
-- **Iso choosing its own context**, editing or pruning it as a note-graph (the "Context Language Models" idea of
-  2026-10-13). This milestone makes the working set explicit and kept, which that would build on.
-- **Summing up earlier turns** to make room (Iso writes a summary that stands for them, visible and undoable).
-  Q65 asks whether you want it.
+- **Iso choosing its own context**: a tool to set a note aside or keep it, or the context as a note-graph Iso
+  edits (the "Context Language Models" idea of 2026-10-13). The post's advice is to keep in code what code can
+  decide, so age-off comes first. Once it has been used, the eval can compare the rule with Iso's own choices.
+- **Subagents** (the post's quarantine): Iso sending a look-up off with a fresh context and taking back only what
+  it found. It may suit long research turns later.
 - **The terminal's own context.** OpenCode keeps and compacts its own. Iso's pane goes on showing its tokens.
 - **The budgets of drafts written in place** in the Note pane.
-- **The tutorial's redesign**, which is in the chat.
+- **The tutorial's redesign** is M16, straight after (agreed 2026-10-26). The tutorial becomes a knowledge base
+  about isorite that you explore, with problem notes as the things to do. Its walk tests go in this milestone.
 - **Setting a gateway up in the browser**, and **Pele with code highlighting**, which come next as agreed.
 
 ## 5. Questions
 
-- **Q64. What Iso reads stays in hand** until you take it out. *Recommended*: you see what it works from, and it
-  doesn't read a note twice. The other way: reads last for the turn only, and you pin the ones to keep.
-- **Q65. Over the limit, the turn isn't sent:** the gauge and the Context view show what to switch off.
-  *Recommended*: nothing is cut that you didn't cut. Either way, should summing up earlier turns come in a later
-  milestone?
-- **Q66. The tier moves to Iso's header**, as low · mid · max beside the gauges. *Recommended.* The other way: it
-  stays in the Context view.
-- **Q67. The base's instructions in `.isorite/instructions.md`**, edited from Iso's settings and shared with the
-  terminal. *Recommended*: it's the base's, not a note. The other way: a note in the base (say `iso.md`), on the
-  Atlas and edited like any note.
-- **Q68. A note's sections can be switched one by one.** *Recommended.* The other way: whole notes only, which is
-  simpler.
-- **Q69. The eval on the mid tier** (Sonnet 5.5 on OpenRouter): about a dozen turns of some 15k tokens in, so about $0.60 a run, twice. *Recommended.* The other
-  way: the low tier, for a few cents, which shows less of what the prompt changes.
+Answered 2026-10-26:
+- **Q64.** What Iso reads stays in hand. Lachlan asked whether Iso should manage its own context, or have some
+  age-off, if there's a principled way. The rule in item 3 is that way: only what can be read again from the base
+  ages off, and it leaves a pointer. Iso managing its own context is left for later (§4).
+- **Q65.** Compaction is essential: item 4.
+- **Q66.** The tier goes in the header, if there's room. Where there isn't, it narrows to the one letter of the
+  tier chosen (item 7).
+- **Q67.** The base's instructions, in keeping with the tradition: **`AGENTS.md`** at the top of the notes folder
+  (item 10).
+- **Q68.** A switch for each section is too granular: whole notes only.
+- **Q69.** Yes: the eval on the mid tier, twice, about $0.60 a run.
+
+Left to confirm:
+- **Q70. The age-off rule:** 3 turns unused, a pointer line left. *Recommended.* The other way: only at
+  compaction, so the provider's cache is never broken between compactions.
+- **Q71. `AGENTS.md`, not `ISO.md`.** *Recommended*: other agents find it, Claude Code and OpenCode included.
+  `ISO.md` would say it's Iso's, but nothing else reads it.
 
 ## 6. What was built
 
