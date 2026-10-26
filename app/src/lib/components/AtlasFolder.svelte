@@ -4,7 +4,7 @@
   // zoom (M12); what it says is held at its size on screen.
   import type { LayoutItem } from "@isorite/core/atlas";
 
-  let { item, name, count, open, titled = true, held = { req: 0, bld: 0 }, dim = false, given = false, onpick }: {
+  let { item, name, count, open, titled = true, held = { req: 0, bld: 0 }, dim = false, given = false, here = false, moment = "", onpick }: {
     item: LayoutItem;
     name: string;
     /** The notes in it, however deep. */
@@ -17,6 +17,10 @@
     dim?: boolean;
     /** In what Iso is sent (the Iso lens, M10). */
     given?: boolean;
+    /** Closed over the note open in the Note pane (M17): the block's bar. */
+    here?: boolean;
+    /** Pointed at from elsewhere, a link or a moment (M17, Atlas-Timeline): outlined, yours or Iso's. */
+    moment?: "" | "you" | "iso";
     onpick: (e: MouseEvent) => void;
   } = $props();
 
@@ -29,12 +33,12 @@
 </script>
 
 {#if open}
-  <div class="folder frame {tone}" class:given data-folder={item.ref} style="{place};--inside:{inside};--behind:{behind};--ground-here:{inside}">
+  <div class="folder frame {tone} {moment ? `mo-${moment}` : ''}" class:given data-folder={item.ref} style="{place};--inside:{inside};--behind:{behind};--ground-here:{inside}">
     {#if titled}<button class="frame-title" type="button" title={given ? "In Iso's context: shift+click takes it back" : undefined} onclick={onpick}>{name}</button>{/if}
     {#if says}<span class="frame-title held">{says}</span>{/if}
   </div>
 {:else}
-  <button class="folder frame closed {tone}" class:dim class:given type="button" data-folder={item.ref} style={place} title={given ? "In Iso's context: shift+click takes it back" : undefined} onclick={onpick}>
+  <button class="folder frame closed {tone} {moment ? `mo-${moment}` : ''}" class:dim class:given class:here aria-current={here ? "page" : undefined} type="button" data-folder={item.ref} style={place} title={given ? "In Iso's context: shift+click takes it back" : undefined} onclick={onpick}>
     <span class="inner"><span class="name">{name}</span><span class="label">{says || `${count} ${count === 1 ? "note" : "notes"}`}</span></span>
   </button>
 {/if}
@@ -60,5 +64,8 @@
   @container (max-width: 70px) { .name, .label { display: none; } }
   @container (max-height: 22px) { .name, .label { display: none; } }
   @container (max-height: 44px) { .closed .label { display: none; } }
+  .here { box-shadow: inset calc(3 * var(--px)) 0 0 var(--text); }
+  .mo-you { outline: calc(2.5 * var(--px)) solid var(--lattice); outline-offset: calc(3 * var(--px)); z-index: 3; }
+  .mo-iso { outline: calc(2.5 * var(--px)) solid var(--growth); outline-offset: calc(3 * var(--px)); z-index: 3; }
   .given { outline: calc(2 * var(--px)) solid var(--growth); outline-offset: calc(2 * var(--px)); }
 </style>

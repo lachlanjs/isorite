@@ -6,6 +6,7 @@
   import Timeline from "$lib/components/Timeline.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { momentKey } from "@isorite/core";
+  import { pointing } from "$lib/pointing.svelte.ts";
 
   // The Atlas, with the session's timeline at its side. It stands in its own pane in the shell (M10).
 
@@ -38,6 +39,8 @@
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
     void goto(`${noteHref(m.note)}?at=${encodeURIComponent(momentKey(m))}`);
   }
+  // The moment pointed at outlines its note on the map, as a link pointed at elsewhere does (M17).
+  $effect(() => { const m = pointed; pointing.set("timeline", m ? { id: m.note, folder: false, who: isos(m) ? "iso" : "you" } : null); });
   function toggle() {
     timeline = !timeline; pointed = null;
     try { localStorage.setItem("isorite.timeline", timeline ? "1" : "0"); } catch { /* not kept */ }
@@ -45,7 +48,7 @@
 </script>
 
 <div class="map">
-  <Atlas pick={pick ? `@draft/${pick}` : ""} moment={pointed ? { note: pointed.note, who: isos(pointed) ? "iso" : "you" } : null} />
+  <Atlas pick={pick ? `@draft/${pick}` : ""} />
   {#if !pick}
     <div class="side">
       <button class="icon" type="button" aria-label="this session's timeline" title="this session's timeline" aria-pressed={timeline} onclick={toggle}>

@@ -115,3 +115,38 @@ The guide's note on the Atlas gets a line on these marks:
 - **Q81: should links in Iso's pane light the Atlas too?** *Recommended: yes.* Iso's answers are where most links
   to unfamiliar notes are met.
 - **Q82: for an open note off screen, a pip or a pan?** *Recommended: the pip.* The Atlas moves only when you ask.
+
+## 7. What was built
+
+Built 2026-10-26 on `m17-atlas-follow`, as planned, with Q78–Q82 as recommended. Version 0.4.1.
+
+- **The shared value:** `app/src/lib/pointing.svelte.ts`. It holds `elsewhere` (a note or folder pointed at from the
+  Note pane, Iso's pane or the timeline, and whose pointing it is) and `onAtlas` (the note under the mouse on the
+  map). The timeline's `moment` prop on the Atlas is gone; AtlasPane sets the shared value instead.
+- **The open note** is read from the page's route. Its block, or the closed folder over it, has the bar
+  (`.here`, an inset 3 px line in the text colour) and `aria-current="page"`.
+- **The pip:** off screen, the open note and what is pointed at are a pip on the line from the Atlas's middle.
+  Clicking it moves the map, at the same zoom, so the note is in the middle.
+- **The choice follows** only when the chosen note was the open one. Following a link the chosen note requires
+  steps back along the walk, as a click on the Atlas does.
+- **From the Note pane:** `editor/pointing.ts` hears the link under a mouse (not a touch). It reports the note or
+  folder that link names, and the Atlas outlines it after Atlas-Timeline (blue). It also lights the link between it
+  and the open note, in its kind, whichever of the two holds it. Nothing is dimmed.
+- **From Iso's pane:** links in what Iso said, and the notes it read, changed, pointed to or made (`data-to` on
+  their buttons), do the same.
+- **From the Atlas to the note:** the note under the mouse on the map marks the open note's links to it (`.cm-pointed`, a
+  light blue ground and a line under).
+
+**Found on the way.** The lit routes of the hover, and of Iso's path, could share a key with the chosen note's lit
+routes. When the hovered note was one the chosen note requires, Svelte threw on the duplicate key and the panes
+stopped drawing. They are now keyed apart (`there:`, `iso:`). Iso's path had the same fault before M17, unseen.
+
+**Tests.**
+- `app/tests/follow.spec.ts` has 7 tests. Five are desktop only, because a phone has no mouse and shows one pane at
+  a time.
+- Unit tests cover what a link points at (`editor.test.ts`).
+- All pass: 186 browser tests (18 skipped), every package's unit tests, and the type checks. The svelte-autofixer
+  found no issues in the changed components. No real model was used.
+
+**Not done.** The guide's note on the Atlas isn't updated, because M16 isn't merged yet. It takes the line in its
+step 5.
