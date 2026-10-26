@@ -63,3 +63,12 @@ test("the finder answers what is asked with the notes that match, and says it is
   await said.locator("a", { hasText: "The Atlas" }).click();
   await expect(page).toHaveURL(/#\/n\/atlas\/the-atlas$/);
 });
+
+test("Diagrams and code is drawn on the site, Pele and Python loaded from the site's own build", async ({ page }) => {
+  await page.goto("./#/n/notes/diagrams-and-code");
+  await expect(title(page)).toHaveValue("Diagrams and code", { timeout: 15_000 });
+  const note = page.locator('[data-pane="note"]');
+  await expect(note.locator(".cm-lp-diagram svg").first()).toBeVisible();
+  await expect(note.locator(".tok-k").first()).toHaveText("def");
+  await shot(page, "diagrams");
+});

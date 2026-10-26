@@ -10,6 +10,7 @@
   import { context } from "$lib/context.svelte.ts";
   import { converse } from "$lib/converse.svelte.ts";
   import { render } from "$lib/markdown.ts";
+  import { drawn } from "$lib/drawn.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { pointedBy, pointing } from "$lib/pointing.svelte.ts";
   import { spend } from "$lib/spend.svelte.ts";
@@ -88,7 +89,7 @@
 {#snippet item(t: Turn, i: TurnItem)}
   {#if i.kind === "text"}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-    <div class="said prose">{@html render(i.text)}</div>
+    <div class="said prose" use:drawn={{ given: i.text, copy: true }}>{@html render(i.text)}</div>
   {:else if i.kind === "look"}
     <p class="look" class:failed={i.step.failed}>
       <span class="v">{HOW[i.step.how]}</span>
@@ -125,7 +126,7 @@
     <!-- Your own answers, joined by Iso (M12): inserted at the end of the note, as yours. -->
     <div class="offer" data-offer={i.id}>
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-      <div class="prose yours">{@html render(i.text)}</div>
+      <div class="prose yours" use:drawn={i.text}>{@html render(i.text)}</div>
       <p class="for">{#if i.note === "AGENTS.md"}<span title="Your instructions for this base, in Iso's settings">AGENTS.md</span>{:else}<button type="button" class="note-link" data-to={i.note} onclick={() => open(i.note)}>{titleOf(i.note)}</button>{/if}
         {#if i.taken}<svg class="in" viewBox="0 0 16 16" width="14" height="14" role="img" aria-label="Inserted" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8.5l3 3 7-7" /></svg>
         {:else}<button class="icon" type="button" aria-label="Insert into {titleOf(i.note)} as yours" title="Insert at the end of {titleOf(i.note)}, as yours" onclick={() => void converse.take(t.id, i.id)}><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13 3v6H4" /><path d="M7 6L4 9l3 3" /></svg></button>{/if}</p>
@@ -147,7 +148,7 @@
           {#if t.state === "running"}
             {#if converse.streaming}
               <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-              <div class="said prose">{@html render(converse.streaming)}</div>
+              <div class="said prose" use:drawn={converse.streaming}>{@html render(converse.streaming)}</div>
             {/if}
             <p class="doing" role="status"><i class="spin" aria-hidden="true"></i>{doing}</p>
           {:else if changes(t)}

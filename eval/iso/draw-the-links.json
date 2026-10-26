@@ -1,0 +1,24 @@
+{
+  "name": "Asked for a diagram of how notes stand, it draws one Pele can draw, from the notes",
+  "turn": {
+    "mode": "ask",
+    "asked": "Draw me a diagram of how leapfrog stands to the notes it rests on.",
+    "given": [
+      {
+        "kind": "note",
+        "id": "integrators/leapfrog"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "diagram": true
+    },
+    {
+      "notCalled": [
+        "edit_note",
+        "write_note"
+      ]
+    }
+  ]
+}

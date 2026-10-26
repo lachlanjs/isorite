@@ -9,6 +9,7 @@
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { createEditor, setText } from "$lib/editor/codemirror.ts";
   import { render } from "$lib/markdown.ts";
+  import { drawn } from "$lib/drawn.ts";
   import { panes } from "$lib/panes.svelte.ts";
 
   let { id, title }: { id: string; title: string } = $props();
@@ -70,7 +71,7 @@
     <h2>Iso's reading</h2>
     {#if report?.reading}
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-      <div class="reading prose">{@html render(report.reading)}</div>
+      <div class="reading prose" use:drawn={report.reading}>{@html render(report.reading)}</div>
     {:else}
       <p class="faint">No reading yet.</p>
     {/if}

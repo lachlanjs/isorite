@@ -8,6 +8,7 @@
   import { tick } from "svelte";
   import type { NoteIso } from "$lib/iso.svelte.ts";
   import { render } from "$lib/markdown.ts";
+  import { drawn } from "$lib/drawn.ts";
 
   let { iso, key }: { iso: NoteIso; key: string } = $props();
 
@@ -53,7 +54,7 @@
   <div class="between working" aria-live="polite">
     <!-- A rewrite's reply is marks and passages until it is taken apart: it is shown when it is whole. -->
     {#if iso.asking.text && !rewriting}<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-      <div class="prose said">{@html render(iso.asking.text)}</div>{/if}
+      <div class="prose said" use:drawn={iso.asking.text}>{@html render(iso.asking.text)}</div>{/if}
     <div class="foot">
       <i class="dia" aria-hidden="true"></i>
       <span class="soft doing">{iso.asking.text ? (rewriting ? "Iso is rewriting" : "Iso is writing") : "Iso is thinking"}{#if lastStep}<span class="faint"> · {lastStep}</span>{/if}</span>
@@ -81,7 +82,7 @@
     {#if editing}
       <textarea class="revision" bind:value={editing.text} aria-label="Iso's text, to edit" rows={Math.max(3, editing.text.split("\n").length + 1)}></textarea>
     {:else}<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-      <div class="prose said">{@html render(proposal.text)}</div>
+      <div class="prose said" use:drawn={{ given: proposal.text, copy: true }}>{@html render(proposal.text)}</div>
     {/if}
     {#if proposal.notice}<p class="label">{proposal.notice}</p>{/if}
     <div class="foot">
@@ -115,7 +116,7 @@
   .said :global(h1), .said :global(h2), .said :global(h3), .said :global(h4) { font-size: 22px; line-height: 1.3; margin: 0 0 12px; }
   .said :global(h1) { font-size: 26px; } .said :global(h3) { font-size: 19px; } .said :global(h4) { font-size: 17px; }
   .said :global(pre) { font: 13px/20px var(--font-mono); background: var(--ground-1); border-left: 2px solid var(--line-strong); padding: 12px 16px; overflow-x: auto; }
-  .said :global(code) { font-family: var(--font-mono); font-size: .86em; }
+  .said :global(:not(pre) > code) { font-family: var(--font-mono); font-size: .86em; }
   .said :global(> :last-child) { margin-bottom: 0; }
   .said :global(.katex-display) { margin: 0; }
   .said :global(.katex-display > .katex) { font-size: 1.17em; }

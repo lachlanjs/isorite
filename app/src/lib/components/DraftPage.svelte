@@ -8,6 +8,7 @@
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { NoteIso } from "$lib/iso.svelte.ts";
   import { render } from "$lib/markdown.ts";
+  import { drawn } from "$lib/drawn.ts";
   import { NoteSession } from "$lib/note.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import NoteEditor from "./NoteEditor.svelte";
@@ -120,7 +121,7 @@
         <div class="between" class:working={Boolean(iso.asking)} aria-live="polite">
           {#if iso.asking}
             {#if iso.asking.text}<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-              <div class="prose said">{@html render(iso.asking.text)}</div>{/if}
+              <div class="prose said" use:drawn={iso.asking.text}>{@html render(iso.asking.text)}</div>{/if}
             <div class="foot">
               <i class="dia" aria-hidden="true"></i>
               <span class="soft">{iso.asking.text ? "Iso is writing" : "Iso is thinking"}{#if lastStep}<span class="faint"> · {lastStep}</span>{/if}</span>
@@ -130,7 +131,7 @@
           {:else if editing}
             <textarea class="revision" bind:value={editing.text} aria-label="Iso's text, to edit" rows={Math.max(6, editing.text.split("\n").length + 1)}></textarea>
           {:else}<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-            <div class="prose said">{@html render(said)}</div>
+            <div class="prose said" use:drawn={{ given: said, copy: true }}>{@html render(said)}</div>
           {/if}
         </div>
       {/if}

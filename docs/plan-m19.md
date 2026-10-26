@@ -174,7 +174,7 @@ are drawn too.
   leaving the prompt alone.
 - **Answered 2026-10-26:**
   - Q87: in colour, with ink as a setting in the Note pane's settings (*code in colour*, on by default). The
-    palette is the four accents (keywords lattice, strings malachite, numbers growth, types rose, comments faint).
+    palette is from the tokens (keywords lattice, strings malachite, numbers growth, types the violet of "requires", comments faint; rose is kept for what is wrong).
     Iso's pane and the others follow the same setting, so code looks the same in every pane.
   - Q88: all of `language-data`.
   - Q89: yes, both installed.
@@ -182,3 +182,73 @@ are drawn too.
 - **Not in M19: Pele's ideas for the Atlas.** These are long edges that turn once (your `sawtooth.png`), a ranked
   list of layout aims, and plain curves where a gap's edges mostly cross. They belong in an Atlas milestone of
   their own, read against `docs/atlas-layout.md`, and I'd propose one after Obsidian import.
+
+## 8. What was built
+
+On branch `m19-diagrams-code`, version 0.7.0.
+
+- **`app/src/lib/code.ts`:** the shared highlighter.
+  - It maps `@lezer/highlight` tags to five classes (`tok-k`, `tok-s`, `tok-n`, `tok-t`, `tok-c`), and is scoped
+    away from the note's own Markdown by its language data. Without that scope, a link's title would be coloured as
+    a string.
+  - Languages come from `@codemirror/language-data`; `languageOf` finds a fence's.
+  - `highlighted` works on a loaded language and `highlight` loads one first. Both parse the code in an editor
+    state of its own, so the older stream languages (Julia, R, Fortran) colour outside the editor too.
+  - `colourCode` colours rendered blocks in place.
+- **The editor:**
+  - `markdown({ codeLanguages })`, plus the highlighter;
+  - `livePreview.ts` hides a fence off its line, leaving the 12px padding, and draws the language's name
+    (`LangWidget`);
+  - `blocks.ts` draws a `mermaid` fence as a `DiagramWidget`. It's replaced away from the cursor and beneath its
+    source while being edited, redrawn in place through `updateDOM`, and shows its source when it can't be drawn.
+- **`app/src/lib/diagram.ts`:**
+  - Pele through `pele/lazy`, which loads each kind on first use;
+  - `mountAsync` with links and images off, `autoDirection`, and labels at 12px;
+  - KaTeX for `$$…$$` in labels, measured off the page;
+  - DOMPurify, with `foreignObject` as an HTML integration point so the maths survives.
+- **`markdown.ts` and `drawn.ts`:**
+  - `render()` wraps fenced code in `.code-block` with its language's name, and turns a mermaid fence into a
+    `div.diagram` that holds its source as text;
+  - the `use:drawn` action colours, draws, and adds a copy icon where asked. It's used in Iso's pane, the terminal's
+    turns, drafts, IsoBlock, IsoChange and the Understanding view.
+- **The look (`app.css`):**
+  - the code colours, with ink as `:root[data-code="ink"]`;
+  - `--pele-*` set from the tokens;
+  - the rendered code block in the board's values.
+- **The setting:** *the code* in the Note pane's settings, *in colour* or *in ink*. It's kept in this browser and
+  set before first paint (`app.html`).
+- **Prompts:** two lines in Iso's `FORMAT` (fenced code named with its language; a mermaid block is drawn, where it
+  helps or when asked, not by habit) and a sentence in the terminal agent's instructions.
+- **The eval:**
+  - a `diagram` check, which uses Pele's `parse` in Node;
+  - the case `draw-the-links`;
+  - `ask-from-a-note` now also checks that no diagram is drawn unasked.
+- **The guide and docs:**
+  - the new note *Diagrams and code*, linked from *A note is Markdown*;
+  - `docs/format.md`;
+  - the npm README, which no longer mentions the exercises taken out in M12.
+
+**Departures from the plan:**
+- Types are violet (`--requires`), not rose, which is kept for what is wrong.
+- A changed code block in Iso's proposed edits (`IsoChange`) isn't coloured, because a change doesn't carry the
+  fence's language.
+- In the editor, code lines wrap with the note (CodeMirror wraps every line), where the board scrolls them
+  sideways. Rendered blocks scroll as on the board.
+- A diagram's corners are square, and Pele's arrowheads are filled, where the board's are cut and open.
+- Mermaid's own `$$…$$` is used for maths in labels, not isorite's single `$`, so files stay as Mermaid has them
+  (and as Obsidian will).
+
+**Tests:**
+- unit: core 303, engine 120, example 11, guide 9, OpenCode 43, server 92, app 51 (4 new in `code.test.ts`);
+- browser: 210 passed, 18 skipped. New is `diagrams.spec.ts`, 4 tests × 4 projects: drawing, editing and errors;
+  ink; Iso's drawn answer with copy; a hostile diagram, whose script, handler and `javascript:` link don't get
+  through;
+- site: 8 passed, including a new check that *Diagrams and code* is drawn on the public site;
+- the type checks are clean, and the autofixer found no issues.
+
+Pele and the languages are chunks of their own. The main chunk holds only the languages' names.
+
+**Real check:** the two eval cases on the mid tier, on fresh copies of the example base, cost $0.031 in all:
+- `draw-the-links` passed 2/2 for $0.0268. It drew `graph TD` with leapfrog's links labelled by kind ("requires",
+  "uses", a dotted "see also").
+- `ask-from-a-note` passed 5/5 for $0.0044, with no diagram drawn.

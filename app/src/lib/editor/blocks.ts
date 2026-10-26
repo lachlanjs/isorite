@@ -3,8 +3,9 @@
 // own, M12), drawn as a callout that opens it. Away from the cursor a block is replaced by its rendering; with the
 // cursor in it, its source shows for editing, and maths keeps its rendering
 // beneath it, updated as you type. Clicking a rendering puts the cursor in
-// its source. Carried over from rdstudio; pictures, artifacts and Mermaid
-// diagrams are not drawn yet.
+// its source. Mermaid diagrams (```mermaid, M19) are drawn by Pele, and keep
+// their drawing beneath their source while edited, as maths does. Carried over
+// from rdstudio; pictures and artifacts are not drawn yet.
 // (Decorations that replace whole lines must come from a state field, not a
 // view plugin, so this is separate from livePreview.ts.)
 
@@ -12,6 +13,8 @@ import { syntaxTree } from "@codemirror/language";
 import { Facet, StateField, type EditorState, type Range } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType, type DecorationSet } from "@codemirror/view";
 import { render } from "$lib/markdown.ts";
+import { drawDiagram, redrawDiagram } from "$lib/diagram.ts";
+import type { Mounted } from "pele/lazy";
 
 type Kind = "maths" | "table";
 
@@ -83,6 +86,54 @@ class BlockWidget extends WidgetType {
   get estimatedHeight(): number { return this.kind === "maths" ? 60 : 120; }
 }
 
+// A diagram, drawn by Pele. Typing in its source redraws it in place rather than drawing it anew, so it doesn't
+// flicker; one that can't be drawn shows Pele's error, over the last drawing while it is edited, and under its source
+// away from it.
+const drawings = new WeakMap<HTMLElement, { mounted: Promise<Mounted>; source: string }>();
+class DiagramWidget extends WidgetType {
+  constructor(readonly source: string, readonly at: number, readonly beneath: boolean) { super(); }
+  eq(other: DiagramWidget): boolean { return other.source === this.source && other.at === this.at && other.beneath === this.beneath; }
+
+  toDOM(view: EditorView): HTMLElement {
+    const el = document.createElement("div");
+    el.className = `cm-lp-block cm-lp-diagram${this.beneath ? " cm-lp-beneath" : ""}`;
+    const src = document.createElement("pre");
+    src.className = "cm-lp-diagram-src";
+    src.textContent = this.source;
+    const drawing = document.createElement("div");
+    drawing.className = "diagram";
+    el.append(src, drawing);
+    drawings.set(el, { mounted: drawDiagram(drawing, this.source, () => el.classList.add("cm-lp-broken-diagram")), source: this.source });
+    if (!this.beneath) {
+      el.title = "Click to edit";
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        view.dispatch({ selection: { anchor: this.at }, scrollIntoView: true });
+        view.focus();
+      });
+    }
+    return el;
+  }
+
+  updateDOM(dom: HTMLElement): boolean {
+    const drawn = drawings.get(dom);
+    if (!drawn || !this.beneath || !dom.classList.contains("cm-lp-beneath")) return false;
+    if (drawn.source !== this.source) {
+      drawn.source = this.source;
+      dom.classList.remove("cm-lp-broken-diagram");
+      (dom.querySelector(".cm-lp-diagram-src") as HTMLElement).textContent = this.source;
+      void drawn.mounted.then((m) => redrawDiagram(m, this.source));
+    }
+    return true;
+  }
+
+  ignoreEvent(): boolean { return true; }
+  get estimatedHeight(): number { return 160; }
+}
+
+const isDiagram = (state: EditorState, info: { from: number; to: number } | null) =>
+  info !== null && state.sliceDoc(info.from, info.to).trim().split(/\s/)[0]!.toLowerCase() === "mermaid";
+
 function build(state: EditorState): DecorationSet {
   const decos: Range<Decoration>[] = [];
   const sel = state.selection.ranges;
@@ -93,6 +144,14 @@ function build(state: EditorState): DecorationSet {
       let source = "";
       if (node.name === "BlockMath") { kind = "maths"; source = state.sliceDoc(node.from, node.to); }
       else if (node.name === "Table") { kind = "table"; source = state.sliceDoc(node.from, node.to); }
+      else if (node.name === "FencedCode" && isDiagram(state, node.node.getChild("CodeInfo"))) {
+        const code = node.node.getChild("CodeText"), source = code ? state.sliceDoc(code.from, code.to) : "";
+        const from = state.doc.lineAt(node.from).from, to = state.doc.lineAt(node.to).to;
+        const editing = sel.some((r) => r.to >= from && r.from <= to);
+        if (!editing) decos.push(Decoration.replace({ widget: new DiagramWidget(source, node.from, false), block: true }).range(from, to));
+        else if (source.trim()) decos.push(Decoration.widget({ widget: new DiagramWidget(source, node.from, true), block: true, side: 1 }).range(to));
+        return false;
+      }
       else if (node.name === "Document" || node.name === "Blockquote" || /List|ListItem/.test(node.name)) {
         return undefined; // blocks can sit inside these
       }
@@ -139,6 +198,10 @@ export const blocksTheme = EditorView.theme({
   ".cm-lp-block .prose": { maxWidth: "none" },
   ".cm-lp-block .prose > :last-child, .cm-lp-block .table-wrap": { marginBottom: "0" },
   ".cm-lp-block .katex-display": { margin: "0" },
+  // A diagram, in the boards' figure (app.css sets Pele's colours). Its source shows only when it can't be drawn.
+  ".cm-lp-diagram .diagram": { overflowX: "auto", overflowY: "hidden" },
+  ".cm-lp-diagram-src": { display: "none", margin: "0", font: "13px/20px var(--font-mono)", whiteSpace: "pre-wrap", color: "var(--text-soft)" },
+  ".cm-lp-diagram.cm-lp-broken-diagram:not(.cm-lp-beneath) .cm-lp-diagram-src": { display: "block" },
   ".cm-lp-beneath": { borderLeft: "2px solid var(--line)", paddingLeft: "12px", marginTop: "4px", opacity: ".9" },
   ".cm-lp-block:not(.cm-lp-beneath):hover": { outline: "1px dashed var(--line)", outlineOffset: "2px" },
   // An embedded question (rose) or problem, as a callout (M12): green with a check once resolved or solved.

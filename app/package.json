@@ -18,6 +18,7 @@
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language": "^6.12.4",
+    "@codemirror/language-data": "6.5.2",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
     "@isorite/core": "*",
@@ -30,7 +31,8 @@
     "dompurify": "^3.4.16",
     "katex": "^0.18.9",
     "markdown-it": "^14.3.2",
-    "markdown-it-texmath": "^1.0.0"
+    "markdown-it-texmath": "^1.0.0",
+    "pele": "1.10.0"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

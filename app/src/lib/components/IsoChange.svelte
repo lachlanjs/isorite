@@ -6,6 +6,7 @@
   import { agentName } from "@isorite/core";
   import type { NoteIso } from "$lib/iso.svelte.ts";
   import { render } from "$lib/markdown.ts";
+  import { drawn } from "$lib/drawn.ts";
 
   let { iso, key }: { iso: NoteIso; key: string } = $props();
 
@@ -32,7 +33,7 @@
     {#if !text.trim()}<span class="gone">the passage above is taken out</span>
     {:else if change.code}<pre class="new">{text.replace(/^\n+|\s+$/g, "")}</pre>
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-    {:else}<div class="new prose">{@html shown}</div>{/if}
+    {:else}<div class="new prose" use:drawn={shown}>{@html shown}</div>{/if}
     <div class="foot"><i class="dia" aria-hidden="true"></i><span class="label">in place of the lines struck through above</span><span class="grow"></span>{@render act()}</div>
   </div>
 {:else if change}

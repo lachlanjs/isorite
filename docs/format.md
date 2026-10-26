@@ -138,6 +138,7 @@ The proof never says.
 - **An embed** is `[[!name]]` alone on a line, outside code: `name` is the note's file name without `.md`, or its path (`[[!global/where-is-compactness-used]]`) where two notes share the name. The app draws it as a callout. One that names nothing, or a shared name, is an issue (`embed-broken`).
 - An embed counts as an `about` (or `uses`) of the note it is in: a question embedded in a note is about that note.
 - Moving a note changes the `about` and `uses` that name it, and the embeds of it, to match.
+- **Code and diagrams** are ordinary fenced blocks (M19). A fence named with a language (` ```python `) is coloured by it in the app. One named `mermaid` holds a Mermaid diagram, drawn by the app (with Pele), and is Mermaid in the file like anywhere else; maths in its labels is between `$$` and `$$`, as Mermaid has it.
 - **Links out of the base** are ordinary Markdown links. To the web: `[the paper](https://arxiv.org/abs/…)`. To code in the base's repository: `[the step](code:src/sim.py#L40)`, or `#L40-L52` for lines; a path is within the repository, never `..`. A code link whose file is not in the repository is broken: the app strikes it through, and Iso and the terminal's agent are told once, at their next turn.
 
 ## 6. What is kept outside the notes

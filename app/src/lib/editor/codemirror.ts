@@ -9,6 +9,7 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { EditorView, drawSelection, keymap, placeholder } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
+import { codeHighlighter, languages } from "$lib/code.ts";
 import { blocksTheme, embeds, renderedBlocks, type Embeds } from "./blocks.ts";
 import { format, formatKeymap, type Format } from "./commands.ts";
 import { linkAt, linkControl } from "./linkControl.ts";
@@ -103,8 +104,9 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       history(),
       drawSelection(),
       EditorView.lineWrapping,
-      markdown({ base: markdownLanguage, extensions: [mathsSyntax], completeHTMLTags: false }),
+      markdown({ base: markdownLanguage, extensions: [mathsSyntax], completeHTMLTags: false, codeLanguages: languages }),
       syntaxHighlighting(highlight),
+      syntaxHighlighting(codeHighlighter),
       theme,
       ...(opts.source ? [sourceTheme] : [livePreview, livePreviewTheme, renderedBlocks, blocksTheme, linkControl, ...(opts.embeds ? [embeds.of(opts.embeds)] : []), ...(opts.codeBroken ? [codeBroken.of(opts.codeBroken)] : [])]),
       closeBrackets(),
