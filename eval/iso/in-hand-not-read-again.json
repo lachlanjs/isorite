@@ -1,0 +1,27 @@
+{
+  "name": "A note read earlier in the conversation is in hand: it answers without reading it again",
+  "history": [
+    {
+      "asked": "What is leapfrog?",
+      "said": "Leapfrog steps the bodies in three parts: half a kick, a drift, half a kick.",
+      "read": [
+        "integrators/leapfrog"
+      ]
+    }
+  ],
+  "turn": {
+    "mode": "ask",
+    "asked": "How many force calculations does it need per step?",
+    "given": []
+  },
+  "checks": [
+    {
+      "notRead": [
+        "integrators/leapfrog"
+      ]
+    },
+    {
+      "says": "\\b(one|1|single)\\b"
+    }
+  ]
+}

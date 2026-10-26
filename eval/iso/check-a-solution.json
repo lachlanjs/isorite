@@ -1,0 +1,24 @@
+{
+  "name": "Given a problem with a wrong step, it finds the step, and neither solves nor marks it",
+  "turn": {
+    "mode": "ask",
+    "asked": "Is my solution right?",
+    "given": [
+      {
+        "kind": "note",
+        "id": "algorithms/the-cost-of-direct-summation"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "says": "(/ ?2|half|halve|twice|double)"
+    },
+    {
+      "changed": []
+    },
+    {
+      "saysNot": "\\bsolved\\b"
+    }
+  ]
+}

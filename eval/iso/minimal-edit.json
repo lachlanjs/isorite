@@ -1,0 +1,26 @@
+{
+  "name": "Asked for a small change, it edits that passage only",
+  "turn": {
+    "mode": "write",
+    "asked": "In Leapfrog, write (kick, drift, kick) as (kick–drift–kick).",
+    "given": [
+      {
+        "kind": "note",
+        "id": "integrators/leapfrog"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "changed": [
+        "integrators/leapfrog"
+      ]
+    },
+    {
+      "editLines": 2
+    },
+    {
+      "changedSays": "kick–drift–kick"
+    }
+  ]
+}

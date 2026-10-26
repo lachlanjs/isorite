@@ -1,0 +1,46 @@
+{
+  "name": "Summed up, the briefing keeps the open thread, and the next turn carries on from it",
+  "history": [
+    {
+      "asked": "Why does the simulation blow up when two bodies pass close?",
+      "said": "The force goes as 1/r², so it grows without bound as r goes to 0. Your note on [softening](/physics/softening.md) is the fix.",
+      "read": [
+        "physics/softening"
+      ]
+    },
+    {
+      "asked": "I still don't see why softening removes the singularity. Leave it for now, I'll come back to it.",
+      "said": "Of course. We can come back to softening whenever you like."
+    },
+    {
+      "asked": "What units do my notes use?",
+      "said": "G = 1, with masses and lengths in the units of [Units](/physics/units.md).",
+      "read": [
+        "physics/units"
+      ]
+    },
+    {
+      "asked": "Thanks.",
+      "said": "You're welcome."
+    }
+  ],
+  "compact": true,
+  "turn": {
+    "mode": "ask",
+    "asked": "Let's pick up the thing I said I'd come back to.",
+    "given": []
+  },
+  "checks": [
+    {
+      "briefing": {
+        "open": "soften",
+        "notes": [
+          "physics/softening"
+        ]
+      }
+    },
+    {
+      "says": "soften"
+    }
+  ]
+}
