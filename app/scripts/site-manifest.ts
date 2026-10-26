@@ -1,4 +1,4 @@
-// After `npm run build:tutorial`: the tutorial's manifest scoped to the folder it is served from. On GitHub Pages the
+// After `npm run build:guide`: the site's manifest scoped to the folder it is served from. On GitHub Pages the
 // page is /isorite (src/app.html takes off the slash), outside the scope "./" (/isorite/), and a browser will not
 // install a page outside its manifest's scope. BASE_PATH is the folder, as for the build; at the root, "./" is right.
 

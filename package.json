@@ -16,13 +16,13 @@
     "fixtures": "node fixtures/expected.ts",
     "bench:atlas": "node bench/atlas_layout.mjs",
     "build": "npm run build -w @isorite/app",
-    "build:tutorial": "npm run build:tutorial -w @isorite/app",
     "serve": "node packages/server/src/main.ts serve",
     "test:browser": "npm run test:browser -w @isorite/app",
     "model": "node packages/server/scripts/embed-model.ts",
     "bench:retrieval": "node bench/retrieval.ts",
     "package": "node scripts/package.ts",
-    "eval:iso": "node scripts/eval-iso.ts"
+    "eval:iso": "node scripts/eval-iso.ts",
+    "build:guide": "npm run build:guide -w @isorite/app"
   },
   "overrides": {
     "typescript": "$typescript"

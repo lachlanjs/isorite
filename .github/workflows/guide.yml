@@ -1,7 +1,8 @@
-# The tutorial, published on GitHub Pages: the app built with its engine in the page, over the example base, and a
-# scripted Iso (npm run build:tutorial -w @isorite/app, into site/). It needs no server and no key.
+# The guide, published on GitHub Pages: the app built with its engine in the page, over the guide (a knowledge base
+# about isorite) kept in the visitor's browser, and the guide's finder as Iso (npm run build:guide -w @isorite/app,
+# into site/). It needs no server and no key.
 # Pages must be set to deploy from GitHub Actions in the repository's settings.
-name: tutorial
+name: guide
 
 on:
   push:
@@ -27,7 +28,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build:tutorial -w @isorite/app
+      - run: npm run build:guide -w @isorite/app
         env:
           # Pages serves the site under the repository's name.
           BASE_PATH: /${{ github.event.repository.name }}

@@ -21,6 +21,17 @@
     document.addEventListener("fullscreenchange", changed);
     return () => document.removeEventListener("fullscreenchange", changed);
   });
+  // The guide's site (M16, Q73): what you did is kept in this browser until you start again, which asks once more.
+  const site = import.meta.env.MODE === "guide";
+  let sure = $state(false);
+  async function startAgain(): Promise<void> {
+    if (!sure) { sure = true; return; }
+    const { forgetKept } = await import("$lib/guide/kept.ts");
+    await forgetKept();
+    try { localStorage.removeItem("isorite.last"); } catch { /* not kept */ }
+    location.hash = "";
+    location.reload();
+  }
   function fullscreen(): void {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void document.documentElement.requestFullscreen().catch(() => undefined);
@@ -42,6 +53,11 @@
   <section>
     <h2 class="label">the base</h2>
     <p><span class="name">{app.session.name}</span> <span class="faint">· {app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span></p>
+    {#if site}
+      <div class="row">
+        <button class="btn" class:danger={sure} type="button" title="The guide as it was first, here in this browser: what you changed in it goes" onclick={() => void startAgain()} onblur={() => (sure = false)}>{sure ? "start again: your changes go" : "start the guide again"}</button>
+      </div>
+    {/if}
   </section>
 {/if}
 
