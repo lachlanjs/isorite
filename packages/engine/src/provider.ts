@@ -87,6 +87,8 @@ export interface Call {
   toolChoice?: "auto" | "none";
   /** Called with each piece of text as it streams. */
   onText?: (piece: string) => void;
+  /** Called before each retry of a request the provider could not answer for a moment: which retry, of how many. */
+  onRetry?: (retry: number, of: number) => void;
   signal?: AbortSignal;
 }
 
@@ -99,8 +101,70 @@ export interface Reply {
   cut: boolean;
 }
 
+/** Whose a failure is likely to be: the provider's for a moment (`unavailable`, `limited`), the settings', or a
+ *  reply that ran out of room before it said anything (`cut`). */
+export type Failure = "unavailable" | "limited" | "settings" | "cut";
+
 /** The provider refused, or could not be reached. */
-export class ModelError extends EngineError {}
+export class ModelError extends EngineError {
+  readonly kind: Failure;
+  /** Worth asking again, after `after` ms if the provider said how long. */
+  readonly retry: boolean;
+  readonly after: number | undefined;
+  constructor(message: string, status = 502, o: { kind?: Failure; retry?: boolean; after?: number } = {}) {
+    super(message, status);
+    this.kind = o.kind ?? "settings";
+    this.retry = o.retry ?? false;
+    this.after = o.after;
+  }
+}
+
+/** The waits before each retry, in ms (a little more at random, so that many clients don't come back at once), and
+ *  the longest Retry-After waited for. Tests shorten them. */
+export const RETRY = { waits: [1000, 2000, 4000], jitter: 250, longest: 10_000 };
+
+/** The errors of a connection that was made and broken, or that took too long: the provider's for a moment. A name
+ *  not found, a refusal or a certificate is the settings', and is not asked again. */
+const BROKEN = new Set(["ECONNRESET", "EPIPE", "ECONNABORTED", "UND_ERR_SOCKET", "ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT"]);
+/** The answers of a gateway whose model or backend is down for the moment. */
+const DOWN = new Set([502, 503, 504]);
+
+/** The code Node keeps for why a request failed, however deep in its causes. */
+export function codeOf(err: unknown): string {
+  let code = "";
+  for (let r = err as { code?: string; cause?: unknown } | undefined, depth = 0; r && depth < 8; r = r.cause as typeof r, depth++) if (typeof r.code === "string") code = r.code;
+  return code;
+}
+
+/** For what passes a request on as it is (the terminal's relay): how long to wait before retry `retry` (0 the first)
+ *  of one that failed with this answer or error, or null not to ask again. As complete() decides. */
+export function retryWait(retry: number, failed: Response | unknown): number | null {
+  const res = isResponse(failed) ? failed : null;
+  const down = res ? DOWN.has(res.status) : BROKEN.has(codeOf(failed)), limited = res?.status === 429;
+  if (!(down || limited) || retry >= (limited ? Math.min(1, RETRY.waits.length) : RETRY.waits.length)) return null;
+  const after = res ? afterOf(res) : undefined;
+  return after === undefined ? RETRY.waits[retry]! + Math.random() * RETRY.jitter : after <= RETRY.longest ? after : null;
+}
+
+/** A reply, not an error. Not by instanceof: a server may put its own Response in place of the global one (Hono's
+ *  Node adapter does), and fetch's replies are then not instances of it. */
+export const isResponse = (v: unknown): v is Response => typeof v === "object" && v !== null && typeof (v as Response).status === "number" && typeof (v as Response).headers?.get === "function";
+
+/** Retry-After, in ms: seconds, or a date. */
+function afterOf(res: Response): number | undefined {
+  const v = res.headers.get("retry-after");
+  if (!v) return undefined;
+  const ms = /^\d+$/.test(v.trim()) ? Number(v) * 1000 : Date.parse(v) - Date.now();
+  return Number.isFinite(ms) ? Math.max(0, ms) : undefined;
+}
+
+const stopped = () => Object.assign(new Error("stopped"), { name: "AbortError" });
+const pause = (ms: number, signal?: AbortSignal) => new Promise<void>((done, fail) => {
+  if (signal?.aborted) { fail(stopped()); return; }
+  const t = setTimeout(() => { signal?.removeEventListener("abort", stop); done(); }, ms);
+  const stop = () => { clearTimeout(t); fail(stopped()); };
+  signal?.addEventListener("abort", stop, { once: true });
+});
 
 /** The certificates Node refuses when it does not know the authority that signed them. */
 const UNTRUSTED = new Set(["SELF_SIGNED_CERT_IN_CHAIN", "DEPTH_ZERO_SELF_SIGNED_CERT", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "UNABLE_TO_GET_ISSUER_CERT", "UNABLE_TO_GET_ISSUER_CERT_LOCALLY"]);
@@ -152,8 +216,31 @@ export function endpoint(p: ProviderConfig, key: string | null, path: string): {
   return { url: url.toString(), headers: { ...p.headers, ...auth, "X-Title": "isorite" } };
 }
 
-/** Call the model, streaming. */
+/** Call the model, streaming. A request the provider could not answer for a moment (down, a broken connection,
+ *  too many requests) is asked again, up to RETRY.waits.length times, but only before any of the reply has come:
+ *  after that, asking again would say it twice. */
 export async function complete(http: Http, p: ProviderConfig, key: string | null, call: Call): Promise<Reply> {
+  const began = Date.now();
+  for (let retry = 0; ; retry++) {
+    const heard = { any: false };
+    try {
+      return await completeOnce(http, p, key, call, heard);
+    } catch (err) {
+      if ((err as Error).name === "AbortError" || !(err instanceof ModelError)) throw err;
+      const most = err.kind === "limited" ? Math.min(1, RETRY.waits.length) : RETRY.waits.length;
+      const again = err.retry && !heard.any && retry < most && (err.after === undefined || err.after <= RETRY.longest);
+      if (!again) {
+        if (!err.retry || retry === 0) throw err;
+        const tries = `tried ${retry + 1} times over ${Math.round((Date.now() - began) / 1000)} s`;
+        throw new ModelError(err.kind === "unavailable" && err.message.includes(" is unavailable (") ? `${err.message}, ${tries}: it is likely ${p.name}, not your settings.` : `${err.message} (${tries})`, err.status, { kind: err.kind });
+      }
+      call.onRetry?.(retry + 1, most);
+      await pause(err.after ?? RETRY.waits[retry]! + Math.random() * RETRY.jitter, call.signal);
+    }
+  }
+}
+
+async function completeOnce(http: Http, p: ProviderConfig, key: string | null, call: Call, heard: { any: boolean }): Promise<Reply> {
   const body = JSON.stringify({
     model: call.model, messages: call.messages.map(wire(p.cacheMarks)), stream: true, ...(p.streamUsage === false ? {} : { stream_options: { include_usage: true } }),
     ...(call.maxTokens ? { max_tokens: call.maxTokens } : {}),
@@ -165,7 +252,8 @@ export async function complete(http: Http, p: ProviderConfig, key: string | null
     res = await http.fetch(to.url, { method: "POST", body, signal: call.signal ?? null, headers: { "Content-Type": "application/json", ...to.headers } });
   } catch (err) {
     if ((err as Error).name === "AbortError") throw err;
-    throw new ModelError(`${p.name} could not be reached: ${unreachable(err, p.url)}`, 502);
+    const broken = BROKEN.has(codeOf(err));
+    throw new ModelError(`${p.name} could not be reached: ${unreachable(err, p.url)}`, 502, { kind: broken ? "unavailable" : "settings", retry: broken });
   }
   if (!res.ok || !res.body) {
     let detail = "";
@@ -173,6 +261,8 @@ export async function complete(http: Http, p: ProviderConfig, key: string | null
       const said = await res.text();
       try { const j = JSON.parse(said) as { error?: { message?: string } | string; message?: string }; detail = (typeof j.error === "string" ? j.error : j.error?.message) ?? j.message ?? ""; } catch { detail = said.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300); }
     } catch { /* none */ }
+    if (DOWN.has(res.status)) throw new ModelError(`${p.name} is unavailable (${res.status}${detail ? `: ${detail}` : ""})`, 502, { kind: "unavailable", retry: true, after: afterOf(res) });
+    if (res.status === 429) throw new ModelError(`${p.name} said 429, too many requests${detail ? `: ${detail}` : ""}. Wait a moment and send it again.`, 502, { kind: "limited", retry: true, after: afterOf(res) });
     const advice = res.status === 401 ? " The key was not accepted: set it again in settings." : res.status === 402 ? " The key's credit is spent." : res.status === 404 ? ` ${p.name} may have no model called ${call.model}${p.defaultTiers ? ", which is OpenRouter's name for it: name this provider's models under [tiers] in config.toml" : ""}.` : "";
     throw new ModelError(`${p.name} said ${res.status}${detail ? `: ${detail}` : ""}.${advice}`, res.status === 401 || res.status === 403 ? 409 : 502);
   }
@@ -193,7 +283,8 @@ export async function complete(http: Http, p: ProviderConfig, key: string | null
     if (chunk.error) throw new ModelError(`${p.name}: ${chunk.error.message ?? "an error"}`, 502);
     const choice = chunk.choices?.[0];
     const piece = choice?.delta?.content ?? choice?.message?.content;
-    if (piece) { text += piece; call.onText?.(piece); }
+    if (piece) { text += piece; heard.any = true; call.onText?.(piece); }
+    if (choice?.delta?.tool_calls?.length || choice?.message?.tool_calls?.length) heard.any = true;
     take(choice?.delta?.tool_calls ?? choice?.message?.tool_calls?.map((t, index) => ({ ...t, index })));
     if (choice?.finish_reason) finish = choice.finish_reason;
     if (chunk.usage) usage = chunk.usage;
@@ -208,7 +299,13 @@ export async function complete(http: Http, p: ProviderConfig, key: string | null
     let buffer = "";
     const decoder = new TextDecoder(), reader = res.body.getReader();
     for (;;) {
-      const { done, value } = await reader.read();
+      let got: Awaited<ReturnType<typeof reader.read>>;
+      try { got = await reader.read(); } catch (err) {
+        if ((err as Error).name === "AbortError" || call.signal?.aborted) throw err;
+        const broken = BROKEN.has(codeOf(err)) || (err as Error).message === "terminated";
+        throw new ModelError(`${p.name} broke off its reply: ${unreachable(err, p.url)}`, 502, { kind: "unavailable", retry: broken });
+      }
+      const { done, value } = got;
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       let nl: number;

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { OPENROUTER, complete, type ProviderConfig } from "@isorite/engine";
+import { OPENROUTER, RETRY, complete, type ProviderConfig } from "@isorite/engine";
 import { gatewayTls, providerConfig } from "../src/config.ts";
 import { gatewayHttp, relay } from "../src/gateway.ts";
 import { createApp } from "../src/http.ts";
@@ -139,5 +139,34 @@ describe("the relay at /api/gateway, for OpenCode", () => {
   it("is not there unless the server was given one", async () => {
     const bare = createApp({ api: {} as never, token: "t", loopback: true, web: null });
     expect((await bare.request("http://localhost/api/gateway/models", { headers: { Host: "localhost", Authorization: "Bearer t" } })).status).toBe(404);
+  });
+});
+
+describe("the relay, when the provider is down for a moment", () => {
+  it("asks again before passing anything on, and passes on the last answer when it stays down", async () => {
+    const saved = { ...RETRY };
+    Object.assign(RETRY, { waits: [5, 5, 5], jitter: 0 });
+    try {
+      const p: ProviderConfig = { ...OPENROUTER, name: "work", url: "https://gw.example/v1" };
+      const answers = [503, 502, 200];
+      const http = { fetch: (async () => { const s = answers.shift() ?? 503; return new Response(s === 200 ? '{"data":[]}' : '{"error":{"message":"upstream"}}', { status: s, headers: { "content-type": "application/json" } }); }) as typeof fetch };
+      const pass = relay(p, http, async () => "k");
+      const ok = await pass("/models", new Request("http://127.0.0.1/api/gateway/models"));
+      expect(ok.status).toBe(200);
+      expect(answers).toEqual([]);
+      answers.push(503, 503, 503, 503, 200);
+      expect((await pass("/models", new Request("http://127.0.0.1/api/gateway/models"))).status).toBe(503);
+      expect(answers).toEqual([200]);
+    } finally { Object.assign(RETRY, saved); }
+  });
+
+  it("passes on a reply that is not an instance of the global Response, as fetch's replies are not under the server", async () => {
+    // Hono's Node adapter puts its own Response in place of the global one; what fetch returns is not an instance of it.
+    const reply = new Response('{"data":[]}', { status: 200, headers: { "content-type": "application/json" } });
+    const foreign = { status: reply.status, ok: true, headers: reply.headers, body: reply.body };
+    const pass = relay({ ...OPENROUTER, name: "work", url: "https://gw.example/v1" }, { fetch: (async () => foreign) as unknown as typeof fetch }, async () => "k");
+    const res = await pass("/models", new Request("http://127.0.0.1/api/gateway/models"));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('{"data":[]}');
   });
 });

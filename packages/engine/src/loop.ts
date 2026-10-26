@@ -29,6 +29,8 @@ export interface Run {
   /** Each piece of the reply as it is written. What was written before a lookup is not the reply: `again` says to start over. */
   onText: (piece: string, again: boolean) => void;
   onStep: (step: Step) => void;
+  /** Before the provider is asked again, having failed for a moment: which retry, of how many. */
+  onRetry?: (retry: number, of: number) => void;
   /** How many rounds of looking up it may have, in place of the tier's. 0: one call, with no tools offered. */
   most?: number;
 }
@@ -50,6 +52,7 @@ export async function rounds(o: Run): Promise<Ran> {
     const r = await complete(o.http, o.provider, o.key, {
       model, messages, maxTokens: o.maxTokens, tools: most ? o.lookup.defs() : [], toolChoice: round < most ? "auto" : "none", signal: o.signal,
       onText: (piece) => { o.onText(piece, first && round > 0); first = false; },
+      ...(o.onRetry ? { onRetry: o.onRetry } : {}),
     });
     usage.tokensIn += r.usage.tokensIn; usage.tokensOut += r.usage.tokensOut; usage.tokensCached += r.usage.tokensCached; usage.usd += r.usage.usd;
     if (!r.calls.length || round >= most) return { text: r.text, usage, calls, cut: r.cut };

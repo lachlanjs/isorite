@@ -6,8 +6,8 @@ export { DRAFT_PREFIX, Engine, MAX_NOTE_BYTES, checkNoteId, isDraftId } from "./
 export type { EngineOptions } from "./engine.ts";
 export { MemoryFiles, MemorySecrets, systemClock } from "./ports.ts";
 export type { Clock, FileInfo, Files, Http, Secrets } from "./ports.ts";
-export { KEY, SPEND_CAP, ModelError, OPENROUTER, TIERS, complete, endpoint, unreachable } from "./provider.ts";
-export type { Call, Message, ProviderConfig, Reply, Tier, ToolCall, ToolDef, Usage } from "./provider.ts";
+export { KEY, SPEND_CAP, ModelError, OPENROUTER, RETRY, TIERS, codeOf, complete, endpoint, isResponse, retryWait, unreachable } from "./provider.ts";
+export type { Call, Failure, Message, ProviderConfig, Reply, Tier, ToolCall, ToolDef, Usage } from "./provider.ts";
 export { Lookup } from "./lookup.ts";
 export type { How, Similar, Step } from "./lookup.ts";
 export { ROUNDS } from "./loop.ts";

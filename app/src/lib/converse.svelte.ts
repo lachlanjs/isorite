@@ -13,6 +13,8 @@ class Converse {
   turns = $state.raw<Turn[]>([]);
   /** The text of the turn running, as it streams. */
   streaming = $state("");
+  /** The provider failed for a moment and is being asked again: which retry, of how many. */
+  retrying = $state.raw<{ retry: number; of: number } | null>(null);
   /** Why the last message could not be sent. */
   problem = $state("");
   /** What the next turn would send, part by part. */
@@ -39,6 +41,19 @@ class Converse {
     void app.api.conversation().then((c) => { if (c && !this.id) this.show(c); }, () => undefined);
     app.on((e) => this.follow(e));
     this.measure();
+  }
+
+  /** A failed turn sent again: its words, what was given with it, its mode and tier. The failed one is left out
+   *  of what this and later turns are sent. */
+  async again(t: Turn): Promise<boolean> {
+    this.problem = "";
+    if (this.running || t.state !== "failed") return false;
+    this.off = this.off.includes(t.id) ? this.off : [...this.off, t.id];
+    try {
+      const { conversation } = await app.api.converse({ conversation: t.conversation, mode: t.mode, asked: t.asked, given: t.given, tier: t.tier, off: this.off });
+      this.id = conversation;
+      return true;
+    } catch (e) { this.problem = (e as Error).message; return false; }
   }
 
   private show(c: Conversation): void { this.id = c.id; this.turns = c.turns; }
@@ -83,6 +98,8 @@ class Converse {
     if (k < 0) return;
     const t = this.turns[k]!;
     const put = (next: Turn) => { this.turns = this.turns.map((x, i) => (i === k ? next : x)); };
+    if (e.type === "iso-retry") { this.retrying = { retry: e.retry, of: e.of }; return; }
+    this.retrying = null;
     if (e.type === "iso-text") this.streaming = e.again ? e.delta : this.streaming + e.delta;
     else if (e.type === "iso-item") {
       if (e.item.kind === "text") this.streaming = "";
