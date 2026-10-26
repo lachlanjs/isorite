@@ -233,6 +233,7 @@ use isorite's memory as well as its own.
 - **Q96: is the timeline enough to watch it learn?** *Recommended: yes for M20*, since it already shows each change
   with what you'd asked. A later view, "what the agent learned this week", could come after you've used it for a
   while.
+- **Answered 2026-10-26:** Q91–Q96 as recommended.
 - **Not in M20:**
   - links between bases;
   - moving a note from a project up to memory with a command (the agent can read it and write it there);
