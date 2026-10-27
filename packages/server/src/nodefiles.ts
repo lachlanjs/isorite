@@ -23,12 +23,19 @@ export class NodeFiles implements Files {
     try { return await readFile(this.at(path), "utf8"); } catch (e) { if (gone(e)) return null; throw e; }
   }
 
+  async readBytes(path: string): Promise<Uint8Array | null> {
+    try { return new Uint8Array(await readFile(this.at(path))); } catch (e) { if (gone(e)) return null; throw e; }
+  }
+
+  async write(path: string, text: string): Promise<void> { await this.replace(path, text); }
+  async writeBytes(path: string, bytes: Uint8Array): Promise<void> { await this.replace(path, bytes); }
+
   /** Written beside the file and renamed over it, so a reader never sees half a note. */
-  async write(path: string, text: string): Promise<void> {
+  private async replace(path: string, data: string | Uint8Array): Promise<void> {
     const full = this.at(path), beside = `${full}.${process.pid}.${this.n++}.tmp`;
     await mkdir(dirname(full), { recursive: true });
     try {
-      await writeFile(beside, text, "utf8");
+      await writeFile(beside, data, typeof data === "string" ? "utf8" : undefined);
       await rename(beside, full);
     } catch (e) {
       await rm(beside, { force: true });

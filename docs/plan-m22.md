@@ -229,7 +229,7 @@ line of its own embeds a question or a problem (M12), with nothing offered as it
 
 ## 6. Questions
 
-- **Q108: should the `[[!` picker list the repository's pictures too?** *Recommended: not in M22.* A game's
+- **Q108 (answered 2026-10-27: not in M22): should the `[[!` picker list the repository's pictures too?** A game's
   assets folder can hold thousands, and listing it means walking the repository. Later, typed `[[!code:` could
   list them, narrowed by the folder typed.
 - **Answered 2026-10-27, as recommended:**

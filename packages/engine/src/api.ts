@@ -275,10 +275,19 @@ export interface AgentLook {
   asked?: string;
 }
 
+/** A picture's file (M22), as `GET /api/file` gives it: its bytes, its media type, and a version for caching. */
+export interface FileBytes { bytes: Uint8Array; type: string; version: string }
+
+/** The largest picture isorite gives or takes (M22). */
+export const MAX_FILE_BYTES = 20_000_000;
+
 export interface Api {
   session(): Promise<Session>;
   notes(): Promise<Listing>;
   readNote(id: string): Promise<NoteSource>;
+  /** A picture (M22): in the notes, by its path there, or (`code`) in the base's repository, by its path there. Null
+   *  when there's no such picture, or the path isn't a picture's: nothing else is given this way. */
+  file(path: string, from?: "notes" | "code"): Promise<FileBytes | null>;
   /** Save a note. `base` is the version the text started from; a note that has moved on refuses with a Conflict. */
   saveNote(id: string, edit: { base: string; text: string }): Promise<Saved>;
   /** Make a note. Refuses when there is one already. */

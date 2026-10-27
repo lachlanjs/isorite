@@ -199,3 +199,35 @@ test("a base's code links resolve against the repository its settings name, from
   const api = await openEngine(locate(base), "testdev1", join(root, "config.toml"), undefined, null);
   expect((await api.map()).notes.step!.links!.map((l) => l.broken ?? false)).toEqual([false, true]);
 });
+
+test("a picture is given from the notes and the repository, and nothing else is (M22)", async () => {
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  mkdirSync(join(notes, "basics", "entropy"), { recursive: true });
+  writeFileSync(join(notes, "basics", "entropy", "coin.png"), png);
+  writeFileSync(join(notes, "basics", "drawn.svg"), '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+  writeFileSync(join(study, "hidden.png"), png);
+  const got = await fetch(url + "/api/file?path=basics/entropy/coin.png");
+  expect(got.status).toBe(200);
+  expect(Buffer.from(await got.arrayBuffer())).toEqual(png);
+  expect(got.headers.get("content-type")).toBe("image/png");
+  expect(got.headers.get("x-content-type-options")).toBe("nosniff");
+  expect(got.headers.get("content-security-policy")).toMatch(/^sandbox; default-src 'none'/);
+  const again = await fetch(url + "/api/file?path=/basics/entropy/coin.png", { headers: { "If-None-Match": got.headers.get("etag")! } });
+  expect(again.status).toBe(304);
+  const svg = await fetch(url + "/api/file?path=basics/drawn.svg");
+  expect([svg.status, svg.headers.get("content-type"), svg.headers.get("content-security-policy")?.startsWith("sandbox")]).toEqual([200, "image/svg+xml", true]);
+  // Not a picture, in isorite's own folder, out of the notes, or not there: none is given.
+  for (const path of ["basics/entropy.md", ".isorite/hidden.png", "../information-theory/basics/entropy/coin.png", "basics/../basics/entropy/coin.png", "basics/gone.png", ".isorite/config.toml"]) {
+    expect([path, (await fetch(url + "/api/file?path=" + encodeURIComponent(path))).status]).toEqual([path, 404]);
+  }
+
+  // From the repository, once one is named; never out of it.
+  expect((await fetch(url + "/api/file?code=assets/player.png")).status).toBe(404);
+  mkdirSync(join(root, "code", "assets"), { recursive: true });
+  writeFileSync(join(root, "code", "assets", "player.png"), png);
+  writeFileSync(join(study, "settings.toml"), 'repository = "../code"\n');
+  const code = await fetch(url + "/api/file?code=assets/player.png");
+  expect([code.status, code.headers.get("content-type")]).toEqual([200, "image/png"]);
+  expect((await fetch(url + "/api/file?code=" + encodeURIComponent("../information-theory/basics/entropy/coin.png"))).status).toBe(404);
+  expect((await fetch(url + "/api/file?code=assets/../../code/assets/player.png")).status).toBe(404);
+});

@@ -3,9 +3,9 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  AGENTS_FILE, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
+  AGENTS_FILE, codeTarget, pictureType, sha256, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, type AgentLook, type AgentChange, type Api, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest, type UnderstandingReport } from "./api.ts";
+import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Away, type Similar } from "./lookup.ts";
@@ -535,6 +535,27 @@ export class Engine implements Api {
     const run = this.queue.then(act, act);
     this.queue = run.catch(() => undefined);
     return run;
+  }
+
+  /** A picture (M22), in the notes or in the base's repository. The path must be a picture's, within its folder,
+   *  and (in the notes) never in a hidden folder such as `.isorite/`: nothing but a picture is given this way. */
+  async file(path: string, from: "notes" | "code" = "notes"): Promise<FileBytes | null> {
+    const type = pictureType(path);
+    if (!type) return null;
+    let files: Files | null, at: string;
+    if (from === "code") {
+      const target = codeTarget(`code:${path}`), where = (await this.settingsOfBase()).repository;
+      files = target && where ? this.opts.repository?.(where) ?? null : null;
+      at = target?.path ?? "";
+    } else {
+      at = path.replace(/^\/+/, "");
+      const parts = at.split("/");
+      files = parts.some((p) => !p || p === "." || p === ".." || p.startsWith(".")) ? null : this.opts.notes;
+    }
+    const bytes = files ? await files.readBytes(at) : null;
+    if (!bytes) return null;
+    if (bytes.length > MAX_FILE_BYTES) throw new EngineError(`${path} is larger than isorite gives (${MAX_FILE_BYTES / 1e6} MB)`, 413);
+    return { bytes, type, version: sha256(bytes).slice(0, 16) };
   }
 
   /** Where a note's file is: drafts and Understanding notes are among isorite's own files. */

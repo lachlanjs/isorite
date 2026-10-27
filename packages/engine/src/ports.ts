@@ -13,6 +13,10 @@ export interface Files {
   read(path: string): Promise<string | null>;
   /** Replace the file, making its folders. Atomic: a reader sees the old text or the new, never half. */
   write(path: string, text: string): Promise<void>;
+  /** The file's bytes, or null when there is no such file: a picture (M22). */
+  readBytes(path: string): Promise<Uint8Array | null>;
+  /** Replace the file with bytes, making its folders. Atomic, as `write` is. */
+  writeBytes(path: string, bytes: Uint8Array): Promise<void>;
   /** Add to the end of the file, making it and its folders. */
   append(path: string, text: string): Promise<void>;
   /** What is in a folder ("" is the root), or nothing when there is no such folder. */
@@ -29,6 +33,8 @@ export const systemClock: Clock = { now: () => Date.now() };
 /** Files held in memory: for tests, and for trying the engine with no disk. */
 export class MemoryFiles implements Files {
   readonly files = new Map<string, string>();
+  /** Files held as bytes (pictures), apart from text. */
+  readonly bytes = new Map<string, Uint8Array>();
 
   constructor(files: Record<string, string> = {}) {
     for (const [path, text] of Object.entries(files)) this.files.set(path, text);
@@ -37,12 +43,17 @@ export class MemoryFiles implements Files {
   async read(path: string): Promise<string | null> { return this.files.get(path) ?? null; }
   async write(path: string, text: string): Promise<void> { this.files.set(path, text); }
   async append(path: string, text: string): Promise<void> { this.files.set(path, (this.files.get(path) ?? "") + text); }
-  async remove(path: string): Promise<void> { this.files.delete(path); }
+  async readBytes(path: string): Promise<Uint8Array | null> {
+    const b = this.bytes.get(path), t = this.files.get(path);
+    return b ?? (t === undefined ? null : new TextEncoder().encode(t));
+  }
+  async writeBytes(path: string, bytes: Uint8Array): Promise<void> { this.files.delete(path); this.bytes.set(path, bytes); }
+  async remove(path: string): Promise<void> { this.files.delete(path); this.bytes.delete(path); }
 
   async list(dir: string): Promise<FileInfo[]> {
     const prefix = dir ? dir + "/" : "";
     const found = new Map<string, boolean>();
-    for (const path of this.files.keys()) {
+    for (const path of [...this.files.keys(), ...this.bytes.keys()]) {
       if (!path.startsWith(prefix)) continue;
       const rest = path.slice(prefix.length), cut = rest.indexOf("/");
       if (cut < 0) found.set(rest, false);

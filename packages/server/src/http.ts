@@ -43,6 +43,9 @@ const TYPES: Record<string, string> = {
   ".wasm": "application/wasm", ".map": "application/json", ".txt": "text/plain; charset=utf-8",
 };
 
+/** What a picture may do when opened on its own: be drawn, and nothing else (no script, no fetch, no form). */
+export const PICTURE_CSP = "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'";
+
 const Edit = z.object({ base: z.string().max(64), text: z.string() }).strict();
 const Make = z.object({ text: z.string() }).strict();
 const Anchor = z.object({ text: z.string(), nth: z.number().int().min(0) }).strict();
@@ -153,6 +156,21 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   app.get("/api/map", (c) => answer(c, () => api.map()));
   app.get("/api/timeline", (c) => answer(c, () => api.timeline()));
   app.get("/api/search", (c) => answer(c, () => api.search(c.req.query("q") ?? "")));
+  // A picture (M22): `path` in the notes, or `code` in the repository. Only a picture: the engine gives nothing
+  // else. An SVG opened here on its own would run its scripts beside the token, so every answer is sandboxed.
+  app.get("/api/file", async (c) => {
+    const code = c.req.query("code"), path = code ?? c.req.query("path") ?? "";
+    let found;
+    try { found = await api.file(path, code === undefined ? "notes" : "code"); } catch (e) {
+      if (e instanceof EngineError) return refuse(c, e.status, e.message);
+      throw e;
+    }
+    if (!found) return refuse(c, 404, `no picture at ${path}`);
+    const etag = `"${found.version}"`;
+    const headers = { "Content-Type": found.type, "Cache-Control": "no-cache", ETag: etag, "X-Content-Type-Options": "nosniff", "Content-Security-Policy": PICTURE_CSP };
+    if (c.req.header("if-none-match") === etag) return c.body(null, 304, headers);
+    return c.body(found.bytes as Uint8Array<ArrayBuffer>, 200, headers);
+  });
 
   app.put("/api/note", async (c) => {
     const refused = writeRefused(c);

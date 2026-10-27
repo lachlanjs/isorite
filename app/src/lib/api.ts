@@ -45,7 +45,10 @@ export interface BasesApi {
   lend(name: string, lend: boolean): Promise<BaseRow[]>;
 }
 
-export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURIComponent(baseHere())}/api/` : "api/", document.baseURI).href): Api & { terminal: TerminalApi; setup: SetupApi; bases: BasesApi } {
+/** Where the browser fetches a picture from (M22), so an `<img>` asks for it itself, cached and lazily. */
+export interface FileUrls { fileUrl(path: string, from?: "notes" | "code"): string }
+
+export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURIComponent(baseHere())}/api/` : "api/", document.baseURI).href): Api & FileUrls & { terminal: TerminalApi; setup: SetupApi; bases: BasesApi } {
   let token: Promise<string> | null = null;
   const ask = async <T>(path: string, init?: RequestInit): Promise<T> => {
     let res: Response;
@@ -61,11 +64,20 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     return ask<T>(path, { method, headers, body: JSON.stringify(body) });
   };
   const q = (id: string) => `?id=${encodeURIComponent(id)}`;
+  const fileUrl = (path: string, from: "notes" | "code" = "notes") => `${root}file?${from === "code" ? "code" : "path"}=${encodeURIComponent(path)}`;
 
   return {
     session: async () => { const { token: t, ...rest } = await session(); token = Promise.resolve(t); return rest; },
     notes: () => ask("notes"),
     readNote: (id) => ask("note" + q(id)),
+    fileUrl,
+    file: async (path, from) => {
+      let res: Response;
+      try { res = await fetch(fileUrl(path, from)); } catch { throw new ApiError("isorite is not answering", 0); }
+      if (res.status === 404) return null;
+      if (!res.ok) throw new ApiError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? res.statusText, res.status);
+      return { bytes: new Uint8Array(await res.arrayBuffer()), type: res.headers.get("content-type") ?? "", version: (res.headers.get("etag") ?? "").replaceAll('"', "") };
+    },
     saveNote: (id, edit) => write("PUT", "note" + q(id), edit),
     createNote: (id, text) => write("POST", "note" + q(id), { text }),
     journal: (id) => ask("journal" + q(id)),
