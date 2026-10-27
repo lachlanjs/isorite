@@ -16,6 +16,9 @@ Releases go through GitHub Actions (`.github/workflows/release.yml`), as rdstudi
 4. **github** makes the GitHub Release for the tag, with the package, the five executables, their `SHA256SUMS`,
    and `install.sh` and `install.ps1` attached, and notes from the commits.
 
+Every push also runs the `windows` workflow: the tests on Windows, `install.ps1` in both PowerShells, and the
+Windows executable from an empty home through `isorite model` and `isorite opencode`.
+
 ## Once: the first version, by hand
 
 npm lets you trust a workflow only from an existing package's settings. So 0.1.0 is published once from your
