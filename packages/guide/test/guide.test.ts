@@ -2,11 +2,11 @@ import { expect, test } from "vitest";
 import { AGENTS_FILE, Bundle } from "@isorite/core";
 import { LEARNING, PRACTICE } from "@isorite/engine";
 import { START, YOURS } from "../src/index.ts";
-import { loadGuide } from "../src/node.ts";
+import { loadGuide, loadGuidePictures } from "../src/node.ts";
 
 // The guide is a base like any other: it is checked as one.
 const files = loadGuide();
-const b = Bundle.fromFiles(Object.entries(files).map(([path, text]) => ({ path, text })));
+const b = Bundle.fromFiles([...Object.entries(files).map(([path, text]) => ({ path, text })), ...Object.keys(loadGuidePictures()).map((path) => ({ path }))]);
 const notes = [...b.concepts.values()];
 
 test("every note loads with a kind and a title, and the base has no issues", () => {

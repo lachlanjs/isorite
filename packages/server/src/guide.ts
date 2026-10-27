@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { OWN_DIR, StudyError } from "@isorite/core";
 import { finderHttp, START } from "@isorite/guide";
-import { loadGuide } from "@isorite/guide/node";
+import { loadGuide, loadGuidePictures } from "@isorite/guide/node";
 import { hasModel } from "./config.ts";
 import { serve } from "./serve.ts";
 import { openBrowser } from "./term.ts";
@@ -23,7 +23,7 @@ export function writeGuide(folder: string): { notes: string; fresh: boolean } {
   if (existsSync(at) && !statSync(at).isDirectory()) throw new StudyError(`${at} is a file`);
   if (existsSync(join(at, `${START}.md`))) return { notes: at, fresh: false };
   if (existsSync(at) && readdirSync(at).some((f) => f !== OWN_DIR)) throw new StudyError(`${at} has files in it that are not the guide: name another folder, isorite guide <folder>`);
-  for (const [path, text] of Object.entries(loadGuide())) {
+  for (const [path, text] of [...Object.entries(loadGuide()), ...Object.entries(loadGuidePictures())]) {
     mkdirSync(dirname(join(at, path)), { recursive: true });
     writeFileSync(join(at, path), text);
   }

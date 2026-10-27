@@ -7,6 +7,20 @@ import type { GuideFiles } from "./index.ts";
 /** In a checkout, the package's notes/; in the npm package, where this is bundled into dist/, the guide/ beside it. */
 export const GUIDE_DIR = [join(import.meta.dirname, "..", "guide"), join(import.meta.dirname, "..", "notes")].find((d) => existsSync(join(d, "start-here.md"))) ?? join(import.meta.dirname, "..", "notes");
 
+/** The guide's pictures (M22), by path, as bytes. */
+export function loadGuidePictures(dir = GUIDE_DIR): Record<string, Uint8Array> {
+  const out: Record<string, Uint8Array> = {};
+  const visit = (at: string) => {
+    for (const name of readdirSync(at)) {
+      const path = join(at, name);
+      if (statSync(path).isDirectory()) visit(path);
+      else if (/\.(png|jpe?g|gif|svg|webp|avif)$/i.test(name)) out[relative(dir, path).split(sep).join("/")] = new Uint8Array(readFileSync(path));
+    }
+  };
+  visit(dir);
+  return out;
+}
+
 /** The guide's files as they stand in the package: its notes and its AGENTS.md, by path. */
 export function loadGuide(dir = GUIDE_DIR): GuideFiles {
   const out: GuideFiles = {};

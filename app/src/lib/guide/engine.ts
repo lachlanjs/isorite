@@ -8,6 +8,8 @@ import { KeptFiles } from "./kept.ts";
 // The guide's files, as they stand in the repository, by their path within the base.
 const raw = import.meta.glob("../../../../packages/guide/notes/**/*.md", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 const seed = Object.fromEntries(Object.entries(raw).map(([path, text]) => [path.split("/guide/notes/").at(-1)!, text]));
+// Its pictures (M22), as the site serves them: put in the notes each time the page opens, never kept in the browser.
+const pictures = import.meta.glob("../../../../packages/guide/notes/**/*.{png,jpg,jpeg,gif,svg,webp,avif}", { query: "?url", import: "default", eager: true }) as Record<string, string>;
 
 /** Whether what is done in the guide is kept in this browser. */
 export const kept = { lasting: false };
@@ -19,6 +21,10 @@ export function guideEngine(): Promise<Api> { return (made ??= open()); }
 async function open(): Promise<Api> {
   const notes = await KeptFiles.open("notes", seed), own = await KeptFiles.open("own", {});
   kept.lasting = notes.lasting;
+  await Promise.all(Object.entries(pictures).map(async ([path, url]) => {
+    const res = await fetch(url).catch(() => null);
+    if (res?.ok) await notes.writeBytes(path.split("/guide/notes/").at(-1)!, new Uint8Array(await res.arrayBuffer()));
+  }));
   return Engine.open({
     notes, own, clock: systemClock, device: "browser", name: GUIDE_NAME,
     http: finderHttp(16), secrets: new MemorySecrets({ [KEY]: "none" }),

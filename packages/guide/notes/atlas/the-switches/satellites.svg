@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 132" width="360" height="132" font-family="ui-monospace, Menlo, monospace" font-size="11">
+  <rect x="0.5" y="0.5" width="359" height="131" fill="#f1efe9" stroke="#b9b4a8"/>
+  <text x="14" y="20" fill="#6d6a63">combat</text>
+  <rect x="14" y="30" width="150" height="64" fill="#f7f6f2" stroke="#7a7770"/>
+  <text x="24" y="50" fill="#2b2a27" font-family="Georgia, serif" font-size="13">Hitboxes</text>
+  <g fill="#f7f6f2" stroke="#9d998f">
+    <rect x="176" y="30" width="26" height="26"/><rect x="210" y="30" width="26" height="26"/><rect x="244" y="30" width="26" height="26"/><rect x="278" y="30" width="26" height="26"/>
+  </g>
+  <g fill="none" stroke="#3a6fb0" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="189" cy="43" r="7"/><path d="M182 43h14M189 36c-2.6 3.6-2.6 10.4 0 14M189 36c2.6 3.6 2.6 10.4 0 14"/>
+    <path d="M220 38.5l-4.5 4.5 4.5 4.5M226 38.5l4.5 4.5-4.5 4.5M224.5 37l-3 12"/>
+  </g>
+  <rect x="245" y="31" width="24" height="24" fill="#c9824f"/><path d="M245 50l7-7 5 5 4-4 8 8v3h-24z" fill="#5d7f4a"/><circle cx="262" cy="37" r="2.5" fill="#f3e3b5"/>
+  <rect x="279" y="31" width="24" height="24" fill="#8fb3d9"/><path d="M283 52l6-14 6 14z M292 52l5-9 5 9z" fill="#48678f"/>
+  <text x="176" y="74" fill="#6d6a63">web code pictures</text>
+  <text x="14" y="116" fill="#6d6a63">its links out, and the pictures it shows, beside it</text>
+</svg>
