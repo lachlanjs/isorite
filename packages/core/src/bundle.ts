@@ -38,6 +38,7 @@ export interface Cite {
   broken: boolean;
   rel: Rating | null; // a link's rating, as for a link to a note
   align: "left" | "center" | null; // a picture's place, from its title
+  alt?: string; // what a picture shown says it shows (M22)
 }
 const ARTIFACT = /\.html?$/i, IMAGE = /\.(png|jpe?g|gif|svg|webp|avif)$/i;
 /** What kind of citable file a path is, or null. */
@@ -239,11 +240,11 @@ export class Bundle {
         if (link.broken) this.issue(concept.path, "warning", "broken-link", `broken link to ${link.target}`);
       }
       // Artifacts and pictures cited: links to them, or embeds (image syntax).
-      for (const { href, title, embed } of citeRefs(concept.body)) {
+      for (const { href, title, embed, alt } of citeRefs(concept.body)) {
         const path = this.filePath(concept, href), kind = path === null ? null : citeKind(path);
         if (path === null || kind === null) continue;
         const t = strip((title ?? "").toLowerCase());
-        const cite: Cite = { target: path, kind, embed, broken: !this.files.has(path), rel: rating(title), align: t === "left" ? "left" : t === "center" || t === "centre" ? "center" : null };
+        const cite: Cite = { target: path, kind, embed, broken: !this.files.has(path), rel: rating(title), align: t === "left" ? "left" : t === "center" || t === "centre" ? "center" : null, ...(embed && alt ? { alt } : {}) };
         concept.cites.push(cite);
         if (cite.broken) this.issue(concept.path, "warning", "broken-link", `broken link to ${path}`);
       }

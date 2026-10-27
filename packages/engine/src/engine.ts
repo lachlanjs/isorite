@@ -221,8 +221,19 @@ export class Engine implements Api {
     const notes: MapReport["notes"] = {}, broken = await this.brokenCode();
     for (const c of this.bundle.concepts.values()) {
       const bad = broken.get(c.id) ?? [];
-      const links = c.outward.map((o) => ({ kind: o.kind, href: o.href, text: o.text, ...(bad.includes(o.href) ? { broken: true as const } : {}) }));
-      notes[c.id] = { title: c.title, tokens: estimate(c.body.trim()), ...(c.kind !== "note" ? { kind: c.kind } : {}), ...(c.done ? { done: c.done } : {}), ...(links.length ? { links } : {}) };
+      const links = c.outward.filter((o) => !(o.kind === "code" && o.picture)).map((o) => ({ kind: o.kind, href: o.href, text: o.text, ...(bad.includes(o.href) ? { broken: true as const } : {}) }));
+      // The pictures it shows (M22): its own, then the repository's, each once.
+      const pictures: NonNullable<MapReport["notes"][string]["pictures"]> = [], shown = new Set<string>();
+      for (const p of c.cites) {
+        if (p.kind !== "image" || !p.embed || shown.has(p.target)) continue;
+        shown.add(p.target);
+        pictures.push({ href: p.target, path: p.target, from: "notes", text: p.alt || p.target.split("/").at(-1)!, ...(p.broken ? { broken: true as const } : {}) });
+      }
+      for (const o of c.outward) {
+        if (o.kind !== "code" || !o.picture) continue;
+        pictures.push({ href: o.href, path: o.path, from: "code", text: o.text, ...(bad.includes(o.href) ? { broken: true as const } : {}) });
+      }
+      notes[c.id] = { title: c.title, tokens: estimate(c.body.trim()), ...(c.kind !== "note" ? { kind: c.kind } : {}), ...(c.done ? { done: c.done } : {}), ...(links.length ? { links } : {}), ...(pictures.length ? { pictures } : {}) };
     }
     return { model: mapModel(this.bundle), notes };
   }

@@ -11,10 +11,10 @@
 
   const SAYS: Record<Switch, string> = {
     provenance: "Provenance: whose words are whose (Alt+P)", timeline: "Timeline (Alt+T)", context: "Iso's context: what it is sent, what it read and changed (Alt+C)",
-    questions: "Open questions (Alt+Q)", problems: "Problems (Alt+B)", web: "Links to the web (Alt+W)", code: "Links to code (Alt+K)",
+    questions: "Open questions (Alt+Q)", problems: "Problems (Alt+B)", web: "Links to the web (Alt+W)", code: "Links to code (Alt+K)", pictures: "Pictures (Alt+I)",
     notes: "Iso may edit the notes (Alt+N)", files: "Iso may edit the project's files (Alt+F)", run: "Iso may run commands (Alt+R)",
   };
-  const COLOUR: Record<Switch, string> = { provenance: "growth", timeline: "lattice", questions: "rose", problems: "text", web: "lattice", code: "lattice", context: "growth", notes: "growth", files: "growth", run: "growth" };
+  const COLOUR: Record<Switch, string> = { provenance: "growth", timeline: "lattice", questions: "rose", problems: "text", web: "lattice", code: "lattice", pictures: "lattice", context: "growth", notes: "growth", files: "growth", run: "growth" };
   // The project's files and commands are the terminal's: offered only while one is attached (M11).
   const shown = $derived((SWITCHES[pane] as readonly Switch[]).filter((k) => (k !== "files" && k !== "run") || panes.terminal));
   const open = $derived(panes.settings === pane);
@@ -43,6 +43,7 @@
           {:else if k === "problems"}<path d="M8 2.5l5.8 10.5H2.2z" />
           {:else if k === "web"}<circle cx="8" cy="8" r="5.5" /><path d="M2.5 8h11M8 2.5c-2 2.8-2 8.2 0 11M8 2.5c2 2.8 2 8.2 0 11" />
           {:else if k === "code"}<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5M9 3l-2 10" />
+          {:else if k === "pictures"}<rect x="2.5" y="3" width="11" height="10" /><path d="M2.5 11l3.5-3.5 3 3 1.5-1.5 3 3" /><circle cx="10.5" cy="6" r="1" fill="currentColor" stroke="none" />
           {:else if k === "context"}<path d="M8 2.5l5.5 5.5L8 13.5 2.5 8z" /><path d="M8 5.5l2.5 2.5L8 10.5 5.5 8z" fill="currentColor" stroke="none" />
           {:else if k === "notes"}<path d="M2.5 13.5l2.5-2.5M5 11c.6-4.2 3.6-7.4 8.5-8.5C12.6 7.2 9.4 10.4 5 11zM7.2 8.8l2.6-.3M8.8 6.6l2.4-.4" />
           {:else if k === "files"}<path d="M3.5 2.5h5.5l3.5 3.5v7.5h-9z" /><path d="M9 2.5V6h3.5" />

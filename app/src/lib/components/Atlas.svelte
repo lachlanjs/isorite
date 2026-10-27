@@ -13,6 +13,7 @@
   import { tick, untrack } from "svelte";
   import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
+  import { pictureSrc } from "$lib/pictures.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
   import { converse } from "$lib/converse.svelte.ts";
@@ -784,7 +785,12 @@
   // Titles are set once, in the map's units (M12): shown while they are big enough on screen to read.
   const labels = $derived(TITLE_UNITS * drawnK >= TITLE_PX);
   /** The links out of the base switched on, beside their notes. */
-  const sats = $derived(L && report ? satellites(notes.map((n) => n.item), report.notes, { web: panes.on.web, code: panes.on.code }) : []);
+  const sats = $derived(L && report ? satellites(notes.map((n) => n.item), report.notes, { web: panes.on.web, code: panes.on.code, pictures: panes.on.pictures }) : []);
+  /** A picture satellite's thumbnail (M22), set once it's had. */
+  function thumb(img: HTMLImageElement, p: { path: string; from: "notes" | "code" }) {
+    const src = pictureSrc(app.api, p);
+    if (typeof src === "string") img.src = src; else void src.then((s) => { if (s) img.src = s; });
+  }
   /** What a note's block stands on: its folder's inside, which a kind's glyph in its top edge cuts the edge with. */
   const behind = (parent: number): string => (parent >= 0 && L!.items[parent]!.depth % 2 ? "var(--ground-1)" : "var(--ground-0)");
   $effect(() => {
@@ -829,6 +835,10 @@
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- an address on the web, not in the app -->
           <a class="sat web" href={s.href} target="_blank" rel="noopener noreferrer" title={`${s.text} · ${s.href}`} aria-label={s.text} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}" onclick={(e) => { if (dragged) e.preventDefault(); e.stopPropagation(); }}>
             <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" /><path d="M2.5 8h11M8 2.5c-2 2.8-2 8.2 0 11M8 2.5c2 2.8 2 8.2 0 11" /></svg></a>
+        {:else if s.kind === "picture"}
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves -->
+          <a class="sat picture" class:broken={s.broken} href={noteHref(s.note)} title={`${s.text} · ${s.picture!.from === "code" ? "code:" : ""}${s.picture!.path}${s.broken ? (s.picture!.from === "code" ? " · not in the repository" : " · not in the notes") : ""}`} aria-label={`${s.text}${s.broken ? ", missing" : ""}`} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}" onclick={(e) => { if (dragged) e.preventDefault(); e.stopPropagation(); }}>
+            {#if s.broken}<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="10" /><path d="M2.5 11l3.5-3.5 3 3 1.5-1.5 3 3" /></svg>{:else}<img alt="" loading="lazy" draggable="false" use:thumb={s.picture!} />{/if}</a>
         {:else}
           <span class="sat code" class:broken={s.broken} role="img" title={`${s.text} · ${s.href.slice(5)}${s.broken ? " · not in the repository" : ""}`} aria-label={`${s.text}${s.broken ? ", not in the repository" : ""}`} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5M9 3l-2 10" /></svg></span>
@@ -898,7 +908,9 @@
   /* A link out of the base (M12): a small block beside its note, in the map's units. */
   .sat { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(3 * var(--u)); height: calc(3 * var(--u)); display: grid; place-items: center; background: var(--ground-1); border: var(--px) solid var(--line-strong); color: var(--lattice); }
   .sat svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
-  .sat.web:hover, .sat.web:focus-visible { border-color: var(--lattice); }
+  .sat.web:hover, .sat.web:focus-visible, .sat.picture:hover, .sat.picture:focus-visible { border-color: var(--lattice); }
+  .sat.picture { overflow: hidden; }
+  .sat.picture img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .sat.broken { color: var(--rose); border-color: var(--rose); border-style: dashed; }
   /* Only while a changed base settles (K3): at any other time, a zoom changes the same places and must not ease. */
   .shifting :global(:is(.n, .sn, .folder)) { transition: left 0.45s ease, top 0.45s ease, width 0.45s ease, height 0.45s ease; }

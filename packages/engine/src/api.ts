@@ -63,6 +63,8 @@ export interface MapReport {
     done?: string;
     /** Its links out of the base, to the web and to code (M12): drawn beside it on the Atlas. */
     links?: { kind: "web" | "code"; href: string; text: string; broken?: true }[];
+    /** The pictures it shows (M22), from the notes or the repository (`code`): drawn beside it on the Atlas. */
+    pictures?: { href: string; path: string; from: "notes" | "code"; text: string; broken?: true }[];
   }>;
 }
 

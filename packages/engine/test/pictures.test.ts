@@ -83,3 +83,16 @@ test("a picture from the repository is checked as a code link is: broken when it
   await engine.reload();
   expect((await engine.notes()).notes.find((n) => n.id === "combat/sprites")?.broken).toEqual(["code:assets/gone.png"]);
 });
+
+test("the Atlas's report has the pictures a note shows, each once, and not as code links", async () => {
+  const { engine, notes } = await open();
+  await notes.write("combat/hitboxes.md", NOTE + "\n![again](hitboxes/player.png) ![gone](gone.png) [a link](hitboxes/player.png) ![repo](code:assets/p.png) [code](code:src/a.ts)\n");
+  await engine.reload();
+  const r = (await engine.map()).notes["combat/hitboxes"]!;
+  expect(r.links).toEqual([{ kind: "code", href: "code:src/a.ts", text: "code" }]);
+  expect(r.pictures).toEqual([
+    { href: "combat/hitboxes/player.png", path: "combat/hitboxes/player.png", from: "notes", text: "the player" },
+    { href: "combat/gone.png", path: "combat/gone.png", from: "notes", text: "gone", broken: true },
+    { href: "code:assets/p.png", path: "assets/p.png", from: "code", text: "repo" },
+  ]);
+});

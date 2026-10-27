@@ -27,3 +27,15 @@ test("a pasted or dropped picture's name: safe, and when it was pasted (M22)", a
   const bytes = new Uint8Array([1, 2, 3, 250]);
   expect(await digest(bytes)).toBe(sha256(bytes));
 });
+
+test("pictures are satellites when switched on, after the note's links (M22)", async () => {
+  const { satellites } = await import("./atlas/kinds.ts");
+  const item = { ref: "combat/hitboxes", gx: 0, gy: 0, w: 10, h: 3 } as Parameters<typeof satellites>[0][number];
+  const notes = { "combat/hitboxes": { title: "Hitboxes", tokens: 1, links: [{ kind: "code" as const, href: "code:src/hit.ts", text: "hit.ts" }], pictures: [{ href: "combat/hitboxes/p.png", path: "combat/hitboxes/p.png", from: "notes" as const, text: "the player" }, { href: "code:assets/gone.png", path: "assets/gone.png", from: "code" as const, text: "gone", broken: true as const }] } };
+  expect(satellites([item], notes, { web: false, code: true })).toMatchObject([{ kind: "code" }]);
+  expect(satellites([item], notes, { web: false, code: true, pictures: true }).map((s) => [s.kind, s.text, s.broken, s.note, s.picture?.from, s.gx, s.gy])).toEqual([
+    ["code", "hit.ts", false, "combat/hitboxes", undefined, 11, 0],
+    ["picture", "the player", false, "combat/hitboxes", "notes", 15, 0],
+    ["picture", "gone", true, "combat/hitboxes", "code", 19, 0],
+  ]);
+});
