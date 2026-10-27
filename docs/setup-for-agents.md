@@ -54,6 +54,7 @@ name = "work"                         # optional; what isorite calls the provide
 url = "https://…/v1"                  # OpenAI-compatible; /chat/completions and /models are added. Absent: OpenRouter
 key = "…"                             # the key; also settable in Iso's settings in the browser
 key_header = "api-key"                # send the key in this header, as it is, instead of Authorization: Bearer
+key_prefix = "Bearer "                # what goes before the key in key_header (default: "Bearer " in Authorization, else "")
 stream_usage = false                  # don't send stream_options (some gateways answer 400 to it)
 max_tokens = 16000                    # the least output budget any call gets, for models that think at length
 cache_marks = true                    # send Anthropic cache marks (OpenRouter-style gateways only)
@@ -149,7 +150,8 @@ Rules:
 | `ENOTFOUND` | The host name isn't found. | Check `url`. The name may resolve only on the company's network or VPN. |
 | `ECONNREFUSED` | Nothing listens there. | Check the URL's port. |
 | `ETIMEDOUT`, `UND_ERR_CONNECT_TIMEOUT` | No answer: often a proxy is needed. | Set `HTTPS_PROXY` (and `NO_PROXY` for internal hosts reached directly). |
-| `said 401` / `said 403` | The key, or where it's sent, isn't accepted. | Check the key, `key_header`, and any header the gateway wants. The gateway's own message usually names it. |
+| `said 401` / `said 403` | The key, or how it's sent, isn't accepted. `doctor` says how it was sent (`sent as X-Gateway-Auth: <41 characters>`) and quotes the gateway. | Check the key, `key_header`, and any header the gateway wants. A message like "missing Bearer prefix" means `key_prefix = "Bearer "`. |
+| `Proxy response (407) … The proxy (HTTPS_PROXY), not the provider, refused with 407` | The company's proxy wants credentials of its own. Not the gateway's 401. | Credentials in `HTTPS_PROXY` (`http://user:password@proxy:port`), or the proxy's own sign-in. A proxy that signs in by Kerberos or NTLM can't be answered by isorite. |
 | `said 404 … no model called X, which is OpenRouter's name for it` | No `[tiers]`. | Name the gateway's models under `[tiers]`. `doctor` lists the models `/models` offers. |
 | `… is unavailable (503 …), tried 4 times over N s: it is likely …, not your settings` | The gateway, or the model behind it, is down. | Wait, and send it again (↻ under the turn). If it lasts, the gateway's status page or owner. |
 | `… used its whole output budget (N tokens) thinking, and wrote nothing` | A reasoning model ran out of room before it wrote. | A lower tier, or `max_tokens` under `[provider]`. |

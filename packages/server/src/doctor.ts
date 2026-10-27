@@ -9,7 +9,7 @@ import { arch, platform, release } from "node:os";
 import { getCACertificates } from "node:tls";
 import { join, resolve } from "node:path";
 import { OWN_DIR, SETTINGS_FILE, parseSettings } from "@isorite/core";
-import { KEY, ModelError, complete, endpoint, unreachable, type Http, type ProviderConfig, type ToolDef } from "@isorite/engine";
+import { KEY, ModelError, complete, endpoint, keySentAs, refusal, unreachable, type Http, type ProviderConfig, type ToolDef } from "@isorite/engine";
 import { findOpenCode, gatewayFrom, type Probe } from "@isorite/opencode";
 import { ConfigSecrets, configPath, gatewayTls, providerConfig, readConfig } from "./config.ts";
 import { cacheDir } from "./embedder.ts";
@@ -72,7 +72,11 @@ export async function checkProvider(p: ProviderConfig, h: Http, key: string | nu
       const missing = models.filter((m) => !listed.includes(m));
       say("reached", "ok", `${to.url.replace(/\?.*$/, "")} answered with ${listed.length} models`);
       if (listed.length && missing.length) say("models", "fail", `${missing.join(", ")} not among them; it has ${listed.slice(0, 12).join(", ")}${listed.length > 12 ? ", …" : ""}. Name its models under [tiers]`);
-    } else say("reached", res.status === 401 || res.status === 403 ? "fail" : "ok", res.status === 401 || res.status === 403 ? `it said ${res.status} to the list of models: the key${p.keyHeader ? "" : ", or the header it goes in (key_header)"}, or a header it wants (headers), is not accepted` : `it answered (${res.status} for the list of models, which some gateways don't have)`);
+    } else if (res.status === 401 || res.status === 403) {
+      // The gateway's own words usually say what it wants (M21): a missing Bearer, another header.
+      const said = refusal(await res.text().catch(() => ""), key);
+      say("reached", "fail", `it said ${res.status} to the list of models${said ? `: “${said}”` : ""}. The key${key ? `, sent as ${keySentAs(p, key)},` : ""} or a header it wants (headers), is not accepted: check key_header and key_prefix`);
+    } else say("reached", "ok", `it answered (${res.status} for the list of models, which some gateways don't have)`);
   } catch (e) {
     reached = false;
     say("reached", "fail", unreachable(e, p.url));
@@ -113,7 +117,7 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
     const tls = gatewayTls(path, env);
     http ??= gatewayHttp(provider, tls, env);
     if (existsSync(path)) say("config", "ok", `${path}: ${provider.name} at ${provider.url}`);
-    say("key", key ? "ok" : tls ? "warn" : "fail", key ? `${hidden(key)}, sent ${provider.keyHeader ? `in ${provider.keyHeader}` : "as Authorization: Bearer"}` : tls ? "none; the client certificate alone is sent" : "none: set one in Iso's settings, or as key under [provider]");
+    say("key", key ? "ok" : tls ? "warn" : "fail", key ? `sent as ${keySentAs(provider, key)}${provider.keyHeader?.toLowerCase() === "authorization" && provider.keyPrefix === undefined ? ` (key_header = "${provider.keyHeader}" alone means Bearer since 0.9.0; key_prefix = "" sends it bare)` : ""}` : tls ? "none; the client certificate alone is sent" : "none: set one in Iso's settings, or as key under [provider]");
     if (tls) say("certificate", "ok", `${tls.files.join(", ")}${tls.pfx || tls.cert ? "" : " (an authority only, no client certificate)"}`);
     const tiers = `low ${provider.tiers.low}, mid ${provider.tiers.mid}, max ${provider.tiers.max}`;
     say("models", provider.defaultTiers ? "warn" : "ok", provider.defaultTiers ? `${tiers}: OpenRouter's names, kept because [tiers] names none for ${provider.name}; a gateway usually calls its models otherwise` : tiers);

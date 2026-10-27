@@ -9,11 +9,14 @@ import { modelDir } from "../src/model.ts";
 
 /** A gateway as OpenAI's API answers, which can be told to refuse stream_options or to drop tools. */
 let gateway: Server, url: string;
-const behave = { refuseStreamOptions: false, dropTools: false, models: ["small", "big"] };
+const behave = { refuseStreamOptions: false, dropTools: false, models: ["small", "big"], bearerIn: "" };
 beforeAll(async () => {
   gateway = createServer((req, res) => {
     let b = "";
     req.on("data", (c) => (b += c)).on("end", () => {
+      // A gateway that wants Bearer in a header of its own, and says so when it isn't there, echoing what it got.
+      const got = behave.bearerIn ? String(req.headers[behave.bearerIn.toLowerCase()] ?? "") : "";
+      if (behave.bearerIn && !got.startsWith("Bearer ")) { res.writeHead(401, { "Content-Type": "application/json" }).end(JSON.stringify({ error: { message: `Missing Bearer prefix in ${behave.bearerIn}, got "${got}"` } })); return; }
       if (req.url === "/v1/models") { res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ data: behave.models.map((id) => ({ id })) })); return; }
       const body = JSON.parse(b) as { tools?: unknown[]; stream_options?: unknown };
       if (behave.refuseStreamOptions && body.stream_options) { res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: { message: "Unrecognized request argument supplied: stream_options" } })); return; }
@@ -46,7 +49,7 @@ describe("isorite doctor", () => {
   it("passes a gateway that answers, streams, reports usage and calls tools", async () => {
     Object.assign(behave, { refuseStreamOptions: false, dropTools: false });
     const { code, text } = await run(work());
-    expect(text).toContain("✓ key: <14 characters>, sent as Authorization: Bearer");
+    expect(text).toContain("✓ key: sent as Authorization: Bearer <14 characters>");
     expect(text).toContain(`✓ reached: ${url}/models answered with 2 models`);
     expect(text).toContain('✓ reply from big: "ready", 9 tokens in and 1 out');
     expect(text).toContain("✓ tools: big called ping");
@@ -70,6 +73,25 @@ describe("isorite doctor", () => {
     const fixed = await run(work("stream_usage = false\n"));
     expect(fixed.text).toContain('✓ reply from small: "ready"\n');
     Object.assign(behave, { refuseStreamOptions: false });
+  });
+
+  it("gives a gateway's own words on a 401, without the key, and key_prefix puts Bearer in another header", async () => {
+    Object.assign(behave, { bearerIn: "X-Gateway-Auth" });
+    const bare = await run(work('key_header = "X-Gateway-Auth"\n'));
+    expect(bare.text).toContain("✓ key: sent as X-Gateway-Auth: <14 characters>");
+    expect(bare.text).toContain('✗ reached: it said 401 to the list of models: “Missing Bearer prefix in X-Gateway-Auth, got "<the key>"”. The key, sent as X-Gateway-Auth: <14 characters>, or a header it wants');
+    expect(bare.text).not.toContain("sk-work-secret");
+    const fixed = await run(work('key_header = "X-Gateway-Auth"\nkey_prefix = "Bearer "\n'));
+    expect(fixed.text).toContain("✓ key: sent as X-Gateway-Auth: Bearer <14 characters>");
+    expect(fixed.code).toBe(0);
+    Object.assign(behave, { bearerIn: "" });
+  });
+
+  it("takes key_header = authorization alone as Bearer, and says so; key_prefix = \"\" sends it bare", async () => {
+    const alone = await run(work('key_header = "authorization"\n'), { offline: true });
+    expect(alone.text).toContain('✓ key: sent as authorization: Bearer <14 characters> (key_header = "authorization" alone means Bearer since 0.9.0; key_prefix = "" sends it bare)');
+    const bare = await run(work('key_header = "authorization"\nkey_prefix = ""\n'), { offline: true });
+    expect(bare.text).toContain("✓ key: sent as authorization: <14 characters>\n");
   });
 
   it("fails a gateway that drops the tools", async () => {

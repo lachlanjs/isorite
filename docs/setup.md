@@ -58,6 +58,8 @@ Gateways inside companies often want more than a key. Each of these is optional:
 url = "https://llm-gateway.corp.example/v1"
 key = "…"
 key_header = "api-key"                     # the header the key goes in, as it is, instead of Authorization: Bearer
+# key_prefix = "Bearer "                   # what goes before the key: for Bearer in another header, as
+#                                          # key_header = "X-Gateway-Auth"; Authorization has Bearer unless key_prefix = ""
 stream_usage = false                       # for a gateway that refuses stream_options; the gauge then counts nothing
 max_tokens = 16000                         # the least room a reply is given, for models that think at length
 

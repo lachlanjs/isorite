@@ -1,6 +1,6 @@
 import { createServer } from "node:net";
 import { expect, test } from "vitest";
-import { ModelError, OPENROUTER, RETRY, complete, unreachable } from "../src/index.ts";
+import { ModelError, OPENROUTER, RETRY, complete, endpoint, keySent, keySentAs, refusal, unreachable } from "../src/index.ts";
 import { rounds } from "../src/loop.ts";
 
 /** A fetch error as Node's fetch throws it: "fetch failed", the reason in its cause (shapes seen on Node 25). */
@@ -147,4 +147,31 @@ test("a reply cut off before it wrote anything is asked once more with three tim
   const roomy = run([() => sse("fine")], { ...work, maxTokens: 16000 });
   await roomy.ran;
   expect(roomy.budgets).toEqual([16000]);
+});
+
+test("the key goes in Authorization with Bearer, or in key_header with key_prefix before it (M21)", () => {
+  const p = (more: Partial<typeof OPENROUTER>) => ({ ...OPENROUTER, ...more });
+  const head = (more: Partial<typeof OPENROUTER>) => endpoint(p(more), "sk-1", "/models").headers;
+  expect(head({})).toMatchObject({ Authorization: "Bearer sk-1" });
+  expect(head({ keyHeader: "api-key" })).toMatchObject({ "api-key": "sk-1" });
+  expect(head({ keyHeader: "X-Gateway-Auth", keyPrefix: "Bearer " })).toMatchObject({ "X-Gateway-Auth": "Bearer sk-1" });
+  // Authorization named alone is Bearer, as a bare key there is rarely wanted; "" sends it bare.
+  expect(head({ keyHeader: "authorization" })).toMatchObject({ authorization: "Bearer sk-1" });
+  expect(head({ keyHeader: "Authorization", keyPrefix: "" })).toMatchObject({ Authorization: "sk-1" });
+  expect(head({ keyPrefix: "Token " })).toMatchObject({ Authorization: "Token sk-1" });
+  expect(keySent(p({ keyHeader: "api-key" }))).toEqual({ header: "api-key", prefix: "" });
+  expect(keySentAs(p({}), "sk-1")).toBe("Authorization: Bearer <4 characters>");
+});
+
+test("what a provider said with a refusal: its message, or its text, cut, and never the key", () => {
+  expect(refusal(JSON.stringify({ error: { message: "Missing Bearer prefix" } }))).toBe("Missing Bearer prefix");
+  expect(refusal(JSON.stringify({ message: "no" }))).toBe("no");
+  expect(refusal("<html><body><h1>401</h1>\n  Unauthorized</body></html>")).toBe("401 Unauthorized");
+  expect(refusal(JSON.stringify({ error: "bad key sk-secret-123" }), "sk-secret-123")).toBe("bad key <the key>");
+  expect(refusal("x".repeat(400))).toHaveLength(300);
+});
+
+test("a proxy's 407 is named as the proxy's, apart from the provider's 401", () => {
+  const tunnel = Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error("Request was cancelled."), { cause: Object.assign(new Error("Proxy response (407) !== 200 when HTTP Tunneling"), { code: "UND_ERR_ABORTED" }) }) });
+  expect(unreachable(tunnel, URL_)).toMatch(/^Proxy response \(407\) !== 200 when HTTP Tunneling \(UND_ERR_ABORTED\)\. The proxy \(HTTPS_PROXY\), not the provider, refused with 407/);
 });

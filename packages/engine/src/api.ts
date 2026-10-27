@@ -184,8 +184,11 @@ export interface ProviderSetup {
   name: string;
   url: string;
   keyHeld: boolean;
-  /** The header the key goes in, when not Authorization: Bearer. */
+  /** The header the key goes in, when not Authorization. */
   keyHeader: string;
+  /** What goes before the key in it, as `Bearer` (M21); empty for the default: Bearer in Authorization, and
+   *  nothing in another header. */
+  keyPrefix: string;
   headers: SetupPair[];
   query: SetupPair[];
   /** The client certificate: a .pfx, or a certificate and its key; and an authority. Paths on the server's machine. */

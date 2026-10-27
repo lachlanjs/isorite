@@ -77,6 +77,23 @@ test("a gateway is set up, checked, kept and in use at once; its secret header i
   await expect(page.locator('[data-pane="iso"] .said').last()).toContainText("measured in");
 });
 
+test("the key's prefix: Bearer in Authorization unless said, and kept as key_prefix for another header (M21)", async ({ page }) => {
+  await page.goto("#/n/basics/surprise");
+  const menu = await settings(page);
+  await menu.getByText("what else it asks for").click();
+  const header = menu.getByLabel("The header the key goes in"), prefix = menu.getByLabel("What goes before the key");
+  await header.fill("");
+  await expect(prefix).toHaveAttribute("placeholder", "Bearer");
+  await expect(prefix).toHaveAttribute("title", /Sent: Authorization: Bearer <the key>/);
+  await header.fill("X-Gateway-Auth");
+  await expect(prefix).toHaveAttribute("placeholder", "no prefix");
+  await prefix.fill("Bearer");
+  await expect(prefix).toHaveAttribute("title", /Sent: X-Gateway-Auth: Bearer <the key>/);
+  await menu.getByRole("button", { name: "keep", exact: true }).click();
+  await expect.poll(() => readFileSync(CONFIG, "utf8")).toContain('key_prefix = "Bearer "');
+  expect(readFileSync(CONFIG, "utf8")).toContain('key_header = "X-Gateway-Auth"');
+});
+
 test("the setup is shown, and not changed, from a tailnet's name", async ({ page }) => {
   const { token } = await (await page.request.get("api/session")).json() as { token: string };
   const view = await (await page.request.get("api/settings/provider")).json() as { local: boolean; setup: object };
