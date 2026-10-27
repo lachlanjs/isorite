@@ -3,6 +3,7 @@
 // issue: versions, the platform, the configuration with its secrets replaced by their lengths, the environment
 // isorite reads, and the checks.
 
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { arch, platform, release } from "node:os";
@@ -34,6 +35,8 @@ export interface DoctorOptions {
   http?: Http;
   /** How OpenCode's version is asked (tests). */
   probe?: Probe;
+  /** The git to time (tests). */
+  git?: string;
   version?: string;
   /** How Node was started: its flags, as process.execArgv. */
   execArgv?: string[];
@@ -143,6 +146,14 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
     if (!o.report) out(`  asking ${p.name}: its models, then ${models.length + 1} replies of a few words (a few hundred tokens in all)`);
     await checkProvider(p, h, key, say);
   }
+
+  // Git (M21): isorite runs none to start, but OpenCode may, in the folder it starts in; a company's wrapper that
+  // waits on the network is seen here by how long `git --version` takes.
+  const began = Date.now(), git = spawnSync(o.git ?? "git", ["--version"], { encoding: "utf8", env, timeout: 3000, killSignal: "SIGKILL" });
+  const took = Date.now() - began;
+  if (git.error && (git.error as NodeJS.ErrnoException).code === "ENOENT") say("git", "skip", "not found: isorite doesn't need it; OpenCode works without it, as a folder that isn't a repository");
+  else if (git.status !== 0 || took >= 3000) say("git", "warn", `git --version ${took >= 3000 ? "didn't answer in 3 s" : `failed after ${took} ms`}: likely a wrapper (a company's) that waits on the network. isorite no longer waits on git to start; OpenCode may, and isorite term then says it's waiting for OpenCode's server`);
+  else say("git", took > 1000 ? "warn" : "ok", `${git.stdout.trim()}, in ${took} ms${took > 1000 ? ": slow, likely a wrapper; OpenCode may wait on it as it starts" : ""}`);
 
   // The terminal.
   try {

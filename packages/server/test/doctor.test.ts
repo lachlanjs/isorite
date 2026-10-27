@@ -95,6 +95,15 @@ describe("isorite doctor", () => {
     expect(bare.text).toContain("✓ key: sent as authorization: <14 characters>\n");
   });
 
+  it.skipIf(process.platform === "win32")("times git, and warns of one that doesn't answer, as a wrapper waiting on the network", async () => {
+    expect((await run(work(), { offline: true })).text).toMatch(/✓ git: git version [\d.]+, in \d+ ms/);
+    const root = mkdtempSync(join(tmpdir(), "isorite-doctor-git-"));
+    made.push(root);
+    writeFileSync(join(root, "git"), "#!/bin/sh\nsleep 60\n", { mode: 0o755 });
+    const { text } = await run(work(), { offline: true, git: join(root, "git") });
+    expect(text).toContain("! git: git --version didn't answer in 3 s: likely a wrapper");
+  }, 20_000);
+
   it("fails a gateway that drops the tools", async () => {
     Object.assign(behave, { dropTools: true });
     expect((await run(work())).text).toContain("✗ tools: big answered without calling the tool");
