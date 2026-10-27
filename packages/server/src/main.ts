@@ -160,11 +160,23 @@ export function main(argv: string[]): number | Promise<number> {
   return command && command !== "help" && command !== "--help" ? 2 : 0;
 }
 
+/** The commands that start something, which say so at once (M21): a subprocess that stalls after this is then
+ *  seen to stall. To stderr, as `mcp` speaks on stdout; once, not again when the command runs itself again with
+ *  the proxy on (ISORITE_STARTING). */
+const STARTS = new Set(["serve", "term", "mcp", "guide", "tutorial", "--tutorial"]);
+export function starting(argv: string[], env: NodeJS.ProcessEnv = process.env, write = (s: string) => process.stderr.write(s)): boolean {
+  if (!STARTS.has(argv[0] ?? "") || env.ISORITE_STARTING) return false;
+  write("isorite: starting…\n");
+  return true;
+}
+
 // Run as the command, however it is reached: npm installs it as a link, so the path it was run by is resolved first.
 // Inside a company, the proxy and the system's authorities are used without flags (network.ts).
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) {
+  starting(process.argv.slice(2));
+  delete process.env.ISORITE_STARTING;
   const env = proxied(process.env);
-  if (env) process.exit(await rerun(env));
+  if (env) process.exit(await rerun({ ...env, ISORITE_STARTING: "1" }));
   trustSystem();
   process.exit(await main(process.argv.slice(2)));
 }

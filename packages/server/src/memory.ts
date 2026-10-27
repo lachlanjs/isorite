@@ -2,12 +2,12 @@
 // as rdstudio's ~/knowledge was. Its practice is its AGENTS.md, yours to change. And isorite bases: the bases this
 // device knows.
 
-import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { AGENTS_FILE, OWN_DIR, StudyError } from "@isorite/core";
 import { configPath, knownBases, rememberBase, basesPath } from "./config.ts";
+import { gitInit } from "./git.ts";
 import { newBase } from "./serve.ts";
 
 export const MEMORY_FOLDER = join(homedir(), "isorite-memory");
@@ -46,7 +46,7 @@ anything secret: keys, passwords, tokens.
 
 /** Make the memory, or say where it is: the folder (as isorite new makes it), a git repository of its own, its
  *  practice, and its row in bases.toml, lent. */
-export function memory(folder = MEMORY_FOLDER, { config = configPath(), out = console.log }: { config?: string; out?: (line: string) => void } = {}): number {
+export function memory(folder = MEMORY_FOLDER, { config = configPath(), out = console.log, env = process.env }: { config?: string; out?: (line: string) => void; env?: NodeJS.ProcessEnv } = {}): number {
   const at = resolve(folder), known = knownBases(config);
   // Run again, it says where the memory is, and changes nothing.
   const had = known.find((b) => b.path === at) ?? (folder === MEMORY_FOLDER ? known.find((b) => b.name === "memory") : undefined);
@@ -58,10 +58,9 @@ export function memory(folder = MEMORY_FOLDER, { config = configPath(), out = co
     if (existsSync(at) && readdirSync(at).some((f) => f !== OWN_DIR && f !== ".git")) throw new StudyError(`${at} has files in it already, and no ${AGENTS_FILE}: name another folder, isorite memory <folder>`);
     newBase(at);
     writeFileSync(join(at, AGENTS_FILE), MEMORY_AGENTS);
-    try {
-      if (!existsSync(join(at, ".git"))) execFileSync("git", ["init", "--quiet"], { cwd: at, stdio: "ignore" });
-    } catch { out("  (git is not here: the memory is not a repository yet)"); }
-    out(`isorite memory: made at ${at}, a private repository of its own: push it where you like`);
+    const repo = existsSync(join(at, ".git")) || gitInit(at, { env });
+    out(repo ? `isorite memory: made at ${at}, a private repository of its own: push it where you like`
+      : `isorite memory: made at ${at}; not a git repository (git did not answer, or is not here): git init it yourself`);
   }
   const name = rememberBase(at, { path: config, as: "memory", lend: true });
   out(`  ${name}: lent to every session's agent and Iso, as listed in ${basesPath(config)}`);
