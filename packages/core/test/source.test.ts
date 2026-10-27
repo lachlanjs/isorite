@@ -1,10 +1,11 @@
 import { describe, expect, test } from "vitest";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { FrontmatterError, editFrontmatter, spliceText, splitSource } from "../src/index.ts";
 import { readFolder } from "../src/node.ts";
 
-const FIXTURES = new URL("../../../fixtures/bundles", import.meta.url).pathname;
+const FIXTURES = fileURLToPath(new URL("../../../fixtures/bundles", import.meta.url));
 
 describe("a note's file taken apart", () => {
   test("the prefix and the body are exactly the file", () => {

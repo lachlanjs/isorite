@@ -38,7 +38,7 @@ describe("the gateway", () => {
 
 describe("the config home", () => {
   it("is beside isorite's own config", () => {
-    expect(defaultHome({ XDG_CONFIG_HOME: "/x" })).toBe("/x/isorite/opencode");
+    expect(defaultHome({ XDG_CONFIG_HOME: "/x" })).toBe(join("/x", "isorite", "opencode"));
   });
 
   it("holds the config, the TUI's settings, the theme and a link to the plugin", () => {

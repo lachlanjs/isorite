@@ -125,7 +125,7 @@ describe("checking and keeping", () => {
     const view = await setup.keep(draft(), true);
     expect(view).toMatchObject({ local: true, config: path, setup: { kind: "gateway", url, keyHeld: true } });
     expect(kept).toBe(1);
-    expect(statSync(path).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") expect(statSync(path).mode & 0o777).toBe(0o600); // Windows has no mode: the profile's ACL keeps it
     expect(readFileSync(`${path}.bak`, "utf8")).toContain("# my note");
     expect(readConfig(path)).toMatchObject({ device: "abcd1234", provider: { url, key: "sk-work", key_header: "api-key" }, tiers: { low: "small" } });
     await setup.keep({ ...draft(), name: "work 2" }, true);

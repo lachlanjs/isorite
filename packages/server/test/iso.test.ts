@@ -39,7 +39,7 @@ test("the key goes in, is kept for its owner alone, and never comes out", async 
   expect(await set.text()).not.toContain("sk-or-secret");
   expect(await (await fetch(url + "/api/settings")).text()).not.toContain("sk-or-secret");
   expect(await (await fetch(url + "/api/settings")).json()).toMatchObject({ key: true });
-  expect(statSync(config).mode & 0o777).toBe(0o600);
+  if (process.platform !== "win32") expect(statSync(config).mode & 0o777).toBe(0o600); // Windows has no mode: the profile's ACL keeps it
   expect(readFileSync(config, "utf8")).toContain('key = "sk-or-secret"');
   expect(await new ConfigSecrets(config).get("provider.key")).toBe("sk-or-secret");
 });

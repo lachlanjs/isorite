@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { doctor, type DoctorOptions } from "../src/doctor.ts";
 import { modelDir } from "../src/model.ts";
@@ -135,7 +135,7 @@ describe("isorite doctor", () => {
   it("names a setting whose variable isn't set, and a notes folder that isn't there", async () => {
     const { text } = await run(`[provider]\nurl = "${url}"\nkey = "k"\n[provider.headers]\nX-Project = "$PROJECT"\n`, { offline: true, folder: "/nowhere/notes" });
     expect(text).toContain('✗ config: [provider] headers.X-Project is "$PROJECT", and PROJECT is not set');
-    expect(text).toContain("✗ notes: no folder at /nowhere/notes");
+    expect(text).toContain(`✗ notes: no folder at ${resolve("/nowhere/notes")}`);
     expect(text).toContain("! terminal: not known until config.toml is fixed");
   });
 
@@ -158,7 +158,7 @@ describe("isorite doctor", () => {
 describe("isorite help setup", () => {
   it("prints the setup guide written for an AI helping someone", async () => {
     const { execFileSync } = await import("node:child_process");
-    const main = new URL("../src/main.ts", import.meta.url).pathname;
+    const main = (await import("node:url")).fileURLToPath(new URL("../src/main.ts", import.meta.url));
     const said = execFileSync(process.execPath, [main, "help", "setup"], { encoding: "utf8" });
     expect(said.startsWith("# Setting isorite up: for an AI helping someone")).toBe(true);
     expect(said).toContain("isorite doctor --report");

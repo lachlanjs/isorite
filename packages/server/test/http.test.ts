@@ -156,7 +156,7 @@ test("the device id is made once and kept, readable by its owner only", () => {
   const id = deviceId(path);
   expect(id).toMatch(/^[a-z0-9]{8}$/);
   expect(deviceId(path)).toBe(id);
-  expect(statSync(path).mode & 0o777).toBe(0o600);
+  if (process.platform !== "win32") expect(statSync(path).mode & 0o777).toBe(0o600); // Windows has no mode: the profile's ACL keeps it
 });
 
 test("a terminal agent is offered the tools and looks up as the page writes: from the origin, with the token", async () => {
