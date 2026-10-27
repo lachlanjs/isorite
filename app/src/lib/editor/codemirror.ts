@@ -13,7 +13,7 @@ import { codeHighlighter, languages } from "$lib/code.ts";
 import { blocksTheme, embeds, renderedBlocks, type Embeds } from "./blocks.ts";
 import { format, formatKeymap, type Format } from "./commands.ts";
 import { linkAt, linkControl } from "./linkControl.ts";
-import { linkCompletion, type LinkTarget } from "./links.ts";
+import { linkCompletion, type LinkTarget, type PictureSource } from "./links.ts";
 import { livePreview, livePreviewTheme, codeBroken, pictures, type PictureAt } from "./livePreview.ts";
 import { mathsSyntax } from "./maths.ts";
 import { noteOf } from "./noteOf.ts";
@@ -56,6 +56,8 @@ export interface EditorOptions {
   codeBroken?: (href: string) => boolean;
   /** The picture an image's address names, drawn in place (M22). */
   pictures?: (href: string) => PictureAt | null;
+  /** The notes' pictures, as `[[!` and `](` offer them (M22). */
+  pictureSource?: PictureSource;
   /** The note or folder a link under the mouse names, and null once it leaves one (M17: lit on the Atlas). */
   onPoint?: (to: Pointed | null) => void;
 }
@@ -79,6 +81,12 @@ const theme = EditorView.theme({
   ".cm-tooltip-autocomplete": { background: "var(--ground-1)", border: "1px solid var(--line-strong)", fontFamily: "var(--font-ui)", fontSize: "13px" },
   ".cm-tooltip.cm-tooltip-autocomplete > ul": { fontFamily: "var(--font-ui)", maxHeight: "16em" },
   ".cm-tooltip-autocomplete > ul > li": { padding: "6px 10px !important", lineHeight: "1.3" },
+  ".cm-picture-thumb": { width: "32px", height: "32px", objectFit: "cover", verticalAlign: "middle", marginRight: "8px", background: "var(--ground-2)" },
+  ".cm-tooltip-autocomplete > ul > li:has(.cm-picture-thumb)": { padding: "3px 10px !important" },
+  ".cm-picture-preview": { padding: "8px" },
+  ".cm-picture-preview img": { display: "block", maxWidth: "240px", maxHeight: "240px" },
+  ".cm-picture-size": { fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--text-faint)", marginTop: "4px" },
+  ".cm-completionInfo": { background: "var(--ground-1)", border: "1px solid var(--line-strong)", padding: "0" },
   ".cm-tooltip-autocomplete > ul > li[aria-selected]": { background: "var(--lattice-soft)", color: "var(--text)" },
   ".cm-completionDetail": { color: "var(--text-faint)", fontStyle: "normal", marginLeft: "10px" },
 });
@@ -118,8 +126,8 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       touchedLines,
       pointingLinks(opts.onPoint),
       ...(opts.readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []),
-      linkCompletion(opts.notes),
-      placeholder(opts.placeholder ?? "Write the note here. # for a heading, [[ to link to another note, $x$ for maths."),
+      linkCompletion(opts.notes, opts.pictureSource ?? null),
+      placeholder(opts.placeholder ?? "Write the note here. # for a heading, [[ to link to another note, [[! to show a picture, $x$ for maths."),
       EditorView.contentAttributes.of({ "aria-label": opts.label, spellcheck: "true", autocapitalize: "sentences", autocorrect: "on" }),
       keymap.of([
         { key: "Mod-s", preventDefault: true, run: () => { opts.onSave(); return true; } },

@@ -3,9 +3,9 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  AGENTS_FILE, codeTarget, pictureType, sha256, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
+  AGENTS_FILE, codeTarget, pictureSize, pictureType, sha256, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest, type UnderstandingReport } from "./api.ts";
+import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Away, type Similar } from "./lookup.ts";
@@ -556,6 +556,43 @@ export class Engine implements Api {
     if (!bytes) return null;
     if (bytes.length > MAX_FILE_BYTES) throw new EngineError(`${path} is larger than isorite gives (${MAX_FILE_BYTES / 1e6} MB)`, 413);
     return { bytes, type, version: sha256(bytes).slice(0, 16) };
+  }
+
+  /** What was read of each picture, kept while its size and time are the same. */
+  private pictureCache = new Map<string, { size?: number; mtime?: number; info: PictureInfo }>();
+
+  /** Every picture in the notes (M22), found afresh: one put in the folder by hand since the base was opened is
+   *  among them, and from then on in the bundle too, so a link to it isn't broken. A hidden folder is never looked in. */
+  async pictures(): Promise<PictureInfo[]> {
+    const found: { path: string; size?: number; mtime?: number }[] = [];
+    const visit = async (dir: string): Promise<void> => {
+      for (const f of await this.opts.notes.list(dir)) {
+        if (f.name.startsWith(".")) continue;
+        const path = dir ? `${dir}/${f.name}` : f.name;
+        if (f.dir) await visit(path);
+        else if (pictureType(f.name)) found.push({ path, ...(f.size === undefined ? {} : { size: f.size }), ...(f.mtime === undefined ? {} : { mtime: f.mtime }) });
+      }
+    };
+    await visit("");
+    const out: PictureInfo[] = [], seen = new Set<string>();
+    for (const f of found) {
+      seen.add(f.path);
+      const kept = this.pictureCache.get(f.path);
+      if (kept && f.size !== undefined && kept.size === f.size && kept.mtime === f.mtime) { out.push(kept.info); continue; }
+      const bytes = f.size !== undefined && f.size > MAX_FILE_BYTES ? null : await this.opts.notes.readBytes(f.path);
+      if (!bytes) continue;
+      const px = pictureSize(bytes, pictureType(f.path)!);
+      const info: PictureInfo = { path: f.path, bytes: bytes.length, width: px?.width ?? null, height: px?.height ?? null, sha256: sha256(bytes) };
+      this.pictureCache.set(f.path, { ...(f.size === undefined ? {} : { size: f.size }), ...(f.mtime === undefined ? {} : { mtime: f.mtime }), info });
+      out.push(info);
+    }
+    for (const path of this.pictureCache.keys()) if (!seen.has(path)) this.pictureCache.delete(path);
+    // The bundle's pictures, as found.
+    let changed = false;
+    for (const path of seen) if (!this.files.has(path)) { this.files.set(path, { path }); changed = true; }
+    for (const path of [...this.files.keys()]) if (pictureType(path) && !seen.has(path)) { this.files.delete(path); changed = true; }
+    if (changed) this.built = this.index = null;
+    return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   }
 
   /** Where a note's file is: drafts and Understanding notes are among isorite's own files. */

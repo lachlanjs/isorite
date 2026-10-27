@@ -24,7 +24,7 @@ test("memory files keep bytes apart from text, and list both", async () => {
   const { notes } = await open();
   expect(await notes.readBytes("combat/hitboxes/player.png")).toEqual(PNG);
   expect(await notes.read("combat/hitboxes/player.png")).toBeNull();
-  expect(await notes.list("combat/hitboxes")).toEqual([{ name: "player.png", dir: false }]);
+  expect(await notes.list("combat/hitboxes")).toEqual([{ name: "player.png", dir: false, size: PNG.length }]);
   await notes.remove("combat/hitboxes/player.png");
   expect(await notes.readBytes("combat/hitboxes/player.png")).toBeNull();
 });
@@ -47,4 +47,18 @@ test("a picture in the repository, once one is named", async () => {
   expect(await engine.file("assets/sprite.webp", "code")).toMatchObject({ type: "image/webp" });
   expect(await engine.file("../assets/sprite.webp", "code")).toBeNull();
   expect(await engine.file("assets/sprite.txt", "code")).toBeNull();
+});
+
+test("every picture in the notes, found afresh, with its size and hash; one added by hand is no longer broken", async () => {
+  const { engine, notes } = await open();
+  expect(await engine.pictures()).toEqual([{ path: "combat/hitboxes/player.png", bytes: PNG.length, width: null, height: null, sha256: sha256(PNG) }]);
+  await notes.write("combat/dodge.md", "---\ntype: Concept\ntitle: Dodge\n---\n\n![roll](/art/roll.svg)\n");
+  await engine.reload();
+  expect(engine.bundle.issues.filter((i) => i.code === "broken-link").map((i) => i.path)).toEqual(["combat/dodge.md"]);
+  await notes.writeBytes("art/roll.svg", new TextEncoder().encode('<svg viewBox="0 0 48 24"/>'));
+  expect((await engine.pictures()).map((p) => [p.path, p.width, p.height])).toEqual([["art/roll.svg", 48, 24], ["combat/hitboxes/player.png", null, null]]);
+  expect(engine.bundle.issues.filter((i) => i.code === "broken-link")).toEqual([]);
+  await notes.remove("art/roll.svg");
+  expect((await engine.pictures()).map((p) => p.path)).toEqual(["combat/hitboxes/player.png"]);
+  expect(engine.bundle.issues.filter((i) => i.code === "broken-link").map((i) => i.path)).toEqual(["combat/dodge.md"]);
 });

@@ -13,3 +13,8 @@ test("a picture's path, from the note, from the top of the notes, or in the repo
   // Not pictures, or out of the notes.
   for (const href of ["../../up.png", "fig.html", "other.md", "https://x.org/p.png", "code:../p.png", "code:src/sim.py", "", "#top"]) expect([href, at(href)]).toEqual([href, null]);
 });
+
+test("a picture's first description is its file name in words", async () => {
+  const { describedAs } = await import("./editor/links.ts");
+  expect([describedAs("art/sprites/player-idle.png"), describedAs("pasted-2026-10-27_0413.png"), describedAs("Tree.svg")]).toEqual(["player idle", "pasted 2026 10 27 0413", "Tree"]);
+});

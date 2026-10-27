@@ -5,6 +5,9 @@
 export interface FileInfo {
   name: string;
   dir: boolean;
+  /** A file's size in bytes and when it last changed (ms), where the port can tell: whether a picture changed (M22). */
+  size?: number;
+  mtime?: number;
 }
 
 /** One folder of files: a knowledge base, or a study base. */
@@ -52,14 +55,15 @@ export class MemoryFiles implements Files {
 
   async list(dir: string): Promise<FileInfo[]> {
     const prefix = dir ? dir + "/" : "";
-    const found = new Map<string, boolean>();
+    const found = new Map<string, FileInfo>();
     for (const path of [...this.files.keys(), ...this.bytes.keys()]) {
       if (!path.startsWith(prefix)) continue;
       const rest = path.slice(prefix.length), cut = rest.indexOf("/");
-      if (cut < 0) found.set(rest, false);
-      else found.set(rest.slice(0, cut), true);
+      if (cut >= 0) { found.set(rest.slice(0, cut), { name: rest.slice(0, cut), dir: true }); continue; }
+      const b = this.bytes.get(path);
+      found.set(rest, b ? { name: rest, dir: false, size: b.length } : { name: rest, dir: false });
     }
-    return [...found].map(([name, isDir]) => ({ name, dir: isDir }));
+    return [...found.values()];
   }
 }
 

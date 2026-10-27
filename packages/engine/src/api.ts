@@ -278,6 +278,10 @@ export interface AgentLook {
 /** A picture's file (M22), as `GET /api/file` gives it: its bytes, its media type, and a version for caching. */
 export interface FileBytes { bytes: Uint8Array; type: string; version: string }
 
+/** A picture in the notes (M22), as `[[!` offers it: its path, size in bytes, size in pixels where that can be told,
+ *  and its SHA-256, by which a picture pasted twice is found already there. */
+export interface PictureInfo { path: string; bytes: number; width: number | null; height: number | null; sha256: string }
+
 /** The largest picture isorite gives or takes (M22). */
 export const MAX_FILE_BYTES = 20_000_000;
 
@@ -288,6 +292,8 @@ export interface Api {
   /** A picture (M22): in the notes, by its path there, or (`code`) in the base's repository, by its path there. Null
    *  when there's no such picture, or the path isn't a picture's: nothing else is given this way. */
   file(path: string, from?: "notes" | "code"): Promise<FileBytes | null>;
+  /** Every picture in the notes, by path (M22). */
+  pictures(): Promise<PictureInfo[]>;
   /** Save a note. `base` is the version the text started from; a note that has moved on refuses with a Conflict. */
   saveNote(id: string, edit: { base: string; text: string }): Promise<Saved>;
   /** Make a note. Refuses when there is one already. */

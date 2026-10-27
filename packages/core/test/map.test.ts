@@ -91,3 +91,13 @@ describe("what a note rests on", () => {
     expect(reach({ edges: [["b", "a", 2], ["c", "b", 2]] }, "c").requires).toEqual(["b", "a"]);
   });
 });
+
+test("a folder holding only pictures isn't on the Atlas; an empty one is (M22)", () => {
+  const b = Bundle.fromFiles([
+    { path: "combat", dir: true }, { path: "combat/hitboxes", dir: true }, { path: "art", dir: true }, { path: "art/sprites", dir: true }, { path: "later", dir: true },
+    { path: "combat/hitboxes.md", text: note("Hitboxes", "![p](hitboxes/p.png)") }, { path: "combat/hitboxes/p.png" },
+    { path: "art/sprites/player.png" },
+  ]);
+  const names = (d: MapDir): string[] => d.children.flatMap((c) => (c.kind === "dir" ? [c.ref, ...names(c)] : []));
+  expect(names(mapModel(b).root)).toEqual(["combat", "later"]);
+});

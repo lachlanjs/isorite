@@ -1,6 +1,6 @@
 // The engine's Files port over a folder on disk.
 
-import { appendFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import type { FileInfo, Files } from "@isorite/engine";
 
@@ -51,8 +51,15 @@ export class NodeFiles implements Files {
 
   async list(dir: string): Promise<FileInfo[]> {
     try {
-      const entries = await readdir(this.at(dir), { withFileTypes: true });
-      return entries.filter((e) => e.isDirectory() || e.isFile()).map((e) => ({ name: e.name, dir: e.isDirectory() })).sort((a, b) => (a.name < b.name ? -1 : 1));
+      const at = this.at(dir), entries = await readdir(at, { withFileTypes: true });
+      const out = await Promise.all(entries.filter((e) => e.isDirectory() || e.isFile()).map(async (e): Promise<FileInfo> => {
+        if (e.isDirectory()) return { name: e.name, dir: true };
+        // A note's size is never asked; a picture's is (M22), to know whether it has changed.
+        if (e.name.endsWith(".md")) return { name: e.name, dir: false };
+        const s = await stat(resolve(at, e.name)).catch(() => null);
+        return s ? { name: e.name, dir: false, size: s.size, mtime: s.mtimeMs } : { name: e.name, dir: false };
+      }));
+      return out.sort((a, b) => (a.name < b.name ? -1 : 1));
     } catch (e) { if (gone(e)) return []; throw e; }
   }
 

@@ -156,6 +156,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   app.get("/api/map", (c) => answer(c, () => api.map()));
   app.get("/api/timeline", (c) => answer(c, () => api.timeline()));
   app.get("/api/search", (c) => answer(c, () => api.search(c.req.query("q") ?? "")));
+  app.get("/api/pictures", (c) => answer(c, () => api.pictures()));
   // A picture (M22): `path` in the notes, or `code` in the repository. Only a picture: the engine gives nothing
   // else. An SVG opened here on its own would run its scripts beside the token, so every answer is sandboxed.
   app.get("/api/file", async (c) => {

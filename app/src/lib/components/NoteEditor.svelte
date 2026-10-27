@@ -45,7 +45,11 @@
       doc: source ? note.text : note.body,
       source,
       label: source ? "The note's file" : "The note",
-      notes: () => app.listing.notes.filter((n) => n.id !== note.id).map((n) => ({ id: n.id, title: n.title, folder: n.dir })),
+      notes: () => app.listing.notes.filter((n) => n.id !== note.id).map((n) => ({ id: n.id, title: n.title, folder: n.dir, ...(n.kind ? { kind: n.kind } : {}) })),
+      pictureSource: {
+        pictures: async () => (await app.api.pictures()).map((p) => ({ path: p.path, width: p.width, height: p.height, src: pictureSrc(app.api, { path: p.path, from: "notes" }) })),
+        here: () => note.id,
+      },
       onChange: (text) => (source ? note.setText(text) : note.setBody(text)),
       onSave: () => { void note.save(); },
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves

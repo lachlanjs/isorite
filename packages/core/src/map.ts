@@ -26,11 +26,16 @@ export function mapModel(base: Bundle): MapModel {
     for (const to of c.attached) if (!strongest.has(to)) strongest.set(to, STRENGTH.uses);
     for (const [to, s] of strongest) edges.push([c.id, to, s]);
   }
-  const dir = (id: string): MapDir => {
+  // A folder that holds files but no notes (a note's pictures, M22), or only such folders, isn't drawn; an empty
+  // one is, waiting for notes.
+  const holdsFiles = new Set<string>();
+  for (const f of base.files) holdsFiles.add(f.includes("/") ? f.slice(0, f.lastIndexOf("/")) : "");
+  const dir = (id: string): MapDir | null => {
     const d = base.directories.get(id)!;
-    return { kind: "dir", id: "d:" + id, ref: id, children: [...[...d.children].sort().map(dir), ...[...d.concepts].sort().map(note)] };
+    const children = [...[...d.children].sort().map(dir).filter((c): c is MapDir => c !== null), ...[...d.concepts].sort().map(note)];
+    return id && !children.length && (holdsFiles.has(id) || d.children.length) ? null : { kind: "dir", id: "d:" + id, ref: id, children };
   };
-  return { root: dir(""), edges };
+  return { root: dir("")!, edges };
 }
 
 // ------------------------------------------------------------ what a note rests on

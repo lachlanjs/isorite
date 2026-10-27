@@ -71,6 +71,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     notes: () => ask("notes"),
     readNote: (id) => ask("note" + q(id)),
     fileUrl,
+    pictures: () => ask("pictures"),
     file: async (path, from) => {
       let res: Response;
       try { res = await fetch(fileUrl(path, from)); } catch { throw new ApiError("isorite is not answering", 0); }
