@@ -160,7 +160,7 @@ Rules:
 | `said 400: … stream_options` | The gateway refuses `stream_options`. | `stream_usage = false`. |
 | `✗ tools: … answered without calling the tool` | The model or gateway drops tools. | Choose a model that supports tool calls. Iso and the terminal need them. |
 | `isorite: starting…` and then nothing, or `waiting for OpenCode's server` | Something it starts is stalled. isorite runs no `git` to start (0.8.1); OpenCode may, and a company's `git` wrapper that waits on the network stalls it. | Read the log the line names. Check `git --version` answers at once in that folder; if not, the wrapper is the cause. |
-| `isorite term needs OpenCode 2` | OpenCode 1, or none. | `npm i -g @opencode/cli`, or `ISORITE_OPENCODE=…`. |
+| `isorite term needs OpenCode 2` | OpenCode 1, or none. | `isorite opencode` installs OpenCode 2 in `~/.config/isorite/opencode-cli`, leaving the global prefix alone; or `ISORITE_OPENCODE=…` names one. `isorite term` offers to install it when run in a terminal. |
 | `port 4767 is serving <other>, not <notes>` | Another base is served there. | Stop it, or `--port`. |
 | The link doesn't open, over SSH | `localhost` is the remote machine. | `ssh -L 4767:localhost:4767 <host>` from the person's own machine. |
 | The terminal works but uses an unexpected model | Check the line `isorite term` prints: `config.toml`, `ISORITE_GATEWAY_URL`, or OpenCode's own (no key or certificate). | Fix what it names. |

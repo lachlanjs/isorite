@@ -10,7 +10,7 @@ import { getCACertificates } from "node:tls";
 import { join, resolve } from "node:path";
 import { OWN_DIR, SETTINGS_FILE, parseSettings } from "@isorite/core";
 import { KEY, ModelError, complete, endpoint, keySentAs, refusal, unreachable, type Http, type ProviderConfig, type ToolDef } from "@isorite/engine";
-import { findOpenCode, gatewayFrom, type Probe } from "@isorite/opencode";
+import { findOpenCode, gatewayFrom, NoOpenCode, type Probe } from "@isorite/opencode";
 import { ConfigSecrets, configPath, gatewayTls, providerConfig, readConfig } from "./config.ts";
 import { cacheDir } from "./embedder.ts";
 import { gatewayHttp } from "./gateway.ts";
@@ -147,9 +147,10 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
   // The terminal.
   try {
     const found = findOpenCode(env, o.probe);
-    say("opencode", "ok", `${found.command} ${found.version}`);
+    say("opencode", "ok", `${found.command} ${found.version}${found.from === "the PATH" ? "" : ` (${found.from})`}`);
   } catch (e) {
-    say("opencode", "warn", (e as Error).message.replace(/\n\s*/g, " "));
+    // Only an OpenCode 1 is a failure: term would start nothing that works. None at all is for later.
+    say("opencode", e instanceof NoOpenCode && e.old ? "fail" : "warn", (e as Error).message.replace(/\n\s*/g, " "));
   }
   const port = o.port ?? 4767, url = `http://127.0.0.1:${port}`, served = await serving(url);
   say("port", "ok", served === null ? `${port} is free: isorite term starts a server there` : `${port} is isorite's, serving ${served}`);

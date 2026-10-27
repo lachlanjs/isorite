@@ -20,7 +20,7 @@ import { proxied, rerun, trustSystem } from "./network.ts";
 import { newBase, serve } from "./serve.ts";
 import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
-import { term } from "./term.ts";
+import { installOpenCode, term } from "./term.ts";
 import { guide } from "./guide.ts";
 import { writeExample, writeGeometry } from "@isorite/example/node";
 import { modelCommand } from "./model.ts";
@@ -50,6 +50,8 @@ const USAGE = `isorite: an agentic harness for understanding
                                          fetched (53 MB, once) from ISORITE_MODEL_BASE_URL, npm, GitHub or
                                          Hugging Face, or --url alone; or from the .tgz fetched by hand, or a
                                          folder: its files copied there, or any compatible model
+  isorite opencode                       OpenCode 2 for isorite term, installed in isorite's own folder
+                                         (~/.config/isorite/opencode-cli), the global one left as it is
   isorite doctor [<notes>] [--report] [--offline]
                                          whether isorite can work here: the configuration, the network, the
                                          provider (asked a few words, a few hundred tokens), the terminal and
@@ -122,6 +124,7 @@ export function main(argv: string[]): number | Promise<number> {
       if (rest.includes("--url") && !/^https?:\/\//.test(url ?? "")) { console.error("--url takes the address of the model's .tgz"); return 2; }
       return modelCommand(rest.includes("--from") ? from : undefined, console.log, process.env, {}, rest.includes("--url") ? url : undefined);
     }
+    if (command === "opencode") return installOpenCode();
     if (command === "memory") return memory(rest.find((a) => !a.startsWith("--")));
     if (command === "bases") return bases(rest);
     if (command === "--version" || command === "-v") { console.log(VERSION); return 0; }
