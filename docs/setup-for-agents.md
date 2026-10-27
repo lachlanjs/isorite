@@ -160,6 +160,7 @@ Rules:
 | `said 400: … stream_options` | The gateway refuses `stream_options`. | `stream_usage = false`. |
 | `✗ tools: … answered without calling the tool` | The model or gateway drops tools. | Choose a model that supports tool calls. Iso and the terminal need them. |
 | `isorite: starting…` and then nothing, or `waiting for OpenCode's server` | Something it starts is stalled. isorite runs no `git` to start (0.8.1); OpenCode may, and a company's `git` wrapper that waits on the network stalls it. | Read the log the line names. Check `git --version` answers at once in that folder; if not, the wrapper is the cause. |
+| The browser asks for a user and password (realm "Secure Area") | That's OpenCode's own web page, on the port `isorite term` names, not isorite's: a pairing link (`/pair`) used twice, or its address opened directly. | Open isorite's page (the link `isorite term` prints, or `/web` in the terminal). |
 | `isorite term needs OpenCode 2` | OpenCode 1, or none. | `isorite opencode` installs OpenCode 2 in `~/.config/isorite/opencode-cli`, leaving the global prefix alone; or `ISORITE_OPENCODE=…` names one. `isorite term` offers to install it when run in a terminal. |
 | `port 4767 is serving <other>, not <notes>` | Another base is served there. | Stop it, or `--port`. |
 | The link doesn't open, over SSH | `localhost` is the remote machine. | `ssh -L 4767:localhost:4767 <host>` from the person's own machine. |

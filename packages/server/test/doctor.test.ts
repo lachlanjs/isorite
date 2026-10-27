@@ -54,6 +54,7 @@ describe("isorite doctor", () => {
     expect(text).toContain('✓ reply from big: "ready", 9 tokens in and 1 out');
     expect(text).toContain("✓ tools: big called ping");
     expect(text).toContain("through isorite's server at http://127.0.0.1:1/api/gateway");
+    expect(text).toContain("✓ browser pages: isorite term also runs OpenCode's own web server, on a port of its own, which asks for a password: open isorite's pages and panes (/web in the terminal), not OpenCode's");
     expect(text).toMatch(/nothing failed$/);
     expect(code).toBe(0);
   });

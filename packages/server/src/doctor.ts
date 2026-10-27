@@ -16,7 +16,7 @@ import { cacheDir } from "./embedder.ts";
 import { gatewayHttp } from "./gateway.ts";
 import { mirrorOf, modelDir, modelInfo, modelPlaces, RELEASE, RELEASE_SHA256, type ModelInfo } from "./model.ts";
 import { locate } from "./serve.ts";
-import { serving } from "./term.ts";
+import { asksPassword, serving } from "./term.ts";
 
 export type Outcome = "ok" | "fail" | "warn" | "skip";
 export interface Check { step: string; outcome: Outcome; said: string }
@@ -162,6 +162,14 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
     else if (!provider) { terminal = "not known until config.toml is fixed"; known = false; }
   } catch (e) { terminal = (e as Error).message; known = false; }
   say("terminal", known ? "ok" : "warn", terminal);
+  // The browser's pages (M21): OpenCode's own asks for a password and is never to be opened; its port is new with
+  // each term, so it can't be looked at from here (term warns of it), but isorite's own must never ask.
+  const hint = "isorite term also runs OpenCode's own web server, on a port of its own, which asks for a password: open isorite's pages and panes (/web in the terminal), not OpenCode's";
+  if (served === null) say("browser pages", "ok", hint);
+  else {
+    const asking = (await Promise.all([`${url}/`, `${url}/api/session`].map(async (at) => ((await asksPassword(at)) ? at : null)))).filter(Boolean);
+    say("browser pages", asking.length ? "fail" : "ok", asking.length ? `${asking.join(" and ")} asked for a password (401, Basic): that is not isorite's server; stop it, or give isorite another port (--port <n>)` : `isorite's pages at ${url}/ ask for no password. ${hint}`);
+  }
   if (env.SSH_CONNECTION) say("browser", "ok", `over SSH: on your own machine, ssh -L ${port}:localhost:${port} <this host>, then http://localhost:${port}/`);
 
   // Search by meaning: a warning, not a failure, without it, as search by words works alone.

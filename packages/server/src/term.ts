@@ -9,6 +9,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { randomBytes } from "node:crypto";
+import { get as httpGet } from "node:http";
 import { createServer, type AddressInfo } from "node:net";
 import { existsSync, openSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
@@ -117,6 +118,19 @@ async function freePort(): Promise<number> {
       const { port } = probe.address() as AddressInfo;
       probe.close(() => done(port));
     });
+  });
+}
+
+/** Whether `address` asks a browser that opens it for a password (M21): a 401 with Basic, as OpenCode 2 answers
+ *  for /api (its page itself is served to anyone). Asked as a browser navigates, by node:http: OpenCode leaves the
+ *  challenge out for its own page's fetches (Sec-Fetch-Mode: cors), which is all Node's fetch can send. */
+export function asksPassword(address: string): Promise<boolean> {
+  return new Promise((done) => {
+    const req = httpGet(address, { headers: { Accept: "text/html", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document" }, timeout: 3000 }, (res) => {
+      res.resume();
+      done(res.statusCode === 401 && /^\s*basic\b/i.test(String(res.headers["www-authenticate"] ?? "")));
+    });
+    req.on("timeout", () => req.destroy()).on("error", () => done(false));
   });
 }
 
@@ -233,7 +247,6 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
   try { models = await modelsFor(given, { url: server.url, token: await tokenOf(server.url) }); } catch (e) { server.release(); throw e; }
   const { gateway, env } = models;
   const said = where(port, models, given, undefined, new URL(server.url).pathname.replace(/\/?$/, "/"));
-  for (const line of said) console.log(line);
   // The base's own instructions go to the terminal's agent as to Iso, when the base is named here.
   const agents = path === undefined ? null : join(locate(path).notes, AGENTS_FILE);
   const home = writeHome(defaultHome(env), { gateway, instructions: agents && existsSync(agents) ? [agents] : [] });
@@ -241,6 +254,9 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
   const shared = { ...env, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url, GIT_TERMINAL_PROMPT: "0" };
   let backend: Awaited<ReturnType<typeof startOpenCode>>;
   try { backend = await startOpenCode(opencode.command, { cwd, env: shared }); } catch (e) { server.release(); throw e; }
+  // OpenCode's own page asks for a password: said, so that nobody opens it for isorite's (M21).
+  if (await asksPassword(`${backend.url}/api/session`)) said.push(`  OpenCode's own web page (port ${new URL(backend.url).port}) asks for a password: don't open it. isorite's page is above, and /web in the terminal opens it`);
+  for (const line of said) console.log(line);
   // The Iso pane follows the session; if this server cannot, the terminal still works.
   await tell(server.url, "/api/terminal/attach", { url: backend.url, password: backend.password, directory: cwd }).catch((e: Error) => console.error(`isorite: the Iso pane will not show the terminal: ${e.message}`));
   const child = spawn(opencode.command, ["--server", backend.url], {
