@@ -285,7 +285,7 @@
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 8h9M8 4.8 11.2 8 8 11.2" stroke="currentColor" stroke-width="1.3" fill="none" /><path d="M13.5 3v10" stroke="currentColor" stroke-width="1.3" /></svg>
         </button>
       </div>
-      {#key momentKey(at)}<NoteVersion text={version.text} title={note.fields.title} touched={version.touched} asked={version.asked} offered={version.offered} />{/key}
+      {#key momentKey(at)}<NoteVersion id={note.id} text={version.text} title={note.fields.title} touched={version.touched} asked={version.asked} offered={version.offered} />{/key}
     {/if}
 
     {#if toIsoAt}

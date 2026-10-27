@@ -6,8 +6,12 @@
   import type { EditorView } from "@codemirror/view";
   import { createEditor } from "$lib/editor/codemirror.ts";
   import { setTouched, type Touched } from "$lib/editor/overlays.ts";
+  import { app } from "$lib/app.svelte.ts";
+  import { pictureOf, pictureSrc } from "$lib/pictures.ts";
 
-  let { text, title: now, touched, asked, offered }: {
+  let { id, text, title: now, touched, asked, offered }: {
+    /** The note's id, which its pictures' paths are relative to. */
+    id: string;
     /** The whole file as it was. */
     text: string;
     /** The note's title as it is: the old one is shown only where it differs. */
@@ -30,7 +34,8 @@
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
   onMount(() => {
-    view = createEditor(host, { doc: parts.body, onChange: () => undefined, onSave: () => undefined, label: "The note as it was", notes: () => [], readOnly: true });
+    view = createEditor(host, { doc: parts.body, onChange: () => undefined, onSave: () => undefined, label: "The note as it was", notes: () => [], readOnly: true,
+      pictures: (href) => { const p = pictureOf(href, id); return p ? { key: `${p.from}:${p.path}`, src: pictureSrc(app.api, p) } : null; } });
     return () => view?.destroy();
   });
   $effect(() => {

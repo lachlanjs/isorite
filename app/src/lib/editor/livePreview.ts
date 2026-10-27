@@ -53,6 +53,37 @@ class MathsWidget extends WidgetType {
   }
 }
 
+// A picture the note shows (M22): its own block, centred, or at the left with the text beside it. One that can't
+// be had is a box naming it, struck through, as a broken code link is.
+class PictureWidget extends WidgetType {
+  constructor(readonly key: string, readonly src: string | Promise<string | null>, readonly alt: string, readonly left: boolean) { super(); }
+  eq(other: PictureWidget): boolean { return other.key === this.key && other.alt === this.alt && other.left === this.left; }
+  toDOM(view: EditorView): HTMLElement {
+    const box = document.createElement("span");
+    box.className = this.left ? "cm-lp-picture cm-lp-picture-left" : "cm-lp-picture";
+    const broken = () => {
+      box.replaceChildren();
+      box.classList.add("cm-lp-picture-broken");
+      box.textContent = this.key.replace(/^notes:/, "");
+      box.title = this.key.startsWith("code:") ? "not in the repository" : "not in the notes";
+      view.requestMeasure();
+    };
+    const img = document.createElement("img");
+    img.alt = this.alt;
+    if (this.alt) img.title = this.alt;
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.onload = () => view.requestMeasure();
+    img.onerror = broken;
+    box.append(img);
+    if (typeof this.src === "string") img.src = this.src;
+    else void this.src.then((s) => { if (s) img.src = s; else broken(); });
+    return box;
+  }
+  // A click on it puts the cursor there, so its source shows.
+  ignoreEvent(): boolean { return false; }
+}
+
 const hide = Decoration.replace({});
 const bullet = Decoration.replace({ widget: new BulletWidget() });
 const rule = Decoration.replace({ widget: new RuleWidget() });
@@ -164,6 +195,17 @@ function build(view: EditorView): DecorationSet {
             }
             break; // on into the text, for emphasis or code inside it
           }
+          case "Image": {
+            // ![alt](path "title"): the picture, in place of its source away from the cursor; after it on its line.
+            const n = node.node, u = n.getChild("URL"), marks = n.getChildren("LinkMark");
+            const picture = u ? state.facet(pictures)(state.sliceDoc(u.from, u.to)) : null;
+            if (!picture || marks.length < 2) break;
+            const t = n.getChild("LinkTitle"), title = t ? state.sliceDoc(t.from + 1, t.to - 1).trim().toLowerCase() : "";
+            const widget = new PictureWidget(picture.key, picture.src, state.sliceDoc(marks[0]!.to, marks[1]!.from), title === "left");
+            if (!isActive(node.from)) decos.push(Decoration.replace({ widget }).range(node.from, node.to));
+            else decos.push(Decoration.widget({ widget, side: 1 }).range(node.to));
+            return false;
+          }
           case "ListMark": {
             const text = state.sliceDoc(node.from, node.to);
             if (!isActive(node.from) && /^[-*+]$/.test(text)) decos.push(bullet.range(node.from, node.to));
@@ -217,6 +259,11 @@ function build(view: EditorView): DecorationSet {
   return builder.finish();
 }
 
+/** The picture an image's address names (M22): a key that's the same for as long as it's the same picture, and
+ *  where the browser gets it. Null for anything else (an artifact), whose source then stays. */
+export interface PictureAt { key: string; src: string | Promise<string | null> }
+export const pictures = Facet.define<(href: string) => PictureAt | null, (href: string) => PictureAt | null>({ combine: (all) => all[0] ?? (() => null) });
+
 /** Whether a code link (`code:path#L1`, M12) names a file no longer in the base's repository. */
 export const codeBroken = Facet.define<(href: string) => boolean, (href: string) => boolean>({ combine: (all) => all[0] ?? (() => false) });
 
@@ -257,6 +304,13 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-lp-weblink": { textDecorationStyle: "dotted" },
   ".cm-lp-codelink": { fontFamily: "var(--font-mono)", fontSize: ".86em", textDecoration: "none", borderBottom: "1px solid color-mix(in srgb, var(--lattice) 50%, transparent)" },
   ".cm-lp-broken": { color: "var(--rose)", textDecoration: "line-through", borderBottomColor: "transparent" },
+  ".cm-lp-picture": { display: "block", margin: "6px auto", width: "fit-content", maxWidth: "100%", lineHeight: "0" },
+  ".cm-lp-picture img": { display: "block", maxWidth: "100%", height: "auto" },
+  ".cm-lp-picture-left": { float: "left", margin: "4px 16px 4px 0", maxWidth: "50%" },
+  ".cm-lp-picture-broken": {
+    display: "inline-block", lineHeight: "1.4", fontFamily: "var(--font-mono)", fontSize: ".86em", color: "var(--rose)", textDecoration: "line-through",
+    border: "1px dashed color-mix(in srgb, var(--rose) 50%, transparent)", padding: "6px 10px", margin: "4px 0",
+  },
   ".cm-lp-bullet": { color: "var(--text-faint)", display: "inline-block", minWidth: "1ch" },
   ".cm-lp-listmark, .cm-lp-task": { color: "var(--text-faint)", fontFamily: "var(--font-mono)" },
   ".cm-lp-quote": { borderLeft: "3px solid var(--lattice)", paddingLeft: "14px !important", color: "var(--text-soft)" },

@@ -1,9 +1,9 @@
 // The example on disk: its notes read from this package, and the base written into a folder, with isorite's own
 // files in its .isorite/.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { OWN_DIR } from "@isorite/core";
+import { OWN_DIR, citeKind } from "@isorite/core";
 import { buildExample, NAME, type Sources } from "./history.ts";
 import { buildGeometry, GEOMETRY_NAME } from "./geometry.ts";
 
@@ -36,7 +36,21 @@ export async function writeExample(folder: string, now = Date.now()): Promise<{ 
       writeFileSync(at, text);
     }
   }
+  copyPictures(NOTES_DIR, notes);
   return { notes };
+}
+
+/** The pictures among a folder's notes (M22), copied as they are: they have no history. */
+function copyPictures(from: string, to: string, dir = from): void {
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) copyPictures(from, to, path);
+    else if (citeKind(name) === "image") {
+      const at = join(to, relative(from, path));
+      mkdirSync(dirname(at), { recursive: true });
+      copyFileSync(path, at);
+    }
+  }
 }
 
 export const GEOMETRY_DIR = join(import.meta.dirname, "..", "geometry");

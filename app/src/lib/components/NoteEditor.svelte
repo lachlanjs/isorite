@@ -9,6 +9,7 @@
   import { setMarks, setOverlays, setTouched, type Inline, type Mark, type Overlay, type Touched } from "$lib/editor/overlays.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { pointing } from "$lib/pointing.svelte.ts";
+  import { pictureOf, pictureSrc } from "$lib/pictures.ts";
   import { setPointedNote } from "$lib/editor/pointing.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import type { NoteIso } from "$lib/iso.svelte.ts";
@@ -55,6 +56,7 @@
       // A link under the mouse is lit on the Atlas (M17).
       onPoint: (to) => pointing.set("note", to ? { ...to, who: "you" } : null),
       codeBroken: (href) => app.listing.notes.find((n) => n.id === note.id)?.broken?.includes(href) ?? false,
+      pictures: (href) => { const p = pictureOf(href, note.id); return p ? { key: `${p.from}:${p.path}`, src: pictureSrc(app.api, p) } : null; },
       ...(iso ? {
         // Ctrl+Enter goes to Iso's pane (M10), with the text selected, if any, given to Iso.
         onAsk: (w: Where) => {

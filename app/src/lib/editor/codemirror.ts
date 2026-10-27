@@ -14,7 +14,7 @@ import { blocksTheme, embeds, renderedBlocks, type Embeds } from "./blocks.ts";
 import { format, formatKeymap, type Format } from "./commands.ts";
 import { linkAt, linkControl } from "./linkControl.ts";
 import { linkCompletion, type LinkTarget } from "./links.ts";
-import { livePreview, livePreviewTheme, codeBroken } from "./livePreview.ts";
+import { livePreview, livePreviewTheme, codeBroken, pictures, type PictureAt } from "./livePreview.ts";
 import { mathsSyntax } from "./maths.ts";
 import { noteOf } from "./noteOf.ts";
 import { overlays, touchedLines, type Mount } from "./overlays.ts";
@@ -54,6 +54,8 @@ export interface EditorOptions {
   embeds?: Embeds;
   /** Whether a code link names a file no longer in the base's repository (M12). */
   codeBroken?: (href: string) => boolean;
+  /** The picture an image's address names, drawn in place (M22). */
+  pictures?: (href: string) => PictureAt | null;
   /** The note or folder a link under the mouse names, and null once it leaves one (M17: lit on the Atlas). */
   onPoint?: (to: Pointed | null) => void;
 }
@@ -108,7 +110,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       syntaxHighlighting(highlight),
       syntaxHighlighting(codeHighlighter),
       theme,
-      ...(opts.source ? [sourceTheme] : [livePreview, livePreviewTheme, renderedBlocks, blocksTheme, linkControl, ...(opts.embeds ? [embeds.of(opts.embeds)] : []), ...(opts.codeBroken ? [codeBroken.of(opts.codeBroken)] : [])]),
+      ...(opts.source ? [sourceTheme] : [livePreview, livePreviewTheme, renderedBlocks, blocksTheme, linkControl, ...(opts.embeds ? [embeds.of(opts.embeds)] : []), ...(opts.codeBroken ? [codeBroken.of(opts.codeBroken)] : []), ...(opts.pictures ? [pictures.of(opts.pictures)] : [])]),
       closeBrackets(),
       // Only brackets: closing quotes would get in the way of apostrophes in prose.
       EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["(", "["] } }]),
