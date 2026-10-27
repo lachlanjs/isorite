@@ -56,6 +56,9 @@ jobs:
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:4790/api/session >/dev/null && break; sleep 1; done
           curl -sf http://127.0.0.1:4790/api/session | grep -q '"name":"nbody-notes"'
           curl -sf http://127.0.0.1:4790/ | grep -q "<title>isorite"
+          # A picture (M22), given with its type, and a note isn't.
+          curl -sf -D - -o /dev/null "http://127.0.0.1:4790/api/file?path=algorithms/the-quadtree/subdivision.svg" | tr -d '\r' | grep -qi "^content-type: image/svg+xml"
+          test "$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:4790/api/file?path=algorithms/the-quadtree.md')" = 404
           kill %1 || true
           "$exe" model
           "$exe" opencode

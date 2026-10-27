@@ -244,3 +244,40 @@ line of its own embeds a question or a problem (M12), with nothing offered as it
   - **Several notes, one picture** (your question): any note shows any picture by its path; paste finds the same
     bytes and links to them instead of copying (§2.2); `[[!` and the link picker offer every picture (§2.2b).
   - **Your additions:** the `[[!` picker with thumbnails (§2.2b), and naming a picture as it's pasted (§2.2).
+
+## 7. What was built
+
+On `m22-images`, step by step as §5 has it. All tests pass (core 307, engine 136, server 117, app 55, guide 9); `npm run check` is clean.
+
+- **Drawn (§2.1):**
+  - `GET /api/file?path=` (or `?code=`) gives only a picture. A note, `.isorite/`, a hidden folder, `..` and a path out of the root are all 404. Every answer carries `nosniff`, an ETag (304 when unchanged) and `Content-Security-Policy: sandbox; default-src 'none'`.
+  - `Files` reads and writes bytes in the Node port and in `MemoryFiles`, and `sha256` takes bytes.
+  - Live preview draws `![…](…)` away from the cursor; on its line, the source shows with the picture below it. `"left"` floats it beside the text. One that can't be had is a dashed box with its path struck through. The version view draws them too.
+- **`[[!` (§2.2b):**
+  - The pictures come from `GET /api/pictures`: path, bytes, pixels (PNG, GIF, JPEG, WebP, SVG; `pictureSize` in core) and SHA-256, kept while a file's size and time are the same.
+  - The list is found afresh each time, so a picture put in the folder by hand is listed. From then on it's in the bundle, and a link to it is no longer broken (before, only reopening the base did that).
+  - Each picture shows a 32 px thumbnail, with a larger preview and its size beside the list. This note's own pictures come first, then its folder's.
+  - Choosing one puts in `![described](/path)` with the description selected. Questions and problems follow the pictures, as `[[!name]]`.
+  - The `](` completion offers pictures too.
+- **Paste and drop (§2.2):** the naming box (`PictureName.svelte`) has:
+  - the name, made safe (`Player Idle (1).png` is `player-idle-1`), and the file it will be;
+  - "is taken: Enter makes it …-2";
+  - what it shows;
+  - the same picture already there ("Show it", or "Save a copy").
+  
+  `POST /api/file` takes the bytes, of the type the name says, with the same origin and token checks, and never writes over a file. Drafts and Understanding notes put theirs in `pictures/` or the note's folder, linked from the top. On the guide's site it says why it can't.
+- **`code:` (§2.3):** `![…](code:…)` is one of the note's code links (`picture: true`), so `brokenCode` checks it. It's drawn from the repository.
+- **Atlas (§2.4):**
+  - `MapReport.notes[id].pictures` lists them; the Pictures switch (Alt+I) draws them as thumbnails after the web and code satellites.
+  - A repository's picture is among the pictures, not the code links.
+  - **Not in the plan:** a folder that holds only pictures, or only such folders, isn't drawn on the Atlas. Otherwise every note's pictures folder showed up as an empty folder. An empty folder still is.
+- **Check, Iso, guide (§2.5–2.7):**
+  - A missing picture is "picture not in the notes: …"; `isorite check --unused` lists pictures no note links to or shows.
+  - Iso's format rules, `read_note` and the terminal agent's context say a picture is its words only.
+  - The guide's pictures go into `isorite guide`'s folder and into the site's engine (fetched each load, never kept in the browser). `atlas/the-switches.md` has one, and `notes/diagrams-and-code.md` a section on pictures.
+- **Docs and CI:** `format.md`, `ISORITE_CONTEXT.md` and the README have been updated. The windows workflow checks that the example's picture is served as `image/svg+xml` and that a note is 404 there. The example's quadtree note has a picture (`writeExample` copies pictures), and it's in the npm package.
+- **Not done, or left as it was:**
+  - A picture on the web (`![…](https://…)`) isn't drawn and stays a link, so a note never makes the browser fetch from elsewhere.
+  - Iso's replies don't draw pictures.
+  - 0.10.0 isn't released.
+- **Checked by hand:** headless Chromium on Linux against the example. I checked drawing, "left", broken boxes, `[[!` with thumbnails and narrowing, a paste found to be the same picture (linked), a new picture dropped and named, the Atlas's switch, and the guide's site. Not yet checked: a real OS drag and paste, Safari, Firefox and Windows (beyond its workflow).
