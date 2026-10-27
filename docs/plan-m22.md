@@ -276,8 +276,8 @@ On `m22-images`, step by step as §5 has it. All tests pass (core 307, engine 13
   - Iso's format rules, `read_note` and the terminal agent's context say a picture is its words only.
   - The guide's pictures go into `isorite guide`'s folder and into the site's engine (fetched each load, never kept in the browser). `atlas/the-switches.md` has one, and `notes/diagrams-and-code.md` a section on pictures.
 - **Docs and CI:** `format.md`, `ISORITE_CONTEXT.md` and the README have been updated. The windows workflow checks that the example's picture is served as `image/svg+xml` and that a note is 404 there. The example's quadtree note has a picture (`writeExample` copies pictures), and it's in the npm package.
+- **Released as 0.10.0.**
 - **Not done, or left as it was:**
   - A picture on the web (`![…](https://…)`) isn't drawn and stays a link, so a note never makes the browser fetch from elsewhere.
   - Iso's replies don't draw pictures.
-  - 0.10.0 isn't released.
 - **Checked by hand:** headless Chromium on Linux against the example. I checked drawing, "left", broken boxes, `[[!` with thumbnails and narrowing, a paste found to be the same picture (linked), a new picture dropped and named, the Atlas's switch, and the guide's site. Not yet checked: a real OS drag and paste, Safari, Firefox and Windows (beyond its workflow).
