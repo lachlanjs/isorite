@@ -38,6 +38,11 @@ export function openBrowser(url: string): void {
   try { spawn(command!, args, { stdio: "ignore", detached: true }).on("error", () => undefined).unref(); } catch { /* no browser here */ }
 }
 
+/** How long a step may take before it's said what is being waited for (M21), and where it's said: stderr, as
+ *  `mcp` speaks on stdout. */
+const SLOW = 2000;
+const waiting = (line: string) => { process.stderr.write(line + "\n"); };
+
 /** The name the server on this URL serves, or null when nothing answers. */
 export async function serving(url: string): Promise<string | null> {
   try {
@@ -52,7 +57,7 @@ export async function serving(url: string): Promise<string | null> {
  *  well from now on, M20; or for any, when no base is named), or one started for the base, its output kept in a
  *  log. `url` is the base's own address there. A server this started stops once the last of those using it lets it
  *  go; one you started yourself goes on. */
-export async function ensureServer(path: string | undefined, { port = 4767, env = process.env, wait = 120_000 } = {}): Promise<{ url: string; release: () => void }> {
+export async function ensureServer(path: string | undefined, { port = 4767, env = process.env, wait = 120_000, say = waiting }: { port?: number; env?: NodeJS.ProcessEnv; wait?: number; say?: (line: string) => void } = {}): Promise<{ url: string; release: () => void }> {
   const root = `http://127.0.0.1:${port}`;
   const opened = path === undefined ? null : locate(path);
   let name = await serving(root), started: ReturnType<typeof spawn> | null = null;
@@ -64,7 +69,9 @@ export async function ensureServer(path: string | undefined, { port = 4767, env 
     started = spawn(process.execPath, [MAIN, "serve", path!, "--port", String(port), "--held"], { stdio: ["ignore", out, out], env, detached: true });
     const exited = new Promise<void>((done) => started!.once("exit", () => done()));
     const begun = Date.now();
+    let told = false;
     while ((name = await serving(root)) === null) {
+      if (!told && Date.now() - begun > SLOW) { say(`isorite: waiting for the isorite server; its output is in ${log}`); told = true; }
       if (started.exitCode !== null || Date.now() - begun > wait) {
         started.kill();
         throw new StudyError(`the isorite server did not start; its output is in ${log}`);
@@ -121,14 +128,19 @@ async function tell(url: string, path: string, body: unknown): Promise<void> {
 
 /** OpenCode's own server, on this machine only, with a password of its own; its output kept in a log. The terminal
  *  attaches to it, and so does the isorite server, which shows its session in the Iso pane (M11). */
-export async function startOpenCode(command: string, { cwd, env, wait = 60_000 }: { cwd: string; env: NodeJS.ProcessEnv; wait?: number }): Promise<{ url: string; password: string; stop: () => void }> {
+export async function startOpenCode(command: string, { cwd, env, wait = 60_000, say = waiting }: { cwd: string; env: NodeJS.ProcessEnv; wait?: number; say?: (line: string) => void }): Promise<{ url: string; password: string; stop: () => void }> {
   const port = await freePort(), password = randomBytes(24).toString("base64url"), url = `http://127.0.0.1:${port}`;
   const log = join(tmpdir(), `isorite-opencode-${port}.log`);
   const out = openSync(log, "w");
   const server = spawn(command, ["serve", "--port", String(port), "--hostname", "127.0.0.1"], { cwd, stdio: ["ignore", out, out], env: { ...env, OPENCODE_PASSWORD: password } });
   const auth = { authorization: "Basic " + Buffer.from(`opencode:${password}`).toString("base64") };
   const started = Date.now();
+  // OpenCode may run git in the folder as it starts, which isorite can't time out (M21): said, with its log.
+  let told = 0;
   for (;;) {
+    const waited = Date.now() - started;
+    if (told === 0 && waited > SLOW) { say("isorite: waiting for OpenCode's server"); told = 1; }
+    if (told === 1 && waited > 10_000) { say(`isorite: OpenCode's server has not answered in 10 s (a git it runs may be waiting); its output is in ${log}`); told = 2; }
     if (server.exitCode !== null || Date.now() - started > wait) {
       server.kill();
       throw new StudyError(`OpenCode's server did not start; its output is in ${log}`);
@@ -189,7 +201,8 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
   // The base's own instructions go to the terminal's agent as to Iso, when the base is named here.
   const agents = path === undefined ? null : join(locate(path).notes, AGENTS_FILE);
   const home = writeHome(defaultHome(env), { gateway, instructions: agents && existsSync(agents) ? [agents] : [] });
-  const shared = { ...env, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url };
+  // No git OpenCode runs may stop to ask for a password: there is nobody to answer it (M21).
+  const shared = { ...env, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url, GIT_TERMINAL_PROMPT: "0" };
   let backend: Awaited<ReturnType<typeof startOpenCode>>;
   try { backend = await startOpenCode(opencode.command, { cwd, env: shared }); } catch (e) { server.release(); throw e; }
   // The Iso pane follows the session; if this server cannot, the terminal still works.
@@ -198,7 +211,7 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
     cwd,
     stdio: "inherit",
     // The provider's key is OpenCode's server's to use; the terminal is not given it.
-    env: { ...given, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url, OPENCODE_PASSWORD: backend.password },
+    env: { ...given, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url, OPENCODE_PASSWORD: backend.password, GIT_TERMINAL_PROMPT: "0" },
   });
   const forward = (signal: NodeJS.Signals) => () => child.kill(signal);
   const handlers = (["SIGTERM", "SIGHUP"] as const).map((signal) => [signal, forward(signal)] as const);

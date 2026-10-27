@@ -304,3 +304,28 @@ One new step (`git`), and five that exist made to say more. Each says what to ch
     password (§2.6).
   - **Q97, Q99, Q102:** as recommended (a Node SEA; `authorization` alone means Bearer; §2.1 released alone as
     0.8.1 first).
+
+## 7. What was built
+
+### 0.8.1: git can't stall startup (§2.1)
+
+Released before the rest, as Q102 answered. On branch `m21-work-setup`.
+
+- **`git.ts`:**
+  - `repoOf` finds the repository by its `.git`, a directory or a worktree's file, without running `git`.
+    `defaultStudyPath` uses it, so `serve` runs no `git` at all.
+  - `gitInit` runs `git init` for `isorite memory` with a 10 s timeout and `plainGitEnv`: no `GIT_*` from the
+    shell, `GIT_CONFIG_NOSYSTEM=1` and `GIT_TERMINAL_PROMPT=0`. When it fails, the memory is still made, and you're
+    told to `git init` it yourself.
+- **`isorite: starting…`** goes to stderr from `serve`, `term`, `mcp` and `guide` before anything else, and once
+  only when the command runs itself again with the proxy on (`ISORITE_STARTING`).
+- **What is being waited for:**
+  - after 2 s, `term` and `mcp` say they're waiting for the isorite server, and name its log;
+  - `term` says it's waiting for OpenCode's server after 2 s, and names its log after 10 s.
+- **OpenCode's `git` (a departure).** OpenCode is given only `GIT_TERMINAL_PROMPT=0`, not the rest of
+  `plainGitEnv`. Turning off the system's git configuration for OpenCode would also change the agent's own `git`
+  commands, where a company's helpers and proxy settings are usually wanted.
+- **The docs:** a row in `setup-for-agents.md`'s table of failures.
+- **The check:** `serve` with a `git` on the PATH that sleeps for 300 s answered in 0.75 s, and the wrapper never
+  ran. Before, it stalled until the wrapper returned.
+- **Tests:** server, 103 passed and 2 skipped. `start.test.ts` is new, with 5 tests.
