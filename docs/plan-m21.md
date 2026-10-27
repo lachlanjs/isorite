@@ -90,6 +90,9 @@ M21 changes no note, base or Atlas. It's the command, the server, the OpenCode p
     example and the WebAssembly file go in as SEA assets.
   - The worker and the plugin are written out to `~/.cache/isorite/<version>/` the first time they're needed,
     since a worker and OpenCode both read files from disk.
+  - The spike found that OpenCode doesn't provide the plugin's `@opentui/core`, `@opentui/solid` and `solid-js`.
+    The plugin failed to load without them. So each platform's executable carries them, with `@opentui/core`'s
+    native library for that platform: about 25 MB.
   - The executable is about 110 MB, against about 15 MB for npm. The model stays out of it (§2.3).
 - **`install.sh`** (and `install.ps1`):
   - fetches the one executable for this machine and checks it against `SHA256SUMS`;
@@ -125,14 +128,17 @@ M21 changes no note, base or Atlas. It's the command, the server, the OpenCode p
 
 ### 2.4 OpenCode 2 without touching the global prefix (note 4)
 
-- **A place of isorite's own:** `~/.config/isorite/opencode/`, an npm prefix used only for OpenCode 2. It's looked
+- **A place of isorite's own:** `~/.config/isorite/opencode-cli/`, an npm prefix used only for OpenCode 2. It's not
+  `~/.config/isorite/opencode/` as your note had it: that's the OpenCode config folder `term` writes
+  (`OPENCODE_CONFIG_DIR`, with the plugin and theme), and an npm prefix there would put a `package.json` and
+  `node_modules` among OpenCode's own configuration. It's looked
   in after `ISORITE_OPENCODE` and before `opencode2` and `opencode` on the PATH.
 - **`isorite opencode`** installs or updates OpenCode 2 there, with
-  `npm install --prefix ~/.config/isorite/opencode @opencode/cli@<the version isorite is tested with>`. It says
+  `npm install --prefix ~/.config/isorite/opencode-cli @opencode/cli@<the version isorite is tested with>`. It says
   where it's put, and that nothing global was changed.
 - **When `term` finds no OpenCode 2:**
   - if it finds an OpenCode 1, it says so in one line, and gives the line above;
-  - it then asks `Install OpenCode 2 for isorite only, in ~/.config/isorite/opencode? [y/N]`. When it isn't run
+  - it then asks `Install OpenCode 2 for isorite only, in ~/.config/isorite/opencode-cli? [y/N]`. When it isn't run
     in a terminal, it doesn't ask, and only says the line.
 - **Pinned to one version.** Today OpenCode's `2.x` is accepted. The one isorite installs is the one its
   `@opencode/client` is (2.0.32), so a newer OpenCode can't break the plugin unseen. One you name with
@@ -168,7 +174,7 @@ One new step (`git`), and five that exist made to say more. Each says what to ch
 | Step | ok | warn / fail |
 | --- | --- | --- |
 | `git` (new) | `git --version` answers within 3 s | warn: it took *n* s, or didn't answer, which is likely a wrapper. isorite no longer waits on it, but OpenCode may (§2.1) |
-| `opencode` | which one, from where (`~/.config/isorite/opencode`, the PATH, `ISORITE_OPENCODE`), its version | fail: only 1.x found, with the `isorite opencode` line |
+| `opencode` | which one, from where (`~/.config/isorite/opencode-cli`, the PATH, `ISORITE_OPENCODE`), its version | fail: only 1.x found, with the `isorite opencode` line |
 | `search by meaning` | installed, where | warn: missing, with the URL, SHA-256 and `--from` lines of §2.3. With the network checked, whether the release URL (or the mirror's) answers |
 | `key` | as now, plus the header and prefix it's sent with | warn: `Authorization` with no prefix (now meaning Bearer, §2.5) |
 | `reached` | as now | fail: the gateway's own words (§2.5) |
@@ -180,24 +186,29 @@ One new step (`git`), and five that exist made to say more. Each says what to ch
 
 ### 2.7 The browser stays on isorite's pages (note 7)
 
-- **In the plugin** (`packages/opencode/plugin/tui.tsx`), isorite's keymap layer takes the id `opencode.browser`
-  and opens `Isorite.url` (the base's page) instead, so "open in browser" opens isorite.
-  - Step 1 checks this against OpenCode 2.0.32: whether a plugin's layer can take a built-in command's id or key.
-  - If it can't, the plugin adds its own command on the same key with a higher priority. If neither works, the
-    plugin's help line says to use `[b]`, and the limit is written up.
+- **What the spike found** (§8, step 1) changed this section:
+  - `opencode.browser` isn't a TUI action. It's the server plugin behind the agent's `browser.*` tools, which need
+    OpenCode's desktop app, so there's nothing to override in the TUI.
+  - What leads you to OpenCode's page is `/web`, the TUI's "Pair device" (`/pair`). It shows a link
+    `/auth/connect/<token>` that logs the browser in once, with a cookie, and expires in 5 minutes. Opened a second
+    time, or after it expires, or by going to the server's address directly, OpenCode's page loads, but its calls to
+    `/api/*` are answered `401` with `WWW-Authenticate: Basic realm="Secure Area"`. That's the browser's prompt.
+  - OpenCode's root is served to anyone (200). Only `/api/*` asks for the password. `opencode serve` has no flag to
+    serve the API without the page.
+- **In the plugin** (`packages/opencode/plugin/tui.tsx`), isorite registers `/web` itself, as "isorite in the
+  browser", which opens the base's page (`Isorite.url`).
+  - The spike checked this in OpenCode 2.0.32: isorite's `/web` is listed first and runs. OpenCode's pairing is
+    still `/pair`, and the title says so.
+  - A test in `term.test.ts` types `/web` and checks that the page opened is isorite's, with a stub `xdg-open`.
 - **OpenCode's server stays on 127.0.0.1 with its password**, as now. It has to be reachable, because the terminal
   and the isorite server attach to it.
-  - If OpenCode 2.0.32 has a setting that serves its API without its web page, `term` turns it on. Step 1 finds
-    out.
-- **`term` checks the server it has just started** (Q101). Once OpenCode's server answers, `term` asks for its root
-  as a browser would: a `GET` with `Accept: text/html` and no credentials.
-  - If the server answers `401` with `WWW-Authenticate: Basic realm="Secure Area"`, it's a page that asks for a
-    password, reachable from the browser, and never to be opened.
-  - `term` then warns once, before the TUI starts: "OpenCode's own web page is at 127.0.0.1:<port> and asks for a
-    password: don't open it. isorite's page is <url>."
-  - If the override above works, the warning is shorter, because nothing in isorite opens that page. It's still
-    given, in case OpenCode opens it by another route.
-  - The check isn't run if OpenCode's web page has been turned off.
+- **`term` checks the server it has just started** (Q101):
+  - once OpenCode's server answers, `term` asks for `/api/session` as a browser would, with `Accept: text/html` and
+    no credentials;
+  - if the answer is `401` with `WWW-Authenticate: Basic`, the page on that port asks for a password, so `term`
+    says once, before the TUI starts: "OpenCode's own web page is on port <n> and asks for a password: don't open
+    it; isorite's page is <url> (/web in the terminal)".
+  - Asking for `/` would not see it: OpenCode serves its page there without the password, and only `/api/*` asks.
 - **Kept apart from §2.5**, as you asked: that's the gateway's 401, with Bearer; this is the browser meeting
   OpenCode's Basic auth.
 
@@ -222,7 +233,7 @@ One new step (`git`), and five that exist made to say more. Each says what to ch
   - a `.tgz` with the wrong SHA-256 refused before it's unpacked;
   - the failure message's URL, SHA-256 and command.
 - **Unit, OpenCode:**
-  - the order `ISORITE_OPENCODE`, `~/.config/isorite/opencode`, `opencode2`, `opencode`;
+  - the order `ISORITE_OPENCODE`, `~/.config/isorite/opencode-cli`, `opencode2`, `opencode`;
   - the message with only a 1.x found;
   - the prompt not asked when not in a terminal.
 - **Unit, engine:**
@@ -239,8 +250,7 @@ One new step (`git`), and five that exist made to say more. Each says what to ch
     `serve` on the example base answering `/api/session`;
   - the release workflow builds all five and runs that test on the three it can (Linux, macOS, Windows, x64).
 - **`install.sh`:** against a local server holding a release, including a wrong checksum refused.
-- **The plugin:** the `opencode.browser` override in OpenCode's tests (`packages/opencode/test`), if step 1 finds it
-  can be done.
+- **The plugin:** `/web` opening isorite's page, in `term.test.ts`.
 
 ## 4. Docs
 
@@ -270,7 +280,7 @@ One new step (`git`), and five that exist made to say more. Each says what to ch
 3. **`key_prefix`** and the gateway's words on a 401 (§2.5), in the engine, the config, the setup form and `doctor`.
 4. **The model's mirror, `--url`, the `.tgz` with `--from`,** and the failure message (§2.3).
 5. **`isorite opencode`**, the private prefix, and `term`'s message and prompt (§2.4).
-6. **The plugin's browser action, and `term`'s check** of OpenCode's page (§2.7).
+6. **The plugin's `/web`, and `term`'s check** of OpenCode's page (§2.7).
 7. **`doctor`'s new steps** (§2.6).
 8. **The executable:**
    - `package:sea`;
@@ -329,3 +339,111 @@ Released before the rest, as Q102 answered. On branch `m21-work-setup`.
 - **The check:** `serve` with a `git` on the PATH that sleeps for 300 s answered in 0.75 s, and the wrapper never
   ran. Before, it stalled until the wrapper returned.
 - **Tests:** server, 103 passed and 2 skipped. `start.test.ts` is new, with 5 tests.
+
+### The spike (step 1), 2026-10-27
+
+- **OpenCode 2.0.32's browser.** Found in its binary and by trying its server and TUI in tmux:
+  - `opencode.browser` is a server plugin for the agent's `browser.*` tools, not a TUI action;
+  - `/web` (alias of `/pair`, "Pair device") shows a one-time link that sets a session cookie, and a second visit
+    to it is `401`;
+  - `/` is served without the password, and `/api/session` without it is `401` with
+    `WWW-Authenticate: Basic realm="Secure Area"`;
+  - `opencode serve` has no flag to leave the page out;
+  - a plugin command with `slash: { name: "web" }` comes before OpenCode's in the list and runs. With a stub
+    `xdg-open`, `/web` opened `http://127.0.0.1:4813/`, isorite's page.
+  - §2.7 is rewritten from this.
+- **The plugin outside a checkout.** `.npm/isorite`'s plugin, copied where there's no `node_modules`, didn't load
+  ("2 plugins failed"). OpenCode doesn't provide `@opentui/*` or `solid-js`, so the executable carries them (§2.2).
+- **A Node 24 SEA** loads an ES module from disk with `import()` and with `require()`. The executable is 127 MB. So
+  the executable will be a small CommonJS start that unpacks the package `npm run package` builds (with its npm
+  dependencies inlined, and the plugin's beside it) into `~/.cache/isorite/<version>/` once, and imports its
+  `dist/main.js`. Every path isorite finds by `import.meta.url` then works as it does from npm.
+  - Left for step 8: `process.argv` under a SEA, and the places isorite runs itself again (`network.ts`'s rerun,
+    `term`'s server), which must run the executable rather than Node with a script.
+- **A departure:** OpenCode 2's private prefix is `~/.config/isorite/opencode-cli/`, since
+  `~/.config/isorite/opencode/` is already `term`'s OpenCode configuration (§2.4).
+
+### 0.9.0: the rest of M21
+
+On branch `m21-work-setup`, after 0.8.1.
+
+- **The key (§2.5).**
+  - `key_prefix` under `[provider]`. `keySent` in the engine settles it: Authorization with `Bearer ` unless said,
+    and nothing before the key in another header. `key_header = "authorization"` alone means Bearer (Q99), and
+    `key_prefix = ""` sends it bare.
+  - `refusal` reads what a gateway said with a 401 or 403 (its `error.message`, else its text), cut to 300
+    characters, and never the key.
+    - `doctor` quotes it, and says how the key was sent (`sent as X-Gateway-Auth: <14 characters>`).
+    - So does Iso's error: "The key was not accepted, sent as …: … check key_header and key_prefix".
+  - Iso's settings have a prefix field beside the header's. Its placeholder is `Bearer` or `no prefix`, and its
+    tooltip says what's sent.
+  - **A departure:** the plan had `doctor` report a 407 from the proxy as an answer, with its realm. Through a real
+    proxy, Node's fetch throws instead ("Proxy response (407) !== 200 when HTTP Tunneling") and gives no realm. So
+    `unreachable` names it, wherever a request fails: "The proxy (HTTPS_PROXY), not the provider, refused with 407".
+- **The model (§2.3).**
+  - `ISORITE_MODEL_BASE_URL` (the folder `isorite-model-granite-1.0.0.tgz` is in) is tried first.
+    `isorite model --url <url>` tries that address alone.
+  - The `.tgz` is checked against `RELEASE_SHA256` before it's unpacked. That's
+    `8d8ab528ae289dfc81fd2bfa80c867ca0c8342a2d98f7c86141df4b15fdf028c`, taken from the GitHub release.
+  - `--from` takes the `.tgz`.
+  - `isorite model` says the file and its SHA-256 before it starts. If nothing works, it ends with the lines to
+    copy.
+  - `doctor` says the same, and whether the source answers from here.
+  - Checked with the real file: `--from` the `.tgz`, and `--url` from a local server.
+- **OpenCode 2 (§2.4).**
+  - `isorite opencode` runs `npm install --prefix ~/.config/isorite/opencode-cli @opencode/cli@2.0.32`. That
+    prefix is looked in after `ISORITE_OPENCODE` and before the PATH.
+  - `NoOpenCode` names an OpenCode 1 it found, and gives the line.
+  - `term` offers to install when a person is at the terminal.
+  - `doctor` fails an OpenCode 1 alone, and only warns when there's none.
+  - Checked for real: installed from npm in 14 s, then found by `doctor`.
+- **The browser (§2.7).**
+  - The plugin's `/web` opens isorite's page. OpenCode's pairing is still `/pair`.
+  - `term` warns when OpenCode's page asks for a password, using `asksPassword`.
+    - **Found on the way:** OpenCode 2.0.32 sends `WWW-Authenticate: Basic` only when a browser navigates
+      (`Sec-Fetch-Mode: navigate`), not to its page's own fetches. So the check asks with `node:http`, as a browser
+      navigates; Node's fetch always says `cors`.
+  - `doctor` has a "browser pages" step: the hint, and, with a server on the port, a check that isorite's own pages
+    ask for no password.
+  - `term.test.ts` types `/web` in OpenCode 2.0.32, in tmux, and checks that the page opened is isorite's. It also
+    checks for the warning when OpenCode exits.
+- **`doctor` (§2.6)** times `git --version`. It warns at more than 1 s, and when there's no answer in 3 s.
+- **The executable (§2.2).**
+  - `npm run package:sea` (`scripts/sea.ts`):
+    - builds the npm package;
+    - installs its `.tgz` into an empty prefix, as `npm i isorite` would, so the dependencies are the tree a person
+      gets from npm, this platform's `@opentui` native library among them;
+    - packs that `node_modules` (8,919 files, 32.7 MB gzipped) as one SEA asset;
+    - injects it into this Node with postject, signing again on macOS.
+  - `scripts/sea-boot.cjs` unpacks it into `~/.cache/isorite/<version>/` once (3 s), then imports
+    `node_modules/isorite/dist/main.js` and calls its new `run()`.
+  - `self.ts`: the proxy's rerun and `term`'s server run the executable itself, with only the arguments, when it's
+    single.
+  - **Found on the way:** the repository's tree has two copies of `solid-js` (the plugin's 1.9.15, and 1.9.12 for
+    `@opentui/solid`'s peer). A plain `npm install` in the package refuses it (ERESOLVE), hence the install from
+    the `.tgz`.
+  - The Linux x64 executable is 159 MB. From an empty home:
+    - `--version` and `doctor --offline` work;
+    - the model installs from the `.tgz`;
+    - `serve` answers, with the page, search, and search by meaning (the worker and its WebAssembly from the cache);
+    - `term` with OpenCode 2.0.32 loads the plugin from the cache and warns of OpenCode's page.
+  - `install.sh` and `install.ps1` fetch the executable for the machine, check it against `SHA256SUMS` (or
+    `--sha256`), and print every address they fetch. `--url` is for a mirror.
+    - `install.sh` was checked against a local mirror, including a wrong sum refused with nothing installed.
+    - `install.ps1` hasn't been run: there's no Windows here.
+  - The release workflow builds the five executables, each on its own platform, and runs each from an empty home
+    (version, `doctor`, `serve` on the example base). It attaches them, with `SHA256SUMS` and the installers, to
+    the release.
+    - Only Linux x64 was built here. macOS, Windows and Linux arm64 are first built by the release.
+    - The Intel macOS runner's name (`macos-15-intel`) should be checked when it runs.
+- **The docs:** `setup.md` (install from the executable, `isorite opencode`, `key_prefix`, the model by hand),
+  `terminal.md`, `setup-for-agents.md` (commands, `key_prefix`, the table of failures), `release.md`, and the
+  README.
+- **Tests:**
+  - unit: core 303, engine 128, example 11, guide 9, OpenCode 44 (the 12 end-to-end ones run with OpenCode 2.0.32),
+    server 114 (2 skipped), app 51;
+  - browser: 226 passed and 22 skipped, the prefix field among them;
+  - `svelte-check` is clean.
+- **Real-model spend:** none.
+- **Not done:** the real check is yours, at work. Try the installer (or `--url` from your mirror), `isorite model`
+  with `ISORITE_MODEL_BASE_URL`, `isorite opencode`, `isorite term` and `doctor`, through the proxy.

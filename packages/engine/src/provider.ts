@@ -27,8 +27,11 @@ export interface ProviderConfig {
   auth?: string;
   /** Sent with every request: what a company's gateway may want besides the key (a team, a project). */
   headers?: Record<string, string>;
-  /** The header the key goes in, as it is (`api-key`), in place of `Authorization: Bearer`. */
+  /** The header the key goes in (`api-key`), in place of `Authorization`. */
   keyHeader?: string;
+  /** What is sent before the key (`key_prefix`, M21): "Bearer " in Authorization, and nothing in another header,
+   *  unless said. */
+  keyPrefix?: string;
   /** Added to every request's address (`api-version`). */
   query?: Record<string, string>;
   /** false for a gateway that refuses `stream_options`: the turns then cost what the prices say, or nothing. */
@@ -184,8 +187,11 @@ export function unreachable(err: unknown, url: string): string {
   said = said.split("\n")[0]!.replace(/^[0-9A-F]{8,}:error:[0-9A-F]+:SSL routines:[^:]*:/, "").replace(/:\.\.\/deps\/.*$/, "");
   let host = url;
   try { host = new URL(url).host; } catch { /* as given */ }
+  const proxy = /Proxy response \((\d{3})\)/.exec(said)?.[1];
   const advice =
-    UNTRUSTED.has(code) ? `Its certificate is signed by an authority not trusted here, often a company's own. Add it to the system's authorities (isorite trusts those), or set NODE_EXTRA_CA_CERTS to its certificate (a .pem), or name that as ca in [provider].`
+    proxy === "407" ? "The proxy (HTTPS_PROXY), not the provider, refused with 407: it wants credentials of its own, as http://user:password@proxy:port in HTTPS_PROXY, or its own sign-in. isorite can't answer a proxy that signs in by Kerberos or NTLM."
+    : proxy ? `The proxy (HTTPS_PROXY) answered ${proxy}, not the provider: check HTTPS_PROXY, and NO_PROXY for hosts reached directly.`
+    : UNTRUSTED.has(code) ? `Its certificate is signed by an authority not trusted here, often a company's own. Add it to the system's authorities (isorite trusts those), or set NODE_EXTRA_CA_CERTS to its certificate (a .pem), or name that as ca in [provider].`
     : code === "CERT_HAS_EXPIRED" ? "Its certificate has expired: that is the gateway's to fix."
     : code === "ERR_TLS_CERT_ALTNAME_INVALID" ? `Its certificate is not for ${host}: check the url in [provider].`
     : /CERTIFICATE_REQUIRED|HANDSHAKE_FAILURE|BAD_CERTIFICATE|UNKNOWN_CA/.test(code) ? "It asks for a client certificate (mTLS) and was given none it accepts: name yours as pfx (with pfx_passphrase), or cert and cert_key, in [provider]."
@@ -210,12 +216,42 @@ const wire = (marks: boolean) => (m: Message) => m.role === "tool" ? { role: "to
 
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
+/** The header the key goes in, and what goes before it: Authorization with "Bearer " unless said otherwise (M21).
+ *  `key_header = "authorization"` alone means Bearer too: a bare key in Authorization is rarely what a gateway
+ *  wants. `key_prefix = ""` sends it bare. */
+export function keySent(p: ProviderConfig): { header: string; prefix: string } {
+  const header = p.keyHeader || "Authorization";
+  return { header, prefix: p.keyPrefix ?? (header.toLowerCase() === "authorization" ? "Bearer " : "") };
+}
+
+/** How the key is sent, as said to the person: `Authorization: Bearer <41 characters>`. */
+export function keySentAs(p: ProviderConfig, key: string): string {
+  const { header, prefix } = keySent(p);
+  return `${header}: ${prefix}<${key.length} characters>`;
+}
+
+/** What a provider said with a refusal: its `error.message` (or `message`, or `error`), else its text without
+ *  markup, cut to 300 characters, and never the key, should it say it back. */
+export function refusal(body: string, key: string | null = null): string {
+  let said = "";
+  try {
+    const j = JSON.parse(body) as { error?: { message?: string } | string; message?: string };
+    said = (typeof j.error === "string" ? j.error : j.error?.message) ?? j.message ?? "";
+  } catch {
+    said = body.replace(/<[^>]+>/g, " ");
+  }
+  said = said.replace(/\s+/g, " ").trim();
+  if (key && key.length >= 8) said = said.split(key).join("<the key>");
+  return said.length > 300 ? said.slice(0, 299) + "…" : said;
+}
+
 /** The address of `path` at the provider, and the headers that go with every request to it: its key, where it
  *  wants it, and its own. */
 export function endpoint(p: ProviderConfig, key: string | null, path: string): { url: string; headers: Record<string, string> } {
   const url = new URL(p.url.replace(/\/+$/, "") + path);
   for (const [name, value] of Object.entries(p.query ?? {})) url.searchParams.set(name, value);
-  const auth: Record<string, string> = !key ? {} : p.keyHeader ? { [p.keyHeader]: key } : { Authorization: `Bearer ${key}` };
+  const sent = keySent(p);
+  const auth: Record<string, string> = !key ? {} : { [sent.header]: sent.prefix + key };
   return { url: url.toString(), headers: { ...p.headers, ...auth, "X-Title": "isorite" } };
 }
 
@@ -260,13 +296,10 @@ async function completeOnce(http: Http, p: ProviderConfig, key: string | null, c
   }
   if (!res.ok || !res.body) {
     let detail = "";
-    try {
-      const said = await res.text();
-      try { const j = JSON.parse(said) as { error?: { message?: string } | string; message?: string }; detail = (typeof j.error === "string" ? j.error : j.error?.message) ?? j.message ?? ""; } catch { detail = said.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300); }
-    } catch { /* none */ }
+    try { detail = refusal(await res.text(), key); } catch { /* none */ }
     if (DOWN.has(res.status)) throw new ModelError(`${p.name} is unavailable (${res.status}${detail ? `: ${detail}` : ""})`, 502, { kind: "unavailable", retry: true, after: afterOf(res) });
     if (res.status === 429) throw new ModelError(`${p.name} said 429, too many requests${detail ? `: ${detail}` : ""}. Wait a moment and send it again.`, 502, { kind: "limited", retry: true, after: afterOf(res) });
-    const advice = res.status === 401 ? " The key was not accepted: set it again in settings." : res.status === 402 ? " The key's credit is spent." : res.status === 404 ? ` ${p.name} may have no model called ${call.model}${p.defaultTiers ? ", which is OpenRouter's name for it: name this provider's models under [tiers] in config.toml" : ""}.` : "";
+    const advice = res.status === 401 ? ` The key was not accepted${key ? `, sent as ${keySentAs(p, key)}` : ""}: set it again in settings, or check key_header and key_prefix.` : res.status === 402 ? " The key's credit is spent." : res.status === 404 ? ` ${p.name} may have no model called ${call.model}${p.defaultTiers ? ", which is OpenRouter's name for it: name this provider's models under [tiers] in config.toml" : ""}.` : "";
     throw new ModelError(`${p.name} said ${res.status}${detail ? `: ${detail}` : ""}.${advice}`, res.status === 401 || res.status === 403 ? 409 : 502);
   }
 

@@ -90,6 +90,20 @@ describe("the setup as a form", () => {
   });
 });
 
+describe("the key's prefix (M21)", () => {
+  const gw = (more: Partial<SetupDraft>): SetupDraft => ({ ...readSetup({}), kind: "gateway", name: "work", url: "https://gw.example/v1", tiers: { low: "a", mid: "b", max: "c" }, ...more });
+  it("is kept as key_prefix with a space after a scheme, read back without it, and left out when empty", () => {
+    const { config } = applySetup({}, gw({ keyHeader: "X-Gateway-Auth", keyPrefix: "Bearer" }));
+    expect(config.provider).toMatchObject({ key_header: "X-Gateway-Auth", key_prefix: "Bearer " });
+    expect(readSetup(config)).toMatchObject({ keyHeader: "X-Gateway-Auth", keyPrefix: "Bearer" });
+    expect(applySetup({}, gw({ keyHeader: "api-key" })).config.provider).not.toHaveProperty("key_prefix");
+  });
+  it("keeps a key_prefix of \"\" written by hand, so Authorization stays bare", () => {
+    const by = { provider: { url: "https://gw.example/v1", key_header: "Authorization", key_prefix: "" } };
+    expect(applySetup(by, gw({ keyHeader: "Authorization" })).config.provider).toMatchObject({ key_prefix: "" });
+  });
+});
+
 describe("checking and keeping", () => {
   const draft = (): SetupDraft => ({ ...readSetup({}), kind: "gateway", name: "work", url, key: "sk-work", keyHeader: "api-key", headers: [{ name: "X-Team", value: "notes" }], tiers: { low: "small", mid: "big", max: "big" } });
 

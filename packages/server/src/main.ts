@@ -17,10 +17,11 @@ import { StudyError } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { doctor } from "./doctor.ts";
 import { proxied, rerun, trustSystem } from "./network.ts";
+import { single } from "./self.ts";
 import { newBase, serve } from "./serve.ts";
 import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
-import { term } from "./term.ts";
+import { installOpenCode, term } from "./term.ts";
 import { guide } from "./guide.ts";
 import { writeExample, writeGeometry } from "@isorite/example/node";
 import { modelCommand } from "./model.ts";
@@ -45,9 +46,13 @@ const USAGE = `isorite: an agentic harness for understanding
   isorite mcp [<notes>] [--port <n>] [--agent <name>]
                                          the knowledge base's tools over MCP, on stdio, for Claude Code or Pi:
                                          claude mcp add isorite -- isorite mcp <base> --agent claude-code
-  isorite model [--from <folder>]        the model for search by meaning: which is installed, and where; else
-                                         fetched (53 MB, once) from npm, GitHub or Hugging Face; or from a
+  isorite model [--from <folder|.tgz>] [--url <url>]
+                                         the model for search by meaning: which is installed, and where; else
+                                         fetched (53 MB, once) from ISORITE_MODEL_BASE_URL, npm, GitHub or
+                                         Hugging Face, or --url alone; or from the .tgz fetched by hand, or a
                                          folder: its files copied there, or any compatible model
+  isorite opencode                       OpenCode 2 for isorite term, installed in isorite's own folder
+                                         (~/.config/isorite/opencode-cli), the global one left as it is
   isorite doctor [<notes>] [--report] [--offline]
                                          whether isorite can work here: the configuration, the network, the
                                          provider (asked a few words, a few hundred tokens), the terminal and
@@ -115,10 +120,12 @@ export function main(argv: string[]): number | Promise<number> {
       return run.catch((e: Error) => { console.error(e.message); return 2; });
     }
     if (command === "model") {
-      const from = rest[rest.indexOf("--from") + 1];
-      if (rest.includes("--from") && !from) { console.error("--from takes a folder"); return 2; }
-      return modelCommand(rest.includes("--from") ? from : undefined);
+      const from = rest[rest.indexOf("--from") + 1], url = rest[rest.indexOf("--url") + 1];
+      if (rest.includes("--from") && !from) { console.error("--from takes a folder, or the model's .tgz"); return 2; }
+      if (rest.includes("--url") && !/^https?:\/\//.test(url ?? "")) { console.error("--url takes the address of the model's .tgz"); return 2; }
+      return modelCommand(rest.includes("--from") ? from : undefined, console.log, process.env, {}, rest.includes("--url") ? url : undefined);
     }
+    if (command === "opencode") return installOpenCode();
     if (command === "memory") return memory(rest.find((a) => !a.startsWith("--")));
     if (command === "bases") return bases(rest);
     if (command === "--version" || command === "-v") { console.log(VERSION); return 0; }
@@ -170,13 +177,18 @@ export function starting(argv: string[], env: NodeJS.ProcessEnv = process.env, w
   return true;
 }
 
-// Run as the command, however it is reached: npm installs it as a link, so the path it was run by is resolved first.
-// Inside a company, the proxy and the system's authorities are used without flags (network.ts).
-if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) {
-  starting(process.argv.slice(2));
+/** The command as run: said to be starting, the proxy turned on (running itself again), the system's authorities
+ *  trusted; its exit code. The single executable calls this (M21). */
+export async function run(argv: string[]): Promise<number> {
+  starting(argv);
   delete process.env.ISORITE_STARTING;
   const env = proxied(process.env);
-  if (env) process.exit(await rerun({ ...env, ISORITE_STARTING: "1" }));
+  if (env) return rerun({ ...env, ISORITE_STARTING: "1" });
   trustSystem();
-  process.exit(await main(process.argv.slice(2)));
+  return main(argv);
 }
+
+// Run as the command, however it is reached: npm installs it as a link, so the path it was run by is resolved first.
+// Inside a company, the proxy and the system's authorities are used without flags (network.ts).
+// The single executable's argv[1] is itself, as typed: it calls run() (M21).
+if (!single() && process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) process.exit(await run(process.argv.slice(2)));

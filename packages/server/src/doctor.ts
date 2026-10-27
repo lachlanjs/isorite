@@ -3,20 +3,21 @@
 // issue: versions, the platform, the configuration with its secrets replaced by their lengths, the environment
 // isorite reads, and the checks.
 
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { arch, platform, release } from "node:os";
 import { getCACertificates } from "node:tls";
 import { join, resolve } from "node:path";
 import { OWN_DIR, SETTINGS_FILE, parseSettings } from "@isorite/core";
-import { KEY, ModelError, complete, endpoint, unreachable, type Http, type ProviderConfig, type ToolDef } from "@isorite/engine";
-import { findOpenCode, gatewayFrom, type Probe } from "@isorite/opencode";
+import { KEY, ModelError, complete, endpoint, keySentAs, refusal, unreachable, type Http, type ProviderConfig, type ToolDef } from "@isorite/engine";
+import { findOpenCode, gatewayFrom, NoOpenCode, type Probe } from "@isorite/opencode";
 import { ConfigSecrets, configPath, gatewayTls, providerConfig, readConfig } from "./config.ts";
 import { cacheDir } from "./embedder.ts";
 import { gatewayHttp } from "./gateway.ts";
-import { modelDir, modelInfo, modelPlaces, type ModelInfo } from "./model.ts";
+import { mirrorOf, modelDir, modelInfo, modelPlaces, RELEASE, RELEASE_SHA256, type ModelInfo } from "./model.ts";
 import { locate } from "./serve.ts";
-import { serving } from "./term.ts";
+import { asksPassword, serving } from "./term.ts";
 
 export type Outcome = "ok" | "fail" | "warn" | "skip";
 export interface Check { step: string; outcome: Outcome; said: string }
@@ -34,6 +35,8 @@ export interface DoctorOptions {
   http?: Http;
   /** How OpenCode's version is asked (tests). */
   probe?: Probe;
+  /** The git to time (tests). */
+  git?: string;
   version?: string;
   /** How Node was started: its flags, as process.execArgv. */
   execArgv?: string[];
@@ -42,7 +45,7 @@ export interface DoctorOptions {
 const MARK: Record<Outcome, string> = { ok: "✓", fail: "✗", warn: "!", skip: "–" };
 
 /** The environment variables isorite and Node read for it; the secret ones are shown only by length. */
-const READ = ["ISORITE_GATEWAY_URL", "ISORITE_GATEWAY_MODELS", "ISORITE_GATEWAY_KEY", "ISORITE_OPENCODE", "XDG_CONFIG_HOME", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "NODE_TLS_REJECT_UNAUTHORIZED", "ISORITE_NODE_DEFAULTS", "SSH_CONNECTION", "ISORITE_EMBED", "ISORITE_EMBED_DIR", "XDG_DATA_HOME", "XDG_CACHE_HOME"];
+const READ = ["ISORITE_GATEWAY_URL", "ISORITE_GATEWAY_MODELS", "ISORITE_GATEWAY_KEY", "ISORITE_OPENCODE", "XDG_CONFIG_HOME", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "NODE_TLS_REJECT_UNAUTHORIZED", "ISORITE_NODE_DEFAULTS", "SSH_CONNECTION", "ISORITE_EMBED", "ISORITE_EMBED_DIR", "ISORITE_MODEL_BASE_URL", "XDG_DATA_HOME", "XDG_CACHE_HOME"];
 export const SECRET = /key|token|secret|pass|auth|cookie/i;
 
 const hidden = (v: string) => `<${v.length} characters>`;
@@ -72,7 +75,11 @@ export async function checkProvider(p: ProviderConfig, h: Http, key: string | nu
       const missing = models.filter((m) => !listed.includes(m));
       say("reached", "ok", `${to.url.replace(/\?.*$/, "")} answered with ${listed.length} models`);
       if (listed.length && missing.length) say("models", "fail", `${missing.join(", ")} not among them; it has ${listed.slice(0, 12).join(", ")}${listed.length > 12 ? ", …" : ""}. Name its models under [tiers]`);
-    } else say("reached", res.status === 401 || res.status === 403 ? "fail" : "ok", res.status === 401 || res.status === 403 ? `it said ${res.status} to the list of models: the key${p.keyHeader ? "" : ", or the header it goes in (key_header)"}, or a header it wants (headers), is not accepted` : `it answered (${res.status} for the list of models, which some gateways don't have)`);
+    } else if (res.status === 401 || res.status === 403) {
+      // The gateway's own words usually say what it wants (M21): a missing Bearer, another header.
+      const said = refusal(await res.text().catch(() => ""), key);
+      say("reached", "fail", `it said ${res.status} to the list of models${said ? `: “${said}”` : ""}. The key${key ? `, sent as ${keySentAs(p, key)},` : ""} or a header it wants (headers), is not accepted: check key_header and key_prefix`);
+    } else say("reached", "ok", `it answered (${res.status} for the list of models, which some gateways don't have)`);
   } catch (e) {
     reached = false;
     say("reached", "fail", unreachable(e, p.url));
@@ -113,7 +120,7 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
     const tls = gatewayTls(path, env);
     http ??= gatewayHttp(provider, tls, env);
     if (existsSync(path)) say("config", "ok", `${path}: ${provider.name} at ${provider.url}`);
-    say("key", key ? "ok" : tls ? "warn" : "fail", key ? `${hidden(key)}, sent ${provider.keyHeader ? `in ${provider.keyHeader}` : "as Authorization: Bearer"}` : tls ? "none; the client certificate alone is sent" : "none: set one in Iso's settings, or as key under [provider]");
+    say("key", key ? "ok" : tls ? "warn" : "fail", key ? `sent as ${keySentAs(provider, key)}${provider.keyHeader?.toLowerCase() === "authorization" && provider.keyPrefix === undefined ? ` (key_header = "${provider.keyHeader}" alone means Bearer since 0.9.0; key_prefix = "" sends it bare)` : ""}` : tls ? "none; the client certificate alone is sent" : "none: set one in Iso's settings, or as key under [provider]");
     if (tls) say("certificate", "ok", `${tls.files.join(", ")}${tls.pfx || tls.cert ? "" : " (an authority only, no client certificate)"}`);
     const tiers = `low ${provider.tiers.low}, mid ${provider.tiers.mid}, max ${provider.tiers.max}`;
     say("models", provider.defaultTiers ? "warn" : "ok", provider.defaultTiers ? `${tiers}: OpenRouter's names, kept because [tiers] names none for ${provider.name}; a gateway usually calls its models otherwise` : tiers);
@@ -140,12 +147,21 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
     await checkProvider(p, h, key, say);
   }
 
+  // Git (M21): isorite runs none to start, but OpenCode may, in the folder it starts in; a company's wrapper that
+  // waits on the network is seen here by how long `git --version` takes.
+  const began = Date.now(), git = spawnSync(o.git ?? "git", ["--version"], { encoding: "utf8", env, timeout: 3000, killSignal: "SIGKILL" });
+  const took = Date.now() - began;
+  if (git.error && (git.error as NodeJS.ErrnoException).code === "ENOENT") say("git", "skip", "not found: isorite doesn't need it; OpenCode works without it, as a folder that isn't a repository");
+  else if (git.status !== 0 || took >= 3000) say("git", "warn", `git --version ${took >= 3000 ? "didn't answer in 3 s" : `failed after ${took} ms`}: likely a wrapper (a company's) that waits on the network. isorite no longer waits on git to start; OpenCode may, and isorite term then says it's waiting for OpenCode's server`);
+  else say("git", took > 1000 ? "warn" : "ok", `${git.stdout.trim()}, in ${took} ms${took > 1000 ? ": slow, likely a wrapper; OpenCode may wait on it as it starts" : ""}`);
+
   // The terminal.
   try {
     const found = findOpenCode(env, o.probe);
-    say("opencode", "ok", `${found.command} ${found.version}`);
+    say("opencode", "ok", `${found.command} ${found.version}${found.from === "the PATH" ? "" : ` (${found.from})`}`);
   } catch (e) {
-    say("opencode", "warn", (e as Error).message.replace(/\n\s*/g, " "));
+    // Only an OpenCode 1 is a failure: term would start nothing that works. None at all is for later.
+    say("opencode", e instanceof NoOpenCode && e.old ? "fail" : "warn", (e as Error).message.replace(/\n\s*/g, " "));
   }
   const port = o.port ?? 4767, url = `http://127.0.0.1:${port}`, served = await serving(url);
   say("port", "ok", served === null ? `${port} is free: isorite term starts a server there` : `${port} is isorite's, serving ${served}`);
@@ -157,6 +173,14 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
     else if (!provider) { terminal = "not known until config.toml is fixed"; known = false; }
   } catch (e) { terminal = (e as Error).message; known = false; }
   say("terminal", known ? "ok" : "warn", terminal);
+  // The browser's pages (M21): OpenCode's own asks for a password and is never to be opened; its port is new with
+  // each term, so it can't be looked at from here (term warns of it), but isorite's own must never ask.
+  const hint = "isorite term also runs OpenCode's own web server, on a port of its own, which asks for a password: open isorite's pages and panes (/web in the terminal), not OpenCode's";
+  if (served === null) say("browser pages", "ok", hint);
+  else {
+    const asking = (await Promise.all([`${url}/`, `${url}/api/session`].map(async (at) => ((await asksPassword(at)) ? at : null)))).filter(Boolean);
+    say("browser pages", asking.length ? "fail" : "ok", asking.length ? `${asking.join(" and ")} asked for a password (401, Basic): that is not isorite's server; stop it, or give isorite another port (--port <n>)` : `isorite's pages at ${url}/ ask for no password. ${hint}`);
+  }
   if (env.SSH_CONNECTION) say("browser", "ok", `over SSH: on your own machine, ssh -L ${port}:localhost:${port} <this host>, then http://localhost:${port}/`);
 
   // Search by meaning: a warning, not a failure, without it, as search by words works alone.
@@ -166,7 +190,18 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
     const dir = modelDir(env);
     try { model = dir ? modelInfo(dir) : null; } catch (e) { say("search by meaning", "fail", `${dir}: ${(e as Error).message}`); }
     if (model) say("search by meaning", "ok", `${model.name} at ${model.dir}`);
-    else if (!dir) say("search by meaning", "warn", `no model in ${modelPlaces(env).map((p) => p.dir).join(" or ")}: isorite model fetches it (53 MB). Search by words works without it`);
+    else if (!dir) {
+      // Where it would come from, and whether that answers from here (M21): by hand otherwise, with its checksum.
+      let reach = "";
+      if (!o.offline) {
+        const from = mirrorOf(env) ?? RELEASE;
+        try {
+          const res = await fetch(from, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(10_000) });
+          reach = res.ok ? ` ${from} answers from here.` : ` ${from} said ${res.status}.`;
+        } catch (e) { reach = ` ${from} can't be reached from here: ${unreachable(e, from)}.`; }
+      }
+      say("search by meaning", "warn", `no model in ${modelPlaces(env).map((p) => p.dir).join(" or ")}: isorite model fetches it (53 MB).${reach} By hand: ${mirrorOf(env) ?? RELEASE} (SHA-256 ${RELEASE_SHA256}), then isorite model --from <that file>. Search by words works without it`);
+    }
   }
 
   // The notes.

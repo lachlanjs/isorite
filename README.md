@@ -24,6 +24,10 @@ isorite model                      # optional: search by meaning (53 MB, once)
 
 To update later, run the same `npm install -g isorite`.
 
+Where npm is hard (a company's mirror, say), isorite is also one executable, with Node inside, on each release:
+`curl -fsSL https://github.com/lachlanjs/isorite/releases/latest/download/install.sh | sh` (on Windows,
+`install.ps1`), and `isorite opencode` puts OpenCode 2 beside it. See [docs/setup.md](docs/setup.md).
+
 ## Try it
 
 ```sh

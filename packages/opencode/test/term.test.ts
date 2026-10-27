@@ -78,6 +78,9 @@ describe.skipIf(!ready)("isorite term", () => {
     // The base's own instructions, which OpenCode is to be given (M15).
     writeFileSync(join(base.notes, "AGENTS.md"), "Write vectors in bold.\n");
     mkdirSync(join(root, "code"));
+    // A browser that keeps the addresses it is asked to open (M21).
+    mkdirSync(join(root, "bin"));
+    writeFileSync(join(root, "bin", "xdg-open"), `#!/bin/sh\necho "$1" >> "${join(root, "opened")}"\n`, { mode: 0o755 });
     gateway = await startScripted((request) => {
       // Iso, asked in place from the note view: its requests carry no edit tool, as OpenCode's do.
       if (!request.tools.includes("edit")) return { text: "Most of the time is in the pairwise distances." };
@@ -112,7 +115,7 @@ describe.skipIf(!ready)("isorite term", () => {
     pane = new Pane([process.execPath, MAIN, "term", base.notes, "--port", String(port)], {
       cwd: join(root, "code"),
       env: {
-        PATH: process.env.PATH ?? "",
+        PATH: `${join(root, "bin")}:${process.env.PATH ?? ""}`,
         HOME: process.env.HOME ?? root,
         ISORITE_OPENCODE: opencode!.command,
         // Everything OpenCode and isorite keep goes in the test's own folder; the cache, which holds
@@ -370,10 +373,25 @@ describe.skipIf(!ready)("isorite term", () => {
     expect((await post("/api/terminal/permission", { id: "per_none", decision: "once" })).status).toBe(409);
   }, 120_000);
 
-  it("stops the server it started when OpenCode exits", async () => {
+  it("opens isorite's page for /web, not OpenCode's own, which asks for a password (M21)", async () => {
+    // The prompt as the test before left it: cleared, then the slash on its own, then the command's name.
+    pane.keys("Escape");
+    await new Promise((r) => setTimeout(r, 500));
+    pane.keys("C-u");
+    pane.type("/");
+    await pane.waitFor("/clear");
+    pane.type("web");
+    await pane.waitFor("isorite in the browser (OpenCode's pairing: /pair)");
+    pane.keys("Enter");
+    await expect.poll(() => { try { return readFileSync(join(root, "opened"), "utf8"); } catch { return ""; } }, { timeout: 10_000 }).toContain(`http://127.0.0.1:${port}/`);
+    expect(pane.text()).not.toContain("Open a link to connect");
+  }, 60_000);
+
+  it("stops the server it started when OpenCode exits, and says again that OpenCode's own page asks for a password", async () => {
     expect(await serving(port)).toBe(true);
     pane.keys("C-c");
-    await pane.waitFor(/\[exited \d+\]/, 30_000);
+    const text = await pane.waitFor(/\[exited \d+\]/, 30_000);
+    expect(text).toMatch(/OpenCode's own web page \(port \d+\) asks for a password: don't open it/);
     // Once the last terminal using it has let it go, after a moment's grace (M20).
     await expect.poll(() => serving(port), { timeout: 5000 }).toBe(false);
   }, 60_000);

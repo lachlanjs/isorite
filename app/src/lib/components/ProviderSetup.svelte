@@ -36,6 +36,12 @@
   const moved = $derived(Boolean(draft && view && at(draft) !== at(view.setup)));
   const changed = $derived(Boolean(draft && view && (JSON.stringify(draft) !== JSON.stringify(view.setup) || fresh || passphrase)));
   const local = $derived(view?.local ?? false);
+  /** Whether the key goes in Authorization, where it has Bearer before it unless another prefix is given (M21). */
+  const bearer = $derived(!draft?.keyHeader.trim() || draft.keyHeader.trim().toLowerCase() === "authorization");
+  const sentAs = $derived.by(() => {
+    const prefix = draft?.keyPrefix?.trim() || (bearer ? "Bearer" : "");
+    return `${draft?.keyHeader.trim() || "Authorization"}: ${prefix ? prefix + " " : ""}<the key>`;
+  });
 
   function sent(): SetupDraft {
     const d: SetupDraft = $state.snapshot(draft)!;
@@ -149,7 +155,10 @@
       <details>
         <summary class="label">what else it asks for</summary>
         <div class="more">
-          <input class="field" bind:value={draft.keyHeader} aria-label="The header the key goes in" placeholder="the key's header" title="the header the key goes in (key_header), as api-key; left empty, Authorization: Bearer" autocomplete="off" spellcheck="false" />
+          <div class="row">
+            <input class="field grow" bind:value={draft.keyHeader} aria-label="The header the key goes in" placeholder="the key's header" title="the header the key goes in (key_header), as api-key; left empty, Authorization" autocomplete="off" spellcheck="false" />
+            <input class="field name" bind:value={draft.keyPrefix} aria-label="What goes before the key" placeholder={bearer ? "Bearer" : "no prefix"} title="what goes before the key (key_prefix), as Bearer; left empty, {bearer ? "Bearer, as the header is Authorization" : "nothing"}. Sent: {sentAs}" autocomplete="off" spellcheck="false" />
+          </div>
           <h3 class="label">headers</h3>
           {@render pairs(draft.headers, "header")}
           <h3 class="label">query</h3>

@@ -6,16 +6,19 @@
 // started for the base, its output kept in a log so that it does not draw over the TUI,
 // and stopped when OpenCode exits.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { createInterface } from "node:readline/promises";
 import { randomBytes } from "node:crypto";
+import { get as httpGet } from "node:http";
 import { createServer, type AddressInfo } from "node:net";
 import { existsSync, openSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AGENTS_FILE, StudyError } from "@isorite/core";
-import { defaultHome, findOpenCode, GATEWAY_KEY, gatewayFrom, writeHome, type Gateway } from "@isorite/opencode";
+import { defaultHome, findOpenCode, GATEWAY_KEY, gatewayFrom, NoOpenCode, OPENCODE_PACKAGE, ownPrefix, writeHome, type Found, type Gateway } from "@isorite/opencode";
 import { ConfigSecrets, configPath, gatewayTls, providerConfig } from "./config.ts";
+import { self } from "./self.ts";
 import { link, locate } from "./serve.ts";
 
 // The command itself, to start a server with: main.ts in a checkout, or the one file it is built into for npm.
@@ -66,7 +69,8 @@ export async function ensureServer(path: string | undefined, { port = 4767, env 
     const log = join(tmpdir(), `isorite-term-${port}.log`);
     const out = openSync(log, "w");
     // Apart from this process, so that a second terminal using it keeps it when this one is done.
-    started = spawn(process.execPath, [MAIN, "serve", path!, "--port", String(port), "--held"], { stdio: ["ignore", out, out], env, detached: true });
+    const again = self(MAIN, ["serve", path!, "--port", String(port), "--held"], []);
+    started = spawn(again.command, again.args, { stdio: ["ignore", out, out], env, detached: true });
     const exited = new Promise<void>((done) => started!.once("exit", () => done()));
     const begun = Date.now();
     let told = false;
@@ -116,6 +120,19 @@ async function freePort(): Promise<number> {
       const { port } = probe.address() as AddressInfo;
       probe.close(() => done(port));
     });
+  });
+}
+
+/** Whether `address` asks a browser that opens it for a password (M21): a 401 with Basic, as OpenCode 2 answers
+ *  for /api (its page itself is served to anyone). Asked as a browser navigates, by node:http: OpenCode leaves the
+ *  challenge out for its own page's fetches (Sec-Fetch-Mode: cors), which is all Node's fetch can send. */
+export function asksPassword(address: string): Promise<boolean> {
+  return new Promise((done) => {
+    const req = httpGet(address, { headers: { Accept: "text/html", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document" }, timeout: 3000 }, (res) => {
+      res.resume();
+      done(res.statusCode === 401 && /^\s*basic\b/i.test(String(res.headers["www-authenticate"] ?? "")));
+    });
+    req.on("timeout", () => req.destroy()).on("error", () => done(false));
   });
 }
 
@@ -189,15 +206,49 @@ async function tokenOf(url: string): Promise<string> {
   return ((await (await fetch(`${url}/api/session`)).json()) as { token: string }).token;
 }
 
+/** `isorite opencode` (M21): OpenCode 2, at the version isorite is tested with, in isorite's own npm prefix, the
+ *  global one left as it is. npm's registry, proxy and mirror settings apply. Run again, it installs it again. */
+export function installOpenCode(env: NodeJS.ProcessEnv = process.env, say: (line: string) => void = console.log, npm = "npm"): number {
+  const prefix = ownPrefix(env);
+  say(`isorite opencode: installing ${OPENCODE_PACKAGE} in ${prefix}, for isorite alone; nothing global is changed`);
+  const done = spawnSync(npm, ["install", "--prefix", prefix, "--no-fund", "--no-audit", "--loglevel=error", OPENCODE_PACKAGE], { stdio: "inherit", env, shell: process.platform === "win32" });
+  if (done.status !== 0) {
+    say(`npm could not install it${done.error ? `: ${done.error.message}` : ""}. If npm's registry or mirror is the trouble, fetch an OpenCode 2 another way and name it: ISORITE_OPENCODE=/path/to/opencode isorite term`);
+    return 1;
+  }
+  try {
+    const found = findOpenCode(env);
+    say(`OpenCode ${found.version} is ${found.command}: isorite term uses it from now on`);
+    return 0;
+  } catch (e) {
+    say((e as Error).message);
+    return 1;
+  }
+}
+
+/** OpenCode 2, or, when there's none and a person is at the terminal, the offer to install it for isorite alone. */
+async function openCodeFor(env: NodeJS.ProcessEnv): Promise<Found> {
+  try {
+    return findOpenCode(env);
+  } catch (e) {
+    if (!(e instanceof NoOpenCode) || env.ISORITE_OPENCODE || !process.stdin.isTTY || !process.stdout.isTTY) throw e;
+    console.error(e.message);
+    const ask = createInterface({ input: process.stdin, output: process.stdout });
+    const yes = /^y(es)?$/i.test((await ask.question(`Install OpenCode 2 for isorite only, in ${ownPrefix(env)}? [y/N] `)).trim());
+    ask.close();
+    if (!yes || installOpenCode(env) !== 0) throw new StudyError("isorite term needs OpenCode 2");
+    return findOpenCode(env);
+  }
+}
+
 export async function term(path: string | undefined, { port = 4767, cwd = process.cwd(), env: given = process.env, wait = 120_000, onServer }: TermOptions = {}): Promise<number> {
-  const opencode = findOpenCode(given);
+  const opencode = await openCodeFor(given);
   const server = await ensureServer(path, { port, env: given, wait });
   onServer?.(server.url);
   let models: Awaited<ReturnType<typeof modelsFor>>;
   try { models = await modelsFor(given, { url: server.url, token: await tokenOf(server.url) }); } catch (e) { server.release(); throw e; }
   const { gateway, env } = models;
   const said = where(port, models, given, undefined, new URL(server.url).pathname.replace(/\/?$/, "/"));
-  for (const line of said) console.log(line);
   // The base's own instructions go to the terminal's agent as to Iso, when the base is named here.
   const agents = path === undefined ? null : join(locate(path).notes, AGENTS_FILE);
   const home = writeHome(defaultHome(env), { gateway, instructions: agents && existsSync(agents) ? [agents] : [] });
@@ -205,6 +256,9 @@ export async function term(path: string | undefined, { port = 4767, cwd = proces
   const shared = { ...env, OPENCODE_CONFIG_DIR: home, ISORITE_URL: server.url, GIT_TERMINAL_PROMPT: "0" };
   let backend: Awaited<ReturnType<typeof startOpenCode>>;
   try { backend = await startOpenCode(opencode.command, { cwd, env: shared }); } catch (e) { server.release(); throw e; }
+  // OpenCode's own page asks for a password: said, so that nobody opens it for isorite's (M21).
+  if (await asksPassword(`${backend.url}/api/session`)) said.push(`  OpenCode's own web page (port ${new URL(backend.url).port}) asks for a password: don't open it. isorite's page is above, and /web in the terminal opens it`);
+  for (const line of said) console.log(line);
   // The Iso pane follows the session; if this server cannot, the terminal still works.
   await tell(server.url, "/api/terminal/attach", { url: backend.url, password: backend.password, directory: cwd }).catch((e: Error) => console.error(`isorite: the Iso pane will not show the terminal: ${e.message}`));
   const child = spawn(opencode.command, ["--server", backend.url], {

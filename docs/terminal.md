@@ -10,8 +10,10 @@ Setting isorite up the first time, or at work behind a company's gateway, is in 
 
 - **Node 24** or later.
 - **isorite**: `npm i -g isorite`.
-- **OpenCode 2**: `npm i -g @opencode/cli`. It installs as `opencode2` and `opencode`. If an older OpenCode is your
-  `opencode`, isorite finds `opencode2`; or name one with `ISORITE_OPENCODE=/path/to/opencode`.
+- **OpenCode 2**: `isorite opencode` installs the version isorite is tested with in `~/.config/isorite/opencode-cli`,
+  for isorite alone, leaving the global npm prefix (and an OpenCode 1 you use) as it is. `isorite term` offers to
+  when it finds none. One installed yourself (`npm i -g @opencode/cli`, as `opencode2`) is found too, or name one
+  with `ISORITE_OPENCODE=/path/to/opencode`.
 - A model provider, set once in `~/.config/isorite/config.toml`: see [setup.md](setup.md). `isorite doctor` checks
   all of this.
 
@@ -58,7 +60,11 @@ works (`-L 9000:localhost:4767`, then `http://localhost:9000/`).
 
 ## In the browser
 
-Open the link. While the terminal runs, Iso's pane header has two more switches beside *Iso may edit the notes*:
+Open the link, or type `/web` in the terminal. OpenCode runs a web page of its own as well, on another port. It
+asks for a password nobody was given, so isorite's `/web` opens isorite's page instead (OpenCode's pairing is
+`/pair`), and `isorite term` says on which port OpenCode's page is, so that you don't open it.
+
+While the terminal runs, Iso's pane header has two more switches beside *Iso may edit the notes*:
 *Iso may edit the project's files* (Alt+F) and *Iso may run commands* (Alt+R). With either on, the pane is the
 terminal's session:
 

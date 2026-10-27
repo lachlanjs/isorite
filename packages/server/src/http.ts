@@ -69,7 +69,7 @@ const Key = z.object({ key: z.string().nullable() }).strict();
 const Pair = z.object({ name: z.string().max(200), value: z.string().max(4000), held: z.boolean().optional() }).strict();
 const Path = z.string().max(1000);
 const SetupDraft = z.object({
-  kind: z.enum(["openrouter", "gateway"]), name: z.string().max(100), url: z.string().max(2000), keyHeld: z.boolean(), keyHeader: z.string().max(200),
+  kind: z.enum(["openrouter", "gateway"]), name: z.string().max(100), url: z.string().max(2000), keyHeld: z.boolean(), keyHeader: z.string().max(200), keyPrefix: z.string().max(50).default(""),
   headers: z.array(Pair).max(40), query: z.array(Pair).max(40), pfx: Path, passphraseHeld: z.boolean(), cert: Path, certKey: Path, ca: Path,
   streamUsage: z.boolean(), maxTokens: z.number().int().positive().max(1_000_000).nullable(), tiers: z.object({ low: z.string().max(200), mid: z.string().max(200), max: z.string().max(200) }).strict(),
   key: z.string().max(400).nullable().optional(), passphrase: z.string().max(1000).nullable().optional(),

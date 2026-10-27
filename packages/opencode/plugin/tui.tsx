@@ -447,6 +447,12 @@ export default Plugin.define({
               openAtlas(id ?? "");
             },
           }, {
+            // OpenCode's own /web pairs a browser with its page, by a link that works once; opened again, that page asks
+            // for a password nobody was given (M21). isorite's /web, listed before it, opens isorite's page; OpenCode's
+            // pairing is still /pair.
+            id: "isorite.web", title: "isorite in the browser (OpenCode's pairing: /pair)", palette: true, slash: { name: "web" },
+            run: () => openInBrowser(Isorite.url + "/"),
+          }, {
             id: "isorite.note.open", title: "Open a note of the knowledge base", palette: true, slash: { name: "note", arguments: true },
             run: async (input) => {
               const words = input?.trim();

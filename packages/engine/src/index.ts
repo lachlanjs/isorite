@@ -8,7 +8,7 @@ export type { Briefing, Hand, HandLine } from "./hand.ts";
 export type { Elsewhere, EngineOptions } from "./engine.ts";
 export { MemoryFiles, MemorySecrets, systemClock } from "./ports.ts";
 export type { Clock, FileInfo, Files, Http, Secrets } from "./ports.ts";
-export { KEY, SPEND_CAP, ModelError, OPENROUTER, RETRY, TIERS, codeOf, complete, endpoint, isResponse, retryWait, unreachable } from "./provider.ts";
+export { KEY, SPEND_CAP, ModelError, OPENROUTER, RETRY, TIERS, codeOf, complete, endpoint, isResponse, keySent, keySentAs, refusal, retryWait, unreachable } from "./provider.ts";
 export type { Call, Failure, Message, ProviderConfig, Reply, Tier, ToolCall, ToolDef, Usage } from "./provider.ts";
 export { Lookup, baseOf } from "./lookup.ts";
 export type { Away, How, Similar, Step } from "./lookup.ts";

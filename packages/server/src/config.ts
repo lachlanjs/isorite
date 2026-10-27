@@ -88,6 +88,7 @@ export function providerFrom(config: Table, env: NodeJS.ProcessEnv = process.env
   const own: Partial<ProviderConfig> = {
     ...(headers ? { headers } : {}), ...(query ? { query } : {}),
     ...(typeof p.key_header === "string" && p.key_header ? { keyHeader: p.key_header } : {}),
+    ...(typeof p.key_prefix === "string" ? { keyPrefix: p.key_prefix } : {}),
     ...(p.stream_usage === false ? { streamUsage: false } : {}),
     ...(typeof p.max_tokens === "number" && p.max_tokens > 0 ? { maxTokens: Math.floor(p.max_tokens) } : {}),
   };

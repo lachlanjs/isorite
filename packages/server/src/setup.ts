@@ -14,7 +14,7 @@ import { gatewayHttp } from "./gateway.ts";
 export class SetupError extends EngineError {}
 
 /** The fields of [provider] the form holds. The rest (spend_cap, cache_marks, context, …) are left as they are. */
-const FORM = ["url", "name", "auth", "key", "key_header", "headers", "query", "pfx", "pfx_passphrase", "cert", "cert_key", "ca", "stream_usage", "max_tokens"];
+const FORM = ["url", "name", "auth", "key", "key_header", "key_prefix", "headers", "query", "pfx", "pfx_passphrase", "cert", "cert_key", "ca", "stream_usage", "max_tokens"];
 const NAMED = /^\$[A-Za-z_][A-Za-z0-9_]*$/;
 const text = (v: unknown): string => (typeof v === "string" || typeof v === "number" ? String(v) : "");
 const secretPair = (name: string, value: string) => SECRET.test(name) && !NAMED.test(value);
@@ -27,7 +27,7 @@ export function readSetup(config: Table): ProviderSetup {
   return {
     kind: gateway ? "gateway" : "openrouter",
     name: text(p.name), url: gateway ? (p.url as string) : OPENROUTER.url,
-    keyHeld: text(p.key) !== "", keyHeader: text(p.key_header),
+    keyHeld: text(p.key) !== "", keyHeader: text(p.key_header), keyPrefix: text(p.key_prefix).trim(),
     headers: pairs(p.headers), query: pairs(p.query),
     pfx: text(p.pfx), passphraseHeld: p.pfx_passphrase !== undefined && text(p.pfx_passphrase) !== "",
     cert: text(p.cert), certKey: text(p.cert_key), ca: text(p.ca),
@@ -63,6 +63,10 @@ export function applySetup(config: Table, draft: SetupDraft): { config: Table; f
   }
   if (gateway) {
     if (draft.keyHeader.trim()) p.key_header = draft.keyHeader.trim();
+    // A scheme, as Bearer, is sent with a space before the key. A key_prefix of "" written by hand is kept.
+    const prefix = (draft.keyPrefix ?? "").trim();
+    if (prefix) p.key_prefix = prefix + " ";
+    else if (old.key_prefix === "" && draft.keyHeader.trim()) p.key_prefix = "";
     const pairs = (field: "headers" | "query", given: SetupPair[]): void => {
       const before = table(old[field]), out: Table = {};
       for (const pair of given) {

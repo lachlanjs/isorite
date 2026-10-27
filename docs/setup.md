@@ -5,9 +5,24 @@ run `isorite doctor`: it checks each step and says what to change.
 
 ## 1. Install
 
+Either one file, with Node inside it:
+
+- **isorite**, as one executable for Linux, macOS or Windows, checked against the release's SHA256SUMS:
+  ```sh
+  curl -fsSL https://github.com/lachlanjs/isorite/releases/latest/download/install.sh | sh
+  ```
+  On Windows, `irm https://github.com/lachlanjs/isorite/releases/latest/download/install.ps1 | iex`. It goes in
+  `~/.local/bin` (`--dir` for another folder). Each address it fetches is printed, so a machine that can't reach
+  GitHub can fetch the same files another way, or from a mirror with `--url <the executable's address>`. It
+  unpacks itself into `~/.cache/isorite/<version>/` the first time it runs. Run the installer again to update.
+
+Or from npm:
+
 - **Node 24** or later (`node --version`).
 - **isorite**: `npm i -g isorite`.
-- For the terminal, **OpenCode 2**: `npm i -g @opencode/cli`.
+
+Then, for the terminal, **OpenCode 2**: `isorite opencode` installs it for isorite alone (in
+`~/.config/isorite/opencode-cli`), leaving your global npm prefix, and any OpenCode 1 you use, as they are.
 
 `isorite guide` now opens the guide, a knowledge base about isorite with things to do in it. Until a provider is set up, Iso there is the guide's finder: no key, nothing sent anywhere.
 
@@ -58,6 +73,8 @@ Gateways inside companies often want more than a key. Each of these is optional:
 url = "https://llm-gateway.corp.example/v1"
 key = "…"
 key_header = "api-key"                     # the header the key goes in, as it is, instead of Authorization: Bearer
+# key_prefix = "Bearer "                   # what goes before the key: for Bearer in another header, as
+#                                          # key_header = "X-Gateway-Auth"; Authorization has Bearer unless key_prefix = ""
 stream_usage = false                       # for a gateway that refuses stream_options; the gauge then counts nothing
 max_tokens = 16000                         # the least room a reply is given, for models that think at length
 
@@ -145,9 +162,11 @@ isorite model
 ```
 
 It says which model is installed and where, or fetches it (53 MB, once): from npm, else from a release on GitHub,
-else from Hugging Face. Without it, Iso searches by words and follows links. Where none of those can be reached,
-copy the model's folder from a machine that has it (`isorite model` there says where it is) and run
-`isorite model --from <folder>`. Any compatible model works the same way: an ONNX model that gives 384 numbers,
+else from Hugging Face. Without it, Iso searches by words and follows links. A mirror of the release is tried
+first when `ISORITE_MODEL_BASE_URL` names the folder its `.tgz` is in, and `isorite model --url <address>` fetches
+from that one address alone. Where none of those can be reached, `isorite model` prints the file's address and
+SHA-256: fetch it another way, and run `isorite model --from <the .tgz>`. Or copy the model's folder from a machine
+that has it (`isorite model` there says where it is) and run `isorite model --from <folder>`. Any compatible model works the same way: an ONNX model that gives 384 numbers,
 with its `tokenizer.json` (for example all-MiniLM-L6-v2, with `{"pooling": "mean"}` in an `isorite-model.json`
 beside it).
 

@@ -1,5 +1,7 @@
 # Release: push a tag v<version> (matching packages/server/package.json; node scripts/version.ts <version> sets it)
-# to test, build and publish isorite to npm, then make a GitHub Release with the package.
+# to test, build and publish isorite to npm, then make a GitHub Release with the package, an executable for each
+# platform (M21: npm run package:sea, built on that platform and checked there), their SHA256SUMS and the
+# installers.
 #
 # Publishing uses trusted publishing: npm trusts this workflow in this repository (set up once on npmjs.com), so no
 # password or token is stored. The npm job runs in the `release` environment, which waits for your approval, and
@@ -51,8 +53,53 @@ jobs:
           path: npm-dist/
           if-no-files-found: error
 
-  npm:
+  # One executable for each platform, built on it: Node's own, with isorite inside. Each is run from an empty home
+  # before it's kept: its version, doctor, and serve answering on the example base.
+  executables:
     needs: build
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { runner: ubuntu-latest, name: isorite-linux-x64 }
+          - { runner: ubuntu-24.04-arm, name: isorite-linux-arm64 }
+          - { runner: macos-latest, name: isorite-macos-arm64 }
+          - { runner: macos-15-intel, name: isorite-macos-x64 } # GitHub's Intel macOS runner: check its name if it's retired
+          - { runner: windows-latest, name: isorite-windows-x64.exe }
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run package:sea
+      - name: Run it from an empty home
+        run: |
+          exe="$PWD/.sea/${{ matrix.name }}"
+          home="$RUNNER_TEMP/home" && mkdir -p "$home" && cd "$RUNNER_TEMP"
+          export HOME="$home" USERPROFILE="$home" LOCALAPPDATA="$home/AppData/Local" XDG_CACHE_HOME= XDG_CONFIG_HOME= XDG_DATA_HOME=
+          test "$("$exe" --version | tr -d '\r')" = "${GITHUB_REF_NAME#v}"
+          "$exe" doctor --offline || true
+          "$exe" example ./example
+          "$exe" serve ./example/nbody-notes --port 4790 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:4790/api/session && break; sleep 1; done
+          curl -sf http://127.0.0.1:4790/api/session | grep -q '"name":"nbody-notes"'
+          curl -sf http://127.0.0.1:4790/ | grep -q "<title>isorite"
+          kill %1 || true
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.name }}
+          path: .sea/${{ matrix.name }}
+          if-no-files-found: error
+
+  npm:
+    needs: [build, executables]
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -81,10 +128,21 @@ jobs:
     permissions:
       contents: write # to create the release
     steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts
       - uses: actions/download-artifact@v8
         with:
-          name: release
+          path: dist
+          merge-multiple: true
+      - name: The executables' SHA256SUMS, and the installers beside them
+        run: |
+          cp scripts/install.sh scripts/install.ps1 dist/
+          (cd dist && sha256sum isorite-linux-* isorite-macos-* isorite-windows-* > SHA256SUMS && cat SHA256SUMS)
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" isorite-*.tgz --repo "$GITHUB_REPOSITORY" --generate-notes --verify-tag
+        run: |
+          cd dist
+          gh release create "$GITHUB_REF_NAME" isorite-*.tgz isorite-linux-* isorite-macos-* isorite-windows-* SHA256SUMS install.sh install.ps1 \
+            --repo "$GITHUB_REPOSITORY" --generate-notes --verify-tag
