@@ -211,7 +211,9 @@ async function tokenOf(url: string): Promise<string> {
 export function installOpenCode(env: NodeJS.ProcessEnv = process.env, say: (line: string) => void = console.log, npm = "npm"): number {
   const prefix = ownPrefix(env);
   say(`isorite opencode: installing ${OPENCODE_PACKAGE} in ${prefix}, for isorite alone; nothing global is changed`);
-  const done = spawnSync(npm, ["install", "--prefix", prefix, "--no-fund", "--no-audit", "--loglevel=error", OPENCODE_PACKAGE], { stdio: "inherit", env, shell: process.platform === "win32" });
+  // On Windows npm is npm.cmd, run through a shell, which splits a prefix with a space (C:\Users\Jo Smith) unquoted.
+  const win = process.platform === "win32";
+  const done = spawnSync(npm, ["install", "--prefix", win ? `"${prefix}"` : prefix, "--no-fund", "--no-audit", "--loglevel=error", OPENCODE_PACKAGE], { stdio: "inherit", env, shell: win });
   if (done.status !== 0) {
     say(`npm could not install it${done.error ? `: ${done.error.message}` : ""}. If npm's registry or mirror is the trouble, fetch an OpenCode 2 another way and name it: ISORITE_OPENCODE=/path/to/opencode isorite term`);
     return 1;

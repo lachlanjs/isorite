@@ -1,0 +1,64 @@
+# Windows: the tests, then isorite as a Windows person gets it (M21), from an empty home: the executable,
+# install.ps1 in Windows PowerShell and in pwsh, doctor, the example served, the model, and isorite opencode with
+# OpenCode 2 found after it. The release builds the same executable; this checks it on every push.
+name: windows
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Test
+        run: npm test
+      - run: npm run package:sea
+      - name: install.ps1, from a local server, in Windows PowerShell and in pwsh
+        run: |
+          cd .sea && sha256sum isorite-windows-x64.exe > SHA256SUMS && cat SHA256SUMS
+          python -m http.server 8765 --bind 127.0.0.1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8765/SHA256SUMS >/dev/null && break; sleep 1; done
+          cd "$GITHUB_WORKSPACE"
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1 -Url http://127.0.0.1:8765/isorite-windows-x64.exe -Dir "$RUNNER_TEMP\\bin ps5"
+          pwsh -NoProfile -File scripts/install.ps1 -Url http://127.0.0.1:8765/isorite-windows-x64.exe -Dir "$RUNNER_TEMP\\bin pwsh"
+          test "$("$RUNNER_TEMP/bin ps5/isorite.exe" --version | tr -d '\r')" = "$(node -p 'require("./packages/server/package.json").version')"
+          pwsh -NoProfile -Command '[Environment]::GetEnvironmentVariable("Path", "User")' | grep -q "bin ps5"
+          # A wrong sum installs nothing.
+          ! pwsh -NoProfile -File scripts/install.ps1 -Url http://127.0.0.1:8765/isorite-windows-x64.exe -Sha256 0000 -Dir "$RUNNER_TEMP\\bin wrong"
+          test ! -e "$RUNNER_TEMP/bin wrong/isorite.exe"
+          kill %1 || true
+      - name: The executable from an empty home, with a space in it
+        run: |
+          exe="$RUNNER_TEMP/bin ps5/isorite.exe"
+          home="$RUNNER_TEMP/Jo Smith" && mkdir -p "$home" && cd "$RUNNER_TEMP"
+          export HOME="$home" USERPROFILE="$home" LOCALAPPDATA="$home/AppData/Local" XDG_CACHE_HOME= XDG_CONFIG_HOME= XDG_DATA_HOME=
+          "$exe" doctor --offline || true
+          "$exe" example ./example
+          "$exe" check ./example/nbody-notes
+          "$exe" serve ./example/nbody-notes --port 4790 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:4790/api/session >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:4790/api/session | grep -q '"name":"nbody-notes"'
+          curl -sf http://127.0.0.1:4790/ | grep -q "<title>isorite"
+          kill %1 || true
+          "$exe" model
+          "$exe" opencode
+          "$exe" doctor --offline | tee doctor.txt || true
+          grep -q "✓ opencode: .*opencode.exe 2\." doctor.txt
+          grep -q "✓ search by meaning" doctor.txt

@@ -29,7 +29,7 @@ const BUNDLED = new Set(["onnxruntime-web", "onnxruntime-web/wasm"]); // the wor
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(join(OUT, "dist"), { recursive: true });
 
-if (!existsSync(at("app/build/index.html"))) execFileSync("npm", ["run", "build"], { cwd: ROOT, stdio: "inherit" });
+if (!existsSync(at("app/build/index.html"))) execFileSync("npm", ["run", "build"], { cwd: ROOT, stdio: "inherit", shell: process.platform === "win32" });
 
 const used = new Set<string>();
 const external = (id: string) => {

@@ -15,7 +15,11 @@ import { gzipSync } from "node:zlib";
 const ROOT = join(import.meta.dirname, "..");
 const PKG = join(ROOT, ".npm", "isorite"), OUT = join(ROOT, ".sea"), WORK = join(OUT, "work");
 const win = process.platform === "win32";
-const run = (cmd: string, args: string[], cwd = ROOT) => execFileSync(cmd, args, { cwd, stdio: "inherit", shell: win });
+// npm and npx are .cmd files on Windows, run through a shell, which splits anything with a space unless it's quoted.
+const run = (cmd: string, args: string[], cwd = ROOT) => {
+  const shell = win && (cmd === "npm" || cmd === "npx");
+  execFileSync(cmd, shell ? args.map((a) => (/\s/.test(a) ? `"${a}"` : a)) : args, { cwd, stdio: "inherit", shell });
+};
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(WORK, { recursive: true });
