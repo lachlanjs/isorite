@@ -1,6 +1,6 @@
 # Milestone 22: pictures in notes
 
-Written 2026-10-27. Branch `m22-images`, from `main` at `a347226` (0.9.1).
+Written 2026-10-27; approved the same day. Branch `m22-images`, from `main` at `a347226` (0.9.1).
 
 It comes from your question about how easy it is to put an image in a note, and the idea that images should
 work the way web and code links do. Today a picture is a link that is understood but never drawn. M22 draws it,
@@ -70,11 +70,22 @@ pictures on the Atlas beside their note, as web and code links already are.
   and puts `![](name.png)` at the cursor, or where it was dropped.
 - **Where it goes**: beside the note, in a folder named for it: `combat/hitboxes.md` puts its pictures in
   `combat/hitboxes/`. That keeps a folder of notes readable, and the link short (`hitboxes/name.png`). (Q103)
-- **Its name**: a dropped file keeps its own, made safe (lower case, `-` for spaces and anything outside
-  `a-z0-9._-`). A pasted picture has none, so it is `pasted-<date>-<time>.png`. If the name is taken, `-2`,
-  `-3`, ….
-- **The alt text** is left empty, with the cursor in it, so the next thing you type describes the picture. Iso
-  and the terminal's agent read the alt text, not the picture (§2.6).
+- **You name it first.** Before anything is saved, a small box opens at the cursor, with a thumbnail of the
+  picture and:
+  - **its name**, filled in and selected so typing replaces it: a dropped file's own name, or for a pasted
+    picture `pasted-<date>-<time>`. The extension is the picture's type, shown beside the field and not typed.
+    The name is made safe as you type (lower case, `-` for spaces and anything outside `a-z0-9._-`), and the
+    box shows the file it will be: `combat/hitboxes/player-idle.png`. If that's taken, it says so and offers
+    `-2`;
+  - **its description** (the alt text), empty, with the hint "what it shows: Iso reads this, not the picture"
+    (§2.6). Left empty, the name is used, with its `-` as spaces;
+  - Enter saves it and puts `![description](hitboxes/player-idle.png)` at the cursor, or where it was dropped.
+    Esc saves nothing.
+  - Dropping several files opens one box for each, in turn.
+- **The same picture twice is one file.** The app takes the picture's SHA-256 as it opens the box. If a
+  picture in the notes has the same bytes, the box says "This picture is already in the notes as
+  `art/sprites/player-idle.png`" and its Enter links to that one, saving nothing. "Save a copy" is beside it
+  for when you want one of your own to change.
 - **The server takes it**: `POST /api/file`, the same origin and token checks as every write. Its body is the
   bytes themselves, not JSON: `Content-Type` must be one of the picture types, and the folder and name are in the
   query. At most 20 MB. It never replaces a file: a name that's taken is a 409, and the app picks the next.
@@ -82,6 +93,33 @@ pictures on the Atlas beside their note, as web and code links already are.
 - **Undo**: the note's change is journaled as any edit is, so undoing it takes the link away. The picture's
   file stays. (Q104)
 - **In the guide**, which has nowhere to save one, paste and drop do nothing and say why.
+
+### 2.2b Choosing a picture to show: `[[!`
+
+Today `[[` offers notes by title and puts in a Markdown link to the one chosen (`links.ts`), and `[[!name]]` on a
+line of its own embeds a question or a problem (M12), with nothing offered as it's typed.
+
+- **Typing `[[!` opens a picker** of what can be shown in the note: the notes folder's pictures first, then its
+  questions and problems.
+  - **A picture** is listed by its file name, with its folder after it, muted, and a thumbnail at its left
+    (32 px, cropped square, loaded lazily as the list scrolls). The one selected shows larger beside the list,
+    at most 240 px, with its size in pixels.
+  - What's typed after `[[!` narrows the list, matched against the name and folder, as `[[` matches titles.
+  - The pictures this note's folder holds come first, then the rest by name.
+  - **Choosing a picture puts in Markdown**, as `[[` does: `![player idle](/art/sprites/player-idle.png)`, the
+    description from the file name, selected so typing replaces it. The `[[!` and the `]]` bracket closing
+    added are replaced. A link from the top of the notes folder (`/…`) reads the same from any note, so a
+    picture several notes show has one link wherever it's written.
+  - **Choosing a question or a problem** puts in `[[!name]]`, as typing it does now.
+  - The last entry is always "Paste or drop a picture to add one", which does nothing but say how.
+- **The app learns the pictures** from `GET /api/pictures`: each picture in the notes with its path, its size
+  in bytes, its width and height, and its SHA-256 (for §2.2's same picture twice). The engine keeps them,
+  reading a file's header and hash again only when its size or time changes. The list is the bundle's own
+  files that `citeKind` calls pictures, so `.isorite/` is never in it.
+- **The link picker** (`](` offering paths, and the link control's target) offers pictures too, by path, so a
+  link can point at a picture without remembering where it is.
+- **Pictures in the repository** are not in the picker in M22: a game's assets folder can hold thousands.
+  `![x](code:assets/player.png)` is typed by hand. (Q108)
 
 ### 2.3 A picture from the repository
 
@@ -135,8 +173,10 @@ pictures on the Atlas beside their note, as web and code links already are.
   to send are a milestone of their own.
 - **Resizing** by syntax (`=300x`, `{width=…}`). None is CommonMark; the place (`"left"`, `"centre"`) is.
 - **Pictures in the terminal.** OpenCode draws text.
-- **Moving a note moves its pictures' folder.** `moveNote` rewrites links to the moved note, not the links in
-  it. Until it does, a moved note's pictures are broken and say so. (Q105)
+- **Moving a picture, or a note with its pictures' folder.** Several notes may show one picture, so moving it
+  means rewriting the link in every note that shows it, as `moveNote` does for links to a note. Until then a
+  moved picture is broken in the notes that show it, and says so. You can still move a picture many notes show
+  to a shared folder (`pictures/`) by hand and fix its links once. (Q105)
 
 ## 3. Tests
 
@@ -147,6 +187,7 @@ pictures on the Atlas beside their note, as web and code links already are.
   - `/api/file` resolution: a picture is given, a note is not, `.isorite/` is not, `..` is not, a path out of
     the root is not; `code=` with and without a repository.
   - The paste's folder and name: safe names, `-2` when taken, never a replace.
+  - `pictures()`: path, size, width and height, hash; read again only when a file changes; never `.isorite/`.
 - **server (http):**
   - GET: the type, `nosniff`, the sandbox CSP, the ETag and a 304, a 404 for a `.md`, a 403 from another host.
   - POST: refused cross-origin, without the token, with a type that isn't a picture, over 20 MB, and with 409
@@ -157,7 +198,10 @@ pictures on the Atlas beside their note, as web and code links already are.
     floats; a broken one is marked.
   - The link control's "Shown here" still turns a link into an image and back (`editor.test.ts`), and the
     picture appears and goes.
-  - Paste and drop: the request sent, and `![](…)` put at the cursor with it in the alt text.
+  - Paste and drop: the box's name made safe, `-2` offered when taken, Esc saves nothing, Enter saves and puts
+    `![description](…)` at the cursor; the same bytes as a picture already there link to it and save nothing.
+  - `[[!`: pictures with thumbnails, this folder's first, narrowed by what's typed; a picture puts in
+    `![…](/….png)`, a question or problem `[[!name]]`, and the `]]` is replaced.
   - `satellites` with pictures switched on, after web and code links.
 - **By hand**, in the app: paste a screenshot, drop a file, move the cursor through it, `"left"`, a `code:`
   sprite, the Atlas switch, and the guide's picture on the built site. On Windows too, through the windows
@@ -175,29 +219,28 @@ pictures on the Atlas beside their note, as web and code links already are.
 
 1. `Files.readBytes` and `GET /api/file` for the notes, with their tests (§2.1).
 2. Live preview draws `Image`, and the reading and version views (§2.1). The example gets a picture.
-3. `writeBytes`, `POST /api/file`, paste and drop (§2.2).
-4. `code:` pictures (§2.3).
-5. The Atlas's pictures (§2.4).
-6. Check, the plugin's word, the guide (§2.5–2.7).
-7. Docs, the windows workflow's picture, and 0.10.0.
-
-Steps 1 and 2 alone are worth having: a picture you put in the folder by hand is drawn. If it helps, they can go
-out first as 0.9.2.
+3. `GET /api/pictures` and the `[[!` picker (§2.2b): with step 2, a picture put in the folder by hand can be
+   found and shown without typing its path.
+4. `writeBytes`, `POST /api/file`, paste and drop with the naming box and the same picture found (§2.2).
+5. `code:` pictures (§2.3).
+6. The Atlas's pictures (§2.4).
+7. Check, the plugin's word, the guide (§2.5–2.7).
+8. Docs, the windows workflow's picture, and 0.10.0.
 
 ## 6. Questions
 
-- **Q103: where does a pasted picture go?** *Recommended: a folder named for the note, beside it*
-  (`combat/hitboxes/`).
-  - The other choices: beside the note itself (a folder of notes fills with pictures), or one `pictures/` folder
-    for the whole base (the links get long, and a picture is far from the note that shows it).
-- **Q104: what happens to a picture when its link goes?** *Recommended: it stays, and `check --unused` lists
-  it.*
-  - Deleting it when the link is undone or removed would lose a picture another note might show, or that you
-    meant to keep. A journal of binary files is a larger change than M22.
-- **Q105: should moving a note move its pictures' folder, in M22?** *Recommended: no, later.* `moveNote` would
-  need to rewrite the moved note's own links as well as links to it. Until then a moved note's pictures show as
-  broken, which `check` names.
-- **Q106: artifacts drawn in place, in M22 or after?** *Recommended: after.* They share the route but need a
-  sandboxed frame and the theme passed in; pictures are the larger part of what people ask for.
-- **Q107: one release (0.10.0), or §2.1 first as 0.9.2?** *Recommended: one*, unless your friend wants pictures
-  sooner.
+- **Q108: should the `[[!` picker list the repository's pictures too?** *Recommended: not in M22.* A game's
+  assets folder can hold thousands, and listing it means walking the repository. Later, typed `[[!code:` could
+  list them, narrowed by the folder typed.
+- **Answered 2026-10-27, as recommended:**
+  - **Q103:** a pasted picture goes in a folder named for the note, beside it (`combat/hitboxes/`), and you name
+    it before it's saved (§2.2).
+  - **Q104:** a picture stays when its link goes. `check --unused` lists the pictures no note shows; one shown
+    by any note is used.
+  - **Q105:** moving a picture, or a note with its pictures, and rewriting every note that shows it, is after
+    M22 (§2.8).
+  - **Q106:** artifacts drawn in place are after M22.
+  - **Q107:** one release, 0.10.0.
+  - **Several notes, one picture** (your question): any note shows any picture by its path; paste finds the same
+    bytes and links to them instead of copying (§2.2); `[[!` and the link picker offer every picture (§2.2b).
+  - **Your additions:** the `[[!` picker with thumbnails (§2.2b), and naming a picture as it's pasted (§2.2).
