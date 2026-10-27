@@ -33,6 +33,32 @@
     pointing.set("iso", to ? { ...to, who: "you" } : null);
   }
 
+  // PROTOTYPE (docs/taste.md): ?take=1|2|3 shows one of three first-appearance designs. Not for release.
+  const take = typeof location === "undefined" ? "" : (new URLSearchParams(location.search).get("take") ?? "");
+  type Room = { name: string; n: number };
+  /** The base's top-level folders and how many notes each holds, for the empty pane to mirror. */
+  const rooms = $derived.by((): Room[] => {
+    const by = new Map<string, number>();
+    for (const n of app.listing.notes) { const top = n.dir.split("/")[0] ?? ""; if (top) by.set(top, (by.get(top) ?? 0) + 1); }
+    return [...by].slice(0, 4).map(([name, n]) => ({ name, n }));
+  });
+  const BOX = 104, CUT = 6;
+  const chamfer = (w: number, h: number): string => `M${CUT} 0H${w}V${h - CUT}L${w - CUT} ${h}H0V${CUT}Z`;
+  const tall = (n: number): number => 22 + 12 * Math.ceil(Math.min(n, 9) / 3);
+  const placed = $derived.by(() => {
+    const ys = [0, 0];
+    return rooms.map((r, i) => { const col = i % 2, h = tall(r.n), y = ys[col]!; ys[col] = y + h + 12; return { ...r, x: 8 + col * 124, y: y + 8, h }; });
+  });
+  const mirrorH = $derived(Math.max(0, ...placed.map((p) => p.y + p.h)) + 8);
+  /** Questions made of this base's own notes (take 2), from notes in different folders. */
+  const asks = $derived.by((): string[] => {
+    const ns = app.listing.notes;
+    const a = ns[0], b = ns.find((n) => n.dir !== a?.dir) ?? ns[1], c = ns.find((n) => n !== a && n !== b);
+    if (!a || !b) return [];
+    return [`How does ${a.title} connect to ${b.title}?`, ...(c ? [`Check what I understand about ${c.title}`] : []), `What builds on ${b.title}?`];
+  });
+  function ask(q: string): void { text = q; document.getElementById("iso-box")?.focus(); }
+
   let text = $state("");
   let list = $state<HTMLElement>();
   const build = $derived(panes.mode === "build");
@@ -139,13 +165,35 @@
   {/if}
 {/snippet}
 
-<div class="iso" class:drop={tray.carrying?.over}>
+<div class="iso" class:drop={tray.carrying?.over} data-take={take || undefined}>
   {#if converse.view === "context"}
     <ContextView />
   {:else if build}
     <TerminalTurns />
   {:else}
     <div class="chat" bind:this={list} role="log" aria-label="The conversation with Iso" aria-live="polite" onpointerover={pointAt} onpointerleave={() => pointing.set("iso", null)}>
+      {#if take && !converse.turns.length}
+        <div class="first">
+          {#if take === "1"}
+            <svg class="mirror" viewBox="0 0 240 {mirrorH}" role="img" aria-label="Your notes, as Iso sees them: {rooms.map((r) => `${r.name}, ${r.n} notes`).join("; ")}">
+              {#each placed as p, i (p.name)}
+                <g transform="translate({p.x} {p.y})" style="--i:{i}">
+                  <path class="wall" d={chamfer(BOX, p.h)} pathLength="1" />
+                  <text x="8" y="13">{p.name}</text>
+                  {#each { length: Math.min(p.n, 9) } as _, k (k)}<rect class="tick" x={8 + (k % 3) * 30} y={20 + Math.floor(k / 3) * 12} width="24" height="6" style="--k:{k}" />{/each}
+                  {#if i === 0}<text class="gold" x={BOX - 12} y="13">◆</text>{/if}
+                </g>
+              {/each}
+            </svg>
+            <p class="cap">Iso reads the notes you see here.<br /><span>{app.listing.notes.length} notes · {rooms.length} folders</span></p>
+          {:else if take === "2"}
+            <p class="cap">Ask in the shape of your notes.</p>
+            <ul class="asks2">{#each asks as q (q)}<li><button type="button" onclick={() => ask(q)}>{q}</button></li>{/each}</ul>
+          {:else}
+            <p class="quiet">Ask about {app.session?.name ?? "your notes"}.</p>
+          {/if}
+        </div>
+      {/if}
       {#each converse.turns as t (t.id)}
         <article class="turn" data-state={t.state}>
           <div class="you"><p class="asked">{t.asked}</p>{@render given(t)}{#if t.mode === "write"}<span class="tmode" title="Iso could edit the notes"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 13.5l2.5-2.5M5 11c.6-4.2 3.6-7.4 8.5-8.5C12.6 7.2 9.4 10.4 5 11zM7.2 8.8l2.6-.3M8.8 6.6l2.4-.4" /></svg><span class="hidden-label">write</span></span>{/if}</div>
@@ -260,4 +308,38 @@
   .offer .for .icon { width: 24px; height: 24px; color: var(--lattice); }
   .offer .in { color: var(--malachite); }
   @media (prefers-reduced-motion: reduce) { .doing .spin { animation: none; } }
+
+  /* PROTOTYPE takes (docs/taste.md). Durations: 120 / 260 / 600 ms; arrivals ease-out. */
+  .first { margin: auto 0; display: grid; gap: 14px; justify-items: start; }
+  .cap { font: 12px/1.5 var(--font-ui); color: var(--text-soft); }
+  .cap span { color: var(--text-faint); }
+  /* Take 1: the pane opens on a small drawing of the notes it reads. No rule bent. */
+  .mirror { width: 100%; max-width: 240px; height: auto; overflow: visible; }
+  .mirror text { font: 8px var(--font-ui); fill: var(--text-faint); }
+  .mirror .gold { fill: var(--growth); font-size: 8px; }
+  .mirror .wall { fill: none; stroke: var(--line-strong); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 1; stroke-dashoffset: 1; animation: wall 600ms ease-out calc(var(--i) * 120ms) forwards; }
+  .mirror .tick { fill: var(--line); opacity: 0; animation: show 260ms ease-out calc(300ms + var(--i) * 120ms + var(--k) * 40ms) forwards; }
+  @keyframes wall { to { stroke-dashoffset: 0; } }
+  @keyframes show { to { opacity: 1; } }
+  [data-take="1"] .said::after { content: ""; position: absolute; left: 4px; top: 18px; bottom: 0; width: 1px; background: var(--growth); transform-origin: top; animation: rule 600ms ease-out both, quiet 600ms ease-out 600ms forwards; }
+  @keyframes rule { from { transform: scaleY(0); } }
+  @keyframes quiet { to { background: var(--line); } }
+  /* Take 2: prompts made from the base's own notes; a reply arrives under a line that draws across. No rule bent. */
+  .asks2 { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .asks2 button { background: none; border: 0; border-left: 1px solid var(--line-strong); padding: 2px 0 2px 10px; font: 13px/1.45 var(--font-ui); color: var(--text-soft); text-align: left; cursor: pointer; transition: color 120ms, border-color 120ms; }
+  .asks2 button:hover, .asks2 button:focus-visible { color: var(--text); border-color: var(--growth); }
+  [data-take="2"] .said { animation: arrive 260ms ease-out; }
+  [data-take="2"] .said::after { content: ""; position: absolute; left: 16px; right: 0; top: -4px; height: 1px; background: var(--growth); transform-origin: left; animation: sweep 600ms ease-out both; }
+  @keyframes arrive { from { opacity: 0; } }
+  @keyframes sweep { from { transform: scaleX(0); } 60% { transform: scaleX(1); opacity: 1; } to { transform: scaleX(1); opacity: 0; } }
+  /* Take 3: nearly nothing to look at. The marker is hollow while Iso writes and fills when it is done. Bends one rule,
+     declared: the filled marker gives off a glow for one beat, as the Context counter already does in the layout. */
+  .quiet { font: 14px/1.5 var(--font-text); color: var(--text-faint); }
+  [data-take="3"] .said::before { content: "◇"; color: var(--text-faint); }
+  [data-take="3"] .turn:not([data-state="running"]) .said::before { content: "◆"; color: var(--growth); animation: settle 600ms ease-out; }
+  @keyframes settle { 0% { color: var(--text); text-shadow: 0 0 8px var(--growth); } }
+  @media (prefers-reduced-motion: reduce) {
+    .mirror .wall, .mirror .tick { animation: none; stroke-dashoffset: 0; opacity: 1; }
+    [data-take] .said, [data-take] .said::before, [data-take] .said::after { animation: none; }
+  }
 </style>

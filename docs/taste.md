@@ -5,14 +5,15 @@ about how the thing behaves. Every line marked (?) is a guess to confirm or over
 
 ## The one idea
 
-isorite is a crystal growing along fixed axes: structure is rigid, growth is gold, and growth is the only thing that
-moves on its own. (?)
+isorite is a mapping that keeps structure (Iso is for isomorphism, not isometric): your notes on one side, your
+understanding and Iso's words on the other, and what makes it feel right is that the shape survives the crossing.
+Structure is rigid, growth is gold, and growth is the only thing that moves on its own. (?)
 
 ## Motion
 
 - One physical rule: things appear by growing along a line (a stroke drawing itself), never by fading or sliding in
   from nowhere. Lines extend; boxes are outlined before they are filled. (?)
-- Moves along the iso axes only (0°, 30°, 90°, 150°) wherever there is a direction. (?)
+- Where there is a direction it follows the structure it belongs to (a line down a folder's edge, across a link), not a decorative one. (?)
 - Three durations: 120 ms (acknowledge: press, hover, focus), 260 ms (change: open, close, swap), 600 ms+ (a result
   worth noticing: Iso wrote into a note, a check resolved). Nothing else.
 - One curve for arrivals (ease-out), one for departures (ease-in). No springs, no bounce.
@@ -30,7 +31,7 @@ Each has a replacement, or it stays banned until one is found.
 | Skeleton shimmer | The dotted ground showing through; content grows in |
 | "No items yet" empty state | A drawn, specific first move (?) |
 | Hover lift / drop shadow | Edge brightens one step; nothing casts a shadow |
-| Stock icon set | Icons drawn on the logo's grid, 1.5 px stroke, round caps |
+| Stock icon set | Icons drawn on one grid, 1.5 px stroke, round caps |
 | Generic error copy | Say what failed, what it touched, what to do, in isorite's voice |
 
 ## Voice
