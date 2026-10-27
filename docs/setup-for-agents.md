@@ -22,7 +22,7 @@ turn off certificate checking (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
 | `isorite memory [<folder>]` | The agent's memory: a base (`~/isorite-memory` unless named), a git repository of its own, with its practice in `AGENTS.md`, listed in `bases.toml` as `memory`, lent. Run again, says where it is and changes nothing. |
 | `isorite bases [lend\|keep <name>]` | The bases this machine knows, as `bases.toml` lists them; `lend` lends one to every session, `keep` stops. |
 | `isorite guide [<folder>]` | The guide, a knowledge base about isorite, written into `~/isorite-guide` (or the folder named) and served. With no provider set up, Iso is the guide's finder: no key or network needed. Good to check the install alone. `isorite --tutorial` is another name for it. |
-| `isorite model [--from <folder>]` | Optional: the model for search by meaning. Says which is installed and where, else fetches it (53 MB) from npm, a GitHub release, then Hugging Face, saying why each failed. `--from`: granite's files, or any compatible model (below). |
+| `isorite model [--from <folder\|.tgz>] [--url <url>]` | Optional: the model for search by meaning. Says which is installed and where, else fetches it (53 MB) from `ISORITE_MODEL_BASE_URL` (a mirror: the folder `isorite-model-granite-1.0.0.tgz` is in), npm, a GitHub release, then Hugging Face, saying why each failed. `--url`: that address only. `--from`: the release's `.tgz` fetched by hand (checked by its SHA-256), granite's files, or any compatible model (below). |
 | `isorite help setup` | Prints this. |
 
 ## Files
@@ -155,8 +155,8 @@ Rules:
 | `said 404 … no model called X, which is OpenRouter's name for it` | No `[tiers]`. | Name the gateway's models under `[tiers]`. `doctor` lists the models `/models` offers. |
 | `… is unavailable (503 …), tried 4 times over N s: it is likely …, not your settings` | The gateway, or the model behind it, is down. | Wait, and send it again (↻ under the turn). If it lasts, the gateway's status page or owner. |
 | `… used its whole output budget (N tokens) thinking, and wrote nothing` | A reasoning model ran out of room before it wrote. | A lower tier, or `max_tokens` under `[provider]`. |
-| `! search by meaning: no model …` | Not installed (optional). | `isorite model`. Its failures name each source; offline, `isorite model --from <folder>` with a copy. |
-| `The model could not be fetched:` and a line for npm, GitHub, Hugging Face | None reachable from here. | Copy the model's folder from a machine that has it (`isorite model` there says where), then `isorite model --from <folder>`; or any compatible model. |
+| `! search by meaning: no model …` | Not installed (optional). `doctor` says whether the release (or the mirror) answers from here. | `isorite model`. Its failures name each source; offline, `isorite model --from <the .tgz>` with the file it names. |
+| `The model could not be fetched:` and a line for each source | None reachable from here. | Fetch the file it prints another way, check its SHA-256, and `isorite model --from <the .tgz>`. Or set `ISORITE_MODEL_BASE_URL` to a mirror's folder, or `isorite model --url <address>`. Or copy the model's folder from a machine that has it, then `isorite model --from <folder>`. |
 | `said 400: … stream_options` | The gateway refuses `stream_options`. | `stream_usage = false`. |
 | `✗ tools: … answered without calling the tool` | The model or gateway drops tools. | Choose a model that supports tool calls. Iso and the terminal need them. |
 | `isorite: starting…` and then nothing, or `waiting for OpenCode's server` | Something it starts is stalled. isorite runs no `git` to start (0.8.1); OpenCode may, and a company's `git` wrapper that waits on the network stalls it. | Read the log the line names. Check `git --version` answers at once in that folder; if not, the wrapper is the cause. |

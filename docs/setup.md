@@ -147,9 +147,11 @@ isorite model
 ```
 
 It says which model is installed and where, or fetches it (53 MB, once): from npm, else from a release on GitHub,
-else from Hugging Face. Without it, Iso searches by words and follows links. Where none of those can be reached,
-copy the model's folder from a machine that has it (`isorite model` there says where it is) and run
-`isorite model --from <folder>`. Any compatible model works the same way: an ONNX model that gives 384 numbers,
+else from Hugging Face. Without it, Iso searches by words and follows links. A mirror of the release is tried
+first when `ISORITE_MODEL_BASE_URL` names the folder its `.tgz` is in, and `isorite model --url <address>` fetches
+from that one address alone. Where none of those can be reached, `isorite model` prints the file's address and
+SHA-256: fetch it another way, and run `isorite model --from <the .tgz>`. Or copy the model's folder from a machine
+that has it (`isorite model` there says where it is) and run `isorite model --from <folder>`. Any compatible model works the same way: an ONNX model that gives 384 numbers,
 with its `tokenizer.json` (for example all-MiniLM-L6-v2, with `{"pooling": "mean"}` in an `isorite-model.json`
 beside it).
 
