@@ -1,7 +1,7 @@
 // Pictures in notes (M22): where a picture a note shows is, and where the browser gets it. A path is relative to
 // the note, or from the top of the notes with "/"; `code:` is the base's repository, as for a code link.
 
-import { citeKind, codeTarget } from "@isorite/core";
+import { citeKind, codeTarget, sha256 } from "@isorite/core";
 import type { Api } from "@isorite/engine";
 import type { FileUrls } from "./api.ts";
 
@@ -35,4 +35,23 @@ export function pictureSrc(api: Api, p: Picture): string | Promise<string | null
   let src = made.get(key);
   if (!src) made.set(key, (src = api.file(p.path, p.from).then((f) => (f ? URL.createObjectURL(new Blob([f.bytes as Uint8Array<ArrayBuffer>], { type: f.type })) : null), () => null)));
   return src;
+}
+
+/** A name as a picture's file name (M22): lower case, `-` for spaces and anything outside a-z, 0-9, `.`, `_`, `-`. */
+export const safeName = (name: string): string =>
+  name.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\.(png|jpe?g|gif|webp|svg|avif)$/, "")
+    .replace(/[^a-z0-9._-]+/g, "-").replace(/-{2,}/g, "-").replace(/^[-.]+|[-.]+$/g, "");
+
+/** The name a pasted picture is offered, which has none of its own: when it was pasted. */
+export function pastedName(now = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `pasted-${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}`;
+}
+
+/** The SHA-256 of a file's bytes, as the engine gives it for each picture: how the same picture is found. */
+export async function digest(bytes: Uint8Array): Promise<string> {
+  // Only a secure page (localhost, https) has crypto.subtle; one reached by another name (--allow-host) has not.
+  if (!globalThis.crypto?.subtle) return sha256(bytes);
+  const hash = await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>);
+  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }

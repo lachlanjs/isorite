@@ -58,6 +58,8 @@ export interface EditorOptions {
   pictures?: (href: string) => PictureAt | null;
   /** The notes' pictures, as `[[!` and `](` offer them (M22). */
   pictureSource?: PictureSource;
+  /** Pictures pasted (`pasted`) or dropped at a place in the text (M22). */
+  onPictures?: (files: File[], at: number, pasted: boolean) => void;
   /** The note or folder a link under the mouse names, and null once it leaves one (M17: lit on the Atlas). */
   onPoint?: (to: Pointed | null) => void;
 }
@@ -107,6 +109,27 @@ function where(state: EditorState): Where {
   return { line: state.doc.lineAt(r.to).number - 1, from: r.from, to: r.to };
 }
 
+/** Pictures pasted or dropped are handed on rather than put in the text as it is (M22); anything else is as usual. */
+function pictureDrops(on: (files: File[], at: number, pasted: boolean) => void) {
+  const pictures = (list: FileList | undefined | null) => [...(list ?? [])].filter((f) => f.type.startsWith("image/"));
+  return EditorView.domEventHandlers({
+    paste(e, view) {
+      const files = pictures(e.clipboardData?.files);
+      if (!files.length) return false;
+      e.preventDefault();
+      on(files, view.state.selection.main.head, true);
+      return true;
+    },
+    drop(e, view) {
+      const files = pictures(e.dataTransfer?.files);
+      if (!files.length) return false;
+      e.preventDefault();
+      on(files, view.posAtCoords({ x: e.clientX, y: e.clientY }) ?? view.state.selection.main.head, false);
+      return true;
+    },
+  });
+}
+
 export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorView {
   const state = EditorState.create({
     doc: opts.doc,
@@ -127,6 +150,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       pointingLinks(opts.onPoint),
       ...(opts.readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []),
       linkCompletion(opts.notes, opts.pictureSource ?? null),
+      ...(opts.onPictures && !opts.readOnly ? [pictureDrops(opts.onPictures)] : []),
       placeholder(opts.placeholder ?? "Write the note here. # for a heading, [[ to link to another note, [[! to show a picture, $x$ for maths."),
       EditorView.contentAttributes.of({ "aria-label": opts.label, spellcheck: "true", autocapitalize: "sentences", autocorrect: "on" }),
       keymap.of([

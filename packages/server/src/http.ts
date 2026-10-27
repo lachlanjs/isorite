@@ -3,11 +3,12 @@
 // given, JSON only), then the engine's own answer. Carried over from rdstudio.
 
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { pictureType } from "@isorite/core";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { Conflict, EngineError, MAX_NOTE_BYTES, type Api, type Choice } from "@isorite/engine";
+import { Conflict, EngineError, MAX_FILE_BYTES, MAX_NOTE_BYTES, type Api, type Choice } from "@isorite/engine";
 import type { BasesPort } from "./bases.ts";
 import type { Setup } from "./setup.ts";
 import { given as withGiven, type Terminal } from "./terminal.ts";
@@ -157,6 +158,20 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   app.get("/api/timeline", (c) => answer(c, () => api.timeline()));
   app.get("/api/search", (c) => answer(c, () => api.search(c.req.query("q") ?? "")));
   app.get("/api/pictures", (c) => answer(c, () => api.pictures()));
+  // A picture pasted or dropped (M22): its bytes as the body, not JSON, of the type its name says. The same origin
+  // and token as every write; never over a file that's there.
+  app.post("/api/file", async (c) => {
+    let origin = "";
+    try { origin = new URL(c.req.header("origin") ?? "").host; } catch { /* no origin */ }
+    if (!c.req.header("origin") || origin !== c.req.header("host")) return refuse(c, 403, "cross-origin request refused");
+    if (c.req.header(TOKEN_HEADER) !== token) return refuse(c, 403, "bad token");
+    const path = c.req.query("path") ?? "", type = pictureType(path);
+    if (!type || (c.req.header("content-type") ?? "").split(";")[0]!.trim().toLowerCase() !== type) return refuse(c, 415, "a picture, of the type its name says");
+    if (Number(c.req.header("content-length") ?? 0) > MAX_FILE_BYTES) return refuse(c, 413, "picture too large");
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    if (bytes.length > MAX_FILE_BYTES) return refuse(c, 413, "picture too large");
+    return answer(c, () => api.savePicture(path, bytes));
+  });
   // A picture (M22): `path` in the notes, or `code` in the repository. Only a picture: the engine gives nothing
   // else. An SVG opened here on its own would run its scripts beside the token, so every answer is sandboxed.
   app.get("/api/file", async (c) => {

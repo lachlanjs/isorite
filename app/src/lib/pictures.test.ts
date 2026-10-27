@@ -18,3 +18,12 @@ test("a picture's first description is its file name in words", async () => {
   const { describedAs } = await import("./editor/links.ts");
   expect([describedAs("art/sprites/player-idle.png"), describedAs("pasted-2026-10-27_0413.png"), describedAs("Tree.svg")]).toEqual(["player idle", "pasted 2026 10 27 0413", "Tree"]);
 });
+
+test("a pasted or dropped picture's name: safe, and when it was pasted (M22)", async () => {
+  const { safeName, pastedName, digest } = await import("./pictures.ts");
+  expect(["Player Idle (1).png", "Ünïcode  café.JPEG", "...hidden", "a/b\\c.svg", "--x--"].map(safeName)).toEqual(["player-idle-1", "unicode-cafe", "hidden", "a-b-c", "x"]);
+  expect(pastedName(new Date(2026, 9, 27, 4, 13))).toBe("pasted-2026-10-27-0413");
+  const { sha256 } = await import("@isorite/core");
+  const bytes = new Uint8Array([1, 2, 3, 250]);
+  expect(await digest(bytes)).toBe(sha256(bytes));
+});

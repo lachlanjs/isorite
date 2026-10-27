@@ -56,7 +56,7 @@ function fromTitle(notes: () => LinkTarget[]) {
 export const describedAs = (path: string): string => path.split("/").at(-1)!.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim();
 
 /** A path as a link's address: in angle brackets where it has a space or a bracket. */
-const address = (path: string): string => (/[\s()<>]/.test(path) ? `<${path}>` : path);
+export const address = (path: string): string => (/[\s()<>]/.test(path) ? `<${path}>` : path);
 
 function fromEmbed(notes: () => LinkTarget[], source: PictureSource | null) {
   return async (ctx: CompletionContext): Promise<CompletionResult | null> => {

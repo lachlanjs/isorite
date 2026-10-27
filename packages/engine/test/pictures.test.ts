@@ -62,3 +62,14 @@ test("every picture in the notes, found afresh, with its size and hash; one adde
   expect((await engine.pictures()).map((p) => p.path)).toEqual(["combat/hitboxes/player.png"]);
   expect(engine.bundle.issues.filter((i) => i.code === "broken-link").map((i) => i.path)).toEqual(["combat/dodge.md"]);
 });
+
+test("a picture is saved where it's free, at a picture's path, and then listed", async () => {
+  const { engine, notes } = await open();
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 9]);
+  expect(await engine.savePicture("combat/hitboxes/dodge.png", png)).toMatchObject({ path: "combat/hitboxes/dodge.png", bytes: 5, sha256: sha256(png) });
+  expect(await notes.readBytes("combat/hitboxes/dodge.png")).toEqual(png);
+  await expect(engine.savePicture("combat/hitboxes/dodge.png", PNG)).rejects.toMatchObject({ status: 409 });
+  expect(await notes.readBytes("combat/hitboxes/dodge.png")).toEqual(png);
+  for (const path of ["combat/hitboxes.md", "x.html", ".isorite/p.png", "../p.png", "a//p.png", "a\\b.png"]) await expect(engine.savePicture(path, png)).rejects.toMatchObject({ status: 400 });
+  expect((await engine.pictures()).map((p) => p.path)).toEqual(["combat/hitboxes/dodge.png", "combat/hitboxes/player.png"]);
+});

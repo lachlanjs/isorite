@@ -145,7 +145,7 @@ test("the file port keeps to its folder and replaces a file whole", async () => 
   await files.append("a/log.jsonl", "2\n");
   expect(await files.read("a/b.txt")).toBe("two");
   expect(await files.read("a/log.jsonl")).toBe("1\n2\n");
-  expect(await files.list("a")).toEqual([{ name: "b.txt", dir: false }, { name: "log.jsonl", dir: false }]);
+  expect(await files.list("a")).toEqual([{ name: "b.txt", dir: false, size: 3, mtime: expect.any(Number) }, { name: "log.jsonl", dir: false, size: expect.any(Number), mtime: expect.any(Number) }]);
   expect(await files.read("a/none")).toBeNull();
   expect(await files.list("none")).toEqual([]);
   await expect(files.read("../information-theory/basics/entropy.md")).rejects.toThrow("leaves the folder");
@@ -230,4 +230,23 @@ test("a picture is given from the notes and the repository, and nothing else is 
   expect([code.status, code.headers.get("content-type")]).toEqual([200, "image/png"]);
   expect((await fetch(url + "/api/file?code=" + encodeURIComponent("../information-theory/basics/entropy/coin.png"))).status).toBe(404);
   expect((await fetch(url + "/api/file?code=assets/../../code/assets/player.png")).status).toBe(404);
+});
+
+test("a picture is saved from its bytes, never over a file, and only as a write is (M22)", async () => {
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9]);
+  const post = (path: string, body: Uint8Array | string, headers: Record<string, string> = {}) =>
+    fetch(url + "/api/file?path=" + encodeURIComponent(path), { method: "POST", headers: { Origin: url, "Content-Type": "image/png", [TOKEN_HEADER]: TOKEN, ...headers }, body });
+  const saved = await post("combat/hitboxes/player idle.png", png);
+  expect(saved.status).toBe(200);
+  expect(await saved.json()).toMatchObject({ path: "combat/hitboxes/player idle.png", bytes: png.length });
+  expect(readFileSync(join(notes, "combat", "hitboxes", "player idle.png"))).toEqual(png);
+  expect((await fetch(url + "/api/pictures")).ok).toBe(true);
+  // Taken; another site, or no token; not the type its name says; not a picture's path.
+  expect((await post("combat/hitboxes/player idle.png", png)).status).toBe(409);
+  expect((await post("combat/x.png", png, { Origin: "http://evil.example" })).status).toBe(403);
+  expect((await post("combat/x.png", png, { [TOKEN_HEADER]: "wrong" })).status).toBe(403);
+  expect((await post("combat/x.png", png, { "Content-Type": "image/svg+xml" })).status).toBe(415);
+  expect((await post("combat/x.html", "<script>", { "Content-Type": "text/html" })).status).toBe(415);
+  for (const path of [".isorite/x.png", "../x.png", "combat/../x.png", "combat//x.png"]) expect([path, (await post(path, png)).status]).toEqual([path, 400]);
+  expect(statSync(join(notes, "combat")).isDirectory()).toBe(true);
 });

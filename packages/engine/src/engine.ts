@@ -595,6 +595,23 @@ export class Engine implements Api {
     return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   }
 
+  /** Put a picture in the notes (M22). The path must be a picture's, out of any hidden folder, and free: a file
+   *  that's there is never replaced. Not journaled: a picture has no history, and stays when its link goes. */
+  savePicture(path: string, bytes: Uint8Array): Promise<PictureInfo> {
+    return this.one(async () => {
+      const type = pictureType(path), parts = path.split("/");
+      if (!type || parts.some((p) => !p || p === "." || p === ".." || p.startsWith(".")) || /[\\\x00-\x1f]/.test(path)) throw new EngineError(`not a picture's path: ${path}`, 400);
+      if (bytes.length > MAX_FILE_BYTES) throw new EngineError(`the picture is larger than isorite takes (${MAX_FILE_BYTES / 1e6} MB)`, 413);
+      if ((await this.opts.notes.readBytes(path)) !== null) throw new Conflict(`${path} is there already`, null);
+      await this.opts.notes.writeBytes(path, bytes);
+      this.files.set(path, { path });
+      this.built = this.index = null;
+      const px = pictureSize(bytes, type);
+      const info: PictureInfo = { path, bytes: bytes.length, width: px?.width ?? null, height: px?.height ?? null, sha256: sha256(bytes) };
+      return info;
+    });
+  }
+
   /** Where a note's file is: drafts and Understanding notes are among isorite's own files. */
   private where(id: string): { files: Files; path: string } {
     if (!inBase(id)) {

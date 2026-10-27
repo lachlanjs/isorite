@@ -2,6 +2,7 @@
 // against the Api interface (@isorite/engine), so a webview can later hand it
 // the engine itself instead of this.
 
+import { pictureType } from "@isorite/core";
 import { baseHere } from "./here.ts";
 import type { Api, Decision, EngineEvent, Given, NoteSource, Session, SetupCheck, SetupDraft, SetupView, TerminalView } from "@isorite/engine";
 
@@ -72,6 +73,11 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     readNote: (id) => ask("note" + q(id)),
     fileUrl,
     pictures: () => ask("pictures"),
+    savePicture: async (path, bytes) => {
+      token ??= session().then((s) => s.token);
+      const type = pictureType(path) ?? "application/octet-stream";
+      return ask(`file?path=${encodeURIComponent(path)}`, { method: "POST", headers: { "Content-Type": type, "x-isorite-token": await token }, body: bytes as Uint8Array<ArrayBuffer> });
+    },
     file: async (path, from) => {
       let res: Response;
       try { res = await fetch(fileUrl(path, from)); } catch { throw new ApiError("isorite is not answering", 0); }

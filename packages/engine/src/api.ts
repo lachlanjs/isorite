@@ -294,6 +294,8 @@ export interface Api {
   file(path: string, from?: "notes" | "code"): Promise<FileBytes | null>;
   /** Every picture in the notes, by path (M22). */
   pictures(): Promise<PictureInfo[]>;
+  /** Put a picture in the notes at `path` (M22), pasted or dropped: never over a file that's there (a Conflict). */
+  savePicture(path: string, bytes: Uint8Array): Promise<PictureInfo>;
   /** Save a note. `base` is the version the text started from; a note that has moved on refuses with a Conflict. */
   saveNote(id: string, edit: { base: string; text: string }): Promise<Saved>;
   /** Make a note. Refuses when there is one already. */
