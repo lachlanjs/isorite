@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // isorite's command line.
 //
-//   isorite check <notes>                  lint a folder of notes
+//   isorite check <notes> [--unused]       lint a folder of notes; --unused lists pictures no note shows
 //   isorite serve <notes>                  open it in the browser
 //   isorite migrate <study base>           move a study base (format 1) into its notes' .isorite/
 //   isorite example <folder>               write the example base, partway built, into a folder
@@ -13,7 +13,7 @@
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { StudyError } from "@isorite/core";
+import { StudyError, citeKind } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { doctor } from "./doctor.ts";
 import { proxied, rerun, trustSystem } from "./network.ts";
@@ -32,7 +32,8 @@ import { VERSION } from "./version.ts";
 const USAGE = `isorite: an agentic harness for understanding
 
   isorite new <folder>                   start a knowledge base: the folder, empty, with isorite's .isorite/
-  isorite check <notes>                  check a folder of notes: frontmatter, links, cycles
+  isorite check <notes> [--unused]       check a folder of notes: frontmatter, links, cycles; --unused lists
+                                         the pictures no note shows
   isorite serve <notes> [--port <n>] [--allow-host <name>]
                                          open it in the browser, on this machine only
   isorite migrate <study base> [--merge] move a study base (format 1) into its notes' .isorite/; exercises
@@ -70,7 +71,7 @@ const USAGE = `isorite: an agentic harness for understanding
                                          none set up, the guide's finder (also: isorite --tutorial)
 `;
 
-export function check(notes: string, out: (line: string) => void = console.log): number {
+export function check(notes: string, out: (line: string) => void = console.log, unused = false): number {
   const root = resolve(notes);
   if (!existsSync(root) || !statSync(root).isDirectory()) { out(`no folder at ${root}`); return 2; }
   const bundle = loadBundle(root), issues = bundle.lint(), cycles = bundle.requiresCycles();
@@ -78,13 +79,20 @@ export function check(notes: string, out: (line: string) => void = console.log):
   for (const c of cycles) out(`warning requires cycle: ${c.join(" -> ")}`);
   const errors = issues.filter((i) => i.level === "error").length;
   out(`${bundle.concepts.size} notes in ${bundle.directories.size} folders; ${errors} errors, ${issues.length - errors} warnings, ${cycles.length} requires cycles`);
+  // The pictures no note shows or links to (M22): yours to keep or delete, so information, never a warning.
+  if (unused) {
+    const cited = new Set([...bundle.concepts.values()].flatMap((c) => c.cites.map((x) => x.target)));
+    const idle = [...bundle.files].filter((f) => citeKind(f) === "image" && !cited.has(f)).sort();
+    for (const f of idle) out(`unused  ${f}`);
+    out(idle.length ? `${idle.length} ${idle.length === 1 ? "picture" : "pictures"} no note shows` : "every picture is shown by a note");
+  }
   return errors ? 1 : 0;
 }
 
 export function main(argv: string[]): number | Promise<number> {
   const [command, ...rest] = argv;
   try {
-    if (command === "check" && rest[0]) return check(rest[0]);
+    if (command === "check" && rest.find((r) => !r.startsWith("--"))) return check(rest.find((r) => !r.startsWith("--"))!, console.log, rest.includes("--unused"));
     if (command === "new" && rest[0]) {
       const made = newBase(rest[0]);
       // The commands that come next, with the whole path: term is run from the code's folder.

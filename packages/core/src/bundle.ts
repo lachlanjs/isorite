@@ -246,7 +246,7 @@ export class Bundle {
         const t = strip((title ?? "").toLowerCase());
         const cite: Cite = { target: path, kind, embed, broken: !this.files.has(path), rel: rating(title), align: t === "left" ? "left" : t === "center" || t === "centre" ? "center" : null, ...(embed && alt ? { alt } : {}) };
         concept.cites.push(cite);
-        if (cite.broken) this.issue(concept.path, "warning", "broken-link", `broken link to ${path}`);
+        if (cite.broken) this.issue(concept.path, "warning", "broken-link", kind === "image" ? `picture not in the notes: ${path}` : `broken link to ${path}`);
       }
     }
     // Embeds (M12): by file name, or by path where two share it. An embed attaches what it embeds to its note.

@@ -250,3 +250,19 @@ test("a picture is saved from its bytes, never over a file, and only as a write 
   for (const path of [".isorite/x.png", "../x.png", "combat/../x.png", "combat//x.png"]) expect([path, (await post(path, png)).status]).toEqual([path, 400]);
   expect(statSync(join(notes, "combat")).isDirectory()).toBe(true);
 });
+
+test("isorite check names a missing picture as one, and --unused lists the pictures no note shows (M22)", async () => {
+  const { check } = await import("../src/main.ts");
+  const dir = join(root, "check-pictures");
+  mkdirSync(join(dir, "combat", "hitboxes"), { recursive: true });
+  writeFileSync(join(dir, "combat", "hitboxes.md"), "---\ntype: Concept\ntitle: Hitboxes\n---\n\n![p](hitboxes/p.png) ![q](hitboxes/q.png) [r](/combat/hitboxes/r.png)\n");
+  for (const f of ["p.png", "r.png", "spare.png"]) writeFileSync(join(dir, "combat", "hitboxes", f), "x");
+  const lines: string[] = [];
+  expect(check(dir, (l) => lines.push(l), true)).toBe(0);
+  expect(lines).toEqual([
+    "warning combat/hitboxes.md: picture not in the notes: combat/hitboxes/q.png",
+    expect.stringMatching(/^1 notes in \d+ folders; 0 errors, 1 warnings/),
+    "unused  combat/hitboxes/spare.png",
+    "1 picture no note shows",
+  ]);
+});

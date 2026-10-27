@@ -99,6 +99,9 @@ const FORMAT = `# How notes work here
   is drawn as the diagram. Draw one where a picture of how things stand to
   each other helps, or when asked; not by habit. Maths in a label goes
   between $$ and $$.
+- A picture is shown as ![what it shows](its/path.png). You can't see it: what
+  you know of it is the words in the brackets. Keep a picture's line as it is
+  when you rewrite around it, and never make up a picture's path.
 - Ordinary Markdown otherwise. No HTML.`;
 
 /** How notes are written, for any request that writes or quotes them. */
