@@ -1,0 +1,8 @@
+# LF on every checkout, Windows too: notes, fixtures and the guide are compared byte for byte.
+* text=auto eol=lf
+*.png binary
+*.wasm binary
+*.onnx binary
+*.tgz binary
+fixtures/bundles/edge/crlf.md -text
+packages/model/LICENSE -text

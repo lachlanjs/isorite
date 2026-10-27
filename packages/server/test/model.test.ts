@@ -20,7 +20,7 @@ mkdirSync(src);
 writeFileSync(join(src, "model.onnx"), "graph");
 writeFileSync(join(src, "tokenizer.json"), "words");
 writeFileSync(join(src, "package.json"), JSON.stringify({ name: "stand-in-model", version: "1.0.0" }));
-const tgz = join(root, execFileSync("npm", ["pack", src, "--silent", "--pack-destination", root], { encoding: "utf8" }).trim().split("\n").at(-1)!);
+const tgz = join(root, execFileSync("npm", ["pack", src, "--silent", "--pack-destination", root], { encoding: "utf8", shell: process.platform === "win32" }).trim().split("\n").at(-1)!);
 const quiet = () => {};
 
 test("from an npm package: its files kept, each checked", async () => {

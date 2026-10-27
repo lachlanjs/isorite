@@ -10,7 +10,7 @@
 
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { createRequire } from "node:module";
 import { build } from "rolldown";
 
@@ -23,13 +23,13 @@ const server = json(at("packages/server/package.json"));
 const version = process.env.ISORITE_VERSION ?? server.version;
 
 // What is bundled: every @isorite/* package. Everything else from npm stays a dependency.
-const ours = (id: string) => id.startsWith("@isorite/") || id.startsWith(".") || id.startsWith("/") || id.startsWith("\0");
+const ours = (id: string) => id.startsWith("@isorite/") || id.startsWith(".") || isAbsolute(id) || id.startsWith("\0");
 const BUNDLED = new Set(["onnxruntime-web", "onnxruntime-web/wasm"]); // the worker's runtime, in the bundle
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(join(OUT, "dist"), { recursive: true });
 
-if (!existsSync(at("app/build/index.html"))) execFileSync("npm", ["run", "build"], { cwd: ROOT, stdio: "inherit" });
+if (!existsSync(at("app/build/index.html"))) execFileSync("npm", ["run", "build"], { cwd: ROOT, stdio: "inherit", shell: process.platform === "win32" });
 
 const used = new Set<string>();
 const external = (id: string) => {

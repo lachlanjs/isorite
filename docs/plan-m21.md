@@ -447,3 +447,26 @@ On branch `m21-work-setup`, after 0.8.1.
 - **Real-model spend:** none.
 - **Not done:** the real check is yours, at work. Try the installer (or `--url` from your mirror), `isorite model`
   with `ISORITE_MODEL_BASE_URL`, `isorite opencode`, `isorite term` and `doctor`, through the proxy.
+
+### 0.9.1: Windows
+
+0.9.0's release stopped at its Windows executable (`package.ts` took `D:\...` for a dependency), so 0.9.0 never
+reached npm or a GitHub Release; 0.9.1 is the first. A `windows` workflow now runs on every push: the tests on
+`windows-latest`, `install.ps1` in Windows PowerShell 5.1 and in pwsh from a local server (and a wrong sum installing
+nothing), then the executable from an empty home whose path has a space in it: `doctor`, `example`, `check`,
+`serve`, `isorite model`, `isorite opencode`, and `doctor` again finding OpenCode 2 and the model.
+
+- **OpenCode on Windows.** npm links OpenCode as `opencode2.cmd`, which Node won't run without a shell (since 2024).
+  isorite runs the package's own `opencode.exe` instead: in its prefix, and, for an `opencode2.cmd` on the PATH,
+  the one in the global `node_modules` beside it (`onWindowsPath`). `isorite opencode` quotes its prefix for the
+  shell npm needs, as a Windows home often has a space in it.
+- **The plugin link** is a junction on Windows: a folder symlink there needs an administrator or Developer Mode.
+- **install.ps1:** it failed to parse in any PowerShell (`$name:`); it now reads `SHA256SUMS` from a file (GitHub
+  serves it as bytes), asks for TLS 1.2, skips Windows PowerShell's slow progress bar, and adds its folder to the
+  user's PATH.
+- **The checkout is LF** everywhere (`.gitattributes`), as notes, fixtures and the guide are compared byte for byte;
+  the CRLF fixture and the model's LICENSE are kept as they are.
+- **The tests** take paths through `fileURLToPath` and `join`, run npm through a shell, and leave out file modes on
+  Windows (the profile's ACL keeps the config there).
+- **Still not checked on Windows:** `isorite term` itself (the TUI in Windows Terminal, the plugin loading through
+  the junction, `/web`), and a corporate machine's certificate store and proxy.

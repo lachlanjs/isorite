@@ -10,7 +10,7 @@
 
 import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { theme } from "./theme.ts";
 
@@ -74,7 +74,8 @@ export function writeHome(dir: string, { gateway = null as Gateway | null, plugi
   const link = join(dir, "plugins", "isorite");
   if (!linksTo(link, plugin)) {
     rmSync(link, { recursive: true, force: true });
-    symlinkSync(plugin, link, "dir");
+    // A junction on Windows: a folder symlink there needs an administrator, or Developer Mode.
+    symlinkSync(plugin, link, process.platform === "win32" ? "junction" : "dir");
   }
   return dir;
 }
@@ -94,5 +95,6 @@ export function withLocal(config: object, local: string): object {
 }
 
 function linksTo(path: string, target: string): boolean {
-  try { return lstatSync(path).isSymbolicLink() && readlinkSync(path) === target; } catch { return false; }
+  const plain = (p: string) => resolve(p).replace(/[\\/]+$/, "");
+  try { return lstatSync(path).isSymbolicLink() && plain(readlinkSync(path)) === plain(target); } catch { return false; }
 }

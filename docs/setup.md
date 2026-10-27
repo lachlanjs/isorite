@@ -11,10 +11,18 @@ Either one file, with Node inside it:
   ```sh
   curl -fsSL https://github.com/lachlanjs/isorite/releases/latest/download/install.sh | sh
   ```
-  On Windows, `irm https://github.com/lachlanjs/isorite/releases/latest/download/install.ps1 | iex`. It goes in
-  `~/.local/bin` (`--dir` for another folder). Each address it fetches is printed, so a machine that can't reach
-  GitHub can fetch the same files another way, or from a mirror with `--url <the executable's address>`. It
-  unpacks itself into `~/.cache/isorite/<version>/` the first time it runs. Run the installer again to update.
+  It goes in `~/.local/bin` (`--dir` for another folder). Each address it fetches is printed, so a machine that
+  can't reach GitHub can fetch the same files another way, or from a mirror with `--url <the executable's address>`.
+  It unpacks itself into `~/.cache/isorite/<version>/` the first time it runs. Run the installer again to update.
+
+  On Windows, in PowerShell:
+  ```powershell
+  irm https://github.com/lachlanjs/isorite/releases/latest/download/install.ps1 | iex
+  ```
+  It goes in `%LOCALAPPDATA%\isorite`, which it adds to your PATH (open a new terminal after), and unpacks itself
+  into `%LOCALAPPDATA%\isorite\<version>\` the first time it runs. The executable isn't signed, so Windows may say
+  it's from an unknown publisher. isorite's own settings are in `%USERPROFILE%\.config\isorite\`. Use Windows
+  Terminal for `isorite term`. `isorite opencode` needs npm, so Node 24 as well.
 
 Or from npm:
 
