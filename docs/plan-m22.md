@@ -154,7 +154,7 @@ line of its own embeds a question or a problem (M12), with nothing offered as it
 ### 2.6 Iso and the terminal's agent
 
 - They read the note's text, as now, so they see `![alt](path)`. The alt text is what they know of a picture.
-  That's why paste leaves the cursor in it (§2.2).
+  That's why the naming box asks for one (§2.2).
 - The plugin's `read_note` tool (and Iso's own) says so: "a picture is shown as `![alt](path)`; it's described
   by its alt text, and you can't see it".
 - Giving them the picture itself (a model that sees) is not in M22 (§2.8).
