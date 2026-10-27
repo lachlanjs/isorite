@@ -45,8 +45,10 @@ const USAGE = `isorite: an agentic harness for understanding
   isorite mcp [<notes>] [--port <n>] [--agent <name>]
                                          the knowledge base's tools over MCP, on stdio, for Claude Code or Pi:
                                          claude mcp add isorite -- isorite mcp <base> --agent claude-code
-  isorite model [--from <folder>]        the model for search by meaning: which is installed, and where; else
-                                         fetched (53 MB, once) from npm, GitHub or Hugging Face; or from a
+  isorite model [--from <folder|.tgz>] [--url <url>]
+                                         the model for search by meaning: which is installed, and where; else
+                                         fetched (53 MB, once) from ISORITE_MODEL_BASE_URL, npm, GitHub or
+                                         Hugging Face, or --url alone; or from the .tgz fetched by hand, or a
                                          folder: its files copied there, or any compatible model
   isorite doctor [<notes>] [--report] [--offline]
                                          whether isorite can work here: the configuration, the network, the
@@ -115,9 +117,10 @@ export function main(argv: string[]): number | Promise<number> {
       return run.catch((e: Error) => { console.error(e.message); return 2; });
     }
     if (command === "model") {
-      const from = rest[rest.indexOf("--from") + 1];
-      if (rest.includes("--from") && !from) { console.error("--from takes a folder"); return 2; }
-      return modelCommand(rest.includes("--from") ? from : undefined);
+      const from = rest[rest.indexOf("--from") + 1], url = rest[rest.indexOf("--url") + 1];
+      if (rest.includes("--from") && !from) { console.error("--from takes a folder, or the model's .tgz"); return 2; }
+      if (rest.includes("--url") && !/^https?:\/\//.test(url ?? "")) { console.error("--url takes the address of the model's .tgz"); return 2; }
+      return modelCommand(rest.includes("--from") ? from : undefined, console.log, process.env, {}, rest.includes("--url") ? url : undefined);
     }
     if (command === "memory") return memory(rest.find((a) => !a.startsWith("--")));
     if (command === "bases") return bases(rest);

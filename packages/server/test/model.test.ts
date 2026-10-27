@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, expect, test } from "vitest";
 import { nodeEmbedder } from "../src/embedder.ts";
-import { ModelFetchError, fetchModel, installFrom, modelCommand, modelDir, type FILES } from "../src/model.ts";
+import { ModelFetchError, RELEASE_SHA256, byHand, fetchModel, installFrom, mirrorOf, modelCommand, modelDir, type FILES } from "../src/model.ts";
 
 // Fetching the model, with two small stand-in files in place of the model's: from a package npm unpacks (a .tgz
 // here, as a registry would serve it), from a folder, and refused when a file is not the one expected.
@@ -79,7 +79,41 @@ test("isorite model with nothing installed and nothing reachable says where it l
   expect(text).toContain(`No model in ${join(root, "empty")}`);
   expect(text).toContain("The model could not be fetched:");
   expect(text).toContain("isorite model --from <folder>");
+  expect(text).toContain(`  SHA-256 ${RELEASE_SHA256}`);
+  expect(text).toContain("isorite model --from ~/Downloads/isorite-model-granite-1.0.0.tgz");
+  expect(said[1]).toMatch(/^If it can't be fetched from here: https:\/\/github\.com\/.*\(SHA-256 8d8ab528/);
   expect(text).toContain("Search by words works without it.");
+});
+
+test("a mirror (ISORITE_MODEL_BASE_URL) is tried first; --url is tried alone; a .tgz not the one expected isn't unpacked", async () => {
+  expect(mirrorOf({ ISORITE_MODEL_BASE_URL: "https://mirror.corp/isorite/" })).toBe("https://mirror.corp/isorite/isorite-model-granite-1.0.0.tgz");
+  expect(mirrorOf({})).toBeNull();
+  const served = await serveTgz(), port = await closedPort();
+  try {
+    const said: string[] = [];
+    await fetchModel(join(root, "mirror"), (l) => said.push(l), { mirror: served.url, pkg: join(root, "no-such.tgz"), release: `http://127.0.0.1:${port}/m.tgz`, hub: null, files });
+    expect(said[0]).toBe(`From the mirror (ISORITE_MODEL_BASE_URL): ${served.url}`);
+    expect(said.some((l) => l.startsWith("From npm") || l.startsWith("From GitHub"))).toBe(false);
+
+    const only: string[] = [];
+    const err = await fetchModel(join(root, "url"), (l) => only.push(l), { url: `http://127.0.0.1:${port}/m.tgz`, mirror: served.url, files }).catch((e: unknown) => e) as ModelFetchError;
+    expect(err.tried).toEqual([expect.stringMatching(/^--url \(http:\/\/127\.0\.0\.1:\d+\/m\.tgz\): connect ECONNREFUSED/)]);
+
+    const wrong = await fetchModel(join(root, "wrong-tgz"), quiet, { url: served.url, files, tgzSha: sha("another package") }).catch((e: unknown) => e) as ModelFetchError;
+    expect(wrong.tried[0]).toMatch(/not the file expected: its SHA-256 is [0-9a-f]{64}, not [0-9a-f]{64}, so it was not unpacked/);
+  } finally { served.close(); }
+});
+
+test("by hand: the file, its SHA-256 and the command; and a .tgz given to --from is checked first", async () => {
+  expect(byHand({ ISORITE_MODEL_BASE_URL: "https://mirror.corp/m" })).toEqual([
+    "Fetch this file another way (a browser, or a machine that can reach it):",
+    "  https://github.com/lachlanjs/isorite/releases/download/model-granite-1.0.0/isorite-model-granite-1.0.0.tgz",
+    "  or from your mirror: https://mirror.corp/m/isorite-model-granite-1.0.0.tgz",
+    `  SHA-256 ${RELEASE_SHA256}`,
+    "then run:",
+    "  isorite model --from ~/Downloads/isorite-model-granite-1.0.0.tgz",
+  ]);
+  await expect(installFrom(tgz, quiet, { XDG_DATA_HOME: join(root, "d-tgz") })).rejects.toThrow(/is not isorite-model-granite-1\.0\.0\.tgz: its SHA-256 is/);
 });
 
 test("a folder without a model is refused, saying what it needs", async () => {

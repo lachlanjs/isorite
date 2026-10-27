@@ -158,7 +158,12 @@ describe("isorite help setup", () => {
 describe("search by meaning", () => {
   it("is a warning, not a failure, without a model: search by words works alone", async () => {
     const { code, text } = await run(work(), { offline: true, env: { ISORITE_EMBED_DIR: "/nowhere/model" } });
-    expect(text).toContain("! search by meaning: no model in /nowhere/model: isorite model fetches it (53 MB). Search by words works without it");
+    expect(text).toContain("! search by meaning: no model in /nowhere/model: isorite model fetches it (53 MB). By hand: https://github.com/lachlanjs/isorite/releases/download/model-granite-1.0.0/isorite-model-granite-1.0.0.tgz (SHA-256 8d8ab528ae289dfc81fd2bfa80c867ca0c8342a2d98f7c86141df4b15fdf028c), then isorite model --from <that file>. Search by words works without it");
+    // A mirror is named, and asked whether it answers when the network is checked.
+    const closed = await new Promise<number>((done) => { const s = createServer().listen(0, "127.0.0.1", () => { const p = (s.address() as AddressInfo).port; s.close(() => done(p)); }); });
+    const mirrored = await run(work(), { env: { ISORITE_EMBED_DIR: "/nowhere/model", ISORITE_MODEL_BASE_URL: `http://127.0.0.1:${closed}/models/` } });
+    expect(mirrored.text).toContain(`http://127.0.0.1:${closed}/models/isorite-model-granite-1.0.0.tgz can't be reached from here: connect ECONNREFUSED`);
+    expect(mirrored.text).toContain(`By hand: http://127.0.0.1:${closed}/models/isorite-model-granite-1.0.0.tgz (SHA-256`);
     expect(code).toBe(0);
   });
   it("names the model and where it is, and is skipped when switched off", async () => {

@@ -14,7 +14,7 @@ import { findOpenCode, gatewayFrom, type Probe } from "@isorite/opencode";
 import { ConfigSecrets, configPath, gatewayTls, providerConfig, readConfig } from "./config.ts";
 import { cacheDir } from "./embedder.ts";
 import { gatewayHttp } from "./gateway.ts";
-import { modelDir, modelInfo, modelPlaces, type ModelInfo } from "./model.ts";
+import { mirrorOf, modelDir, modelInfo, modelPlaces, RELEASE, RELEASE_SHA256, type ModelInfo } from "./model.ts";
 import { locate } from "./serve.ts";
 import { serving } from "./term.ts";
 
@@ -42,7 +42,7 @@ export interface DoctorOptions {
 const MARK: Record<Outcome, string> = { ok: "✓", fail: "✗", warn: "!", skip: "–" };
 
 /** The environment variables isorite and Node read for it; the secret ones are shown only by length. */
-const READ = ["ISORITE_GATEWAY_URL", "ISORITE_GATEWAY_MODELS", "ISORITE_GATEWAY_KEY", "ISORITE_OPENCODE", "XDG_CONFIG_HOME", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "NODE_TLS_REJECT_UNAUTHORIZED", "ISORITE_NODE_DEFAULTS", "SSH_CONNECTION", "ISORITE_EMBED", "ISORITE_EMBED_DIR", "XDG_DATA_HOME", "XDG_CACHE_HOME"];
+const READ = ["ISORITE_GATEWAY_URL", "ISORITE_GATEWAY_MODELS", "ISORITE_GATEWAY_KEY", "ISORITE_OPENCODE", "XDG_CONFIG_HOME", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "NODE_TLS_REJECT_UNAUTHORIZED", "ISORITE_NODE_DEFAULTS", "SSH_CONNECTION", "ISORITE_EMBED", "ISORITE_EMBED_DIR", "ISORITE_MODEL_BASE_URL", "XDG_DATA_HOME", "XDG_CACHE_HOME"];
 export const SECRET = /key|token|secret|pass|auth|cookie/i;
 
 const hidden = (v: string) => `<${v.length} characters>`;
@@ -170,7 +170,18 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
     const dir = modelDir(env);
     try { model = dir ? modelInfo(dir) : null; } catch (e) { say("search by meaning", "fail", `${dir}: ${(e as Error).message}`); }
     if (model) say("search by meaning", "ok", `${model.name} at ${model.dir}`);
-    else if (!dir) say("search by meaning", "warn", `no model in ${modelPlaces(env).map((p) => p.dir).join(" or ")}: isorite model fetches it (53 MB). Search by words works without it`);
+    else if (!dir) {
+      // Where it would come from, and whether that answers from here (M21): by hand otherwise, with its checksum.
+      let reach = "";
+      if (!o.offline) {
+        const from = mirrorOf(env) ?? RELEASE;
+        try {
+          const res = await fetch(from, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(10_000) });
+          reach = res.ok ? ` ${from} answers from here.` : ` ${from} said ${res.status}.`;
+        } catch (e) { reach = ` ${from} can't be reached from here: ${unreachable(e, from)}.`; }
+      }
+      say("search by meaning", "warn", `no model in ${modelPlaces(env).map((p) => p.dir).join(" or ")}: isorite model fetches it (53 MB).${reach} By hand: ${mirrorOf(env) ?? RELEASE} (SHA-256 ${RELEASE_SHA256}), then isorite model --from <that file>. Search by words works without it`);
+    }
   }
 
   // The notes.
