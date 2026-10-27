@@ -80,15 +80,15 @@ export function linkTexts(body: string): { href: string; text: string }[] {
 }
 
 /** Every link and image in a body, in order: where it points, its title, and whether it is an image
- *  (`![…](…)`, which for an artifact or a picture means "shown here", an embed). */
-export function citeRefs(body: string): { href: string; title: string | null; embed: boolean }[] {
+ *  (`![…](…)`, which for an artifact or a picture means "shown here", an embed), with an image's alt text. */
+export function citeRefs(body: string): { href: string; title: string | null; embed: boolean; alt?: string }[] {
   const { tokens } = parse(body);
-  const out: { href: string; title: string | null; embed: boolean }[] = [];
+  const out: { href: string; title: string | null; embed: boolean; alt?: string }[] = [];
   for (const t of tokens) {
     if (t.type !== "inline" || !t.children) continue;
     for (const c of t.children) {
       if (c.type === "link_open") out.push({ href: c.attrGet("href") ?? "", title: c.attrGet("title"), embed: false });
-      else if (c.type === "image") out.push({ href: c.attrGet("src") ?? "", title: c.attrGet("title"), embed: true });
+      else if (c.type === "image") out.push({ href: c.attrGet("src") ?? "", title: c.attrGet("title"), embed: true, alt: c.content });
     }
   }
   return out;

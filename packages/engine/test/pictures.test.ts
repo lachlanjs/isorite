@@ -73,3 +73,13 @@ test("a picture is saved where it's free, at a picture's path, and then listed",
   for (const path of ["combat/hitboxes.md", "x.html", ".isorite/p.png", "../p.png", "a//p.png", "a\\b.png"]) await expect(engine.savePicture(path, png)).rejects.toMatchObject({ status: 400 });
   expect((await engine.pictures()).map((p) => p.path)).toEqual(["combat/hitboxes/dodge.png", "combat/hitboxes/player.png"]);
 });
+
+test("a picture from the repository is checked as a code link is: broken when its file is gone", async () => {
+  const repo = new MemoryFiles();
+  await repo.writeBytes("assets/player.png", PNG);
+  const { engine, notes } = await open(repo);
+  await engine.nameRepository("../code");
+  await notes.write("combat/sprites.md", "---\ntype: Concept\ntitle: Sprites\n---\n\n![the player](code:assets/player.png) ![gone](code:assets/gone.png)\n");
+  await engine.reload();
+  expect((await engine.notes()).notes.find((n) => n.id === "combat/sprites")?.broken).toEqual(["code:assets/gone.png"]);
+});

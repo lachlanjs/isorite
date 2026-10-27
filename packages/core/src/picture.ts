@@ -1,6 +1,13 @@
 // A picture's size in pixels (M22), read from the head of its file: PNG, GIF, JPEG, WebP and SVG. Null where it
 // can't be told (AVIF, or a file that isn't what its name says).
 
+const TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", svg: "image/svg+xml", webp: "image/webp", avif: "image/avif" };
+/** A picture's media type, by its extension, or null when the path isn't a picture's (M22). */
+export const pictureType = (path: string): string | null => {
+  const dot = path.lastIndexOf(".");
+  return dot < 0 || path.lastIndexOf("/") > dot ? null : TYPES[path.slice(dot + 1).toLowerCase()] ?? null;
+};
+
 /** Width and height in pixels, or null. */
 export function pictureSize(bytes: Uint8Array, type: string): { width: number; height: number } | null {
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), n = bytes.length;

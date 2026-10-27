@@ -6,7 +6,8 @@
 // A note embeds one on a line of its own, `[[!name]]`, by its file name without .md, or by its path where two
 // share the name. The embed counts as an `about` (or a `uses`) of the note it is in.
 
-import { linkTexts } from "./markdown.ts";
+import { citeRefs, linkTexts } from "./markdown.ts";
+import { pictureType } from "./picture.ts";
 import { text } from "./text.ts";
 
 export type Kind = "note" | "question" | "problem";
@@ -62,7 +63,7 @@ export function embedFor(id: string, ids: Iterable<string>): string {
  *  (`#L40-L52` for lines), resolved against `repository` in `.isorite/settings.toml`. */
 export type Outward =
   | { kind: "web"; href: string; text: string }
-  | { kind: "code"; href: string; text: string; path: string; line?: number; end?: number };
+  | { kind: "code"; href: string; text: string; path: string; line?: number; end?: number; picture?: true };
 
 /** A code link's file and lines, or null when it is not one, or names a path outside the repository. */
 export function codeTarget(href: string): { path: string; line?: number; end?: number } | null {
@@ -80,6 +81,14 @@ export function outwardLinks(body: string): Outward[] {
     if (seen.has(href)) continue;
     if (/^https?:\/\//i.test(href)) out.push({ kind: "web", href, text: words || href.replace(/^https?:\/\/(www\.)?/i, "") });
     else { const c = codeTarget(href); if (!c) continue; out.push({ kind: "code", href, text: words || c.path.split("/").at(-1)!, ...c }); }
+    seen.add(href);
+  }
+  // A picture from the repository (M22), shown with `![…](code:…)`: a code link like any other, checked as they are.
+  for (const { href, embed, alt } of citeRefs(body)) {
+    if (!embed || seen.has(href)) continue;
+    const c = codeTarget(href);
+    if (!c || !pictureType(c.path)) continue;
+    out.push({ kind: "code", href, text: alt || c.path.split("/").at(-1)!, path: c.path, picture: true });
     seen.add(href);
   }
   return out;

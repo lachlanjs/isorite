@@ -26,3 +26,12 @@ test("a picture's size in pixels, from the head of its file (M22)", () => {
   expect(pictureSize(png(5, 5).subarray(0, 20), "image/png")).toBeNull();
   expect(pictureSize(png(5, 5), "image/avif")).toBeNull();
 });
+
+test("a picture from the repository is a code link of the note (M22)", async () => {
+  const { outwardLinks, pictureType } = await import("../src/index.ts");
+  expect(outwardLinks("A ![the player](code:assets/player.png), [step](code:src/a.py#L3), ![p](code:src/a.py) and ![w](https://x.org/p.png)")).toEqual([
+    { kind: "code", href: "code:src/a.py#L3", text: "step", path: "src/a.py", line: 3 },
+    { kind: "code", href: "code:assets/player.png", text: "the player", path: "assets/player.png", picture: true },
+  ]);
+  expect(["a.PNG", "b.jpeg", "c.svg", "d.png.md", "e", "f.d/g", "h.tiff"].map(pictureType)).toEqual(["image/png", "image/jpeg", "image/svg+xml", null, null, null, null]);
+});

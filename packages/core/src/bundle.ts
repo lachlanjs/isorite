@@ -42,9 +42,6 @@ export interface Cite {
 const ARTIFACT = /\.html?$/i, IMAGE = /\.(png|jpe?g|gif|svg|webp|avif)$/i;
 /** What kind of citable file a path is, or null. */
 export const citeKind = (path: string): Cite["kind"] | null => (ARTIFACT.test(path) ? "artifact" : IMAGE.test(path) ? "image" : null);
-const PICTURE_TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", svg: "image/svg+xml", webp: "image/webp", avif: "image/avif" };
-/** A picture's media type, by its extension, or null when the path isn't a picture's (M22). */
-export const pictureType = (path: string): string | null => (IMAGE.test(path) ? PICTURE_TYPES[path.slice(path.lastIndexOf(".") + 1).toLowerCase()]! : null);
 
 export type IssueCode =
   | "broken-link" | "requires-cycle" | "frontmatter-invalid" | "frontmatter-missing" | "type-missing"
