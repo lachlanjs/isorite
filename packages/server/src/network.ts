@@ -7,6 +7,7 @@
 import { spawn } from "node:child_process";
 import { constants } from "node:os";
 import { getCACertificates, setDefaultCACertificates } from "node:tls";
+import { self } from "./self.ts";
 
 const LOCAL = ["localhost", "127.0.0.1", "::1"];
 
@@ -34,7 +35,8 @@ export function proxied(env: NodeJS.ProcessEnv, execArgv: string[] = process.exe
 
 /** Run this command again with `env`, its input and output its own; its exit code. */
 export function rerun(env: NodeJS.ProcessEnv, argv: string[] = process.argv, execArgv: string[] = process.execArgv): Promise<number> {
-  const child = spawn(process.execPath, [...execArgv, ...argv.slice(1)], { stdio: "inherit", env });
+  const again = self(argv[1]!, argv.slice(2), execArgv);
+  const child = spawn(again.command, again.args, { stdio: "inherit", env });
   // Ctrl-C reaches both through the terminal; what else is sent to this one is passed on.
   for (const signal of ["SIGTERM", "SIGHUP"] as const) process.on(signal, () => child.kill(signal));
   process.on("SIGINT", () => undefined);

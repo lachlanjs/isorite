@@ -17,6 +17,7 @@ import { StudyError } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { doctor } from "./doctor.ts";
 import { proxied, rerun, trustSystem } from "./network.ts";
+import { single } from "./self.ts";
 import { newBase, serve } from "./serve.ts";
 import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
@@ -176,13 +177,18 @@ export function starting(argv: string[], env: NodeJS.ProcessEnv = process.env, w
   return true;
 }
 
-// Run as the command, however it is reached: npm installs it as a link, so the path it was run by is resolved first.
-// Inside a company, the proxy and the system's authorities are used without flags (network.ts).
-if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) {
-  starting(process.argv.slice(2));
+/** The command as run: said to be starting, the proxy turned on (running itself again), the system's authorities
+ *  trusted; its exit code. The single executable calls this (M21). */
+export async function run(argv: string[]): Promise<number> {
+  starting(argv);
   delete process.env.ISORITE_STARTING;
   const env = proxied(process.env);
-  if (env) process.exit(await rerun({ ...env, ISORITE_STARTING: "1" }));
+  if (env) return rerun({ ...env, ISORITE_STARTING: "1" });
   trustSystem();
-  process.exit(await main(process.argv.slice(2)));
+  return main(argv);
 }
+
+// Run as the command, however it is reached: npm installs it as a link, so the path it was run by is resolved first.
+// Inside a company, the proxy and the system's authorities are used without flags (network.ts).
+// The single executable's argv[1] is itself, as typed: it calls run() (M21).
+if (!single() && process.argv[1] && import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href) process.exit(await run(process.argv.slice(2)));

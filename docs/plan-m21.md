@@ -362,3 +362,88 @@ Released before the rest, as Q102 answered. On branch `m21-work-setup`.
     `term`'s server), which must run the executable rather than Node with a script.
 - **A departure:** OpenCode 2's private prefix is `~/.config/isorite/opencode-cli/`, since
   `~/.config/isorite/opencode/` is already `term`'s OpenCode configuration (§2.4).
+
+### 0.9.0: the rest of M21
+
+On branch `m21-work-setup`, after 0.8.1.
+
+- **The key (§2.5).**
+  - `key_prefix` under `[provider]`. `keySent` in the engine settles it: Authorization with `Bearer ` unless said,
+    and nothing before the key in another header. `key_header = "authorization"` alone means Bearer (Q99), and
+    `key_prefix = ""` sends it bare.
+  - `refusal` reads what a gateway said with a 401 or 403 (its `error.message`, else its text), cut to 300
+    characters, and never the key.
+    - `doctor` quotes it, and says how the key was sent (`sent as X-Gateway-Auth: <14 characters>`).
+    - So does Iso's error: "The key was not accepted, sent as …: … check key_header and key_prefix".
+  - Iso's settings have a prefix field beside the header's. Its placeholder is `Bearer` or `no prefix`, and its
+    tooltip says what's sent.
+  - **A departure:** the plan had `doctor` report a 407 from the proxy as an answer, with its realm. Through a real
+    proxy, Node's fetch throws instead ("Proxy response (407) !== 200 when HTTP Tunneling") and gives no realm. So
+    `unreachable` names it, wherever a request fails: "The proxy (HTTPS_PROXY), not the provider, refused with 407".
+- **The model (§2.3).**
+  - `ISORITE_MODEL_BASE_URL` (the folder `isorite-model-granite-1.0.0.tgz` is in) is tried first.
+    `isorite model --url <url>` tries that address alone.
+  - The `.tgz` is checked against `RELEASE_SHA256` before it's unpacked. That's
+    `8d8ab528ae289dfc81fd2bfa80c867ca0c8342a2d98f7c86141df4b15fdf028c`, taken from the GitHub release.
+  - `--from` takes the `.tgz`.
+  - `isorite model` says the file and its SHA-256 before it starts. If nothing works, it ends with the lines to
+    copy.
+  - `doctor` says the same, and whether the source answers from here.
+  - Checked with the real file: `--from` the `.tgz`, and `--url` from a local server.
+- **OpenCode 2 (§2.4).**
+  - `isorite opencode` runs `npm install --prefix ~/.config/isorite/opencode-cli @opencode/cli@2.0.32`. That
+    prefix is looked in after `ISORITE_OPENCODE` and before the PATH.
+  - `NoOpenCode` names an OpenCode 1 it found, and gives the line.
+  - `term` offers to install when a person is at the terminal.
+  - `doctor` fails an OpenCode 1 alone, and only warns when there's none.
+  - Checked for real: installed from npm in 14 s, then found by `doctor`.
+- **The browser (§2.7).**
+  - The plugin's `/web` opens isorite's page. OpenCode's pairing is still `/pair`.
+  - `term` warns when OpenCode's page asks for a password, using `asksPassword`.
+    - **Found on the way:** OpenCode 2.0.32 sends `WWW-Authenticate: Basic` only when a browser navigates
+      (`Sec-Fetch-Mode: navigate`), not to its page's own fetches. So the check asks with `node:http`, as a browser
+      navigates; Node's fetch always says `cors`.
+  - `doctor` has a "browser pages" step: the hint, and, with a server on the port, a check that isorite's own pages
+    ask for no password.
+  - `term.test.ts` types `/web` in OpenCode 2.0.32, in tmux, and checks that the page opened is isorite's. It also
+    checks for the warning when OpenCode exits.
+- **`doctor` (§2.6)** times `git --version`. It warns at more than 1 s, and when there's no answer in 3 s.
+- **The executable (§2.2).**
+  - `npm run package:sea` (`scripts/sea.ts`):
+    - builds the npm package;
+    - installs its `.tgz` into an empty prefix, as `npm i isorite` would, so the dependencies are the tree a person
+      gets from npm, this platform's `@opentui` native library among them;
+    - packs that `node_modules` (8,919 files, 32.7 MB gzipped) as one SEA asset;
+    - injects it into this Node with postject, signing again on macOS.
+  - `scripts/sea-boot.cjs` unpacks it into `~/.cache/isorite/<version>/` once (3 s), then imports
+    `node_modules/isorite/dist/main.js` and calls its new `run()`.
+  - `self.ts`: the proxy's rerun and `term`'s server run the executable itself, with only the arguments, when it's
+    single.
+  - **Found on the way:** the repository's tree has two copies of `solid-js` (the plugin's 1.9.15, and 1.9.12 for
+    `@opentui/solid`'s peer). A plain `npm install` in the package refuses it (ERESOLVE), hence the install from
+    the `.tgz`.
+  - The Linux x64 executable is 159 MB. From an empty home:
+    - `--version` and `doctor --offline` work;
+    - the model installs from the `.tgz`;
+    - `serve` answers, with the page, search, and search by meaning (the worker and its WebAssembly from the cache);
+    - `term` with OpenCode 2.0.32 loads the plugin from the cache and warns of OpenCode's page.
+  - `install.sh` and `install.ps1` fetch the executable for the machine, check it against `SHA256SUMS` (or
+    `--sha256`), and print every address they fetch. `--url` is for a mirror.
+    - `install.sh` was checked against a local mirror, including a wrong sum refused with nothing installed.
+    - `install.ps1` hasn't been run: there's no Windows here.
+  - The release workflow builds the five executables, each on its own platform, and runs each from an empty home
+    (version, `doctor`, `serve` on the example base). It attaches them, with `SHA256SUMS` and the installers, to
+    the release.
+    - Only Linux x64 was built here. macOS, Windows and Linux arm64 are first built by the release.
+    - The Intel macOS runner's name (`macos-15-intel`) should be checked when it runs.
+- **The docs:** `setup.md` (install from the executable, `isorite opencode`, `key_prefix`, the model by hand),
+  `terminal.md`, `setup-for-agents.md` (commands, `key_prefix`, the table of failures), `release.md`, and the
+  README.
+- **Tests:**
+  - unit: core 303, engine 128, example 11, guide 9, OpenCode 44 (the 12 end-to-end ones run with OpenCode 2.0.32),
+    server 114 (2 skipped), app 51;
+  - browser: 226 passed and 22 skipped, the prefix field among them;
+  - `svelte-check` is clean.
+- **Real-model spend:** none.
+- **Not done:** the real check is yours, at work. Try the installer (or `--url` from your mirror), `isorite model`
+  with `ISORITE_MODEL_BASE_URL`, `isorite opencode`, `isorite term` and `doctor`, through the proxy.

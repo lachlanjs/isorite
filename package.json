@@ -21,6 +21,7 @@
     "model": "node packages/server/scripts/embed-model.ts",
     "bench:retrieval": "node bench/retrieval.ts",
     "package": "node scripts/package.ts",
+    "package:sea": "node scripts/sea.ts",
     "eval:iso": "node scripts/eval-iso.ts",
     "build:guide": "npm run build:guide -w @isorite/app"
   },

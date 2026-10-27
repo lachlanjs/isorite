@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { AGENTS_FILE, StudyError } from "@isorite/core";
 import { defaultHome, findOpenCode, GATEWAY_KEY, gatewayFrom, NoOpenCode, OPENCODE_PACKAGE, ownPrefix, writeHome, type Found, type Gateway } from "@isorite/opencode";
 import { ConfigSecrets, configPath, gatewayTls, providerConfig } from "./config.ts";
+import { self } from "./self.ts";
 import { link, locate } from "./serve.ts";
 
 // The command itself, to start a server with: main.ts in a checkout, or the one file it is built into for npm.
@@ -68,7 +69,8 @@ export async function ensureServer(path: string | undefined, { port = 4767, env 
     const log = join(tmpdir(), `isorite-term-${port}.log`);
     const out = openSync(log, "w");
     // Apart from this process, so that a second terminal using it keeps it when this one is done.
-    started = spawn(process.execPath, [MAIN, "serve", path!, "--port", String(port), "--held"], { stdio: ["ignore", out, out], env, detached: true });
+    const again = self(MAIN, ["serve", path!, "--port", String(port), "--held"], []);
+    started = spawn(again.command, again.args, { stdio: ["ignore", out, out], env, detached: true });
     const exited = new Promise<void>((done) => started!.once("exit", () => done()));
     const begun = Date.now();
     let told = false;

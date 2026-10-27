@@ -5,9 +5,24 @@ run `isorite doctor`: it checks each step and says what to change.
 
 ## 1. Install
 
+Either one file, with Node inside it:
+
+- **isorite**, as one executable for Linux, macOS or Windows, checked against the release's SHA256SUMS:
+  ```sh
+  curl -fsSL https://github.com/lachlanjs/isorite/releases/latest/download/install.sh | sh
+  ```
+  On Windows, `irm https://github.com/lachlanjs/isorite/releases/latest/download/install.ps1 | iex`. It goes in
+  `~/.local/bin` (`--dir` for another folder). Each address it fetches is printed, so a machine that can't reach
+  GitHub can fetch the same files another way, or from a mirror with `--url <the executable's address>`. It
+  unpacks itself into `~/.cache/isorite/<version>/` the first time it runs. Run the installer again to update.
+
+Or from npm:
+
 - **Node 24** or later (`node --version`).
 - **isorite**: `npm i -g isorite`.
-- For the terminal, **OpenCode 2**: `npm i -g @opencode/cli`.
+
+Then, for the terminal, **OpenCode 2**: `isorite opencode` installs it for isorite alone (in
+`~/.config/isorite/opencode-cli`), leaving your global npm prefix, and any OpenCode 1 you use, as they are.
 
 `isorite guide` now opens the guide, a knowledge base about isorite with things to do in it. Until a provider is set up, Iso there is the guide's finder: no key, nothing sent anywhere.
 
