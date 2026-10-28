@@ -11,7 +11,7 @@
 
   const SAYS: Record<Switch, string> = {
     provenance: "Provenance: whose words are whose (Alt+P)", timeline: "Timeline (Alt+T)", context: "Iso's context: what it is sent, what it read and changed (Alt+C)",
-    questions: "Open questions (Alt+Q)", problems: "Problems (Alt+B)", web: "Links to the web (Alt+W)", code: "Links to code (Alt+K)", pictures: "Pictures (Alt+I)",
+    questions: "Open questions (Alt+Q)", problems: "Problems (Alt+B)", web: "Links to the web (Alt+W)", code: "Links to code (Alt+K)", pictures: "Files beside the notes: pictures, artifacts, data (Alt+I)",
     notes: "Iso may edit the notes (Alt+N)", files: "Iso may edit the project's files (Alt+F)", run: "Iso may run commands (Alt+R)",
   };
   const COLOUR: Record<Switch, string> = { provenance: "growth", timeline: "lattice", questions: "rose", problems: "text", web: "lattice", code: "lattice", pictures: "lattice", context: "growth", notes: "growth", files: "growth", run: "growth" };

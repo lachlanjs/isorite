@@ -88,7 +88,13 @@
     try {
       const all = await app.api.map();
       // The kinds switched off are not on the map (M12), and a resolved question leaves it.
-      const next = { ...all, model: withoutNotes(all.model, (ref) => { const n = all.notes[ref]; return n?.kind === "question" ? !panes.on.questions || !!n.done : n?.kind === "problem" ? !panes.on.problems : false; }) };
+      // Files beside the notes (M23: pictures, artifacts, data, documents, others) are on it when its switch is on.
+      const next = { ...all, model: withoutNotes(all.model, (ref) => {
+        const f = all.files?.[ref];
+        if (f) return !panes.on.pictures;
+        const n = all.notes[ref];
+        return n?.kind === "question" ? !panes.on.questions || !!n.done : n?.kind === "problem" ? !panes.on.problems : false;
+      }) };
       // A changed base is laid out from where things stood (V5), on the same grid and the same way.
       const on = `${flow}|${grain}`, from = laid && laidOn === on ? laid.layout.orders ?? null : null;
       const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from });
@@ -123,7 +129,7 @@
   // A kind switched on or off lays the map out again, from where things stood (V5).
   let kindsWere = "";
   $effect(() => {
-    const now = `${panes.on.questions}|${panes.on.problems}`;
+    const now = `${panes.on.questions}|${panes.on.problems}|${panes.on.pictures}`;
     if (kindsWere && kindsWere !== now) void load();
     kindsWere = now;
   });
@@ -587,7 +593,9 @@
     try { await makeNew(kind, about); } catch (err) { notice = (err as Error).message; }
   }
 
-  const title = (ref: string): string => report?.notes[ref]?.title ?? ref.split("/").at(-1) ?? ref;
+  /** What an item opens: a note, a file, or for a folder of pictures, the note they were pasted into (M22). */
+  const opens = (ref: string): string => (ref.endsWith("/") ? ref.slice(0, -1) : ref);
+  const title = (ref: string): string => report?.notes[ref]?.title ?? report?.files?.[ref]?.title ?? ref.split("/").at(-1) ?? ref;
   const folderName = (ref: string): string => ref.split("/").at(-1) || app.session?.name || "the base";
 
   // ------------------------------------------------------------ moving about
@@ -719,7 +727,7 @@
     // Shift+click gives a note to Iso, or takes it back, with Iso's context shown or not (M14).
     if (e.shiftKey) { if (!ref.startsWith("@")) giveOrTake(ref); return; }
     // Chosen already: open it, beside the Atlas on a desktop (V1).
-    if (chosen === ref) { void panes.open(ref); return; }
+    if (chosen === ref) { void panes.open(opens(ref)); return; }
     const back: string[] = [];
     if (lit && at === chosen && lit.depth[ref]) for (let r: string | undefined = ref; r && r !== chosen; r = lit.via[r]) back.unshift(r);
     walk = walk.includes(ref) ? walk.slice(0, walk.indexOf(ref) + 1) : back.length ? [...walk, ...back] : [ref];
@@ -785,7 +793,7 @@
   // Titles are set once, in the map's units (M12): shown while they are big enough on screen to read.
   const labels = $derived(TITLE_UNITS * drawnK >= TITLE_PX);
   /** The links out of the base switched on, beside their notes. */
-  const sats = $derived(L && report ? satellites(notes.map((n) => n.item), report.notes, { web: panes.on.web, code: panes.on.code, pictures: panes.on.pictures }) : []);
+  const sats = $derived(L && report ? satellites(notes.map((n) => n.item), report.notes, { web: panes.on.web, code: panes.on.code }) : []);
   /** A picture satellite's thumbnail (M22), set once it's had. */
   function thumb(img: HTMLImageElement, p: { path: string; from: "notes" | "code" }) {
     const src = pictureSrc(app.api, p);
@@ -827,7 +835,7 @@
       {#each notes as n (n.item.id)}
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} given={isoLens && givenNotes.has(n.item.ref)} held={isoLens && !givenNotes.has(n.item.ref) ? (heldRows.get(n.item.ref)?.on ? "on" : heldRows.has(n.item.ref) ? "aside" : "") : ""} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={!!lit && !mark} href={noteHref(n.item.ref)}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} file={report.files?.[n.item.ref]?.kind ?? ""} given={isoLens && givenNotes.has(n.item.ref)} held={isoLens && !givenNotes.has(n.item.ref) ? (heldRows.get(n.item.ref)?.on ? "on" : heldRows.has(n.item.ref) ? "aside" : "") : ""} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={!!lit && !mark} href={noteHref(opens(n.item.ref))}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; pointing.onAtlas = pointed; }} />
       {/each}
       {#each sats as s (s.key)}

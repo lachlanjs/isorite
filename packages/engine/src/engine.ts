@@ -3,7 +3,7 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  AGENTS_FILE, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
+  AGENTS_FILE, STRENGTH, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
 import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
@@ -251,7 +251,27 @@ export class Engine implements Api {
       }
       notes[c.id] = { title: c.title, tokens: estimate(c.body.trim()), ...(c.kind !== "note" ? { kind: c.kind } : {}), ...(c.done ? { done: c.done } : {}), ...(links.length ? { links } : {}), ...(pictures.length ? { pictures } : {}) };
     }
-    return { model: mapModel(this.bundle), notes };
+    // Files (M23): each by its title or name, and an artifact joined to the data it says it uses.
+    const model = mapModel(this.bundle), files: NonNullable<MapReport["files"]> = {};
+    const items: string[] = [];
+    const walk = (d: MapModel["root"]): void => { for (const c of d.children) if (c.kind === "dir") walk(c); else if (c.id.startsWith("f:")) items.push(c.ref); };
+    walk(model.root);
+    const all = new Set(items);
+    for (const ref of items) {
+      if (ref.endsWith("/")) { const count = [...this.bundle.files].filter((f) => f.startsWith(ref) && !f.slice(ref.length).includes("/")).length; files[ref] = { title: `${ref.slice(0, -1).split("/").at(-1)} · ${count} ${count === 1 ? "picture" : "pictures"}`, kind: "image", count }; continue; }
+      const kind = citeKind(ref)!, name = ref.split("/").at(-1)!;
+      if (kind !== "artifact") { files[ref] = { title: name, kind }; continue; }
+      const html = await this.opts.notes.read(ref).catch(() => null), m = html ? manifestOf(html) : null;
+      files[ref] = { title: m?.title || name, kind };
+      const dir = ref.split("/").slice(0, -1);
+      for (const u of m?.uses ?? []) {
+        const parts = [...dir];
+        for (const p of u.split("/")) { if (p === "..") parts.pop(); else if (p && p !== ".") parts.push(p); }
+        const to = parts.join("/");
+        if (all.has(to) && !model.edges.some(([a, b]) => a === ref && b === to)) model.edges.push([ref, to, STRENGTH.uses]);
+      }
+    }
+    return { model, notes, ...(items.length ? { files } : {}) };
   }
 
   // ------------------------------------------------------------ code links (M12)

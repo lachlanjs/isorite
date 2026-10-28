@@ -4,12 +4,16 @@
   // edge. What is lit round it is an outline, a pixel or two wide whatever the zoom. It knows nothing of the layout
   // or of Iso.
   import type { LayoutItem } from "@isorite/core/atlas";
+  import type { FileKind } from "@isorite/core";
+  import Glyph from "./Glyph.svelte";
 
-  let { item, title, kind = "", done = false, behind = "var(--ground-0)", mark = "", far = 0, num = 0, iso = "", linked = false, dim = false, moment = "", given = false, held = "", changed = false, pointed = "", order = 0, here = false, href, onpick, onpoint }: {
+  let { item, title, kind = "", file = "", done = false, behind = "var(--ground-0)", mark = "", far = 0, num = 0, iso = "", linked = false, dim = false, moment = "", given = false, held = "", changed = false, pointed = "", order = 0, here = false, href, onpick, onpoint }: {
     item: LayoutItem;
     title: string;
     /** A question or a problem (M12), and whether it is solved. */
     kind?: "" | "question" | "problem";
+    /** A file of the notes (M23): its kind's glyph before its name. */
+    file?: "" | FileKind;
     done?: boolean;
     /** The ground of the folder it stands in: its notch cuts the edge with it. */
     behind?: string;
@@ -43,11 +47,11 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:linked class:dim={dim && !num && !iso && !linked && !given} class:far={far > 1} class:pick={num > 0} class:given class:held={held === "on"} class:aside={held === "aside"} class:changed class:pointed={!!pointed} class:here aria-current={here ? "page" : undefined} {href} aria-label={num ? `${title}: linked, number ${num}` : `${kind === "question" ? "Question: " : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in Iso's context" : held === "on" ? ": read by Iso, in hand" : held === "aside" ? ": read by Iso, set aside" : ""}${changed ? ", changed by Iso" : ""}${pointed ? `, Iso points to it: ${pointed}` : ""}`} title={pointed || (given ? "In Iso's context: shift+click takes it back" : held === "on" ? "Read by Iso, in hand: shift+click sets it aside" : held === "aside" ? "Read by Iso, set aside: shift+click puts it in hand again" : undefined)} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
+<a class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:linked class:dim={dim && !num && !iso && !linked && !given} class:far={far > 1} class:pick={num > 0} class:given class:held={held === "on"} class:aside={held === "aside"} class:changed class:pointed={!!pointed} class:here class:file={!!file} aria-current={here ? "page" : undefined} {href} aria-label={num ? `${title}: linked, number ${num}` : `${kind === "question" ? "Question: " : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in Iso's context" : held === "on" ? ": read by Iso, in hand" : held === "aside" ? ": read by Iso, set aside" : ""}${changed ? ", changed by Iso" : ""}${pointed ? `, Iso points to it: ${pointed}` : ""}`} title={pointed || (given ? "In Iso's context: shift+click takes it back" : held === "on" ? "Read by Iso, in hand: shift+click sets it aside" : held === "aside" ? "Read by Iso, set aside: shift+click puts it in hand again" : undefined)} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
-  onfocus={() => onpoint(true)} onblur={() => onpoint(false)}>{#if kind}<svg class="notch" viewBox="0 0 16 16" aria-hidden="true">{#if kind === "question"}<path d="M5.6 5.6a2.4 2.4 0 1 1 3.4 2.2c-.6.3-1 .8-1 1.5v.9" /><path d="M8 12v1.2" />{:else}<path d="M8 2.5l5.8 10.5H2.2z" fill={done ? "currentColor" : "none"} />{/if}</svg>{/if}<span class="t">{title}</span>{#if num}<b class="num">{num}</b>{/if}{#if order}<b class="order" aria-hidden="true">{order}</b>{/if}{#if changed}<i class="dia" aria-hidden="true"></i>{/if}</a>
+  onfocus={() => onpoint(true)} onblur={() => onpoint(false)}>{#if kind}<svg class="notch" viewBox="0 0 16 16" aria-hidden="true">{#if kind === "question"}<path d="M5.6 5.6a2.4 2.4 0 1 1 3.4 2.2c-.6.3-1 .8-1 1.5v.9" /><path d="M8 12v1.2" />{:else}<path d="M8 2.5l5.8 10.5H2.2z" fill={done ? "currentColor" : "none"} />{/if}</svg>{/if}{#if file}<Glyph kind={file} size={11} />{/if}<span class="t">{#if file && /^[^\s]+\.\w+$/.test(title)}{title.slice(0, title.lastIndexOf("."))}<wbr />{title.slice(title.lastIndexOf("."))}{:else}{title}{/if}</span>{#if num}<b class="num">{num}</b>{/if}{#if order}<b class="order" aria-hidden="true">{order}</b>{/if}{#if changed}<i class="dia" aria-hidden="true"></i>{/if}</a>
 
 <style>
   /* In the map's units: the layer the block is in is scaled to the zoom, and --px is a screen pixel in it. */
@@ -58,6 +62,9 @@
     background: var(--ground-1); border: var(--px) solid var(--line-strong); transition: opacity .15s;
   }
   .n:hover { color: var(--text); text-decoration: none; }
+  /* A file (M23): its glyph, its name in the faint ink, a lighter edge, and no fill of its own. */
+  .n.file { gap: 6px; color: var(--text-faint); background: var(--ground-0); border-style: dashed; border-color: var(--line-strong); }
+  .n.file :global(.glyph) { color: var(--text-soft); }
   .t { display: none; overflow: hidden; overflow-wrap: break-word; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; }
   :global(.atlas-world.labels) .t { display: -webkit-box; }
   /* A kind's glyph (M12) in a notch in the top edge, as a folder's name sits in its frame. */

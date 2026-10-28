@@ -26,7 +26,7 @@ export type { Change, Cost, Discard, Entry, Insert, Moment, Passage, Placement, 
 export { GITATTRIBUTES, OWN_DIR, OWN_FORMAT, SETTINGS_FILE, journalPath, parseSettings, recordPath, settingsText } from "./own.ts";
 export type { Settings as BaseSettings } from "./own.ts";
 export { CONFIG_FILE, STUDY_DIR, STUDY_FORMAT, StudyError, parseStudyConfig } from "./study.ts";
-export { mapModel, reach } from "./map.ts";
+export { isFileRef, mapModel, reach } from "./map.ts";
 export { ABOUT, DONE, codeTarget, doneOf, embedFor, embedRefs, idsOf, kindOf, outwardLinks } from "./kinds.ts";
 export type { Kind, Outward } from "./kinds.ts";
 export type { MapDir, MapModel, MapNote, Reach, ReachLink } from "./map.ts";

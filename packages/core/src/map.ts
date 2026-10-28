@@ -1,10 +1,10 @@
 // The Atlas's model of a knowledge base, and what a note rests on: what lights when one is chosen.
 
-import type { Bundle } from "./bundle.ts";
+import { citeKind, type Bundle, type FileKind } from "./bundle.ts";
 import { STRENGTH } from "./graph.ts";
 
 /** `of` says a question or a problem (M12); a plain note has none. */
-export interface MapNote { kind: "concept"; id: string; ref: string; weight: number; rank: number; of?: "question" | "problem" }
+export interface MapNote { kind: "concept"; id: string; ref: string; weight: number; rank: number; of?: "question" | "problem" | FileKind }
 export interface MapDir { kind: "dir"; id: string; ref: string; children: (MapDir | MapNote)[] }
 export interface MapModel { root: MapDir; edges: [from: string, to: string, strength: number][] }
 
@@ -26,17 +26,50 @@ export function mapModel(base: Bundle): MapModel {
     for (const to of c.attached) if (!strongest.has(to)) strongest.set(to, STRENGTH.uses);
     for (const [to, s] of strongest) edges.push([c.id, to, s]);
   }
-  // A folder that holds files but no notes (a note's pictures, M22), or only such folders, isn't drawn; an empty
-  // one is, waiting for notes.
+  // A folder that holds files but no notes (a note's pictures, M22), or only such folders, isn't drawn as a folder;
+  // an empty one is, waiting for notes.
   const holdsFiles = new Set<string>();
-  for (const f of base.files) holdsFiles.add(f.includes("/") ? f.slice(0, f.lastIndexOf("/")) : "");
+  const parentOf = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
+  for (const f of base.files) holdsFiles.add(parentOf(f));
+
+  // Files (M23, plan-m23 §2.1 b): each file of the notes that isn't a note is an item in its folder, joined to the
+  // notes that cite it. A folder of pictures alone (the pictures pasted into a note, M22) is one item (Q110), its ref
+  // the folder's path with a "/".
+  const pictureFolder = (d: string) => {
+    const dd = base.directories.get(d);
+    const here = [...base.files].filter((f) => parentOf(f) === d);
+    return !!d && (!dd || (!dd.concepts.length && !dd.children.length)) && here.length > 0 && here.every((f) => citeKind(f) === "image");
+  };
+  const refOf = (f: string) => (citeKind(f) === "image" && pictureFolder(parentOf(f)) ? parentOf(f) + "/" : f);
+  const fileEdges = new Map<string, Set<string>>();
+  for (const c of base.concepts.values()) for (const x of c.cites) {
+    if (x.broken || !base.files.has(x.target)) continue;
+    const ref = refOf(x.target);
+    if (!fileEdges.has(c.id)) fileEdges.set(c.id, new Set());
+    fileEdges.get(c.id)!.add(ref);
+  }
+  const rankOf = new Map<string, number>();
+  for (const [from, refs] of fileEdges) for (const ref of refs) { edges.push([from, ref, STRENGTH.uses]); rankOf.set(ref, Math.max(rankOf.get(ref) ?? 0, order.get(from)?.depth ?? 0)); }
+  const filesIn = new Map<string, MapNote[]>();
+  for (const f of [...base.files].sort()) {
+    const of = citeKind(f), ref = of ? refOf(f) : null;
+    if (!of || !ref) continue;
+    const at = ref.endsWith("/") ? parentOf(ref.slice(0, -1)) : parentOf(f);
+    const list = filesIn.get(at) ?? [];
+    if (!list.some((n) => n.ref === ref)) list.push({ kind: "concept", id: "f:" + ref, ref, weight: 1, rank: rankOf.get(ref) ?? 0, of });
+    filesIn.set(at, list);
+  }
   const dir = (id: string): MapDir | null => {
     const d = base.directories.get(id)!;
-    const children = [...[...d.children].sort().map(dir).filter((c): c is MapDir => c !== null), ...[...d.concepts].sort().map(note)];
+    if (id && pictureFolder(id)) return null;
+    const children = [...[...d.children].sort().map(dir).filter((c): c is MapDir => c !== null), ...[...d.concepts].sort().map(note), ...(filesIn.get(id) ?? [])];
     return id && !children.length && (holdsFiles.has(id) || d.children.length) ? null : { kind: "dir", id: "d:" + id, ref: id, children };
   };
   return { root: dir("")!, edges };
 }
+
+/** Whether a map item is a file (M23), not a note: its ref has an extension, or is a folder of pictures. */
+export const isFileRef = (ref: string): boolean => ref.endsWith("/") || citeKind(ref) !== null;
 
 // ------------------------------------------------------------ what a note rests on
 

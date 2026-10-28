@@ -1,7 +1,7 @@
 // The Atlas's model of a base, what a note rests on, and a format 1 study base's isorite.toml, read to move it.
 
 import { describe, expect, test } from "vitest";
-import { Bundle, StudyError, journalPath, mapModel, parseStudyConfig, reach, recordPath, type MapDir } from "../src/index.ts";
+import { Bundle, StudyError, isFileRef, journalPath, mapModel, parseStudyConfig, reach, recordPath, type MapDir } from "../src/index.ts";
 import { gridLayout } from "../src/atlas/layout.js";
 
 const note = (title: string, body = "") => `---\ntype: Concept\ntitle: ${title}\n---\n\n${body}\n`;
@@ -92,12 +92,27 @@ describe("what a note rests on", () => {
   });
 });
 
-test("a folder holding only pictures isn't on the Atlas; an empty one is (M22)", () => {
+test("a folder holding only pictures is one item on the Atlas (M23, Q110), not a folder; an empty one is a folder (M22)", () => {
   const b = Bundle.fromFiles([
     { path: "combat", dir: true }, { path: "combat/hitboxes", dir: true }, { path: "art", dir: true }, { path: "art/sprites", dir: true }, { path: "later", dir: true },
     { path: "combat/hitboxes.md", text: note("Hitboxes", "![p](hitboxes/p.png)") }, { path: "combat/hitboxes/p.png" },
     { path: "art/sprites/player.png" },
   ]);
   const names = (d: MapDir): string[] => d.children.flatMap((c) => (c.kind === "dir" ? [c.ref, ...names(c)] : []));
-  expect(names(mapModel(b).root)).toEqual(["combat", "later"]);
+  const m = mapModel(b);
+  expect(names(m.root)).toEqual(["art", "combat", "later"]);
+  const items = (d: MapDir): string[] => d.children.flatMap((c) => (c.kind === "dir" ? items(c) : [`${c.ref}${c.of ? ` ${c.of}` : ""}`]));
+  expect(items(m.root)).toEqual(["art/sprites/ image", "combat/hitboxes", "combat/hitboxes/ image"]);
+  // The note that shows a picture is joined to its folder's item.
+  expect(m.edges).toContainEqual(["combat/hitboxes", "combat/hitboxes/", 2]);
+});
+
+test("every file of the notes is an item in its folder, joined to the notes that cite it (M23)", () => {
+  const b = Bundle.fromFiles([
+    { path: "sim/run.md", text: note("Run", "[the dashboard](dash.html) and [data](runs.csv)") }, { path: "sim/dash.html" }, { path: "sim/runs.csv" }, { path: "sim/paper.pdf" },
+  ]);
+  const m = mapModel(b), sim = m.root.children.find((c) => c.ref === "sim") as MapDir;
+  expect(sim.children.map((c) => [c.ref, c.kind === "concept" ? c.of ?? "" : "dir"])).toEqual([["sim/run", ""], ["sim/dash.html", "artifact"], ["sim/paper.pdf", "document"], ["sim/runs.csv", "data"]]);
+  expect(m.edges).toEqual([["sim/run", "sim/dash.html", 2], ["sim/run", "sim/runs.csv", 2]]);
+  expect([isFileRef("sim/dash.html"), isFileRef("sim/run"), isFileRef("art/sprites/")]).toEqual([true, false, true]);
 });

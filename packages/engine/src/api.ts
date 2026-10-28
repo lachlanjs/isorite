@@ -2,7 +2,7 @@
 // interface and nothing else, so it does not know whether the engine is
 // behind HTTP (the server) or in the same process (a webview, later).
 
-import type { Anchor, Cost, Entry, MapModel, Passage, SessionMoment } from "@isorite/core";
+import type { Anchor, Cost, Entry, FileKind, MapModel, Passage, SessionMoment } from "@isorite/core";
 import type { Part } from "./iso.ts";
 import type { AgentEdit } from "./agent.ts";
 import type { Step } from "./lookup.ts";
@@ -66,6 +66,9 @@ export interface MapReport {
     /** The pictures it shows (M22), from the notes or the repository (`code`): drawn beside it on the Atlas. */
     pictures?: { href: string; path: string; from: "notes" | "code"; text: string; broken?: true }[];
   }>;
+  /** The files on the map (M23), by their ref: an artifact by its title, anything else by its name; a folder of
+   *  pictures (its path with a "/") by how many it holds. */
+  files?: Record<string, { title: string; kind: FileKind; count?: number }>;
 }
 
 export interface SearchHit {
