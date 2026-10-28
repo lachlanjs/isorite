@@ -21,3 +21,5 @@ want them:
 
 - https://avp.fandom.com/wiki/File:Alien_Isolation_Map_-2.png
 - https://avp.fandom.com/wiki/File:Alien_Isolation_motion_tracker_Nostromo.jpg (the motion tracker, close up)
+
+Good
