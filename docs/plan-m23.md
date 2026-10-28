@@ -115,6 +115,11 @@ Because components only read tokens, a different look is a different theme file:
 
 - In a frame with `sandbox="allow-scripts"` and no `allow-same-origin`: it can't reach isorite's token or API, can't
   open windows, can't navigate isorite.
+- **The frame makes no request of its own.** The host fetches the artifact, inlines the kit and theme into it, and
+  gives the frame that document through `srcdoc`; data still comes over the bridge, so the manifest still decides what
+  it gets. Learned from the demo: a sandboxed frame's requests are cross-site, so behind anything that needs a cookie
+  (a Codespace's forwarded port, a proxy, a login) a frame that fetches its own kit gets a sign-in page instead. With
+  `srcdoc` there is nothing to sign in to, and nothing the frame could reach.
 - Its only way out is a message bridge the host answers: the data files its manifest names (and no others), the
   ground (lapis or quartz, and changes to it), `iso.open`, and its errors.
 - No network from an artifact unless the user allows it for that artifact (**Q112**: per artifact, or never?).
@@ -132,6 +137,21 @@ Because components only read tokens, a different look is a different theme file:
   in the manifest), and they come back to Iso as the tool's result, so it can fix what it wrote in the same turn.
 - **Q113**: whether Iso also sees a picture of the rendered artifact. That needs a model that takes images, which M22
   left to its own milestone.
+
+### 3.6 On the static site
+
+The guide (`npm run build:guide`, GitHub Pages) runs the engine in the browser with no server. M22 already copies
+every picture a guide note cites into the site, and the guide's engine answers `/api/file` from there (plan-m22 §2.7).
+Artifacts fit the same path:
+
+- the build copies each cited artifact **and the data its manifest names**, and the in-browser engine plays host: it
+  fetches them from the site, builds the `srcdoc`, and answers the bridge. The kit and theme ship once with the app.
+- Nothing in an artifact needs a server: it is all client-side by design.
+- Limits are the host's: GitHub Pages allows 1 GB a site and warns on files over 50 MB (rejects over 100 MB); a big
+  data file is a slow first view. An artifact meant for the site should use a summary of its data.
+- **Publishing publishes the data.** A base's data files (experimental evidence, say) would go onto a public site with
+  the artifacts that use them. The build should list what it's about to publish. **Q116**: opt in per artifact or per
+  data file, or publish whatever is cited?
 
 ## 4. Questions and problems (from the design rounds)
 
@@ -185,7 +205,18 @@ You asked for the details section to be reworked, and for artifacts to be viewab
   3D model through the kit's viewer.
 - **Q115**: the pane is called "Note". Keep the name, or call it something that covers every kind?
 
-## 6. Not in M23
+## 6. Picking this up
+
+Where the design work for this milestone lives, for whoever plans it properly:
+
+- this file, and its open questions (Q109 to Q116), to answer before planning;
+- `docs/taste.md`: what is settled about the look (lustre not flash, no directive text, the Atlas's layout untouched,
+  Ioskeley as the display face, understanding phased out);
+- `inspiration/README.md`: the themes, the sketches by letter, and what you kept or dropped;
+- `inspiration/combinations/sketches.src.html` (build with `node inspiration/combinations/build.mjs`): sketches C to V;
+- `inspiration/artifacts/`: the artifact framework working end to end (kit, artifact, data, host, export).
+
+## 7. Not in M23
 
 - The terminal taking isorite's marks (sketched, then set aside).
 - Iso seeing images (Q113).

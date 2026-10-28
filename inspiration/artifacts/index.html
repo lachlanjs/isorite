@@ -45,7 +45,7 @@
     </span>
   </div>
   <div class="said" id="said" role="status"></div>
-  <iframe id="frame" sandbox="allow-scripts" src="entropy-lab.html" title="Entropy lab"></iframe>
+  <iframe id="frame" sandbox="allow-scripts" title="Entropy lab"></iframe>
 </div>
 <script>
   const ARTIFACT = "entropy-lab.html", frame = document.getElementById("frame"), said = document.getElementById("said");
@@ -90,21 +90,30 @@
   seg("ground", (v) => { ground = v; document.documentElement.dataset.ground = v; tell({ type: "ground", ground: v }); });
   seg("look", (v) => { look = v; tell({ type: "look", look: v }); });
 
-  // Standalone: one HTML with the kit, both looks and the data inlined, which opens anywhere.
-  document.getElementById("standalone").addEventListener("click", async () => {
+  // The artifact as one document: its kit and themes inlined, and with the data too for a standalone export. The frame
+  // is given this through srcdoc, so it makes no request of its own: nothing to sign in to, nothing it could reach.
+  async function assemble(withData) {
     await ready;
     const get = async (p) => (await fetch(p)).text(), safe = (t) => t.replace(/<\/(script|style)/gi, "<\\/$1");
     let html = await get(ARTIFACT);
     for (const [tag, href, , lk] of [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"( data-look="(\w+)")?>/g)]) {
       const css = safe(await get(href));
-      html = html.replace(tag, () => `<style${lk ? ` data-look="${lk}"` : ""}>\n${css}\n</style>`);
+      html = html.replace(tag, () => `<style${lk ? ` data-look="${lk}"` : ""}>\n${css}\n<\/style>`);
     }
     const js = safe(await get("kit/kit.js"));
     html = html.replace('<script src="kit/kit.js"><\/script>', () => `<script>\n${js}\n<\/script>`);
-    const data = [];
-    for (const p of allowed) data.push(`<script type="text/plain" data-path="${esc(p)}">${safe(await get(p))}<\/script>`);
-    html = html.replace("</head>", () => `${data.join("\n")}\n</head>`).replace('<html lang="en">', () => `<html lang="en" data-look="${look}" data-ground="${ground}">`);
-    const a = document.createElement("a");
+    if (withData) {
+      const data = [];
+      for (const p of allowed) data.push(`<script type="text/plain" data-path="${esc(p)}">${safe(await get(p))}<\/script>`);
+      html = html.replace("</head>", () => `${data.join("\n")}\n</head>`);
+    }
+    return html.replace('<html lang="en">', () => `<html lang="en" data-look="${look}" data-ground="${ground}">`);
+  }
+  assemble(false).then((html) => { frame.srcdoc = html; });
+
+  // Standalone: the same document with the data inside, which opens anywhere.
+  document.getElementById("standalone").addEventListener("click", async () => {
+    const html = await assemble(true), a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([html], { type: "text/html" }));
     a.download = ARTIFACT.replace(/\.html$/, ".standalone.html");
     a.click();
