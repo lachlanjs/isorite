@@ -107,9 +107,12 @@ understanding is being phased out in favour of questions and problems as the jou
   Iso's (gold ◆), unavailable (faint), the same on every control.
 - **Q, glyphs with a habit**: one drawing rule for every icon (0°, 45°, 90°, 60° for hexagonal ones; 1.5 px; the
   note's chamfer), at 16 and 32 px.
-- **R, questions and problems on the way**: a question is a cavity (hollow, growing in, filled); a problem is a
-  fracture (a rose crack, mended in gold). Iso's asked question with a keep button.
-- **S, the terminal**: the braille crystal while it works, ◆ and ◇, corner-bracket parts, strata in the header.
+- **R, questions and problems on the way** (second version): a question as a specimen label with one mark that fills
+  when answered; a problem as a crafting screen with slots and a progress bar; on the Atlas, ordinary boxes with the
+  mark or the bar. Iso's asked question with a keep button.
+- The terminal sketch (S) is set aside for now.
+- Q now has glyphs for the new node kinds (artifact, data, document, misc) and every kind drawn as an Atlas node; the
+  plan for those kinds and for artifacts is `docs/plan-m23.md`.
 - **T, a note's history as strata**: versions as layers, yours blue and Iso's gold.
 
 Gray area: D's marker and vein are gold, which the tokens reserve for Iso. You liked it gold; if gold should stay Iso's

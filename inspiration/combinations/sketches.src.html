@@ -229,20 +229,25 @@
   .glyphs .solid { fill: currentColor; }
 
   /* ---------------------------------------------------------------- R: questions and problems */
-  .journey { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fill, 150px); gap: 22px 11px; }
-  .journey figure { margin: 0; display: grid; gap: 8px; }
-  .journey svg { display: block; }
-  .journey figcaption { font: 11px/16px var(--ui); color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; }
-  .journey .name { font: 11px var(--ui); fill: var(--text); }
+  .qp { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 11px; margin-top: 18px; max-width: 820px; }
+  .qcard, .pcard { --edge: var(--line); --face: var(--ground-1); --ink: var(--text); padding: 14px 16px; display: grid; gap: 8px; align-content: start; --glint: .25; cursor: pointer; }
+  .qcard:hover, .pcard:hover { --edge: var(--line-strong); }
+  .qno { display: flex; justify-content: space-between; font: 11px/16px var(--ui); color: var(--text-faint); letter-spacing: .06em; }
+  .qm { color: var(--malachite); } .qm.open { color: var(--rose); }
+  .qq { font: 16px/24px var(--serif); color: var(--text); }
+  .qans { font: 14px/22px var(--serif); color: var(--text-soft); padding-left: 10px; border-left: 2px solid var(--malachite); }
+  .qabout, .slotsrow { display: flex; flex-wrap: wrap; gap: 6px; }
+  .br { position: relative; font: 11px/16px var(--ui); color: var(--text-soft); padding: 3px 8px; --b: var(--line-strong); background:
+    linear-gradient(var(--b), var(--b)) top left / 5px 1px no-repeat, linear-gradient(var(--b), var(--b)) top left / 1px 5px no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom right / 5px 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom right / 1px 5px no-repeat; }
+  .sl { font: 11px/16px var(--ui); color: var(--text-faint); padding: 3px 8px; border: 1px dashed var(--line-strong); }
+  .sl.on { color: var(--text); border: 1px solid var(--malachite); }
+  .prog { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; height: 4px; margin-top: 2px; }
+  .prog i { background: var(--line); } .prog i.on { background: var(--malachite); }
   .asks { margin-top: 22px; max-width: 560px; font: 15px/24px var(--serif); color: var(--text); display: flex; gap: 10px; align-items: baseline; padding-left: 16px; position: relative; }
   .asks::before { content: "◇"; position: absolute; left: 0; color: var(--rose); font: 11px/24px var(--ui); }
   .asks .keep { --edge: var(--rose); --face: var(--ground-0); --ink: var(--rose); --cut: 5px; font: 11px var(--ui); text-transform: uppercase; letter-spacing: .06em; padding: 4px 10px; cursor: pointer; --glint: .4; flex: none; }
   .asks .keep:hover { --face: color-mix(in srgb, var(--rose) var(--soft), var(--ground-1)); }
-
-  /* ---------------------------------------------------------------- S: the terminal */
-  .term { margin-top: 18px; max-width: 720px; background: #05090F; color: #C9D3E1; font: 13px/20px var(--ui); padding: 14px 16px; border: 1px solid var(--line); overflow: auto; white-space: pre; }
-  :root[data-ground="quartz"] .term { background: #FBFAF6; color: #1F2A3B; }
-  .term .y { color: var(--growth); } .term .b { color: var(--lattice); } .term .f { color: var(--text-faint); } .term .r { color: var(--rose); } .term .g { color: var(--malachite); } .term .w { color: var(--text); }
 
   /* ---------------------------------------------------------------- T: a note's history as strata */
   .hist { margin-top: 18px; display: flex; gap: 18px; max-width: 640px; }
@@ -401,27 +406,26 @@
 
   <section>
     <h2>Q · Glyphs with a habit</h2>
-    <p>One drawing rule for every icon, from crystal habits: strokes at 0°, 45°, 90° (60° for the hexagonal ones), 1.5 px, square ends, the note's chamfer wherever there's a corner. Shown at 16 and 32 px: whole multiples, so they stay sharp.</p>
+    <p>One drawing rule for every icon, from crystal habits: strokes at 0°, 45°, 90° (60° for the hexagonal ones), 1.5 px, square ends, the note's chamfer wherever there's a corner. Shown at 16 and 32 px: whole multiples, so they stay sharp. With the new kinds (artifact, data, document, misc), and below, every kind as an Atlas node: files in the bundle as full nodes, links out of it as small ones beside their note.</p>
     <div class="glyphs" id="glyphs"></div>
+    <div class="kinds" id="kinds"></div>
   </section>
 
   <section>
     <h2>R · Questions and problems, on the way</h2>
-    <p>With understanding gone, these are the journey. A question is a cavity: hollow while open, crystals growing in from its walls while Iso and you work at it, filled when it's answered. A problem is a fracture: open, it's a crack in the rose; solved, the crack is filled in gold, the way kintsugi mends.</p>
-    <div class="journey">
-      <figure><svg width="150" height="62" viewBox="0 0 150 62"><rect x="1.5" y="1.5" width="146" height="58" fill="none" stroke="var(--rose)" stroke-dasharray="4 3" shape-rendering="crispEdges"/><text class="name" x="12" y="22">Why does Kraft</text><text class="name" x="12" y="36">hold?</text><path d="M133 9L138 14L133 19L128 14Z" fill="none" stroke="var(--rose)"/></svg><figcaption>question · open</figcaption></figure>
-      <figure><svg width="150" height="62" viewBox="0 0 150 62"><rect x="1.5" y="1.5" width="146" height="58" fill="none" stroke="var(--rose)" shape-rendering="crispEdges"/><g fill="color-mix(in srgb, var(--malachite) 45%, transparent)"><path d="M2 2L12 2L7 9Z"/><path d="M12 2L22 2L17 7Z"/><path d="M2 60L14 60L8 52Z"/><path d="M14 60L24 60L19 55Z"/><path d="M148 2L148 14L141 8Z"/><path d="M148 60L136 60L142 53Z"/><path d="M126 60L136 60L131 56Z"/><path d="M2 14L2 26L8 20Z"/></g><text class="name" x="12" y="22">Why does Kraft</text><text class="name" x="12" y="36">hold?</text><path d="M133 9L138 14L133 19L128 14Z" fill="none" stroke="var(--rose)"/></svg><figcaption>question · growing in</figcaption></figure>
-      <figure><svg width="150" height="62" viewBox="0 0 150 62"><rect x="1.5" y="1.5" width="146" height="58" fill="color-mix(in srgb, var(--malachite) 18%, var(--ground-1))" stroke="var(--malachite)" shape-rendering="crispEdges"/><text class="name" x="12" y="22">Why does Kraft</text><text class="name" x="12" y="36">hold?</text><path d="M133 9L138 14L133 19L128 14Z" fill="var(--malachite)"/></svg><figcaption>question · answered</figcaption></figure>
-      <figure><svg width="150" height="62" viewBox="0 0 150 62"><rect x="1.5" y="1.5" width="146" height="58" fill="var(--ground-2)" stroke="var(--rose)" shape-rendering="crispEdges"/><path d="M96 1.5L104 16L99 24L112 38L109 46L118 60.5" fill="none" stroke="var(--rose)" stroke-width="1.5"/><text class="name" x="12" y="22">Build a code</text><text class="name" x="12" y="36">for 5 symbols</text></svg><figcaption>problem · open</figcaption></figure>
-      <figure><svg width="150" height="62" viewBox="0 0 150 62"><rect x="1.5" y="1.5" width="146" height="58" fill="var(--ground-2)" stroke="var(--line-strong)" shape-rendering="crispEdges"/><path d="M96 1.5L104 16L99 24L112 38L109 46L118 60.5" fill="none" stroke="var(--growth)" stroke-width="2.5"/><text class="name" x="12" y="22">Build a code</text><text class="name" x="12" y="36">for 5 symbols</text></svg><figcaption>problem · solved</figcaption></figure>
+    <p>Second try, calmer. A question is a specimen label: catalogue number, the question in your words, the notes it's about in corner brackets, and one mark that fills as it's answered (hollow rose ◇, then malachite ◆ with the answer's first line). A problem is a crafting screen: the notes it uses as slots, and a progress bar of its steps. On the Atlas they stay ordinary boxes; the mark, or the bar along the foot, is the only difference.</p>
+    <div class="qp">
+      <div class="qcard chamfer sheen"><div class="qno">Q-014<span class="qm open">◇</span></div><div class="qq">Why does Kraft's inequality hold for every prefix code?</div><div class="qabout"><span class="br">Kraft inequality</span><span class="br">Source coding</span></div></div>
+      <div class="qcard chamfer sheen done"><div class="qno">Q-009<span class="qm">◆</span></div><div class="qq">Why must codeword lengths be whole numbers?</div><div class="qans">Each symbol of the code alphabet is written once: a length counts symbols.</div><div class="qabout"><span class="br">The bit</span></div></div>
+      <div class="pcard chamfer sheen"><div class="qno">P-003</div><div class="qq">Build a Huffman code for five symbols</div><div class="slotsrow"><span class="sl on">Surprise</span><span class="sl on">Kraft inequality</span><span class="sl">Huffman codes</span></div><div class="prog" aria-label="2 of 5 steps"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div></div>
     </div>
+    <div class="atlas" style="margin-top:22px"><svg width="468" height="92" viewBox="0 0 468 92" role="img" aria-label="Questions and a problem as Atlas boxes">
+      <g transform="translate(16.5 20.5)"><rect class="box" width="96" height="50"/><text class="name" x="9" y="20">Why does</text><text class="name" x="9" y="33">Kraft hold?</text><text x="84" y="14" style="font:10px var(--ui);fill:var(--rose)">◇</text></g>
+      <g transform="translate(128.5 20.5)"><rect class="box" width="96" height="50"/><text class="name" x="9" y="20">Why whole</text><text class="name" x="9" y="33">lengths?</text><text x="84" y="14" style="font:10px var(--ui);fill:var(--malachite)">◆</text></g>
+      <g transform="translate(240.5 20.5)"><rect class="box" width="96" height="50"/><text class="name" x="9" y="20">Huffman for</text><text class="name" x="9" y="33">5 symbols</text><g fill="var(--line-strong)"><rect x="9" y="42" width="11" height="3" fill="var(--malachite)"/><rect x="23" y="42" width="11" height="3" fill="var(--malachite)"/><rect x="37" y="42" width="11" height="3"/><rect x="51" y="42" width="11" height="3"/><rect x="65" y="42" width="11" height="3"/></g></g>
+      <g transform="translate(352.5 20.5)"><rect class="box" width="96" height="50"/><text class="name" x="9" y="20">Prove the</text><text class="name" x="9" y="33">bound</text><g><rect x="9" y="42" width="78" height="3" fill="var(--malachite)"/></g></g>
+    </svg></div>
     <div class="asks">Why must the codeword lengths be whole numbers? <button class="keep chamfer sheen">keep</button></div>
-  </section>
-
-  <section>
-    <h2>S · The same language, in the terminal</h2>
-    <p>For "too opencode'y": the terminal keeps its own agent but takes isorite's marks. The crystal (I) grows in braille while it works; ◆ is Iso, ◇ a question it asks; what it drew on sits in corner brackets (G); the context strata (O) in the header.</p>
-    <div class="term" id="term"></div>
   </section>
 
   <section>
@@ -534,7 +538,11 @@
     ["link", '<path d="M1.75 6.5H4.75V9.5H1.75Z"/><path d="M11.25 6.5H14.25V9.5H11.25Z"/><path d="M4.75 8H11.25"/>'],
     ["picture", '<path d="M4 2.75H13.25V10.5L11 12.75H2.75V4Z"/><path d="M4.5 10.5L7 7.5L8.75 9.25L10 8L11.75 10"/>'],
     ["code", '<path d="M5.25 4.75L2 8L5.25 11.25"/><path d="M10.75 4.75L14 8L10.75 11.25"/><path d="M9.25 3.25L6.75 12.75"/>'],
-    ["web", '<path d="M8 1.75L13.5 4.9V11.1L8 14.25L2.5 11.1V4.9Z"/><path d="M2.5 8H13.5"/><path d="M8 1.75V14.25"/>'],
+    ["web", '<path d="M5.5 1.75H10.5L14.25 5.5V10.5L10.5 14.25H5.5L1.75 10.5V5.5Z"/><path d="M1.75 8H14.25"/><path d="M8 1.75V14.25"/>'],
+    ["artifact", '<path d="M5 2.75H13.25V11L11 13.25H2.75V5Z"/><path d="M2.75 5.75H13.25"/><path d="M4.75 11L7 8.5L8.75 10L11.25 7.5"/>'],
+    ["data", '<path d="M5 2.75H13.25V11L11 13.25H2.75V5Z"/><path d="M2.75 6.75H13.25"/><path d="M2.75 10H13.25"/><path d="M7.5 6.75V13.25"/>'],
+    ["document", '<path d="M2.75 1.75H10L13.25 5V14.25H2.75Z"/><path d="M10 1.75V5H13.25"/><path d="M5 8.25H11"/><path d="M5 11H9"/>'],
+    ["misc", '<path d="M8 1.75L13.5 4.9V11.1L8 14.25L2.5 11.1V4.9Z"/><path d="M2.5 4.9L8 8L13.5 4.9"/><path d="M8 8V14.25"/>'],
     ["search", '<path d="M6.75 2.25L11.25 6.75L6.75 11.25L2.25 6.75Z"/><path d="M9.25 9.25L13.75 13.75"/>'],
     ["settings", '<path d="M5 2.5H11L14 8L11 13.5H5L2 8Z"/><path d="M7 6.25H9L10 8L9 9.75H7L6 8Z"/>'],
     ["new", '<path d="M8 2.75V13.25"/><path d="M2.75 8H13.25"/>'],
@@ -544,53 +552,15 @@
   ];
   const glyphs = document.getElementById("glyphs");
   for (const [name, d] of GLYPHS) glyphs.insertAdjacentHTML("beforeend", `<figure><div class="pair"><svg class="x1" viewBox="0 0 16 16" aria-hidden="true">${d}</svg><svg class="x2" viewBox="0 0 16 16" aria-hidden="true" style="stroke-width:.75">${d}</svg></div><figcaption>${name}</figcaption></figure>`);
+  // Q: every kind as an Atlas node. Files in the bundle are full boxes; links out of it are small ones.
+  const g = Object.fromEntries(GLYPHS), KINDS = [["note", "Huffman codes", 1], ["picture", "tree.png", 1], ["artifact", "Code lengths", 1], ["data", "runs.csv", 1], ["document", "Shannon 1948", 1], ["misc", "rotor.glb", 1], ["web", "wikipedia", 0], ["code", "huffman.py", 0]];
+  document.getElementById("kinds").innerHTML = `<div class="atlas" style="margin-top:22px"><svg width="${KINDS.length * 116 + 20}" height="92" viewBox="0 0 ${KINDS.length * 116 + 20} 92">${KINDS.map(([k, name, full], i) => {
+    const x = 16.5 + i * 116, w = full ? 104 : 96, h = full ? 50 : 30, y = full ? 20.5 : 30.5;
+    return `<g transform="translate(${x} ${y})"><rect class="box" width="${w}" height="${h}"${full ? "" : ' style="fill:var(--ground-1)"'}/><g transform="translate(6 ${full ? 6 : 7}) scale(.75)" style="fill:none;stroke:var(--text-soft);stroke-width:1.5">${g[k]}</g><text class="name" x="${full ? 9 : 22}" y="${full ? 36 : 19}">${name}</text></g><text class="count" x="${x}" y="88">${k}</text>`;
+  }).join("")}</svg></div>`;
   // T: a layer's date under the title while it's under the pointer.
   const when = document.getElementById("when");
   for (const i of document.querySelectorAll("#column i")) { i.addEventListener("mouseenter", () => { when.textContent = i.dataset.w; }); i.addEventListener("mouseleave", () => { when.textContent = ""; }); }
-  // S: the terminal, with a crystal growing in braille: the crystal is rasterised to a 12 × 12 dot grid, one frame
-  // per step outward, and each 2 × 4 block of dots is one braille character.
-  const term = document.getElementById("term");
-  const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-  function braille(c, upTo) {
-    const W = 12, H = 12, dots = Array.from({ length: H }, () => Array(W).fill(false));
-    for (let k = 0; k < c.n; k++) {
-      const rot = k * 2 * Math.PI / c.n - Math.PI / 2, cos = Math.cos(rot), sin = Math.sin(rot);
-      for (const [x1, y1, x2, y2, d] of c.segs) {
-        if (d / c.steps > upTo) continue;
-        for (let t = 0; t <= 1; t += .2) {
-          const x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t, px = (x * cos - y * sin) * c.scale, py = (x * sin + y * cos) * c.scale;
-          const gx = Math.round((px + 22) / 44 * (W - 1)), gy = Math.round((py + 22) / 44 * (H - 1));
-          if (gx >= 0 && gx < W && gy >= 0 && gy < H) dots[gy][gx] = true;
-        }
-      }
-    }
-    const BIT = [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]], lines = [];
-    for (let row = 0; row < H / 4; row++) { let line = ""; for (let col = 0; col < W / 2; col++) { let b = 0; for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 2; dx++) if (dots[row * 4 + dy][col * 2 + dx]) b |= BIT[dy][dx]; line += String.fromCharCode(0x2800 + b); } lines.push(line); }
-    return lines;
-  }
-  let tk = 37, tframe = 0;
-  function paint() {
-    const c = CRYSTALS[tk], up = Math.min(1, tframe / 10), [b1, b2, b3] = braille(c, up);
-    term.innerHTML = [
-      `<span class="w">ISO</span> <span class="f">mid</span>                              <span class="f">▨▨</span><span class="b">████</span><span class="f">▥▥▥▥▥</span><span class="g">█</span><span class="f">······  10.1k of 15k</span>`,
-      ``,
-      `<span class="b">›</span> <span class="w">${esc("what does Kraft's inequality bound?")}</span>`,
-      `<span class="f">· read      Kraft inequality</span>`,
-      `<span class="f">· followed  Source coding → Kraft inequality</span>`,
-      `<span class="y">${b1}</span>`,
-      `<span class="y">${b2}</span>  <span class="f">Iso is reading Surprise</span>`,
-      `<span class="y">${b3}</span>`,
-      ``,
-      `<span class="y">◆</span> <span class="w">It bounds the codeword lengths a prefix code can have:</span>`,
-      `  <span class="w">the sum of 2^−ℓ over them is at most one.</span>`,
-      `  <span class="f">⌜</span><span class="b">Kraft inequality</span><span class="f">⌟  ⌜</span><span class="b">Surprise</span><span class="f">⌟</span>`,
-      ``,
-      `<span class="r">◇</span> <span class="w">Why must the lengths be whole numbers?</span>  <span class="r">[keep]</span>`,
-    ].join("\n");
-    tframe++;
-    if (tframe > 24) { tframe = 0; tk = Math.floor(Math.random() * CRYSTALS.length); }
-  }
-  paint(); setInterval(paint, 110);
 </script>
 </body>
 </html>
