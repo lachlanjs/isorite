@@ -240,17 +240,88 @@ if (!scripted) {
   const all = (await (await fetch("https://openrouter.ai/api/v1/models")).json() as { data: { id: string; top_provider?: { max_completion_tokens?: number } }[] }).data;
   for (const m of all) if (m.top_provider?.max_completion_tokens) limits.set(m.id, m.top_provider.max_completion_tokens);
 }
+// --kit 1 (the default): Iso itself is asked, through the engine, in write mode, on a fresh copy of the N-body example
+// base with the case's data beside where it's asked to write: its prompt, its tools (artifact_recipe, read_data,
+// write_artifact with its checks and its run unseen), and its loop (room to think, effort low when it wrote nothing).
+// What it wrote is then rendered for the screenshots and checked as above. --kit 0 is the trial: the model asked
+// directly with kit 0's context.
+const KIT1 = (arg("--kit") ?? "1") === "1";
+const BUILT_KIT = join(ROOT, "app", "build", "kit");
+async function attemptIso(model: string, c: Case): Promise<Result> {
+  const { mkdtempSync, rmSync, cpSync, readdirSync: ls } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { Engine, MemorySecrets, OPENROUTER, KEY, systemClock } = await import("@isorite/engine");
+  const { writeExample } = await import("../packages/example/src/node.ts");
+  const { NodeFiles } = await import("../packages/server/src/nodefiles.ts");
+  const { runArtifact } = await import("../packages/server/src/serve.ts");
+  const { assemble, checkArtifact, columnsOf, parseData, KIT_FILES } = await import("@isorite/kit");
+  const t0 = Date.now(), res: Result = { model, case: c, writes: 0, reads: [], broken: [], usd: 0, seconds: 0 };
+  const root = mkdtempSync(join(tmpdir(), "isorite-artifacts-"));
+  try {
+    const { notes } = await writeExample(join(root, "base"));
+    const dir = dirname(c.path);
+    mkdirSync(join(notes, dir), { recursive: true });
+    for (const f of c.files) cpSync(join(EVAL, "data", f), join(notes, dir, f));
+    mkdirSync(join(notes, ".isorite"), { recursive: true });
+    const engine = await Engine.open({
+      notes: new NodeFiles(notes), own: new NodeFiles(join(notes, ".isorite")), clock: systemClock, device: "eval01", name: "nbody-notes",
+      http: { fetch }, secrets: new MemorySecrets({ [KEY]: KEY_VALUE }), provider: { ...OPENROUTER, tiers: { low: model, mid: model, max: model } },
+      renderArtifact: (path, html) => runArtifact(notes, path, html),
+    });
+    const given = c.files.length ? `Data files beside it: ${c.files.join(", ")}.` : "It uses no data file.";
+    const { conversation, turn } = await engine.converse({ mode: "write", asked: `${c.asked}\n\nWrite it to ${c.path}. ${given}`, tier: "mid", given: [] });
+    let cost = 0, failed = "";
+    await new Promise<void>((done) => {
+      const off = engine.events((e) => {
+        if (!("request" in e) || e.request !== turn) return;
+        if (e.type === "iso-done") { cost = (e as { cost?: { usd: number } }).cost?.usd ?? 0; off(); done(); }
+        else if (e.type === "iso-failed" || e.type === "iso-stopped") { failed = (e as { message?: string }).message ?? e.type; off(); done(); }
+      });
+    });
+    res.usd = cost; spent += cost;
+    const t = (await engine.conversation(conversation))!.turns[0]!;
+    res.writes = t.items.filter((i) => i.kind === "change" && i.note.endsWith(".html")).length;
+    res.reads = t.items.flatMap((i) => (i.kind === "look" && i.step.tool === "read_data" ? [String((i.step as { said?: string }).said ?? "")] : []));
+    if (failed) res.note = `failed: ${failed.slice(0, 200)}`;
+    writeFileSync(join(out, `${model.split("/")[1]}--${c.name}.json`), JSON.stringify(t, null, 1));
+    const written = ls(join(notes, dir)).filter((f) => f.endsWith(".html")).map((f) => join(dir, f));
+    const path = written.includes(c.path) ? c.path : written[0];
+    if (path) {
+      const html = readFileSync(join(notes, path), "utf8");
+      res.html = html;
+      writeFileSync(join(out, `${model.split("/")[1]}--${c.name}-${res.writes}.html`), html);
+      const columns = Object.fromEntries(c.files.filter((f) => f.endsWith(".csv")).map((f) => [f, columnsOf(parseData(f, dataText(f)))]));
+      res.broken = checkArtifact(html, { files: c.files, columns }).filter((b) => b.level === "error").map((b) => `rule ${b.rule}: ${b.message}`);
+      const kit = Object.fromEntries(KIT_FILES.map((f) => [f, readFileSync(join(BUILT_KIT, f), "utf8")])) as never;
+      const stem = `${model.split("/")[1]}--${c.name}-${res.writes}`, shots: string[] = [];
+      const { renderArtifact, findBrowser } = await import("../packages/server/src/render.ts");
+      const read = async (rel: string) => { try { return rel.endsWith(".csv") ? readFileSync(join(notes, dir, rel), "utf8") : new Uint8Array(readFileSync(join(notes, dir, rel))); } catch { return null; } };
+      let first: Render | undefined;
+      for (const ground of ["lapis", "quartz"]) {
+        const got = await renderArtifact(assemble(html, kit, { ground }), (html.match(/<meta name="isorite:uses" content="([^"]*)"/)?.[1] ?? "").split(/[\s,]+/).filter(Boolean), read, { executable: findBrowser()!, ground, screenshot: true });
+        if (got.screenshot) { writeFileSync(join(out, `${stem}-${ground}.png`), got.screenshot); shots.push(`${stem}-${ground}.png`); }
+        first ??= { rendered: got.rendered, errors: got.errors, drawn: got.drawn, height: got.height, shots };
+      }
+      res.render = first;
+    } else res.note ??= "wrote no artifact";
+  } finally { rmSync(root, { recursive: true, force: true }); }
+  res.seconds = Math.round((Date.now() - t0) / 1000);
+  return res;
+}
+const KEY_VALUE = KEY ?? "";
+
 const results: Result[] = [];
 for (const model of MODELS) {
   // The models in parallel would be quicker, but one at a time keeps the spend checkable between cases.
   for (const c of cases) {
     if (spent > budget) break;
     process.stdout.write(`${model} ${c.name} … `);
-    try { const r = await attempt(model, c); results.push(r); console.log(`${r.writes} writes, ${r.broken.length} rules, ${r.render?.errors.length ?? "-"} errors, drew ${r.render?.drawn ?? 0}, $${r.usd.toFixed(3)} (total $${spent.toFixed(2)})`); }
+    try { const r = await (KIT1 ? attemptIso(model, c) : attempt(model, c)); results.push(r); console.log(`${r.writes} writes, ${r.broken.length} rules, ${r.render?.errors.length ?? "-"} errors, drew ${r.render?.drawn ?? 0}, $${r.usd.toFixed(3)} (total $${spent.toFixed(2)})`); }
     catch (e) { console.log(`failed: ${(e as Error).message}`); results.push({ model, case: c, writes: 0, reads: [], broken: [], usd: 0, seconds: 0, note: `failed: ${(e as Error).message}` }); }
   }
 }
 await browser?.close();
+await (await import("../packages/server/src/render.ts")).closeBrowser();
 
 const ok = (r: Result) => !!r.render?.rendered && !r.render.errors.length && !r.broken.length && r.render.drawn > 0;
 const lines = [`# Artifact eval, ${today}`, "", `Spent $${spent.toFixed(2)} of $${budget}.${cut.size ? ` Used the whole output budget thinking, at least once: ${[...cut].join(", ")}.` : ""}`, "", "| model | case | level | passes | writes | read_data | rules broken | errors | drawn | $ | s |", "|---|---|---|---|---|---|---|---|---|---|---|"];

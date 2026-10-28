@@ -89,7 +89,7 @@ export async function openEngine({ notes }: Opened, device = deviceId(), config 
 }
 
 /** Run an artifact unseen: null when there's no browser, or no built kit, to run it with. */
-async function runArtifact(notes: string, path: string, html: string): Promise<ArtifactRun | null> {
+export async function runArtifact(notes: string, path: string, html: string): Promise<ArtifactRun | null> {
   const executable = findBrowser(), kitDir = join(WEB_DIR, "kit");
   if (!executable || !existsSync(join(kitDir, "kit.js"))) return null;
   const kit = Object.fromEntries(KIT_FILES.map((f) => [f, readFileSync(join(kitDir, f), "utf8")])) as KitFiles;
