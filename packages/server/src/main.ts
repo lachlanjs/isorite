@@ -11,7 +11,8 @@
 //   isorite doctor [<notes>] [--report]    whether isorite can work here, a step at a time
 
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { checkArtifact, columnsOf, manifestOf, parseData } from "@isorite/kit";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { StudyError, citeKind } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
@@ -77,8 +78,20 @@ export function check(notes: string, out: (line: string) => void = console.log, 
   const bundle = loadBundle(root), issues = bundle.lint(), cycles = bundle.requiresCycles();
   for (const i of issues) out(`${i.level.padEnd(7)} ${i.path}: ${i.message}`);
   for (const c of cycles) out(`warning requires cycle: ${c.join(" -> ")}`);
-  const errors = issues.filter((i) => i.level === "error").length;
-  out(`${bundle.concepts.size} notes in ${bundle.directories.size} folders; ${errors} errors, ${issues.length - errors} warnings, ${cycles.length} requires cycles`);
+  // Artifacts on the kit (M23): the rules write_artifact keeps, checked of each, with the files beside it.
+  let artifactErrors = 0, artifactWarnings = 0;
+  for (const f of [...bundle.files].filter((x) => citeKind(x) === "artifact").sort()) {
+    const html = readFileSync(join(root, f), "utf8");
+    if (manifestOf(html).kit === null) continue; // an HTML file of its own: shown as it is, not checked
+    const dir = dirname(join(root, f)), uses = manifestOf(html).uses, files = uses.filter((u) => existsSync(join(dir, u)));
+    const columns = Object.fromEntries(files.filter((u) => citeKind(u) === "data").flatMap((u) => { try { return [[u, columnsOf(parseData(u, readFileSync(join(dir, u), "utf8")))]]; } catch { return []; } }));
+    for (const b of checkArtifact(html, { files, columns })) {
+      out(`${b.level.padEnd(7)} ${f}: ${b.message}`);
+      if (b.level === "error") artifactErrors++; else artifactWarnings++;
+    }
+  }
+  const errors = issues.filter((i) => i.level === "error").length + artifactErrors;
+  out(`${bundle.concepts.size} notes in ${bundle.directories.size} folders; ${errors} errors, ${issues.length - issues.filter((i) => i.level === "error").length + artifactWarnings} warnings, ${cycles.length} requires cycles`);
   // The pictures no note shows or links to (M22): yours to keep or delete, so information, never a warning.
   if (unused) {
     const cited = new Set([...bundle.concepts.values()].flatMap((c) => c.cites.map((x) => x.target)));

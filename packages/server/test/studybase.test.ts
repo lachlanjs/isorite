@@ -95,3 +95,16 @@ test("check reports what is wrong and counts the notes", () => {
   expect(lines.join("\n")).toMatch(/bit\.md/);
   expect([0, 1]).toContain(code);
 });
+
+test("check checks each artifact on the kit by write_artifact's rules, with its data beside it (M23); an HTML file of its own is left be", () => {
+  const repo = base(), lines: string[] = [];
+  writeFileSync(join(repo, "basics/runs.csv"), "t,e\n0,1\n");
+  writeFileSync(join(repo, "basics/fig.html"), '<title>Fig</title><meta name="description" content="d"><meta name="isorite:kit" content="1"><meta name="isorite:uses" content="runs.csv"><iso-chart data="runs.csv" x="t" y="energy"></iso-chart><style>p{color:#fff}</style>');
+  writeFileSync(join(repo, "basics/old.html"), "<p style='color:#fff'>a report of its own</p>");
+  const code = check(repo, (l) => lines.push(l));
+  expect(lines.filter((l) => l.includes(".html"))).toEqual([
+    'error   basics/fig.html: <iso-chart data="runs.csv" y="energy">: runs.csv has no column "energy" (it has t, e)',
+    "error   basics/fig.html: a colour of its own (#fff): use the theme's, var(--lattice) in CSS or iso.tokens().lattice in script",
+  ]);
+  expect(code).toBe(1);
+});
