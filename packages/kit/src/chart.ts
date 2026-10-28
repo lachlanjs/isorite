@@ -98,6 +98,17 @@ class IsoChart extends HTMLElement {
         }
       } else window.iso.complain(`<iso-chart at="${at}">: iso.state.${at} isn't a number yet (an iso-slider or iso-play named ${at} sets it)`);
     }
+    // On a log axis, the grid only at the powers of ten: Plot's own falls at every minor tick, too close to read.
+    const decades = (vs: unknown[]) => {
+      const ns = vs.filter((v): v is number => typeof v === "number" && v > 0);
+      if (!ns.length) return [];
+      const out: number[] = [];
+      // Within the data only: a grid line is a mark, and Plot would widen the axis to reach it.
+      for (let e = Math.ceil(Math.log10(Math.min(...ns)) - 1e-9); e <= Math.floor(Math.log10(Math.max(...ns)) + 1e-9); e++) out.push(10 ** e);
+      return out;
+    };
+    if (xScale === "log" && !across) marks.unshift(Plot.gridX(decades(usable.map((p) => p.x)), { stroke: t.line, strokeOpacity: 1 }));
+    if (yScale === "log" && !across) marks.unshift(Plot.gridY(decades(usable.map((p) => p.y)), { stroke: t.line, strokeOpacity: 1 }));
     marks.push(Plot.frame({ stroke: t.line, anchor: "bottom" }), Plot.frame({ stroke: t.line, anchor: "left" }));
     const legend = series && new Set(usable.map((p) => p.series)).size > 1;
     try {
@@ -110,8 +121,8 @@ class IsoChart extends HTMLElement {
           x: { label: attr(this, "y-label", ys.length > 1 ? "" : pretty(ys[0]!)), grid: true, labelAnchor: "center" as const, labelArrow: "none" as const, tickFormat: fmtTick("linear") },
           y: { label: null },
         } : {
-        x: { ...(xText ? {} : { type: xScale as "linear" }), label: attr(this, "x-label", pretty(x)), grid: !xText, labelAnchor: "center", labelArrow: "none", nice: xScale !== "log", ...(xText ? {} : { tickFormat: fmtTick(xScale) }) },
-        y: { type: yScale as "linear", label: attr(this, "y-label", ys.length > 1 ? "" : pretty(ys[0]!)), grid: true, labelArrow: "none", nice: yScale !== "log", tickFormat: fmtTick(yScale) },
+        x: { ...(xText ? {} : { type: xScale as "linear" }), label: attr(this, "x-label", pretty(x)), grid: !xText && xScale !== "log", labelAnchor: "center", labelArrow: "none", nice: xScale !== "log", ...(xText ? {} : { tickFormat: fmtTick(xScale) }) },
+        y: { type: yScale as "linear", label: attr(this, "y-label", ys.length > 1 ? "" : pretty(ys[0]!)), grid: yScale !== "log", labelArrow: "none", nice: yScale !== "log", tickFormat: fmtTick(yScale) },
         }),
         color: { ...plotStyle(t, 0, 0).color, ...(series ? { domain: [...new Set(usable.map((p) => p.series))] as string[] } : {}) },
       });

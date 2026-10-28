@@ -102,7 +102,7 @@ Keep the notes in a folder of their own. It can start empty, and is best kept as
 isorite serve ~/notes/my-project          # the browser, at http://localhost:4767/
 ```
 
-Paste a screenshot or drop a picture into a note and it's kept beside the note, named as you say; `[[!` shows one that's there already. isorite keeps what it knows about the notes (each note's history, Iso's conversations) in `.isorite/` inside the folder, to be committed with them. A study base from an earlier isorite is moved in with `isorite migrate <study base>`.
+Paste a screenshot or drop a picture into a note and it's kept beside the note, named as you say; `[[!` shows one that's there already. Ask Iso for a dashboard of a data file, a simulation or an explorable explanation and it builds an artifact: a page beside the notes that works, in isorite's look, shown in the Note pane or in place in a note, and saved standalone with its data inside. isorite keeps what it knows about the notes (each note's history, Iso's conversations) in `.isorite/` inside the folder, to be committed with them. A study base from an earlier isorite is moved in with `isorite migrate <study base>`.
 
 To work in your code with the notes beside it, start the terminal from the repository (after `isorite opencode`, above; on Windows, in Windows Terminal). This also starts the browser's server if it isn't running. [docs/terminal.md](docs/terminal.md) has more.
 
