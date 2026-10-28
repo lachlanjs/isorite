@@ -348,3 +348,58 @@ What changed because of it:
 - **The context is staged** (§3.7): the write-mode prompt has a short section; `artifact_recipe` gives the reference (about 2,500 tokens) and one of five recipes, each a complete working artifact on its own small data (`packages/kit/context/`).
 
 Judged by eye, the static checks passing is a low bar: Gemma's artifacts work but look thin beside Sonnet's. The full eval on kit 1 (step 10) is where that is measured.
+
+### The eval on kit 1 (step 10, 2026-10-28)
+
+`npm run eval:artifacts` now asks Iso itself: the engine in write mode on a fresh example base, with its prompt, its
+tools, write_artifact's checks and unseen run, and its loop. The same eight cases, the same three models; about
+US$0.85 for the 24, and some 30 cents of reruns (about US$4 of the US$10 in all).
+
+| | passed | $ for eight | notes |
+|---|---|---|---|
+| Sonnet 5.5 | 8 of 8 | 0.65 (kit 0: about 2.75) | Markup and recipes write a third as much: 20 to 94 s a case. |
+| DeepSeek V4.1 Flash | 8 of 8 | 0.12 | With the loop's effort low, nothing was lost to thinking. |
+| Gemma 4 31B | 8 of 8 after two fixes | 0.06 | First 6 of 8: below. |
+
+What the first run found, and what changed:
+
+- **A table is drawn too.** An artifact of numbers and a table drew no SVG or canvas, and the check called it blank:
+  the check counts a table's cells now.
+- **`uses` is worked out, not trusted.** Gemma gave `uses: []`, and write_artifact wrote that over the file's own
+  manifest, then told it to mend the manifest; it did, five times, and each was overwritten. write_artifact now uses
+  what's given, what the file's manifest says and what its markup and script read, together.
+- **A reply of nothing at all** is asked for once more (`loop.ts`).
+- **The kit stays quiet about a few zeros on a log scale** (an error of 0 at the start), and complains when most of a
+  series is lost.
+
+By eye: Sonnet's are rich and right (the explorable sets its maths, reads its numbers out, and charts through the
+kit); DeepSeek's and Gemma's are plainer but correct and in isorite's look, which is the point of the kit: the floor
+is set by the elements, not the model.
+
+### Built, step by step
+
+1. The trial on kit 0, and the eval (`scripts/eval-artifacts.ts`, `eval/artifacts/`).
+2. Every file a note cites is kept as its kind (`citeKind`: artifact, image, data, document, misc).
+3. The kit, `packages/kit`: two themes, the elements, Plot, three.js and KaTeX each added only when used, the host's
+   assembly, the rules, data shapes; Iso's context (`context/reference.md`, five recipes on their own data).
+4. The host: `/api/file` gives any file but a note; the Note pane opens every kind; an artifact in its sandboxed frame
+   by srcdoc, with its look and standalone export.
+5. Iso's tools: `artifact_recipe`, `read_data`, `write_artifact` (checked, journalled, undone, run unseen),
+   `read_artifact`; room to think; `isorite doctor` finds a browser; `isorite check` checks artifacts.
+6. The label in place of details; delete in the pane's menu.
+7. Files on the Atlas as items (the algorithms untouched), a picture folder as one, behind the files switch (Alt+I).
+8. Questions as diamonds; problems chained by requires, in the guide and Iso's context.
+9. An artifact shown in a note works in place; the guide's site serves artifacts and their data; a guide note on them.
+10. The eval through Iso; docs; 0.11.0.
+
+### Not done, or found on the way
+
+- **Q113's vision check** (a screenshot shown to a model with vision) isn't built: the run unseen gives errors back, not
+  a look. The eval's screenshots are for a person.
+- **Q116's opt-in per data file** has nothing to apply to yet: the only site is the guide's. It belongs with
+  publishing a base, when that comes.
+- **History as strata** in the label (sketch T) and web and code links drawn as node-styled satellites (§2.1 a) are
+  left as they were.
+- **The phone's Atlas test** "the chain is walked" fails, hiding "2 steps back" in the header; it failed the same way
+  before M23 (checked at 2d13ce6).
+
