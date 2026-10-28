@@ -1,0 +1,58 @@
+[
+  {
+    "name": "one-chart",
+    "level": "basic",
+    "files": ["timesteps.csv"],
+    "path": "integrators/timestep-sweep.html",
+    "asked": "Make an artifact from timesteps.csv showing how each integrator's worst energy error falls as the time step shrinks. One chart is enough, on log axes."
+  },
+  {
+    "name": "stats-and-table",
+    "level": "basic",
+    "files": ["timesteps.csv"],
+    "path": "integrators/sweep-table.html",
+    "asked": "Make an artifact with the time-step sweep as a table, and three big numbers above it: the best leapfrog error, the best Euler error, and how many times smaller leapfrog's is at the same step."
+  },
+  {
+    "name": "dashboard",
+    "level": "mid",
+    "files": ["orbits.csv", "energy-leapfrog.csv"],
+    "path": "simulation/run-dashboard.html",
+    "asked": "Build a dashboard of the leapfrog run: the bodies' paths in the x-y plane, kinetic, potential and total energy over time, and the relative energy error over time. A slider for time should mark where every body is at that moment on the paths and on the energy charts."
+  },
+  {
+    "name": "compare-runs",
+    "level": "mid",
+    "files": ["energy-euler.csv", "energy-leapfrog.csv"],
+    "path": "integrators/euler-vs-leapfrog.html",
+    "asked": "Compare the Euler and leapfrog runs (same initial conditions, same time step): their relative energy error over time on one chart, the final error of each as numbers, and a toggle between a linear and a log scale for the error's size."
+  },
+  {
+    "name": "simulation",
+    "level": "hard",
+    "files": [],
+    "path": "physics/softening-sim.html",
+    "asked": "Make a simulation of a small N-body system (start with the three-body figure-eight orbit) integrated live with leapfrog, with sliders for the time step and the softening length, play and pause, a reset, and a live readout and small chart of the relative energy error, so I can see how softening and the time step trade accuracy."
+  },
+  {
+    "name": "explorable",
+    "level": "hard",
+    "files": [],
+    "path": "physics/softening-explained.html",
+    "asked": "Make an explorable explanation of gravitational softening: the force between two bodies against their separation, with and without softening, a slider for the softening length, the largest force each allows as a number, and a second view where two bodies pass close to each other and you can see the softened and unsoftened paths diverge. Link to the note physics/softening."
+  },
+  {
+    "name": "orbits-3d",
+    "level": "hard",
+    "files": ["orbits.csv"],
+    "path": "simulation/orbits-3d.html",
+    "asked": "Show the four bodies' orbits from orbits.csv in 3D, which I can rotate by dragging, with each body's path in its own colour, the current positions as dots, a time slider and a play button that moves them along their paths."
+  },
+  {
+    "name": "quadtree",
+    "level": "hard",
+    "files": [],
+    "path": "algorithms/quadtree-explorer.html",
+    "asked": "Make an interactive Barnes-Hut quadtree explorer: points scattered in a square (a button to scatter again, a slider for how many), the quadtree's cells drawn over them, and a slider for the opening angle theta. Picking a point shows which cells it treats as single masses and which it opens, and readouts compare the number of force calculations with direct summation."
+  }
+]

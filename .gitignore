@@ -43,3 +43,5 @@ testing-notes.png
 inspiration/artifacts/kit/isorite.css
 # A personal API key (OpenRouter), read into an environment variable for the eval; never committed
 .key
+# The artifact kit, built from packages/kit by the app's build (and dev)
+app/static/kit/

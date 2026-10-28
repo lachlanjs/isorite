@@ -1,7 +1,8 @@
 # Milestone 23 (draft): every file a node, and artifacts Iso can build
 
-Drafted 2026-10-28 from a design conversation; its questions answered the same day; **not yet approved**. It records what was asked and a proposal, so the
-milestone can be planned properly later. Questions are numbered from Q109 (Q108 is M22's); all were answered on 2026-10-28.
+Drafted 2026-10-28 from a design conversation; its questions answered the same day; **approved 2026-10-28** ("proceed
+with the milestone"), and built in the order of §8. Questions are numbered from Q109 (Q108 is M22's); all were
+answered on 2026-10-28.
 
 What you asked for:
 
@@ -299,3 +300,33 @@ Where the design work for this milestone lives, for whoever plans it properly:
 - The terminal taking isorite's marks (sketched, then set aside).
 - Iso seeing images (Q113).
 - Editing an artifact by hand in isorite; it is shown, and Iso rewrites it.
+
+## 8. Order of work
+
+Each step is a commit (or a few), tested as it goes; the trial comes first so the kit is shaped by what weaker models
+get wrong (§3.9).
+
+1. **The trial on kit 0** (§3.9): `npm run eval:artifacts` (`scripts/eval-artifacts.ts`, `eval/artifacts/`): eight
+   cases from one chart to a quadtree explorer, on the three models of Q118, rendered as isorite will show them,
+   checked without a judge, with screenshots. What it finds goes in §9 and decides the kit's elements.
+2. **Kinds in core** (§2): `citeKind` gives artifact, image, data, document or misc for any file; a cite of any kind
+   is kept, and a broken one is reported; `isorite check`'s artifact rules (§3.7) as `artifactIssues`.
+3. **The kit** (§3.1, §3.2, §3.8): a package of its own (`packages/kit`), built into the app's static files: the two
+   themes, the components, the elements the trial asks for, Plot and three.js bundled and loaded only when used,
+   licences.
+4. **The host** (§3.4, §5.3): `/api/file` gives every kind (sandboxed); the Note pane opens an artifact in the frame,
+   with the bridge, the look and standalone export; data, documents, pictures and misc open there too.
+5. **Iso's tools** (§3.5, §3.7): `read_data`, `artifact_recipe`, `write_artifact` (checked, journaled, undoable,
+   rendered by the open app's frame or a headless browser with its errors back), `read_artifact`; the recipes; the
+   vision check by model (Q113); `isorite doctor` finds a headless browser (Q117).
+6. **The label** (§5.1, §5.2): the Note pane's details become the label.
+7. **The Atlas** (§2.1): files in the bundle as layout items, web and code as node-styled satellites, a note's
+   picture folder as one node, a glyph per kind.
+8. **Questions and problems** (§4): sketch R's question and problem, with no progress bar; multi-step problems as
+   chains of `requires` in the guide and in Iso's context (Q114).
+9. **The site** (§3.6): artifacts and the data you opt into copied into the guide's build, the engine playing host.
+10. **The eval on the real kit** (§3.9), the rest of the budget, then docs and the release.
+
+## 9. What was found and built
+
+Filled in as §8 goes.
