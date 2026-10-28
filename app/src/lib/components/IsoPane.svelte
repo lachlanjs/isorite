@@ -84,7 +84,7 @@
 {/snippet}
 
 {#snippet qmark()}
-  <svg class="qm" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M5.6 5.6a2.4 2.4 0 1 1 3.4 2.2c-.6.3-1 .8-1 1.5v.9" /><path d="M8 12v1.2" /></svg>
+  <svg class="qm" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.5L13.5 8L8 13.5L2.5 8Z" /></svg>
 {/snippet}
 
 {#snippet item(t: Turn, i: TurnItem)}

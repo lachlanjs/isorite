@@ -206,7 +206,7 @@
 
 {#snippet glyph(k: "note" | "question" | "problem", solved: boolean)}
   <svg class="glyph {k}" class:solved viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4">
-    {#if k === "question"}<path d="M5.6 5.6a2.4 2.4 0 1 1 3.4 2.2c-.6.3-1 .8-1 1.5v.9" /><path d="M8 12v1.2" />{:else}<path d="M8 2.5l5.8 10.5H2.2z" fill={solved ? "currentColor" : "none"} />{/if}
+    {#if k === "question"}<path d="M8 2.5L13.5 8L8 13.5L2.5 8Z" fill={solved ? "currentColor" : "none"} />{:else}<path d="M8 2.5l5.8 10.5H2.2z" fill={solved ? "currentColor" : "none"} />{/if}
   </svg>
 {/snippet}
 

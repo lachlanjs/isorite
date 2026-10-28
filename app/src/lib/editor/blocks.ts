@@ -26,7 +26,7 @@ export const embeds = Facet.define<Embeds, Embeds | null>({ combine: (all) => al
 
 const EMBED = /^[ \t]*\[\[!([^\]\n]+)\]\][ \t]*$/;
 const GLYPH: Record<Embedded["kind"], string> = {
-  question: '<path d="M5.6 5.6a2.4 2.4 0 1 1 3.4 2.2c-.6.3-1 .8-1 1.5v.9"/><path d="M8 12v1.2"/>',
+  question: '<path d="M8 2.5L13.5 8L8 13.5L2.5 8Z"/>',
   problem: '<path d="M8 2.5l5.8 10.5H2.2z"/>',
   note: '<rect x="3.5" y="2.5" width="9" height="11"/>',
 };

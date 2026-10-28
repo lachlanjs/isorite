@@ -4,7 +4,7 @@ title: Questions
 description: An open question marks where your understanding stops.
 ---
 
-A question is a note of its own, `type: Question`, about the notes it names in its details:
+A question is a note of its own, `type: Question`, about the notes it names in its label:
 
 ```markdown
 ---
