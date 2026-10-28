@@ -13,7 +13,7 @@ Each pane's header has a row of small icons. Each is a switch: it says what it i
 **The Atlas:**
 - Open questions (Alt+Q) and problems (Alt+B), on the map.
 - Links to the web (Alt+W) and to code (Alt+K): see [links out of the base](/out-of-the-base/web-and-code-links.md "see also").
-- Pictures (Alt+I): the pictures a note shows, small, beside it. One that's missing is marked.
+- Files beside the notes (Alt+I): pictures, [artifacts](/iso/artifacts.md "see also"), data and documents, each in its folder with its kind's mark, joined to the notes that cite them. A note's pasted pictures are one item.
 - Iso's context (Alt+C): what Iso is sent, what it read and what it changed, marked on the map.
 
 **Iso:**

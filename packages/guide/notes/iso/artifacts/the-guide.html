@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The guide in numbers</title>
+<meta name="description" content="How many notes each of the guide's folders holds: an artifact on the kit, from one data file, in markup only.">
+<meta name="author" content="Iso">
+<meta name="date" content="2026-10-28">
+<meta name="isorite:kit" content="1">
+<meta name="isorite:uses" content="the-guide.csv">
+</head>
+<body>
+<iso-page>
+  <header>
+    <h1>The guide in numbers</h1>
+    <p>Where the guide spends its notes.</p>
+  </header>
+  <iso-grid>
+    <iso-panel class="wide">
+      <h2>In all</h2>
+      <iso-stats>
+        <iso-stat data="the-guide.csv" column="notes" of="sum" label="notes" tone="blue"></iso-stat>
+        <iso-stat data="the-guide.csv" column="folder" of="count" label="folders"></iso-stat>
+        <iso-stat data="the-guide.csv" column="notes" of="max" label="the most in one folder" tone="gold"></iso-stat>
+      </iso-stats>
+    </iso-panel>
+    <iso-panel class="wide">
+      <h2>Notes by folder</h2>
+      <iso-chart data="the-guide.csv" type="bar" x="folder" y="notes" y-label="notes" height="220"></iso-chart>
+      <p>The notes and Iso take the most explaining; the base itself, the least.</p>
+    </iso-panel>
+  </iso-grid>
+</iso-page>
+</body>
+</html>

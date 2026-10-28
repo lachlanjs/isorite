@@ -14,6 +14,6 @@ Ask in the box at the foot of its pane. What Iso may do is set by its pane's [sw
 
 Iso helps you understand rather than understanding for you. Asked to explain, it may first ask where you stand, and it keeps [a reading of where you stand](/questions-and-problems/how-iso-reads-you.md "see also"). Given a [problem](/questions-and-problems/problems.md "see also"), it checks your solution rather than solving it. And it keeps your notes in your words.
 
-What it is sent each turn is yours to see and choose: [what Iso is sent](/iso/what-iso-is-sent.md "see also"). Which model answers is [its tier](/iso/tiers.md "see also"), and how it should work in your base is [AGENTS.md](/iso/agents-md.md "see also").
+It can build [artifacts](/iso/artifacts.md "see also"): pages that work, from your data. What it is sent each turn is yours to see and choose: [what Iso is sent](/iso/what-iso-is-sent.md "see also"). Which model answers is [its tier](/iso/tiers.md "see also"), and how it should work in your base is [AGENTS.md](/iso/agents-md.md "see also").
 
 Iso needs a model, from a provider of your choosing and with its key: see [starting a base](/your-own-base/starting-a-base.md "see also"). On the guide's own site there is none, and Iso is the guide's finder, which says so: it answers with the notes that match what you ask.

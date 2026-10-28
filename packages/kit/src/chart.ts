@@ -74,7 +74,10 @@ class IsoChart extends HTMLElement {
     const type = attr(this, "type", "line"), z = series ? "series" : undefined, colour = series ? "series" : t.series[0] ?? t.lattice;
     const xText = usable.some((p) => typeof p.x === "string"), few = usable.length / Math.max(1, new Set(usable.map((p) => p.series)).size) <= 40;
     const marks: Plot.Markish[] = [];
-    if (type === "bar") marks.push(xText ? Plot.barY(usable, { x: "x", y: "y", fill: colour, fx: undefined, tip: true }) : Plot.barX(usable, { y: "x", x: "y", fill: colour, tip: true }));
+    // Categories whose names won't fit under their bars lie down: the bars run across, the names down the side.
+    const cats = xText ? [...new Set(usable.map((p) => String(p.x)))] : [], longest = Math.max(0, ...cats.map((c) => c.length));
+    const across = xText && cats.length * (longest * 6.6 + 8) > width - 80;
+    if (type === "bar") marks.push(xText && !across ? Plot.barY(usable, { x: "x", y: "y", fill: colour, tip: true }) : Plot.barX(usable, { y: "x", x: "y", fill: colour, tip: true }));
     else if (type === "dot") marks.push(Plot.dot(usable, { x: "x", y: "y", fill: colour, r: 2.5, tip: true }));
     else if (type === "area") marks.push(Plot.areaY(usable, { x: "x", y: "y", z, fill: colour, fillOpacity: 0.25 }), Plot.lineY(usable, { x: "x", y: "y", z, stroke: colour, strokeWidth: 1.5 }));
     else {
@@ -98,11 +101,18 @@ class IsoChart extends HTMLElement {
     marks.push(Plot.frame({ stroke: t.line, anchor: "bottom" }), Plot.frame({ stroke: t.line, anchor: "left" }));
     const legend = series && new Set(usable.map((p) => p.series)).size > 1;
     try {
+      const style = plotStyle(t, width, across ? Math.max(height, cats.length * 26 + 60) : height);
+      if (across) style.marginLeft = Math.min(width / 2, longest * 6.6 + 16);
       const svg = Plot.plot({
-        ...plotStyle(t, width, height), marks,
+        ...style, marks,
         // Ticks read as the kit reads numbers (Plot's own log ticks say 3m for 0.003).
-        x: { type: xScale as "linear", label: attr(this, "x-label", pretty(x)), grid: !xText, labelAnchor: "center", labelArrow: "none", nice: xScale !== "log", ...(xText ? {} : { tickFormat: fmtTick(xScale) }) },
+        ...(across ? {
+          x: { label: attr(this, "y-label", ys.length > 1 ? "" : pretty(ys[0]!)), grid: true, labelAnchor: "center" as const, labelArrow: "none" as const, tickFormat: fmtTick("linear") },
+          y: { label: null },
+        } : {
+        x: { ...(xText ? {} : { type: xScale as "linear" }), label: attr(this, "x-label", pretty(x)), grid: !xText, labelAnchor: "center", labelArrow: "none", nice: xScale !== "log", ...(xText ? {} : { tickFormat: fmtTick(xScale) }) },
         y: { type: yScale as "linear", label: attr(this, "y-label", ys.length > 1 ? "" : pretty(ys[0]!)), grid: true, labelArrow: "none", nice: yScale !== "log", tickFormat: fmtTick(yScale) },
+        }),
         color: { ...plotStyle(t, 0, 0).color, ...(series ? { domain: [...new Set(usable.map((p) => p.series))] as string[] } : {}) },
       });
       for (const g of svg.querySelectorAll<SVGElement>("[aria-label$='grid'] line, [aria-label$='grid'] path")) g.setAttribute("stroke", t.line), g.setAttribute("stroke-opacity", "1");

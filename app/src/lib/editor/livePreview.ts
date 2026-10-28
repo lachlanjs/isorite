@@ -84,6 +84,23 @@ class PictureWidget extends WidgetType {
   ignoreEvent(): boolean { return false; }
 }
 
+// An artifact the note shows (M23, plan-m23 §3.4): working, in place, through whatever the editor was given to mount
+// one with (the app's sandboxed frame). Its source shows on its line, as a picture's does.
+class ArtifactWidget extends WidgetType {
+  constructor(readonly path: string, readonly mount: (el: HTMLElement) => () => void) { super(); }
+  eq(other: ArtifactWidget): boolean { return other.path === this.path; }
+  private stop: (() => void) | null = null;
+  toDOM(view: EditorView): HTMLElement {
+    const box = document.createElement("span");
+    box.className = "cm-lp-artifact";
+    this.stop = this.mount(box);
+    new ResizeObserver(() => view.requestMeasure()).observe(box);
+    return box;
+  }
+  destroy(): void { this.stop?.(); this.stop = null; }
+  ignoreEvent(): boolean { return true; }
+}
+
 const hide = Decoration.replace({});
 const bullet = Decoration.replace({ widget: new BulletWidget() });
 const rule = Decoration.replace({ widget: new RuleWidget() });
@@ -198,6 +215,13 @@ function build(view: EditorView): DecorationSet {
           case "Image": {
             // ![alt](path "title"): the picture, in place of its source away from the cursor; after it on its line.
             const n = node.node, u = n.getChild("URL"), marks = n.getChildren("LinkMark");
+            const shown = u ? state.facet(artifacts)(state.sliceDoc(u.from, u.to)) : null;
+            if (shown && marks.length >= 2) {
+              const widget = new ArtifactWidget(shown.path, shown.mount);
+              if (!isActive(node.from)) decos.push(Decoration.replace({ widget }).range(node.from, node.to));
+              else decos.push(Decoration.widget({ widget, side: 1 }).range(node.to));
+              return false;
+            }
             const picture = u ? state.facet(pictures)(state.sliceDoc(u.from, u.to)) : null;
             if (!picture || marks.length < 2) break;
             const t = n.getChild("LinkTitle"), title = t ? state.sliceDoc(t.from + 1, t.to - 1).trim().toLowerCase() : "";
@@ -264,6 +288,11 @@ function build(view: EditorView): DecorationSet {
 export interface PictureAt { key: string; src: string | Promise<string | null> }
 export const pictures = Facet.define<(href: string) => PictureAt | null, (href: string) => PictureAt | null>({ combine: (all) => all[0] ?? (() => null) });
 
+/** The artifact an image's address names (M23), and how to mount it in an element (returning how to take it down);
+ *  null for anything else. */
+export interface ArtifactAt { path: string; mount: (el: HTMLElement) => () => void }
+export const artifacts = Facet.define<(href: string) => ArtifactAt | null, (href: string) => ArtifactAt | null>({ combine: (all) => all[0] ?? (() => null) });
+
 /** Whether a code link (`code:path#L1`, M12) names a file no longer in the base's repository. */
 export const codeBroken = Facet.define<(href: string) => boolean, (href: string) => boolean>({ combine: (all) => all[0] ?? (() => false) });
 
@@ -293,6 +322,7 @@ export const livePreviewTheme = EditorView.theme({
     fontWeight: "600", lineHeight: "1.3", fontVariationSettings: '"opsz" 36', paddingTop: ".5em !important",
   },
   ".cm-lp-h1": { fontSize: "26px" },
+  ".cm-lp-artifact": { display: "block", margin: "8px 0 12px", fontFamily: "var(--font-ui)", fontSize: "12px", lineHeight: "1.4" },
   ".cm-lp-h2": { fontSize: "22px" },
   ".cm-lp-h3": { fontSize: "19px" },
   ".cm-lp-h4": { fontSize: "17px", fontWeight: "700" },

@@ -2,6 +2,8 @@
   // The text of a note, in CodeMirror: the body as a live preview, or the whole file as source. Iso's blocks
   // are laid over it (overlays.ts) at the places the note's journal gives them.
   import { mount, onMount, unmount, untrack } from "svelte";
+  import { artifactOf } from "$lib/artifact.ts";
+  import ArtifactEmbed from "./ArtifactEmbed.svelte";
   import { goto } from "$app/navigation";
   import type { EditorView } from "@codemirror/view";
   import { app, findEmbed, noteHref } from "$lib/app.svelte.ts";
@@ -118,6 +120,11 @@
       onPoint: (to) => pointing.set("note", to ? { ...to, who: "you" } : null),
       codeBroken: (href) => app.listing.notes.find((n) => n.id === note.id)?.broken?.includes(href) ?? false,
       pictures: (href) => { const p = pictureOf(href, note.id); return p ? { key: `${p.from}:${p.path}`, src: pictureSrc(app.api, p) } : null; },
+      // An artifact shown in the note (M23) works in place, in its sandboxed frame.
+      artifacts: (href) => {
+        const path = artifactOf(href, note.id);
+        return path ? { path, mount: (el) => { const c = mount(ArtifactEmbed, { target: el, props: { path } }); return () => { void unmount(c); }; } } : null;
+      },
       ...(iso ? {
         // Ctrl+Enter goes to Iso's pane (M10), with the text selected, if any, given to Iso.
         onAsk: (w: Where) => {

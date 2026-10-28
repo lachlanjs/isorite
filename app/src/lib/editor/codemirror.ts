@@ -14,7 +14,7 @@ import { blocksTheme, embeds, renderedBlocks, type Embeds } from "./blocks.ts";
 import { format, formatKeymap, type Format } from "./commands.ts";
 import { linkAt, linkControl } from "./linkControl.ts";
 import { linkCompletion, type LinkTarget, type PictureSource } from "./links.ts";
-import { livePreview, livePreviewTheme, codeBroken, pictures, type PictureAt } from "./livePreview.ts";
+import { artifacts, livePreview, livePreviewTheme, codeBroken, pictures, type ArtifactAt, type PictureAt } from "./livePreview.ts";
 import { mathsSyntax } from "./maths.ts";
 import { fileOf, noteOf } from "./noteOf.ts";
 import { overlays, touchedLines, type Mount } from "./overlays.ts";
@@ -56,6 +56,8 @@ export interface EditorOptions {
   codeBroken?: (href: string) => boolean;
   /** The picture an image's address names, drawn in place (M22). */
   pictures?: (href: string) => PictureAt | null;
+  /** The artifact an address names, shown working in place (M23). */
+  artifacts?: (href: string) => ArtifactAt | null;
   /** The notes' pictures, as `[[!` and `](` offer them (M22). */
   pictureSource?: PictureSource;
   /** Pictures pasted (`pasted`) or dropped at a place in the text (M22). */
@@ -141,7 +143,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       syntaxHighlighting(highlight),
       syntaxHighlighting(codeHighlighter),
       theme,
-      ...(opts.source ? [sourceTheme] : [livePreview, livePreviewTheme, renderedBlocks, blocksTheme, linkControl, ...(opts.embeds ? [embeds.of(opts.embeds)] : []), ...(opts.codeBroken ? [codeBroken.of(opts.codeBroken)] : []), ...(opts.pictures ? [pictures.of(opts.pictures)] : [])]),
+      ...(opts.source ? [sourceTheme] : [livePreview, livePreviewTheme, renderedBlocks, blocksTheme, linkControl, ...(opts.embeds ? [embeds.of(opts.embeds)] : []), ...(opts.codeBroken ? [codeBroken.of(opts.codeBroken)] : []), ...(opts.pictures ? [pictures.of(opts.pictures)] : []), ...(opts.artifacts ? [artifacts.of(opts.artifacts)] : [])]),
       closeBrackets(),
       // Only brackets: closing quotes would get in the way of apostrophes in prose.
       EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["(", "["] } }]),

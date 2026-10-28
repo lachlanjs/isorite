@@ -88,6 +88,14 @@ export function bridge(frame: HTMLIFrameElement, api: Api, path: string, uses: (
   return { tell, stop: () => removeEventListener("message", listen) };
 }
 
+/** The artifact an address in a note names (`/a/fig.html`, or `fig.html` beside the note), or null. */
+export function artifactOf(href: string, noteId: string): string | null {
+  const raw = href.split(/[#?]/)[0]!.trim();
+  if (!raw || /^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith("//") || !/\.html?$/i.test(raw)) return null;
+  const at = raw.startsWith("/") ? raw.slice(1) : within(`${noteId}.md`, raw);
+  return at ? decodeURI(at) : null;
+}
+
 /** The ground as the page shows it: the one chosen, or the system's. */
 export function groundNow(): "lapis" | "quartz" {
   const g = document.documentElement.dataset.ground;
