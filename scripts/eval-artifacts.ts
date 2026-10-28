@@ -21,6 +21,10 @@ const EVAL = join(ROOT, "eval", "artifacts"), KIT = join(ROOT, "inspiration", "a
 const arg = (name: string): string | undefined => { const at = process.argv.indexOf(name); return at < 0 ? undefined : process.argv[at + 1]; };
 const MODELS = (arg("--models") ?? "anthropic/claude-sonnet-5.5,deepseek/deepseek-v4.1-flash,google/gemma-4-31b-it").split(",");
 const only = arg("--only")?.split(","), budget = +(arg("--budget") ?? 3), scripted = process.argv.includes("--scripted");
+// A model that thinks before it writes needs room for both: DeepSeek V4.1 Flash spent 16,000 tokens thinking and wrote
+// nothing (the trial). Each model is given up to this, or its own limit where that's less.
+const MAX_TOKENS = +(arg("--max-tokens") ?? 48000);
+const limits = new Map<string, number>();
 const KEY = process.env.OPENROUTER_API_KEY;
 if (!KEY && !scripted) throw new Error("OPENROUTER_API_KEY is not set");
 
@@ -164,6 +168,8 @@ async function render(html: string, given: string[], stem: string): Promise<Rend
 
 // One model on one case: the conversation, with the tools answered here.
 let spent = 0;
+/** Models that used their whole budget thinking and wrote nothing, at least once. */
+const cut = new Set<string>();
 async function call(model: string, messages: Msg[]): Promise<{ message: Msg; usd: number }> {
   if (scripted) {
     const done = messages.some((m) => m.role === "tool" && m.content?.startsWith("Written"));
@@ -173,10 +179,16 @@ async function call(model: string, messages: Msg[]): Promise<{ message: Msg; usd
   for (let attempt = 0; ; attempt++) {
     const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST", headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json", "x-title": "isorite artifact eval" },
-      body: JSON.stringify({ model, messages, tools: TOOLS, max_tokens: 16000, usage: { include: true } }),
+      body: JSON.stringify({ model, messages, tools: TOOLS, max_tokens: Math.min(MAX_TOKENS, limits.get(model) ?? MAX_TOKENS), usage: { include: true } }),
+      signal: AbortSignal.timeout(15 * 60_000),
     });
-    const j = await r.json() as { choices?: { message: Msg }[]; usage?: { cost?: number }; error?: { message: string } };
-    if (j.choices?.[0]) { const usd = j.usage?.cost ?? 0; spent += usd; return { message: j.choices[0].message, usd }; }
+    const j = await r.json() as { choices?: { message: Msg; finish_reason?: string }[]; usage?: { cost?: number }; error?: { message: string } };
+    if (j.choices?.[0]) {
+      const usd = j.usage?.cost ?? 0, c = j.choices[0];
+      spent += usd;
+      if (c.finish_reason === "length" && !c.message.content && !c.message.tool_calls?.length) cut.add(model);
+      return { message: c.message, usd };
+    }
     if (attempt >= 2) throw new Error(j.error?.message ?? `HTTP ${r.status}`);
     await new Promise((res) => setTimeout(res, 4000 * (attempt + 1)));
   }
@@ -221,6 +233,10 @@ async function attempt(model: string, c: Case): Promise<Result> {
   return res;
 }
 
+if (!scripted) {
+  const all = (await (await fetch("https://openrouter.ai/api/v1/models")).json() as { data: { id: string; top_provider?: { max_completion_tokens?: number } }[] }).data;
+  for (const m of all) if (m.top_provider?.max_completion_tokens) limits.set(m.id, m.top_provider.max_completion_tokens);
+}
 const results: Result[] = [];
 for (const model of MODELS) {
   // The models in parallel would be quicker, but one at a time keeps the spend checkable between cases.
@@ -234,7 +250,7 @@ for (const model of MODELS) {
 await browser?.close();
 
 const ok = (r: Result) => !!r.render?.rendered && !r.render.errors.length && !r.broken.length && r.render.drawn > 0;
-const lines = [`# Artifact eval, ${today}`, "", `Spent $${spent.toFixed(2)} of $${budget}.`, "", "| model | case | level | passes | writes | read_data | rules broken | errors | drawn | $ | s |", "|---|---|---|---|---|---|---|---|---|---|---|"];
+const lines = [`# Artifact eval, ${today}`, "", `Spent $${spent.toFixed(2)} of $${budget}.${cut.size ? ` Used the whole output budget thinking, at least once: ${[...cut].join(", ")}.` : ""}`, "", "| model | case | level | passes | writes | read_data | rules broken | errors | drawn | $ | s |", "|---|---|---|---|---|---|---|---|---|---|---|"];
 for (const r of results) lines.push(`| ${r.model.split("/")[1]} | ${r.case.name} | ${r.case.level} | ${ok(r) ? "yes" : "no"} | ${r.writes} | ${r.reads.join(" ") || "-"} | ${r.broken.join("; ") || "-"} | ${r.render?.errors.join("; ").slice(0, 160) || "-"} | ${r.render?.drawn ?? 0} | ${r.usd.toFixed(3)} | ${r.seconds} |${r.note ? ` ${r.note}` : ""}`);
 writeFileSync(join(out, "report.md"), lines.join("\n") + "\n");
 // A page of the screenshots, by case, to judge the quality by eye.

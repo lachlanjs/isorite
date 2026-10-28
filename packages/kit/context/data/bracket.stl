@@ -1,0 +1,170 @@
+solid bracket
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 60 10 0
+  vertex 60 0 0
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 0 10 0
+  vertex 60 10 0
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 30
+  vertex 60 0 30
+  vertex 60 10 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 30
+  vertex 60 10 30
+  vertex 0 10 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 60 0 0
+  vertex 60 0 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 60 0 30
+  vertex 0 0 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 60 10 0
+  vertex 0 10 0
+  vertex 0 10 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 60 10 0
+  vertex 0 10 30
+  vertex 60 10 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 60 0 0
+  vertex 60 10 0
+  vertex 60 10 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 60 0 0
+  vertex 60 10 30
+  vertex 60 0 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 0 0 30
+  vertex 0 10 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 0 10 30
+  vertex 0 10 0
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 10 50 0
+  vertex 10 0 0
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 0 50 0
+  vertex 10 50 0
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 30
+  vertex 10 0 30
+  vertex 10 50 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 30
+  vertex 10 50 30
+  vertex 0 50 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 10 0 0
+  vertex 10 0 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 10 0 30
+  vertex 0 0 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 10 50 0
+  vertex 0 50 0
+  vertex 0 50 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 10 50 0
+  vertex 0 50 30
+  vertex 10 50 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 10 0 0
+  vertex 10 50 0
+  vertex 10 50 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 10 0 0
+  vertex 10 50 30
+  vertex 10 0 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 0 0 30
+  vertex 0 50 30
+ endloop
+endfacet
+facet normal 0 0 0
+ outer loop
+  vertex 0 0 0
+  vertex 0 50 30
+  vertex 0 50 0
+ endloop
+endfacet
+endsolid bracket

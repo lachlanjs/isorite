@@ -122,6 +122,11 @@ export const ISORITE = `# Their knowledge base
   problem note is practice that \`uses\` notes. Theirs alone to mark:
   \`resolved\` or \`solved\`, with the day. \`[[!name]]\` alone on a line
   embeds one in a note.
+- A problem of several steps is several problem notes, each linked to the one
+  before it as "requires", in a folder of their own when they belong
+  together. A problem has no steps inside it.
+- Files beside the notes that are not notes (data, documents, pictures,
+  artifacts) are linked as any note is: [runs](/simulation/runs.csv).
 - Every change you make is marked as yours, in the note's history, and they
   can undo it.
 
@@ -215,6 +220,28 @@ far, from its Understanding note.
   a problem solved or not. Say nothing the evidence does not show.
 - Never invent a note, a link or a quotation.`;
 
+/** The rounds of tools a turn in write mode may have at least: an artifact takes a recipe, the data, a write, a fix. */
+export const ARTIFACT_ROUNDS = 6;
+
+/** Building an artifact (M23, plan-m23 §3.7): in stages, so a small model's window holds it. This much always; the
+ *  recipe and the kit's reference only from artifact_recipe. */
+const ARTIFACTS = `# Artifacts
+
+An artifact is an HTML page beside their notes that isorite shows working: a
+dashboard of their data, a comparison, a simulation, an explorable
+explanation, a 3D model's viewer. Make one when they ask for something to see
+or try; not for what an answer or a note says as well.
+
+1. artifact_recipe with the recipe nearest what they asked: dashboard,
+   compare, simulation, explorable or viewer. It gives a complete working
+   artifact and the kit's reference. Start from the recipe and change what it
+   marks; keep the rest.
+2. read_data for every data file it will read. Use the columns as given.
+3. write_artifact with the whole file. It is checked and run. If it reports a
+   problem, fix that and write the whole file again.
+4. Say in a sentence what it shows, linked: [what it shows](/folder/name.html).
+   Link it from the note it belongs to if they want it there.`;
+
 const ASKING = (write: boolean) => `# Asking back, and their own answers
 
 - Where a question to them would do more than an answer (what is unclear in
@@ -296,13 +323,21 @@ export const WRITE_UNDERSTANDING = fn("write_understanding", "Rewrite your readi
   { id: { ...str, description: "The note's id." }, reading: str }, ["id", "reading"]);
 export const ASK_QUESTION = fn("ask_question", "Ask them a question back, kept as an open question in their base, about one or more of their notes.",
   { title: { ...str, description: "The question, short, ending in a question mark." }, text: { ...str, description: "A line or two on what is asked, or empty." }, about: { type: "array", items: str, description: "The ids of the notes it is about." } }, ["title", "text", "about"]);
+export const READ_DATA = fn("read_data", "A data file's shape: its columns with their types and ranges, the row count and the first rows. Read it before writing anything that uses the file, so the column names are real.",
+  { path: { ...str, description: "The file's path in the base: folder/name.csv." } }, ["path"]);
+export const ARTIFACT_RECIPE = fn("artifact_recipe", "A recipe for an artifact: a complete working one to start from, the kit's reference, and the rules write_artifact checks. dashboard: numbers, charts and a table of one data file. compare: two data files side by side. simulation: a model with parameters and play. explorable: inputs, derived numbers and linked views. viewer: a 3D model.",
+  { name: { type: "string", enum: ["dashboard", "compare", "simulation", "explorable", "viewer"] } }, ["name"]);
+export const WRITE_ARTIFACT = fn("write_artifact", "Write an artifact: a whole HTML file on the kit. The title, description and uses given here are written into it. It is checked, and run where it can be; the result says what to fix. Nothing is written while a rule is broken.",
+  { path: { ...str, description: "Where: folder/name.html, beside the notes it belongs to." }, title: str, description: { ...str, description: "One sentence: what it shows, and what can be done with it." },
+    uses: { type: "array", items: str, description: "Every data or model file it reads, relative to it (runs.csv), or none." }, html: { ...str, description: "The whole file." } }, ["path", "title", "description", "uses", "html"]);
+export const READ_ARTIFACT = fn("read_artifact", "An artifact's whole file, to change it and write it again.", { path: { ...str, description: "folder/name.html" } }, ["path"]);
 export const OFFER_TEXT = fn("offer_text", "Offer them their own answers, lightly joined, to insert at the end of a note as their writing. Only their words.",
   { id: { ...str, description: "The note's id, or AGENTS.md for a line of their instructions for the base." }, text: { ...str, description: "The passage, in Markdown." } }, ["id", "text"]);
 
 /** The tools each mode adds to looking things up. */
 export const MODE_TOOLS: Record<Exclude<Mode, "build">, ToolDef[]> = {
-  ask: [POINT_TO_NOTE, ASK_QUESTION, OFFER_TEXT],
-  write: [EDIT_NOTE, WRITE_NOTE, MOVE_NOTE, DELETE_NOTE, POINT_TO_NOTE, ASK_QUESTION, OFFER_TEXT],
+  ask: [POINT_TO_NOTE, ASK_QUESTION, OFFER_TEXT, READ_DATA],
+  write: [EDIT_NOTE, WRITE_NOTE, MOVE_NOTE, DELETE_NOTE, POINT_TO_NOTE, ASK_QUESTION, OFFER_TEXT, READ_DATA, ARTIFACT_RECIPE, WRITE_ARTIFACT, READ_ARTIFACT],
 };
 
 /** A turn's own tools: its mode's, and with an Understanding note given, the one that rewrites Iso's reading. */
@@ -369,7 +404,7 @@ export function turnMessages(a: AskedTurn): { messages: Message[]; parts: Part[]
   const understood = a.sent.filter((s) => s.kind === "understanding");
   const checking = a.sent.some((s) => s.kind === "note" && s.of === "problem");
   // In layers, the same for every turn but the mode's and the parts given: so the provider's cache holds.
-  const system = [WHO, ISORITE, PRACTICE, LEARNING, MODE_RULES[a.mode], ASKING(a.mode === "write"), ...(checking ? [CHECKING] : []), ...(understood.length ? [UNDERSTANDING] : []), FORMAT_RULES, LOOKING(ROUNDS[a.tier], a.meaning, a.lookup)].join("\n\n");
+  const system = [WHO, ISORITE, PRACTICE, LEARNING, MODE_RULES[a.mode], ...(a.mode === "write" ? [ARTIFACTS] : []), ASKING(a.mode === "write"), ...(checking ? [CHECKING] : []), ...(understood.length ? [UNDERSTANDING] : []), FORMAT_RULES, LOOKING(a.mode === "write" ? Math.max(ROUNDS[a.tier], ARTIFACT_ROUNDS) : ROUNDS[a.tier], a.meaning, a.lookup)].join("\n\n");
   // Every earlier turn that is on, whole, after the briefings that stand for the ones before them: nothing is
   // shortened or left out here that the person did not switch off.
   const briefed = a.briefings?.length ? `# Earlier in this conversation, summed up\n\n${a.briefings.join("\n\n---\n\n")}` : "";

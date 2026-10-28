@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Why a fast wheel turns backwards</title>
+<meta name="description" content="Sample a sine too slowly and a slower one appears: choose the signal's frequency and the sampling rate, and see the samples, the wave they seem to come from, and where every frequency lands.">
+<meta name="isorite:kit" content="1">
+<meta name="isorite:uses" content="">
+</head>
+<body>
+<!-- Recipe 4: an explorable explanation. An input, numbers derived from it, and linked views that all follow the same
+     state; captions say what to see. CHANGE: the inputs (sliders), derive() (the numbers), the drawing, and the
+     chart's rows. Keep: every view redrawn from iso.state in one place, update(). -->
+<iso-page>
+  <header>
+    <h1>Why a fast wheel turns backwards</h1>
+    <p>Sampled too slowly, a signal is indistinguishable from a slower one. Which one, and when?</p>
+  </header>
+  <iso-grid>
+    <iso-panel class="wide">
+      <h2>The signal and the sampling</h2>
+      <iso-row>
+        <iso-slider name="f" label="signal (Hz)" min="0.2" max="12" step="0.1" value="7" digits="1"></iso-slider>
+        <iso-slider name="fs" label="samples per second" min="2" max="24" step="1" value="8" digits="0"></iso-slider>
+      </iso-row>
+      <iso-stats>
+        <iso-stat id="nyquist" label="Nyquist limit (Hz)" tone="blue"></iso-stat>
+        <iso-stat id="apparent" label="what the samples show (Hz)" tone="gold"></iso-stat>
+        <iso-stat id="verdict" label="faithful?"></iso-stat>
+      </iso-stats>
+    </iso-panel>
+    <iso-panel class="wide">
+      <h2>One second <span>the signal, its samples, and the slower wave through them</span></h2>
+      <iso-canvas id="wave" height="260"></iso-canvas>
+      <p>Gold dots are the samples. Above the Nyquist limit the blue wave, slower, passes through every one of them as
+        well as the true signal does: from the samples alone, the two can't be told apart.</p>
+    </iso-panel>
+    <iso-panel class="wide">
+      <h2>Where every frequency lands</h2>
+      <iso-chart id="fold" x="signal" y="apparent" at="f" x-label="signal (Hz)" y-label="frequency the samples show (Hz)" height="220"></iso-chart>
+      <p>The frequency seen climbs with the signal's up to half the sampling rate, then folds back down:
+        $f_\text{seen} = |f - f_s \operatorname{round}(f / f_s)|$. See <iso-note href="signals/sampling">sampling</iso-note>.</p>
+    </iso-panel>
+  </iso-grid>
+</iso-page>
+<script>
+  // CHANGE: the numbers derived from the inputs.
+  function derive(f, fs) {
+    const nyquist = fs / 2;
+    const folded = Math.abs(f - fs * Math.round(f / fs));
+    return { nyquist, apparent: folded, faithful: f < nyquist };
+  }
+
+  // CHANGE: the drawing. t is the theme (t.line, t.soft, t.faint, t.lattice, t.growth, t.ui).
+  const wave = document.getElementById("wave");
+  wave.draw = (ctx, w, h, t) => {
+    const { f, fs } = iso.state, d = derive(f, fs), mid = h / 2, amp = h * 0.38;
+    const X = (s) => 40 + s * (w - 60), Y = (v) => mid - v * amp;
+    ctx.strokeStyle = t.line; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(X(0), mid); ctx.lineTo(X(1), mid); ctx.stroke();
+    const curve = (freq, colour, width) => {
+      ctx.strokeStyle = colour; ctx.lineWidth = width; ctx.beginPath();
+      for (let i = 0; i <= 600; i++) { const s = i / 600, v = Math.sin(2 * Math.PI * freq * s); i ? ctx.lineTo(X(s), Y(v)) : ctx.moveTo(X(s), Y(v)); }
+      ctx.stroke();
+    };
+    curve(f, t.soft, 1);
+    // The slower wave through the same samples: the signal less the nearest whole number of sampling rates.
+    if (!d.faithful) curve(f - fs * Math.round(f / fs), t.lattice, 2);
+    ctx.fillStyle = t.growth;
+    for (let k = 0; k <= fs; k++) { const s = k / fs; ctx.beginPath(); ctx.arc(X(s), Y(Math.sin(2 * Math.PI * f * s)), 4, 0, 2 * Math.PI); ctx.fill(); }
+    ctx.fillStyle = t.faint; ctx.font = `11px ${t.ui}`; ctx.fillText("0 s", X(0) - 8, h - 6); ctx.fillText("1 s", X(1) - 8, h - 6);
+  };
+
+  // One place redraws every view from the state.
+  const fold = document.getElementById("fold");
+  function update() {
+    const { f, fs } = iso.state, d = derive(f, fs);
+    document.getElementById("nyquist").value = iso.format(d.nyquist);
+    document.getElementById("apparent").value = iso.format(d.apparent);
+    document.getElementById("verdict").value = d.faithful ? "yes" : "no: aliased";
+    // CHANGE: the chart's rows, computed from the state.
+    const rows = [];
+    for (let s = 0; s <= 12; s += 0.05) rows.push({ signal: +s.toFixed(2), apparent: derive(s, fs).apparent });
+    fold.rows = rows;
+    wave.redraw();
+  }
+  iso.watch(update);
+  update();
+</script>
+</body>
+</html>

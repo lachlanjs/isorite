@@ -3,7 +3,7 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  AGENTS_FILE, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
+  AGENTS_FILE, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
 import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
@@ -11,10 +11,11 @@ import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Away, type Similar } from "./lookup.ts";
 import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
 import { AGE_OFF, briefingText, handOf, readHand, type Briefing, type Hand, type HandLine } from "./hand.ts";
-import { COMPACT, CONVERSATIONS_DIR, ISORITE, PRACTICE, MODES, conversationPath, turnTools, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
+import { ARTIFACT_ROUNDS, COMPACT, CONVERSATIONS_DIR, ISORITE, PRACTICE, MODES, conversationPath, turnTools, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
 import { KEY, SPEND_CAP, OPENROUTER, TIERS, complete, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
+import { RECIPES, REFERENCE, checkArtifact, columnsOf, describeShape, manifestOf, parseData, shapeOf, withManifest } from "@isorite/kit";
 
 /** What switches a part given to Iso, in the page's `off`: `g:<kind>:<id>`, a passage by a short hash of its text. */
 export function givenKey(g: Given): string {
@@ -54,7 +55,13 @@ export interface EngineOptions {
   repository?: (path: string) => Files | null;
   /** The other bases lent to this one's sessions (M20), where a server holds several. */
   elsewhere?: Elsewhere;
+  /** An artifact run unseen (M23, Q117), where a browser can be had: what it reported. Without it, or when it
+   *  answers null, only the static checks run. */
+  renderArtifact?: (path: string, html: string) => Promise<ArtifactRun | null>;
 }
+
+/** What running an artifact unseen found. */
+export interface ArtifactRun { rendered: boolean; errors: string[]; drawn: number }
 
 /** The other bases a server holds that are lent to this base's sessions: their names, each with a line on what it
  *  holds, and each one's engine. */
@@ -68,6 +75,9 @@ const fromBase = (base: string, text: string): string => `(From the base ${base}
 
 /** The longest request and the longest reply asked for, in characters and tokens. */
 export const MAX_ASKED = 4000, REPLY_TOKENS = 2500, NOTE_TOKENS = 6000;
+/** A turn that may write an artifact (M23) may write a whole one, of up to 200 kB, after thinking: a budget, paid
+ *  only for what is used. And it takes rounds: a recipe, the data, a write, a fix. */
+export const ARTIFACT_TOKENS = 32_000;
 
 /** Notes for Iso that are not in the base yet: among isorite's own files, under this prefix wherever notes are named. */
 export const DRAFT_PREFIX = "@draft/", DRAFT_DIR = "drafts";
@@ -88,6 +98,12 @@ export function checkNoteId(id: string): string {
 
 /** What a mode's tool is handed of the turn it is in. */
 interface TurnCtx { turn: string; conversation: string; mode: Turn["mode"]; item: (i: TurnItem) => Promise<void>; signal: AbortSignal; who: string; asked: string }
+
+/** A file's path in the base as Iso gives one: no leading slash, no "..", nothing hidden. */
+function filePathOf(raw: unknown): string | null {
+  const p = String(raw ?? "").trim().replace(/^\/+/, "");
+  return p && !p.split("/").some((x) => !x || x === "." || x === ".." || x.startsWith(".")) ? p : null;
+}
 
 /** A conversation's or turn's id: a ULID. */
 const TURN_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -516,7 +532,7 @@ export class Engine implements Api {
 
   async deleteNote(id: string, base: string, who = "you"): Promise<void> {
     if (!inBase(id)) throw new EngineError("only a note of the base is deleted here");
-    const notes = this.opts.notes, path = `${checkNoteId(id)}.md`;
+    const { files: notes, path } = this.where(id);
     await this.one(async () => {
       const now = await notes.read(path);
       if (now === null) throw new Conflict(`${id} is gone`, null);
@@ -625,6 +641,8 @@ export class Engine implements Api {
 
   /** Where a note's file is: drafts and Understanding notes are among isorite's own files. */
   private where(id: string): { files: Files; path: string } {
+    // An artifact (M23) is journalled as a note is, by its path: Iso's rewrites of it are marked and undone the same way.
+    if (inBase(id) && citeKind(id) === "artifact") return { files: this.opts.notes, path: checkNoteId(id) };
     if (!inBase(id)) {
       return { files: this.opts.own, path: `${isDraftId(id) ? DRAFT_DIR : UNDERSTANDING_DIR}/${checkNoteId(bare(id))}.md` };
     }
@@ -1415,7 +1433,8 @@ export class Engine implements Api {
     void (async () => {
       try {
         const got = await rounds({
-          http, provider: this.provider, key, tier: req.tier, messages, lookup: tools, maxTokens: REPLY_TOKENS * 2, signal: abort.signal, most: ROUNDS[req.tier],
+          http, provider: this.provider, key, tier: req.tier, messages, lookup: tools, signal: abort.signal,
+          maxTokens: mode === "write" ? ARTIFACT_TOKENS : REPLY_TOKENS * 2, most: mode === "write" ? Math.max(ROUNDS[req.tier], ARTIFACT_ROUNDS) : ROUNDS[req.tier],
           onText: (delta, again) => this.publish({ type: "iso-text", request: turn, note: "", delta, again }),
           onStep: (step) => { void item({ kind: "look", step }); this.publish({ type: "iso-step", request: turn, note: "", step }); },
           onRetry: (retry, of) => this.publish({ type: "iso-retry", request: turn, note: "", retry, of }),
@@ -1562,7 +1581,71 @@ export class Engine implements Api {
       if (saved.entry) await t.item({ kind: "change", note: uid, entry: saved.entry, why: was ? "edit" : "create", title: `Understanding · ${title(id)}`, added: 0, removed: 0 });
       return `Your reading of ${title(id)} is written.`;
     }
+    if (name === "read_data") {
+      const path = filePathOf(args.path);
+      if (!path) return `${String(args.path ?? "")} is not a file's path in their base.`;
+      const got = await this.file(path).catch(() => null);
+      if (!got) return `There is no file ${path}.${this.nearFiles(path)}`;
+      try { return describeShape(shapeOf(path, parseData(path, new TextDecoder().decode(got.bytes)))); }
+      catch (e) { return `${path} could not be read as data: ${(e as Error).message}`; }
+    }
+    if (name === "artifact_recipe") {
+      const r = RECIPES[String(args.name ?? "")];
+      if (!r) return `There's no recipe ${String(args.name ?? "")}: there are ${Object.keys(RECIPES).join(", ")}.`;
+      return `${REFERENCE}\n\n# The recipe: ${String(args.name)}\n\n${r.about}. A complete working artifact; change what it marks, keep the rest.\n\n\`\`\`html\n${r.html}\`\`\``;
+    }
+    if (name === "read_artifact") {
+      const path = filePathOf(args.path);
+      if (!path || citeKind(path) !== "artifact") return `${String(args.path ?? "")} is not an artifact's path (folder/name.html).`;
+      const got = await this.opts.notes.read(path);
+      return got === null ? `There is no artifact ${path}.` : got;
+    }
+    if (name === "write_artifact") return this.writeArtifact(args, t);
     return `${name} cannot be used yet.`;
+  }
+
+  /** Files in the same folder as a path, to say which there are when one isn't. */
+  private nearFiles(path: string): string {
+    const dir = path.split("/").slice(0, -1).join("/"), there = [...this.files.keys()].filter((f) => !f.endsWith(".md") && f.split("/").slice(0, -1).join("/") === dir);
+    return there.length ? ` In ${dir || "the top folder"} there are: ${there.map((f) => f.split("/").at(-1)).join(", ")}.` : "";
+  }
+
+  /** write_artifact (M23, plan-m23 §3.5, §3.7): the manifest written as given, the rules checked before anything is
+   *  written, then written and journalled as a note is, and run where it can be, with all it reports said back. */
+  private async writeArtifact(args: Record<string, unknown>, t: TurnCtx): Promise<string> {
+    const path = filePathOf(args.path);
+    if (!path || citeKind(path) !== "artifact" || !inBase(path)) return `${String(args.path ?? "")} is not an artifact's path: give folder/name.html.`;
+    const raw = String(args.html ?? "");
+    if (!raw.trim()) return "Give the whole file, in html.";
+    const uses = [...new Set((Array.isArray(args.uses) ? args.uses : typeof args.uses === "string" ? args.uses.split(/[\s,]+/) : []).map((u) => String(u).trim().replace(/^\.\//, "")).filter(Boolean))];
+    const title = String(args.title ?? "").trim() || manifestOf(raw).title || path.split("/").at(-1)!.replace(/\.html?$/, "").replace(/-/g, " ");
+    const html = withManifest(raw, { title, description: String(args.description ?? "").trim() || manifestOf(raw).description, author: "Iso", date: new Date(this.opts.clock.now()).toISOString().slice(0, 10), kit: "1", uses });
+    // What it may read: its uses that exist, beside it; and the columns of each that is data.
+    const dir = path.split("/").slice(0, -1);
+    const at = (rel: string) => { const parts = [...dir]; for (const p of rel.split("/")) { if (p === "..") parts.pop(); else if (p && p !== ".") parts.push(p); } return parts.join("/"); };
+    const files: string[] = [], columns: Record<string, string[]> = {};
+    for (const u of uses) {
+      const got = await this.file(at(u)).catch(() => null);
+      if (!got) continue;
+      files.push(u);
+      if (citeKind(u) === "data") try { columns[u] = columnsOf(parseData(u, new TextDecoder().decode(got.bytes))); } catch { /* not readable as data: its columns aren't checked */ }
+    }
+    const broken = checkArtifact(html, { files, columns }), errors = broken.filter((b) => b.level === "error");
+    const list = (bs: { message: string }[]) => bs.map((b) => `- ${b.message}`).join("\n");
+    if (errors.length) return `Not written: ${errors.length === 1 ? "a rule is" : "rules are"} broken.\n${list(errors)}\nFix ${errors.length === 1 ? "it" : "them"} and call write_artifact again with the whole file.`;
+    const was = await this.opts.notes.read(path);
+    const saved = await this.one(() => this.put(path, html, was === null ? null : hashText(was), "edit", { asked: t.asked }, t.who));
+    if (saved.entry) await t.item({ kind: "change", note: path, entry: saved.entry, why: was === null ? "create" : "edit", title, added: html.split("\n").length, removed: was?.split("\n").length ?? 0 });
+    const warnings = broken.filter((b) => b.level === "warning");
+    const run = await this.opts.renderArtifact?.(path, html).catch(() => null) ?? null;
+    const problems = [
+      ...(run && !run.rendered ? ["it didn't start: the kit never said it was ready"] : []),
+      ...(run?.errors ?? []).map((e) => `it reported: ${e}`),
+      ...(run && run.rendered && run.drawn === 0 ? ["it drew nothing: no chart, canvas or 3D view has anything in it"] : []),
+      ...warnings.map((w) => w.message),
+    ];
+    const ran = run ? "It was run, with every control touched" : "It couldn't be run here (no browser), so only its rules were checked";
+    return `${was === null ? "Written" : "Written anew"}: ${path}. ${ran}${problems.length ? `, and:\n${problems.map((p) => `- ${p}`).join("\n")}\nFix these and call write_artifact again with the whole file.` : run ? ", with no error." : "."}`;
   }
 
   /** A note's Understanding note (M10): Iso's reading and your scratchpad. */

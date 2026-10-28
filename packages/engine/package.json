@@ -12,7 +12,8 @@
     "check": "tsc -p ."
   },
   "dependencies": {
-    "@isorite/core": "*"
+    "@isorite/core": "*",
+    "@isorite/kit": "*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The corner bracket</title>
+<meta name="description" content="The printed corner bracket in 3D, with its dimensions and the notes on how it was designed and tested.">
+<meta name="isorite:kit" content="1">
+<meta name="isorite:uses" content="bracket.stl">
+</head>
+<body>
+<!-- Recipe 5: a 3D model's viewer, with what it is beside it. iso-model shows glTF, GLB, STL and OBJ; list the file
+     in isorite:uses. CHANGE: the model's file, the numbers, the notes it links to. -->
+<iso-page>
+  <header>
+    <h1>The corner bracket</h1>
+    <p>The part as printed: an L of two plates, 6 cm by 5 cm.</p>
+  </header>
+  <iso-grid style="--cols: 3">
+    <iso-panel class="wide">
+      <h2>The part <span>bracket.stl</span></h2>
+      <iso-model src="bracket.stl" height="380"></iso-model>
+    </iso-panel>
+    <iso-panel>
+      <h2>Size</h2>
+      <iso-stats>
+        <iso-stat label="long arm (mm)" value="60" tone="blue"></iso-stat>
+        <iso-stat label="short arm (mm)" value="50"></iso-stat>
+        <iso-stat label="thickness (mm)" value="10"></iso-stat>
+      </iso-stats>
+    </iso-panel>
+    <iso-panel>
+      <h2>Printed</h2>
+      <iso-stats>
+        <iso-stat label="infill" value="40%"></iso-stat>
+        <iso-stat label="mass (g)" value="31" tone="gold"></iso-stat>
+      </iso-stats>
+    </iso-panel>
+    <iso-panel>
+      <h2>Notes</h2>
+      <p><iso-note href="design/bracket-loads">The loads it takes</iso-note>, and
+        <iso-note href="design/print-settings">how it was printed</iso-note>.</p>
+    </iso-panel>
+  </iso-grid>
+</iso-page>
+</body>
+</html>

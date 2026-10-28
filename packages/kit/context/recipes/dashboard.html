@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The pendulum's period</title>
+<meta name="description" content="Forty timed swings at eight lengths: how the period grows with length, how close it comes to 2π√(L/g), and how much the trials scatter.">
+<meta name="isorite:kit" content="1">
+<meta name="isorite:uses" content="pendulum.csv">
+</head>
+<body>
+<!-- Recipe 1: a dashboard of one data file, in markup only. Change: the file, the numbers, the charts' columns, the
+     captions. Every column named here must be one read_data gave. -->
+<iso-page>
+  <header>
+    <h1>The pendulum's period</h1>
+    <p>Does a longer pendulum swing slower, and by as much as theory says?</p>
+  </header>
+  <iso-grid>
+    <iso-panel class="wide">
+      <h2>In numbers <span>40 swings</span></h2>
+      <iso-stats>
+        <iso-stat data="pendulum.csv" column="period_s" of="min" label="shortest period (s)" tone="blue"></iso-stat>
+        <iso-stat data="pendulum.csv" column="period_s" of="max" label="longest period (s)" tone="gold"></iso-stat>
+        <iso-stat data="pendulum.csv" column="temp_c" of="mean" label="mean temperature (°C)"></iso-stat>
+        <iso-stat data="pendulum.csv" column="trial" of="count" label="swings timed"></iso-stat>
+      </iso-stats>
+    </iso-panel>
+    <iso-panel>
+      <h2>Period against length</h2>
+      <iso-chart data="pendulum.csv" type="dot" x="length_m" y="period_s" x-label="length (m)" y-label="period (s)"></iso-chart>
+      <p>The period rises with length, more slowly as the pendulum gets longer: a square root.</p>
+    </iso-panel>
+    <iso-panel>
+      <h2>On log axes <span>slope ½ is √L</span></h2>
+      <iso-chart data="pendulum.csv" type="dot" x="length_m" y="period_s" x-scale="log" y-scale="log" x-label="length (m)" y-label="period (s)"></iso-chart>
+      <p>A straight line here is a power law; its slope, near one half, is the exponent.</p>
+    </iso-panel>
+    <iso-panel class="wide">
+      <h2>Each trial <span>the scatter is the stopwatch</span></h2>
+      <iso-chart data="pendulum.csv" type="line" x="length_m" y="period_s" by="trial" height="200" x-label="length (m)" y-label="period (s)"></iso-chart>
+    </iso-panel>
+    <iso-panel class="wide">
+      <h2>The measurements</h2>
+      <iso-table data="pendulum.csv" columns="length_m trial period_s temp_c" limit="40"></iso-table>
+    </iso-panel>
+  </iso-grid>
+</iso-page>
+</body>
+</html>

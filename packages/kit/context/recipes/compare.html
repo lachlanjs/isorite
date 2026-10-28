@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A lid against an open mug</title>
+<meta name="description" content="Two mugs of the same coffee cooling for an hour, one with a lid: their temperature together, the gap between them, and where each stands at a chosen minute.">
+<meta name="isorite:kit" content="1">
+<meta name="isorite:uses" content="mug-open.csv mug-lid.csv">
+</head>
+<body>
+<!-- Recipe 2: comparing two data files with the same columns. data="a.csv b.csv" reads both as one table with a
+     column `file` ("mug-open", "mug-lid"), so by="file" draws one series each and where="file=…" picks one.
+     Change: the files, the columns, the captions. -->
+<iso-page>
+  <header>
+    <h1>A lid against an open mug</h1>
+    <p>How much longer does a lid keep coffee hot?</p>
+  </header>
+  <iso-grid>
+    <iso-panel class="wide">
+      <h2>At one minute</h2>
+      <iso-row>
+        <iso-slider name="t" label="minute" min="0" max="60" step="2" value="20" digits="0"></iso-slider>
+        <iso-select name="scale" label="temperature scale" options="linear log"></iso-select>
+      </iso-row>
+      <iso-stats>
+        <iso-stat data="mug-open.csv" column="temp_c" of="last" where="t_min<=$t" label="open (°C)" tone="blue"></iso-stat>
+        <iso-stat data="mug-lid.csv" column="temp_c" of="last" where="t_min<=$t" label="with a lid (°C)" tone="gold"></iso-stat>
+        <iso-stat data="mug-open.csv" column="temp_c" of="last" label="open after the hour (°C)"></iso-stat>
+        <iso-stat data="mug-lid.csv" column="temp_c" of="last" label="lid after the hour (°C)"></iso-stat>
+      </iso-stats>
+    </iso-panel>
+    <iso-panel class="wide">
+      <h2>Both, cooling</h2>
+      <iso-chart data="mug-open.csv mug-lid.csv" x="t_min" y="temp_c" by="file" at="t" y-scale="$scale" x-label="time (min)" y-label="temperature (°C)" height="300"></iso-chart>
+      <p>Both fall fast at first and slower as they near the room's 21 °C; the lid halves the early loss.</p>
+    </iso-panel>
+    <iso-panel>
+      <h2>Open</h2>
+      <iso-table data="mug-open.csv" limit="12"></iso-table>
+    </iso-panel>
+    <iso-panel>
+      <h2>With a lid</h2>
+      <iso-table data="mug-lid.csv" limit="12"></iso-table>
+    </iso-panel>
+  </iso-grid>
+</iso-page>
+</body>
+</html>

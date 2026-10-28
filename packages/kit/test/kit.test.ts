@@ -35,13 +35,17 @@ const ART = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>R
 <meta name="isorite:kit" content="1"><meta name="isorite:uses" content="runs.csv">
 <link rel="stylesheet" href="kit/isorite.css"><script src="kit/kit.js"></script></head>
 <body><iso-chart data="runs.csv" x="t" y="e"></iso-chart></body></html>`;
-const KIT: KitFiles = { "kit.js": "/*kit*/", "chart.js": "/*chart</script>*/", "model.js": "/*model*/", "isorite.css": "/*isorite*/", "plain.css": "/*plain*/", "kit.css": "/*kitcss*/" };
+const KIT: KitFiles = { "kit.js": "/*kit*/", "chart.js": "/*chart</script>*/", "model.js": "/*model*/", "math.js": "/*math*/", "math.css": "/*mathcss*/", "isorite.css": "/*isorite*/", "plain.css": "/*plain*/", "kit.css": "/*kitcss*/" };
 
 test("the manifest, and the parts an artifact uses", () => {
   expect(manifestOf(ART)).toEqual({ title: "Runs & errors", description: "What the runs say.", author: "", date: "", kit: "1", uses: ["runs.csv"] });
   expect(partsUsed(ART)).toEqual(["chart"]);
   expect(partsUsed('<iso-model src="a.glb">')).toEqual(["model"]);
   expect(partsUsed("<iso-panel>")).toEqual([]);
+  // Maths in the text, not a template string's $ in a script, nor a price.
+  expect(partsUsed("<p>Energy $E = mc^2$ here.</p>")).toEqual(["math"]);
+  expect(partsUsed("<p>$$\\int f$$</p>")).toEqual(["math"]);
+  expect(partsUsed("<p>It costs $5 and $6.</p><script>const s = `${a}px ${b}`;</script>")).toEqual([]);
 });
 
 test("assembled: the CSP first, the kit and the parts it uses inlined, its own kit links gone, the ground and look set", () => {
@@ -50,6 +54,7 @@ test("assembled: the CSP first, the kit and the parts it uses inlined, its own k
   expect(doc).toContain('<html lang="en" data-look="isorite" data-ground="quartz">');
   expect(doc).toContain("/*chart<\\/script>*/");
   expect(doc).not.toContain("/*model*/");
+  expect(doc).not.toContain("/*mathcss*/");
   expect(doc).not.toContain('href="kit/');
   expect(doc).not.toContain('src="kit/');
   const standalone = assemble(ART, KIT, { data: { "runs.csv": "t,e\n0,1\n", "part.glb": new Uint8Array([1, 2, 3]) } });
@@ -80,4 +85,28 @@ test("the rules: each broken one said so that it can be fixed", () => {
   // A token, a template using one, and an SVG namespace are not broken rules.
   expect(checkArtifact(ART.replace("</body>", '<script>ctx.fillStyle = t.rose; ctx.font = `11px ${t.ui}`; document.createElementNS("http://www.w3.org/2000/svg", "svg")</script><iso-stat tone="blue"></iso-stat></body>'), ctx)).toEqual([]);
   expect(checkArtifact(ART, { files: [] }).map((b) => b.message)).toEqual(["runs.csv is in isorite:uses but there's no such file beside it"]);
+});
+
+test("Iso's context is generated from the reference and recipes as they are, and every recipe keeps the rules", async () => {
+  const { readFileSync, readdirSync } = await import("node:fs");
+  // @ts-expect-error a plain script beside the kit
+  const { generated } = await import("../context/build.mjs");
+  expect(readFileSync(new URL("../src/context.gen.ts", import.meta.url), "utf8")).toBe(generated());
+  const data = new URL("../context/data/", import.meta.url), files = readdirSync(data);
+  const columns = Object.fromEntries(files.filter((f) => f.endsWith(".csv")).map((f) => [f, Object.keys(parseData(f, readFileSync(new URL(f, data), "utf8"))[0]!)]));
+  const { RECIPES } = await import("../src/index.ts");
+  for (const [name, r] of Object.entries(RECIPES)) expect([name, checkArtifact(r.html, { files, columns })]).toEqual([name, []]);
+});
+
+test("the manifest written as given, whatever the file said or left out", async () => {
+  const { withManifest } = await import("../src/index.ts");
+  const m = { title: "Runs <1>", description: 'The "runs"', author: "Iso", date: "2026-10-28", kit: "1", uses: ["a.csv", "b.csv"] };
+  const doc = withManifest(ART, m);
+  expect(manifestOf(doc)).toEqual({ ...m, title: "Runs <1>" });
+  expect(doc.match(/isorite:kit/g)!.length).toBe(1);
+  // A body alone is given a document.
+  const bare = withManifest("<iso-panel><h2>x</h2></iso-panel>", m);
+  expect(bare).toMatch(/^<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">/);
+  expect(bare).toContain("<body>\n<iso-panel><h2>x</h2></iso-panel>\n</body>");
+  expect(manifestOf(bare).uses).toEqual(["a.csv", "b.csv"]);
 });

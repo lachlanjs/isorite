@@ -18,6 +18,7 @@ import { gatewayHttp } from "./gateway.ts";
 import { mirrorOf, modelDir, modelInfo, modelPlaces, RELEASE, RELEASE_SHA256, type ModelInfo } from "./model.ts";
 import { locate } from "./serve.ts";
 import { asksPassword, serving } from "./term.ts";
+import { findBrowser } from "./render.ts";
 
 export type Outcome = "ok" | "fail" | "warn" | "skip";
 export interface Check { step: string; outcome: Outcome; said: string }
@@ -182,6 +183,11 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
     say("browser pages", asking.length ? "fail" : "ok", asking.length ? `${asking.join(" and ")} asked for a password (401, Basic): that is not isorite's server; stop it, or give isorite another port (--port <n>)` : `isorite's pages at ${url}/ ask for no password. ${hint}`);
   }
   if (env.SSH_CONNECTION) say("browser", "ok", `over SSH: on your own machine, ssh -L ${port}:localhost:${port} <this host>, then http://localhost:${port}/`);
+
+  // A browser to run artifacts unseen (M23, Q117): what Iso writes is checked by running it; without one, only
+  // its rules are, which is a warning.
+  const chrome = findBrowser(env);
+  say("artifacts", chrome ? "ok" : "warn", chrome ? `run unseen when Iso writes one, in ${chrome}` : "no Chromium found to run them unseen, so only their rules are checked when Iso writes one; ISORITE_BROWSER names one (Chrome, Chromium, Edge)");
 
   // Search by meaning: a warning, not a failure, without it, as search by words works alone.
   let model: ModelInfo | null = null;

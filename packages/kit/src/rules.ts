@@ -33,15 +33,18 @@ export function checkArtifact(html: string, ctx: RuleContext = {}): Broken[] {
   // 2. Every file it reads is in isorite:uses, and every one there exists.
   const reads = new Set<string>();
   for (const r of own.matchAll(/iso\.(?:data|text|bytes)\(\s*["'`]([^"'`$]+)["'`]/g)) reads.add(r[1]!);
-  for (const t of own.matchAll(TAG)) { const a = attrsOf(t[2]!); if (a.data) reads.add(a.data); if (t[1]!.toLowerCase() === "iso-model" && a.src) reads.add(a.src); }
+  const files = (a: Record<string, string>) => (a.data ?? "").split(/[\s,]+/).filter(Boolean);
+  for (const t of own.matchAll(TAG)) { const a = attrsOf(t[2]!); files(a).forEach((f) => reads.add(f)); if (t[1]!.toLowerCase() === "iso-model" && a.src) reads.add(a.src); }
   for (const r of reads) if (!m.uses.includes(r)) err(2, `it reads ${r}, which isn't in <meta name="isorite:uses">`);
   if (ctx.files) for (const u of m.uses) if (!ctx.files.includes(u)) err(2, `${u} is in isorite:uses but there's no such file beside it${ctx.files.length ? ` (there are: ${ctx.files.join(", ")})` : ""}`);
   if (ctx.uses && [...ctx.uses].sort().join() !== [...m.uses].sort().join()) err(2, `isorite:uses (${m.uses.join(" ") || "none"}) and the uses given (${ctx.uses.join(" ") || "none"}) differ`);
 
   // 3. The columns an element names are in its data.
   if (ctx.columns) for (const t of own.matchAll(TAG)) {
-    const a = attrsOf(t[2]!), have = a.data ? ctx.columns[a.data] : undefined;
-    if (!have) continue;
+    // Several files are one table, with a `file` column naming each row's.
+    const a = attrsOf(t[2]!), fs = files(a), known = fs.map((f) => ctx.columns![f]);
+    if (!fs.length || known.some((k) => !k)) continue;
+    const have = [...new Set(known.flat() as string[]), ...(fs.length > 1 ? ["file"] : [])];
     for (const k of COLUMN_ATTRS) for (const c of (a[k] ?? "").split(/[\s,]+/).filter(Boolean)) {
       const name = c.replace(/^abs\((.+)\)$/, "$1");
       if (k === "at" && t[1]!.toLowerCase() !== "iso-chart3d" && !have.includes(name)) continue; // a state name

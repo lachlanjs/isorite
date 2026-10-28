@@ -15,8 +15,9 @@ export interface Manifest {
 }
 
 /** The kit's built files, by name (packages/kit/build.ts). */
-export type KitFiles = Record<"kit.js" | "chart.js" | "model.js" | "isorite.css" | "plain.css" | "kit.css", string>;
-export type Part = "chart" | "model";
+export type KitFiles = Record<"kit.js" | "chart.js" | "model.js" | "math.js" | "math.css" | "isorite.css" | "plain.css" | "kit.css", string>;
+export type Part = "chart" | "model" | "math";
+export const KIT_FILES = ["kit.js", "chart.js", "model.js", "math.js", "math.css", "isorite.css", "plain.css", "kit.css"] as const;
 
 const unescape = (s: string) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 function meta(html: string, name: string): string | null {
@@ -37,11 +38,37 @@ export function manifestOf(html: string): Manifest {
   };
 }
 
+/** The artifact with its manifest as given (write_artifact, plan-m23 §3.5): its title, description, author, date, kit
+ *  and uses set in its head, put in where missing, so they're always right whatever the file said. A file with no
+ *  head or no document around it is given one. */
+export function withManifest(html: string, m: Partial<Manifest>): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  let doc = html.trim();
+  if (!/<html\b/i.test(doc)) doc = /<head\b/i.test(doc) ? `<!doctype html>\n<html lang="en">\n${doc}\n</html>` : `<!doctype html>\n<html lang="en">\n<head>\n</head>\n<body>\n${doc.replace(/<\/?body\b[^>]*>/gi, "")}\n</body>\n</html>`;
+  if (!/<head\b/i.test(doc)) doc = doc.replace(/<html\b[^>]*>/i, (h) => `${h}\n<head>\n</head>`);
+  if (!/^<!doctype/i.test(doc)) doc = `<!doctype html>\n${doc}`;
+  const metas: [string, string | undefined][] = [["description", m.description], ["author", m.author], ["date", m.date], ["isorite:kit", m.kit ?? undefined], ["isorite:uses", m.uses?.join(" ")]];
+  for (const [name, value] of metas) {
+    if (value === undefined) continue;
+    const tag = `<meta name="${name}" content="${esc(value)}">`, re = new RegExp(`<meta\\b[^>]*\\bname\\s*=\\s*["']${name.replace(":", "\\:")}["'][^>]*>`, "i");
+    doc = re.test(doc) ? doc.replace(re, () => tag) : doc.replace(/<head\b[^>]*>/i, (h) => `${h}\n${tag}`);
+  }
+  if (m.title !== undefined) {
+    const t = `<title>${esc(m.title)}</title>`;
+    doc = /<title\b[^>]*>[\s\S]*?<\/title>/i.test(doc) ? doc.replace(/<title\b[^>]*>[\s\S]*?<\/title>/i, () => t) : doc.replace(/<head\b[^>]*>/i, (h) => `${h}\n${t}`);
+  }
+  if (!/<meta\b[^>]*charset/i.test(doc)) doc = doc.replace(/<head\b[^>]*>/i, (h) => `${h}\n<meta charset="utf-8">`);
+  return doc.endsWith("\n") ? doc : doc + "\n";
+}
+
 /** The kit's parts an artifact uses beyond the core: Plot with a chart, three.js with 3D. */
 export function partsUsed(html: string): Part[] {
   const parts: Part[] = [];
   if (/<iso-chart[\s>]|\bPlot\.\w/.test(html)) parts.push("chart");
   if (/<iso-model[\s>]|<iso-chart3d[\s>]|\bTHREE\.\w/.test(html)) parts.push("model");
+  // Maths in its text (not in its scripts or styles, where $ is something else), or asked for.
+  const text = html.replace(/<script\b[\s\S]*?<\/script>/gi, "").replace(/<style\b[\s\S]*?<\/style>/gi, "");
+  if (/<iso-math[\s>]|\biso\.math\(|\$\$[\s\S]+?\$\$|\\\(|\$(?=\S)[^$\n]+?(?<=\S)\$(?!\d)/.test(text) || /\biso\.math\(/.test(html)) parts.push("math");
   return parts;
 }
 
@@ -68,7 +95,7 @@ export function assemble(html: string, kit: KitFiles, opts: Assembly = {}): stri
   const data = Object.entries(opts.data ?? {}).map(([p, v]) => typeof v === "string"
     ? `<script type="text/plain" data-path="${attr(p)}">${safe(v)}</script>`
     : `<script type="application/octet-stream" data-encoding="base64" data-path="${attr(p)}">${base64(v)}</script>`);
-  const parts = partsUsed(body).map((p) => `<script>\n${safe(kit[`${p}.js`])}\n</script>`);
+  const parts = partsUsed(body).map((p) => `${p === "math" ? `<style>\n${safe(kit["math.css"])}\n</style>\n` : ""}<script>\n${safe(kit[`${p}.js`])}\n</script>`);
   const head = [
     CSP,
     `<style data-look="isorite">\n${safe(kit["isorite.css"])}\n</style>`,

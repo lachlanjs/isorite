@@ -3,10 +3,9 @@
 // the bridge, which answers it with the files its manifest names and nothing else.
 
 import { asset } from "$app/paths";
-import { assemble, manifestOf, type KitFiles, type Manifest } from "@isorite/kit";
+import { KIT_FILES, assemble, manifestOf, type KitFiles, type Manifest } from "@isorite/kit";
 import type { Api } from "@isorite/engine";
 
-const KIT_FILES = ["kit.js", "chart.js", "model.js", "isorite.css", "plain.css", "kit.css"] as const;
 let kit: Promise<KitFiles> | null = null;
 /** The kit's built files (packages/kit, built into the app's static files). */
 export function kitFiles(): Promise<KitFiles> {

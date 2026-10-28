@@ -140,13 +140,23 @@ addEventListener("unhandledrejection", (e) => report(e.reason));
 const attr = (el: Element, name: string, fallback = "") => el.getAttribute(name) ?? fallback;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 /** Its rows, or a complaint naming what's missing: a file not given, or a column not in it. */
+/** Its rows: set by a script (el.rows = […]), or read from its data="…" file. Several files (data="a.csv b.csv") are
+ *  one table, each row with a `file` column naming the file it came from ("a"), to compare them by="file". */
 async function rowsFor(el: Element, columns: string[]): Promise<Row[] | null> {
+  const given = (el as Element & { rows?: Row[] }).rows;
   const path = el.getAttribute("data");
-  if (!path) { report(`<${el.localName}> has no data="…" attribute`); return null; }
+  if (!path && !given) { report(`<${el.localName}> has no data="…" attribute (or set its rows from a script)`); return null; }
   let rows: Row[];
-  try { rows = await data(path); } catch (e) { report(`<${el.localName} data="${path}">: ${(e as Error).message}`); return null; }
+  if (given) rows = given;
+  else {
+    const paths = path!.split(/[\s,]+/).filter(Boolean);
+    try {
+      rows = paths.length === 1 ? await data(paths[0]!) : (await Promise.all(paths.map(async (p) => (await data(p)).map((r) => ({ ...r, file: p.split("/").pop()!.replace(/\.[^.]+$/, "") }))))).flat();
+    } catch (e) { report(`<${el.localName} data="${path}">: ${(e as Error).message}`); return null; }
+  }
+  if (given && !given.length) return [];
   const have = columnsOf(rows), missing = columns.filter((c) => c && !have.includes(c));
-  if (missing.length) { report(`<${el.localName} data="${path}">: no column ${missing.map((c) => `"${c}"`).join(", ")} (the columns are ${have.join(", ")})`); return null; }
+  if (missing.length) { report(`<${el.localName} data="${path ?? "rows"}">: no column ${missing.map((c) => `"${c}"`).join(", ")} (the columns are ${have.join(", ")})`); return null; }
   return applyWhere(el, rows);
 }
 /** where="integrator=leapfrog", where="t<=$t" (a $name is iso.state's value): the rows it keeps. */

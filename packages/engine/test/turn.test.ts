@@ -37,7 +37,7 @@ test("a turn in Ask mode: what was given is sent, what Iso looks up and points t
   expect(user).toContain("## Entropy (/basics/entropy.md)");
   expect(user).toContain("## A passage they chose in Surprise (/basics/surprise.md)\n\n> An outcome of probability $p$ carries $-\\log p$.");
   expect(user).toContain("# What they ask now\n\nwhat is it measured in?");
-  expect(sent[0]!.tools!.map((t) => t.function.name)).toEqual(["search_notes", "outline_note", "read_note", "point_to_note", "ask_question", "offer_text"]);
+  expect(sent[0]!.tools!.map((t) => t.function.name)).toEqual(["search_notes", "outline_note", "read_note", "point_to_note", "ask_question", "offer_text", "read_data"]);
 
   // Kept in the conversation's file, in order; the notes are as they were.
   const [t] = readTurns(study.files.get(`conversations/${conversation}.jsonl`)!);
@@ -59,7 +59,7 @@ test("a second turn is sent the first; one turn at a time; Iso kept from looking
   await ended(second.turn);
   const user = String(sent[1]!.messages[1]!.content);
   expect(user).toContain("# Earlier in this conversation\n\nIn ask mode they asked: what is it measured in?\n\nYou wrote:\n\nBits.");
-  expect(sent[1]!.tools!.map((t) => t.function.name)).toEqual(["point_to_note", "ask_question", "offer_text"]);
+  expect(sent[1]!.tools!.map((t) => t.function.name)).toEqual(["point_to_note", "ask_question", "offer_text", "read_data"]);
   expect((await engine.conversation(first.conversation))!.turns.map((t) => t.asked)).toEqual(["what is it measured in?", "always?"]);
   // What a turn would send, part by part.
   const ctx = await engine.turnContext({ conversation: first.conversation, mode: "ask", tier: "mid", given: [{ kind: "folder", id: "basics" }] });
@@ -152,7 +152,7 @@ test("given an Understanding note, Iso is sent its reading of you, asks before i
   await ended(turn);
   expect(JSON.stringify(sent[0]!.messages[0]!.content)).toContain("# Their understanding");
   expect(String(sent[0]!.messages[1]!.content)).toContain("## Their understanding of Entropy (/basics/entropy.md)\n\nYour reading so far: none yet.");
-  expect(sent[0]!.tools!.map((t) => t.function.name)).toEqual(["search_notes", "outline_note", "read_note", "point_to_note", "ask_question", "offer_text", "write_understanding"]);
+  expect(sent[0]!.tools!.map((t) => t.function.name)).toEqual(["search_notes", "outline_note", "read_note", "point_to_note", "ask_question", "offer_text", "read_data", "write_understanding"]);
   expect(await engine.understanding("basics/entropy")).toMatchObject({ reading: "You can derive it.", scratchpad: "My own words." });
   expect(study.files.get("understanding/basics/entropy.md")).toContain("## Iso's reading\n\nYou can derive it.\n\n## Scratchpad\n\nMy own words.");
   expect((await engine.journal("@understanding/basics/entropy")).at(-1)).toMatchObject({ who: "iso:openrouter/anthropic/claude-sonnet-5.5" });
@@ -242,4 +242,44 @@ test("a problem given is checked, never marked; a note goes with its open questi
   expect(user).toContain("## A problem: Entropy of two coins (/basics/two-coins.md)");
   expect(user).toContain("Open questions about it:\n- Why is even largest? (/basics/why-even.md)");
   expect(notes.files.get("basics/two-coins.md")).toBe(PROBLEM);
+});
+
+test("Write mode builds an artifact (M23): a recipe, the data's shape, a file refused while a rule is broken, then written with its manifest, journalled, run, and undone with the turn", async () => {
+  const BODY = (y: string) => `<iso-page><iso-panel><h2>Energy</h2><iso-chart data="runs.csv" x="t" y="${y}"></iso-chart></iso-panel></iso-page>`;
+  const { engine, notes, study, ended, sent } = await open([
+    { calls: [{ name: "artifact_recipe", arguments: { name: "dashboard" } }, { name: "read_data", arguments: { path: "basics/runs.csv" } }] },
+    { calls: [{ name: "write_artifact", arguments: { path: "basics/energy.html", title: "Energy", description: "The run's energy.", uses: ["runs.csv"], html: BODY("energy") + '<style>h2{color:#fff}</style>' } }] },
+    { calls: [{ name: "write_artifact", arguments: { path: "basics/energy.html", title: "Energy", description: "The run's energy.", uses: ["runs.csv"], html: BODY("e") } }] },
+    { text: ["It charts [the energy](/basics/energy.html)."] },
+  ]);
+  await notes.write("basics/runs.csv", "t,e\n0,1\n1,0.5\n");
+  const ran: string[] = [];
+  (engine as unknown as { opts: { renderArtifact: (p: string, h: string) => Promise<unknown> } }).opts.renderArtifact = async (p) => { ran.push(p); return { rendered: true, errors: ["<iso-chart>: a complaint"], drawn: 12 }; };
+  const { conversation, turn } = await engine.converse({ mode: "write", asked: "chart the run", tier: "low", given: [] });
+  expect(await ended(turn)).toMatchObject({ type: "iso-done" });
+  // Write mode's own tools, the rounds an artifact takes, and what the recipe and the data said.
+  expect(sent[0]!.tools!.map((t) => t.function.name)).toContain("write_artifact");
+  expect(JSON.stringify(sent[0]!.messages[0]!.content)).toContain("# Artifacts");
+  const results = sent[1]!.messages.filter((m) => m.role === "tool").map((m) => String(m.content));
+  expect(results[0]).toContain("# The kit (isorite kit 1)");
+  expect(results[0]).toContain("# The recipe: dashboard");
+  expect(results[1]).toBe("basics/runs.csv: 2 rows, 2 columns\n- t: number, 0 to 1 (mean 0.5)\n- e: number, 0.5 to 1 (mean 0.75)\nFirst rows:\nt,e\n0,1\n1,0.5");
+  // The first write broke two rules and wasn't written; the second was, and was run.
+  const refused = String(sent[2]!.messages.at(-1)!.content);
+  expect(refused).toMatch(/^Not written: rules are broken\./);
+  expect(refused).toContain('runs.csv has no column "energy" (it has t, e)');
+  expect(refused).toContain("a colour of its own (#fff)");
+  expect(String(sent[3]!.messages.at(-1)!.content)).toBe("Written: basics/energy.html. It was run, with every control touched, and:\n- it reported: <iso-chart>: a complaint\nFix these and call write_artifact again with the whole file.");
+  expect(ran).toEqual(["basics/energy.html"]);
+  const html = notes.files.get("basics/energy.html")!;
+  expect(html).toContain("<title>Energy</title>");
+  expect(html).toContain('<meta name="isorite:uses" content="runs.csv">');
+  expect(html).toContain('<meta name="author" content="Iso">');
+  expect(html).toContain('<meta name="date" content="2026-10-22">');
+  // Journalled as a note is, and undone with the turn.
+  expect((await engine.journal("basics/energy.html")).at(-1)).toMatchObject({ kind: "change", who: expect.stringMatching(/^iso:openrouter\//) });
+  const t = readTurns(study.files.get(`conversations/${conversation}.jsonl`)!)[0]!;
+  expect(t.items.filter((i) => i.kind === "change")).toMatchObject([{ note: "basics/energy.html", why: "create", title: "Energy" }]);
+  expect(await engine.undoTurn(conversation, turn)).toEqual({ notes: ["basics/energy.html"], left: [] });
+  expect(notes.files.has("basics/energy.html")).toBe(false);
 });

@@ -8,8 +8,8 @@
 //   x-scale, y-scale   linear (default), log, or $name for iso.state's value
 //   x-label, y-label   the axes' names, with units (default: the column)
 //   where    rows kept: "integrator=leapfrog", "t<=$t"
-//   at       a state name: a rule where x is iso.state[at], or, when x is another column, a dot on each series at the
-//            row whose column `at` is nearest iso.state[at]
+//   at       a state name: a rule where x is iso.state[at]; or, when the rows have a column of that name and x is
+//            another, a dot on each series at the row whose column `at` is nearest iso.state[at]
 //   height   in pixels (default 260)
 // A script can draw anything else with Plot itself: el.plot = (Plot, rows, tokens) => Plot.plot({...}).
 
@@ -36,6 +36,10 @@ function plotStyle(t: Tokens, width: number, height: number) {
 class IsoChart extends HTMLElement {
   plot: ((plot: typeof Plot, rows: Row[], t: Tokens) => Element) | null = null;
   #width = 0;
+  #rows: Row[] | undefined;
+  /** Rows given by a script, for a chart of what it computes (a simulation's energy as it runs). */
+  get rows(): Row[] | undefined { return this.#rows; }
+  set rows(r: Row[] | undefined) { this.#rows = r; if (this.isConnected) void this.render(); }
   connectedCallback() {
     if (this.dataset.on) return;
     this.dataset.on = "1";
@@ -50,11 +54,13 @@ class IsoChart extends HTMLElement {
     const x = attr(this, "x"), ys = words(attr(this, "y")), by = attr(this, "by"), at = attr(this, "at");
     const needed = [x, ...ys, by].filter(Boolean).map((c) => column(c).name);
     if (this.plot) {
-      const rows = this.hasAttribute("data") ? await window.iso._.rowsFor(this, needed) : [];
+      const rows = this.hasAttribute("data") || this.#rows ? await window.iso._.rowsFor(this, needed) : [];
       if (!rows) return;
       try { this.replaceChildren(this.plot(Plot, rows, t)); } catch (e) { window.iso.complain(e); }
       return;
     }
+    // A chart a script gives its rows waits for them.
+    if (!this.hasAttribute("data") && this.#rows === undefined) return;
     if (!x || !ys.length) { window.iso.complain(`<iso-chart data="${attr(this, "data")}"> needs x="…" and y="…"`); return; }
     const all = await window.iso._.rowsFor(this, needed);
     if (!all) return;
@@ -79,7 +85,8 @@ class IsoChart extends HTMLElement {
     if (at) {
       const now = window.iso.state[at];
       if (typeof now === "number") {
-        if (column(x).name === at) marks.push(Plot.ruleX([now], { stroke: t.growth, strokeDasharray: "3,3" }));
+        // A rule where x is now, unless the rows have a column of that name other than x: then a dot on each series.
+        if (column(x).name === at || !(at in (all[0] ?? {}))) marks.push(Plot.ruleX([now], { stroke: t.growth, strokeDasharray: "3,3" }));
         else {
           // The row nearest now, on each series.
           const nearest = new Map<unknown, (typeof usable)[number]>();

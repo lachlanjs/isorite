@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A damped spring</title>
+<meta name="description" content="A mass on a spring, integrated live: change the stiffness and the damping and see the motion, the energy draining away, and the period against theory's.">
+<meta name="isorite:kit" content="1">
+<meta name="isorite:uses" content="">
+<style>
+  /* Layout only. */
+  .readout { margin-top: 12px; }
+</style>
+</head>
+<body>
+<!-- Recipe 3: a simulation with parameters and play. The parts to change are marked CHANGE: the state (what the
+     model is), step() (how it moves), draw() (what's on the canvas), and what's measured. The rest stays. -->
+<iso-page>
+  <header>
+    <h1>A damped spring</h1>
+    <p>How do stiffness and damping shape an oscillation?</p>
+  </header>
+  <iso-grid>
+    <iso-panel class="wide">
+      <h2>The model</h2>
+      <iso-row>
+        <iso-slider name="k" label="stiffness k (N/m)" min="1" max="40" step="0.5" value="10" digits="1"></iso-slider>
+        <iso-slider name="c" label="damping c (kg/s)" min="0" max="2" step="0.05" value="0.3" digits="2"></iso-slider>
+      </iso-row>
+      <iso-row>
+        <iso-toggle name="playing" label="play" value="true"></iso-toggle>
+        <button type="button" class="iso-button" id="reset">reset</button>
+      </iso-row>
+      <iso-stats class="readout">
+        <iso-stat id="time" label="time (s)"></iso-stat>
+        <iso-stat id="energy" label="energy left" tone="gold"></iso-stat>
+        <iso-stat id="period" label="period, theory (s)" tone="blue"></iso-stat>
+      </iso-stats>
+    </iso-panel>
+    <iso-panel>
+      <h2>The mass</h2>
+      <iso-canvas id="scene" height="300"></iso-canvas>
+    </iso-panel>
+    <iso-panel>
+      <h2>Energy <span>a share of the start</span></h2>
+      <iso-chart id="chart" x="t" y="energy" x-label="time (s)" y-label="energy left" height="300"></iso-chart>
+      <p>With no damping the energy stays; damping drains it, faster the larger c is.</p>
+    </iso-panel>
+  </iso-grid>
+</iso-page>
+<script>
+  // CHANGE: the model's state and its start.
+  const m = 1;
+  let s, history;
+  function reset() { s = { t: 0, x: 1, v: 0 }; history = []; }
+  reset();
+  const energy = () => 0.5 * m * s.v * s.v + 0.5 * iso.state.k * s.x * s.x;
+  let e0 = energy();
+
+  // CHANGE: one step of the model (here semi-implicit Euler, small steps).
+  function step(dt) {
+    const a = (-iso.state.k * s.x - iso.state.c * s.v) / m;
+    s.v += a * dt;
+    s.x += s.v * dt;
+    s.t += dt;
+  }
+
+  // CHANGE: what's drawn. t is the theme: t.line, t.text, t.soft, t.faint, t.lattice, t.growth, t.ui.
+  const scene = document.getElementById("scene");
+  scene.draw = (ctx, w, h, t) => {
+    const cx = w / 2, y0 = 24, rest = h * 0.5, y = rest + s.x * h * 0.3;
+    ctx.strokeStyle = t.line; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx - 60, y0); ctx.lineTo(cx + 60, y0); ctx.stroke();
+    ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(cx - 80, rest); ctx.lineTo(cx + 80, rest); ctx.stroke(); ctx.setLineDash([]);
+    // The spring, as a zigzag from the ceiling to the mass.
+    ctx.strokeStyle = t.soft; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(cx, y0);
+    for (let i = 1; i < 16; i++) ctx.lineTo(cx + (i % 2 ? 12 : -12), y0 + (y - 20 - y0) * i / 16);
+    ctx.lineTo(cx, y - 20); ctx.stroke();
+    ctx.fillStyle = t.lattice; ctx.fillRect(cx - 20, y - 20, 40, 40);
+    ctx.fillStyle = t.faint; ctx.font = `11px ${t.ui}`; ctx.fillText("rest", cx + 84, rest + 4);
+  };
+
+  // Measured, and shown: the readouts and the chart, a few times a second.
+  const chart = document.getElementById("chart");
+  let since = 0;
+  function show() {
+    document.getElementById("time").value = s.t.toFixed(1);
+    document.getElementById("energy").value = iso.format(energy() / e0);
+    document.getElementById("period").value = iso.format(2 * Math.PI * Math.sqrt(m / iso.state.k));
+    chart.rows = history;
+  }
+
+  iso.loop((dt) => {
+    if (!iso.state.playing) return;
+    for (let i = 0; i < 20; i++) step(dt / 20);
+    scene.redraw();
+    since += dt;
+    if (since > 0.1) { since = 0; history.push({ t: +s.t.toFixed(2), energy: energy() / e0 }); if (history.length > 600) history.shift(); show(); }
+  });
+  iso.watch((name) => { if (name === "k") { e0 = energy(); } show(); scene.redraw(); });
+  document.getElementById("reset").addEventListener("click", () => { reset(); e0 = energy(); show(); scene.redraw(); });
+  show();
+</script>
+</body>
+</html>

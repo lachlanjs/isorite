@@ -2,13 +2,13 @@
 // engine on this machine.
 
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
 import { serve as nodeServe } from "@hono/node-server";
 import { CONFIG_FILE, GITATTRIBUTES, OWN_DIR, StudyError } from "@isorite/core";
-import { Engine, KEY, OPENROUTER, systemClock, type Elsewhere, type Embedder, type Http, type ProviderConfig, type Secrets } from "@isorite/engine";
+import { Engine, KEY, OPENROUTER, systemClock, type ArtifactRun, type Elsewhere, type Embedder, type Http, type ProviderConfig, type Secrets } from "@isorite/engine";
 import { ConfigSecrets, configPath, deviceId, gatewayTls, hasModel, providerConfig, rememberBase } from "./config.ts";
 import { Bases } from "./bases.ts";
 import { gatewayHttp, relay } from "./gateway.ts";
@@ -19,6 +19,8 @@ import { NodeFiles } from "./nodefiles.ts";
 import { Setup } from "./setup.ts";
 import { VERSION } from "./version.ts";
 import { defaultStudyPath, openStudyBase } from "./studybase.ts";
+import { KIT_FILES, assemble, manifestOf, type KitFiles } from "@isorite/kit";
+import { findBrowser, renderArtifact, type Reader } from "./render.ts";
 
 /** The built app: in a checkout, where npm run build puts it; installed from npm, in the package's web/. */
 export const WEB_DIR = [join(dirname(fileURLToPath(import.meta.url)), "..", "web"), join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "app", "build")]
@@ -81,7 +83,24 @@ export async function openEngine({ notes }: Opened, device = deviceId(), config 
     // notes, kept outside both repositories under a name made from where the notes are.
     ...(embedder ? { embedder, cache: { files: new NodeFiles(cacheDir()), name: `vectors-${createHash("sha256").update(notes).digest("hex").slice(0, 16)}.json` } } : {}),
     ...(extras.elsewhere ? { elsewhere: extras.elsewhere } : {}),
+    // An artifact Iso writes is run unseen (M23), in a browser found on this machine, with the kit the app is built with.
+    renderArtifact: (path, html) => runArtifact(notes, path, html),
   });
+}
+
+/** Run an artifact unseen: null when there's no browser, or no built kit, to run it with. */
+async function runArtifact(notes: string, path: string, html: string): Promise<ArtifactRun | null> {
+  const executable = findBrowser(), kitDir = join(WEB_DIR, "kit");
+  if (!executable || !existsSync(join(kitDir, "kit.js"))) return null;
+  const kit = Object.fromEntries(KIT_FILES.map((f) => [f, readFileSync(join(kitDir, f), "utf8")])) as KitFiles;
+  const dir = dirname(resolve(notes, path)), uses = manifestOf(html).uses;
+  const read: Reader = async (rel) => {
+    const at = resolve(dir, rel);
+    if (!at.startsWith(resolve(notes) + sep) || !existsSync(at)) return null;
+    return /\.(csv|tsv|json|jsonl|ndjson|txt|gltf|obj)$/i.test(at) ? readFileSync(at, "utf8") : new Uint8Array(readFileSync(at));
+  };
+  const got = await renderArtifact(assemble(html, kit), uses, read, { executable });
+  return { rendered: got.rendered, errors: got.errors, drawn: got.drawn };
 }
 
 /** The guide's finder, as a provider: no key, no sign-in, and a name that says what it is. */
