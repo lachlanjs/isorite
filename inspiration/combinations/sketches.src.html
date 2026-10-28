@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en" data-display="departure">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lustre sketches</title>
+<style>
+  /* Sketches crossing the machine (Alien: Isolation), the mineral and growth, in isorite's own tokens and fonts.
+     Edit sketches.src.html; build.mjs inlines the fonts (app/static/fonts, licences in app/static/licenses) into
+     sketches.html. */
+  @font-face { font-family: "Ioskeley Mono"; font-weight: 100 550; src: url(FONT:ioskeley-mono-latin-regular.woff2) format("woff2"); }
+  @font-face { font-family: "Ioskeley Mono"; font-weight: 551 900; src: url(FONT:ioskeley-mono-latin-bold.woff2) format("woff2"); }
+  @font-face { font-family: "Departure Mono"; src: url(FONT:departure-mono-latin-regular.woff2) format("woff2"); }
+  @font-face { font-family: "Charter"; src: url(FONT:charter-regular.woff2) format("woff2"); }
+  @font-face { font-family: "Charter"; font-style: italic; src: url(FONT:charter-italic.woff2) format("woff2"); }
+
+  /* The app's two grounds. --on is the ink on a solid accent; --sheen the colour of light on a face. */
+  :root, :root[data-ground="lapis"] {
+    color-scheme: dark;
+    --ground-0: #07101C; --ground-1: #0C1828; --ground-2: #122238; --ground-3: #1A3150;
+    --line: #23395A; --line-strong: #5C7BA6;
+    --text: #E9EEF5; --text-soft: #B4C0D2; --text-faint: #8796AD;
+    --lattice: #6BA6FF; --growth: #F0BE4A; --growth-deep: #C28F1E; --malachite: #5FD3A4; --rose: #FF8FA6;
+    --on: #07101C; --sheen: 255 248 225; --soft: 16%;
+  }
+  :root[data-ground="quartz"] {
+    color-scheme: light;
+    --ground-0: #F2F0EA; --ground-1: #F8F7F3; --ground-2: #FFFFFF; --ground-3: #E6E4DC;
+    --line: #D3D0C5; --line-strong: #7F7D70;
+    --text: #0E1726; --text-soft: #3B475B; --text-faint: #5B677A;
+    --lattice: #1E4FB8; --growth: #8C6200; --growth-deep: #D9A21B; --malachite: #0B6B4A; --rose: #A81E48;
+    --on: #F8F7F3; --sheen: 255 255 255; --soft: 10%;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-ground]) {
+      color-scheme: light;
+      --ground-0: #F2F0EA; --ground-1: #F8F7F3; --ground-2: #FFFFFF; --ground-3: #E6E4DC;
+      --line: #D3D0C5; --line-strong: #7F7D70;
+      --text: #0E1726; --text-soft: #3B475B; --text-faint: #5B677A;
+      --lattice: #1E4FB8; --growth: #8C6200; --growth-deep: #D9A21B; --malachite: #0B6B4A; --rose: #A81E48;
+      --on: #F8F7F3; --sheen: 255 255 255; --soft: 10%;
+    }
+  }
+  /* The display face, switchable. Departure Mono is drawn on an 11 px grid: it is only crisp at 11, 22, 33 and 44 px
+     with no letter-spacing, so every display size here is one of those. Ioskeley takes the same sizes for a fair
+     comparison. */
+  :root { --display: "Departure Mono", ui-monospace, monospace; }
+  :root[data-display="ioskeley"] { --display: "Ioskeley Mono", ui-monospace, monospace; }
+  :root {
+    --cut: 8px;
+    --ui: "Ioskeley Mono", ui-monospace, monospace; --serif: "Charter", Georgia, serif;
+    --lattice-soft: color-mix(in srgb, var(--lattice) var(--soft), var(--ground-1));
+    --growth-soft: color-mix(in srgb, var(--growth) var(--soft), var(--ground-1));
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--ground-0); color: var(--text); font: 13px/20px var(--ui); padding: 44px 16px 88px; text-rendering: optimizeLegibility; }
+  main { max-width: 1000px; margin: 0 auto; display: grid; gap: 66px; }
+  .d { font-family: var(--display); letter-spacing: 0; font-weight: 400; }
+  h1 { font: 44px/44px var(--display); margin: 0; text-transform: uppercase; }
+  h2 { font: 22px/22px var(--display); text-transform: uppercase; margin: 0 0 11px; }
+  p { margin: 0; color: var(--text-soft); max-width: 72ch; }
+  .bar-top { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 16px; align-items: center; }
+  .seg { display: flex; }
+  .seg button { font: 12px/20px var(--ui); color: var(--text-soft); background: none; border: 1px solid var(--line); margin-left: -1px; padding: 2px 10px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--text); color: var(--ground-0); border-color: var(--text); position: relative; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; margin-top: 18px; }
+
+  /* The chamfer: a 1px edge that follows the cut (the element's background, clipped), with the face a layer 1px
+     inside it, clipped again. */
+  @property --edge { syntax: "<color>"; inherits: true; initial-value: transparent; }
+  @property --face { syntax: "<color>"; inherits: true; initial-value: transparent; }
+  @property --ink { syntax: "<color>"; inherits: true; initial-value: black; }
+  .chamfer { clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); position: relative; isolation: isolate; border: 0; background: var(--edge); color: var(--ink); transition: --edge 120ms steps(1, end), --face 260ms ease-out, --ink 120ms; }
+  .chamfer::after { content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--face); clip-path: polygon(calc(var(--cut) - .4px) 0, 100% 0, 100% calc(100% - var(--cut) + .4px), calc(100% - var(--cut) + .4px) 100%, 0 100%, 0 calc(var(--cut) - .4px)); }
+
+  /* Lustre: one band of light crosses a face, once, when it's touched. The only acknowledgement there is: no flash. */
+  .sheen { position: relative; overflow: hidden; --glint: .55; }
+  .sheen::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(115deg, transparent 40%, rgb(var(--sheen) / calc(var(--glint) * .5)) 49%, rgb(var(--sheen) / var(--glint)) 50%, rgb(var(--sheen) / calc(var(--glint) * .5)) 51%, transparent 60%); transform: translateX(-120%); }
+  .sheen:hover::before, .sheen:focus-visible::before, .sheen.glint::before { transform: translateX(120%); transition: transform 700ms cubic-bezier(.2, .7, .2, 1); }
+
+  /* ---------------------------------------------------------------- C */
+  .btn { --edge: var(--line-strong); --face: var(--ground-2); --ink: var(--text-soft); font: 12px/1 var(--ui); letter-spacing: .08em; text-transform: uppercase; padding: 13px 19px; cursor: pointer; }
+  .btn:focus-visible { outline: none; }
+  .btn.gold:hover, .btn.gold:focus-visible { --edge: var(--growth); --face: var(--growth-soft); --ink: var(--text); }
+  .btn.blue { --glint: .25; }
+  .btn.blue:hover, .btn.blue:focus-visible { --edge: var(--lattice); --face: var(--lattice-soft); --ink: var(--text); }
+  .btn.gold.solid { --edge: var(--growth); --face: var(--growth); --ink: var(--on); }
+
+  /* ---------------------------------------------------------------- D */
+  .list { list-style: none; padding: 0; margin: 18px 0 0; max-width: 520px; border-top: 1px solid var(--line); }
+  .list li { position: relative; overflow: hidden; display: grid; grid-template-columns: 3ch 1fr auto; gap: 14px; align-items: baseline; padding: 9px 12px 9px 16px; border-bottom: 1px solid var(--line); cursor: pointer; --glint: .18; }
+  .list .n { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .list .t { font: 17px/24px var(--serif); color: var(--text); }
+  .list .k { color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+  .list li > i { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--growth); transform: scaleY(0); transform-origin: top; }
+  .list li::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--growth); transform: scaleX(0); transform-origin: left; }
+  .list li:hover > i, .list li.on > i { transform: scaleY(1); transition: transform 120ms ease-out; }
+  .list li:hover::after, .list li.on::after { transform: scaleX(1); transition: transform 260ms ease-out 100ms; }
+  .list li.on { background: var(--ground-2); }
+
+  /* ---------------------------------------------------------------- the Atlas, as it is */
+  .atlas { margin-top: 18px; display: inline-block; max-width: 100%; overflow: auto; background: var(--ground-1); border: 1px solid var(--line); background-image: radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 1.2px); background-size: 14px 14px; }
+  .atlas svg { display: block; }
+  .atlas .wall { fill: color-mix(in srgb, var(--lattice) 4%, var(--ground-1)); stroke: var(--line-strong); stroke-width: 1; shape-rendering: crispEdges; }
+  .atlas .tag { font: 11px var(--display); fill: var(--text-soft); }
+  .atlas .tagbg { fill: var(--ground-1); }
+  .atlas .box { fill: var(--ground-2); stroke: var(--line-strong); stroke-width: 1; shape-rendering: crispEdges; transition: stroke 120ms steps(1, end), opacity 260ms; }
+  .atlas .name { font: 11px var(--ui); fill: var(--text); transition: opacity 260ms; }
+  .atlas .route { fill: none; stroke: var(--line-strong); stroke-width: 1.5; transition: opacity 260ms; }
+  .atlas .lit { fill: none; stroke: var(--lattice); stroke-width: 1.5; stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .atlas .count { font: 11px var(--ui); fill: var(--text-faint); }
+  .atlas .open { fill: var(--text); }
+  .atlas .iso { fill: var(--growth); }
+  .atlas g.n { cursor: pointer; }
+  .atlas .glint { fill: url(#glint); opacity: 0; pointer-events: none; }
+  .atlas:has(g.n:hover) .box, .atlas:has(g.n:hover) .route, .atlas:has(g.n:hover) .name { opacity: .45; }
+  .atlas g.n:hover .box, .atlas g.n:hover .name { opacity: 1; }
+  .atlas g.n:hover .box { stroke: var(--lattice); }
+  .atlas g.n:hover .glint { animation: glint 700ms cubic-bezier(.2, .7, .2, 1); }
+  @keyframes glint { 0% { opacity: 1; transform: translateX(-90px); } 100% { opacity: 1; transform: translateX(90px); } }
+  .atlas:has(g.n[data-n="huff"]:hover) .lit.huff, .atlas:has(g.n[data-n="kraft"]:hover) .lit.kraft, .atlas:has(g.n[data-n="bit"]:hover) .lit.bit { stroke-dashoffset: 0; transition: stroke-dashoffset 500ms ease-out 80ms; }
+  .bands rect { fill: none; stroke-width: 1; shape-rendering: crispEdges; }
+
+  /* ---------------------------------------------------------------- G */
+  .reply { margin-top: 18px; max-width: 560px; padding-left: 16px; position: relative; font: 16px/26px var(--serif); color: var(--text); }
+  .reply::before { content: "◆"; position: absolute; left: 0; top: 0; font: 10px/26px var(--ui); color: var(--growth); }
+  .cite { font: inherit; color: var(--text); background: none; border: 0; padding: 0 1px; cursor: pointer; text-decoration: underline dotted var(--line-strong); text-underline-offset: 3px; }
+  .cite:hover, .cite.lit { color: var(--lattice); text-decoration-color: var(--lattice); }
+  .parts { display: flex; flex-wrap: wrap; gap: 14px; margin: 16px 0 0 16px; font-size: 11px; line-height: 16px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); }
+  .part { position: relative; padding: 8px 12px 7px; min-width: 120px; display: grid; gap: 2px; cursor: pointer; --glint: .3; }
+  .part > s { position: absolute; inset: 0; pointer-events: none; --b: var(--line-strong); background:
+    linear-gradient(var(--b), var(--b)) top left / 8px 1px no-repeat, linear-gradient(var(--b), var(--b)) top left / 1px 8px no-repeat,
+    linear-gradient(var(--b), var(--b)) top right / 8px 1px no-repeat, linear-gradient(var(--b), var(--b)) top right / 1px 8px no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom left / 8px 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom left / 1px 8px no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom right / 8px 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom right / 1px 8px no-repeat; }
+  .part b { font: 14px/20px var(--serif); text-transform: none; letter-spacing: 0; color: var(--text); font-weight: 400; }
+  .part.lit > s, .part:hover > s { --b: var(--lattice); }
+  .part.lit, .part:hover { background: var(--lattice-soft); }
+
+  /* ---------------------------------------------------------------- H and N: a note's text */
+  .note { margin-top: 18px; max-width: 600px; font: 17px/28px var(--serif); color: var(--text); }
+  .note p { color: var(--text); margin: 0 0 14px; max-width: none; }
+  .seam { position: relative; padding-left: 18px; }
+  .seam .line { position: absolute; left: 0; top: 4px; bottom: 4px; width: 2px; background: var(--growth); overflow: hidden; }
+  .seam .line::before { content: ""; position: absolute; left: 0; right: 0; height: 40%; background: linear-gradient(transparent, rgb(var(--sheen) / .9), transparent); transform: translateY(-120%); }
+  .seam:hover .line::before { transform: translateY(260%); transition: transform 700ms cubic-bezier(.2, .7, .2, 1); }
+  /* N: a link's kind as the weight of its vein. requires: a solid vein; uses: a thin one; see also: dotted. Light runs
+     along it on hover. */
+  .vein { color: inherit; text-decoration: none; background-repeat: no-repeat; background-position: 0 100%; padding-bottom: 1px; }
+  .vein.requires { background-image: linear-gradient(var(--lattice), var(--lattice)); background-size: 100% 2px; }
+  .vein.uses { background-image: linear-gradient(var(--line-strong), var(--line-strong)); background-size: 100% 1px; }
+  .vein.also { background-image: linear-gradient(90deg, var(--line-strong) 50%, transparent 50%); background-size: 4px 1px; background-repeat: repeat-x; }
+  .vein { position: relative; }
+  .vein::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, transparent, rgb(var(--sheen) / .95), transparent) no-repeat; background-size: 30% 100%; background-position: -40% 0; }
+  .vein:hover::after { background-position: 140% 0; transition: background-position 600ms ease-out; }
+  .vein:hover { color: var(--lattice); }
+
+  /* ---------------------------------------------------------------- I and K: crystals */
+  .grow { display: flex; align-items: center; gap: 22px; margin-top: 18px; }
+  .grow svg.big { width: 88px; height: 88px; }
+  .flake line { stroke: var(--growth); stroke-linecap: round; }
+  .flake.growing line { opacity: 0; animation: seg 1ms linear forwards; }
+  @keyframes seg { to { opacity: 1; } }
+  .flake.fading { opacity: 0; transition: opacity 300ms ease-in; }
+  .label { font: 11px/11px var(--display); text-transform: uppercase; color: var(--text-faint); }
+  .doing { font: 12px/20px var(--ui); color: var(--text-faint); }
+  .drawer { display: grid; grid-template-columns: repeat(10, 44px); gap: 11px; margin-top: 22px; padding: 11px; border: 1px solid var(--line); width: max-content; max-width: 100%; overflow: auto; background: var(--ground-1); }
+  .drawer svg { width: 44px; height: 44px; }
+  .drawer .flake line { stroke: var(--text-faint); }
+  .drawer svg:hover .flake line { stroke: var(--growth); }
+  .history { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; margin-top: 18px; max-width: 760px; }
+  .spec { --edge: var(--line); --face: var(--ground-1); --ink: var(--text); padding: 14px; display: grid; grid-template-columns: 44px 1fr; gap: 6px 14px; cursor: pointer; --glint: .25; }
+  .spec:hover { --edge: var(--line-strong); }
+  .spec svg { grid-row: span 3; width: 44px; height: 44px; }
+  .spec .q { font: 15px/22px var(--serif); color: var(--text); }
+  .spec .m { font: 11px/16px var(--ui); color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; }
+  @media (max-width: 700px) { .history { grid-template-columns: 1fr; } }
+
+  /* ---------------------------------------------------------------- J */
+  .slots { display: flex; flex-wrap: wrap; gap: 11px; margin-top: 18px; }
+  .slot { --edge: var(--line-strong); --face: var(--ground-2); --ink: var(--text-soft); width: 132px; height: 88px; display: grid; place-items: center; align-content: center; gap: 11px; font: 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; --glint: .5; }
+  .slot .g { font: 22px/22px var(--display); }
+  .slot:hover { --edge: var(--text-soft); }
+  .slot.on { --edge: var(--lattice); --face: var(--lattice); --ink: var(--on); }
+  .slot.q.on { --edge: var(--rose); --face: var(--rose); }
+  .slot.u.on { --edge: var(--malachite); --face: var(--malachite); }
+
+  /* ---------------------------------------------------------------- L: understanding as banding */
+  .heads { display: flex; flex-wrap: wrap; gap: 33px; margin-top: 18px; align-items: center; }
+  .head { display: flex; align-items: center; gap: 11px; font: 22px/28px var(--serif); color: var(--text); }
+  .head svg { width: 22px; height: 22px; }
+
+  /* ---------------------------------------------------------------- O: context as strata */
+  .isobar { margin-top: 18px; width: 420px; max-width: 100%; display: flex; align-items: center; gap: 11px; height: 40px; padding: 0 12px; border: 1px solid var(--line); background: var(--ground-1); }
+  .isobar .who { font: 22px/22px var(--display); text-transform: uppercase; }
+  .strata { flex: 1; height: 11px; display: flex; border: 1px solid var(--line-strong); }
+  .strata i { display: block; height: 100%; cursor: default; }
+  .strata i:not(:last-child) { border-right: 1px solid var(--ground-1); }
+  .strata .s1 { background: repeating-linear-gradient(45deg, var(--line-strong) 0 1px, transparent 1px 4px); }
+  .strata .s2 { background: var(--lattice); }
+  .strata .s3 { background: repeating-linear-gradient(90deg, var(--text-faint) 0 1px, transparent 1px 3px); }
+  .strata .s4 { background: var(--malachite); }
+  .strata .s5 { background: none; flex: 1; }
+  .strata i:hover { outline: 1px solid var(--text); outline-offset: -1px; }
+  .isobar .said { font: 11px/16px var(--ui); color: var(--text-faint); min-width: 13ch; text-align: right; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .flake.growing line { opacity: 1; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Lustre</h1>
+    <p style="margin-top:16px">C, D, G, H, I and J, kept and revised; the Atlas, redone within its present layout; K, L, N and O are new. No flash anywhere: a touched thing shows one band of light.</p>
+    <div class="bar-top">
+      <div class="seg" role="group" aria-label="Ground"><button type="button" data-ground="" aria-pressed="true">system</button><button type="button" data-ground="lapis" aria-pressed="false">lapis</button><button type="button" data-ground="quartz" aria-pressed="false">quartz</button></div>
+      <div class="seg" role="group" aria-label="Display face"><button type="button" data-display="departure" aria-pressed="true">Departure Mono</button><button type="button" data-display="ioskeley" aria-pressed="false">Ioskeley Mono</button></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>C · Lustre on touch</h2>
+    <p>The edge takes its colour in one step, the face fills over 260 ms, and one band of light crosses. Gold for Iso and what is valuable; blue, fainter, for structure and your own actions.</p>
+    <div class="row">
+      <button class="btn gold chamfer sheen">Check my understanding</button>
+      <button class="btn gold solid chamfer sheen">Ask Iso</button>
+      <button class="btn blue chamfer sheen">New note</button>
+      <button class="btn blue chamfer sheen">Move</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>D · Rows with a vein</h2>
+    <p>The marker grows down, the vein runs along the foot, and a faint band crosses the row.</p>
+    <ul class="list">
+      <li class="on sheen"><i></i><span class="n">006</span><span class="t">Surprise</span><span class="k">concept</span></li>
+      <li class="sheen"><i></i><span class="n">007</span><span class="t">The bit</span><span class="k">concept</span></li>
+      <li class="sheen"><i></i><span class="n">008</span><span class="t">Why does Kraft hold?</span><span class="k">question</span></li>
+      <li class="sheen"><i></i><span class="n">009</span><span class="t">Huffman codes</span><span class="k">concept</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>The Atlas, as it is</h2>
+    <p>Same layout, same routes, drawn at the screen's own pixels so the names are crisp: 11 px Ioskeley, and the folder tags in the display face. Boxes get a face, not just an outline. Hover a note: the others dim, its box takes the lustre and its routes draw in blue. The white bar is the open note (as now); the gold ◆, a note Iso has read this turn; the banding in a corner, how far you've understood it (L).</p>
+    <div class="atlas">
+      <svg width="360" height="400" viewBox="0 0 360 400" role="img" aria-label="Six notes in three folders">
+        <defs><linearGradient id="glint" x1="0" x2="1" y1="0" y2=".3"><stop offset=".4" stop-color="rgb(var(--sheen))" stop-opacity="0"/><stop offset=".5" stop-color="rgb(var(--sheen))" stop-opacity=".5"/><stop offset=".6" stop-color="rgb(var(--sheen))" stop-opacity="0"/></linearGradient>
+          <clipPath id="cb"><rect width="84" height="50"/></clipPath></defs>
+        <path class="wall" d="M28.5 24.5H160.5V206.5L150.5 216.5H18.5V34.5Z"/>
+        <rect class="tagbg" x="32" y="17" width="58" height="14"/><text class="tag" x="36" y="28">basics</text>
+        <path class="wall" d="M208.5 24.5H340.5V286.5L330.5 296.5H198.5V34.5Z"/>
+        <rect class="tagbg" x="212" y="17" width="58" height="14"/><text class="tag" x="216" y="28">coding</text>
+        <path class="wall" d="M28.5 254.5H160.5V368.5L150.5 378.5H18.5V264.5Z"/>
+        <rect class="tagbg" x="32" y="247" width="80" height="14"/><text class="tag" x="36" y="258">channels</text>
+
+        <path class="route" d="M160.5 118.5H198.5"/><path class="route" d="M160.5 121.5H198.5"/><text class="count" x="175" y="112">2</text>
+        <path class="route" d="M130.5 81.5H146.5V118.5H160.5M130.5 161.5H146.5V121.5"/>
+        <path class="route" d="M198.5 120.5H214.5V81.5H228.5"/>
+        <path class="route" d="M270.5 106.5V136.5M270.5 186.5V216.5"/>
+        <path class="lit huff" pathLength="1" d="M228.5 81.5H214.5V120.5H160.5H146.5V161.5H130.5"/>
+        <path class="lit huff" pathLength="1" d="M270.5 106.5V136.5"/>
+        <path class="lit kraft" pathLength="1" d="M270.5 136.5V106.5"/>
+        <path class="lit kraft" pathLength="1" d="M270.5 186.5V216.5"/>
+        <path class="lit bit" pathLength="1" d="M130.5 161.5H146.5V121.5H160.5H198.5H214.5V81.5H228.5"/>
+
+        <g class="n" data-n="sur" transform="translate(46.5 56.5)"><rect class="box" width="84" height="50"/><text class="name" x="9" y="20">Surprise</text>
+          <g class="bands" transform="translate(70 37)"><rect width="9" height="9" stroke="var(--malachite)"/><rect x="2" y="2" width="5" height="5" stroke="var(--malachite)"/></g>
+          <g clip-path="url(#cb)"><rect class="glint" x="-40" width="164" height="50"/></g></g>
+        <g class="n" data-n="bit" transform="translate(46.5 136.5)"><rect class="box" width="84" height="50"/><text class="name" x="9" y="20">The bit</text>
+          <g clip-path="url(#cb)"><rect class="glint" x="-40" width="164" height="50"/></g></g>
+        <g class="n" data-n="huff" transform="translate(228.5 56.5)"><rect class="box" width="84" height="50"/><rect class="open" width="3" height="50"/><text class="name" x="9" y="20">Huffman</text><text class="name" x="9" y="33">codes</text>
+          <text class="iso" x="70" y="14" style="font:9px var(--ui)">◆</text>
+          <g clip-path="url(#cb)"><rect class="glint" x="-40" width="164" height="50"/></g></g>
+        <g class="n" data-n="kraft" transform="translate(228.5 136.5)"><rect class="box" width="84" height="50"/><text class="name" x="9" y="20">Kraft</text><text class="name" x="9" y="33">inequality</text>
+          <text class="iso" x="70" y="14" style="font:9px var(--ui)">◆</text>
+          <g class="bands" transform="translate(72 39)"><rect width="7" height="7" stroke="var(--rose)"/></g>
+          <g clip-path="url(#cb)"><rect class="glint" x="-40" width="164" height="50"/></g></g>
+        <g class="n" data-n="src" transform="translate(228.5 216.5)"><rect class="box" width="84" height="50"/><text class="name" x="9" y="20">Source</text><text class="name" x="9" y="33">coding</text>
+          <g clip-path="url(#cb)"><rect class="glint" x="-40" width="164" height="50"/></g></g>
+        <g class="n" data-n="hic" transform="translate(46.5 290.5)"><rect class="box" width="84" height="50"/><text class="name" x="9" y="20">Huffman</text><text class="name" x="9" y="33">in code</text>
+          <g clip-path="url(#cb)"><rect class="glint" x="-40" width="164" height="50"/></g></g>
+      </svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>G · What Iso drew on</h2>
+    <p>The notes Iso used, as parts under the reply. A cited phrase and its part light together.</p>
+    <div class="reply">Huffman codes are optimal because they meet the <button class="cite" data-c="k">Kraft inequality</button> with equality, and each codeword's length tracks its symbol's <button class="cite" data-c="s">surprise</button>, measured in <button class="cite" data-c="b">bits</button>.</div>
+    <div class="parts">
+      <div class="part sheen" data-c="k"><s></s><b>Kraft inequality</b>coding</div>
+      <div class="part sheen" data-c="s"><s></s><b>Surprise</b>basics</div>
+      <div class="part sheen" data-c="b"><s></s><b>The bit</b>basics</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>H · Iso's words, as a seam · N · Links as veins</h2>
+    <p>H: Iso's passage carries a gold seam in the margin; light runs down it on hover. N: a link's kind is the weight of its vein: <i>requires</i> solid, <i>uses</i> thin, <i>see also</i> dotted.</p>
+    <div class="note">
+      <p>A prefix code assigns each symbol a codeword so that no codeword begins another. It <a class="vein requires" href="#">rests on</a> the idea of <a class="vein uses" href="#">surprise</a>, measured in <a class="vein uses" href="#">bits</a>.</p>
+      <div class="seam"><span class="line"></span><p>Kraft's inequality says such a code exists exactly when the sum of 2<sup>−ℓ</sup> over the codeword lengths ℓ is at most one.</p></div>
+      <p>Huffman's construction meets it with equality. See also <a class="vein also" href="#">Shannon–Fano coding</a>.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>I · Iso at work, growing</h2>
+    <p>A hundred crystals, each an L-system grown with 3- to 8-fold symmetry. Each time Iso starts, one is chosen at random and grows outward segment by segment. The drawer below shows all of them; hover one to see it in gold.</p>
+    <div class="grow"><svg class="big" id="live" viewBox="-24 -24 48 48" aria-hidden="true"></svg><div><div class="label" id="liveno"></div><div class="doing">Iso is reading Kraft inequality</div></div></div>
+    <div class="drawer" id="drawer"></div>
+  </section>
+
+  <section>
+    <h2>K · Conversations, as specimens</h2>
+    <p>From your testing notes ("past conversation history would be very nice"). Each conversation keeps the crystal it grew when it began: one look tells them apart, as a specimen drawer does.</p>
+    <div class="history" id="history"></div>
+  </section>
+
+  <section>
+    <h2>J · A note's kind</h2>
+    <p>The kinds as slots. Choosing one fills it, with one band of light.</p>
+    <div class="slots" id="slots">
+      <button class="slot chamfer sheen on"><span class="g">▣</span>concept</button>
+      <button class="slot chamfer sheen q"><span class="g">?</span>question</button>
+      <button class="slot chamfer sheen q"><span class="g">!</span>problem</button>
+      <button class="slot chamfer sheen u"><span class="g">◇</span>understanding</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>L · Understanding, as banding</h2>
+    <p>Malachite and agate record their growth in bands. Each time Iso checks what you've understood of a note, a band is added inside: malachite where it held, rose where it's still open. Beside a note's title, and in its Atlas box's corner.</p>
+    <div class="heads">
+      <div class="head"><svg viewBox="0 0 22 22" aria-label="understood once"><g class="bands" transform="translate(.5 .5)"><rect width="21" height="21" stroke="var(--malachite)"/></g></svg>Surprise</div>
+      <div class="head"><svg viewBox="0 0 22 22" aria-label="checked three times, the last still open"><g class="bands" transform="translate(.5 .5)"><rect width="21" height="21" stroke="var(--malachite)"/><rect x="4" y="4" width="13" height="13" stroke="var(--malachite)"/><rect x="8" y="8" width="5" height="5" stroke="var(--rose)"/></g></svg>Kraft inequality</div>
+      <div class="head"><svg viewBox="0 0 22 22" aria-label="never checked"><g class="bands" transform="translate(.5 .5)"><rect width="21" height="21" stroke="var(--line)"/></g></svg>Source coding</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>O · Context, as strata</h2>
+    <p>From "context management a bit skewiff": what Iso will be sent, as a geologist's column on its side. Hatched: your instructions; blue: the notes you gave; ruled: the conversation; malachite: its summary; empty: room left. Hover a layer for its name and size.</p>
+    <div class="isobar"><span class="who">Iso</span><div class="strata" id="strata">
+      <i class="s1" style="width:8%" data-s="instructions · 1.2k"></i><i class="s2" style="width:22%" data-s="notes · 3.4k"></i><i class="s3" style="width:30%" data-s="conversation · 4.6k"></i><i class="s4" style="width:6%" data-s="summary · 0.9k"></i><i class="s5" data-s="room · 5.1k"></i>
+    </div><span class="said" id="said">10.1k of 15k</span></div>
+  </section>
+</main>
+<script>
+  const root = document.documentElement;
+  // The ground and the display face, as switches.
+  for (const b of document.querySelectorAll("[data-ground]")) b.addEventListener("click", () => {
+    if (b.dataset.ground) root.dataset.ground = b.dataset.ground; else delete root.dataset.ground;
+    b.parentElement.querySelectorAll("button").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+  });
+  for (const b of document.querySelectorAll("button[data-display]")) b.addEventListener("click", () => {
+    root.dataset.display = b.dataset.display;
+    b.parentElement.querySelectorAll("button").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+  });
+  // A sheen that has run must be able to run again: drop the transition once it's done.
+  for (const el of document.querySelectorAll(".sheen")) el.addEventListener("transitionend", () => el.classList.remove("glint"));
+
+  // G: a cited phrase and its part light together.
+  for (const el of document.querySelectorAll("[data-c]")) {
+    el.addEventListener("mouseenter", () => document.querySelectorAll(`[data-c="${el.dataset.c}"]`).forEach((x) => x.classList.add("lit")));
+    el.addEventListener("mouseleave", () => document.querySelectorAll(".lit").forEach((x) => x.classList.remove("lit")));
+  }
+  // J: choosing a kind fills it and runs the lustre once.
+  const slots = [...document.querySelectorAll(".slot")];
+  for (const s of slots) s.addEventListener("click", () => { slots.forEach((o) => o.classList.toggle("on", o === s)); s.classList.remove("glint"); void s.offsetWidth; s.classList.add("glint"); });
+  // O: a layer's name in the bar's corner while it's under the pointer.
+  const said = document.getElementById("said"), whole = said.textContent;
+  for (const i of document.querySelectorAll("#strata i")) { i.addEventListener("mouseenter", () => { said.textContent = i.dataset.s; }); i.addEventListener("mouseleave", () => { said.textContent = whole; }); }
+
+  // I, K: a hundred crystals. Each is an L-system: a rule for one arm, symmetric about the arm's own axis, turned at
+  // multiples of 180°/n so the branches fall on the crystal's own directions, then drawn n times around the centre.
+  const NS = "http://www.w3.org/2000/svg";
+  function rng(seed) { let s = seed * 9301 + 49297; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; }
+  // Templates for an arm. Every [+X] has its [-X] at the same place, so each arm is mirror-symmetric.
+  const RULES = ["F[+F][-F]F", "FF[+F][-F]F", "F[+F][-F][F]", "F[++F][--F]F", "F[+F][-F]F[+F][-F]", "F[+FF][-FF]F", "FF[+F][-F][++F][--F]", "F[+F[+F][-F]][-F[+F][-F]]F"];
+  const FOLDS = [3, 4, 5, 6, 6, 6, 7, 8, 8];
+  function crystal(seed) {
+    const r = rng(seed + 1), n = FOLDS[Math.floor(r() * FOLDS.length)], rule = RULES[Math.floor(r() * RULES.length)];
+    const turn = (180 / n) * (r() < .5 ? 1 : 2) * (n <= 4 && r() < .5 ? .5 : 1), depth = rule.length > 14 ? 2 : r() < .55 ? 3 : 2;
+    let s = "F"; for (let k = 0; k < depth; k++) s = s.replace(/F/g, rule);
+    // Walk the arm once; record each segment with its distance from the centre in steps, for growing outward.
+    const segs = [], stack = []; let x = 0, y = 0, a = 0, d = 0, maxR = 0;
+    for (const c of s) {
+      if (c === "F") { const nx = x + Math.cos(a * Math.PI / 180), ny = y + Math.sin(a * Math.PI / 180); segs.push([x, y, nx, ny, d]); x = nx; y = ny; d++; maxR = Math.max(maxR, Math.hypot(x, y)); }
+      else if (c === "+") a += turn; else if (c === "-") a -= turn;
+      else if (c === "[") stack.push([x, y, a, d]); else if (c === "]") [x, y, a, d] = stack.pop();
+    }
+    return { n, rule, turn, depth, segs, scale: 21 / Math.max(maxR, 1), steps: Math.max(...segs.map((q) => q[4])) + 1 };
+  }
+  const CRYSTALS = Array.from({ length: 100 }, (_, k) => crystal(k * 7919 + 13));
+  function draw(svg, c, grow) {
+    svg.replaceChildren();
+    const g = document.createElementNS(NS, "g"); g.setAttribute("class", "flake" + (grow ? " growing" : ""));
+    const width = Math.min(1.4, Math.max(.6, 30 / c.segs.length * c.n / 6 + .55));
+    for (let k = 0; k < c.n; k++) {
+      const rot = k * 360 / c.n - 90, cos = Math.cos(rot * Math.PI / 180), sin = Math.sin(rot * Math.PI / 180);
+      for (const [x1, y1, x2, y2, d] of c.segs) {
+        const l = document.createElementNS(NS, "line"), p = (x, y) => [(x * cos - y * sin) * c.scale, (x * sin + y * cos) * c.scale];
+        const [a1, b1] = p(x1, y1), [a2, b2] = p(x2, y2);
+        l.setAttribute("x1", a1.toFixed(2)); l.setAttribute("y1", b1.toFixed(2)); l.setAttribute("x2", a2.toFixed(2)); l.setAttribute("y2", b2.toFixed(2));
+        l.setAttribute("stroke-width", width.toFixed(2));
+        if (grow) l.style.animationDelay = `${Math.round(d / c.steps * 1100)}ms`;
+        g.append(l);
+      }
+    }
+    svg.append(g);
+    return g;
+  }
+  // The live one: grow, stand, fade, and choose again.
+  const live = document.getElementById("live"), liveno = document.getElementById("liveno");
+  function cycle() {
+    const k = Math.floor(Math.random() * CRYSTALS.length), c = CRYSTALS[k];
+    liveno.textContent = `No. ${String(k + 1).padStart(3, "0")} · ${c.n}-fold`;
+    const g = draw(live, c, true);
+    setTimeout(() => g.classList.add("fading"), 2600);
+    setTimeout(cycle, 2950);
+  }
+  cycle();
+  // The drawer of all hundred.
+  const drawer = document.getElementById("drawer");
+  CRYSTALS.forEach((c, k) => { const s = document.createElementNS(NS, "svg"); s.setAttribute("viewBox", "-24 -24 48 48"); s.setAttribute("aria-label", `No. ${k + 1}, ${c.n}-fold`); draw(s, c, false); drawer.append(s); });
+  // K: past conversations, each with the crystal it began with.
+  const PAST = [["What does Kraft's inequality actually bound?", "today · 14:02", "4 notes · 11 turns", 37], ["Check what I understand about surprise", "today · 09:40", "2 notes · 6 turns", 82], ["Draw how Huffman builds its tree", "yesterday", "3 notes · 9 turns", 5], ["Why is the bit the unit?", "Mon", "1 note · 3 turns", 61], ["Rewrite source coding in my words", "Mon", "1 note · 4 turns", 19], ["Where does entropy come in?", "last week", "5 notes · 14 turns", 93]];
+  const history = document.getElementById("history");
+  for (const [q, when, size, k] of PAST) {
+    const card = document.createElement("div"); card.className = "spec chamfer sheen";
+    const s = document.createElementNS(NS, "svg"); s.setAttribute("viewBox", "-24 -24 48 48"); s.setAttribute("aria-hidden", "true"); draw(s, CRYSTALS[k], false);
+    card.append(s);
+    for (const [cls, text] of [["m", when], ["q", q], ["m", size]]) { const d = document.createElement("div"); d.className = cls; d.textContent = text; card.append(d); }
+    history.append(card);
+  }
+</script>
+</body>
+</html>

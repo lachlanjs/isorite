@@ -20,6 +20,15 @@ Structure is rigid, growth is gold, and growth is the only thing that moves on i
 - Gold moves; blue stays. Only Iso's work and growth animate in gold; the user's own actions are instant or 120 ms.
 - Every animation has a `prefers-reduced-motion` form that keeps the information and drops the movement.
 
+## Settled (from the inspiration rounds)
+
+- No flash. A touched thing acknowledges with one band of light across its face (lustre), not an inversion or blink.
+- No directive text: no key legends, no captions explaining what a control does. If it needs one, redesign it.
+- The Atlas's layout and routing do not change for style. Colour, weight, fill and motion only.
+- Departure Mono only at 11, 22, 33 or 44 px, with no letter-spacing, or it blurs. Map labels drawn at the screen's
+  own pixels, not scaled with the map.
+- Sketches: `inspiration/combinations/sketches.html`.
+
 ## Banned defaults
 
 Each has a replacement, or it stays banned until one is found.

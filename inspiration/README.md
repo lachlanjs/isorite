@@ -8,7 +8,7 @@ for you to judge; the "take" lines are my proposals, to keep or strike.
 | `alien-isolation/` | Screenshots of the game's UI: terminals, logs, crafting inventory, item wheel, CRT screens, motion tracker. See `alien-isolation/SOURCES.md`. |
 | `minerals/` | Photographs from Wikimedia Commons (bismuth, pyrite, quartz, lapis with pyrite, gold, malachite, rose quartz, veins, fluorite, agate), and two drawn here (`generated-*`). |
 | `organic-growth/` | Photographs of venation, dendrites, phyllotaxis, lichen, coral, romanesco, DLA, and three drawn here (`generated-*`). |
-| `combinations/` | `hover-flash-lustre.html`: working sketches that cross the themes, in isorite's own tokens and fonts. Open it in a browser and hover. |
+| `combinations/` | `sketches.html` (built from `sketches.src.html` by `build.mjs`, which inlines the fonts): working sketches that cross the themes, in isorite's own tokens and fonts. Open it in a browser and hover. |
 | `prospective/` | Themes that could join these three. See `prospective/README.md`. |
 | `MANUAL-LINKS.md` | Images I couldn't fetch or didn't find, for you to open by hand. |
 
@@ -78,23 +78,32 @@ how lines and shapes are drawn (colour, weight, fill, motion), never where they 
 
 ## Crossing them
 
-`combinations/hover-flash-lustre.html`, on both grounds (switch at the top). You kept C, D and E; A (flash alone) and B
-(lustre alone) are gone. F to J are new.
+`combinations/sketches.html`, with switches for the ground (lapis, quartz) and the display face (Departure Mono,
+Ioskeley Mono). Round two, after your notes: no flash anywhere (a touched thing shows one band of light), no directive
+text in the mock interfaces, display text only at 11, 22, 33 or 44 px so Departure Mono sits on its pixel grid.
 
-- **C, flash then lustre**: the flash selects; the lustre follows once the face has settled. Gold with lustre for Iso
-  and what is valuable; blue without it for structure and your own actions.
-- **D, log rows with a vein**: the game's solid selected row, its marker growing down, a gold vein along its foot. For
-  the note list, search results, anything chosen from a list.
-- **E, the pane bar**: the page now shows it in the three panes and a dialog, and says where it's used and its gray
-  areas (focus or status light; whether the app tracks the pane you're in).
-- **F, an Atlas region in the map's manner**: filled region with its name large and faint, filled rooms, callout
-  labels, channel routes, a legend. Styling only: positions and routes would come from the existing layout and router.
-- **G, what Iso drew on, as parts**: the "[1] note-name" tail replaced by bracketed parts under the reply; a cited
-  phrase and its part light together.
-- **H, Iso's words as a seam**: provenance as a thin gold seam in the margin (kintsugi), lustre running down it on hover.
-- **I, Iso at work, growing**: a 60° crystal growing in dropped frames, in place of the spinning square.
-- **J, a note's kind as crafting slots**: for "selection of note type is not nice"; slots chosen with a flash, described
-  underneath, arrow keys to choose.
+- **C, lustre on touch**: the edge changes in one step, the face fills, one band of light crosses. Gold for Iso and
+  what is valuable, blue (fainter light) for structure and your own actions.
+- **D, rows with a vein**: marker, vein, and a faint band across the row.
+- **The Atlas, as it is** (replaces F, which changed the layout too much): the same boxes, folders and routes, drawn at
+  the screen's own pixels so labels are crisp; boxes with a face; hover dims the rest, lights the note's routes in blue
+  and runs the lustre across its box; the open note's white bar as now; a gold ◆ for a note Iso read; L's banding in
+  the corner.
+- **G, what Iso drew on**: parts under the reply, lit together with the phrase that cites them.
+- **H, Iso's words as a seam**, with **N, links as veins**: a link's kind (requires, uses, see also) as the weight of its
+  underline, light running along it on hover.
+- **I, Iso at work, growing**: a hundred L-system crystals with 3- to 8-fold symmetry, one chosen at random each time,
+  growing outward segment by segment; a drawer shows all hundred.
+- **J, a note's kind**: slots, filled with one band of light; no description or key legend.
+- **K, conversations as specimens** (new, for "past conversation history"): each conversation keeps the crystal it grew
+  when it began.
+- **L, understanding as banding** (new): each check of understanding adds a band, malachite where it held, rose where
+  it's open.
+- **O, context as strata** (new, for "context management a bit skewiff"): what Iso will be sent as a geologist's column
+  on its side; hover a layer for its name and size.
+
+Gray area: D's marker and vein are gold, which the tokens reserve for Iso. You liked it gold; if gold should stay Iso's
+alone, D would be blue.
 
 A rule that could hold them together: **the machine is how isorite answers you (stepped, instant, slightly broken);
 the mineral is what your notes are made of (lustre, habit, veins); growth is how they change (along lines, at
