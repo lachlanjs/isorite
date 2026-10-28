@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-display="departure">
+<html lang="en" data-display="ioskeley">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -120,7 +120,6 @@
   .atlas g.n:hover .glint { animation: glint 700ms cubic-bezier(.2, .7, .2, 1); }
   @keyframes glint { 0% { opacity: 1; transform: translateX(-90px); } 100% { opacity: 1; transform: translateX(90px); } }
   .atlas:has(g.n[data-n="huff"]:hover) .lit.huff, .atlas:has(g.n[data-n="kraft"]:hover) .lit.kraft, .atlas:has(g.n[data-n="bit"]:hover) .lit.bit { stroke-dashoffset: 0; transition: stroke-dashoffset 500ms ease-out 80ms; }
-  .bands rect { fill: none; stroke-width: 1; shape-rendering: crispEdges; }
 
   /* ---------------------------------------------------------------- G */
   .reply { margin-top: 18px; max-width: 560px; padding-left: 16px; position: relative; font: 16px/26px var(--serif); color: var(--text); }
@@ -186,10 +185,6 @@
   .slot.q.on { --edge: var(--rose); --face: var(--rose); }
   .slot.u.on { --edge: var(--malachite); --face: var(--malachite); }
 
-  /* ---------------------------------------------------------------- L: understanding as banding */
-  .heads { display: flex; flex-wrap: wrap; gap: 33px; margin-top: 18px; align-items: center; }
-  .head { display: flex; align-items: center; gap: 11px; font: 22px/28px var(--serif); color: var(--text); }
-  .head svg { width: 22px; height: 22px; }
 
   /* ---------------------------------------------------------------- O: context as strata */
   .isobar { margin-top: 18px; width: 420px; max-width: 100%; display: flex; align-items: center; gap: 11px; height: 40px; padding: 0 12px; border: 1px solid var(--line); background: var(--ground-1); }
@@ -205,6 +200,61 @@
   .strata i:hover { outline: 1px solid var(--text); outline-offset: -1px; }
   .isobar .said { font: 11px/16px var(--ui); color: var(--text-faint); min-width: 13ch; text-align: right; }
 
+  /* ---------------------------------------------------------------- P: one grammar of states */
+  .states { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 22px 11px; margin-top: 18px; max-width: 900px; }
+  .states figure { margin: 0; display: grid; gap: 8px; }
+  .states figcaption { font: 11px/16px var(--ui); color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; }
+  .st { --edge: var(--line-strong); --face: var(--ground-2); --ink: var(--text-soft); height: 44px; white-space: nowrap; gap: 10px; display: flex; align-items: center; padding: 0 14px; font: 13px var(--ui); cursor: pointer; --glint: .5; overflow: visible; }
+  .st.sel { --edge: var(--lattice); --face: var(--lattice); --ink: var(--on); }
+  .st.cur::before { content: ""; position: absolute; left: 1px; top: 1px; bottom: 1px; width: 3px; background: var(--text); z-index: 1; transform: none; }
+  .st.isos .dia { color: var(--growth); margin-left: auto; font-size: 10px; }
+  .st.off { --edge: var(--line); --face: var(--ground-1); --ink: var(--text-faint); cursor: default; }
+  .wrapf { position: relative; padding: 5px; margin: -5px; }
+  .wrapf > s { position: absolute; inset: 0; pointer-events: none; --b: var(--text); background:
+    linear-gradient(var(--b), var(--b)) top left / 7px 1.5px no-repeat, linear-gradient(var(--b), var(--b)) top left / 1.5px 7px no-repeat,
+    linear-gradient(var(--b), var(--b)) top right / 7px 1.5px no-repeat, linear-gradient(var(--b), var(--b)) top right / 1.5px 7px no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom left / 7px 1.5px no-repeat, linear-gradient(var(--b), var(--b)) bottom left / 1.5px 7px no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom right / 7px 1.5px no-repeat, linear-gradient(var(--b), var(--b)) bottom right / 1.5px 7px no-repeat; opacity: 0; }
+  .wrapf.f > s, .wrapf:has(:focus-visible) > s { opacity: 1; }
+  .wrapf :focus-visible { outline: none; }
+
+  /* ---------------------------------------------------------------- Q: glyphs with a habit */
+  .glyphs { display: grid; grid-template-columns: repeat(auto-fill, 88px); gap: 11px; margin-top: 18px; }
+  .glyphs figure { margin: 0; display: grid; justify-items: center; gap: 6px; padding: 11px 0 8px; border: 1px solid var(--line); background: var(--ground-1); }
+  .glyphs svg { fill: none; stroke: var(--text); stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; }
+  .glyphs .x2 { width: 32px; height: 32px; } .glyphs .x1 { width: 16px; height: 16px; }
+  .glyphs .pair { display: flex; align-items: end; gap: 11px; }
+  .glyphs figcaption { font: 11px/16px var(--ui); color: var(--text-faint); }
+  .glyphs .gold { stroke: none; fill: var(--growth); }
+  .glyphs .solid { fill: currentColor; }
+
+  /* ---------------------------------------------------------------- R: questions and problems */
+  .journey { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fill, 150px); gap: 22px 11px; }
+  .journey figure { margin: 0; display: grid; gap: 8px; }
+  .journey svg { display: block; }
+  .journey figcaption { font: 11px/16px var(--ui); color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; }
+  .journey .name { font: 11px var(--ui); fill: var(--text); }
+  .asks { margin-top: 22px; max-width: 560px; font: 15px/24px var(--serif); color: var(--text); display: flex; gap: 10px; align-items: baseline; padding-left: 16px; position: relative; }
+  .asks::before { content: "◇"; position: absolute; left: 0; color: var(--rose); font: 11px/24px var(--ui); }
+  .asks .keep { --edge: var(--rose); --face: var(--ground-0); --ink: var(--rose); --cut: 5px; font: 11px var(--ui); text-transform: uppercase; letter-spacing: .06em; padding: 4px 10px; cursor: pointer; --glint: .4; flex: none; }
+  .asks .keep:hover { --face: color-mix(in srgb, var(--rose) var(--soft), var(--ground-1)); }
+
+  /* ---------------------------------------------------------------- S: the terminal */
+  .term { margin-top: 18px; max-width: 720px; background: #05090F; color: #C9D3E1; font: 13px/20px var(--ui); padding: 14px 16px; border: 1px solid var(--line); overflow: auto; white-space: pre; }
+  :root[data-ground="quartz"] .term { background: #FBFAF6; color: #1F2A3B; }
+  .term .y { color: var(--growth); } .term .b { color: var(--lattice); } .term .f { color: var(--text-faint); } .term .r { color: var(--rose); } .term .g { color: var(--malachite); } .term .w { color: var(--text); }
+
+  /* ---------------------------------------------------------------- T: a note's history as strata */
+  .hist { margin-top: 18px; display: flex; gap: 18px; max-width: 640px; }
+  .column { width: 11px; display: flex; flex-direction: column; border: 1px solid var(--line-strong); flex: none; align-self: stretch; }
+  .column i { display: block; background: var(--lattice-soft); border-bottom: 1px solid var(--ground-1); cursor: default; }
+  .column i.iso { background: var(--growth); }
+  .column i:last-child { border-bottom: 0; }
+  .column i:hover { outline: 1px solid var(--text); outline-offset: -1px; }
+  .hist .note { margin-top: 0; }
+  .hist h4 { font: 22px/28px var(--serif); margin: 0 0 4px; font-weight: 400; }
+  .hist .when { font: 11px/16px var(--ui); color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 11px; min-height: 16px; }
+
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .flake.growing line { opacity: 1; } }
 </style>
 </head>
@@ -212,10 +262,10 @@
 <main>
   <header>
     <h1>Lustre</h1>
-    <p style="margin-top:16px">C, D, G, H, I and J, kept and revised; the Atlas, redone within its present layout; K, L, N and O are new. No flash anywhere: a touched thing shows one band of light.</p>
+    <p style="margin-top:16px">Kept: C, D, G, H, I, J, K, N, O and the Atlas. New: P to T. No flash anywhere: a touched thing shows one band of light.</p>
     <div class="bar-top">
       <div class="seg" role="group" aria-label="Ground"><button type="button" data-ground="" aria-pressed="true">system</button><button type="button" data-ground="lapis" aria-pressed="false">lapis</button><button type="button" data-ground="quartz" aria-pressed="false">quartz</button></div>
-      <div class="seg" role="group" aria-label="Display face"><button type="button" data-display="departure" aria-pressed="true">Departure Mono</button><button type="button" data-display="ioskeley" aria-pressed="false">Ioskeley Mono</button></div>
+      <div class="seg" role="group" aria-label="Display face"><button type="button" data-display="ioskeley" aria-pressed="true">Ioskeley Mono</button><button type="button" data-display="departure" aria-pressed="false">Departure Mono</button></div>
     </div>
   </header>
 
@@ -243,7 +293,7 @@
 
   <section>
     <h2>The Atlas, as it is</h2>
-    <p>Same layout, same routes, drawn at the screen's own pixels so the names are crisp: 11 px Ioskeley, and the folder tags in the display face. Boxes get a face, not just an outline. Hover a note: the others dim, its box takes the lustre and its routes draw in blue. The white bar is the open note (as now); the gold ◆, a note Iso has read this turn; the banding in a corner, how far you've understood it (L).</p>
+    <p>Same layout, same routes, drawn at the screen's own pixels so the names are crisp: 11 px Ioskeley, and the folder tags in the display face. Boxes get a face, not just an outline. Hover a note: the others dim, its box takes the lustre and its routes draw in blue. The white bar is the open note (as now); the gold ◆, a note Iso has read this turn.</p>
     <div class="atlas">
       <svg width="360" height="400" viewBox="0 0 360 400" role="img" aria-label="Six notes in three folders">
         <defs><linearGradient id="glint" x1="0" x2="1" y1="0" y2=".3"><stop offset=".4" stop-color="rgb(var(--sheen))" stop-opacity="0"/><stop offset=".5" stop-color="rgb(var(--sheen))" stop-opacity=".5"/><stop offset=".6" stop-color="rgb(var(--sheen))" stop-opacity="0"/></linearGradient>
@@ -266,7 +316,6 @@
         <path class="lit bit" pathLength="1" d="M130.5 161.5H146.5V121.5H160.5H198.5H214.5V81.5H228.5"/>
 
         <g class="n" data-n="sur" transform="translate(46.5 56.5)"><rect class="box" width="84" height="50"/><text class="name" x="9" y="20">Surprise</text>
-          <g class="bands" transform="translate(70 37)"><rect width="9" height="9" stroke="var(--malachite)"/><rect x="2" y="2" width="5" height="5" stroke="var(--malachite)"/></g>
           <g clip-path="url(#cb)"><rect class="glint" x="-40" width="164" height="50"/></g></g>
         <g class="n" data-n="bit" transform="translate(46.5 136.5)"><rect class="box" width="84" height="50"/><text class="name" x="9" y="20">The bit</text>
           <g clip-path="url(#cb)"><rect class="glint" x="-40" width="164" height="50"/></g></g>
@@ -275,7 +324,6 @@
           <g clip-path="url(#cb)"><rect class="glint" x="-40" width="164" height="50"/></g></g>
         <g class="n" data-n="kraft" transform="translate(228.5 136.5)"><rect class="box" width="84" height="50"/><text class="name" x="9" y="20">Kraft</text><text class="name" x="9" y="33">inequality</text>
           <text class="iso" x="70" y="14" style="font:9px var(--ui)">◆</text>
-          <g class="bands" transform="translate(72 39)"><rect width="7" height="7" stroke="var(--rose)"/></g>
           <g clip-path="url(#cb)"><rect class="glint" x="-40" width="164" height="50"/></g></g>
         <g class="n" data-n="src" transform="translate(228.5 216.5)"><rect class="box" width="84" height="50"/><text class="name" x="9" y="20">Source</text><text class="name" x="9" y="33">coding</text>
           <g clip-path="url(#cb)"><rect class="glint" x="-40" width="164" height="50"/></g></g>
@@ -331,21 +379,58 @@
   </section>
 
   <section>
-    <h2>L · Understanding, as banding</h2>
-    <p>Malachite and agate record their growth in bands. Each time Iso checks what you've understood of a note, a band is added inside: malachite where it held, rose where it's still open. Beside a note's title, and in its Atlas box's corner.</p>
-    <div class="heads">
-      <div class="head"><svg viewBox="0 0 22 22" aria-label="understood once"><g class="bands" transform="translate(.5 .5)"><rect width="21" height="21" stroke="var(--malachite)"/></g></svg>Surprise</div>
-      <div class="head"><svg viewBox="0 0 22 22" aria-label="checked three times, the last still open"><g class="bands" transform="translate(.5 .5)"><rect width="21" height="21" stroke="var(--malachite)"/><rect x="4" y="4" width="13" height="13" stroke="var(--malachite)"/><rect x="8" y="8" width="5" height="5" stroke="var(--rose)"/></g></svg>Kraft inequality</div>
-      <div class="head"><svg viewBox="0 0 22 22" aria-label="never checked"><g class="bands" transform="translate(.5 .5)"><rect width="21" height="21" stroke="var(--line)"/></g></svg>Source coding</div>
-    </div>
-  </section>
-
-  <section>
     <h2>O · Context, as strata</h2>
     <p>From "context management a bit skewiff": what Iso will be sent, as a geologist's column on its side. Hatched: your instructions; blue: the notes you gave; ruled: the conversation; malachite: its summary; empty: room left. Hover a layer for its name and size.</p>
     <div class="isobar"><span class="who">Iso</span><div class="strata" id="strata">
       <i class="s1" style="width:8%" data-s="instructions · 1.2k"></i><i class="s2" style="width:22%" data-s="notes · 3.4k"></i><i class="s3" style="width:30%" data-s="conversation · 4.6k"></i><i class="s4" style="width:6%" data-s="summary · 0.9k"></i><i class="s5" data-s="room · 5.1k"></i>
     </div><span class="said" id="said">10.1k of 15k</span></div>
+  </section>
+  <section>
+    <h2>P · One grammar of states</h2>
+    <p>Every control speaks the same few states, so nothing needs explaining: light crosses what you touch; corner brackets mark where the keyboard is (Tab through these); solid is chosen; a bar is what's open; gold is Iso's; faint is unavailable.</p>
+    <div class="states">
+      <figure><div class="wrapf"><s></s><button class="st chamfer sheen">Huffman codes</button></div><figcaption>rest</figcaption></figure>
+      <figure><div class="wrapf"><s></s><button class="st chamfer sheen" data-loop>Huffman codes</button></div><figcaption>touched</figcaption></figure>
+      <figure><div class="wrapf f"><s></s><button class="st chamfer sheen">Huffman codes</button></div><figcaption>keyboard here</figcaption></figure>
+      <figure><div class="wrapf"><s></s><button class="st chamfer sheen sel">Huffman codes</button></div><figcaption>chosen</figcaption></figure>
+      <figure><div class="wrapf"><s></s><button class="st chamfer sheen cur">Huffman codes</button></div><figcaption>open</figcaption></figure>
+      <figure><div class="wrapf"><s></s><button class="st chamfer sheen isos">Huffman codes<span class="dia">◆</span></button></div><figcaption>Iso's</figcaption></figure>
+      <figure><div class="wrapf"><s></s><button class="st chamfer off" disabled>Huffman codes</button></div><figcaption>unavailable</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Q · Glyphs with a habit</h2>
+    <p>One drawing rule for every icon, from crystal habits: strokes at 0°, 45°, 90° (60° for the hexagonal ones), 1.5 px, square ends, the note's chamfer wherever there's a corner. Shown at 16 and 32 px: whole multiples, so they stay sharp.</p>
+    <div class="glyphs" id="glyphs"></div>
+  </section>
+
+  <section>
+    <h2>R · Questions and problems, on the way</h2>
+    <p>With understanding gone, these are the journey. A question is a cavity: hollow while open, crystals growing in from its walls while Iso and you work at it, filled when it's answered. A problem is a fracture: open, it's a crack in the rose; solved, the crack is filled in gold, the way kintsugi mends.</p>
+    <div class="journey">
+      <figure><svg width="150" height="62" viewBox="0 0 150 62"><rect x="1.5" y="1.5" width="146" height="58" fill="none" stroke="var(--rose)" stroke-dasharray="4 3" shape-rendering="crispEdges"/><text class="name" x="12" y="22">Why does Kraft</text><text class="name" x="12" y="36">hold?</text><path d="M133 9L138 14L133 19L128 14Z" fill="none" stroke="var(--rose)"/></svg><figcaption>question · open</figcaption></figure>
+      <figure><svg width="150" height="62" viewBox="0 0 150 62"><rect x="1.5" y="1.5" width="146" height="58" fill="none" stroke="var(--rose)" shape-rendering="crispEdges"/><g fill="color-mix(in srgb, var(--malachite) 45%, transparent)"><path d="M2 2L12 2L7 9Z"/><path d="M12 2L22 2L17 7Z"/><path d="M2 60L14 60L8 52Z"/><path d="M14 60L24 60L19 55Z"/><path d="M148 2L148 14L141 8Z"/><path d="M148 60L136 60L142 53Z"/><path d="M126 60L136 60L131 56Z"/><path d="M2 14L2 26L8 20Z"/></g><text class="name" x="12" y="22">Why does Kraft</text><text class="name" x="12" y="36">hold?</text><path d="M133 9L138 14L133 19L128 14Z" fill="none" stroke="var(--rose)"/></svg><figcaption>question · growing in</figcaption></figure>
+      <figure><svg width="150" height="62" viewBox="0 0 150 62"><rect x="1.5" y="1.5" width="146" height="58" fill="color-mix(in srgb, var(--malachite) 18%, var(--ground-1))" stroke="var(--malachite)" shape-rendering="crispEdges"/><text class="name" x="12" y="22">Why does Kraft</text><text class="name" x="12" y="36">hold?</text><path d="M133 9L138 14L133 19L128 14Z" fill="var(--malachite)"/></svg><figcaption>question · answered</figcaption></figure>
+      <figure><svg width="150" height="62" viewBox="0 0 150 62"><rect x="1.5" y="1.5" width="146" height="58" fill="var(--ground-2)" stroke="var(--rose)" shape-rendering="crispEdges"/><path d="M96 1.5L104 16L99 24L112 38L109 46L118 60.5" fill="none" stroke="var(--rose)" stroke-width="1.5"/><text class="name" x="12" y="22">Build a code</text><text class="name" x="12" y="36">for 5 symbols</text></svg><figcaption>problem · open</figcaption></figure>
+      <figure><svg width="150" height="62" viewBox="0 0 150 62"><rect x="1.5" y="1.5" width="146" height="58" fill="var(--ground-2)" stroke="var(--line-strong)" shape-rendering="crispEdges"/><path d="M96 1.5L104 16L99 24L112 38L109 46L118 60.5" fill="none" stroke="var(--growth)" stroke-width="2.5"/><text class="name" x="12" y="22">Build a code</text><text class="name" x="12" y="36">for 5 symbols</text></svg><figcaption>problem · solved</figcaption></figure>
+    </div>
+    <div class="asks">Why must the codeword lengths be whole numbers? <button class="keep chamfer sheen">keep</button></div>
+  </section>
+
+  <section>
+    <h2>S · The same language, in the terminal</h2>
+    <p>For "too opencode'y": the terminal keeps its own agent but takes isorite's marks. The crystal (I) grows in braille while it works; ◆ is Iso, ◇ a question it asks; what it drew on sits in corner brackets (G); the context strata (O) in the header.</p>
+    <div class="term" id="term"></div>
+  </section>
+
+  <section>
+    <h2>T · A note's history, as strata</h2>
+    <p>Each saved version is a layer, newest on top, as thick as the change was large. Yours are blue; Iso's are gold. Hover a layer to see when.</p>
+    <div class="hist">
+      <div class="column" id="column"><i class="iso" style="height:14px" data-w="Iso · today 14:06 · +2 −0"></i><i style="height:6px" data-w="you · today 13:51 · +1 −1"></i><i style="height:22px" data-w="you · yesterday · +5 −2"></i><i class="iso" style="height:9px" data-w="Iso · Mon · +2 −1"></i><i style="height:40px" data-w="you · last week · made"></i></div>
+      <div class="note"><h4>Huffman codes</h4><div class="when" id="when"></div><p>A prefix code assigns each symbol a codeword so that no codeword begins another. Huffman's construction meets Kraft's inequality with equality.</p></div>
+    </div>
   </section>
 </main>
 <script>
@@ -436,6 +521,76 @@
     for (const [cls, text] of [["m", when], ["q", q], ["m", size]]) { const d = document.createElement("div"); d.className = cls; d.textContent = text; card.append(d); }
     history.append(card);
   }
+  // P: the touched example runs its lustre now and then.
+  const loop = document.querySelector("[data-loop]");
+  setInterval(() => { loop.classList.remove("glint"); void loop.offsetWidth; loop.classList.add("glint"); }, 2200);
+  // Q: the glyphs, on a 16-unit grid.
+  const GLYPHS = [
+    ["note", '<path d="M5 2.75H13.25V11L11 13.25H2.75V5Z"/>'],
+    ["folder", '<path d="M4.25 4.25H14.25V12.25L12.25 14.25H1.75V6.75Z"/><path d="M5 1.75H9.5"/>'],
+    ["question", '<path d="M8 1.75L14.25 8L8 14.25L1.75 8Z"/><path d="M8 5.75L10.25 8L8 10.25L5.75 8Z"/>'],
+    ["problem", '<path d="M5 2.75H13.25V11L11 13.25H2.75V5Z"/><path d="M8.5 2.75L9.75 6.25L8.25 8.5L10 13.25"/>'],
+    ["Iso", '<path class="gold" d="M8 2.5L13.5 8L8 13.5L2.5 8Z"/>'],
+    ["link", '<path d="M1.75 6.5H4.75V9.5H1.75Z"/><path d="M11.25 6.5H14.25V9.5H11.25Z"/><path d="M4.75 8H11.25"/>'],
+    ["picture", '<path d="M4 2.75H13.25V10.5L11 12.75H2.75V4Z"/><path d="M4.5 10.5L7 7.5L8.75 9.25L10 8L11.75 10"/>'],
+    ["code", '<path d="M5.25 4.75L2 8L5.25 11.25"/><path d="M10.75 4.75L14 8L10.75 11.25"/><path d="M9.25 3.25L6.75 12.75"/>'],
+    ["web", '<path d="M8 1.75L13.5 4.9V11.1L8 14.25L2.5 11.1V4.9Z"/><path d="M2.5 8H13.5"/><path d="M8 1.75V14.25"/>'],
+    ["search", '<path d="M6.75 2.25L11.25 6.75L6.75 11.25L2.25 6.75Z"/><path d="M9.25 9.25L13.75 13.75"/>'],
+    ["settings", '<path d="M5 2.5H11L14 8L11 13.5H5L2 8Z"/><path d="M7 6.25H9L10 8L9 9.75H7L6 8Z"/>'],
+    ["new", '<path d="M8 2.75V13.25"/><path d="M2.75 8H13.25"/>'],
+    ["send", '<path d="M2.5 8H13"/><path d="M9 4L13 8L9 12"/>'],
+    ["stop", '<path class="solid" d="M4.5 4.5H11.5V11.5H4.5Z"/>'],
+    ["undo", '<path d="M3.5 6.5H10.75L13 8.75V12.5"/><path d="M6.25 3.75L3.5 6.5L6.25 9.25"/>'],
+  ];
+  const glyphs = document.getElementById("glyphs");
+  for (const [name, d] of GLYPHS) glyphs.insertAdjacentHTML("beforeend", `<figure><div class="pair"><svg class="x1" viewBox="0 0 16 16" aria-hidden="true">${d}</svg><svg class="x2" viewBox="0 0 16 16" aria-hidden="true" style="stroke-width:.75">${d}</svg></div><figcaption>${name}</figcaption></figure>`);
+  // T: a layer's date under the title while it's under the pointer.
+  const when = document.getElementById("when");
+  for (const i of document.querySelectorAll("#column i")) { i.addEventListener("mouseenter", () => { when.textContent = i.dataset.w; }); i.addEventListener("mouseleave", () => { when.textContent = ""; }); }
+  // S: the terminal, with a crystal growing in braille: the crystal is rasterised to a 12 × 12 dot grid, one frame
+  // per step outward, and each 2 × 4 block of dots is one braille character.
+  const term = document.getElementById("term");
+  const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  function braille(c, upTo) {
+    const W = 12, H = 12, dots = Array.from({ length: H }, () => Array(W).fill(false));
+    for (let k = 0; k < c.n; k++) {
+      const rot = k * 2 * Math.PI / c.n - Math.PI / 2, cos = Math.cos(rot), sin = Math.sin(rot);
+      for (const [x1, y1, x2, y2, d] of c.segs) {
+        if (d / c.steps > upTo) continue;
+        for (let t = 0; t <= 1; t += .2) {
+          const x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t, px = (x * cos - y * sin) * c.scale, py = (x * sin + y * cos) * c.scale;
+          const gx = Math.round((px + 22) / 44 * (W - 1)), gy = Math.round((py + 22) / 44 * (H - 1));
+          if (gx >= 0 && gx < W && gy >= 0 && gy < H) dots[gy][gx] = true;
+        }
+      }
+    }
+    const BIT = [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]], lines = [];
+    for (let row = 0; row < H / 4; row++) { let line = ""; for (let col = 0; col < W / 2; col++) { let b = 0; for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 2; dx++) if (dots[row * 4 + dy][col * 2 + dx]) b |= BIT[dy][dx]; line += String.fromCharCode(0x2800 + b); } lines.push(line); }
+    return lines;
+  }
+  let tk = 37, tframe = 0;
+  function paint() {
+    const c = CRYSTALS[tk], up = Math.min(1, tframe / 10), [b1, b2, b3] = braille(c, up);
+    term.innerHTML = [
+      `<span class="w">ISO</span> <span class="f">mid</span>                              <span class="f">▨▨</span><span class="b">████</span><span class="f">▥▥▥▥▥</span><span class="g">█</span><span class="f">······  10.1k of 15k</span>`,
+      ``,
+      `<span class="b">›</span> <span class="w">${esc("what does Kraft's inequality bound?")}</span>`,
+      `<span class="f">· read      Kraft inequality</span>`,
+      `<span class="f">· followed  Source coding → Kraft inequality</span>`,
+      `<span class="y">${b1}</span>`,
+      `<span class="y">${b2}</span>  <span class="f">Iso is reading Surprise</span>`,
+      `<span class="y">${b3}</span>`,
+      ``,
+      `<span class="y">◆</span> <span class="w">It bounds the codeword lengths a prefix code can have:</span>`,
+      `  <span class="w">the sum of 2^−ℓ over them is at most one.</span>`,
+      `  <span class="f">⌜</span><span class="b">Kraft inequality</span><span class="f">⌟  ⌜</span><span class="b">Surprise</span><span class="f">⌟</span>`,
+      ``,
+      `<span class="r">◇</span> <span class="w">Why must the lengths be whole numbers?</span>  <span class="r">[keep]</span>`,
+    ].join("\n");
+    tframe++;
+    if (tframe > 24) { tframe = 0; tk = Math.floor(Math.random() * CRYSTALS.length); }
+  }
+  paint(); setInterval(paint, 110);
 </script>
 </body>
 </html>

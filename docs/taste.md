@@ -25,8 +25,10 @@ Structure is rigid, growth is gold, and growth is the only thing that moves on i
 - No flash. A touched thing acknowledges with one band of light across its face (lustre), not an inversion or blink.
 - No directive text: no key legends, no captions explaining what a control does. If it needs one, redesign it.
 - The Atlas's layout and routing do not change for style. Colour, weight, fill and motion only.
-- Departure Mono only at 11, 22, 33 or 44 px, with no letter-spacing, or it blurs. Map labels drawn at the screen's
+- Ioskeley Mono is the display face. (Departure Mono, if kept anywhere, only at 11, 22, 33 or 44 px with no
+  letter-spacing, or it blurs.) Map labels drawn at the screen's
   own pixels, not scaled with the map.
+- Understanding is being phased out as a visible feature; questions and problems carry the journey.
 - Sketches: `inspiration/combinations/sketches.html`.
 
 ## Banned defaults

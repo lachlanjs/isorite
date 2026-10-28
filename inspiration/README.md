@@ -97,10 +97,20 @@ text in the mock interfaces, display text only at 11, 22, 33 or 44 px so Departu
 - **J, a note's kind**: slots, filled with one band of light; no description or key legend.
 - **K, conversations as specimens** (new, for "past conversation history"): each conversation keeps the crystal it grew
   when it began.
-- **L, understanding as banding** (new): each check of understanding adds a band, malachite where it held, rose where
-  it's open.
 - **O, context as strata** (new, for "context management a bit skewiff"): what Iso will be sent as a geologist's column
   on its side; hover a layer for its name and size.
+
+Round three: Ioskeley Mono is the display face (Departure Mono stays switchable for comparison); L is gone, since
+understanding is being phased out in favour of questions and problems as the journey. New:
+
+- **P, one grammar of states**: rest, touched (lustre), keyboard focus (corner brackets), chosen (solid), open (bar),
+  Iso's (gold ◆), unavailable (faint), the same on every control.
+- **Q, glyphs with a habit**: one drawing rule for every icon (0°, 45°, 90°, 60° for hexagonal ones; 1.5 px; the
+  note's chamfer), at 16 and 32 px.
+- **R, questions and problems on the way**: a question is a cavity (hollow, growing in, filled); a problem is a
+  fracture (a rose crack, mended in gold). Iso's asked question with a keep button.
+- **S, the terminal**: the braille crystal while it works, ◆ and ◇, corner-bracket parts, strata in the header.
+- **T, a note's history as strata**: versions as layers, yours blue and Iso's gold.
 
 Gray area: D's marker and vein are gold, which the tokens reserve for Iso. You liked it gold; if gold should stay Iso's
 alone, D would be blue.
