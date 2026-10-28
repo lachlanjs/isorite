@@ -24,6 +24,9 @@ const only = arg("--only")?.split(","), budget = +(arg("--budget") ?? 3), script
 // A model that thinks before it writes needs room for both: DeepSeek V4.1 Flash spent 16,000 tokens thinking and wrote
 // nothing (the trial). Each model is given up to this, or its own limit where that's less.
 const MAX_TOKENS = +(arg("--max-tokens") ?? 48000);
+// Left to itself, DeepSeek V4.1 Flash thought past 48,000 tokens; with effort "low" it wrote (plan-m23 §9). --effort
+// sends OpenRouter's reasoning effort to every model.
+const EFFORT = arg("--effort");
 const limits = new Map<string, number>();
 const KEY = process.env.OPENROUTER_API_KEY;
 if (!KEY && !scripted) throw new Error("OPENROUTER_API_KEY is not set");
@@ -179,7 +182,7 @@ async function call(model: string, messages: Msg[]): Promise<{ message: Msg; usd
   for (let attempt = 0; ; attempt++) {
     const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST", headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json", "x-title": "isorite artifact eval" },
-      body: JSON.stringify({ model, messages, tools: TOOLS, max_tokens: Math.min(MAX_TOKENS, limits.get(model) ?? MAX_TOKENS), usage: { include: true } }),
+      body: JSON.stringify({ model, messages, tools: TOOLS, max_tokens: Math.min(MAX_TOKENS, limits.get(model) ?? MAX_TOKENS), usage: { include: true }, ...(EFFORT ? { reasoning: { effort: EFFORT } } : {}) }),
       signal: AbortSignal.timeout(15 * 60_000),
     });
     const j = await r.json() as { choices?: { message: Msg; finish_reason?: string }[]; usage?: { cost?: number }; error?: { message: string } };

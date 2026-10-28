@@ -57,8 +57,8 @@ export async function rounds(o: Run): Promise<Ran> {
   let firstIn = 0;
   for (let round = 0, calls = 1; ; round++, calls++) {
     let first = true;
-    const ask = (maxTokens: number) => complete(o.http, o.provider, o.key, {
-      model, messages, maxTokens, tools: most ? o.lookup.defs() : [], toolChoice: round < most ? "auto" : "none", signal: o.signal,
+    const ask = (maxTokens: number, effort?: "low") => complete(o.http, o.provider, o.key, {
+      model, messages, maxTokens, tools: most ? o.lookup.defs() : [], toolChoice: round < most ? "auto" : "none", signal: o.signal, ...(effort ? { effort } : {}),
       onText: (piece) => { o.onText(piece, first && round > 0); first = false; },
       ...(o.onRetry ? { onRetry: o.onRetry } : {}),
     });
@@ -66,9 +66,11 @@ export async function rounds(o: Run): Promise<Ran> {
     let r = await ask(o.maxTokens);
     add(r);
     if (round === 0) firstIn = r.usage.tokensIn;
-    // A model that thinks before it writes can spend the whole budget thinking: asked once more with more room.
+    // A model that thinks before it writes can spend the whole budget thinking: asked once more with more room, and
+    // (on OpenRouter) asked to think less. DeepSeek V4.1 Flash thought past 48,000 tokens on an artifact left to
+    // itself, and wrote it at once with effort low (plan-m23 §9).
     if (empty(r)) {
-      r = await ask(o.maxTokens * WIDER);
+      r = await ask(o.maxTokens * WIDER, "low");
       add(r);
       if (empty(r)) throw new ModelError(`${model} used its whole output budget (${Math.max(o.maxTokens * WIDER, o.provider.maxTokens ?? 0)} tokens) thinking, and wrote nothing. Try a lower tier, or raise max_tokens under [provider] in config.toml.`, 502, { kind: "cut" });
     }

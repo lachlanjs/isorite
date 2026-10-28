@@ -128,17 +128,21 @@ test("stopping while it waits to ask again stops at once", async () => {
   expect(g.asked).toHaveLength(1);
 });
 
-test("a reply cut off before it wrote anything is asked once more with three times the room; empty again, it says why", async () => {
+test("a reply cut off before it wrote anything is asked once more with three times the room (and on OpenRouter, to think less); empty again, it says why", async () => {
   const thought = () => new Response(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "length" }], usage: { prompt_tokens: 10, completion_tokens: 2500 } })}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
   const run = (answers: (() => Response)[], p = work) => {
-    const budgets: number[] = [];
-    const http = { fetch: (async (_u: unknown, init?: RequestInit) => { budgets.push((JSON.parse(String(init!.body)) as { max_tokens: number }).max_tokens); return answers.shift()!(); }) as typeof fetch };
+    const budgets: number[] = [], efforts: unknown[] = [];
+    const http = { fetch: (async (_u: unknown, init?: RequestInit) => { const b = JSON.parse(String(init!.body)) as { max_tokens: number; reasoning?: unknown }; budgets.push(b.max_tokens); efforts.push(b.reasoning); return answers.shift()!(); }) as typeof fetch };
     const tools = { defs: () => [], call: async () => ({ text: "" }) };
-    return { budgets, ran: rounds({ http, provider: { ...p, tiers: { low: "thinker", mid: "thinker", max: "thinker" } }, key: "k", tier: "mid", messages: ask.messages, lookup: tools, maxTokens: 2500, signal: new AbortController().signal, onText: () => {}, onStep: () => {}, most: 0 }) };
+    return { budgets, efforts, ran: rounds({ http, provider: { ...p, tiers: { low: "thinker", mid: "thinker", max: "thinker" } }, key: "k", tier: "mid", messages: ask.messages, lookup: tools, maxTokens: 2500, signal: new AbortController().signal, onText: () => {}, onStep: () => {}, most: 0 }) };
   };
   const recovered = run([thought, () => sse("fine")]);
   expect((await recovered.ran).text).toBe("fine");
   expect(recovered.budgets).toEqual([2500, 7500]);
+  expect(recovered.efforts).toEqual([undefined, work.name === "openrouter" ? { effort: "low" } : undefined]);
+  const openrouter = run([thought, () => sse("fine")], { ...work, name: "openrouter" });
+  await openrouter.ran;
+  expect(openrouter.efforts).toEqual([undefined, { effort: "low" }]);
   const empty = run([thought, thought]);
   const err = await empty.ran.catch((e: unknown) => e) as ModelError;
   expect(err.kind).toBe("cut");

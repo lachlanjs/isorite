@@ -87,14 +87,12 @@ test("the list narrows as you type, by title and by what the notes say", async (
   await expect(page.getByText("No note matches.")).toBeVisible();
 });
 
-test("the details are hidden until asked for, and change only their own lines of the file", async ({ page }) => {
+test("the label is always there under the title, and changes only its own lines of the file (M23)", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await expect(page.locator(".cm-lp-table table")).toBeVisible(); // a table is drawn as one
   const before = await file(page, "basics/bit");
-  await page.evaluate(() => localStorage.removeItem("isorite.details"));
-  await expect(page.getByLabel("description")).toHaveCount(0);
-  await page.getByRole("button", { name: "details" }).click();
-  await expect(page.getByLabel("tags")).toHaveValue("units");
+  await expect(page.getByRole("button", { name: "tag units: remove" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "concept" })).toHaveAttribute("aria-checked", "true");
   const said = `Said on ${test.info().project.name}.`;
   await page.getByLabel("description").fill(said);
   await saved(page);
@@ -102,15 +100,14 @@ test("the details are hidden until asked for, and change only their own lines of
   expect(after).toContain(`description: ${said}`);
   expect(after).toContain("# kept as written\ntags: [units]"); // the comment and the other fields are as they were
   expect(after.split("---\n").at(-1)).toBe(before.split("---\n").at(-1)); // and so is the body
-  await look(page, "details");
+  await look(page, "label");
 
-  // The source is the file itself.
+  // The source is the file itself, with no label over it.
   await page.getByRole("button", { name: "source" }).click();
   await expect(page.getByRole("textbox", { name: "The note's file" })).toContainText("# kept as written");
-  await page.getByRole("button", { name: "details" }).waitFor({ state: "detached" });
-  await page.getByRole("button", { name: "source" }).click();
-  await page.getByRole("button", { name: "details" }).click();
   await expect(page.getByLabel("description")).toHaveCount(0);
+  await page.getByRole("button", { name: "source" }).click();
+  await expect(page.getByLabel("description")).toHaveValue(said);
 });
 
 test("a note changed elsewhere while you write is offered as a choice, and nothing is overwritten", async ({ page }) => {

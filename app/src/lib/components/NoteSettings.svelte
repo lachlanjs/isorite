@@ -2,6 +2,7 @@
   // The Note pane's settings, and what belongs to no one pane: the base, the ground, fullscreen, and on a desktop the
   // layouts and which panes show (M10b: from the header, which is gone).
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { app } from "$lib/app.svelte.ts";
   import { CODE_LOOKS, GROUNDS, codeLook, ground } from "$lib/ground.svelte.ts";
@@ -33,6 +34,25 @@
     location.hash = "";
     location.reload();
   }
+  // Deleting the open note (M23: from the menu, away from its name in the label). Asked first, saying who links here.
+  let asking = $state<string[] | null>(null), problem = $state("");
+  async function askDelete(id: string): Promise<void> {
+    problem = "";
+    try {
+      const map = await app.api.map();
+      asking = [...new Set(map.model.edges.filter(([from, to]) => to === id && from !== id && !from.startsWith("@")).map(([from]) => map.notes[from]?.title || from))];
+    } catch (e) { problem = (e as Error).message; }
+  }
+  async function remove(id: string): Promise<void> {
+    try {
+      await app.api.deleteNote(id, (await app.api.readNote(id)).version);
+      asking = null;
+      panes.settings = null;
+      await app.refresh();
+      await goto(resolve("/notes"), { replaceState: true });
+    } catch (e) { problem = (e as Error).message; asking = null; }
+  }
+
   function fullscreen(): void {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void document.documentElement.requestFullscreen().catch(() => undefined);
@@ -46,7 +66,18 @@
     <div class="row">
       <button class="btn" type="button" onclick={() => { panes.settings = null; void makeKind("question", open); }}>A question about it</button>
       <button class="btn" type="button" onclick={() => { panes.settings = null; void makeKind("problem", open); }}>A problem using it</button>
+      {#if asking === null && app.listing.notes.some((n) => n.id === open)}<button class="btn quiet danger-text" type="button" onclick={() => void askDelete(open)}>Delete it</button>{/if}
     </div>
+    {#if asking !== null}
+      <div class="ask" role="alertdialog" aria-label="delete this note">
+        <span>Delete this note? {#if asking.length}{asking.length === 1 ? "One note links" : `${asking.length} notes link`} to it ({asking.join(", ")}); {asking.length === 1 ? "its link is" : "their links are"} left broken.{:else}No note links to it.{/if} Its history stays.</span>
+        <div class="row">
+          <button class="btn danger" type="button" onclick={() => void remove(open)}>delete</button>
+          <button class="btn quiet" type="button" onclick={() => { asking = null; }}>keep it</button>
+        </div>
+      </div>
+    {/if}
+    {#if problem}<p class="problem" role="alert">{problem}</p>{/if}
   </section>
 {/if}
 
@@ -111,6 +142,9 @@
   section { display: flex; flex-direction: column; gap: var(--space-2); }
   h2 { font-weight: 400; }
   .name { color: var(--text); }
+  .danger-text:hover, .danger-text:focus-visible { color: var(--rose); }
+  .ask { display: flex; flex-direction: column; gap: var(--space-2); color: var(--text-soft); font-size: 13px; }
+  .problem { margin: 0; color: var(--rose); font-size: 12px; }
   .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
   .btn.on { --fill: var(--text); color: var(--ground-0); font-weight: 700; }
   .icons { display: flex; align-items: center; gap: 2px; }

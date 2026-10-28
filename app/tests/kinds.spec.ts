@@ -29,10 +29,10 @@ test("a question embedded in a note is a callout that opens it; resolved from it
   await page.screenshot({ path: `test-results/screens/${test.info().project.name}-question-callout.png`, fullPage: true });
   await callout.click();
   await expect(page).toHaveURL(new RegExp(`#/n/${q}$`));
-  // The question's title row: its glyph, and the ✓ that resolves it.
+  // The question's title row has its glyph; its label, what it's about and the mark that resolves it (M23).
   await expect(page.locator(".titlerow > .glyph.question")).toBeVisible();
-  await expect(page.locator(".about a")).toHaveText([`Capacity ${name}`]);
-  const tick = page.getByRole("button", { name: "Resolved", exact: true });
+  await expect(page.locator(".extra a.br")).toHaveText([`Capacity ${name}`]);
+  const tick = page.getByRole("button", { name: /open|resolved/ });
   await expect(tick).toHaveAttribute("aria-pressed", "false");
   await tick.click();
   await expect(tick).toHaveAttribute("aria-pressed", "true");
@@ -54,7 +54,7 @@ test("a problem using the note open is made from the Note pane's settings, untit
   await page.getByRole("button", { name: "A problem using it" }).click();
   await expect(page).toHaveURL(/#\/n\/basics\/untitled-problem(-\d+)?$/);
   await expect(page.locator(".titlerow > .glyph.problem")).toBeVisible();
-  await expect(page.locator(".about a")).toHaveText(["The bit"]);
+  await expect(page.locator(".extra a.br")).toHaveText(["The bit"]);
   const title = page.getByLabel("Title");
   await title.fill(`Two coins ${name}`);
   await title.press("Enter");

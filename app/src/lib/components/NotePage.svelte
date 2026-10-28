@@ -6,7 +6,7 @@
   import { onMount, tick } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { ABOUT, doneOf, idsOf, kindOf, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
+  import { doneOf, kindOf, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
@@ -14,7 +14,7 @@
   import type { Mark } from "$lib/editor/overlays.ts";
   import { NoteIso } from "$lib/iso.svelte.ts";
   import { NoteSession } from "$lib/note.svelte.ts";
-  import NoteDetails from "./NoteDetails.svelte";
+  import NoteLabel from "./NoteLabel.svelte";
   import NoteEditor from "./NoteEditor.svelte";
   import NoteVersion from "./NoteVersion.svelte";
   import Timeline from "./Timeline.svelte";
@@ -28,9 +28,6 @@
   const note = new NoteSession(id);
   const iso = new NoteIso(note);
 
-  const remembered = (key: string): boolean => { try { return localStorage.getItem(key) === "1"; } catch { return false; } };
-  const remember = (key: string, on: boolean) => { try { localStorage.setItem(key, on ? "1" : "0"); } catch { /* not kept */ } };
-  let details = $state(remembered("isorite.details"));
   let source = $state(false);
   // Frontmatter that cannot be read is mended in the source, where all of the file shows.
   const asSource = $derived(source || note.meta === null);
@@ -172,9 +169,7 @@
   // the questions and problems attached to it.
   const kind = $derived(kindOf(String(note.meta?.type ?? "")));
   const done = $derived(kind === "note" ? null : doneOf(note.meta ?? {}, kind));
-  const about = $derived(kind === "note" ? [] : (app.listing.notes.find((n) => n.id === id)?.attached ?? idsOf(note.meta?.[ABOUT[kind]])));
   const attached = $derived(app.listing.notes.filter((n) => n.kind && n.id !== id && n.attached?.includes(id)).sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "question" ? -1 : 1)));
-  const titleOf = (n: string): string => app.listing.notes.find((x) => x.id === n)?.title ?? n.split("/").at(-1)!;
   let marking = $state(false);
   async function toggleDone(): Promise<void> {
     marking = true;
@@ -246,28 +241,17 @@
         <textarea id="title" class="serif title" rows="1" value={note.fields.title} placeholder={id.split("/").at(-1)} autocomplete="off"
           oninput={(e) => note.setFields({ title: e.currentTarget.value.replace(/\s*\n\s*/g, " ") })}
           onkeydown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }} onblur={() => void named()}></textarea>
-        {#if kind !== "note"}
-          {@const verb = kind === "question" ? (done ? "Resolved" : "Resolve") : done ? "Solved" : "Mark solved"}
-          <button class="done-tg" type="button" aria-pressed={!!done} disabled={marking} aria-label={kind === "question" ? "Resolved" : "Solved"} title={done ? `${verb} ${done} · press to open it again` : verb} onclick={() => void toggleDone()}>
-            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8.5l3 3 7-7" /></svg>
-          </button>
-        {/if}
         </div>
       {:else}
         <span class="grow faint">{id}.md{note.meta === null ? ": the frontmatter cannot be read, so the file is shown as it is" : ""}</span>
       {/if}
       <div class="side">
       <div class="tools">
-        {#if !asSource}<button class="btn quiet" type="button" aria-pressed={details} onclick={() => { details = !details; remember("isorite.details", details); }}>details</button>{/if}
         <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => (source = !source)}>source</button>
       </div>
       </div>
     </div>
-    {#if about.length && !asSource}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves -->
-      <p class="about">{#each about as a, k (a)}{k ? " · " : ""}<a href={noteHref(a)}>{titleOf(a)}</a>{/each}</p>
-    {/if}
-    {#if details && !asSource}<NoteDetails {note} />{/if}
+    {#if !asSource}<NoteLabel {note} {kind} {done} {marking} onmark={() => void toggleDone()} />{/if}
 
     {#if timeline && !asSource}
       <div class="tl-col"><Timeline moments={all} at={at ? momentKey(at) : null} {pointed} point={(m) => (pointed = m)} {pick} /></div>
@@ -342,11 +326,6 @@
   .glyph.question { color: var(--rose); }
   .glyph.problem { color: var(--text-soft); }
   .glyph.problem.solved { color: var(--malachite); }
-  .done-tg { flex: none; width: 30px; height: 30px; margin-top: 8px; display: grid; place-items: center; background: none; border: 1px solid var(--line); color: var(--text-faint); cursor: pointer; }
-  .done-tg:hover:not(:disabled) { color: var(--text); border-color: var(--line-strong); }
-  .done-tg[aria-pressed="true"] { color: var(--ground-0); background: var(--malachite); border-color: var(--malachite); }
-  .about { margin: -6px 0 0 2px; font-size: 12px; color: var(--text-faint); }
-  .about a { color: var(--text-soft); }
   .attached { list-style: none; margin: 32px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; }
   .attached a { display: grid; grid-template-columns: 18px minmax(0, 1fr) 14px; gap: 10px; align-items: center; padding: 6px 0; font: 15px var(--font-text); color: var(--text); text-decoration: none; }
   .attached a:hover span { color: var(--lattice); }

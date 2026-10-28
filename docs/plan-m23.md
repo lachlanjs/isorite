@@ -329,4 +329,22 @@ get wrong (§3.9).
 
 ## 9. What was found and built
 
-Filled in as §8 goes.
+### The trial on kit 0 (step 1, 2026-10-28)
+
+Eight cases (`eval/artifacts/cases.json`) on the N-body data, each model given kit 0's context (`eval/artifacts/context/kit0.md`) and the entropy lab as its example, with read_data and write_artifact. About US$3 of the US$10 spent: Sonnet 5.5 about $2.75 ($0.20 to $0.77 a case, up to 8 minutes for the explorable), DeepSeek and Gemma about a cent a case.
+
+| | passed (ran, drew, no rule broken) | what went wrong |
+|---|---|---|
+| Sonnet 5.5 | 8 of 8 | Hand-drawn charts with labels over curves and axes. A readout showing "–" for a number. |
+| DeepSeek V4.1 Flash | 6 of 8 with effort low; 2 of 8 at first | Left to itself it thought until the budget ran out and wrote nothing: 16,000 tokens, then 48,000. With OpenRouter's `reasoning: {effort: "low"}` it wrote; one explorable still thought out. |
+| Gemma 4 31B | 8 of 8 | Charts with no tick values. Raw LaTeX shown as text (`$\epsilon$`). The theme's names in its prose ("kinetic (lattice)"). Sparse simulations (dots, no trails). |
+
+What changed because of it:
+
+- **Charts are markup** (`<iso-chart>` on Plot): ticks, labels, legends and log axes come out right whatever model writes them. The recipes chart only through it, or `chart.rows` from a script.
+- **Maths is set** (`$…$`, `$$…$$`, `<iso-math>`, KaTeX), only in artifacts that write some.
+- **The reference says** never to name the theme's colours in text.
+- **Room to think**: a write-mode turn may write 32,000 tokens and take 6 rounds; a reply that is all thinking is asked again with three times the room and, on OpenRouter, effort low (`loop.ts`).
+- **The context is staged** (§3.7): the write-mode prompt has a short section; `artifact_recipe` gives the reference (about 2,500 tokens) and one of five recipes, each a complete working artifact on its own small data (`packages/kit/context/`).
+
+Judged by eye, the static checks passing is a low bar: Gemma's artifacts work but look thin beside Sonnet's. The full eval on kit 1 (step 10) is where that is measured.

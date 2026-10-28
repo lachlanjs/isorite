@@ -91,6 +91,8 @@ export interface Call {
   tools?: ToolDef[];
   /** With tools: "none" makes it reply without calling one. */
   toolChoice?: "auto" | "none";
+  /** How hard a model that thinks should think (OpenRouter's reasoning effort), where the provider is OpenRouter. */
+  effort?: "low" | "medium" | "high";
   /** Called with each piece of text as it streams. */
   onText?: (piece: string) => void;
   /** Called before each retry of a request the provider could not answer for a moment: which retry, of how many. */
@@ -284,6 +286,7 @@ async function completeOnce(http: Http, p: ProviderConfig, key: string | null, c
     model: call.model, messages: call.messages.map(wire(p.cacheMarks)), stream: true, ...(p.streamUsage === false ? {} : { stream_options: { include_usage: true } }),
     ...(call.maxTokens ? { max_tokens: Math.max(call.maxTokens, p.maxTokens ?? 0) } : {}),
     ...(call.tools?.length ? { tools: call.tools, tool_choice: call.toolChoice ?? "auto" } : {}),
+    ...(call.effort && p.name === OPENROUTER.name ? { reasoning: { effort: call.effort } } : {}),
   });
   let res: Response;
   try {
