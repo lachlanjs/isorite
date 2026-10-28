@@ -10,8 +10,10 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test": "vitest run",
     "test:browser": "playwright test",
-    "build:guide": "ISORITE_GUIDE=1 vite build --mode guide && node scripts/site-manifest.ts",
-    "test:site": "playwright test -c playwright.site.config.ts"
+    "build:guide": "node ../packages/kit/build.ts && ISORITE_GUIDE=1 vite build --mode guide && node scripts/site-manifest.ts",
+    "test:site": "playwright test -c playwright.site.config.ts",
+    "predev": "node ../packages/kit/build.ts",
+    "prebuild": "node ../packages/kit/build.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -25,6 +27,7 @@
     "@isorite/engine": "*",
     "@isorite/example": "*",
     "@isorite/guide": "*",
+    "@isorite/kit": "*",
     "@lezer/common": "^1.5.3",
     "@lezer/highlight": "^1.2.5",
     "@lezer/markdown": "^1.7.2",

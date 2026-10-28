@@ -1,0 +1,32 @@
+/* isorite kit 1, theme: isorite. Every kit component reads only these custom properties, so a different theme file
+   (plain.css, or your own) is the whole of a different look. build.ts inlines the fonts. */
+@font-face { font-family: "Ioskeley Mono"; font-weight: 100 550; src: url(FONT:ioskeley-mono-latin-regular.woff2) format("woff2"); }
+@font-face { font-family: "Ioskeley Mono"; font-weight: 551 900; src: url(FONT:ioskeley-mono-latin-bold.woff2) format("woff2"); }
+@font-face { font-family: "Charter"; src: url(FONT:charter-regular.woff2) format("woff2"); }
+@font-face { font-family: "Charter"; font-style: italic; src: url(FONT:charter-italic.woff2) format("woff2"); }
+
+:root, :root[data-ground="lapis"] {
+  color-scheme: dark;
+  --ground-0: #07101C; --ground-1: #0C1828; --ground-2: #122238; --ground-3: #1A3150;
+  --line: #23395A; --line-strong: #5C7BA6;
+  --text: #E9EEF5; --text-soft: #B4C0D2; --text-faint: #8796AD;
+  --lattice: #6BA6FF; --growth: #F0BE4A; --malachite: #5FD3A4; --rose: #FF8FA6;
+  --on: #07101C; --sheen: 255 248 225;
+}
+:root[data-ground="quartz"] {
+  color-scheme: light;
+  --ground-0: #F2F0EA; --ground-1: #F8F7F3; --ground-2: #FFFFFF; --ground-3: #E6E4DC;
+  --line: #D3D0C5; --line-strong: #7F7D70;
+  --text: #0E1726; --text-soft: #3B475B; --text-faint: #5B677A;
+  --lattice: #1E4FB8; --growth: #8C6200; --malachite: #0B6B4A; --rose: #A81E48;
+  --on: #F8F7F3; --sheen: 255 255 255;
+}
+:root {
+  --font-ui: "Ioskeley Mono", ui-monospace, monospace;
+  --font-text: "Charter", Georgia, serif;
+  --font-display: "Ioskeley Mono", ui-monospace, monospace;
+  --cut: 8px; --radius: 0px;
+  --chamfer: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  --series-1: var(--lattice); --series-2: var(--growth); --series-3: var(--malachite); --series-4: var(--rose); --series-5: var(--text-soft);
+  --glint: 1;
+}

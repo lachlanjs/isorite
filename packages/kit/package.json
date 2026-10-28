@@ -1,0 +1,25 @@
+{
+  "name": "@isorite/kit",
+  "version": "1.0.0",
+  "description": "The kit isorite gives every artifact (M23): two themes of the same custom properties, components as custom elements, charts on Observable Plot and 3D on three.js, and the bridge to isorite. Built into the app's static files; nothing is fetched at run time.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "node build.ts",
+    "test": "vitest run",
+    "check": "tsc -p ."
+  },
+  "dependencies": {
+    "@observablehq/plot": "^0.6.17",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/three": "^0.186.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.2"
+  }
+}

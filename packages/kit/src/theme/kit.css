@@ -1,0 +1,80 @@
+/* isorite kit 1, components. Reads only the theme's custom properties: no colour, font or corner is set here. */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--ground-0); color: var(--text); font: 13px/20px var(--font-ui); }
+iso-page { display: block; max-width: 1080px; margin: 0 auto; padding: 28px 20px 44px; }
+.iso-framed iso-page { padding-top: 4px; } .iso-framed iso-page > header { display: none; }
+iso-page > header h1 { font: 400 33px/40px var(--font-text); margin: 0; }
+iso-page > header p { font: italic 16px/24px var(--font-text); color: var(--text-soft); margin: 4px 0 0; max-width: 70ch; }
+iso-grid { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 11px; margin-top: 22px; }
+iso-grid > .wide { grid-column: 1 / -1; }
+@media (max-width: 760px) { iso-grid { grid-template-columns: 1fr; } }
+
+/* A panel: a face with a 1px edge that follows the chamfer (or the radius, in a theme without one). */
+iso-panel { display: block; position: relative; isolation: isolate; padding: 14px 16px 16px; background: var(--line); clip-path: var(--chamfer); border-radius: var(--radius); min-width: 0; }
+iso-panel::before { content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--ground-1); clip-path: var(--chamfer); border-radius: calc(var(--radius) - 1px); }
+iso-panel > h2 { display: flex; justify-content: space-between; gap: 12px; font: 11px/16px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); margin: 0 0 12px; font-weight: 400; }
+iso-panel > h2 span { color: var(--text-soft); text-transform: none; letter-spacing: 0; }
+
+/* Readouts: a number and what it is. */
+iso-stats { display: flex; flex-wrap: wrap; gap: 14px 26px; }
+iso-stat { display: grid; gap: 2px; }
+iso-stat b { font: 400 22px/28px var(--font-display); font-variant-numeric: tabular-nums; color: var(--text); }
+iso-stat small { font: 11px/16px var(--font-ui); color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; }
+iso-stat[tone="gold"] b { color: var(--growth); } iso-stat[tone="blue"] b { color: var(--lattice); } iso-stat[tone="green"] b { color: var(--malachite); } iso-stat[tone="rose"] b { color: var(--rose); }
+
+/* Controls. */
+iso-slider { display: grid; grid-template-columns: auto 1fr 6ch; align-items: center; gap: 10px; font: 11px/16px var(--font-ui); color: var(--text-soft); text-transform: uppercase; letter-spacing: .06em; }
+iso-slider output { font-variant-numeric: tabular-nums; color: var(--text); text-align: right; text-transform: none; }
+input[type=range] { width: 100%; accent-color: var(--lattice); }
+.iso-button { position: relative; overflow: hidden; isolation: isolate; font: 11px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .08em; color: var(--text-soft); background: var(--line-strong); border: 0; padding: 9px 14px; cursor: pointer; clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); border-radius: var(--radius); }
+.iso-button::after { content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--ground-2); clip-path: inherit; border-radius: calc(var(--radius) - 1px); }
+.iso-button:hover { color: var(--text); background: var(--lattice); }
+.iso-button.on { color: var(--on); background: var(--lattice); } .iso-button.on::after { background: var(--lattice); }
+/* Lustre: one band of light across a touched control, once; none in a theme that sets --glint to 0. */
+.iso-button::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: var(--glint); background: linear-gradient(115deg, transparent 40%, rgb(var(--sheen) / .35) 50%, transparent 60%); transform: translateX(-120%); }
+.iso-button:hover::before { transform: translateX(120%); transition: transform 700ms cubic-bezier(.2, .7, .2, 1); }
+textarea.iso { width: 100%; min-height: 76px; resize: vertical; background: var(--ground-0); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; font: 15px/22px var(--font-text); }
+textarea.iso:focus { outline: none; border-color: var(--line-strong); }
+
+/* A note named in an artifact: opens it in isorite. */
+.iso-note { font: inherit; color: var(--lattice); background: none; border: 0; padding: 0; cursor: pointer; border-bottom: 1px solid currentColor; }
+
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.faint { color: var(--text-faint); }
+.scroll-x { overflow-x: auto; overflow-y: hidden; }
+canvas { display: block; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+/* Kit 1. */
+iso-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 12px; }
+iso-panel > p, iso-panel > .caption { font: 14px/22px var(--font-text); color: var(--text-soft); margin: 10px 0 0; max-width: 72ch; }
+.iso-label { font: 11px/16px var(--font-ui); color: var(--text-soft); text-transform: uppercase; letter-spacing: .06em; margin-right: 8px; }
+iso-select { display: inline-flex; align-items: center; } iso-select [role=radiogroup] { display: inline-flex; gap: 4px; }
+iso-toggle, iso-play { display: inline-block; }
+iso-slider { min-width: 220px; flex: 1 1 240px; }
+.iso-button[aria-pressed="true"], .iso-button.on { color: var(--on); background: var(--lattice); }
+.iso-button[aria-pressed="true"]::after { background: var(--lattice); }
+.iso-button:focus-visible, iso-note:focus-visible, input[type=range]:focus-visible { outline: 1px solid var(--lattice); outline-offset: 2px; }
+iso-note { color: var(--lattice); cursor: pointer; border-bottom: 1px solid currentColor; }
+iso-canvas { display: block; } iso-canvas canvas { width: 100%; }
+iso-chart, iso-model, iso-chart3d { display: block; position: relative; min-width: 0; }
+iso-chart svg { display: block; overflow: visible; max-width: 100%; height: auto; }
+iso-chart figure { margin: 0; }
+iso-chart [aria-label="legend"], iso-chart .iso-legend { font: 11px/16px var(--font-ui); color: var(--text-soft); }
+.iso-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 8px; }
+.iso-legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+.iso-tip { position: absolute; pointer-events: none; z-index: 2; padding: 6px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font: 11px/16px var(--font-ui); color: var(--text); white-space: nowrap; }
+
+/* Tables. */
+iso-table { display: block; }
+iso-table table { width: 100%; border-collapse: collapse; font: 12px/18px var(--font-ui); font-variant-numeric: tabular-nums; }
+iso-table th { text-align: left; font-weight: 400; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); padding: 6px 10px; border-bottom: 1px solid var(--line-strong); }
+iso-table td { padding: 6px 10px; border-bottom: 1px solid var(--line); color: var(--text-soft); }
+iso-table .n { text-align: right; }
+iso-table tbody tr:hover td { color: var(--text); background: var(--ground-2); }
+
+/* 3D. */
+iso-model canvas, iso-chart3d canvas { display: block; width: 100%; cursor: grab; touch-action: none; }
+iso-model canvas:active, iso-chart3d canvas:active { cursor: grabbing; }
