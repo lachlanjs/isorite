@@ -260,6 +260,43 @@
   .hist h4 { font: 22px/28px var(--serif); margin: 0 0 4px; font-weight: 400; }
   .hist .when { font: 11px/16px var(--ui); color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 11px; min-height: 16px; }
 
+  /* ---------------------------------------------------------------- U, V: the Note pane */
+  .npane { margin-top: 18px; width: 520px; max-width: 100%; border: 1px solid var(--line); background: var(--ground-0); display: grid; grid-template-columns: 11px 1fr; gap: 0 18px; padding: 22px 22px 26px 12px; }
+  .npane .column { grid-row: span 9; }
+  .ntitle { font: 30px/36px var(--serif); color: var(--text); margin: 0; }
+  .nstand { font: italic 16px/24px var(--serif); color: var(--text-soft); margin: 4px 0 0; min-height: 24px; border-bottom: 1px dashed transparent; cursor: text; }
+  .nstand:empty { border-bottom-color: var(--line); }
+  .nstand:hover { color: var(--text); }
+  .nlabel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line); font: 11px/16px var(--ui); color: var(--text-faint); }
+  .kinds3 { display: flex; }
+  .k3 { --edge: var(--line-strong); --face: var(--ground-1); --ink: var(--text-faint); --cut: 5px; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; margin-right: 4px; font: 11px var(--ui); text-transform: uppercase; letter-spacing: .06em; cursor: pointer; --glint: .4; }
+  .k3 svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+  .k3:hover { --edge: var(--text-soft); --ink: var(--text); }
+  .k3.on { --edge: var(--lattice); --face: var(--lattice); --ink: var(--on); }
+  .k3.q.on { --edge: var(--rose); --face: var(--rose); }
+  .k3.fixed { cursor: default; }
+  .path { font: 12px/20px var(--ui); color: var(--text-faint); }
+  .path button { font: inherit; color: var(--text-soft); background: none; border: 0; padding: 0 2px; cursor: pointer; border-bottom: 1px solid transparent; }
+  .path button:hover { color: var(--text); border-bottom-color: var(--line-strong); }
+  .tags { display: flex; gap: 6px; align-items: center; }
+  .tags .add, .extra .add { font: 13px var(--ui); color: var(--text-faint); background: none; border: 0; cursor: pointer; padding: 0 4px; }
+  .tags .add:hover, .extra .add:hover { color: var(--text); }
+  .extra { display: none; align-items: center; gap: 8px 10px; flex-wrap: wrap; margin-top: 10px; font: 11px/16px var(--ui); color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; }
+  .npane[data-k="question"] .extra.q, .npane[data-k="problem"] .extra.p { display: flex; }
+  .mark { --edge: var(--rose); --face: var(--ground-0); --ink: var(--rose); --cut: 5px; height: 24px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; font: 11px var(--ui); text-transform: uppercase; letter-spacing: .06em; cursor: pointer; --glint: .4; }
+  .mark.done { --edge: var(--malachite); --face: var(--malachite); --ink: var(--on); }
+  .nbody { font: 17px/28px var(--serif); color: var(--text); margin-top: 16px; }
+  .nbody p { margin: 0 0 12px; color: var(--text); max-width: none; }
+  .vtools { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .vtools .seg button { font-size: 11px; padding: 1px 8px; }
+  .vtools .btn { padding: 6px 10px; font-size: 11px; --cut: 5px; }
+  .frame { margin-top: 16px; border: 1px solid var(--line); background: var(--ground-1); padding: 14px; }
+  .frame.plain { --ground-1: #ffffff; --line: #d9d9d9; --text: #222; --text-soft: #555; --text-faint: #777; --lattice: #3366cc; --growth: #d98c00; --ui: system-ui, sans-serif; background: #fff; border-color: #d9d9d9; border-radius: 6px; }
+  .frame .ft { font: 11px/16px var(--ui); color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; display: flex; justify-content: space-between; }
+  .frame svg { display: block; width: 100%; height: auto; margin-top: 8px; }
+  .frame .ctl { display: flex; align-items: center; gap: 10px; margin-top: 10px; font: 11px var(--ui); color: var(--text-soft); }
+  .frame input[type=range] { flex: 1; accent-color: var(--lattice); }
+
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .flake.growing line { opacity: 1; } }
 </style>
 </head>
@@ -436,6 +473,53 @@
       <div class="note"><h4>Huffman codes</h4><div class="when" id="when"></div><p>A prefix code assigns each symbol a codeword so that no codeword begins another. Huffman's construction meets Kraft's inequality with equality.</p></div>
     </div>
   </section>
+  <section>
+    <h2>U · A note's label, in place of "details"</h2>
+    <p>Always there, one strip under the title, no field labels. The description is the italic line under the title, written in place (a faint rule holds its place while it's empty). The kind is three slots, so a question is one press away. The path is where the note lives: press a folder or the name to move or rename it. Tags are bracketed parts. A question gains what it's about and a mark to answer it; a problem, what it uses and its steps. History runs down the margin (T). Deleting moves to the pane's menu, away from the name.</p>
+    <div class="npane" id="npane" data-k="concept">
+      <div class="column"><i class="iso" style="height:14px"></i><i style="height:6px"></i><i style="height:22px"></i><i class="iso" style="height:9px"></i><i style="height:40px"></i></div>
+      <h3 class="ntitle">Huffman codes</h3>
+      <p class="nstand" contenteditable="true" spellcheck="false">A prefix code built bottom-up from symbol frequencies.</p>
+      <div class="nlabel">
+        <div class="kinds3" id="k3">
+          <button class="k3 chamfer sheen on" data-k="concept"><svg viewBox="0 0 16 16"><path d="M5 2.75H13.25V11L11 13.25H2.75V5Z"/></svg>concept</button>
+          <button class="k3 chamfer sheen q" data-k="question"><svg viewBox="0 0 16 16"><path d="M8 1.75L14.25 8L8 14.25L1.75 8Z"/><path d="M8 5.75L10.25 8L8 10.25L5.75 8Z"/></svg>question</button>
+          <button class="k3 chamfer sheen q" data-k="problem"><svg viewBox="0 0 16 16"><path d="M5 2.75H13.25V11L11 13.25H2.75V5Z"/><path d="M8.5 2.75L9.75 6.25L8.25 8.5L10 13.25"/></svg>problem</button>
+        </div>
+        <span class="path"><button>coding</button> / <button>huffman-codes</button></span>
+        <span class="tags"><span class="br">units</span><span class="br">compression</span><button class="add" aria-label="Add a tag">+</button></span>
+      </div>
+      <div class="extra q">about <span class="br">Kraft inequality</span><span class="br">Source coding</span><button class="add" aria-label="Add a note it's about">+</button><span style="margin-left:auto"></span><button class="mark chamfer sheen" id="mark">◇ open</button></div>
+      <div class="extra p">uses <span class="sl on">Surprise</span><span class="sl on">Kraft inequality</span><span class="sl">Huffman codes</span><span class="prog" style="width:120px;margin-left:auto"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></div>
+      <div class="nbody"><p>It rests on Kraft's inequality, and counts in bits.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>V · An artifact, in the Note pane</h2>
+    <p>Opened from a note or the Atlas, an artifact takes the Note pane with the same label: its kind fixed, its path, and the data it uses as parts. The two things it adds: its look (isorite, or plain, which is only a different theme file) and saving it as a standalone page.</p>
+    <div class="npane" style="grid-template-columns:1fr;padding-left:22px">
+      <h3 class="ntitle">Code lengths</h3>
+      <p class="nstand">How Huffman's lengths track each symbol's surprise, across five runs.</p>
+      <div class="nlabel">
+        <span class="k3 chamfer fixed on" style="--edge:var(--line-strong);--face:var(--ground-2);--ink:var(--text-soft)"><svg viewBox="0 0 16 16"><path d="M5 2.75H13.25V11L11 13.25H2.75V5Z"/><path d="M2.75 5.75H13.25"/><path d="M4.75 11L7 8.5L8.75 10L11.25 7.5"/></svg>artifact</span>
+        <span class="path"><button>coding</button> / <button>code-lengths.html</button></span>
+        <span class="tags">uses <span class="br">runs.csv</span></span>
+        <span class="vtools"><span class="seg" id="look"><button type="button" aria-pressed="true" data-l="iso">isorite</button><button type="button" aria-pressed="false" data-l="plain">plain</button></span><button class="btn blue chamfer sheen">standalone</button></span>
+      </div>
+      <div class="frame" id="frame">
+        <div class="ft"><span>length vs surprise</span><span>run 3 of 5</span></div>
+        <svg viewBox="0 0 440 150" aria-label="A chart">
+          <g fill="none" stroke="var(--line)" stroke-width="1" shape-rendering="crispEdges"><path d="M30 10V130H430"/><path d="M30 90H430M30 50H430" stroke-dasharray="2 4"/></g>
+          <g font-size="10" fill="var(--text-faint)" style="font-family:var(--ui)"><text x="4" y="134">0</text><text x="4" y="94">2</text><text x="4" y="54">4</text><text x="400" y="146">bits</text></g>
+          <path d="M40 122L110 104L180 86L250 70L320 52L400 30" fill="none" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <g fill="var(--lattice)"><rect x="57" y="113" width="6" height="6"/><rect x="127" y="99" width="6" height="6"/><rect x="167" y="79" width="6" height="6"/><rect x="247" y="69" width="6" height="6"/><rect x="317" y="45" width="6" height="6"/></g>
+          <g fill="var(--growth)"><rect x="237" y="59" width="6" height="6"/></g>
+        </svg>
+        <div class="ctl">run <input type="range" min="1" max="5" value="3" aria-label="run"> <span>3</span></div>
+      </div>
+    </div>
+  </section>
 </main>
 <script>
   const root = document.documentElement;
@@ -561,6 +645,13 @@
   // T: a layer's date under the title while it's under the pointer.
   const when = document.getElementById("when");
   for (const i of document.querySelectorAll("#column i")) { i.addEventListener("mouseenter", () => { when.textContent = i.dataset.w; }); i.addEventListener("mouseleave", () => { when.textContent = ""; }); }
+  // U: the kind's slots; a question's mark.
+  const npane = document.getElementById("npane");
+  for (const b of document.querySelectorAll("#k3 .k3")) b.addEventListener("click", () => { npane.dataset.k = b.dataset.k; document.querySelectorAll("#k3 .k3").forEach((o) => o.classList.toggle("on", o === b)); });
+  const mark = document.getElementById("mark");
+  mark.addEventListener("click", () => { const done = mark.classList.toggle("done"); mark.textContent = done ? "◆ answered" : "◇ open"; });
+  // V: the artifact's look is only its theme.
+  for (const b of document.querySelectorAll("#look button")) b.addEventListener("click", () => { document.getElementById("frame").classList.toggle("plain", b.dataset.l === "plain"); document.querySelectorAll("#look button").forEach((o) => o.setAttribute("aria-pressed", String(o === b))); });
 </script>
 </body>
 </html>

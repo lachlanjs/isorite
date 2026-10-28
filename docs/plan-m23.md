@@ -146,7 +146,43 @@ version, is the current proposal, and the least settled part of the design:
   this frequent.
 - **Q114**: what counts as a problem's steps, and who marks one done (the user, Iso, or both)?
 
-## 5. Not in M23
+## 5. The Note pane: a label for every node, and artifacts shown in it
+
+You asked for the details section to be reworked, and for artifacts to be viewable in the Note pane.
+
+### 5.1 What's wrong with details today (`app/src/lib/components/NoteDetails.svelte`)
+
+- The **type** is a free-text field with suggestions, so making a question or problem means knowing to type
+  "Question" (your testing notes: "selection of note type is not nice", "hard to add question type notes").
+- A question's **`attached`** notes (what it's about) and **`done`** (resolved) aren't editable here at all.
+- The fields don't look like fields, and the description shows a placeholder sentence (directive text).
+- **Delete** sits inline beside the file's name.
+- The whole section hides behind a "details" button.
+
+### 5.2 The label (sketch U)
+
+- Always shown, one strip under the title, with no field labels.
+- The **description** is the italic line under the title, written in place. A faint rule holds its place while empty.
+- The **kind** is three slots (concept, question, problem), with the glyphs of `docs/taste.md`.
+- The **path** (`coding / huffman-codes`) is where the note lives: press a folder to move it, the name to rename it.
+- **Tags** are bracketed parts with a `+`.
+- A **question** adds what it's about (parts, `+`) and a mark to answer it (◇ open, ◆ answered: `done`). A
+  **problem** adds what it uses and its steps (Q114).
+- **History** as strata down the margin (sketch T).
+- **Delete** moves to the pane's menu, away from the name.
+- Other frontmatter fields stay as now: not shown, never touched.
+
+### 5.3 Every kind opens in the Note pane (sketch V)
+
+- An **artifact** opens in the Note pane, in the sandboxed frame of §3.4, under the same label: its kind fixed, its
+  path, the data it uses as parts. It adds two things: its look (isorite or plain, a different theme file, §3.2), and
+  "standalone" (export, §3.3).
+- The same holds for the other kinds, each with what suits it: **data** a table of its head and its shape (what
+  `read_data` gives Iso); a **document** a PDF viewer; a **picture** the picture; **misc** its size and type, and a
+  3D model through the kit's viewer.
+- **Q115**: the pane is called "Note". Keep the name, or call it something that covers every kind?
+
+## 6. Not in M23
 
 - The terminal taking isorite's marks (sketched, then set aside).
 - Iso seeing images (Q113).

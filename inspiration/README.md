@@ -111,6 +111,9 @@ understanding is being phased out in favour of questions and problems as the jou
   when answered; a problem as a crafting screen with slots and a progress bar; on the Atlas, ordinary boxes with the
   mark or the bar. Iso's asked question with a keep button.
 - The terminal sketch (S) is set aside for now.
+- **U, a note's label** in place of the details section: description in place, kind as slots, the path to move and
+  rename, tags as parts, a question's "about" and answer mark, a problem's uses and steps.
+- **V, an artifact in the Note pane** under the same label, with its look (isorite or plain) and "standalone".
 - Q now has glyphs for the new node kinds (artifact, data, document, misc) and every kind drawn as an Atlas node; the
   plan for those kinds and for artifacts is `docs/plan-m23.md`.
 - **T, a note's history as strata**: versions as layers, yours blue and Iso's gold.
