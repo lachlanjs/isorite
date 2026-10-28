@@ -107,7 +107,9 @@
       for (const p of allowed) data.push(`<script type="text/plain" data-path="${esc(p)}">${safe(await get(p))}<\/script>`);
       html = html.replace("</head>", () => `${data.join("\n")}\n</head>`);
     }
-    return html.replace('<html lang="en">', () => `<html lang="en" data-look="${look}" data-ground="${ground}">`);
+    // No network from an artifact, enforced: anything it tries to fetch fails, and the error reaches Iso (plan-m23 §3.8).
+    const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:">`;
+    return html.replace("<head>", () => `<head>\n${csp}`).replace('<html lang="en">', () => `<html lang="en" data-look="${look}" data-ground="${ground}">`);
   }
   assemble(false).then((html) => { frame.srcdoc = html; });
 

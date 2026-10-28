@@ -78,7 +78,7 @@ A small library isorite provides to every artifact, versioned (`kit@1`):
   - layout: `<iso-page>`, `<iso-panel>`, `<iso-grid>`;
   - data: `iso.data("runs.csv")` gives typed columns (CSV, JSON; Parquet and Arrow later);
   - charts: `<iso-chart type="line" data="runs.csv" x="t" y="energy" by="trial">`, on a charting grammar Iso knows
-    well (Observable Plot is the likely base; uPlot where a series is long);
+    well (Observable Plot is the likely base; uPlot where a series is long), shipped with isorite (§3.8);
   - controls: `<iso-slider>`, `<iso-toggle>`, `<iso-select>`, play and pause, bound to one shared `iso.state`;
   - simulation: `<iso-canvas>` with `iso.loop((dt, state) => …)`, at the device's pixel ratio, paused when hidden or
     when reduced motion is asked for;
@@ -130,7 +130,7 @@ Because components only read tokens, a different look is a different theme file:
 - **Tools**: `write_artifact(path, title, description, uses, html)` and `read_artifact(path)`, journaled and undoable
   as notes are; `read_data(path)` giving a data file's shape (columns, types, row count, a head, summary statistics) so
   Iso can build on a 50 MB CSV without reading it.
-- **The kit's reference**, short (a few thousand tokens), given only when Iso is building an artifact, with four worked
+- **The kit's reference**, short (a few thousand tokens), given only when Iso is building an artifact (in stages, §3.7), with worked
   examples: a dashboard of charts from a CSV, a simulation with controls, a 3D model's viewer, and a comparison of two
   data files.
 - **Its errors back**: the frame reports exceptions and the kit's own complaints (a column not in the data, a file not
@@ -152,6 +152,67 @@ Artifacts fit the same path:
 - **Publishing publishes the data.** A base's data files (experimental evidence, say) would go onto a public site with
   the artifacts that use them. The build should list what it's about to publish. **Q116**: opt in per artifact or per
   data file, or publish whatever is cited?
+
+### 3.7 Enough for a much weaker model
+
+Iso will often run on a model far less capable than the one that built the demo (DeepSeek V4.1, or smaller). The
+demo's quality has to come from the kit and the context, not the model. Proposal:
+
+- **Most artifacts need no script.** The kit's elements do the work from attributes: `<iso-chart>`, `<iso-table>`,
+  `<iso-stat>`, `<iso-slider>`, `<iso-model>`, bound to data columns and to `iso.state` by name. A dashboard from a
+  CSV is markup only. A weak model writes markup far more reliably than drawing code.
+- **Script only where it must**, for simulations and explorables like the entropy lab, and then into **recipes**:
+  a recipe is a complete, working artifact with marked places to change (the model, its parameters, what's drawn),
+  not a blank page. The first set:
+  1. a dashboard of charts from one data file;
+  2. comparing two data files;
+  3. a simulation with parameters and a play button (`iso.loop`, `<iso-canvas>`);
+  4. an explorable explanation: input, derived numbers, and linked views (the entropy lab, generalised);
+  5. a 3D model's viewer, with notes pinned to parts.
+- **Context in stages, so a small context window holds it**:
+  - always: one paragraph on what an artifact is and when to make one, and the tools;
+  - on choosing to build one: `artifact_recipe(name)` returns that recipe's file, its rules, and a short reference
+    for the kit elements it uses, a few thousand tokens in all, not the whole kit;
+  - `read_data(path)` before writing anything that uses data, so column names are real, not guessed.
+- **Rules a weak model can follow**, stated in every recipe and checked by `isorite check` and by `write_artifact`
+  itself, which refuses or warns before the file is written:
+  - the manifest is present and names every file the script reads;
+  - columns used exist in the data (from `read_data`'s shape);
+  - no colour, font or corner of its own (use the kit's tokens), no external URL, no `<script src>` but the kit;
+  - under the size limit.
+- **The loop closes on its own.** The frame reports runtime errors and the kit's complaints (a missing column, a
+  file not in the manifest, a chart with no data) and `write_artifact`'s result carries them, so the model fixes them
+  in the same turn. Gray area: this needs the artifact rendered somewhere when Iso writes it. In the app, the frame
+  can render it unseen; from the terminal or with no browser open there is nowhere, and only the static checks run.
+  **Q117**: render headless on the server (Playwright's Chromium is already a dev dependency, but not shipped), or
+  accept static checks only when no app is open?
+- **The bar is set by an example, not by description.** The entropy lab, rewritten on the real kit, is recipe 4's
+  worked example. A model shown a finished, good artifact imitates it better than it follows adjectives.
+
+### 3.8 Everything ships with isorite: no CDN
+
+- Every dependency an artifact can use (the charting library, three.js and its loaders, KaTeX, Markdown, the fonts)
+  is an npm dependency, built into the kit with the app, and installed with isorite: the npm package and the single
+  executable alike. Nothing is fetched at run time, in isorite or in an exported artifact.
+- The host enforces it: the `srcdoc` document it builds starts with
+  `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:">`,
+  so an artifact that tries a CDN fails visibly, and the error reaches Iso.
+- The kit is split so an artifact carries only what it uses: three.js only with `<iso-model>`, the charting library
+  only with `<iso-chart>`. Standalone export inlines the same parts.
+- Licences go with them into `app/static/licenses/` (Plot is ISC, three.js and KaTeX MIT).
+- Cost: the install grows by the 3D and charting libraries, roughly 1 MB. That is the price of no CDN.
+
+### 3.9 Testing it on weaker models (after the kit exists)
+
+- Extend Iso's eval (M15, `npm run eval:iso`, `eval/iso/`) with artifact cases on the N-body example base: a
+  dashboard from a CSV of orbits, a simulation of the bodies with parameters, comparing two runs, a 3D view, an
+  explorable of one note. Each case's checks run without a judge: the artifact renders in headless Chromium with no
+  error, its manifest is right, it uses the kit's elements, it sets no colours or fonts, the data columns exist.
+  Screenshots of each go into the report, for a person to judge the quality.
+- Run it through OpenRouter on DeepSeek V4.1 and on smaller models, with a key Lachlan provides for the purpose
+  (kept in the eval's own config, never in the repository). **Q118**: which smaller models, and what spend is
+  acceptable per run?
+- What fails decides what changes: a recipe, a rule, a kit element that does more, or a check that catches it.
 
 ## 4. Questions and problems (from the design rounds)
 
@@ -209,7 +270,7 @@ You asked for the details section to be reworked, and for artifacts to be viewab
 
 Where the design work for this milestone lives, for whoever plans it properly:
 
-- this file, and its open questions (Q109 to Q116), to answer before planning;
+- this file, and its open questions (Q109 to Q118), to answer before planning;
 - `docs/taste.md`: what is settled about the look (lustre not flash, no directive text, the Atlas's layout untouched,
   Ioskeley as the display face, understanding phased out);
 - `inspiration/README.md`: the themes, the sketches by letter, and what you kept or dropped;
