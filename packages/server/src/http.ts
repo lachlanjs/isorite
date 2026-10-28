@@ -172,8 +172,9 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     if (bytes.length > MAX_FILE_BYTES) return refuse(c, 413, "picture too large");
     return answer(c, () => api.savePicture(path, bytes));
   });
-  // A picture (M22): `path` in the notes, or `code` in the repository. Only a picture: the engine gives nothing
-  // else. An SVG opened here on its own would run its scripts beside the token, so every answer is sandboxed.
+  // A file (M22, M23): any but a note by `path` in the notes, or a picture by `code` in the repository. An SVG or an
+  // artifact opened here on its own would run its scripts beside the token, so every answer is sandboxed; the app
+  // shows an artifact by reading it and giving a sandboxed frame the document (plan-m23 §3.4).
   app.get("/api/file", async (c) => {
     const code = c.req.query("code"), path = code ?? c.req.query("path") ?? "";
     let found;
@@ -181,7 +182,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
       if (e instanceof EngineError) return refuse(c, e.status, e.message);
       throw e;
     }
-    if (!found) return refuse(c, 404, `no picture at ${path}`);
+    if (!found) return refuse(c, 404, `no file at ${path}`);
     const etag = `"${found.version}"`;
     const headers = { "Content-Type": found.type, "Cache-Control": "no-cache", ETag: etag, "X-Content-Type-Options": "nosniff", "Content-Security-Policy": PICTURE_CSP };
     if (c.req.header("if-none-match") === etag) return c.body(null, 304, headers);

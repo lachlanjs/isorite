@@ -16,7 +16,7 @@ import { linkAt, linkControl } from "./linkControl.ts";
 import { linkCompletion, type LinkTarget, type PictureSource } from "./links.ts";
 import { livePreview, livePreviewTheme, codeBroken, pictures, type PictureAt } from "./livePreview.ts";
 import { mathsSyntax } from "./maths.ts";
-import { noteOf } from "./noteOf.ts";
+import { fileOf, noteOf } from "./noteOf.ts";
 import { overlays, touchedLines, type Mount } from "./overlays.ts";
 import { pointingLinks, type Pointed } from "./pointing.ts";
 
@@ -34,7 +34,7 @@ export interface EditorOptions {
   /** Plain Markdown, the whole file, instead of the live preview. */
   source?: boolean;
   placeholder?: string;
-  /** A link to a note was followed (Ctrl or Cmd and a click): its id. */
+  /** A link to a note or a file was followed (Ctrl or Cmd and a click): the note's id, or the file's path. */
   onFollow?: (id: string) => void;
   /** Iso was asked for (Ctrl or Cmd and Enter): where the cursor or the selection is. */
   onAsk?: (where: Where) => void;
@@ -186,7 +186,8 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
           if (!opts.onFollow || !(event.ctrlKey || event.metaKey) || event.button !== 0) return false;
           const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
           const link = pos === null ? null : linkAt(view.state, pos);
-          const id = link && !link.embed ? noteOf(link.url) : null;
+          // A note, or since M23 a file of the notes (an artifact, data, …), shown in place or linked.
+          const id = !link ? null : link.embed ? fileOf(link.url) : noteOf(link.url) ?? fileOf(link.url);
           if (id === null) return false;
           event.preventDefault();
           opts.onFollow(id);

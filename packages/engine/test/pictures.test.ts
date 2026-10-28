@@ -29,10 +29,15 @@ test("memory files keep bytes apart from text, and list both", async () => {
   expect(await notes.readBytes("combat/hitboxes/player.png")).toBeNull();
 });
 
-test("a picture in the notes is given with its type and a version; nothing else is", async () => {
-  const { engine } = await open();
+test("a file in the notes is given with its type and a version; a note, a hidden folder and a path out are not", async () => {
+  const { engine, notes } = await open();
   expect(await engine.file("combat/hitboxes/player.png")).toEqual({ bytes: PNG, type: "image/png", version: sha256(PNG).slice(0, 16) });
   expect(await engine.file("/combat/hitboxes/player.png")).toMatchObject({ type: "image/png" });
+  // Any kind since M23: an artifact, data, a model, a file of no known kind.
+  for (const [path, type] of [["combat/fig.html", "text/html"], ["combat/runs.csv", "text/csv"], ["combat/part.glb", "model/gltf-binary"], ["combat/x.bin", "application/octet-stream"]]) {
+    await notes.writeBytes(path!, PNG);
+    expect([path, (await engine.file(path!))?.type]).toEqual([path, type]);
+  }
   for (const path of ["combat/hitboxes.md", ".hidden/p.png", "combat/../combat/hitboxes/player.png", "../x.png", "combat//hitboxes/player.png", "gone.png", ""]) {
     expect([path, await engine.file(path)]).toEqual([path, null]);
   }

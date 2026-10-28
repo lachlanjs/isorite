@@ -8,6 +8,23 @@ export const pictureType = (path: string): string | null => {
   return dot < 0 || path.lastIndexOf("/") > dot ? null : TYPES[path.slice(dot + 1).toLowerCase()] ?? null;
 };
 
+const OTHER: Record<string, string> = {
+  html: "text/html", htm: "text/html", csv: "text/csv", tsv: "text/tab-separated-values", json: "application/json",
+  jsonl: "application/jsonl", ndjson: "application/x-ndjson", txt: "text/plain", tex: "text/plain", pdf: "application/pdf",
+  glb: "model/gltf-binary", gltf: "model/gltf+json", stl: "model/stl", obj: "model/obj", zip: "application/zip",
+  parquet: "application/vnd.apache.parquet", arrow: "application/vnd.apache.arrow.file", npy: "application/octet-stream",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  epub: "application/epub+zip", odt: "application/vnd.oasis.opendocument.text",
+};
+/** Any file's media type in the notes (M23), by its extension: a picture's, one listed, or octet-stream. Null for a
+ *  note (Markdown is read as a note, never as a file) and for a path with no extension. */
+export const fileType = (path: string): string | null => {
+  const dot = path.lastIndexOf(".");
+  if (dot < 0 || path.lastIndexOf("/") > dot) return null;
+  const ext = path.slice(dot + 1).toLowerCase();
+  return ext === "md" ? null : pictureType(path) ?? OTHER[ext] ?? "application/octet-stream";
+};
+
 /** Width and height in pixels, or null. */
 export function pictureSize(bytes: Uint8Array, type: string): { width: number; height: number } | null {
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), n = bytes.length;

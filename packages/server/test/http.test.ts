@@ -200,7 +200,7 @@ test("a base's code links resolve against the repository its settings name, from
   expect((await api.map()).notes.step!.links!.map((l) => l.broken ?? false)).toEqual([false, true]);
 });
 
-test("a picture is given from the notes and the repository, and nothing else is (M22)", async () => {
+test("a file is given from the notes (M23; pictures in M22), a picture from the repository, and nothing else is", async () => {
   const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
   mkdirSync(join(notes, "basics", "entropy"), { recursive: true });
   writeFileSync(join(notes, "basics", "entropy", "coin.png"), png);
@@ -216,7 +216,11 @@ test("a picture is given from the notes and the repository, and nothing else is 
   expect(again.status).toBe(304);
   const svg = await fetch(url + "/api/file?path=basics/drawn.svg");
   expect([svg.status, svg.headers.get("content-type"), svg.headers.get("content-security-policy")?.startsWith("sandbox")]).toEqual([200, "image/svg+xml", true]);
-  // Not a picture, in isorite's own folder, out of the notes, or not there: none is given.
+  // An artifact is given as text, sandboxed like everything here (M23).
+  writeFileSync(join(notes, "basics", "fig.html"), "<p>fig</p>");
+  const fig = await fetch(url + "/api/file?path=basics/fig.html");
+  expect([fig.status, fig.headers.get("content-type"), fig.headers.get("content-security-policy")?.startsWith("sandbox"), await fig.text()]).toEqual([200, "text/html", true, "<p>fig</p>"]);
+  // A note, in isorite's own folder, out of the notes, or not there: none is given.
   for (const path of ["basics/entropy.md", ".isorite/hidden.png", "../information-theory/basics/entropy/coin.png", "basics/../basics/entropy/coin.png", "basics/gone.png", ".isorite/config.toml"]) {
     expect([path, (await fetch(url + "/api/file?path=" + encodeURIComponent(path))).status]).toEqual([path, 404]);
   }

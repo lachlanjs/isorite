@@ -277,7 +277,7 @@ export interface AgentLook {
   asked?: string;
 }
 
-/** A picture's file (M22), as `GET /api/file` gives it: its bytes, its media type, and a version for caching. */
+/** A file (M22, M23), as `GET /api/file` gives it: its bytes, its media type, and a version for caching. */
 export interface FileBytes { bytes: Uint8Array; type: string; version: string }
 
 /** A picture in the notes (M22), as `[[!` offers it: its path, size in bytes, size in pixels where that can be told,
@@ -291,8 +291,8 @@ export interface Api {
   session(): Promise<Session>;
   notes(): Promise<Listing>;
   readNote(id: string): Promise<NoteSource>;
-  /** A picture (M22): in the notes, by its path there, or (`code`) in the base's repository, by its path there. Null
-   *  when there's no such picture, or the path isn't a picture's: nothing else is given this way. */
+  /** A file that isn't a note (M23; M22 gave pictures only): in the notes, by its path there, or (`code`) a picture in
+   *  the base's repository. Null when there's no such file, or the path is a note's. */
   file(path: string, from?: "notes" | "code"): Promise<FileBytes | null>;
   /** Every picture in the notes, by path (M22). */
   pictures(): Promise<PictureInfo[]>;
