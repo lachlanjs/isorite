@@ -28,3 +28,9 @@ packages/model/*.tgz
 /.npm/
 .eval/
 .sea/
+
+# Inspiration: the images are for reference, not to ship (inspiration/README.md says where each came from)
+inspiration/**/*.png
+inspiration/**/*.jpg
+inspiration/**/*.jpeg
+inspiration/**/*.webp

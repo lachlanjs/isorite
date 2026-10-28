@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flash and lustre</title>
+<style>
+  /* Sketches: Alien: Isolation's machine crossed with a mineral's material and with growth. isorite's own tokens and
+     fonts, both grounds, so what works here can be lifted into app.css. Open the file in a browser and hover. */
+  @font-face { font-family: "Ioskeley Mono"; font-weight: 100 550; src: url(../../app/static/fonts/ioskeley-mono-latin-regular.woff2) format("woff2"); }
+  @font-face { font-family: "Ioskeley Mono"; font-weight: 551 900; src: url(../../app/static/fonts/ioskeley-mono-latin-bold.woff2) format("woff2"); }
+  @font-face { font-family: "Departure Mono"; src: url(../../app/static/fonts/departure-mono-latin-regular.woff2) format("woff2"); }
+  @font-face { font-family: "Charter"; src: url(../../app/static/fonts/charter-regular.woff2) format("woff2"); }
+  @font-face { font-family: "Charter"; font-style: italic; src: url(../../app/static/fonts/charter-italic.woff2) format("woff2"); }
+
+  /* The app's two grounds, as app.css has them. --on is the ink on a solid accent: the ground's darkest in lapis,
+     its lightest in quartz. */
+  :root, :root[data-ground="lapis"] {
+    color-scheme: dark;
+    --ground-0: #07101C; --ground-1: #0C1828; --ground-2: #122238; --ground-3: #1A3150;
+    --line: #23395A; --line-strong: #5C7BA6;
+    --text: #E9EEF5; --text-soft: #B4C0D2; --text-faint: #8796AD;
+    --lattice: #6BA6FF; --growth: #F0BE4A; --growth-deep: #C28F1E; --malachite: #5FD3A4; --rose: #FF8FA6;
+    --on: #07101C; --sheen: 255 250 230; --soft: 16%;
+  }
+  :root[data-ground="quartz"] {
+    color-scheme: light;
+    --ground-0: #F2F0EA; --ground-1: #F8F7F3; --ground-2: #FFFFFF; --ground-3: #E6E4DC;
+    --line: #D3D0C5; --line-strong: #7F7D70;
+    --text: #0E1726; --text-soft: #3B475B; --text-faint: #5B677A;
+    --lattice: #1E4FB8; --growth: #8C6200; --growth-deep: #D9A21B; --malachite: #0B6B4A; --rose: #A81E48;
+    --on: #F8F7F3; --sheen: 255 255 255; --soft: 10%;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-ground]) {
+      color-scheme: light;
+      --ground-0: #F2F0EA; --ground-1: #F8F7F3; --ground-2: #FFFFFF; --ground-3: #E6E4DC;
+      --line: #D3D0C5; --line-strong: #7F7D70;
+      --text: #0E1726; --text-soft: #3B475B; --text-faint: #5B677A;
+      --lattice: #1E4FB8; --growth: #8C6200; --growth-deep: #D9A21B; --malachite: #0B6B4A; --rose: #A81E48;
+      --on: #F8F7F3; --sheen: 255 255 255; --soft: 10%;
+    }
+  }
+  :root {
+    --cut: 8px;
+    --ui: "Ioskeley Mono", ui-monospace, monospace; --pixel: "Departure Mono", ui-monospace, monospace; --serif: "Charter", Georgia, serif;
+    --lattice-soft: color-mix(in srgb, var(--lattice) var(--soft), var(--ground-1));
+    --growth-soft: color-mix(in srgb, var(--growth) var(--soft), var(--ground-1));
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground-0); color: var(--text); font: 13px/1.5 var(--ui); padding: 40px 16px 96px; }
+  main { max-width: 1000px; margin: 0 auto; display: grid; gap: 64px; }
+  h1 { font: 44px/1 var(--pixel); letter-spacing: .02em; margin: 0; text-transform: uppercase; }
+  h2 { font: 18px/1 var(--pixel); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 8px; }
+  h3 { font: 12px/1.4 var(--ui); text-transform: uppercase; letter-spacing: .08em; color: var(--text-faint); margin: 20px 0 6px; font-weight: 400; }
+  p, li { color: var(--text-soft); max-width: 72ch; }
+  p { margin: 0; }
+  ul.spec { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  code { font: 12px var(--ui); color: var(--text); background: var(--ground-2); padding: 0 4px; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; margin-top: 18px; }
+  .ground { display: flex; gap: 6px; margin-top: 14px; }
+  .ground button { font: 12px var(--ui); color: var(--text-soft); background: none; border: 1px solid var(--line); padding: 4px 10px; cursor: pointer; }
+  .ground button[aria-pressed="true"] { background: var(--text); color: var(--ground-0); border-color: var(--text); }
+
+  /* The chamfer, everywhere: a 1px edge that follows the cut. The edge is the element's own background, clipped; the
+     face is a layer 1px inside it, clipped again. (A border is cut off at the corners.) */
+  @property --edge { syntax: "<color>"; inherits: true; initial-value: transparent; }
+  @property --face { syntax: "<color>"; inherits: true; initial-value: transparent; }
+  @property --ink { syntax: "<color>"; inherits: true; initial-value: black; }
+  .chamfer { clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); position: relative; isolation: isolate; border: 0; background: var(--edge); color: var(--ink); }
+  .chamfer::after { content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--face); clip-path: polygon(calc(var(--cut) - .4px) 0, 100% 0, 100% calc(100% - var(--cut) + .4px), calc(100% - var(--cut) + .4px) 100%, 0 100%, 0 calc(var(--cut) - .4px)); }
+
+  /* Lustre: one specular band crosses a gold face once. Shared by C, F, H. */
+  .sheen { position: relative; overflow: hidden; }
+  .sheen::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(115deg, transparent 38%, rgb(var(--sheen) / .45) 49%, rgb(var(--sheen) / .8) 50%, rgb(var(--sheen) / .45) 51%, transparent 62%); transform: translateX(-120%); }
+
+  /* ---------------------------------------------------------------- C: flash, then lustre */
+  .both { --edge: var(--line-strong); --face: var(--ground-2); --ink: var(--text-soft); font: 13px/1 var(--ui); letter-spacing: .08em; text-transform: uppercase; padding: 13px 19px; cursor: pointer; }
+  .both:hover, .both:focus-visible { outline: none; animation: flash 150ms steps(1, end) forwards; }
+  .both:hover::before, .both:focus-visible::before { transform: translateX(120%); transition: transform 600ms cubic-bezier(.2, .7, .2, 1) 150ms; }
+  @keyframes flash { 0% { --edge: var(--text); --face: var(--text); --ink: var(--ground-0); } 33% { --edge: var(--line-strong); --face: var(--ground-2); --ink: var(--text-soft); } 66%, 100% { --edge: var(--growth); --face: var(--growth); --ink: var(--on); } }
+  .both.blue:hover, .both.blue:focus-visible { animation-name: flash-blue; }
+  .both.blue::before { display: none; }
+  @keyframes flash-blue { 0% { --edge: var(--text); --face: var(--text); --ink: var(--ground-0); } 33% { --edge: var(--line-strong); --face: var(--ground-2); --ink: var(--text-soft); } 66%, 100% { --edge: var(--lattice); --face: var(--lattice); --ink: var(--on); } }
+
+  /* ---------------------------------------------------------------- D: log rows with a vein */
+  .list { list-style: none; padding: 0; margin: 18px 0 0; max-width: 520px; border-top: 1px solid var(--line); }
+  .list li { position: relative; display: grid; grid-template-columns: 3ch 1fr auto; gap: 14px; align-items: baseline; padding: 9px 12px 9px 16px; border-bottom: 1px solid var(--line); cursor: pointer; max-width: none; }
+  .list .n { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .list .t { font: 17px/1.3 var(--serif); color: var(--text); }
+  .list .k { color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+  .list li::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--growth); transform: scaleY(0); transform-origin: top; }
+  .list li::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--growth); transform: scaleX(0); transform-origin: left; }
+  .list li:hover::before, .list li.on::before { transform: scaleY(1); transition: transform 120ms ease-out; }
+  .list li:hover::after, .list li.on::after { transform: scaleX(1); transition: transform 260ms ease-out 100ms; }
+  .list li:hover { animation: row 120ms steps(1, end) forwards; }
+  .list li.on { background: var(--ground-2); }
+  @keyframes row { 0% { background: color-mix(in srgb, var(--text) 18%, var(--ground-0)); } 50%, 100% { background: var(--ground-2); } }
+
+  /* ---------------------------------------------------------------- E: the pane bar, in the app's three panes */
+  .app { display: grid; grid-template-columns: 1fr 1.15fr 1fr; border: 1px solid var(--line); height: 360px; margin-top: 18px; background: var(--ground-1); }
+  .pane { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; border-right: 1px solid var(--line); cursor: pointer; }
+  .pane:last-child { border-right: 0; }
+  .bar { --accent: var(--lattice); display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px 0 12px; border-bottom: 1px solid var(--line); color: var(--text-soft); }
+  .bar .name { font: 15px/1 var(--pixel); text-transform: uppercase; letter-spacing: .06em; color: var(--text); white-space: nowrap; }
+  .bar .ctx { font: 11px/1 var(--ui); color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .bar .tools { margin-left: auto; display: flex; gap: 2px; }
+  .bar .tools i { width: 24px; height: 24px; display: grid; place-items: center; font-style: normal; font-size: 12px; color: var(--text-faint); }
+  .pane.iso .bar { --accent: var(--growth); }
+  /* The pane you're in: its bar solid, in its accent; the others an outline only. Arrives in one dropped frame. */
+  .pane.on .bar { background: var(--accent); border-bottom-color: var(--accent); animation: bar 120ms steps(1, end); }
+  .pane.on .bar .name, .pane.on .bar .ctx, .pane.on .bar .tools i { color: var(--on); }
+  @keyframes bar { 0% { background: var(--text); } }
+  .pane .body { padding: 12px; overflow: hidden; color: var(--text-soft); font: 14px/1.55 var(--serif); }
+  .pane .body h4 { font: 20px/1.2 var(--serif); color: var(--text); margin: 0 0 8px; }
+  .keys { border-top: 1px solid var(--line); padding: 6px 12px; font-size: 10.5px; color: var(--text-faint); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .keys b { color: var(--malachite); font-weight: 400; }
+  .pane:not(.on) .keys { visibility: hidden; }
+  .dlg { margin-top: 18px; width: 340px; border: 1px solid var(--line-strong); background: var(--ground-1); }
+  .dlg .bar { background: var(--lattice); border: 0; }
+  .dlg .bar .name, .dlg .bar .tools i { color: var(--on); }
+  .dlg .body { padding: 14px 12px; font: 13px/1.5 var(--ui); color: var(--text-soft); }
+  @media (max-width: 760px) { .app { grid-template-columns: 1fr; height: auto; } .pane:not(.on) { display: none; } }
+
+  /* ---------------------------------------------------------------- F: an Atlas region, in the map's manner */
+  .atlas { margin-top: 18px; background: var(--ground-1); border: 1px solid var(--line); background-image: radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 1.2px); background-size: 14px 14px; }
+  .atlas svg { display: block; width: 100%; height: auto; }
+  .atlas .region { fill: color-mix(in srgb, var(--lattice) 7%, var(--ground-1)); stroke: var(--line-strong); stroke-width: 1; }
+  .atlas .rname { font: 34px var(--pixel); fill: color-mix(in srgb, var(--lattice) 30%, var(--ground-1)); text-transform: uppercase; letter-spacing: .06em; }
+  .atlas .room { fill: var(--ground-3); stroke: var(--line-strong); stroke-width: 1; cursor: pointer; }
+  .atlas .room.q { stroke: var(--rose); }
+  .atlas .label { font: 12px var(--ui); fill: var(--text-soft); text-transform: uppercase; letter-spacing: .06em; }
+  .atlas .leader { stroke: var(--line-strong); stroke-width: 1; fill: none; }
+  .atlas .route { stroke: var(--line-strong); stroke-width: 2; fill: none; stroke-linejoin: round; }
+  .atlas .route.shared { stroke-width: 3.5; }
+  .atlas .vein { stroke: var(--growth); stroke-width: 2; fill: none; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .atlas g.n:hover .room { fill: var(--growth); stroke: var(--growth); animation: room 150ms steps(1, end); }
+  .atlas g.n:hover .label { fill: var(--text); }
+  @keyframes room { 0% { fill: var(--text); } 50% { fill: var(--ground-3); } }
+  .atlas:has(g.n.huff:hover) .vein.huff, .atlas:has(g.n.kraft:hover) .vein.kraft { stroke-dashoffset: 0; transition: stroke-dashoffset 600ms ease-out 150ms; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 8px 12px; border-top: 1px solid var(--line); background: var(--ground-1); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 8px; display: inline-block; background: var(--ground-3); border: 1px solid var(--line-strong); }
+  .legend i.q { border-color: var(--rose); } .legend i.g { background: var(--growth); border-color: var(--growth); }
+  .legend i.r { height: 0; border-width: 1.5px 0 0; width: 14px; } .legend i.v { height: 0; border: 0; border-top: 2px solid var(--growth); width: 14px; background: none; }
+
+  /* ---------------------------------------------------------------- G: what Iso drew on, as the crafting screen's parts */
+  .reply { margin-top: 18px; max-width: 560px; padding-left: 16px; position: relative; font: 16px/1.6 var(--serif); color: var(--text); }
+  .reply::before { content: "◆"; position: absolute; left: 0; top: 3px; font: 10px var(--ui); color: var(--growth); }
+  .cite { font: inherit; color: var(--text); background: none; border: 0; padding: 0 1px; cursor: pointer; text-decoration: underline dotted var(--line-strong); text-underline-offset: 3px; }
+  .cite:hover, .cite.lit { color: var(--lattice); text-decoration-color: var(--lattice); }
+  .parts { display: flex; gap: 14px; margin: 16px 0 0 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); }
+  .part { position: relative; padding: 8px 12px 6px; min-width: 120px; display: grid; gap: 2px; cursor: pointer; }
+  /* Corner brackets, as the item wheel's frames: four L-shapes, no closed box. */
+  .part::before { content: ""; position: absolute; inset: 0; pointer-events: none; --b: var(--line-strong); background:
+    linear-gradient(var(--b), var(--b)) top left / 8px 1px no-repeat, linear-gradient(var(--b), var(--b)) top left / 1px 8px no-repeat,
+    linear-gradient(var(--b), var(--b)) top right / 8px 1px no-repeat, linear-gradient(var(--b), var(--b)) top right / 1px 8px no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom left / 8px 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom left / 1px 8px no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom right / 8px 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom right / 1px 8px no-repeat; }
+  .part b { font: 14px/1.3 var(--serif); text-transform: none; letter-spacing: 0; color: var(--text); font-weight: 400; }
+  .part.lit::before, .part:hover::before { --b: var(--lattice); }
+  .part.lit, .part:hover { background: var(--lattice-soft); }
+
+  /* ---------------------------------------------------------------- H: Iso's words in a note, as a gold seam */
+  .note { margin-top: 18px; max-width: 600px; font: 17px/1.65 var(--serif); color: var(--text); }
+  .note p { color: var(--text); margin: 0 0 14px; max-width: none; }
+  .seam { position: relative; padding-left: 18px; }
+  .seam .line { position: absolute; left: 0; top: 4px; bottom: 4px; width: 2px; background: var(--growth); overflow: hidden; }
+  .seam .line::before { content: ""; position: absolute; left: 0; right: 0; height: 40%; background: linear-gradient(transparent, rgb(var(--sheen) / .9), transparent); transform: translateY(-120%); }
+  .seam:hover .line::before { transform: translateY(260%); transition: transform 600ms cubic-bezier(.2, .7, .2, 1); }
+  .seam .who { position: absolute; left: -64px; top: 4px; width: 52px; text-align: right; font: 10.5px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--growth); opacity: 0; transition: opacity 120ms; }
+  .seam:hover .who { opacity: 1; }
+
+  /* ---------------------------------------------------------------- I: Iso at work, a crystal growing in steps */
+  .grow { display: flex; align-items: center; gap: 14px; margin-top: 18px; font-size: 12px; color: var(--text-faint); }
+  .grow svg { width: 44px; height: 44px; }
+  .grow line { stroke: var(--growth); stroke-width: 1.2; stroke-linecap: round; opacity: 0; animation: grown 2.4s steps(1, end) infinite; }
+  @keyframes grown { 0% { opacity: 0; } 4%, 86% { opacity: 1; } 92%, 100% { opacity: 0; } }
+
+  /* ---------------------------------------------------------------- J: choosing a note's kind, as crafting slots */
+  .slots { display: flex; gap: 10px; margin-top: 18px; }
+  .slot { --edge: var(--line-strong); --face: var(--ground-2); --ink: var(--text-soft); width: 132px; height: 92px; display: grid; place-items: center; align-content: center; gap: 8px; font: 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+  .slot .g { font: 24px/1 var(--pixel); }
+  .slot:hover { --edge: var(--text); }
+  .slot.on { --edge: var(--lattice); --face: var(--lattice); --ink: var(--on); animation: slot 150ms steps(1, end); }
+  .slot.q.on { --edge: var(--rose); --face: var(--rose); }
+  .slot.u.on { --edge: var(--malachite); --face: var(--malachite); }
+  @keyframes slot { 0% { --face: var(--text); } 50% { --face: var(--ground-2); } }
+  .slotsays { margin-top: 12px; max-width: 460px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-soft); min-height: 3em; }
+
+  body.scan::after { content: ""; position: fixed; inset: 0; pointer-events: none; background: repeating-linear-gradient(transparent 0 2px, rgb(0 0 0 / .14) 2px 3px); }
+  label { color: var(--text-faint); font-size: 12px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .grow line { opacity: 1; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Flash &amp; lustre</h1>
+    <p style="margin-top:12px">The machine (Alien: Isolation) is how isorite answers you: stepped, instant, slightly broken. The mineral is what your notes are made of: lustre, habit, veins. Growth is how they change. C, D and E are the ones you kept; F to J are new. Every sketch works on both grounds.</p>
+    <div class="ground" role="group" aria-label="Ground">
+      <button type="button" data-g="" aria-pressed="true">the system's</button><button type="button" data-g="lapis" aria-pressed="false">lapis</button><button type="button" data-g="quartz" aria-pressed="false">quartz</button>
+      <label style="margin-left:12px"><input type="checkbox" onchange="document.body.classList.toggle('scan', this.checked)"> scanlines</label>
+    </div>
+  </header>
+
+  <section>
+    <h2>C · Flash, then lustre</h2>
+    <p>The flash selects (150&nbsp;ms, stepped); the lustre follows once the face has settled. Gold, with lustre, for what Iso does or what is valuable; blue, without, for structure and your own actions.</p>
+    <div class="row">
+      <button class="both chamfer sheen">Check my understanding</button>
+      <button class="both chamfer sheen">Ask Iso</button>
+      <button class="both chamfer blue">New note</button>
+      <button class="both chamfer blue">Move</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>D · Log rows with a vein</h2>
+    <p>The game's selected row is a solid block with a marker. Here the block arrives in one dropped frame, the marker grows down, and a gold vein runs along the row's foot. For the note list, search results, and anything chosen from a list. The open note keeps the marker (first row).</p>
+    <ul class="list">
+      <li class="on"><span class="n">006</span><span class="t">Surprise</span><span class="k">concept</span></li>
+      <li><span class="n">007</span><span class="t">The bit</span><span class="k">concept</span></li>
+      <li><span class="n">008</span><span class="t">Why does Kraft hold?</span><span class="k">question</span></li>
+      <li><span class="n">009</span><span class="t">Huffman codes</span><span class="k">concept</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>E · The pane bar</h2>
+    <p>Each of the three panes gets one; click a pane below to move into it. This replaces the 40&nbsp;px header row the panes have now (the small square, the name, the row of icons), so it adds nothing in height.</p>
+    <div class="app" id="app">
+      <div class="pane"><div class="bar"><span class="name">Note</span><span class="ctx">coding / Huffman codes</span><span class="tools"><i>⌕</i><i>⚙</i></span></div>
+        <div class="body"><h4>Huffman codes</h4>It rests on Kraft inequality. It counts in bits.</div>
+        <div class="keys"><b>Ctrl+E</b> edit . . . <b>Alt+P</b> provenance . . . <b>Esc</b> back</div></div>
+      <div class="pane on"><div class="bar"><span class="name">Atlas</span><span class="ctx">information-theory · 6 notes</span><span class="tools"><i>⛶</i><i>⚙</i></span></div>
+        <div class="body" style="font:12px var(--ui)">(the map)</div>
+        <div class="keys"><b>C</b> grid . . . <b>L</b> lines . . . <b>Alt+I</b> pictures . . . <b>F</b> fit</div></div>
+      <div class="pane iso"><div class="bar"><span class="name">Iso</span><span class="ctx">mid · $0.02 today</span><span class="tools"><i>+</i><i>⚙</i></span></div>
+        <div class="body">It is measured in bits, as Surprise is.</div>
+        <div class="keys"><b>Enter</b> send . . . <b>Shift+Enter</b> new line . . . <b>Esc</b> stop</div></div>
+    </div>
+    <h3>Where it's used</h3>
+    <ul class="spec">
+      <li><b>The three panes' headers</b> (Note, Atlas, Iso). The name in Departure Mono at 15&nbsp;px, then what the pane holds now in small mono: the note's folder and title, the base and its size, Iso's tier and spend. The pane's own controls stay at the right, as now.</li>
+      <li><b>Which pane you're in</b> is the one solid bar; the others are outline only. The Note and Atlas bars are lattice blue, Iso's is gold, so the accent says who the pane belongs to (blue for structure and you, gold for Iso), as the tokens already do.</li>
+      <li><b>The key legend</b> sits at the foot of the pane you're in only, and only on a keyboard (it isn't shown on a phone or with touch). It names the keys that work in that pane now, not every key the app has.</li>
+      <li><b>Dialogs</b> (Note settings, Iso settings, the provider setup) get the same bar, always solid, so they read as screens of the same machine.</li>
+      <li><b>On a phone</b>, one pane at a time is shown, so its bar is always solid.</li>
+    </ul>
+    <h3>Gray areas</h3>
+    <ul class="spec">
+      <li>The app may not track "the pane you're in" today. If it doesn't, the solid bar needs a rule: the last pane clicked or focused.</li>
+      <li>A solid gold bar on Iso while it's answering might be the better rule than focus: Iso's bar fills while it works and empties when done. That would make the bar a status light, not a focus marker. Pick one; both at once would be confusing.</li>
+      <li>The legend's keys here are invented to show the format. The real ones come from the app.</li>
+    </ul>
+    <div class="dlg"><div class="bar"><span class="name">Note settings</span><span class="tools"><i>×</i></span></div><div class="body">Ground: the system's · lapis · quartz</div></div>
+  </section>
+
+  <section>
+    <h2>F · An Atlas region, in the map's manner</h2>
+    <p>From the game's map: the folder is a filled region with its name large and faint across it; notes are filled rooms; names sit outside on leader lines; routes are channels, thicker where several links share one; a legend at the foot. Hover Huffman codes or Kraft inequality: the room flashes gold and its route lights as a vein. <b>Styling only:</b> every position and route here would come from the Atlas's existing layout and router, unchanged.</p>
+    <div class="atlas">
+      <svg viewBox="0 0 960 360" role="img" aria-label="A sketch of one folder on the Atlas">
+        <path class="region" d="M48 30H600V300L586 314H48Z"/>
+        <text class="rname" x="70" y="290">Coding</text>
+        <path class="region" d="M660 30H920V256L906 270H660Z"/>
+        <text class="rname" x="676" y="252">Basics</text>
+        <path class="route shared" d="M532 104H704"/>
+        <path class="route" d="M330 104H420M274 128V160M330 184V214H420M760 128V140"/>
+        <path class="vein huff" pathLength="1" d="M330 104H420M532 104H704"/>
+        <path class="vein kraft" pathLength="1" d="M420 104H330M274 128V160"/>
+        <g class="n huff"><rect class="room" x="420" y="80" width="112" height="48"/><path class="leader" d="M476 80V54H560"/><text class="label" x="566" y="58">Huffman codes</text></g>
+        <g class="n kraft"><rect class="room" x="218" y="80" width="112" height="48"/><path class="leader" d="M218 104H120V70"/><text class="label" x="74" y="62">Kraft inequality</text></g>
+        <g class="n"><rect class="room" x="218" y="160" width="112" height="48"/><path class="leader" d="M218 184H120V214"/><text class="label" x="74" y="232">Source coding</text></g>
+        <g class="n"><rect class="room q" x="420" y="190" width="112" height="48"/><path class="leader" d="M476 238V262H560"/><text class="label" x="566" y="266">Why does Kraft hold?</text></g>
+        <g class="n"><rect class="room" x="704" y="80" width="112" height="48"/><path class="leader" d="M816 104H872V70"/><text class="label" x="790" y="62">The bit</text></g>
+        <g class="n"><rect class="room" x="704" y="140" width="112" height="48"/></g>
+      </svg>
+      <div class="legend"><span><i></i>concept</span><span><i class="q"></i>question</span><span><i class="g"></i>chosen</span><span><i class="r"></i>link</span><span><i class="v"></i>followed</span><span style="margin-left:auto"><b style="color:var(--malachite);font-weight:400">C</b>&nbsp;grid . . . <b style="color:var(--malachite);font-weight:400">L</b>&nbsp;lines</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>G · What Iso drew on, as parts</h2>
+    <p>In place of the "[1] note-name" tail (from your testing notes): the notes Iso used are parts, in the item wheel's corner brackets, under the reply. Hover a part or a cited phrase and the other lights.</p>
+    <div class="reply">Huffman codes are optimal because they meet the <button class="cite" data-c="k">Kraft inequality</button> with equality, and each codeword's length tracks its symbol's <button class="cite" data-c="s">surprise</button>, measured in <button class="cite" data-c="b">bits</button>.</div>
+    <div class="parts">
+      <div class="part" data-c="k"><b>Kraft inequality</b>coding · read</div>
+      <div class="part" data-c="s"><b>Surprise</b>basics · read</div>
+      <div class="part" data-c="b"><b>The bit</b>basics · searched</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>H · Iso's words in a note, as a seam</h2>
+    <p>Provenance as kintsugi: Iso's passage carries a thin gold seam in the margin, not a tinted background. The text itself stays the note's own colour. Hover the seam: the lustre runs down it and it says whose words they are.</p>
+    <div class="note" style="margin-left:64px">
+      <p>A prefix code assigns each symbol a codeword so that no codeword begins another.</p>
+      <div class="seam"><span class="line"></span><span class="who">◆ Iso</span><p>Kraft's inequality says such a code exists exactly when the sum of 2<sup>−ℓ</sup> over the codeword lengths ℓ is at most one.</p></div>
+      <p>Huffman's construction meets it with equality.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>I · Iso at work, growing</h2>
+    <p>In place of the spinning square: a crystal grows at 60° in dropped frames, then clears and grows again. Growth (gold) only moves when Iso does.</p>
+    <div class="grow"><svg id="dendrite" viewBox="-22 -22 44 44" aria-hidden="true"></svg>Iso is reading Kraft inequality</div>
+  </section>
+
+  <section>
+    <h2>J · A note's kind, as crafting slots</h2>
+    <p>From your testing notes ("selection of note type is not nice", "hard to add question type notes"): the kinds as slots, chosen with a flash, described underneath as the crafting screen does, and keyboard first.</p>
+    <div class="slots" id="slots">
+      <button class="slot chamfer on" data-s="A note: what something is, in your words."><span class="g">▣</span>concept</button>
+      <button class="slot chamfer q" data-s="Something you don't know yet. Stays open until it's resolved."><span class="g">?</span>question</button>
+      <button class="slot chamfer q" data-s="Something to work out, with the notes it uses."><span class="g">!</span>problem</button>
+      <button class="slot chamfer u" data-s="What you've understood of a note, checked by Iso."><span class="g">◇</span>understanding</button>
+    </div>
+    <p class="slotsays" id="slotsays">A note: what something is, in your words.</p>
+    <p class="keys" style="border:0;padding:0;margin-top:4px"><b>← →</b> choose . . . <b>Enter</b> keep . . . <b>Esc</b> back</p>
+  </section>
+</main>
+<script>
+  // The ground, as the app sets it: none for the system's, or data-ground on <html>.
+  for (const b of document.querySelectorAll(".ground button")) b.addEventListener("click", () => {
+    if (b.dataset.g) document.documentElement.dataset.ground = b.dataset.g; else delete document.documentElement.dataset.ground;
+    for (const o of document.querySelectorAll(".ground button")) o.setAttribute("aria-pressed", String(o === b));
+  });
+  // E: click a pane to move into it.
+  for (const p of document.querySelectorAll("#app .pane")) p.addEventListener("click", () => { for (const o of document.querySelectorAll("#app .pane")) o.classList.toggle("on", o === p); });
+  // G: a cited phrase and its part light together.
+  for (const el of document.querySelectorAll("[data-c]")) {
+    el.addEventListener("mouseenter", () => document.querySelectorAll(`[data-c="${el.dataset.c}"]`).forEach((x) => x.classList.add("lit")));
+    el.addEventListener("mouseleave", () => document.querySelectorAll(".lit").forEach((x) => x.classList.remove("lit")));
+  }
+  // I: a small dendrite at 60°, each segment appearing a frame later than its parent.
+  const svg = document.getElementById("dendrite"), NS = "http://www.w3.org/2000/svg";
+  function branch(x, y, a, len, depth, t) {
+    if (depth > 3) return;
+    const r = a * Math.PI / 180, x2 = x + Math.cos(r) * len, y2 = y + Math.sin(r) * len, l = document.createElementNS(NS, "line");
+    Object.entries({ x1: x, y1: y, x2, y2 }).forEach(([k, v]) => l.setAttribute(k, v.toFixed(2)));
+    l.style.animationDelay = `${t * 110}ms`;
+    svg.append(l);
+    branch(x2, y2, a, len * .8, depth + 1, t + 1);
+    if (depth < 3) { branch(x + (x2 - x) * .5, y + (y2 - y) * .5, a + 60, len * .45, depth + 2, t + 1); branch(x + (x2 - x) * .5, y + (y2 - y) * .5, a - 60, len * .45, depth + 2, t + 1); }
+  }
+  for (let k = 0; k < 6; k++) branch(0, 0, k * 60, 8, 0, 0);
+  // J: choosing a kind.
+  const says = document.getElementById("slotsays");
+  for (const s of document.querySelectorAll(".slot")) s.addEventListener("click", () => { for (const o of document.querySelectorAll(".slot")) o.classList.toggle("on", o === s); says.textContent = s.dataset.s; });
+  document.getElementById("slots").addEventListener("keydown", (e) => {
+    const all = [...document.querySelectorAll(".slot")], i = all.findIndex((o) => o.classList.contains("on"));
+    const j = e.key === "ArrowRight" ? Math.min(all.length - 1, i + 1) : e.key === "ArrowLeft" ? Math.max(0, i - 1) : i;
+    if (j !== i) { all[j].click(); all[j].focus(); }
+  });
+</script>
+</body>
+</html>
