@@ -179,3 +179,13 @@ test("a proxy's 407 is named as the proxy's, apart from the provider's 401", () 
   const tunnel = Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error("Request was cancelled."), { cause: Object.assign(new Error("Proxy response (407) !== 200 when HTTP Tunneling"), { code: "UND_ERR_ABORTED" }) }) });
   expect(unreachable(tunnel, URL_)).toMatch(/^Proxy response \(407\) !== 200 when HTTP Tunneling \(UND_ERR_ABORTED\)\. The proxy \(HTTPS_PROXY\), not the provider, refused with 407/);
 });
+
+test("a reply of nothing at all is asked for once more (M23)", async () => {
+  const nothing = () => new Response(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
+  const answers = [nothing, () => sse("there")];
+  let asked = 0;
+  const http = { fetch: (async () => { asked++; return answers.shift()!(); }) as typeof fetch };
+  const tools = { defs: () => [], call: async () => ({ text: "" }) };
+  const got = await rounds({ http, provider: work, key: "k", tier: "mid", messages: ask.messages, lookup: tools, maxTokens: 2500, signal: new AbortController().signal, onText: () => {}, onStep: () => {}, most: 0 });
+  expect([got.text, asked]).toEqual(["there", 2]);
+});

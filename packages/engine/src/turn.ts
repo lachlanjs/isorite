@@ -329,7 +329,7 @@ export const ARTIFACT_RECIPE = fn("artifact_recipe", "A recipe for an artifact: 
   { name: { type: "string", enum: ["dashboard", "compare", "simulation", "explorable", "viewer"] } }, ["name"]);
 export const WRITE_ARTIFACT = fn("write_artifact", "Write an artifact: a whole HTML file on the kit. The title, description and uses given here are written into it. It is checked, and run where it can be; the result says what to fix. Nothing is written while a rule is broken.",
   { path: { ...str, description: "Where: folder/name.html, beside the notes it belongs to." }, title: str, description: { ...str, description: "One sentence: what it shows, and what can be done with it." },
-    uses: { type: "array", items: str, description: "Every data or model file it reads, relative to it (runs.csv), or none." }, html: { ...str, description: "The whole file." } }, ["path", "title", "description", "uses", "html"]);
+    uses: { type: "array", items: str, description: "The data or model files it reads, relative to it (runs.csv). Those its markup and script name are added." }, html: { ...str, description: "The whole file." } }, ["path", "title", "description", "uses", "html"]);
 export const READ_ARTIFACT = fn("read_artifact", "An artifact's whole file, to change it and write it again.", { path: { ...str, description: "folder/name.html" } }, ["path"]);
 export const OFFER_TEXT = fn("offer_text", "Offer them their own answers, lightly joined, to insert at the end of a note as their writing. Only their words.",
   { id: { ...str, description: "The note's id, or AGENTS.md for a line of their instructions for the base." }, text: { ...str, description: "The passage, in Markdown." } }, ["id", "text"]);

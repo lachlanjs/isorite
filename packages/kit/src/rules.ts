@@ -18,6 +18,14 @@ const COLUMN_ATTRS = ["x", "y", "z", "by", "column", "columns", "at"];
 const TAG = /<(iso-[\w-]+)\b([^>]*)>/gi;
 const attrsOf = (s: string) => Object.fromEntries([...s.matchAll(/([\w-]+)\s*=\s*"([^"]*)"/g)].map((m) => [m[1]!.toLowerCase(), m[2]!]));
 
+/** The files an artifact reads, from its markup and script: data="…", an iso-model's src, iso.data/text/bytes("…"). */
+export function readsOf(html: string): string[] {
+  const own = html.replace(/<!--[\s\S]*?-->/g, ""), reads = new Set<string>();
+  for (const r of own.matchAll(/iso\.(?:data|text|bytes)\(\s*["'`]([^"'`$]+)["'`]/g)) reads.add(r[1]!);
+  for (const t of own.matchAll(TAG)) { const a = attrsOf(t[2]!); (a.data ?? "").split(/[\s,]+/).filter(Boolean).forEach((f) => reads.add(f)); if (t[1]!.toLowerCase() === "iso-model" && a.src) reads.add(a.src); }
+  return [...reads];
+}
+
 export function checkArtifact(html: string, ctx: RuleContext = {}): Broken[] {
   const out: Broken[] = [], m = manifestOf(html);
   const err = (rule: number, message: string) => out.push({ rule, level: "error", message });

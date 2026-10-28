@@ -256,7 +256,7 @@ async function attemptIso(model: string, c: Case): Promise<Result> {
   const { runArtifact } = await import("../packages/server/src/serve.ts");
   const { assemble, checkArtifact, columnsOf, parseData, KIT_FILES } = await import("@isorite/kit");
   const t0 = Date.now(), res: Result = { model, case: c, writes: 0, reads: [], broken: [], usd: 0, seconds: 0 };
-  const root = mkdtempSync(join(tmpdir(), "isorite-artifacts-"));
+  const root = mkdtempSync(join(tmpdir(), "isorite-artifacts-")), sentBodies: string[] = [];
   try {
     const { notes } = await writeExample(join(root, "base"));
     const dir = dirname(c.path);
@@ -265,7 +265,8 @@ async function attemptIso(model: string, c: Case): Promise<Result> {
     mkdirSync(join(notes, ".isorite"), { recursive: true });
     const engine = await Engine.open({
       notes: new NodeFiles(notes), own: new NodeFiles(join(notes, ".isorite")), clock: systemClock, device: "eval01", name: "nbody-notes",
-      http: { fetch }, secrets: new MemorySecrets({ [KEY]: KEY_VALUE }), provider: { ...OPENROUTER, tiers: { low: model, mid: model, max: model } },
+      // Every request kept, so what the tools said back can be read afterwards.
+      http: { fetch: (async (u: string | URL | Request, init?: RequestInit) => { try { sentBodies.push(String(init?.body ?? "")); } catch { /* not kept */ } return fetch(u, init); }) as typeof fetch }, secrets: new MemorySecrets({ [KEY]: KEY_VALUE }), provider: { ...OPENROUTER, tiers: { low: model, mid: model, max: model } },
       renderArtifact: (path, html) => runArtifact(notes, path, html),
     });
     const given = c.files.length ? `Data files beside it: ${c.files.join(", ")}.` : "It uses no data file.";
@@ -284,6 +285,9 @@ async function attemptIso(model: string, c: Case): Promise<Result> {
     res.reads = t.items.flatMap((i) => (i.kind === "look" && i.step.tool === "read_data" ? [String((i.step as { said?: string }).said ?? "")] : []));
     if (failed) res.note = `failed: ${failed.slice(0, 200)}`;
     writeFileSync(join(out, `${model.split("/")[1]}--${c.name}.json`), JSON.stringify(t, null, 1));
+    // The last request holds the whole exchange: what was called, and what each tool said.
+    const last = sentBodies.at(-1);
+    if (last) writeFileSync(join(out, `${model.split("/")[1]}--${c.name}.exchange.json`), JSON.stringify((JSON.parse(last) as { messages: unknown[] }).messages.slice(1), null, 1));
     const written = ls(join(notes, dir)).filter((f) => f.endsWith(".html")).map((f) => join(dir, f));
     const path = written.includes(c.path) ? c.path : written[0];
     if (path) {

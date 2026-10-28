@@ -15,7 +15,7 @@ import { ARTIFACT_ROUNDS, COMPACT, CONVERSATIONS_DIR, ISORITE, PRACTICE, MODES, 
 import { Meaning, type Embedder } from "./meaning.ts";
 import { KEY, SPEND_CAP, OPENROUTER, TIERS, complete, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
-import { RECIPES, REFERENCE, checkArtifact, columnsOf, describeShape, manifestOf, parseData, shapeOf, withManifest } from "@isorite/kit";
+import { RECIPES, REFERENCE, checkArtifact, readsOf, columnsOf, describeShape, manifestOf, parseData, shapeOf, withManifest } from "@isorite/kit";
 
 /** What switches a part given to Iso, in the page's `off`: `g:<kind>:<id>`, a passage by a short hash of its text. */
 export function givenKey(g: Given): string {
@@ -1637,7 +1637,10 @@ export class Engine implements Api {
     if (!path || citeKind(path) !== "artifact" || !inBase(path)) return `${String(args.path ?? "")} is not an artifact's path: give folder/name.html.`;
     const raw = String(args.html ?? "");
     if (!raw.trim()) return "Give the whole file, in html.";
-    const uses = [...new Set((Array.isArray(args.uses) ? args.uses : typeof args.uses === "string" ? args.uses.split(/[\s,]+/) : []).map((u) => String(u).trim().replace(/^\.\//, "")).filter(Boolean))];
+    // What it uses: as given, as its own manifest says, and what its markup and script read, all of them. A model that
+    // left `uses` empty (Gemma 4 31B did, then mended the file's meta again and again) loses nothing by it.
+    const given = (Array.isArray(args.uses) ? args.uses : typeof args.uses === "string" ? args.uses.split(/[\s,]+/) : []).map((u) => String(u));
+    const uses = [...new Set([...given, ...manifestOf(raw).uses, ...readsOf(raw)].map((u) => u.trim().replace(/^\.\//, "")).filter(Boolean))];
     const title = String(args.title ?? "").trim() || manifestOf(raw).title || path.split("/").at(-1)!.replace(/\.html?$/, "").replace(/-/g, " ");
     const html = withManifest(raw, { title, description: String(args.description ?? "").trim() || manifestOf(raw).description, author: "Iso", date: new Date(this.opts.clock.now()).toISOString().slice(0, 10), kit: "1", uses });
     // What it may read: its uses that exist, beside it; and the columns of each that is data.

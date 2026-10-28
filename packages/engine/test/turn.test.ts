@@ -249,7 +249,8 @@ test("Write mode builds an artifact (M23): a recipe, the data's shape, a file re
   const { engine, notes, study, ended, sent } = await open([
     { calls: [{ name: "artifact_recipe", arguments: { name: "dashboard" } }, { name: "read_data", arguments: { path: "basics/runs.csv" } }] },
     { calls: [{ name: "write_artifact", arguments: { path: "basics/energy.html", title: "Energy", description: "The run's energy.", uses: ["runs.csv"], html: BODY("energy") + '<style>h2{color:#fff}</style>' } }] },
-    { calls: [{ name: "write_artifact", arguments: { path: "basics/energy.html", title: "Energy", description: "The run's energy.", uses: ["runs.csv"], html: BODY("e") } }] },
+    // uses left empty, as a weak model leaves it: what the file reads is used all the same.
+    { calls: [{ name: "write_artifact", arguments: { path: "basics/energy.html", title: "Energy", description: "The run's energy.", uses: [], html: BODY("e") } }] },
     { text: ["It charts [the energy](/basics/energy.html)."] },
   ]);
   await notes.write("basics/runs.csv", "t,e\n0,1\n1,0.5\n");

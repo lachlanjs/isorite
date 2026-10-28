@@ -74,6 +74,8 @@ export async function rounds(o: Run): Promise<Ran> {
       add(r);
       if (empty(r)) throw new ModelError(`${model} used its whole output budget (${Math.max(o.maxTokens * WIDER, o.provider.maxTokens ?? 0)} tokens) thinking, and wrote nothing. Try a lower tier, or raise max_tokens under [provider] in config.toml.`, 502, { kind: "cut" });
     }
+    // A reply of nothing at all (Gemma 4 31B once ended an artifact's turn so) is asked for once more.
+    if (!r.text.trim() && !r.calls.length && !r.cut) { r = await ask(o.maxTokens); add(r); }
     if (!r.calls.length || round >= most) return { text: r.text, usage, calls, cut: r.cut, firstIn };
     messages.push({ role: "assistant", content: r.text, calls: r.calls });
     for (const c of r.calls) {

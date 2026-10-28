@@ -68,9 +68,9 @@ const HOST = `(doc, ground) => {
   });
   f.srcdoc = doc;
 }`;
-/** What it drew: SVG marks, and 100 for each canvas with anything on it (a WebGL one, if it has a size). */
+/** What it drew: SVG marks, a table's cells, and 100 for each canvas with anything on it (a WebGL one, if it has a size). */
 const DRAWN = `(() => {
-  let n = document.querySelectorAll("svg path, svg line, svg circle, svg rect, svg polyline, svg polygon, svg text").length;
+  let n = document.querySelectorAll("svg path, svg line, svg circle, svg rect, svg polyline, svg polygon, svg text, iso-table td").length;
   for (const c of document.querySelectorAll("canvas")) {
     try {
       const g = c.getContext("2d");

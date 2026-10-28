@@ -70,7 +70,8 @@ class IsoChart extends HTMLElement {
     const long = all.flatMap((r) => ys.map((y) => ({ x: val(r, xc), y: val(r, column(y)), series: ys.length > 1 ? pretty(y) : by ? r[by] : pretty(y), row: r })));
     const xScale = stateOf(attr(this, "x-scale", "linear")), yScale = stateOf(attr(this, "y-scale", "linear"));
     const usable = long.filter((p) => (xScale !== "log" || (typeof p.x === "number" && p.x > 0)) && (yScale !== "log" || (typeof p.y === "number" && p.y > 0)));
-    if (usable.length < long.length && long.length) window.iso.complain(`<iso-chart data="${attr(this, "data")}">: ${long.length - usable.length} of ${long.length} points are zero or below, so a log scale leaves them out (abs(${ys[0]}) charts their size)`);
+    // A few points at zero (an error at the start) are left off a log scale quietly; most of them is a mistake.
+    if (long.length && usable.length < long.length / 2) window.iso.complain(`<iso-chart data="${attr(this, "data")}">: ${long.length - usable.length} of ${long.length} points are zero or below, so a log scale leaves them out${/^abs\(/.test(ys[0]!) ? "" : ` (abs(${ys[0]}) charts their size)`}`);
     const type = attr(this, "type", "line"), z = series ? "series" : undefined, colour = series ? "series" : t.series[0] ?? t.lattice;
     const xText = usable.some((p) => typeof p.x === "string"), few = usable.length / Math.max(1, new Set(usable.map((p) => p.series)).size) <= 40;
     const marks: Plot.Markish[] = [];
