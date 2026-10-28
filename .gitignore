@@ -34,3 +34,8 @@ inspiration/**/*.png
 inspiration/**/*.jpg
 inspiration/**/*.jpeg
 inspiration/**/*.webp
+# Rebuilt from their sources: node inspiration/combinations/build.mjs, node inspiration/generate.mjs
+inspiration/combinations/sketches.html
+inspiration/**/generated-*.svg
+# A personal screenshot of testing notes, not part of the project
+testing-notes.png

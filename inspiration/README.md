@@ -8,11 +8,11 @@ for you to judge; the "take" lines are my proposals, to keep or strike.
 | `alien-isolation/` | Screenshots of the game's UI: terminals, logs, crafting inventory, item wheel, CRT screens, motion tracker. See `alien-isolation/SOURCES.md`. |
 | `minerals/` | Photographs from Wikimedia Commons (bismuth, pyrite, quartz, lapis with pyrite, gold, malachite, rose quartz, veins, fluorite, agate), and two drawn here (`generated-*`). |
 | `organic-growth/` | Photographs of venation, dendrites, phyllotaxis, lichen, coral, romanesco, DLA, and three drawn here (`generated-*`). |
-| `combinations/` | `sketches.html` (built from `sketches.src.html` by `build.mjs`, which inlines the fonts): working sketches that cross the themes, in isorite's own tokens and fonts. Open it in a browser and hover. |
+| `combinations/` | `sketches.html` (not in git: build it with `node inspiration/combinations/build.mjs`, which inlines the fonts into `sketches.src.html`): working sketches that cross the themes, in isorite's own tokens and fonts. Open it in a browser and hover. |
 | `prospective/` | Themes that could join these three. See `prospective/README.md`. |
 | `MANUAL-LINKS.md` | Images I couldn't fetch or didn't find, for you to open by hand. |
 
-`generate.mjs` redraws the `generated-*.svg` files (`node inspiration/generate.mjs`). The PNGs beside them are renders
+`generate.mjs` redraws the `generated-*.svg` files (not in git) (`node inspiration/generate.mjs`). The PNGs beside them are renders
 of the same SVGs.
 
 ## The three themes, and what each could take
