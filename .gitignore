@@ -41,3 +41,5 @@ inspiration/**/generated-*.svg
 testing-notes.png
 # Built: node inspiration/artifacts/build.mjs
 inspiration/artifacts/kit/isorite.css
+# A personal API key (OpenRouter), read into an environment variable for the eval; never committed
+.key

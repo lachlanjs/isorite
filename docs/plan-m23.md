@@ -1,7 +1,7 @@
 # Milestone 23 (draft): every file a node, and artifacts Iso can build
 
-Drafted 2026-10-28 from a design conversation; **not approved**. It records what was asked and a proposal, so the
-milestone can be planned properly later. Open questions are numbered from Q109.
+Drafted 2026-10-28 from a design conversation; its questions answered the same day; **not yet approved**. It records what was asked and a proposal, so the
+milestone can be planned properly later. Questions are numbered from Q109 (Q108 is M22's); all were answered on 2026-10-28.
 
 What you asked for:
 
@@ -57,10 +57,10 @@ two things, and they cost differently:
   and its edges are routed like links. The layout and router **algorithms** don't change, but their **output** does
   (more items, more routes), and `LAYOUT_VERSION` is bumped.
 - Proposal: **(b) for files in the bundle** (artifact, data, document, misc, pictures), **(a) for links out of it**
-  (web, code), each kind behind the switches the Atlas has now. **Q109**: is (b) acceptable, given the layout is not to
-  be disturbed for style? It changes what is laid out, not how.
-- **Q110**: pictures saved beside a note (M22's folder named for the note): one node each, or one node for the folder?
-  M22 hides a folder of only pictures.
+  (web, code), each kind behind the switches the Atlas has now. **Q109 (answered: yes)**: (b) is acceptable; it
+  changes what is laid out, not how. Each kind stays behind its switch.
+- **Q110 (answered: one node for the folder)**: pictures saved beside a note (M22's folder named for the note) are one
+  node, which opens to show them, so a note with many pictures doesn't flood the map.
 
 ## 3. Artifacts: a framework for Iso
 
@@ -107,9 +107,8 @@ Because components only read tokens, a different look is a different theme file:
 - **Export** ("Save as standalone") writes one HTML with the kit, the chosen theme and the data inlined, which opens
   anywhere with no server. This is how an artifact is used elsewhere, and keeps the data sovereignty `ISORITE_DOC.md`
   asks for.
-- **Q111**: or inline the kit into every saved artifact (between markers Iso never sees, as unkept text is fenced), so
-  the raw file opens in a browser straight from the notes folder? Simpler for sovereignty, larger files, and the kit
-  upgraded by rewriting each file.
+- **Q111 (answered: the host provides the kit)**: the kit is not inlined into every saved file; export makes the
+  self-contained copy.
 
 ### 3.4 Shown in isorite
 
@@ -122,7 +121,7 @@ Because components only read tokens, a different look is a different theme file:
   `srcdoc` there is nothing to sign in to, and nothing the frame could reach.
 - Its only way out is a message bridge the host answers: the data files its manifest names (and no others), the
   ground (lapis or quartz, and changes to it), `iso.open`, and its errors.
-- No network from an artifact unless the user allows it for that artifact (**Q112**: per artifact, or never?).
+- No network from an artifact, ever (**Q112, answered: never**), enforced as §3.8 says.
 - Shown in place in a note (`![…](fig.html)`), opened on its own in the Note pane, and as a node on the Atlas.
 
 ### 3.5 What Iso gets
@@ -135,8 +134,13 @@ Because components only read tokens, a different look is a different theme file:
   data files.
 - **Its errors back**: the frame reports exceptions and the kit's own complaints (a column not in the data, a file not
   in the manifest), and they come back to Iso as the tool's result, so it can fix what it wrote in the same turn.
-- **Q113**: whether Iso also sees a picture of the rendered artifact. That needs a model that takes images, which M22
-  left to its own milestone.
+- **Q113 (answered)**: whether Iso looks at the rendered artifact depends on the model. Whether a model takes images is
+  known from the provider's model list (OpenRouter's `architecture.input_modalities`), and isorite records it per model:
+  - a model with vision is shown a screenshot of the rendered artifact after writing it, and asked to check it;
+  - a model without it can hand the look to another model that has vision (a tier's model, or one named for the
+    purpose), or skip it; the static checks and runtime errors run either way;
+  - the screenshot needs a browser: the app's frame when the app is open, or a headless browser `isorite doctor`
+    finds on the machine (Q117). With neither, there's no visual check, and Iso says so.
 
 ### 3.6 On the static site
 
@@ -150,8 +154,10 @@ Artifacts fit the same path:
 - Limits are the host's: GitHub Pages allows 1 GB a site and warns on files over 50 MB (rejects over 100 MB); a big
   data file is a slow first view. An artifact meant for the site should use a summary of its data.
 - **Publishing publishes the data.** A base's data files (experimental evidence, say) would go onto a public site with
-  the artifacts that use them. The build should list what it's about to publish. **Q116**: opt in per artifact or per
-  data file, or publish whatever is cited?
+  the artifacts that use them. The build should list what it's about to publish. **Q116 (answered)**: the build
+  lists what it will publish and you opt in per data file. A data file too large to keep in git by good practice
+  (GitHub warns at 50 MB) is left out, and the artifacts using it carry a notice on the site that the data is local:
+  open it in isorite with the data to see it fully.
 
 ### 3.7 Enough for a much weaker model
 
@@ -184,8 +190,9 @@ demo's quality has to come from the kit and the context, not the model. Proposal
   file not in the manifest, a chart with no data) and `write_artifact`'s result carries them, so the model fixes them
   in the same turn. Gray area: this needs the artifact rendered somewhere when Iso writes it. In the app, the frame
   can render it unseen; from the terminal or with no browser open there is nowhere, and only the static checks run.
-  **Q117**: render headless on the server (Playwright's Chromium is already a dev dependency, but not shipped), or
-  accept static checks only when no app is open?
+  **Q117 (answered)**: static checks by default. `isorite doctor` looks for a headless browser on the machine and,
+  if it finds one, Iso can render and see artifacts with it (Q113) when the app isn't open. Artifacts are never
+  viewable in the terminal.
 - **The bar is set by an example, not by description.** The entropy lab, rewritten on the real kit, is recipe 4's
   worked example. A model shown a finished, good artifact imitates it better than it follows adjectives.
 
@@ -202,7 +209,11 @@ demo's quality has to come from the kit and the context, not the model. Proposal
 - Licences go with them into `app/static/licenses/` (Plot is ISC, three.js and KaTeX MIT).
 - Cost: the install grows by the 3D and charting libraries, roughly 1 MB. That is the price of no CDN.
 
-### 3.9 Testing it on weaker models (after the kit exists)
+### 3.9 Testing it on weaker models
+
+A first run can use the demo's kit (`inspiration/artifacts/kit/`, kit 0) with a draft of the staged context, so what
+weaker models get wrong shapes the real kit before it's built; the full eval follows the real kit.
+
 
 - Extend Iso's eval (M15, `npm run eval:iso`, `eval/iso/`) with artifact cases on the N-body example base: a
   dashboard from a CSV of orbits, a simulation of the bodies with parameters, comparing two runs, a 3D view, an
@@ -210,8 +221,11 @@ demo's quality has to come from the kit and the context, not the model. Proposal
   error, its manifest is right, it uses the kit's elements, it sets no colours or fonts, the data columns exist.
   Screenshots of each go into the report, for a person to judge the quality.
 - Run it through OpenRouter on DeepSeek V4.1 and on smaller models, with a key Lachlan provides for the purpose
-  (kept in the eval's own config, never in the repository). **Q118**: which smaller models, and what spend is
-  acceptable per run?
+  (an environment variable, never in the repository). **Q118 (answered)**: up to US$10 for the run, across a wide
+  range of artifacts, on three models, with what Lachlan expects of each:
+  - **Claude Sonnet 5.5**: builds them capably and easily (the reference);
+  - **DeepSeek V4.1 Flash**: builds them capably too;
+  - **Gemma 4 31B**: basic building; on par with DeepSeek, given detailed context, would be exceptional.
 - What fails decides what changes: a recipe, a rule, a kit element that does more, or a check that catches it.
 
 ## 4. Questions and problems (from the design rounds)
@@ -222,13 +236,16 @@ version, is the current proposal, and the least settled part of the design:
 
 - **A question** as a specimen label: its catalogue number, the question in the user's words, the notes it's about in
   corner brackets, and one mark: a hollow rose ◇ while open, a malachite ◆ with the answer's first line once answered.
-- **A problem** as the crafting screen: the notes it uses as slots (filled once worked through), and a progress bar of
-  its steps.
-- **On the Atlas** they stay ordinary boxes: the ◇/◆ mark in the corner, or the progress bar along the foot.
+- **A problem** as the crafting screen: the notes it uses as slots (filled once worked through). No progress bar: a
+  multi-step problem is a chain of problems (Q114).
+- **On the Atlas** they stay ordinary boxes, with the kind's mark in the corner (◇/◆ for a question).
 - A question Iso asks shows in its reply as a rose ◇ and a small "keep" button, which makes it a question note.
 - Gone from the first version: hollow dashed cavities and cracks mended in gold. Too much drawing for something
   this frequent.
-- **Q114**: what counts as a problem's steps, and who marks one done (the user, Iso, or both)?
+- **Q114 (answered: no steps)**: a problem has no steps of its own. A multi-step problem is several problems linked in
+  succession by `requires` links, in a folder of their own if they belong together; isorite already does this. Say so
+  in the tutorial base and in Iso's context. The problem card (sketch R) loses its progress bar: its slots are what it
+  uses, and the Atlas shows the chain.
 
 ## 5. The Note pane: a label for every node, and artifacts shown in it
 
@@ -251,7 +268,7 @@ You asked for the details section to be reworked, and for artifacts to be viewab
 - The **path** (`coding / huffman-codes`) is where the note lives: press a folder to move it, the name to rename it.
 - **Tags** are bracketed parts with a `+`.
 - A **question** adds what it's about (parts, `+`) and a mark to answer it (◇ open, ◆ answered: `done`). A
-  **problem** adds what it uses and its steps (Q114).
+  **problem** adds what it uses; a multi-step problem is a chain of problems (Q114).
 - **History** as strata down the margin (sketch T).
 - **Delete** moves to the pane's menu, away from the name.
 - Other frontmatter fields stay as now: not shown, never touched.
@@ -264,13 +281,13 @@ You asked for the details section to be reworked, and for artifacts to be viewab
 - The same holds for the other kinds, each with what suits it: **data** a table of its head and its shape (what
   `read_data` gives Iso); a **document** a PDF viewer; a **picture** the picture; **misc** its size and type, and a
   3D model through the kit's viewer.
-- **Q115**: the pane is called "Note". Keep the name, or call it something that covers every kind?
+- **Q115 (answered: keep "Note")**: the pane keeps its name.
 
 ## 6. Picking this up
 
 Where the design work for this milestone lives, for whoever plans it properly:
 
-- this file, and its open questions (Q109 to Q118), to answer before planning;
+- this file, with its questions (Q109 to Q118) answered on 2026-10-28;
 - `docs/taste.md`: what is settled about the look (lustre not flash, no directive text, the Atlas's layout untouched,
   Ioskeley as the display face, understanding phased out);
 - `inspiration/README.md`: the themes, the sketches by letter, and what you kept or dropped;
