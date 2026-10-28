@@ -1,0 +1,13 @@
+name,source,length,symbols,entropy,avg_length
+pangram,english,43,27,4.3855,4.4651
+hamlet,english,39,13,3.2908,3.3333
+lorem,latin,120,18,3.9029,3.9417
+abracadabra,word,11,5,2.0404,2.0909
+mississippi,word,11,4,1.8231,1.9091
+dna,random,120,4,1.9909,2.0000
+skewed,random,100,5,1.6680,1.7000
+base64,random,160,58,5.6738,5.7188
+pi,digits,101,10,3.2908,3.3168
+code,python,64,24,4.2100,4.2500
+binary,random,120,2,0.9998,1.0000
+notes,english,79,21,3.9850,4.0253

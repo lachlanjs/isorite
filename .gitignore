@@ -39,3 +39,5 @@ inspiration/combinations/sketches.html
 inspiration/**/generated-*.svg
 # A personal screenshot of testing notes, not part of the project
 testing-notes.png
+# Built: node inspiration/artifacts/build.mjs
+inspiration/artifacts/kit/isorite.css

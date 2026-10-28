@@ -1,0 +1,16 @@
+/* isorite kit 0, theme: plain. The same custom properties as isorite.css, with system fonts, neutral colours, rounded
+   corners and no chamfer or lustre: an artifact taken out of isorite to be used elsewhere. */
+:root, :root[data-ground="lapis"], :root[data-ground="quartz"] {
+  color-scheme: light;
+  --ground-0: #FFFFFF; --ground-1: #FFFFFF; --ground-2: #F6F7F9; --ground-3: #ECEEF2;
+  --line: #E1E4EA; --line-strong: #A9B0BC;
+  --text: #1C2330; --text-soft: #475063; --text-faint: #6B7385;
+  --lattice: #2F6FDE; --growth: #E08A00; --malachite: #1E9E6A; --rose: #D6335C;
+  --on: #FFFFFF; --sheen: 255 255 255;
+  --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-text: Georgia, "Times New Roman", serif;
+  --font-display: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --cut: 0px; --radius: 8px; --chamfer: none;
+  --series-1: var(--lattice); --series-2: var(--growth); --series-3: var(--malachite); --series-4: var(--rose); --series-5: var(--text-soft);
+  --glint: 0;
+}

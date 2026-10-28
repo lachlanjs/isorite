@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Artifact host</title>
+<link rel="stylesheet" href="kit/isorite.css">
+<style>
+  /* A stand-in for isorite's Note pane showing an artifact (docs/plan-m23.md §3.4, §5.3): the label (sketch U), and the
+     artifact in a sandboxed frame that reaches the host only through messages. */
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground-0); color: var(--text); font: 13px/20px var(--font-ui); }
+  .pane { max-width: 1120px; margin: 0 auto; padding: 22px 16px 40px; }
+  h1 { font: 400 30px/36px var(--font-text); margin: 0; }
+  .stand { font: italic 16px/24px var(--font-text); color: var(--text-soft); margin: 4px 0 0; max-width: 80ch; }
+  .label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line); font: 11px/16px var(--font-ui); color: var(--text-faint); }
+  .kind { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--line-strong); color: var(--text-soft); text-transform: uppercase; letter-spacing: .06em; }
+  .kind svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+  .path { font-size: 12px; color: var(--text-soft); }
+  .br { font: 11px/16px var(--font-ui); color: var(--text-soft); padding: 3px 8px; --b: var(--line-strong); background:
+    linear-gradient(var(--b), var(--b)) top left / 5px 1px no-repeat, linear-gradient(var(--b), var(--b)) top left / 1px 5px no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom right / 5px 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom right / 1px 5px no-repeat; }
+  .tools { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .seg { display: flex; }
+  .seg button, .tools > button { font: 11px/18px var(--font-ui); color: var(--text-soft); background: none; border: 1px solid var(--line); margin-left: -1px; padding: 3px 9px; cursor: pointer; text-transform: uppercase; letter-spacing: .06em; }
+  .seg button[aria-pressed="true"] { background: var(--text); color: var(--ground-0); border-color: var(--text); position: relative; }
+  .tools > button:hover { color: var(--text); border-color: var(--lattice); }
+  .said { margin-top: 10px; min-height: 20px; font-size: 12px; color: var(--text-faint); }
+  .said .bad { color: var(--rose); } .said .open { color: var(--lattice); }
+  iframe { display: block; width: 100%; height: 900px; border: 0; margin-top: 12px; background: transparent; }
+</style>
+</head>
+<body>
+<div class="pane">
+  <h1 id="title">…</h1>
+  <p class="stand" id="desc"></p>
+  <div class="label">
+    <span class="kind"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2.75H13.25V11L11 13.25H2.75V5Z"/><path d="M2.75 5.75H13.25"/><path d="M4.75 11L7 8.5L8.75 10L11.25 7.5"/></svg>artifact</span>
+    <span class="path">artifacts / entropy-lab.html</span>
+    <span id="uses"></span>
+    <span class="tools">
+      <span class="seg" id="ground" aria-label="Ground"><button type="button" data-v="lapis" aria-pressed="true">lapis</button><button type="button" data-v="quartz" aria-pressed="false">quartz</button></span>
+      <span class="seg" id="look" aria-label="Look"><button type="button" data-v="isorite" aria-pressed="true">isorite</button><button type="button" data-v="plain" aria-pressed="false">plain</button></span>
+      <button type="button" id="standalone">standalone</button>
+    </span>
+  </div>
+  <div class="said" id="said" role="status"></div>
+  <iframe id="frame" sandbox="allow-scripts" src="entropy-lab.html" title="Entropy lab"></iframe>
+</div>
+<script>
+  const ARTIFACT = "entropy-lab.html", frame = document.getElementById("frame"), said = document.getElementById("said");
+  let allowed = new Set(), ground = "lapis", look = "isorite";
+  const tell = (m) => frame.contentWindow.postMessage({ isorite: 0, ...m }, "*");
+  const say = (html) => { said.innerHTML = html; };
+  const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+
+  // The manifest: what the label shows, and the only files the artifact may ask for.
+  async function manifest() {
+    const doc = new DOMParser().parseFromString(await (await fetch(ARTIFACT)).text(), "text/html"), meta = (n) => doc.querySelector(`meta[name="${n}"]`)?.content ?? "";
+    document.getElementById("title").textContent = doc.title;
+    document.getElementById("desc").textContent = meta("description");
+    allowed = new Set(meta("isorite:uses").split(/[\s,]+/).filter(Boolean));
+    document.getElementById("uses").innerHTML = allowed.size ? `uses ${[...allowed].map((p) => `<span class="br">${esc(p)}</span>`).join(" ")}` : "";
+  }
+  const ready = manifest();
+
+  // The bridge. Messages only from this frame; files only from the manifest.
+  addEventListener("message", async (e) => {
+    if (e.source !== frame.contentWindow) return;
+    const m = e.data;
+    if (!m || m.isorite !== 0) return;
+    if (m.type === "ready") { await ready; tell({ type: "ground", ground }); tell({ type: "look", look }); }
+    else if (m.type === "file") {
+      await ready;
+      if (!allowed.has(m.path)) { tell({ type: "reply", id: m.id, error: `${m.path} is not in the artifact's manifest (isorite:uses)` }); say(`<span class="bad">refused ${esc(m.path)}: not in the manifest</span>`); return; }
+      const r = await fetch(m.path);
+      tell({ type: "reply", id: m.id, ...(r.ok ? { text: await r.text() } : { error: `${m.path}: ${r.status}` }) });
+    }
+    else if (m.type === "height") frame.style.height = `${Math.ceil(m.height) + 4}px`;
+    else if (m.type === "error") say(`<span class="bad">the artifact reported: ${esc(m.message)}</span> (Iso would get this back)`);
+    else if (m.type === "open") say(`<span class="open">would open ${esc(m.note)} in the Note pane</span>`);
+  });
+
+  function seg(id, set) {
+    for (const b of document.querySelectorAll(`#${id} button`)) b.addEventListener("click", () => {
+      document.querySelectorAll(`#${id} button`).forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+      set(b.dataset.v);
+    });
+  }
+  seg("ground", (v) => { ground = v; document.documentElement.dataset.ground = v; tell({ type: "ground", ground: v }); });
+  seg("look", (v) => { look = v; tell({ type: "look", look: v }); });
+
+  // Standalone: one HTML with the kit, both looks and the data inlined, which opens anywhere.
+  document.getElementById("standalone").addEventListener("click", async () => {
+    await ready;
+    const get = async (p) => (await fetch(p)).text(), safe = (t) => t.replace(/<\/(script|style)/gi, "<\\/$1");
+    let html = await get(ARTIFACT);
+    for (const [tag, href, , lk] of [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"( data-look="(\w+)")?>/g)]) {
+      const css = safe(await get(href));
+      html = html.replace(tag, () => `<style${lk ? ` data-look="${lk}"` : ""}>\n${css}\n</style>`);
+    }
+    const js = safe(await get("kit/kit.js"));
+    html = html.replace('<script src="kit/kit.js"><\/script>', () => `<script>\n${js}\n<\/script>`);
+    const data = [];
+    for (const p of allowed) data.push(`<script type="text/plain" data-path="${esc(p)}">${safe(await get(p))}<\/script>`);
+    html = html.replace("</head>", () => `${data.join("\n")}\n</head>`).replace('<html lang="en">', () => `<html lang="en" data-look="${look}" data-ground="${ground}">`);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    a.download = ARTIFACT.replace(/\.html$/, ".standalone.html");
+    a.click();
+    say(`saved ${a.download}: ${Math.round(html.length / 1024)} KB, with the kit, both looks and ${allowed.size} data file${allowed.size === 1 ? "" : "s"} inside`);
+  });
+</script>
+</body>
+</html>

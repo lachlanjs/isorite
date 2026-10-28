@@ -87,6 +87,9 @@ A small library isorite provides to every artifact, versioned (`kit@1`):
   - `iso.open("basics/surprise")`: open a note in isorite from the artifact.
 - The states, glyphs and motion of `docs/taste.md` (lustre, corner-bracket focus, no flash).
 
+A working sketch of all of §3 is in `inspiration/artifacts/` (kit, an artifact, its data, a host with the bridge and
+the standalone export).
+
 ### 3.2 Leaving isorite's look
 
 Because components only read tokens, a different look is a different theme file:

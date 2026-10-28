@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entropy lab</title>
+<meta name="description" content="Type any text and watch what its symbols' surprise says about how short a code for it can be: Huffman's tree grown merge by merge, every three-symbol distribution as a surface, the code sent through a noisy channel, and twelve measured texts against Shannon's bounds.">
+<meta name="author" content="Iso">
+<meta name="date" content="2026-10-28">
+<meta name="isorite:kit" content="0">
+<meta name="isorite:uses" content="runs.csv">
+<link rel="stylesheet" href="kit/isorite.css" data-look="isorite">
+<link rel="stylesheet" href="kit/plain.css" data-look="plain">
+<link rel="stylesheet" href="kit/kit.css">
+<script src="kit/kit.js"></script>
+<style>
+  /* Layout only: the kit and the theme give every colour and font. */
+  .tree svg, .bars svg { display: block; }
+  .bits { font: 12px/18px var(--font-ui); word-break: break-all; color: var(--text-faint); max-height: 126px; overflow: auto; }
+  .bits .flip { color: var(--rose); background: color-mix(in srgb, var(--rose) 18%, transparent); }
+  .decoded { font: 16px/26px var(--font-text); margin-top: 10px; overflow-wrap: anywhere; }
+  .decoded .wrong { color: var(--rose); text-decoration: underline wavy color-mix(in srgb, var(--rose) 60%, transparent); }
+  .surface { position: relative; }
+  .surface canvas { width: 100%; height: 300px; cursor: grab; touch-action: none; }
+  .surface canvas:active { cursor: grabbing; }
+  .caption { font: 14px/22px var(--font-text); color: var(--text-soft); margin: 10px 0 0; }
+  .key { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; font: 11px/16px var(--font-ui); color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; }
+  .key i { width: 10px; height: 10px; display: inline-block; }
+</style>
+</head>
+<body>
+<iso-page>
+  <header>
+    <h1>Entropy lab</h1>
+    <p>How short can a code for a text be? Type anything: its symbols' surprise sets the bound, and Huffman's code comes within a bit of it.</p>
+  </header>
+
+  <iso-grid>
+    <iso-panel class="wide">
+      <h2>The text</h2>
+      <textarea class="iso" id="src" spellcheck="false">a prefix code assigns each symbol a codeword so that no codeword begins another</textarea>
+      <iso-stats style="margin-top:14px">
+        <iso-stat id="n" label="symbols in it"></iso-stat>
+        <iso-stat id="k" label="different symbols"></iso-stat>
+        <iso-stat id="H" label="entropy, bits per symbol" tone="blue"></iso-stat>
+        <iso-stat id="L" label="Huffman, bits per symbol" tone="gold"></iso-stat>
+        <iso-stat id="eff" label="of the bound reached" tone="green"></iso-stat>
+        <iso-stat id="kraft" label="Kraft sum"></iso-stat>
+        <iso-stat id="saved" label="smaller than 8 bits each"></iso-stat>
+      </iso-stats>
+    </iso-panel>
+
+    <iso-panel class="wide">
+      <h2>Surprise and code length, by symbol <span id="bars-say"></span></h2>
+      <div class="scroll-x bars" id="bars"></div>
+      <p class="caption"><span class="key"><i style="border:1.5px solid var(--lattice)"></i>surprise, −log₂ p</span><span class="key"><i style="background:var(--growth);height:3px"></i>Huffman's code length</span> A symbol's code is never far from its surprise: rare symbols get long codes, common ones short. See <button class="iso-note" data-note="basics/surprise">Surprise</button>.</p>
+    </iso-panel>
+
+    <iso-panel class="wide">
+      <h2>Huffman's tree, grown <span id="tree-say"></span></h2>
+      <div class="row" style="margin-bottom:12px"><button class="iso-button" id="play">grow</button><iso-slider name="step" label="merges" min="0" max="1" step="1" value="0" style="flex:1;min-width:220px"></iso-slider></div>
+      <div class="scroll-x tree" id="tree"></div>
+      <p class="caption">Each merge joins the two lightest pieces. A symbol's code is the path down to it: 0 for left, 1 for right.</p>
+    </iso-panel>
+
+    <iso-panel>
+      <h2>Three symbols, every distribution <span id="tri-say"></span></h2>
+      <div class="surface"><canvas id="surface" aria-label="Entropy over every distribution of three symbols; drag to turn it"></canvas></div>
+      <p class="caption">Height is entropy. The peak is the even split; the corners, certainty. The gold stem is your text's three commonest symbols. Drag to turn it.</p>
+    </iso-panel>
+
+    <iso-panel>
+      <h2>Through a noisy channel <span id="ch-say"></span></h2>
+      <iso-slider name="flip" label="flip chance" min="0" max="0.08" step="0.002" value="0.01" digits="3"></iso-slider>
+      <div class="row" style="margin:10px 0"><button class="iso-button" id="again">send again</button><iso-stats><iso-stat id="flips" label="bits flipped" tone="rose"></iso-stat><iso-stat id="wrong" label="symbols wrong" tone="rose"></iso-stat></iso-stats></div>
+      <div class="bits" id="bits"></div>
+      <div class="decoded" id="decoded"></div>
+      <p class="caption">A prefix code has no commas: one flipped bit can shift every codeword after it.</p>
+    </iso-panel>
+
+    <iso-panel class="wide">
+      <h2>Twelve texts, measured <span id="runs-say">runs.csv</span></h2>
+      <div class="scroll-x" id="runs"></div>
+      <p class="caption">Every text lands in the band: Huffman's average length is at least the entropy, and less than a bit more. Your text is the gold diamond.</p>
+    </iso-panel>
+  </iso-grid>
+</iso-page>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const NS = "http://www.w3.org/2000/svg";
+  const show = (c) => (c === " " ? "␣" : c === "\n" ? "↵" : c);
+
+  /** Huffman's code: merge the two lightest, ties by first appearance. Keeps every merge, for growing the tree. */
+  function huffman(text) {
+    const counts = new Map(); for (const c of text) counts.set(c, (counts.get(c) ?? 0) + 1);
+    const leaves = [...counts].map(([sym, w], i) => ({ sym, w, order: i }));
+    let forest = [...leaves]; const merges = [];
+    while (forest.length > 1) {
+      forest.sort((a, b) => a.w - b.w || a.order - b.order);
+      const [a, b] = forest.splice(0, 2), node = { w: a.w + b.w, order: Math.min(a.order, b.order), kids: [a, b], merge: merges.length };
+      merges.push(node); forest.push(node);
+    }
+    const root = forest[0] ?? null, code = new Map();
+    const walk = (n, path) => { if (!n) return; if (n.kids) { walk(n.kids[0], path + "0"); walk(n.kids[1], path + "1"); } else code.set(n.sym, path || "0"); };
+    walk(root, "");
+    return { counts, leaves, merges, root, code, n: text.length };
+  }
+
+  let model = null;
+  function analyse() {
+    const text = $("src").value || " ";
+    model = huffman(text);
+    const { counts, code, n } = model;
+    let H = 0, L = 0, kraft = 0;
+    for (const [c, k] of counts) { const p = k / n; H -= p * Math.log2(p); L += p * code.get(c).length; kraft += 2 ** -code.get(c).length; }
+    Object.assign(model, { H, L });
+    $("n").value = n; $("k").value = counts.size; $("H").value = H.toFixed(3); $("L").value = L.toFixed(3);
+    $("eff").value = L ? `${Math.round((H / L) * 100)}%` : "–"; $("kraft").value = kraft.toFixed(3); $("saved").value = `${Math.round((1 - L / 8) * 100)}%`;
+    const slider = document.querySelector('iso-slider[name="step"] input');
+    slider.max = String(model.merges.length); slider.value = String(model.merges.length); slider.dispatchEvent(new Event("input"));
+    drawBars(); drawTree(); drawSurface(); send(); drawRuns();
+  }
+
+  // Surprise and length, one column per symbol, commonest first.
+  function drawBars() {
+    const { counts, code, n } = model, syms = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b));
+    const W = Math.max(34, Math.max(...syms.map((c) => code.get(c).length)) * 6 + 12), top = 14, h = 150, maxB = Math.max(...syms.map((c) => Math.max(-Math.log2(counts.get(c) / n), code.get(c).length)), 1);
+    const y = (b) => top + h - (b / maxB) * h, width = syms.length * W + 40;
+    let s = `<svg width="${width}" height="${top + h + 34}" viewBox="0 0 ${width} ${top + h + 34}">`;
+    for (let b = 0; b <= maxB; b++) s += `<line x1="30" x2="${width}" y1="${y(b) + .5}" y2="${y(b) + .5}" stroke="var(--line)" stroke-dasharray="${b ? "2 4" : ""}"/><text x="4" y="${y(b) + 4}" font-size="10" fill="var(--text-faint)" font-family="var(--font-ui)">${b}</text>`;
+    syms.forEach((c, i) => {
+      const x = 36 + i * W, sur = -Math.log2(counts.get(c) / n), len = code.get(c).length;
+      s += `<g data-c="${encodeURIComponent(c)}"><rect x="${x + 4}" y="${y(sur)}" width="${W - 14}" height="${top + h - y(sur)}" fill="color-mix(in srgb, var(--lattice) 16%, transparent)" stroke="var(--lattice)" stroke-width="1.5"/>`
+        + `<rect x="${x}" y="${y(len) - 1.5}" width="${W - 6}" height="3" fill="var(--growth)"/>`
+        + `<text x="${x + (W - 6) / 2}" y="${top + h + 18}" text-anchor="middle" font-size="15" fill="var(--text)" font-family="var(--font-text)">${show(c).replace("<", "&lt;")}</text>`
+        + `<text x="${x + (W - 6) / 2}" y="${top + h + 31}" text-anchor="middle" font-size="9" fill="var(--text-faint)" font-family="var(--font-ui)">${code.get(c)}</text><rect x="${x}" y="${top}" width="${W - 4}" height="${h + 34}" fill="transparent"/></g>`;
+    });
+    $("bars").innerHTML = s + "</svg>";
+    for (const g of $("bars").querySelectorAll("g[data-c]")) {
+      const c = decodeURIComponent(g.dataset.c), p = counts.get(c) / n;
+      g.addEventListener("mouseenter", () => { $("bars-say").textContent = `${show(c)} · p ${p.toFixed(3)} · surprise ${(-Math.log2(p)).toFixed(2)} · code ${code.get(c)}`; });
+      g.addEventListener("mouseleave", () => { $("bars-say").textContent = ""; });
+    }
+  }
+
+  // The tree: leaves along the foot, each merge higher than the one before, so it grows upward as merges are added.
+  function drawTree() {
+    const { root, merges } = model, step = iso.state.step ?? merges.length, LW = 34, top = 20, foot = 260, leafH = 34;
+    const order = []; const dfs = (n) => (n.kids ? n.kids.forEach(dfs) : order.push(n)); if (root) dfs(root);
+    const pos = new Map(); order.forEach((l, i) => pos.set(l, { x: 20 + i * LW + LW / 2, y: foot }));
+    const dy = merges.length ? (foot - top - 20) / merges.length : 0;
+    merges.forEach((m) => { const [a, b] = m.kids.map((k) => pos.get(k)); pos.set(m, { x: (a.x + b.x) / 2, y: foot - 14 - (m.merge + 1) * dy }); });
+    const width = order.length * LW + 40;
+    let s = `<svg width="${width}" height="${foot + leafH + 8}" viewBox="0 0 ${width} ${foot + leafH + 8}">`;
+    merges.slice(0, step).forEach((m) => {
+      const p = pos.get(m), fresh = m.merge === step - 1;
+      m.kids.forEach((k, side) => {
+        const c = pos.get(k), d = `M${c.x} ${c.y}V${p.y}H${p.x}`;
+        s += `<path d="${d}" fill="none" stroke="${fresh ? "var(--growth)" : "var(--line-strong)"}" stroke-width="${fresh ? 2 : 1.25}" pathLength="1" stroke-dasharray="${fresh ? 1 : "none"}" stroke-dashoffset="${fresh ? 1 : 0}">${fresh ? '<animate attributeName="stroke-dashoffset" from="1" to="0" dur=".35s" fill="freeze"/>' : ""}</path>`;
+        s += `<text x="${c.x + (side ? 4 : -9)}" y="${Math.max(p.y + 12, c.y - 6)}" font-size="9" fill="var(--text-faint)" font-family="var(--font-ui)">${side}</text>`;
+      });
+      s += `<rect x="${p.x - 3}" y="${p.y - 3}" width="6" height="6" fill="${fresh ? "var(--growth)" : "var(--line-strong)"}"/>`;
+      if (fresh || m === root) s += `<text x="${p.x + 7}" y="${p.y - 5}" font-size="10" fill="${fresh ? "var(--growth)" : "var(--text-faint)"}" font-family="var(--font-ui)">${m.w}</text>`;
+    });
+    for (const l of order) {
+      const { x, y } = pos.get(l), w = LW - 6, c = 5;
+      s += `<path d="M${x - w / 2 + c} ${y}H${x + w / 2}V${y + leafH - c}L${x + w / 2 - c} ${y + leafH}H${x - w / 2}V${y + c}Z" fill="var(--ground-2)" stroke="var(--line-strong)"/>`
+        + `<text x="${x}" y="${y + 17}" text-anchor="middle" font-size="15" fill="var(--text)" font-family="var(--font-text)">${show(l.sym).replace("<", "&lt;")}</text>`
+        + `<text x="${x}" y="${y + 29}" text-anchor="middle" font-size="9" fill="var(--text-faint)" font-family="var(--font-ui)">${l.w}</text>`;
+    }
+    $("tree").innerHTML = s + "</svg>";
+    $("tree-say").textContent = step >= merges.length ? `${merges.length} merges, done` : `${step} of ${merges.length} merges`;
+  }
+  let growing = 0;
+  $("play").addEventListener("click", () => {
+    const input = document.querySelector('iso-slider[name="step"] input');
+    if (growing) { clearInterval(growing); growing = 0; $("play").classList.remove("on"); return; }
+    if (+input.value >= +input.max) input.value = "0";
+    $("play").classList.add("on");
+    growing = setInterval(() => {
+      input.value = String(+input.value + 1); input.dispatchEvent(new Event("input"));
+      if (+input.value >= +input.max) { clearInterval(growing); growing = 0; $("play").classList.remove("on"); }
+    }, 420);
+  });
+
+  // Every distribution of three symbols, as a surface over the triangle of them; height is entropy.
+  const cv = $("surface"), ctx = cv.getContext("2d");
+  let yaw = .6, pitch = .95, dragging = null;
+  const hex = (c) => { const m = /^#?([0-9a-f]{6})$/i.exec(c.trim()); const v = m ? parseInt(m[1], 16) : 0x888888; return [v >> 16, (v >> 8) & 255, v & 255]; };
+  const mix = (a, b, t) => a.map((x, i) => Math.round(x + (b[i] - x) * t));
+  const H3 = (p) => -p.reduce((s, x) => s + (x > 0 ? x * Math.log2(x) : 0), 0) / Math.log2(3);
+  const corner = [[0, 1], [-Math.sqrt(3) / 2, -.5], [Math.sqrt(3) / 2, -.5]];
+  const at = (p) => [p[0] * corner[0][0] + p[1] * corner[1][0] + p[2] * corner[2][0], p[0] * corner[0][1] + p[1] * corner[1][1] + p[2] * corner[2][1], H3(p) * .9];
+  function project([x, y, z], w, h) {
+    const cx = x * Math.cos(yaw) - y * Math.sin(yaw), cy = x * Math.sin(yaw) + y * Math.cos(yaw);
+    const sy = cy * Math.cos(pitch) - z * Math.sin(pitch), depth = cy * Math.sin(pitch) + z * Math.cos(pitch);
+    const s = Math.min(w, h) * .46;
+    return [w / 2 + cx * s, h * .58 + sy * s, depth];
+  }
+  function top3() {
+    const { counts, n } = model, best = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    while (best.length < 3) best.push(["–", 0]);
+    const t = best.reduce((s, [, k]) => s + k, 0) || 1;
+    return { syms: best.map(([c]) => c), p: best.map(([, k]) => k / t) };
+  }
+  function drawSurface() {
+    if (!model) return;
+    const dpr = devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+    const t = iso.tokens(), low = hex(t.ground3), mid = hex(t.lattice), high = hex(t.growth), N = 22, tris = [];
+    const P = (i, j) => { const a = i / N, b = j / N; return [a, b, Math.max(0, 1 - a - b)]; };
+    for (let i = 0; i < N; i++) for (let j = 0; j < N - i; j++) {
+      tris.push([P(i, j), P(i + 1, j), P(i, j + 1)]);
+      if (i + j < N - 1) tris.push([P(i + 1, j), P(i + 1, j + 1), P(i, j + 1)]);
+    }
+    const drawn = tris.map((tr) => { const pts = tr.map((p) => project(at(p), w, h)); const z = tr.reduce((s, p) => s + H3(p), 0) / 3; return { pts, depth: pts.reduce((s, p) => s + p[2], 0) / 3, z }; }).sort((a, b) => a.depth - b.depth);
+    const lineRgb = hex(t.line);
+    for (const { pts, z } of drawn) {
+      const c = z < .7 ? mix(low, mid, z / .7) : mix(mid, high, (z - .7) / .3);
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); ctx.lineTo(pts[1][0], pts[1][1]); ctx.lineTo(pts[2][0], pts[2][1]); ctx.closePath();
+      ctx.fillStyle = `rgb(${c})`; ctx.fill(); ctx.strokeStyle = `rgba(${lineRgb},.55)`; ctx.lineWidth = .5; ctx.stroke();
+    }
+    // The base triangle and its corners: certainty of one symbol.
+    const { syms, p } = top3(), base = corner.map(([x, y]) => project([x, y, 0], w, h));
+    ctx.strokeStyle = t.lineStrong; ctx.lineWidth = 1; ctx.beginPath(); base.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.stroke();
+    ctx.font = `15px ${t.serif}`; ctx.fillStyle = t.text; ctx.textAlign = "center";
+    base.forEach(([x, y], i) => ctx.fillText(show(syms[i]), x + (x - w / 2) * .12, y + (y - h * .58) * .12 + 14));
+    // Your text: a gold stem from the floor to the surface.
+    const f = project([...at(p).slice(0, 2), 0], w, h), s = project(at(p), w, h);
+    ctx.strokeStyle = t.growth; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(f[0], f[1]); ctx.lineTo(s[0], s[1]); ctx.stroke();
+    ctx.fillStyle = t.growth; ctx.beginPath(); ctx.moveTo(s[0], s[1] - 6); ctx.lineTo(s[0] + 6, s[1]); ctx.lineTo(s[0], s[1] + 6); ctx.lineTo(s[0] - 6, s[1]); ctx.closePath(); ctx.fill();
+    $("tri-say").textContent = `${syms.map(show).join(" ")} · ${(H3(p) * Math.log2(3)).toFixed(2)} bits`;
+  }
+  cv.addEventListener("pointerdown", (e) => { dragging = [e.clientX, e.clientY, yaw, pitch]; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", (e) => { if (!dragging) return; yaw = dragging[2] + (e.clientX - dragging[0]) * .01; pitch = Math.max(.2, Math.min(1.45, dragging[3] + (e.clientY - dragging[1]) * .01)); drawSurface(); });
+  cv.addEventListener("pointerup", () => { dragging = null; });
+  iso.loop((dt) => { if (!dragging) { yaw += dt * .12; drawSurface(); } });
+
+  // The code sent through a channel that flips each bit with some chance, and read back.
+  let seed = 1;
+  function send() {
+    const { code, root } = model, text = ($("src").value || " ").slice(0, 160), flip = iso.state.flip ?? .01;
+    let r = seed * 7919 + 17; const rnd = () => ((r = (r * 16807) % 2147483647) - 1) / 2147483646;
+    const bits = [...text].map((c) => code.get(c)).join(""), got = [...bits].map((b) => (rnd() < flip ? (b === "0" ? "1" : "0") : b));
+    let out = "", n = root;
+    for (const b of got) { if (!n.kids) break; n = n.kids[+b]; if (!n.kids) { out += n.sym; n = root; } }
+    if (!root.kids) out = text;
+    const flips = got.filter((b, i) => b !== bits[i]).length;
+    $("bits").innerHTML = got.map((b, i) => (b !== bits[i] ? `<span class="flip">${b}</span>` : b)).join("");
+    let wrong = 0;
+    $("decoded").innerHTML = [...out].map((c, i) => { const bad = c !== text[i]; wrong += bad; const e = c.replace("&", "&amp;").replace("<", "&lt;"); return bad ? `<span class="wrong">${e}</span>` : e; }).join("");
+    wrong += Math.max(0, text.length - out.length);
+    $("flips").value = flips; $("wrong").value = wrong;
+    $("ch-say").textContent = `${bits.length} bits`;
+  }
+  $("again").addEventListener("click", () => { seed++; send(); });
+
+  // The measured texts, from runs.csv (a data file the manifest names), against Shannon's bounds.
+  let runs = [];
+  function drawRuns() {
+    if (!model) return;
+    const W = 980, H = 300, pad = 40, xmax = 6, ymax = 7, X = (v) => pad + (v / xmax) * (W - pad - 10), Y = (v) => H - pad + 10 - (v / ymax) * (H - pad - 10);
+    let s = `<svg width="${W}" height="${H + 10}" viewBox="0 0 ${W} ${H + 10}">`;
+    s += `<path d="M${X(0)} ${Y(0)}L${X(xmax)} ${Y(xmax)}L${X(xmax)} ${Y(Math.min(ymax, xmax + 1))}L${X(ymax - 1)} ${Y(ymax)}L${X(0)} ${Y(1)}Z" fill="color-mix(in srgb, var(--lattice) 10%, transparent)"/>`;
+    s += `<path d="M${X(0)} ${Y(0)}L${X(xmax)} ${Y(xmax)}M${X(0)} ${Y(1)}L${X(ymax - 1)} ${Y(ymax)}" stroke="var(--line-strong)" stroke-dasharray="4 3" fill="none"/>`;
+    for (let v = 0; v <= xmax; v++) s += `<text x="${X(v)}" y="${H + 2}" text-anchor="middle" font-size="10" fill="var(--text-faint)" font-family="var(--font-ui)">${v}</text>`;
+    for (let v = 0; v <= ymax; v++) s += `<text x="${pad - 10}" y="${Y(v) + 4}" text-anchor="end" font-size="10" fill="var(--text-faint)" font-family="var(--font-ui)">${v}</text>`;
+    s += `<text x="${X(xmax)}" y="${H - 14}" text-anchor="end" font-size="10" fill="var(--text-faint)" font-family="var(--font-ui)">entropy, bits</text><text x="${pad}" y="12" font-size="10" fill="var(--text-faint)" font-family="var(--font-ui)">Huffman, bits</text>`;
+    s += `<text x="${X(4.6)}" y="${Y(4.6) + 16}" font-size="10" fill="var(--text-faint)" font-family="var(--font-ui)">L = H</text><text x="${X(3.6)}" y="${Y(4.6) - 8}" font-size="10" fill="var(--text-faint)" font-family="var(--font-ui)">L = H + 1</text>`;
+    for (const r of runs) s += `<rect data-r="${r.name}" x="${X(r.entropy) - 4}" y="${Y(r.avg_length) - 4}" width="8" height="8" fill="var(--ground-1)" stroke="var(--lattice)" stroke-width="1.5" style="cursor:default"/>`;
+    const x = X(model.H), y = Y(model.L);
+    s += `<path d="M${x} ${y - 8}L${x + 8} ${y}L${x} ${y + 8}L${x - 8} ${y}Z" fill="var(--growth)"/>`;
+    $("runs").innerHTML = s + "</svg>";
+    for (const el of $("runs").querySelectorAll("[data-r]")) {
+      const r = runs.find((q) => q.name === el.dataset.r);
+      el.addEventListener("mouseenter", () => { el.setAttribute("fill", "var(--lattice)"); $("runs-say").textContent = `${r.name} (${r.source}) · ${r.symbols} symbols · H ${r.entropy.toFixed(2)} · L ${r.avg_length.toFixed(2)}`; });
+      el.addEventListener("mouseleave", () => { el.setAttribute("fill", "var(--ground-1)"); $("runs-say").textContent = "runs.csv"; });
+    }
+  }
+
+  for (const b of document.querySelectorAll("[data-note]")) b.addEventListener("click", () => iso.open(b.dataset.note));
+  iso.watch((k) => { if (!model) return; if (k === "step") drawTree(); if (k === "flip") send(); });
+  iso.on("theme", drawSurface);
+  $("src").addEventListener("input", analyse);
+  analyse();
+  iso.data("runs.csv").then((rows) => { runs = rows; drawRuns(); });
+</script>
+</body>
+</html>
