@@ -17,12 +17,25 @@ test("a note cites artifacts and pictures: linked or shown, with a rating or a p
     { target: "a/fig.html", kind: "artifact", embed: true, broken: false, rel: null, align: null, alt: "a plot" },
     { target: "img/sphere.png", kind: "image", embed: true, broken: false, rel: null, align: "left", alt: "A sphere" },
     { target: "a/missing.svg", kind: "image", embed: true, broken: true, rel: null, align: "center", alt: "gone" },
+    { target: "a/table.csv", kind: "data", embed: false, broken: false, rel: null, align: null },
   ]);
-  // Links to notes are as they were; a file that is neither is not a citation; an address is not looked at.
+  // Links to notes are as they were; every other file is a citation (M23); an address is not looked at.
   expect(c.links.map((l) => l.target)).toEqual(["a/m"]);
   expect(b.issues.filter((i) => i.code === "broken-link").map((i) => i.message)).toEqual(["picture not in the notes: a/missing.svg"]);
   expect(b.files.has("a/fig.html") && b.files.has("a/table.csv")).toBe(true);
-  expect([citeKind("x.html"), citeKind("x.HTM"), citeKind("x.jpeg"), citeKind("x.md"), citeKind("x.csv")]).toEqual(["artifact", "artifact", "image", null, null]);
+  expect([citeKind("x.html"), citeKind("x.HTM"), citeKind("x.jpeg"), citeKind("x.md"), citeKind("x.csv"), citeKind("a/x.pdf"), citeKind("part.glb"), citeKind("notes"), citeKind(".gitignore")])
+    .toEqual(["artifact", "artifact", "image", null, "data", "document", "misc", null, null]);
+});
+
+test("a cite of any kind is kept, and a broken one reported (M23)", () => {
+  const b = Bundle.fromFiles([
+    { path: "n.md", text: note("[runs](runs.csv), [paper](paper.pdf), [part](part.glb) and [gone](gone.parquet).") },
+    { path: "runs.csv" }, { path: "paper.pdf" }, { path: "part.glb" },
+  ]);
+  expect(b.concepts.get("n")!.cites.map((c) => [c.target, c.kind, c.broken])).toEqual([
+    ["runs.csv", "data", false], ["paper.pdf", "document", false], ["part.glb", "misc", false], ["gone.parquet", "data", true],
+  ]);
+  expect(b.issues.filter((i) => i.code === "broken-link").map((i) => i.message)).toEqual(["broken link to gone.parquet"]);
 });
 
 test("an artifact is not a note: it is not a concept, and is in no folder's listing", () => {

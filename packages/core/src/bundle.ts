@@ -29,20 +29,34 @@ export interface Link {
   rel: Rating | null;
 }
 
-/** A file in the bundle that a note cites and that is not a note (T76): an artifact (an HTML document) or a
- *  picture, linked or shown in place. What an artifact links to in turn is never read. */
+/** What a file in the bundle that is not a note is (M23): an artifact (an HTML document isorite shows), a picture,
+ *  data (what an artifact draws from, or evidence), a document to read, or anything else. */
+export type FileKind = "artifact" | "image" | "data" | "document" | "misc";
+
+/** A file in the bundle that a note cites and that is not a note (T76): any kind, linked or shown in place. What an
+ *  artifact links to in turn is never read. */
 export interface Cite {
   target: string; // the file's path in the bundle: "design/figure.html"
-  kind: "artifact" | "image";
+  kind: FileKind;
   embed: boolean; // ![…](…): shown in the note; else a link to it
   broken: boolean;
   rel: Rating | null; // a link's rating, as for a link to a note
   align: "left" | "center" | null; // a picture's place, from its title
   alt?: string; // what a picture shown says it shows (M22)
 }
-const ARTIFACT = /\.html?$/i, IMAGE = /\.(png|jpe?g|gif|svg|webp|avif)$/i;
-/** What kind of citable file a path is, or null. */
-export const citeKind = (path: string): Cite["kind"] | null => (ARTIFACT.test(path) ? "artifact" : IMAGE.test(path) ? "image" : null);
+const KINDS: [FileKind, RegExp][] = [
+  ["artifact", /\.html?$/i],
+  ["image", /\.(png|jpe?g|gif|svg|webp|avif)$/i],
+  ["data", /\.(csv|tsv|json|jsonl|ndjson|parquet|arrow|feather|npy|npz|xlsx|xls|h5|hdf5|nc)$/i],
+  ["document", /\.(pdf|docx?|odt|rtf|epub|pptx?|odp|txt|tex)$/i],
+];
+/** What kind of file a path is: null for a note, or a path with no extension (a note or a folder named without one);
+ *  anything not listed is misc rather than dropped. */
+export const citeKind = (path: string): FileKind | null => {
+  const name = basename(path);
+  if (/\.md$/i.test(name) || !/\.[^.]+$/.test(name.replace(/^\./, ""))) return null;
+  return KINDS.find(([, re]) => re.test(name))?.[0] ?? "misc";
+};
 
 export type IssueCode =
   | "broken-link" | "requires-cycle" | "frontmatter-invalid" | "frontmatter-missing" | "type-missing"
@@ -239,7 +253,7 @@ export class Bundle {
       for (const link of links) {
         if (link.broken) this.issue(concept.path, "warning", "broken-link", `broken link to ${link.target}`);
       }
-      // Artifacts and pictures cited: links to them, or embeds (image syntax).
+      // Files cited, of any kind: links to them, or embeds (image syntax).
       for (const { href, title, embed, alt } of citeRefs(concept.body)) {
         const path = this.filePath(concept, href), kind = path === null ? null : citeKind(path);
         if (path === null || kind === null) continue;
