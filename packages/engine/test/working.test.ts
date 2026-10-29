@@ -175,3 +175,18 @@ test("a note in hand read again is not sent twice: the look-up says it is in han
   expect(String(sent[5]!.messages.find((m) => (m as { role: string }).role === "tool")!.content)).toContain("At most log n.");
   expect((await engine.turnContext({ conversation: c, mode: "ask", tier: "low", given: [] })).rows!.find((r) => r.key === "r:basics/entropy")).toMatchObject({ detail: "Units, Bounds", on: true });
 });
+
+test("past conversations are listed newest first, each with when, what was first asked, and its turns and notes (M24, K)", async () => {
+  const { engine, ask } = await open([
+    { calls: [{ name: "read_note", arguments: { id: "basics/surprise" } }] }, { text: ["It is -log p."] }, { text: ["Yes."] }, { text: ["Bits."] },
+  ]);
+  expect(await engine.conversations()).toEqual([]);
+  const a = await ask("what is surprise?");
+  await ask("always?", a);
+  const b = await ask("what is entropy measured in?");
+  const all = await engine.conversations();
+  expect(all.map((c) => c.id)).toEqual([b, a]);
+  expect(all[1]).toMatchObject({ asked: "what is surprise?", turns: 2, notes: 1 });
+  expect(all[0]).toMatchObject({ asked: "what is entropy measured in?", turns: 1, notes: 0 });
+  expect(all[1]!.at < all[1]!.last).toBe(true);
+});

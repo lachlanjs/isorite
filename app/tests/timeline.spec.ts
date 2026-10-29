@@ -53,11 +53,14 @@ test("the timeline: marks only, pointing marks what each changed, a version show
   await page.reload();
   const marks = page.locator('[data-pane="note"] .timeline .moment');
   await expect(marks).toHaveCount(3);
-  await expect(page.locator('[data-pane="note"] .timeline')).not.toContainText(/\w/); // marks, no words
-  await expect(marks.nth(0).locator("i.sq.empty")).toHaveCount(1);
-  await expect(marks.nth(1).locator("i.sq:not(.empty)")).toHaveCount(1);
-  await expect(marks.nth(2).locator("i.dia")).toHaveCount(1);
-  await expect(marks.nth(2)).toHaveAccessibleName(new RegExp(`Iso · “edit ${id}” · edited`));
+  // As strata (M24, T): a layer each, the newest on top, no words; Iso's gold, yours blue, what was found hatched,
+  // each as thick as its change.
+  await expect(page.locator('[data-pane="note"] .timeline')).not.toContainText(/\w/);
+  await expect(marks.nth(0)).toHaveClass(/\biso\b/);
+  await expect(marks.nth(1)).toHaveClass(/\byou\b/);
+  await expect(marks.nth(2)).toHaveClass(/\bexternal\b/);
+  await expect(marks.nth(0)).toHaveAccessibleName(new RegExp(`Iso · “edit ${id}” · edited`));
+  expect((await marks.nth(2).boundingBox())!.height).toBeGreaterThan((await marks.nth(1).boundingBox())!.height);
 
   // With nothing pointed at, Iso's latest change is marked; pointing at your edit marks its line, in lattice, and
   // pointing at Iso's shows what was asked beside it.
@@ -65,12 +68,14 @@ test("the timeline: marks only, pointing marks what each changed, a version show
   await marks.nth(1).hover();
   await expect(page.locator(".cm-line.cm-touched-you")).toHaveCount(1);
   await expect(page.locator(".cm-line.cm-touched-you")).toContainText("It is zero for a certain outcome.");
-  await marks.nth(2).hover();
+  // Yours says whose, when and how large.
+  await expect(page.locator('[data-pane="note"] .timeline .asked')).toHaveText(/^you edited · just now · \+1 −1$/);
+  await marks.nth(0).hover();
   await expect(page.locator('[data-pane="note"] .timeline .asked')).toHaveText(`“edit ${id}”`);
   await look(page, "timeline-pointed");
 
   // The note as it was when found: read only, the live note hidden; → steps to your edit, and back.
-  await marks.nth(0).click();
+  await marks.nth(2).click();
   const was = page.getByRole("textbox", { name: "The note as it was" });
   await expect(was).toBeVisible();
   await expect(was).not.toContainText("It is zero");
@@ -93,13 +98,13 @@ test("the timeline: marks only, pointing marks what each changed, a version show
   expect(journal.at(-1)).toMatchObject({ why: "restore" });
 
   // And undone the same way: restored to Iso's change, from the moment before the restore.
-  await marks.nth(2).click();
+  await marks.nth(1).click();
   await page.getByRole("button", { name: "restore to here" }).click();
   await expect(editor(page)).toContainText("Plain text, and Iso's words.");
   expect(onDisk(id)).toBe(edited);
 
   // Back to now leaves a version without changing anything; closing the timeline takes the marks away.
-  await marks.nth(1).click();
+  await marks.nth(3).click();
   await page.getByRole("button", { name: "back to now" }).click();
   await expect(editor(page)).toBeVisible();
   await button.click();

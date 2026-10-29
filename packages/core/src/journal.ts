@@ -116,6 +116,8 @@ const KINDS: readonly string[] = ["change", "proposal", "revise", "discard"];
 
 export const SNAPSHOT_EVERY = 40;
 export const SESSION_GAP_MS = 30 * 60 * 1000;
+/** Your edits in a row are one moment, one layer of a note's history (M24, T), until 10 minutes pass with none. */
+export const LAYER_IDLE_MS = 10 * 60 * 1000;
 
 export const hashText = (text: string): string => sha256(text).slice(0, 16);
 
@@ -406,14 +408,22 @@ export interface Moment {
   what: "wrote" | "found" | "edited" | "kept" | "offered" | "discarded" | "restored" | "moved" | "changed elsewhere";
   /** What was asked, where the moment came from a proposal. */
   asked?: string;
+  /** How many lines it put in and took out of the note (M24, T: a layer's thickness). Nothing for text not kept. */
+  added: number;
+  removed: number;
 }
 
-/** The journal as the timeline shows it. Your own edits in a row within a session are one moment; a proposal is
- *  one moment whose `what` says how it ended. Revisions are not moments. */
+/** The journal as the timeline shows it. Your own edits in a row within a session are one moment, until ten minutes
+ *  pass with none (LAYER_IDLE_MS); a proposal is one moment whose `what` says how it ended. Revisions are not
+ *  moments. */
 export function moments(entries: readonly Entry[]): Moment[] {
   const out: Moment[] = [], offered = new Map<string, Moment>(), asked = new Map<string, string>();
+  /** Lines a change put in and took out: a note's first entry, all of its text. */
+  const size = (c: Change): [number, number] => (c.why === "start" || (!c.hunks.length && c.before === null)
+    ? [(c.text ?? "").split("\n").length, 0]
+    : [c.hunks.reduce((n, h) => n + h.ins.length, 0), c.hunks.reduce((n, h) => n + h.del.length, 0)]);
   for (const e of entries) {
-    const base = { ids: [e.id], at: e.at, session: e.session, who: e.who };
+    const base = { ids: [e.id], at: e.at, session: e.session, who: e.who, added: 0, removed: 0 };
     if (e.kind === "proposal") {
       const m: Moment = { ...base, what: "offered", asked: e.asked };
       offered.set(e.id, m); asked.set(e.id, e.asked);
@@ -423,11 +433,15 @@ export function moments(entries: readonly Entry[]): Moment[] {
       if (m) { m.what = "discarded"; m.ids.push(e.id); }
     } else if (e.kind === "change") {
       const m = e.proposal ? offered.get(e.proposal) : undefined;
-      if (e.why === "keep" && m) { m.what = "kept"; m.ids.push(e.id); m.at = e.at; continue; }
+      const [added, removed] = size(e);
+      if (e.why === "keep" && m) { m.what = "kept"; m.ids.push(e.id); m.at = e.at; m.added += added; m.removed += removed; continue; }
       const last = out[out.length - 1];
-      if (e.why === "edit" && last && last.what === "edited" && last.who === e.who && last.session === e.session) { last.ids.push(e.id); last.at = e.at; continue; }
+      if (e.why === "edit" && last && last.what === "edited" && last.who === e.who && last.session === e.session && Date.parse(e.at) - Date.parse(last.at) <= LAYER_IDLE_MS) {
+        last.ids.push(e.id); last.at = e.at; last.added += added; last.removed += removed;
+        continue;
+      }
       const what = e.why === "start" ? (e.who === "external" ? "found" : "wrote") : e.why === "edit" ? "edited" : e.why === "restore" ? "restored" : e.why === "keep" ? "kept" : e.why === "move" ? "moved" : "changed elsewhere";
-      out.push({ ...base, what, ...(e.asked ? { asked: e.asked } : {}) });
+      out.push({ ...base, what, added, removed, ...(e.asked ? { asked: e.asked } : {}) });
     }
   }
   return out;

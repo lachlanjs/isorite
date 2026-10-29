@@ -12,6 +12,24 @@
   const MARK: Record<HandRow["kind"], string> = { note: "◆", folder: "▭", passage: "“", read: "◇", question: "?", turn: "›", briefing: "≡", instructions: "", agents: "", message: "" };
 
   const report = $derived(converse.report);
+
+  // What is sent as a geologist's column on its side (M24, O): a layer for each kind of thing, as wide as its share.
+  // From a quarter of what the model takes, the column is drawn to that scale with the room left; below it, the room
+  // would be all there is to see, and the figure beside it says how full it is. Under the pointer, a layer's name
+  // and size stand in the figure.
+  const STRATA = [["instructions", "instructions"], ["notes", "notes"], ["conversation", "conversation"], ["summary", "summary"]] as const;
+  const stratum = (r: HandRow): (typeof STRATA)[number][0] => (r.group === "fixed" ? "instructions" : r.kind === "briefing" ? "summary" : r.group === "notes" ? "notes" : "conversation");
+  const strata = $derived.by(() => {
+    if (!report?.rows) return [];
+    const scaled = report.tokens >= report.limit / 4, by = new Map<string, number>();
+    for (const r of report.rows) if (r.on) by.set(stratum(r), (by.get(stratum(r)) ?? 0) + r.tokens);
+    const layers = STRATA.map(([k, name]) => ({ k, name, tokens: by.get(k) ?? 0 })).filter((l) => l.tokens > 0);
+    const all = scaled ? [...layers, { k: "room", name: "room", tokens: Math.max(0, report.limit - report.tokens) }] : layers;
+    const whole = all.reduce((n, l) => n + l.tokens, 0) || 1;
+    return all.map((l) => ({ ...l, w: (100 * l.tokens) / whole }));
+  });
+  let layer = $state<string | null>(null);
+  const shown = $derived(strata.find((l) => l.k === layer));
   const build = $derived(panes.mode === "build");
   /** The turns a briefing stands for, shown under it when it is opened. */
   let unfolded = $state<string[]>([]);
@@ -37,7 +55,12 @@
       {/each}
     </ul>
   {:else if report?.rows}
-    <p class="total" title={report.counted ? "As the provider counted the last turn" : "Estimated: counted after the first turn"}><span>{short(report.tokens)}</span><span class="faint">of {short(report.limit)}{report.counted ? "" : " ~"}</span></p>
+    <div class="column">
+      <div class="strata" role="img" aria-label={strata.map((l) => `${l.name} ${short(l.tokens)}`).join(", ")} onpointerover={(e) => (layer = (e.target as HTMLElement).dataset.k ?? null)} onpointerleave={() => (layer = null)}>
+        {#each strata as l (l.k)}<i class="s {l.k}" data-k={l.k} style:width="{l.w.toFixed(2)}%"></i>{/each}
+      </div>
+      <p class="total" title={report.counted ? "As the provider counted the last turn" : "Estimated: counted after the first turn"}>{#if shown}<span>{shown.name} · {short(shown.tokens)}</span>{:else}<span>{short(report.tokens)}</span><span class="faint">of {short(report.limit)}{report.counted ? "" : " ~"}</span>{/if}</p>
+    </div>
     {#each GROUPS as g (g)}
       {@const rows = report.rows.filter((r) => r.group === g && !r.under)}
       {#if rows.length || g === "notes"}
@@ -92,6 +115,19 @@
 
 <style>
   .context { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+  /* The column (O): hatched, what Iso is told; blue, the notes; ruled, the conversation; malachite, its summary;
+     empty, the room left. */
+  /* The figure under the column, so that a layer's name standing in it never moves the layers. */
+  .column { display: flex; flex-direction: column; gap: 6px; }
+  .strata { min-width: 0; height: 14px; display: flex; border: 1px solid var(--line-strong); background: var(--ground-0); }
+  .s { height: 100%; min-width: 2px; flex: none; transition: filter var(--t-ack) var(--ease-out); }
+  .s + .s { box-shadow: inset 1px 0 0 var(--ground-0); }
+  .s:hover { filter: brightness(1.25); }
+  .instructions { background: repeating-linear-gradient(135deg, var(--text-faint) 0 1px, transparent 1px 4px); }
+  .notes { background: var(--lattice); }
+  .conversation { background: repeating-linear-gradient(90deg, var(--text-soft) 0 1px, transparent 1px 3px); }
+  .summary { background: var(--malachite); }
+  .room { flex: 1 1 auto; background: none; }
   .total { display: flex; gap: 6px; align-items: baseline; font-variant-numeric: tabular-nums; color: var(--text); }
   .label { display: flex; align-items: center; gap: 6px; font-weight: 400; margin-top: 8px; min-height: 22px; }
   .acts { margin-left: auto; display: inline-flex; gap: 2px; }

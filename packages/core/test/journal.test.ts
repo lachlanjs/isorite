@@ -5,7 +5,7 @@
 import { describe, expect, test } from "vitest";
 import {
   applyHunks, blocks, change, diffLines, hashText, insertAt, journalLine, locate, findPassage, moments, passageOf, pending, readJournal, reconcile, replay, sessionMoments, stamp, textAt, touched, written,
-  SNAPSHOT_EVERY, type Entry, type Insert, type Rewrite, type Stamp,
+  LAYER_IDLE_MS, SNAPSHOT_EVERY, type Entry, type Insert, type Rewrite, type Stamp,
 } from "../src/index.ts";
 
 let clock = Date.parse("2026-10-13T09:00:00Z");
@@ -239,6 +239,18 @@ describe("the timeline", () => {
     ]);
     expect(moments(e)[2]).toMatchObject({ asked: "say more" });
     expect(pending(e).map((x) => x.id)).toEqual([p3.id]);
+  });
+  test("a moment says how many lines it put in and took out; ten minutes with no edit begins a new one (M24, T)", () => {
+    const e: Entry[] = [];
+    const push = (x: Entry | null) => { e.push(x!); return x!; };
+    push(change(e, NOTE, at("you"), "edit"));
+    push(change(e, NOTE + "a\n", at("you", e.at(-1)!), "edit"));
+    push(change(e, NOTE.replace("average surprise", "mean surprise") + "a\nb\n", at("you", e.at(-1)!, 60_000), "edit"));
+    // Ten minutes and a second later: a layer of its own, in the same session.
+    push(change(e, NOTE + "a\nb\n", at("you", e.at(-1)!, LAYER_IDLE_MS + 1000), "edit"));
+    const m = moments(e);
+    expect(m.map((x) => [x.what, x.ids.length, x.added, x.removed])).toEqual([["wrote", 1, NOTE.split("\n").length, 0], ["edited", 2, 3, 1], ["edited", 1, 1, 1]]);
+    expect(m[1]!.session).toBe(m[2]!.session);
   });
   test("a note the journal first meets already written is found, not written", () => {
     const found = reconcile([], NOTE, at("external"))!;

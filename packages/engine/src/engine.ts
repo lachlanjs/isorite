@@ -5,7 +5,7 @@
 import {
   AGENTS_FILE, STRENGTH, unwrap, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest } from "./api.ts";
+import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type ConversationSummary, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Away, type Similar } from "./lookup.ts";
@@ -1165,6 +1165,28 @@ export class Engine implements Api {
     const text = await study.read(conversationPath(id));
     // A turn with no ending in the file was stopped, unless it is running here now.
     return text === null ? null : { id, turns: readTurns(text).map((t) => (this.running.has(t.id) ? { ...t, state: "running" as const } : t)) };
+  }
+
+  async conversations(): Promise<ConversationSummary[]> {
+    const study = this.opts.own;
+    const names = await study.list(CONVERSATIONS_DIR).catch(() => []);
+    const all: ConversationSummary[] = [];
+    for (const f of names) {
+      const id = f.name.slice(0, -".jsonl".length);
+      if (f.dir || !f.name.endsWith(".jsonl") || !TURN_ID.test(id)) continue;
+      const turns = readTurns((await study.read(conversationPath(id))) ?? "");
+      if (!turns.length) continue;
+      const notes = new Set<string>();
+      for (const t of turns) {
+        for (const g of t.given) if (g.kind !== "folder") notes.add(g.id);
+        for (const i of t.items) {
+          if (i.kind === "look" && i.step.opened && !i.step.away) notes.add(i.step.opened);
+          else if (i.kind === "point" || (i.kind === "change" && i.why !== "delete")) notes.add(i.kind === "change" && i.to ? i.to : i.note);
+        }
+      }
+      all.push({ id, at: turns[0]!.at, last: turns.at(-1)!.at, asked: turns[0]!.asked, turns: turns.length, notes: notes.size });
+    }
+    return all.sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : 0));
   }
 
   /** What was given, checked: notes and passages of the base, and its folders. */

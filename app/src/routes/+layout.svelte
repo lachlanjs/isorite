@@ -18,6 +18,7 @@
   import { PANES, panes, type Pane, type Switch } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import IsoGauge from "$lib/components/IsoGauge.svelte";
+  import Crystal from "$lib/components/Crystal.svelte";
   import TierSwitch from "$lib/components/TierSwitch.svelte";
   import IsoSettings from "$lib/components/IsoSettings.svelte";
   import NoteSettings from "$lib/components/NoteSettings.svelte";
@@ -178,6 +179,12 @@
                 {/if}
                 {#if panes.mode !== "build"}<TierSwitch />{/if}
                 <IsoGauge />
+                <!-- The drawer of past conversations (M24, K), under this one's crystal. -->
+                {#if panes.mode !== "build"}
+                  <button class="icon past" type="button" aria-label="Past conversations" aria-pressed={converse.view === "past"} title="Past conversations" onclick={() => void converse.drawer()}>
+                    {#if converse.id}<Crystal id={converse.id} size={20} />{:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 4.5h11v8h-11zM2.5 7.5h11M6.5 10h3" /></svg>{/if}
+                  </button>
+                {/if}
                 <!-- What the next turn is sent (I8), with how many parts you gave; a new conversation. -->
                 <button class="icon ctx" type="button" aria-label="Context" aria-pressed={converse.view === "context"} title="What Iso is sent, part by part" onclick={() => (converse.view = converse.view === "context" ? "chat" : "context")}>
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h6" /></svg>
@@ -219,6 +226,7 @@
 
 <style>
   .says { overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 12px; color: var(--text-soft); flex: 0 1 auto; }
+  @media (max-width: 760px) { .says { flex: none; } }
   .link { background: none; border: 0; padding: 4px 0; color: var(--lattice); white-space: nowrap; font-size: 12px; flex: none; cursor: pointer; }
   .out { height: 28px; padding: 0 10px; font-size: 12px; flex: none; }
   .where { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 12px; }

@@ -18,6 +18,8 @@
   import { terminal } from "$lib/terminal.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
   import ContextView from "./ContextView.svelte";
+  import Conversations from "./Conversations.svelte";
+  import Crystal from "./Crystal.svelte";
   import TerminalTurns from "./TerminalTurns.svelte";
 
   const SYM: Record<Part["kind"], string> = { note: "▣", folder: "▭", passage: "“" };
@@ -67,6 +69,27 @@
   /** A note Iso changed opens with provenance on, where its words are marked. */
   function openChanged(id: string): void { panes.flip("provenance", true); void panes.open(id, true); }
   const changes = (t: Turn): boolean => t.items.some((i) => i.kind === "change") && !t.items.some((i) => i.kind === "undone");
+
+  /** What a reply drew on (M24, G): the notes it cites in its text, in the order cited, then the others it read.
+   *  Once the turn is over they are parts under the reply, and the lines that read them go. */
+  const CITED = /\]\(\/([^)\s]+?)\.md(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/g;
+  function drew(t: Turn): string[] {
+    const ids = new Set<string>();
+    for (const i of t.items) if (i.kind === "text") for (const m of i.text.matchAll(CITED)) ids.add(decodeURI(m[1]!));
+    for (const i of t.items) if (i.kind === "look" && i.step.opened && !i.step.away && !i.step.failed) ids.add(i.step.opened);
+    return [...ids].filter((id) => app.listing.notes.some((n) => n.id === id));
+  }
+  const folderOf = (id: string): string => app.listing.notes.find((n) => n.id === id)?.dir.split("/").at(-1) || "notes";
+  /** A read folded into the parts once its turn is over. */
+  const folded = (t: Turn, i: TurnItem): boolean => t.state !== "running" && i.kind === "look" && !!i.step.opened && !i.step.away && !i.step.failed;
+  /** The note pointed at, here or on the Atlas: its part and the phrases citing it are lit together. */
+  const lit = $derived(pointing.elsewhere?.from === "iso" && !pointing.elsewhere.folder ? pointing.elsewhere.id : pointing.onAtlas);
+  $effect(() => {
+    const id = lit;
+    void converse.turns;
+    if (!list) return;
+    for (const a of list.querySelectorAll<HTMLAnchorElement>(".said a.vein")) a.classList.toggle("lit", !!id && pointedBy(a.getAttribute("href") ?? "")?.id === id);
+  });
 </script>
 
 {#snippet given(t: Turn)}
@@ -117,10 +140,11 @@
   {:else if i.kind === "point"}
     <p class="point"><span class="dia" aria-hidden="true">◆</span><span class="v">look at</span><button type="button" class="note-link" data-to={i.note} onclick={() => open(i.note)}>{titleOf(i.note)}</button>{#if i.why}<span class="why">{i.why}</span>{/if}</p>
   {:else if i.kind === "question"}
-    <!-- A question Iso asks back (M12): a question note once made; until then, + makes it one, yours. -->
-    <div class="asks" data-question={i.id}>
+    <!-- A question Iso asks back (M12, M24 R): a rose ◇ and "keep", which makes it a question note, yours; until then it
+         stands on the Atlas, dotted, where it would go. Kept, it is a link to the note. -->
+    <div class="asks" data-question={i.id} data-to={i.made ?? `?${i.id}`}>
       <p>{@render qmark()}{#if i.made}<button type="button" class="note-link" data-to={i.made} onclick={() => open(i.made!)}>{i.title}</button>{:else}<span class="qt">{i.title}</span>
-        <button class="icon plus" type="button" aria-label="Keep “{i.title}” as an open question" title="Keep as an open question about {i.about.map(titleOf).join(", ")}" onclick={() => void converse.take(t.id, i.id)}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10" /></svg></button>{/if}</p>
+        <button class="keep" type="button" data-lustre aria-label="Keep “{i.title}” as an open question" title="Keep as an open question about {i.about.map(titleOf).join(", ")}" onclick={() => void converse.take(t.id, i.id)}>keep</button>{/if}</p>
       {#if i.text}<p class="qb">{i.text}</p>{/if}
     </div>
   {:else if i.kind === "offer"}
@@ -138,6 +162,8 @@
 <div class="iso" class:drop={tray.carrying?.over}>
   {#if converse.view === "context"}
     <ContextView />
+  {:else if converse.view === "past" && !build}
+    <Conversations />
   {:else if build}
     <TerminalTurns />
   {:else}
@@ -145,13 +171,21 @@
       {#each converse.turns as t (t.id)}
         <article class="turn" data-state={t.state}>
           <div class="you"><p class="asked">{t.asked}</p>{@render given(t)}{#if t.mode === "write"}<span class="tmode" title="Iso could edit the notes"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 13.5l2.5-2.5M5 11c.6-4.2 3.6-7.4 8.5-8.5C12.6 7.2 9.4 10.4 5 11zM7.2 8.8l2.6-.3M8.8 6.6l2.4-.4" /></svg><span class="hidden-label">write</span></span>{/if}</div>
-          {#each t.items as i, k (k)}{@render item(t, i)}{/each}
+          {#each t.items as i, k (k)}{#if !folded(t, i)}{@render item(t, i)}{/if}{/each}
+          {#if t.state !== "running" && drew(t).length}
+            <div class="parts" role="group" aria-label="What Iso drew on">
+              {#each drew(t) as id (id)}
+                <button type="button" class="part" class:lit={lit === id} data-to={id} data-lustre onclick={() => open(id)}><s aria-hidden="true"></s><b>{titleOf(id)}</b>{folderOf(id)}</button>
+              {/each}
+            </div>
+          {/if}
           {#if t.state === "running"}
             {#if converse.streaming}
               <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
               <div class="said prose" use:drawn={converse.streaming}>{@html render(converse.streaming)}</div>
             {/if}
-            <p class="doing" role="status"><i class="spin" aria-hidden="true"></i>{doing}</p>
+            <!-- Iso at work (M24, I): the conversation's crystal grows while it works. -->
+            <p class="doing" role="status"><Crystal id={t.conversation || converse.id} size={28} growing />{doing}</p>
           {:else if changes(t)}
             <p class="undo"><button class="icon" type="button" aria-label="Undo this turn's changes" title="Put back every note this turn changed" onclick={() => void converse.undo(t.id)}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3.2 9.5A5 5 0 1 0 4.6 4.3" /><path d="M3 1.8v3.4h3.4" /></svg></button></p>
           {/if}
@@ -225,8 +259,7 @@
   .undo { padding-left: 10px; margin-top: -4px; }
   .undone { font-size: 12px; padding-left: 16px; }
   .point .dia { color: var(--growth); font-size: 10px; position: absolute; left: 0; }
-  .doing .spin { position: absolute; left: 1px; top: 4px; width: 8px; height: 8px; border: 1px solid var(--growth); animation: spin 1.2s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .doing { padding-left: 0; align-items: center; gap: 10px; flex-wrap: nowrap; margin-left: -6px; }
   .bad { color: var(--rose); font-size: 12px; padding-left: 16px; }
   .end { font-size: 12px; padding-left: 16px; }
   .composer { flex: none; border-top: 1px solid var(--line); padding: 10px 12px 10px; display: grid; gap: 8px; }
@@ -247,11 +280,22 @@
   .asks .qt { color: var(--text); overflow-wrap: anywhere; }
   .asks .note-link { color: var(--text); }
   .asks .qb { color: var(--text-soft); font-size: 12.5px; display: block; }
-  .asks .plus { width: 22px; height: 22px; flex: none; color: var(--rose); }
+  .asks .keep { --cut: 5px; flex: none; margin-left: 4px; height: 22px; padding: 0 9px; background: none; border: 1px solid var(--rose); color: var(--rose); font: 10px/20px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; cursor: pointer; --glint: .4; transition: background-color var(--t-ack) var(--ease-out); }
+  .asks .keep:hover { background: var(--rose-soft); }
+  /* What Iso drew on (M24, G): parts with bracketed corners, lit blue with the phrases that cite them. */
+  .parts { display: flex; flex-wrap: wrap; gap: 8px; margin-left: 16px; }
+  .part { position: relative; display: grid; gap: 1px; justify-items: start; min-width: 0; max-width: 100%; padding: 6px 10px 5px; background: none; border: 0; text-align: left; font: 10px/14px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); cursor: pointer; --glint: .3; transition: background-color var(--t-ack) var(--ease-out); }
+  .part > s { position: absolute; inset: 0; pointer-events: none; --b: var(--line-strong); --l: 6px; background:
+    linear-gradient(var(--b), var(--b)) top left / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) top left / 1px var(--l) no-repeat,
+    linear-gradient(var(--b), var(--b)) top right / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) top right / 1px var(--l) no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom left / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom left / 1px var(--l) no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom right / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom right / 1px var(--l) no-repeat; }
+  .part b { font: 13px/18px var(--font-text); text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--text); overflow-wrap: anywhere; }
+  .part:hover > s, .part.lit > s { --b: var(--lattice); }
+  .part:hover, .part.lit { background: var(--lattice-soft); }
   .offer { margin-left: 16px; border-left: 2px solid var(--line-strong); padding: 2px 0 2px 12px; display: grid; gap: 4px; }
   .offer .yours { font: 15px/1.6 var(--font-text); color: var(--text); overflow-wrap: anywhere; }
   .offer .for { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-faint); }
   .offer .for .icon { width: 24px; height: 24px; color: var(--lattice); }
   .offer .in { color: var(--malachite); }
-  @media (prefers-reduced-motion: reduce) { .doing .spin { animation: none; } }
 </style>

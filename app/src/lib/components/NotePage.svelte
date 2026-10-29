@@ -255,7 +255,7 @@
     {#if !asSource}<NoteLabel {note} {kind} {done} {marking} onmark={() => void toggleDone()} />{/if}
 
     {#if timeline && !asSource}
-      <div class="tl-col"><Timeline moments={all} at={at ? momentKey(at) : null} {pointed} point={(m) => (pointed = m)} {pick} /></div>
+      <div class="tl-col"><Timeline moments={all} strata at={at ? momentKey(at) : null} {pointed} point={(m) => (pointed = m)} {pick} /></div>
     {/if}
 
     {#if at && version}

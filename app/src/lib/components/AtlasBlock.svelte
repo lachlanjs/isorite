@@ -7,13 +7,15 @@
   import type { FileKind } from "@isorite/core";
   import Glyph from "./Glyph.svelte";
 
-  let { item, title, kind = "", file = "", done = false, behind = "var(--ground-0)", mark = "", far = 0, num = 0, iso = "", linked = false, dim = false, moment = "", given = false, held = "", changed = false, pointed = "", order = 0, here = false, href, onpick, onpoint }: {
+  let { item, title, kind = "", file = "", prospect = false, done = false, behind = "var(--ground-0)", mark = "", far = 0, num = 0, iso = "", linked = false, dim = false, moment = "", given = false, held = "", changed = false, pointed = "", order = 0, here = false, href, onpick, onpoint }: {
     item: LayoutItem;
     title: string;
     /** A question or a problem (M12), and whether it is solved. */
     kind?: "" | "question" | "problem";
     /** A file of the notes (M23): its kind's glyph before its name. */
     file?: "" | FileKind;
+    /** A question Iso asked and not kept yet (M24, R): where it would go, in a dotted outline. */
+    prospect?: boolean;
     done?: boolean;
     /** The ground of the folder it stands in: its notch cuts the edge with it. */
     behind?: string;
@@ -47,7 +49,7 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a data-lustre class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:linked class:dim={dim && !num && !iso && !linked && !given} class:far={far > 1} class:pick={num > 0} class:given class:held={held === "on"} class:aside={held === "aside"} class:changed class:pointed={!!pointed} class:here class:file={!!file} aria-current={here ? "page" : undefined} {href} aria-label={num ? `${title}: linked, number ${num}` : `${kind === "question" ? "Question: " : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in Iso's context" : held === "on" ? ": read by Iso, in hand" : held === "aside" ? ": read by Iso, set aside" : ""}${changed ? ", changed by Iso" : ""}${pointed ? `, Iso points to it: ${pointed}` : ""}`} title={pointed || (given ? "In Iso's context: shift+click takes it back" : held === "on" ? "Read by Iso, in hand: shift+click sets it aside" : held === "aside" ? "Read by Iso, set aside: shift+click puts it in hand again" : undefined)} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
+<a data-lustre class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:linked class:dim={dim && !num && !iso && !linked && !given} class:far={far > 1} class:pick={num > 0} class:given class:held={held === "on"} class:aside={held === "aside"} class:changed class:pointed={!!pointed} class:here class:file={!!file} class:prospect aria-current={here ? "page" : undefined} {href} aria-label={num ? `${title}: linked, number ${num}` : `${prospect ? "Asked by Iso, not kept: " : kind === "question" ? "Question: " : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in Iso's context" : held === "on" ? ": read by Iso, in hand" : held === "aside" ? ": read by Iso, set aside" : ""}${changed ? ", changed by Iso" : ""}${pointed ? `, Iso points to it: ${pointed}` : ""}`} title={pointed || (given ? "In Iso's context: shift+click takes it back" : held === "on" ? "Read by Iso, in hand: shift+click sets it aside" : held === "aside" ? "Read by Iso, set aside: shift+click puts it in hand again" : undefined)} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
@@ -83,6 +85,8 @@
   .problem .notch { color: var(--text-soft); }
   .problem.done .notch { color: var(--malachite); }
   .question .t, .problem .t { overflow: hidden; }
+  /* A question Iso asked and not kept (R): no face of its own, a dotted rose edge, its name faint, until kept. */
+  .prospect { background: var(--ground-0); border: calc(1.5 * var(--px)) dotted var(--rose); color: var(--text-faint); }
   .dim { opacity: .5; }
   /* Iso's path (Marks, Desktop-Think), under the outlines of what is chosen. */
   .linked { outline: calc(2 * var(--px)) solid var(--lattice); outline-offset: calc(3 * var(--px)); color: var(--text); }

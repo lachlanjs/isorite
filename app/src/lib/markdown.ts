@@ -9,6 +9,7 @@ import MarkdownIt from "markdown-it";
 import texmath from "markdown-it-texmath";
 import katex from "katex";
 import DOMPurify from "dompurify";
+import { rating } from "@isorite/core";
 import { highlighted } from "./code.ts";
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true })
@@ -29,13 +30,16 @@ md.renderer.rules.fence = (tokens, idx) => {
   return `<div class="code-block"><pre><code${lang ? ` class="language-${escape(lang)}"` : ""}>${body}</code></pre>${named}</div>\n`;
 };
 
-// A link to a note (/folder/note.md) goes to its page in the app.
+// A link to a note (/folder/note.md) goes to its page in the app. Every link is a vein (M24, N): its weight is the
+// kind its title names (requires, uses, see also; none counts as uses), a link to the web its own.
 type Rule = NonNullable<MarkdownIt["renderer"]["rules"]["link_open"]>;
 const linkOpen: Rule = md.renderer.rules.link_open ?? ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
 md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const token = tokens[idx]!;
   const href = token.attrGet("href") ?? "";
-  if (/^https?:/i.test(href)) { token.attrSet("target", "_blank"); token.attrSet("rel", "noopener"); }
+  const web = /^https?:/i.test(href), kind = rating(token.attrGet("title"));
+  token.attrSet("class", `vein ${web ? "web" : kind === "requires" ? "requires" : kind === "see also" ? "also" : "uses"}`);
+  if (web) { token.attrSet("target", "_blank"); token.attrSet("rel", "noopener"); }
   else if (href.startsWith("/") && /\.md(#.*)?$/.test(href)) token.attrSet("href", "#/n" + href.replace(/\.md(#.*)?$/, ""));
   return linkOpen(tokens, idx, options, env, self);
 };

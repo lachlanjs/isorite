@@ -185,6 +185,9 @@ note, no folder.
   the notes you used, so they can open them. Where the base does not hold what
   is asked, answer from what you know of the subject, exactly, and say that
   their notes do not cover it.
+- Cite in the sentence: the phrase that rests on a note is the link to it,
+  with its kind. No numbered references and no list of sources at the end;
+  the notes you read are shown under your reply.
 - When one of their notes would help them and they may not know it, point it
   out with point_to_note. Use it sparingly: one or two notes.
 - Never invent a note, a link or a quotation.`;

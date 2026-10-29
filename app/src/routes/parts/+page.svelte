@@ -1,5 +1,6 @@
 <script lang="ts">
   // The parts: every token and component of the one style, to be looked at on both grounds.
+  import Crystal from "$lib/components/Crystal.svelte";
   import Logo from "$lib/components/Logo.svelte";
   import { GROUNDS as CHOICES, ground } from "$lib/ground.svelte.ts";
 
@@ -69,6 +70,12 @@
   </section>
 
   <section>
+    <h2 class="label">crystals (M24, I): growing while Iso works, at 28 and 88; at rest, a conversation's mark</h2>
+    <div class="row crystals"><Crystal id="a" size={28} growing /><Crystal id="a" size={88} growing /><Crystal id="b" size={88} growing /><Crystal id="c" size={88} growing /></div>
+    <div class="row crystals rest">{#each ["a", "b", "c", "d", "e", "f", "g", "h"] as id (id)}<Crystal {id} size={44} /><Crystal {id} size={20} />{/each}</div>
+  </section>
+
+  <section>
     <h2 class="label">a frame, a field, the marks</h2>
     <div class="frame box">
       <span class="frame-title">a frame</span>
@@ -88,5 +95,6 @@
   .swatch { display: flex; flex-direction: column; gap: var(--space-1); font-size: 12px; color: var(--text-faint); width: 104px; }
   .swatch i { height: 40px; border: 1px solid var(--line); }
   .box { padding: var(--space-6) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+  .rest { color: var(--text-faint); }
   .ground { height: 96px; border: 1px solid var(--line); }
 </style>

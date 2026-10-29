@@ -22,7 +22,7 @@ export { anchorOf, blocks, findAnchor } from "./blocks.ts";
 export type { Anchor, Block } from "./blocks.ts";
 export { DiffError, applyHunks, diffLines } from "./diff.ts";
 export type { Hunk } from "./diff.ts";
-export { SESSION_GAP_MS, SNAPSHOT_EVERY, authors, change, wordAuthors, hashText, insertAt, journalLine, locate, moments, passageOf, findPassage, pending, readJournal, reconcile, replay, sessionMoments, stamp, textAt, touched, written } from "./journal.ts";
+export { LAYER_IDLE_MS, SESSION_GAP_MS, SNAPSHOT_EVERY, authors, change, wordAuthors, hashText, insertAt, journalLine, locate, moments, passageOf, findPassage, pending, readJournal, reconcile, replay, sessionMoments, stamp, textAt, touched, written } from "./journal.ts";
 export type { Change, Cost, Discard, Entry, Insert, Moment, Passage, Placement, Proposal, Revise, Rewrite, Run, SessionMoment, Stamp, Who, Why } from "./journal.ts";
 export { GITATTRIBUTES, OWN_DIR, OWN_FORMAT, SETTINGS_FILE, journalPath, parseSettings, recordPath, settingsText } from "./own.ts";
 export type { Settings as BaseSettings } from "./own.ts";

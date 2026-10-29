@@ -1,7 +1,7 @@
 // The conversation in Iso's pane (M10): its turns as the engine keeps them, the turn running now as its events
 // come, and what is sent with the next. One conversation at a time; a new one is begun from the pane.
 
-import type { ContextReport, Conversation, Decision, EngineEvent, HandRow, Turn, TurnItem } from "@isorite/engine";
+import type { ContextReport, Conversation, ConversationSummary, Decision, EngineEvent, HandRow, Turn, TurnItem } from "@isorite/engine";
 import { app } from "./app.svelte.ts";
 import { context } from "./context.svelte.ts";
 import { panes } from "./panes.svelte.ts";
@@ -19,8 +19,27 @@ class Converse {
   problem = $state("");
   /** What the next turn would send, part by part. */
   report = $state.raw<ContextReport | null>(null);
-  /** What Iso's pane shows: the conversation, or what the next turn is sent (M10b). */
-  view = $state<"chat" | "context">("chat");
+  /** What Iso's pane shows: the conversation, what the next turn is sent (M10b), or the past ones (M24, K). */
+  view = $state<"chat" | "context" | "past">("chat");
+  /** Every conversation, the newest first, as the drawer shows them: fetched when it opens. */
+  past = $state.raw<ConversationSummary[] | null>(null);
+  /** The drawer of past conversations, opened or closed. */
+  async drawer(): Promise<void> {
+    if (this.view === "past") { this.view = "chat"; return; }
+    this.view = "past";
+    try { this.past = await app.api.conversations(); } catch (e) { this.problem = (e as Error).message; }
+  }
+  /** A past conversation, carried on: shown, and what is sent next goes on from it. */
+  async resume(id: string): Promise<void> {
+    if (this.running) return;
+    this.problem = "";
+    try {
+      const c = await app.api.conversation(id);
+      if (c) { this.show(c); this.streaming = ""; this.off = this.off.filter((x) => !/^[rtb]:/.test(x)); }
+      this.view = "chat";
+    } catch (e) { this.problem = (e as Error).message; }
+    this.measure();
+  }
   /** The parts switched off that the page keeps (M15): what you gave (`g:…`), open questions (`q:…`) and AGENTS.md.
    *  What Iso read, the turns and the briefings are switched in the conversation itself. */
   off = $state.raw<string[]>([]);

@@ -5,8 +5,10 @@
   // corner brackets. A question adds what it's about and its mark; a problem, what it uses and its. Other frontmatter
   // fields are not shown here and are never touched. Deleting is in the pane's menu, away from the name.
   import { goto } from "$app/navigation";
+  import { tick } from "svelte";
   import { ABOUT, idsOf, type Kind } from "@isorite/core";
   import { app, noteHref } from "$lib/app.svelte.ts";
+  import { lustre } from "$lib/lustre.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
   import FolderField from "./FolderField.svelte";
   import Glyph from "./Glyph.svelte";
@@ -16,9 +18,14 @@
   const inBase = $derived(!note.id.startsWith("@"));
   let problem = $state("");
 
-  // The kind: a note's own type ("Theorem") stays while it stays a note.
+  // The kind: a note's own type ("Theorem") stays while it stays a note. Choosing one fills its slot, and one band
+  // of light crosses it (M24, J).
   const KINDS = [["note", "concept", "Concept"], ["question", "question", "Question"], ["problem", "problem", "Problem"]] as const;
-  function setKind(k: Kind, type: string): void { if (k !== kind) note.setFields({ type }); }
+  function setKind(k: Kind, type: string, slot: HTMLElement): void {
+    if (k === kind) return;
+    note.setFields({ type });
+    void tick().then(() => lustre(slot, true));
+  }
 
   // Where it is: its folder and its name, pressed to change; a change moves it.
   const dirOf = (id: string) => id.split("/").slice(0, -1).join("/");
@@ -73,7 +80,7 @@
 <div class="label">
   <span class="kinds" role="radiogroup" aria-label="kind">
     {#each KINDS as [k, name, type] (k)}
-      <button type="button" role="radio" class="slot {k}" aria-checked={kind === k} onclick={() => setKind(k, type)}><Glyph kind={k === "note" ? "concept" : k} />{name}</button>
+      <button type="button" role="radio" class="slot {k}" aria-checked={kind === k} data-lustre onclick={(e) => setKind(k, type, e.currentTarget)}><Glyph kind={k === "note" ? "concept" : k} />{name}</button>
     {/each}
   </span>
   {#if inBase}

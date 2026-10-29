@@ -97,6 +97,9 @@ export interface TurnRequest { conversation?: string; mode: Mode; asked: string;
 
 /** A conversation, as the pane draws it. */
 export interface Conversation { id: string; turns: Turn[] }
+/** A past conversation, as the drawer of them shows it (M24, K): when it began and was last added to, what was
+ *  first asked, and how many turns and notes it has (the notes given, read, pointed to or changed). */
+export interface ConversationSummary { id: string; at: string; last: string; asked: string; turns: number; notes: number }
 
 /** The terminal's session (M11), as the Iso pane's Build mode draws it: read by the isorite server from OpenCode's
  *  own server, which `isorite term` starts and the terminal is attached to. `connected` is false when no terminal is. */
@@ -328,6 +331,8 @@ export interface Api {
   converse(request: TurnRequest): Promise<{ conversation: string; turn: string }>;
   /** A conversation, or the latest when none is named; null when there is none. */
   conversation(id?: string): Promise<Conversation | null>;
+  /** Every conversation, the newest first (M24, K). */
+  conversations(): Promise<ConversationSummary[]>;
   /** What a turn would send now, part by part, with the session's cost. */
   turnContext(request: Omit<TurnRequest, "asked">): Promise<ContextReport>;
   /** Switch a part of a conversation's working set on or off: `r:<note>` (read by Iso), `t:<turn>`, `b:<briefing>`. */

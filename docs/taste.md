@@ -25,7 +25,14 @@ isorite is a mapping that keeps structure (Iso is for isomorphism, not isometric
 - Gold is Iso's alone.
 - The Atlas's layout and routing do not change for style. Colour, weight, fill and motion only.
 - Ioskeley Mono is the display face. (Departure Mono, if kept anywhere, only at 11, 22, 33 or 44 px with no letter-spacing, or it blurs.) Map labels drawn at the screen's own pixels, not scaled with the map.
-- Understanding is being phased out as a visible feature; questions and problems carry the journey.
+- A row in a list (the notes) has a vein: touched or chosen, a blue marker grows down its left edge and a vein runs along its foot, and the lustre crosses it. `.vein-row` in `app/src/app.css`.
+- A link's kind is the weight of its vein, in the text's own colour: requires solid and blue (2 px), uses thin, see also dotted, the web dashed. Light runs along it when pointed at. The same in the note and in what Iso says. `.vein`.
+- Iso cites in the sentence: the phrase that rests on a note is the link to it. What it drew on stands under the reply as parts in corner brackets, and a phrase and its part are lit together. No numbered tail.
+- Iso at work is a crystal growing (one of a hundred, chosen by the conversation's id), not a spinner; at rest it marks that conversation. Past conversations are specimens in a drawer, each with its crystal.
+- What Iso is sent is strata: hatched for what Iso is told, blue for notes, ruled for the conversation, malachite for its summary, empty for the room left.
+- A note's history is strata in its margin: a layer per moment, newest on top, as thick as the change, yours blue, Iso's gold.
+- A question Iso asks shows, before it is kept, where it would go on the Atlas: a dotted rose outline. Kept, the note takes its place.
+- Understanding is phased out; questions and problems carry the journey.
 - Sketches: `inspiration/combinations/sketches.html`.
 
 ## Banned defaults

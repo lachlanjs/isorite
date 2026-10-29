@@ -87,6 +87,9 @@
   .settings:focus-visible { outline: none; }
   @media (max-width: 760px) {
     .phead { height: 48px; }
+    /* A phone's header is short of room: what a pane's tools say ("2 steps back") keeps its width, and the switches
+       give way, scrolled sideways. */
+    .switches { flex: 0 1 auto; min-width: 56px; overflow-x: auto; scrollbar-width: none; }
     .settings { top: 62px; }
     .inner { max-height: calc(100dvh - 210px); }
   }

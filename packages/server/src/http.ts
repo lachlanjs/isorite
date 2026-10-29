@@ -219,6 +219,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   post("/api/iso/branch", z.object({ conversation: z.string().max(64) }).strict(), (_c, b) => api.branch(b.conversation));
   post("/api/iso/undo", z.object({ conversation: z.string().max(64), turn: z.string().max(64) }).strict(), (_c, b) => api.undoTurn(b.conversation, b.turn));
   post("/api/iso/answer", z.object({ turn: z.string().max(64), permission: z.string().max(64), decision: z.enum(["once", "always", "reject"]) }).strict(), (_c, b) => api.answer(b.turn, b.permission, b.decision));
+  app.get("/api/conversations", (c) => answer(c, () => api.conversations()));
   app.get("/api/conversation", (c) => answer(c, async () => (await api.conversation(c.req.query("id") || undefined)) ?? { id: "", turns: [] }));
   app.get("/api/turn/context", (c) => answer(c, () => {
     let raw: unknown = {};

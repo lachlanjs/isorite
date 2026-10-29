@@ -63,7 +63,7 @@ test("choosing a note outlines what it requires, all the way back, and what buil
   await note(page, "coding/kraft-inequality").click();
   await note(page, "coding/kraft-inequality").click();
   await expect(page).toHaveURL(/#\/n\/coding\/kraft-inequality$/);
-  await expect(page.getByLabel("Title")).toHaveValue("Kraft inequality");
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Kraft inequality");
 });
 
 test("the chain is walked a step at a time, the way kept", async ({ page }) => {
@@ -164,7 +164,7 @@ const session = async (page: Page) => ({ "x-isorite-token": ((await (await page.
 test("holding makes an untitled note in the folder held in, its title chosen to type over; holding, then dragging, an untitled folder with its first note; a press that moves is a drag", async ({ page }) => {
   await atlas(page);
   const name = test.info().project.name, box = (await page.locator(".atlas").boundingBox())!;
-  const title = page.getByLabel("Title");
+  const title = page.getByLabel("Title", { exact: true });
   const made: string[] = [];
 
   // A press that moves is a drag, however long it lasts.
@@ -344,7 +344,7 @@ test("notes are picked on the map for a request: numbered in order, sized in the
   await atlas(page);
   const made = (await (await page.request.post("api/drafts", { headers: await session(page), data: {} })).json()) as { id: string };
   await page.goto(`#/draft/${made.id.slice("@draft/".length)}`);
-  await page.getByLabel("Title").fill("Codes, in my words");
+  await page.getByLabel("Title", { exact: true }).fill("Codes, in my words");
   await page.locator(".cm-content").click();
   await page.keyboard.type("A code is short where the source is likely.");
   await page.getByRole("button", { name: "[ + pick on the atlas ]" }).click();

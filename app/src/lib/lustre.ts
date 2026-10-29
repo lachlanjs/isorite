@@ -22,7 +22,7 @@ const B4 = bayer(4);
 const CELL = 2, DUR = 320, FPS = 24;
 
 const still = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
-const runs = new WeakMap<Element, object>();
+const runs = new WeakMap<Element, HTMLCanvasElement>();
 
 /** The part of a box not cut away by what it scrolls or clips in, as insets from its own edges. */
 function clipped(el: Element, box: DOMRect): [number, number, number, number] | null {
@@ -36,9 +36,11 @@ function clipped(el: Element, box: DOMRect): [number, number, number, number] | 
   return t < b && l < r ? [t - box.top, box.right - r, box.bottom - b, l - box.left] : null;
 }
 
-/** One band of light across el, in whole cells and whole frames, leaning as the chamfer does (u = x + y/2). */
-export function lustre(el: HTMLElement): void {
-  if (still() || runs.has(el)) return;
+/** One band of light across el, in whole cells and whole frames, leaning as the chamfer does (u = x + y/2). A touch
+ *  while one crosses lets it finish; a choice (again) starts it over, on the face it chose. */
+export function lustre(el: HTMLElement, again = false): void {
+  if (still() || (runs.has(el) && !again)) return;
+  runs.get(el)?.remove();
   const box = el.getBoundingClientRect(), keep = clipped(el, box);
   if (!keep || box.width < 8) return;
   const W = Math.ceil(box.width / CELL), H = Math.ceil(box.height / CELL);
@@ -52,11 +54,12 @@ export function lustre(el: HTMLElement): void {
   Object.assign(c.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${W * CELL}px`, height: `${H * CELL}px`, clipPath: `inset(${keep.map((v) => `${v}px`).join(" ")})` });
   document.body.append(c);
   const ctx = c.getContext("2d")!, img = ctx.createImageData(W, H), d = img.data;
-  const bw = Math.max(4, Math.round(W * 0.1)), run = {}, t0 = performance.now();
-  runs.set(el, run);
+  const bw = Math.max(4, Math.round(W * 0.1)), t0 = performance.now();
+  runs.set(el, c);
   let last = -1;
   const step = (now: number): void => {
     const f = Math.floor(((now - t0) / 1000) * FPS), t = (f * 1000) / FPS / DUR;
+    if (runs.get(el) !== c) return;
     if (t >= 1 || !el.isConnected) { c.remove(); runs.delete(el); return; }
     if (f !== last) {
       last = f;

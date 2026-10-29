@@ -6,6 +6,7 @@
 import { syntaxTree } from "@codemirror/language";
 import { Facet, RangeSetBuilder, type EditorState, type Range } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+import { rating } from "@isorite/core";
 import katex from "katex";
 import { formula } from "./maths.ts";
 
@@ -204,7 +205,9 @@ function build(view: EditorView): DecorationSet {
             // Out of the base (M12): to the web, or to code in its repository, which may be gone.
             const u = n.getChild("URL"), href = u ? state.sliceDoc(u.from, u.to) : "";
             const code = href.startsWith("code:"), web = /^https?:/i.test(href);
-            const cls = code ? (state.facet(codeBroken)(href) ? "cm-lp-link cm-lp-codelink cm-lp-broken" : "cm-lp-link cm-lp-codelink") : web ? "cm-lp-link cm-lp-weblink" : "cm-lp-link";
+            // Its kind as the weight of its vein (M24, N): the link's title names it.
+            const t = n.getChild("LinkTitle"), kind = rating(t ? state.sliceDoc(t.from + 1, t.to - 1) : null);
+            const cls = code ? (state.facet(codeBroken)(href) ? "cm-lp-link cm-lp-codelink cm-lp-broken" : "cm-lp-link cm-lp-codelink") : web ? "cm-lp-link cm-lp-weblink vein web" : `cm-lp-link vein ${kind === "requires" ? "requires" : kind === "see also" ? "also" : "uses"}`;
             if (open && close && close.from > open.to) decos.push((code ? Decoration.mark({ class: cls, attributes: { title: state.facet(codeBroken)(href) ? `${href.slice(5)}: not in the repository` : href.slice(5) } }) : mark(cls)).range(open.to, close.from));
             if (!isActive(node.from) && url && open && close) {
               decos.push(hide.range(open.from, open.to));
@@ -330,9 +333,7 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-lp-strong": { fontWeight: "700" },
   ".cm-lp-strike": { textDecoration: "line-through" },
   ".cm-lp-code": { fontFamily: "var(--font-mono)", fontSize: ".86em", background: "color-mix(in srgb, var(--text) 8%, transparent)", padding: ".1em .2em" },
-  ".cm-lp-link": { color: "var(--lattice)", textDecoration: "underline", textUnderlineOffset: "2px" },
-  ".cm-lp-weblink": { textDecorationStyle: "dotted" },
-  ".cm-lp-codelink": { fontFamily: "var(--font-mono)", fontSize: ".86em", textDecoration: "none", borderBottom: "1px solid color-mix(in srgb, var(--lattice) 50%, transparent)" },
+  ".cm-lp-codelink": { color: "var(--lattice)", fontFamily: "var(--font-mono)", fontSize: ".86em", textDecoration: "none", borderBottom: "1px solid color-mix(in srgb, var(--lattice) 50%, transparent)" },
   ".cm-lp-broken": { color: "var(--rose)", textDecoration: "line-through", borderBottomColor: "transparent" },
   ".cm-lp-picture": { display: "block", margin: "6px auto", width: "fit-content", maxWidth: "100%", lineHeight: "0" },
   ".cm-lp-picture img": { display: "block", maxWidth: "100%", height: "auto" },

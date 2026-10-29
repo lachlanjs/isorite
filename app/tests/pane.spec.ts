@@ -46,7 +46,10 @@ test("a turn in Ask mode: what you gave is shown with it, what Iso reads is told
   const log = page.getByRole("log", { name: "The conversation with Iso" });
   await expect(log.locator(".turn").last().locator(".asked")).toHaveText(`look up what it is measured in, ${test.info().project.name}`);
   await expect(log.locator(".turn").last().locator(".gave")).toContainText("One fair coin toss");
-  await expect(log.locator(".turn").last().locator(".look")).toContainText("Surprise");
+  // What it read is a part under the reply once the turn is over (M24, G), and the line that read it goes.
+  await expect(log.locator(".turn").last().locator(".part")).toHaveCount(1);
+  await expect(log.locator(".turn").last().locator(".part b")).toHaveText("Surprise");
+  await expect(log.locator(".turn").last().locator(".look", { hasText: "Surprise" })).toHaveCount(0);
   await expect(log.locator(".turn").last().locator(".said")).toContainText("It is measured in bits");
   await expect(log.locator(".turn").last().locator(".said .katex")).toBeVisible();
   await look(page, "iso-turn");
@@ -56,7 +59,7 @@ test("a turn in Ask mode: what you gave is shown with it, what Iso reads is told
   await toIso(page);
   await expect(log.locator(".turn").last().locator(".said")).toContainText("It is measured in bits");
   // A note it read opens in the Note pane.
-  await log.locator(".turn").last().locator(".look").getByRole("button", { name: "Surprise" }).click();
+  await log.locator(".turn").last().locator(".part", { hasText: "Surprise" }).click();
   await expect(page).toHaveURL(/#\/n\/basics\/surprise$/);
 });
 
@@ -77,6 +80,8 @@ test("a turn can be stopped, and a refusal is said plainly; the quill in Iso's h
   await box(page).press("Enter");
   const log = page.getByRole("log", { name: "The conversation with Iso" });
   await expect(log.locator(".turn").last().locator(".doing")).toBeVisible();
+  // While Iso works, the conversation's crystal grows (M24, I).
+  await expect(log.locator(".turn").last().locator(".doing svg.crystal.growing")).toBeVisible();
   await pane(page).getByRole("button", { name: "Stop Iso" }).click();
   await expect(log.locator(".turn").last()).toHaveAttribute("data-state", "stopped");
 
@@ -179,6 +184,14 @@ test("the Context view lists what the next turn is sent, a row each with its siz
   await expect(notes.getByRole("switch", { name: "Send: Surprise" })).toHaveAttribute("title", /Read by Iso, and kept in hand/);
   await expect(always.getByRole("switch")).toHaveText([/instructions and tools/, /your message/]);
   await expect(view.locator(".total")).toHaveText(/^\d[\d.]*k?of \d+k/);
+  // What is sent as strata (M24, O): a layer for each kind; under the pointer, its name and size in the figure.
+  await expect(view.locator(".strata .s.instructions")).toHaveCount(1);
+  await expect(view.locator(".strata .s.notes")).toHaveCount(1);
+  if ((page.viewportSize()?.width ?? 1280) > 760) {
+    await view.locator(".strata .s.notes").hover();
+    await expect(view.locator(".total")).toHaveText(/^notes · \d/);
+    await page.mouse.move(2, 2);
+  }
   // No sentence explains a control.
   await expect(view).not.toContainText("Nothing yet");
   await expect(view).not.toContainText("how able a model");
@@ -223,3 +236,34 @@ test("two bars in Iso's header gauge the context and the spend, and open the Con
   await tier.getByRole("radio", { name: "mid" }).click();
 });
 
+
+test("past conversations are kept in a drawer, each with its crystal; one opened is carried on (M24, K)", async ({ page }) => {
+  const name = test.info().project.name;
+  await page.goto("#/n/basics/bit");
+  await toIso(page);
+  const log = page.getByRole("log", { name: "The conversation with Iso" });
+  const fresh = pane(page).getByRole("button", { name: "A new conversation" });
+  for (const asked of [`first, ${name}`, `second, ${name}`]) {
+    // Other tests have conversations by now: the latest is shown once loaded, and a new one is begun from it.
+    await expect(fresh).toBeEnabled();
+    await fresh.click();
+    await box(page).fill(asked);
+    await box(page).press("Enter");
+    await expect(log.locator(".turn").last()).toHaveAttribute("data-state", "done");
+  }
+  await pane(page).getByRole("button", { name: "Past conversations" }).click();
+  const drawer = page.getByRole("list", { name: "Past conversations" });
+  const second = drawer.getByRole("button", { name: new RegExp(`second, ${name}`) }), first = drawer.getByRole("button", { name: new RegExp(`first, ${name}`) });
+  // The newest first, the one shown chosen, each with its crystal.
+  await expect(second).toHaveAttribute("aria-current", "true");
+  await expect(first).not.toHaveAttribute("aria-current", "true");
+  await expect(first.locator("svg.crystal")).toBeVisible();
+  await expect(first).toContainText("1 turn");
+  await look(page, "iso-past");
+  await first.click();
+  await expect(log.locator(".turn .asked")).toHaveText([`first, ${name}`]);
+  // Carried on: what is asked next goes on in it.
+  await box(page).fill(`again, ${name}`);
+  await box(page).press("Enter");
+  await expect(log.locator(".turn .asked")).toHaveText([`first, ${name}`, `again, ${name}`]);
+});

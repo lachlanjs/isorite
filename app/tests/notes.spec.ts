@@ -43,7 +43,7 @@ test("a note with maths and a typed link is written, saved, and there when reope
   await expect(page.getByText(`${id}.md`)).toBeVisible();
   await page.getByRole("button", { name: "make it" }).click();
 
-  await expect(page.getByLabel("Title")).toHaveValue(`Entropy ${name}`);
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue(`Entropy ${name}`);
   await editor(page).click();
   await page.keyboard.type("The average surprise of a source.\n\n$$\nH = -\\sum_x p(x) \\log p(x)\n$$\n\nIt rests on [[Surpr");
   await page.getByRole("option", { name: /Surprise/ }).click();
@@ -54,7 +54,7 @@ test("a note with maths and a typed link is written, saved, and there when reope
   expect(await file(page, id)).toContain('[Surprise](/basics/surprise.md "requires")');
 
   await page.reload();
-  await expect(page.getByLabel("Title")).toHaveValue(`Entropy ${name}`);
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue(`Entropy ${name}`);
   await expect(page.locator(".cm-lp-maths .katex-display")).toBeVisible();
   await expect(page.locator(".cm-lp-imaths .katex")).toBeVisible();
   await expect(page.locator(".cm-lp-link")).toHaveText("Surprise");
@@ -71,7 +71,7 @@ test("a note with maths and a typed link is written, saved, and there when reope
   await expect(page).toHaveTitle(`Entropy ${name} · isorite`);
   await notePane(page).getByRole("button", { name: "All notes" }).click();
   await notePane(page).getByRole("link", { name: `Entropy ${name}` }).click();
-  await expect(page.getByLabel("Title")).toHaveValue(`Entropy ${name}`);
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue(`Entropy ${name}`);
 });
 
 test("the list narrows as you type, by title and by what the notes say", async ({ page }) => {

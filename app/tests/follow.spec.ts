@@ -93,6 +93,13 @@ test("a note named in Iso's answer, under the mouse, is outlined on the map", as
   await expect(said).toBeVisible();
   await said.hover();
   await expect(note(page, "basics/surprise")).toHaveClass(/\bmo-you\b/);
+  // The phrase and the part it cites are lit together (M24, G), whichever is pointed at.
+  const part = page.locator('[data-pane="iso"] .turn').last().locator(".part", { hasText: "Surprise" });
+  await expect(part).toHaveClass(/\blit\b/);
+  await page.mouse.move(2, 2);
+  await expect(part).not.toHaveClass(/\blit\b/);
+  await part.hover();
+  await expect(said).toHaveClass(/\blit\b/);
   await page.mouse.move(2, 2);
   await expect(note(page, "basics/surprise")).not.toHaveClass(/\bmo-you\b/);
 });

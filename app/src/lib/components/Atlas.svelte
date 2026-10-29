@@ -19,7 +19,7 @@
   import { converse } from "$lib/converse.svelte.ts";
   import { pointing } from "$lib/pointing.svelte.ts";
   import { CELL, MAX_ZOOM, MIN_ZOOM, TITLE_UNITS, TITLE_PX, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
-  import { satellites, withoutNotes } from "$lib/atlas/kinds.ts";
+  import { satellites, withoutNotes, withProspects, type Prospect } from "$lib/atlas/kinds.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
   import AtlasFolder from "./AtlasFolder.svelte";
@@ -84,9 +84,19 @@
     leaves = on;
     try { localStorage.setItem("isorite.atlas.leaves", on ? "on" : "off"); } catch { /* storage unavailable: not remembered */ }
   }
+  /** The questions Iso asked in the conversation shown and you have not kept (M24, R), while questions are on the map. */
+  const prospects = $derived.by((): Prospect[] => {
+    if (!panes.on.questions) return [];
+    const out: Prospect[] = [];
+    for (const t of converse.turns) for (const i of t.items) if (i.kind === "question" && !i.made) out.push({ ref: `?${i.id}`, title: i.title, about: i.about });
+    return out;
+  });
   async function load(): Promise<void> {
     try {
-      const all = await app.api.map();
+      const got = await app.api.map(), asked = untrack(() => prospects);
+      const notes: MapReport["notes"] = { ...got.notes };
+      for (const p of asked) notes[p.ref] = { title: p.title, tokens: 0, kind: "question" };
+      const all = { ...got, model: withProspects(got.model, asked), notes };
       // The kinds switched off are not on the map (M12), and a resolved question leaves it.
       // Files beside the notes (M23: pictures, artifacts, data, documents, others) are on it when its switch is on.
       const next = { ...all, model: withoutNotes(all.model, (ref) => {
@@ -126,6 +136,12 @@
     } catch (e) { failed = (e as Error).message; }
   }
 
+  // A question Iso asks, or one kept or gone, lays the map out again: the dotted node comes, or the note takes its place.
+  let askedWere = "";
+  $effect(() => {
+    const now = prospects.map((p) => p.ref).join(" ");
+    if (now !== askedWere) { const first = askedWere === "" && now === ""; askedWere = now; if (!first) void load(); }
+  });
   // A kind switched on or off lays the map out again, from where things stood (V5).
   let kindsWere = "";
   $effect(() => {
@@ -723,6 +739,8 @@
     e.preventDefault();
     e.stopPropagation();
     if (dragged) return;
+    // A question Iso asked and not kept is kept, or not, in Iso's pane.
+    if (ref.startsWith("?")) { panes.to("iso"); return; }
     if (pick) { toggle(ref); return; }
     // Shift+click gives a note to Iso, or takes it back, with Iso's context shown or not (M14).
     if (e.shiftKey) { if (!ref.startsWith("@")) giveOrTake(ref); return; }
@@ -835,7 +853,7 @@
       {#each notes as n (n.item.id)}
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} file={report.files?.[n.item.ref]?.kind ?? ""} given={isoLens && givenNotes.has(n.item.ref)} held={isoLens && !givenNotes.has(n.item.ref) ? (heldRows.get(n.item.ref)?.on ? "on" : heldRows.has(n.item.ref) ? "aside" : "") : ""} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={!!lit && !mark} href={noteHref(opens(n.item.ref))}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} file={report.files?.[n.item.ref]?.kind ?? ""} prospect={n.item.ref.startsWith("?")} given={isoLens && givenNotes.has(n.item.ref)} held={isoLens && !givenNotes.has(n.item.ref) ? (heldRows.get(n.item.ref)?.on ? "on" : heldRows.has(n.item.ref) ? "aside" : "") : ""} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={!!lit && !mark} href={noteHref(opens(n.item.ref))}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; pointing.onAtlas = pointed; }} />
       {/each}
       {#each sats as s (s.key)}

@@ -108,6 +108,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     nameRepository: async () => false,
     brokenNews: async () => [],
     answer: async (turn, permission, decision) => { await write("POST", "iso/answer", { turn, permission, decision }); },
+    conversations: () => ask("conversations"),
     conversation: async (id) => { const c = await ask<{ id: string; turns: [] }>("conversation" + (id ? q(id) : "")); return c.id ? c : null; },
     turnContext: (request) => ask(`turn/context?turn=${encodeURIComponent(JSON.stringify(request))}`),
     stop: async (request) => { await write("POST", "iso/stop", { request }); },

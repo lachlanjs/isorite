@@ -109,6 +109,28 @@ button { cursor: pointer; }
 /* Chosen (P): solid, in its own colour (--c) or the lattice, cut at two corners as a chip is. Open: a bar. */
 :root { --chosen-cut: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); }
 canvas.lustre { position: fixed; z-index: 999; pointer-events: none; image-rendering: pixelated; }
+/* A row with a vein (M24, D): touched or chosen, a blue marker grows down its left edge and a vein runs along its
+   foot; the lustre crosses it (lustre.ts, data-lustre). Chosen keeps both, on the raised ground. */
+.vein-row { position: relative; --glint: .18; }
+.vein-row::before, .vein-row::after { content: ""; position: absolute; left: 0; background: var(--lattice); pointer-events: none; }
+.vein-row::before { top: 0; bottom: 0; width: 3px; transform: scaleY(0); transform-origin: top; }
+.vein-row::after { right: 0; bottom: -1px; height: 1px; transform: scaleX(0); transform-origin: left; }
+.vein-row:hover::before, .vein-row.on::before { transform: scaleY(1); transition: transform var(--t-ack) var(--ease-out); }
+.vein-row:hover::after, .vein-row.on::after { transform: scaleX(1); transition: transform var(--t-change) var(--ease-out) 100ms; }
+.vein-row.on { background: var(--ground-2); }
+/* A link's kind as the weight of its vein (M24, N): requires solid and blue, uses thin, see also dotted; to the
+   web, dashed. Light runs along it when pointed at. Rendered Markdown (markdown.ts) and the editor (livePreview.ts). */
+.vein { color: inherit; text-decoration: none; position: relative; background-repeat: no-repeat; background-position: 0 100%; padding-bottom: 1px;
+  background-image: linear-gradient(var(--text-soft), var(--text-soft)); background-size: 100% 1px; }
+.vein.requires { background-image: linear-gradient(var(--lattice), var(--lattice)); background-size: 100% 2px; }
+.vein.also { background-image: linear-gradient(90deg, var(--text-soft) 50%, transparent 50%); background-size: 3px 1px; background-repeat: repeat-x; }
+.vein.web { background-image: linear-gradient(90deg, var(--text-soft) 60%, transparent 60%); background-size: 8px 1px; background-repeat: repeat-x; }
+.vein::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; pointer-events: none; background: linear-gradient(90deg, transparent, rgb(var(--sheen) / .95), transparent) no-repeat -40% 0 / 30% 100%; }
+/* The editor colours a link's text by its syntax, inside the vein: the vein's colour wins. */
+.vein * { color: inherit; }
+.vein:hover, .vein.lit { color: var(--lattice); text-decoration: none; }
+.vein:hover::after, .vein.lit::after { background-position: 140% 0; transition: background-position var(--t-result) var(--ease-out); }
+@media (prefers-reduced-motion: reduce) { .vein-row::before, .vein-row::after, .vein::after { transition: none !important; } }
 ::selection { background: color-mix(in srgb, var(--lattice) 40%, transparent); }
 .soft { color: var(--text-soft); }
 .faint { color: var(--text-faint); }
