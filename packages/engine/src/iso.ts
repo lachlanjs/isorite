@@ -2,7 +2,7 @@
 // go is not here: it is in the form (docs/architecture.md, section 4). These
 // words only say what to write.
 
-import { moments, pending, type Entry } from "@isorite/core";
+import { moments, pending, unwrap, type Entry } from "@isorite/core";
 import { ROUNDS } from "./loop.ts";
 import type { Message, Tier } from "./provider.ts";
 
@@ -102,6 +102,8 @@ const FORMAT = `# How notes work here
 - A picture is shown as ![what it shows](its/path.png). You can't see it: what
   you know of it is the words in the brackets. Keep a picture's line as it is
   when you rewrite around it, and never make up a picture's path.
+- A paragraph or a list item is one line, however long: do not break lines at
+  a width. The editor wraps them to the pane.
 - Ordinary Markdown otherwise. No HTML.`;
 
 /** How notes are written, for any request that writes or quotes them. */
@@ -307,7 +309,7 @@ export function parseRewrite(reply: string, count: number): { regions: (string |
 /** A passage's new text, set between the same neighbours as the old: it keeps the old one's space and line
  *  breaks at either end, whatever the model put round what it wrote. An empty one takes the passage out. */
 export function fitted(old: string, text: string): string {
-  const core = text.trim();
+  const core = unwrap(text.trim());
   if (!core) return "";
   return /^\s*/.exec(old)![0] + core + /\s*$/.exec(old)![0];
 }
@@ -350,5 +352,5 @@ export function replyText(reply: string): string {
   // A reply wrapped whole in a Markdown fence.
   const fenced = /^```(?:markdown|md)?\n([\s\S]*)\n```$/.exec(text.trim());
   if (fenced) text = fenced[1]!;
-  return text.trim();
+  return unwrap(text.trim());
 }

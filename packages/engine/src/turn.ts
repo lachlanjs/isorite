@@ -199,6 +199,8 @@ change marked as yours, and can undo it.
 - A new note (write_note) is written as one of theirs: frontmatter with type
   and title, their notation, their level, plain words, linked to the notes it
   rests on.
+- Write each paragraph and each list item on one line. Do not break lines at a
+  width: the editor wraps them to the pane.
 - Moving or deleting a note is asked of them before it happens. Do it only
   when they asked for it.
 - When you are done, say in a sentence or two what you changed and why. Do not

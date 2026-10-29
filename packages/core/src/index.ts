@@ -10,6 +10,7 @@ export type { Meta } from "./frontmatter.ts";
 export { editFrontmatter, spliceText, splitSource } from "./source.ts";
 export { RATINGS, headings, linkRefs, linkTexts, rating, section, slugify } from "./markdown.ts";
 export type { Heading, Rating } from "./markdown.ts";
+export { unwrap } from "./unwrap.ts";
 export { cmp, cmpTuple, contentHash, floatRepr, iso, pyRepr, sha256, strip, text, toTime } from "./text.ts";
 export { SearchIndex, round3, snippet, tokenize } from "./search.ts";
 export type { Hit, SearchOptions } from "./search.ts";

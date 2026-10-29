@@ -3,7 +3,7 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  AGENTS_FILE, STRENGTH, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
+  AGENTS_FILE, STRENGTH, unwrap, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
 import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest, type UnderstandingReport } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
@@ -1524,7 +1524,7 @@ export class Engine implements Api {
     if (name === "edit_note") {
       const id = noteId(this.bundle, args.id);
       if (!id) return `There is no note ${String(args.id ?? "")}. Search for it by its words.`;
-      const old = String(args.old ?? ""), next = String(args.new ?? "");
+      const old = String(args.old ?? ""), next = unwrap(String(args.new ?? ""));
       if (!old) return "Give the passage as it is now, in old.";
       const now = await this.readNote(id);
       const at = now.text.indexOf(old), again = at < 0 ? -1 : now.text.indexOf(old, at + 1);
@@ -1538,7 +1538,7 @@ export class Engine implements Api {
     if (name === "write_note") {
       const id = this.newNoteId(args.id);
       if (!id) return `${String(args.id ?? "")} is not a note's id in their base: give folder/name, lower case with hyphens.`;
-      let text = String(args.text ?? "");
+      let text = unwrap(String(args.text ?? ""));
       if (!text.trim()) return "Give the note's whole text.";
       if (!/^---\n/.test(text)) text = `---\ntype: Concept\ntitle: ${JSON.stringify(/^#\s+(.+)$/m.exec(text)?.[1]?.trim() ?? id.split("/").at(-1)!.replace(/-/g, " "))}\n---\n\n${text.replace(/^#\s+.+\n+/, "")}`;
       const was = this.bundle.concepts.has(id) ? await this.readNote(id) : null;
