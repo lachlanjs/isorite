@@ -53,6 +53,18 @@
     if (Math.abs(Math.log(k / drawnK)) > REDRAW) drawnK = k;
     else if (k !== drawnK) resting = setTimeout(() => (drawnK = k), 150);
   });
+  /** The map moving (panned or zoomed): its layer is the compositor's while it moves, and painted again, at whole
+   *  pixels, once it rests a moment. Kept the compositor's at rest, its names stayed a blur of the zoom they were
+   *  painted at until something over them was painted again (a hover). */
+  let moving = $state(false);
+  let settling: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    void view.x; void view.y; void view.k;
+    moving = true;
+    clearTimeout(settling);
+    settling = setTimeout(() => (moving = false), 200);
+    return () => clearTimeout(settling);
+  });
   /** A first view is drawn at once, not scaled into. */
   const begin = (to: View): void => { view = to; drawnK = to.k; };
   let size = $state.raw({ w: 0, h: 0 });
@@ -837,7 +849,7 @@
     {#if !L.items.length}<p class="said faint">There are no notes yet. The map draws itself as you write them.</p>{/if}
     <!-- One move for the whole map (M12): the folders and the notes are scaled as they stand, in the map's units;
          what is drawn round them (routes, counts, Iso's note) is placed at the zoom. -->
-    <div class="atlas-world" class:labels class:shifting data-open={open} style="transform: translate({view.x}px, {view.y}px) scale({view.k / drawnK}); --u: {(L?.cell ?? 7) * drawnK}px; --k: {drawnK}">
+    <div class="atlas-world" class:labels class:shifting class:moving data-open={open} style="transform: translate({moving ? view.x : Math.round(view.x)}px, {moving ? view.y : Math.round(view.y)}px) scale({view.k / drawnK}); --u: {(L?.cell ?? 7) * drawnK}px; --k: {drawnK}">
       <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each folders as f (f.item.id)}
           <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} />
@@ -927,7 +939,8 @@
   /* A long press is the Atlas's own (a hold): not the browser's menu, nor iOS's preview of a link. */
   .atlas { position: relative; isolation: isolate; height: 100%; overflow: clip; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: grab; outline-offset: -2px; }
   .atlas:active { cursor: grabbing; }
-  .atlas-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; will-change: transform; }
+  .atlas-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+  .atlas-world.moving { will-change: transform; }
   /* The dot grid, moved with the map by a transform a cell at most, so that a pan paints nothing. */
   .ground { position: absolute; inset: -24px; z-index: -1; pointer-events: none; will-change: transform; }
   .scaled { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }

@@ -293,6 +293,8 @@ test("a drag from a note never moves the map; a drag from open ground does", asy
   await atlas(page);
   const world = page.locator(".atlas-world");
   const at = async () => (await world.getAttribute("style"))?.match(/translate\(([^)]*)\)/)?.[1];
+  // At rest, on whole pixels.
+  await expect(world).not.toHaveClass(/\bmoving\b/);
   const still = await at();
   const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
   await page.mouse.move(huffman.x + 10, huffman.y + 6);
@@ -301,6 +303,7 @@ test("a drag from a note never moves the map; a drag from open ground does", asy
   await expect(page.locator(".carried")).toHaveText("▣ Huffman codes");
   await page.mouse.up();
   await expect(page.locator(".carried")).toHaveCount(0);
+  await expect(world).not.toHaveClass(/\bmoving\b/);
   expect(await at()).toBe(still);
   // Open ground pans.
   const box = (await page.locator(".atlas").boundingBox())!;
