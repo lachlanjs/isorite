@@ -70,3 +70,5 @@ None open.
 ## Released
 
 isorite 0.12.0, 2026-10-29: M24 built in four steps (the foundation; the surfaces D, N, G, J; Iso's I, K, O; T and R), with the understanding feature phased out, Iso's writing kept to one line per paragraph, the repository's docs rewrapped, and the Atlas's names drawn at the screen's pixels, growing in steps as you zoom in. H's gold seam for Iso's words is left for provenance's own pass.
+
+isorite 0.12.1, 2026-10-29: the Atlas's names are sharp at rest (the map's layer was kept the compositor's at rest, and its names stayed a blur until a hover painted them again).
