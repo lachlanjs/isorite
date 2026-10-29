@@ -67,13 +67,18 @@
   .n.file { gap: 6px; color: var(--text-faint); background: var(--ground-0); border-style: dashed; border-color: var(--line-strong); }
   .n.file :global(.glyph) { color: var(--text-soft); }
   /* Its name at the screen's own pixels (M24): the block's size at the zoom, scaled back, so the text is laid out
-     and drawn at 11 px whatever the zoom, and takes the lines the block has room for. */
+     and drawn crisp, at 11 px, and larger in steps as the block grows on the screen, taking the lines it has room for. */
   .inner {
     position: absolute; left: 0; top: 0; width: calc(100% * var(--k)); height: calc(100% * var(--k)); transform-origin: 0 0; transform: scale(var(--ik));
     padding: 0 6px; display: flex; align-items: center; gap: 6px; font: 11px/14px var(--font-ui); container-type: size;
   }
   .t { display: none; overflow: hidden; overflow-wrap: normal; min-width: 0; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; }
   :global(.atlas-world.labels) .t { display: -webkit-box; }
+  /* Zoomed in, the name grows with its box, in steps, still at the screen's pixels. */
+  @container (min-width: 130px) { .inner > * { font-size: 13px; line-height: 17px; } }
+  @container (min-width: 175px) { .inner > * { font-size: 15px; line-height: 20px; } }
+  @container (min-width: 235px) { .inner > * { font-size: 18px; line-height: 24px; } }
+  @container (min-width: 310px) { .inner > * { font-size: 22px; line-height: 28px; } }
   @container (max-width: 72px) { .inner > :first-child { margin-left: -2px; } .inner > :last-child { margin-right: -2px; } .inner > * { font-size: 10px; line-height: 12px; } .t { hyphens: auto; overflow-wrap: anywhere; } }
   @container (max-height: 48px) { .t { -webkit-line-clamp: 2; line-clamp: 2; } }
   @container (max-height: 32px) { .t { -webkit-line-clamp: 1; line-clamp: 1; } }

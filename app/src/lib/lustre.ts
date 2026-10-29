@@ -45,7 +45,8 @@ export function lustre(el: HTMLElement, again = false): void {
   if (!keep || box.width < 8) return;
   const W = Math.ceil(box.width / CELL), H = Math.ceil(box.height / CELL);
   const cs = getComputedStyle(el), [R, G, B] = cs.getPropertyValue("--sheen").trim().split(/\s+/).map(Number);
-  const peak = Math.min(1, (parseFloat(cs.getPropertyValue("--glint")) || 0.4) * 1.4 * (parseFloat(cs.getPropertyValue("--sheen-k")) || 1));
+  // A quarter fainter than first built (Lachlan, 2026-10-29: "very strong").
+  const peak = Math.min(1, (parseFloat(cs.getPropertyValue("--glint")) || 0.4) * 1.05 * (parseFloat(cs.getPropertyValue("--sheen-k")) || 1));
   // A chamfered part (--cut) loses the cells in its cut corners: top left and bottom right.
   const cut = (parseFloat(cs.getPropertyValue("--cut")) || 0) / CELL;
   const c = document.createElement("canvas");

@@ -62,3 +62,7 @@ Done first, before the surfaces, so nothing more is styled for it. The Understan
 ## Questions
 
 None open.
+
+## After M24
+
+- **Live code in a note** (Lachlan, 2026-10-29; a milestone of its own): link to a range of lines in the repository, or to something tree-sitter can name (a class, a function), and embed that code in the note, so the note shows the code as it is now when it changes. Builds on M12's code links (`code:path#L1`) and their broken mark.

@@ -17,14 +17,14 @@ isorite is a mapping that keeps structure (Iso is for isomorphism, not isometric
 
 ## Settled (from the inspiration rounds)
 
-- No flash. A touched thing acknowledges with one band of light across its face (lustre), not an inversion or blink. The band is dithered (4×4 Bayer, 2 px cells, 24 frames a second, 320 ms across): a mineral's lustre drawn by a machine. On quartz it is dark pixels. `app/src/lib/lustre.ts`.
+- No flash. A touched thing acknowledges with one band of light across its face (lustre), not an inversion or blink. The band is dithered (4×4 Bayer, 2 px cells, 24 frames a second, 320 ms across, at three quarters of the strength first built): a mineral's lustre drawn by a machine. On quartz it is dark pixels. `app/src/lib/lustre.ts`.
 - One grammar of states on every control: rest; touched (the lustre); where the keyboard is (corner brackets, not an outline); chosen (solid, in its colour or the lattice); open (a bar); Iso's (a gold ◆); unavailable (faint).
 - The three themes blend: the machine is how isorite answers you, the mineral is what notes are made of, growth is how they change. A heuristic, not a separation.
 - No directive text: no key legends, no captions explaining what a control does. If it needs one, redesign it. As little guiding text as possible, ideally none.
 - Voice: short, concrete, a little dry. No exclamation marks, no "Oops".
 - Gold is Iso's alone.
 - The Atlas's layout and routing do not change for style. Colour, weight, fill and motion only.
-- Ioskeley Mono is the display face. (Departure Mono, if kept anywhere, only at 11, 22, 33 or 44 px with no letter-spacing, or it blurs.) Map labels drawn at the screen's own pixels, not scaled with the map.
+- Ioskeley Mono is the display face. (Departure Mono, if kept anywhere, only at 11, 22, 33 or 44 px with no letter-spacing, or it blurs.) Map labels drawn at the screen's own pixels, not scaled with the map: 11 px, and larger in steps (13, 15, 18, 22) as a box grows on the screen.
 - A row in a list (the notes) has a vein: touched or chosen, a blue marker grows down its left edge and a vein runs along its foot, and the lustre crosses it. `.vein-row` in `app/src/app.css`.
 - A link's kind is the weight of its vein, in the text's own colour: requires solid and blue (2 px), uses thin, see also dotted, the web dashed. Light runs along it when pointed at. The same in the note and in what Iso says. `.vein`.
 - Iso cites in the sentence: the phrase that rests on a note is the link to it. What it drew on stands under the reply as parts in corner brackets, and a phrase and its part are lit together. No numbered tail.
