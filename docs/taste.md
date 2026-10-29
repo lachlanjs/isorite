@@ -12,12 +12,12 @@ isorite is a mapping that keeps structure (Iso is for isomorphism, not isometric
 - Where there is a direction it follows the structure it belongs to (a line down a folder's edge, across a link), not a decorative one. (?)
 - Three durations: 120 ms (acknowledge: press, hover, focus), 260 ms (change: open, close, swap), 600 ms+ (a result worth noticing: Iso wrote into a note, a check resolved). Nothing else. In CSS: `--t-ack`, `--t-change`, `--t-result`.
 - One curve for arrivals (ease-out), one for departures (ease-in). No springs, no bounce. In CSS: `--ease-out`, `--ease-in`.
-- Gold moves, and so may blue. Iso's work and growth animate in gold; your own actions may animate too, in blue, but less than Iso's (a pointed-at note's routes draw out in 260 ms; nothing of yours loops).
+- Gold moves, and so may blue. Iso's work and growth animate in gold; your own actions may animate too, in blue, but less than Iso's (a pointed-at note's routes draw out in 390 ms; nothing of yours loops).
 - Every animation has a `prefers-reduced-motion` form that keeps the information and drops the movement.
 
 ## Settled (from the inspiration rounds)
 
-- No flash. A touched thing acknowledges with one band of light across its face (lustre), not an inversion or blink. The band is dithered (4×4 Bayer, 2 px cells, 24 frames a second): a mineral's lustre drawn by a machine. On quartz it is dark pixels. `app/src/lib/lustre.ts`.
+- No flash. A touched thing acknowledges with one band of light across its face (lustre), not an inversion or blink. The band is dithered (4×4 Bayer, 2 px cells, 24 frames a second, 320 ms across): a mineral's lustre drawn by a machine. On quartz it is dark pixels. `app/src/lib/lustre.ts`.
 - One grammar of states on every control: rest; touched (the lustre); where the keyboard is (corner brackets, not an outline); chosen (solid, in its colour or the lattice); open (a bar); Iso's (a gold ◆); unavailable (faint).
 - The three themes blend: the machine is how isorite answers you, the mineral is what notes are made of, growth is how they change. A heuristic, not a separation.
 - No directive text: no key legends, no captions explaining what a control does. If it needs one, redesign it. As little guiding text as possible, ideally none.

@@ -70,7 +70,8 @@
   .along { vector-effect: none; stroke-dasharray: 1; stroke-linecap: butt; }
   .retract { stroke-dashoffset: 0; animation: retract 0.22s ease-in forwards; }
   .draw { stroke-dashoffset: 1; animation: draw 0.34s ease-out forwards; }
-  .touch { stroke: var(--lattice); stroke-dashoffset: 1; animation: draw var(--t-change) var(--ease-out) forwards; }
+  /* 1.5 times a change (Lachlan, 2026-10-29), slow enough to follow where it goes. */
+  .touch { stroke: var(--lattice); stroke-dashoffset: 1; animation: draw calc(var(--t-change) * 1.5) var(--ease-out) forwards; }
   @keyframes retract { to { stroke-dashoffset: 1; } }
   @keyframes draw { to { stroke-dashoffset: 0; } }
   @media (prefers-reduced-motion: reduce) { .lit { animation: none; } .touch { animation: none; stroke-dashoffset: 0; } .grown { animation: none; stroke-dashoffset: 0; opacity: .6; } }

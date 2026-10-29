@@ -18,8 +18,8 @@ function bayer(n: number): number[][] {
   return m.map((r) => r.map((v) => (v + 0.5) / (n * n)));
 }
 const B4 = bayer(4);
-/** Cells of 2 px, and how long the band takes to cross: the motion rules' 600 ms for something worth noticing. */
-const CELL = 2, DUR = 640, FPS = 24;
+/** Cells of 2 px, and how long the band takes to cross: quick, as an acknowledgement is (Lachlan, 2026-10-29: twice as fast as 640 ms). */
+const CELL = 2, DUR = 320, FPS = 24;
 
 const still = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const runs = new WeakMap<Element, object>();
