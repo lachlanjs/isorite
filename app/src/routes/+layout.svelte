@@ -141,12 +141,6 @@
           {#if p === "note"}
             <PaneHead pane="note" first={panes.narrow || standing[0] === "note"} name="Note" settings={noteSettings}>
               {#snippet tools()}
-                {#if page.route.id === "/n/[...id]" && !(page.params.id ?? "").startsWith("@")}
-                  <!-- The note's Understanding note (M10), in place of the note while pressed. -->
-                  <button class="icon" type="button" data-tour="understanding" aria-label="Understanding note" title="Understanding note" aria-pressed={panes.understanding} onclick={() => panes.showUnderstanding()}>
-                    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 14.5V7.5M8 7.5L4.6 4.4M8 7.5l3.4-3.1M8 7.5V2.5M4.6 4.4L2.8 4.6M4.6 4.4L4.5 2.4M11.4 4.4l1.8.2M11.4 4.4l.1-2M8 11L5.8 9.6M8 11l2.2-1.4" /></svg>
-                  </button>
-                {/if}
                 {#if inNote && app.saving}<span class="saved" class:bad={app.saving.bad} class:busy={!app.saving.text.startsWith("saved")} title={app.saving.text} role="status"><i aria-hidden="true"></i><span class="hidden-label">{app.saving.text}</span></span>{/if}
                 <button class="icon" type="button" aria-label="All notes" title="All notes, and search" aria-pressed={page.route.id === "/notes" || panes.tree} onclick={() => { if (page.route.id !== "/notes") panes.tree = !panes.tree; }}>
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 3h4M4.5 3v9.5h3M4.5 7.5h3" /><rect x="8" y="5.5" width="5.5" height="3.5" /><rect x="8" y="10.5" width="5.5" height="3.5" /></svg>

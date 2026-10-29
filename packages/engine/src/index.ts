@@ -1,7 +1,7 @@
 // @isorite/engine: the public surface.
 
 export { Conflict, EngineError, MAX_FILE_BYTES } from "./api.ts";
-export type { AgentLook, AgentChange, Api, FileBytes, PictureInfo, AskRequest, Choice, ContextItem, ContextReport, HandRow, Conversation, TurnRequest, UnderstandingReport, DraftSummary, EngineEvent, Listing, MapReport, NoteSource, NoteSummary, Saved, SearchHit, Session, Settings, SetupCheck, SetupDraft, SetupPair, SetupView, ProviderSetup, Spend, TerminalItem, TerminalPermission, TerminalTurn, TerminalView } from "./api.ts";
+export type { AgentLook, AgentChange, Api, FileBytes, PictureInfo, AskRequest, Choice, ContextItem, ContextReport, HandRow, Conversation, TurnRequest, DraftSummary, EngineEvent, Listing, MapReport, NoteSource, NoteSummary, Saved, SearchHit, Session, Settings, SetupCheck, SetupDraft, SetupPair, SetupView, ProviderSetup, Spend, TerminalItem, TerminalPermission, TerminalTurn, TerminalView } from "./api.ts";
 export { DRAFT_PREFIX, Engine, MAX_NOTE_BYTES, checkNoteId, givenKey, isDraftId, type ArtifactRun } from "./engine.ts";
 export { AGE_OFF, briefingText, handOf, readHand } from "./hand.ts";
 export type { Briefing, Hand, HandLine } from "./hand.ts";
@@ -18,7 +18,6 @@ export type { Exchange, Part } from "./iso.ts";
 export { INLINE, Meaning, pieces } from "./meaning.ts";
 export type { Embedder, Found, Hit, Piece } from "./meaning.ts";
 export { editRegions, regionsOf, writeRegions } from "./agent.ts";
-export { UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
 export { CONVERSATIONS_DIR, LEARNING, MODES, PRACTICE, conversationPath, readTurns, turnMessages } from "./turn.ts";
 export type { Decision, Given, Mode, Sent, Turn, TurnItem, TurnLine } from "./turn.ts";
 export type { AgentEdit, Region } from "./agent.ts";

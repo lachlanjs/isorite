@@ -1,7 +1,6 @@
 // What Iso is sent (M10, §7): the tray above Iso's box. Notes, folders and passages are put there by dragging or
 // holding on the Atlas, by tapping in the Atlas's Iso lens, and by "send to Iso" on a selection in a note. Each can
-// be taken out again. Nothing is put there that you did not put there, except the mode's own parts (Understand
-// mode's Understanding notes), which are shown and can be taken out too.
+// be taken out again. Nothing is put there that you did not put there.
 
 import { app } from "./app.svelte.ts";
 import { panes } from "./panes.svelte.ts";
@@ -9,9 +8,7 @@ import { panes } from "./panes.svelte.ts";
 export type Part =
   | { kind: "note"; id: string; title: string }
   | { kind: "folder"; id: string; title: string }
-  | { kind: "passage"; id: string; title: string; text: string }
-  /** A note's Understanding note: put in by Understand mode itself, for each note in hand (M10). */
-  | { kind: "understanding"; id: string; title: string };
+  | { kind: "passage"; id: string; title: string; text: string };
 
 const key = (p: Part): string => (p.kind === "passage" ? `passage:${p.id}:${p.text}` : `${p.kind}:${p.id}`);
 
@@ -32,7 +29,6 @@ class Tray {
     return true;
   }
   remove(part: Part): void {
-    if (part.kind === "understanding") { this.unwant(part.id); return; }
     this.parts = this.parts.filter((p) => key(p) !== key(part));
   }
   /** In if out, out if in: the Atlas's Iso lens. */
@@ -43,21 +39,9 @@ class Tray {
   }
   clear(): void { this.parts = []; }
 
-  /** Understanding notes taken out: not put back until what Iso may do, or the Understanding note shown, changes. */
-  private notWanted = $state.raw<string[]>([]);
-  /** The Understanding note that goes with what is given (M12): the open note's, while it is shown in the Note pane. */
-  get modeParts(): Part[] {
-    const ids = panes.understanding && app.open && !app.open.startsWith("@") ? [app.open] : [];
-    return ids.filter((id) => !this.notWanted.includes(id)).map((id) => ({ kind: "understanding" as const, id, title: app.listing.notes.find((n) => n.id === id)?.title ?? id }));
-  }
-  /** Everything a turn is sent: what you put in, and the Understanding notes that go with it. */
-  get sent(): Part[] { return [...this.parts, ...this.modeParts]; }
-  /** Take one of the Understanding notes out. */
-  unwant(id: string): void { this.notWanted = [...this.notWanted, id]; }
-  /** They all come back for next time. */
-  modeChanged(): void { this.notWanted = []; }
+  /** Everything a turn is sent. */
+  get sent(): Part[] { return this.parts; }
   keyOf = key;
 }
 
 export const tray = new Tray();
-panes.onMode = () => tray.modeChanged();

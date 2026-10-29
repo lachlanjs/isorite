@@ -44,10 +44,9 @@
     if (!view || naming) return;
     if (import.meta.env.MODE === "guide") { say("The guide's site has nowhere to keep a picture. In isorite on your own machine, paste or drop one into a note and it's saved beside it."); return; }
     // A note of the base keeps its pictures in a folder named for it, linked from beside it; a note outside the base
-    // (a draft, an Understanding note) in that of the note it's about, or in pictures/, linked from the top.
+    // (a draft) in pictures/, linked from the top.
     const id = note.id, inBase = !id.startsWith("@");
-    const about = id.startsWith("@understanding/") ? id.slice("@understanding/".length) : null;
-    const folder = inBase ? id : about ?? "pictures";
+    const folder = inBase ? id : "pictures";
     const hrefOf = (path: string) => (inBase && path.startsWith(`${id}/`) ? address(path.slice(id.lastIndexOf("/") + 1)) : `/${address(path)}`);
     let known: PictureInfo[] = [];
     try { known = await app.api.pictures(); } catch { /* none known: every name is free, as far as is known */ }

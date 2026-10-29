@@ -20,7 +20,7 @@
   import ContextView from "./ContextView.svelte";
   import TerminalTurns from "./TerminalTurns.svelte";
 
-  const SYM: Record<Part["kind"], string> = { note: "▣", folder: "▭", passage: "“", understanding: "◇" };
+  const SYM: Record<Part["kind"], string> = { note: "▣", folder: "▭", passage: "“" };
   const titleOf = (id: string): string => app.listing.notes.find((n) => n.id === id)?.title ?? id.split("/").at(-1) ?? id;
   const HOW: Record<Step["how"], string> = { keyword: "searched", meaning: "by meaning", link: "followed", read: "read" };
 
@@ -64,12 +64,8 @@
     else if (e.key === "Escape" && busy) { e.preventDefault(); void stop(); }
   }
   function open(id: string): void { void panes.open(id, true); }
-  /** A note Iso changed opens with provenance on, where its words are marked; an Understanding note as itself. */
-  function openChanged(id: string): void {
-    if (id.startsWith("@understanding/")) { openUnderstanding(id.slice("@understanding/".length)); return; }
-    panes.flip("provenance", true); panes.showUnderstanding(false); void panes.open(id, true);
-  }
-  function openUnderstanding(id: string): void { panes.showUnderstanding(true); void panes.open(id, true); }
+  /** A note Iso changed opens with provenance on, where its words are marked. */
+  function openChanged(id: string): void { panes.flip("provenance", true); void panes.open(id, true); }
   const changes = (t: Turn): boolean => t.items.some((i) => i.kind === "change") && !t.items.some((i) => i.kind === "undone");
 </script>
 
@@ -77,7 +73,7 @@
   {#if t.given.length}
     <span class="gave">
       {#each t.given as g, k (k)}
-        <span class="chip" class:u={g.kind === "understanding"}><span class="k" aria-hidden="true">{SYM[g.kind]}</span><span class="t">{g.kind === "passage" ? g.text : g.kind === "folder" ? g.id || "the base" : titleOf(g.id)}</span></span>
+        <span class="chip"><span class="k" aria-hidden="true">{SYM[g.kind]}</span><span class="t">{g.kind === "passage" ? g.text : g.kind === "folder" ? g.id || "the base" : titleOf(g.id)}</span></span>
       {/each}
     </span>
   {/if}
@@ -103,7 +99,7 @@
     </p>
   {:else if i.kind === "change"}
     <p class="change">
-      <span class="v">{i.note.startsWith("@understanding/") ? "wrote" : i.why === "create" ? "made" : i.why === "delete" ? "deleted" : i.why === "move" ? "moved" : "changed"}</span>
+      <span class="v">{i.why === "create" ? "made" : i.why === "delete" ? "deleted" : i.why === "move" ? "moved" : "changed"}</span>
       {#if i.why === "delete"}<span class="q">{i.title}</span>{:else}<button type="button" class="note-link" data-to={i.why === "move" ? i.to : i.note} onclick={() => openChanged(i.why === "move" ? i.to! : i.note)}>{i.why === "move" ? `${i.title} → ${i.to}` : i.note.startsWith("@") ? i.title : titleOf(i.note)}</button>{/if}
       {#if i.added || i.removed}<span class="n"><span class="add">+{i.added}</span> <span class="del">−{i.removed}</span></span>{/if}
     </p>
@@ -235,9 +231,7 @@
   .end { font-size: 12px; padding-left: 16px; }
   .composer { flex: none; border-top: 1px solid var(--line); padding: 10px 12px 10px; display: grid; gap: 8px; }
   .chip { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px; border: 1px solid var(--line); font-size: 11px; color: var(--text-soft); max-width: 100%; }
-  .chip.u { border-color: var(--malachite); }
   .chip .k { color: var(--growth); }
-  .chip.u .k { color: var(--malachite); }
   .chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
   .box { position: relative; display: flex; }
   textarea { flex: 1 1 auto; min-width: 0; min-height: 42px; max-height: 160px; resize: none; field-sizing: content; background: var(--ground-1); border: 1px solid var(--line); padding: 9px 34px 9px 10px; font: 13px/1.5 var(--font-ui); color: var(--text); }

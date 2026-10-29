@@ -39,10 +39,9 @@ test("Gauss–Bonnet's proof sketch is Iso's, untouched, and the examples are yo
   expect(built.notes[`${COMPACT}.md`]).not.toMatch(/^resolved:/m);
 });
 
-test("Iso has read you on Gauss–Bonnet, and has not marked the triangle", () => {
-  const u = built.own[`journal/@understanding/${BONNET}.jsonl`] ?? Object.entries(built.own).find(([p]) => p.includes("understanding"))?.[1];
-  expect(u).toBeTruthy();
-  expect(Object.values(built.own).join("\n")).toContain("You can state it and use it");
+test("Iso has said where you stand on Gauss–Bonnet, and has not marked the triangle", () => {
+  expect(Object.entries(built.own).some(([p, text]) => p.startsWith("conversations/") && text.includes("You can state it and use it"))).toBe(true);
+  expect(Object.keys(built.own).some((p) => p.includes("understanding"))).toBe(false);
   expect(READING).toContain(TRIANGLE);
   expect(built.notes[`${TRIANGLE}.md`]).not.toMatch(/^solved:/m);
 });

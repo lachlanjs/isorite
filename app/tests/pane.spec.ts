@@ -155,38 +155,6 @@ test("with the notes switch on, moving a note is asked first, and not allowed it
   await setSwitch(page, "notes", false);
 });
 
-test("with a note's Understanding note open, it goes with what you ask; Iso's reading is written in it, beside your scratchpad", async ({ page }) => {
-  const name = test.info().project.name, id = `channels/understand-${name}`;
-  const { token } = (await (await page.request.get("api/session")).json()) as { token: string };
-  await page.request.post(`api/note?id=${id}`, { data: { text: `---\ntype: Concept\ntitle: Rate ${name}\n---\n\nBits a use.\n` }, headers: { "x-isorite-token": token, Origin: new URL(test.info().project.use.baseURL!).origin } });
-  await page.goto(`#/n/${id}`);
-  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Bits a use.");
-  // The sprig in the Note pane's header shows the note's Understanding note in its place.
-  const note = page.locator('[data-pane="note"]');
-  await note.getByRole("button", { name: "Understanding note", exact: true }).click();
-  await expect(note.locator(".u")).toBeVisible();
-  await toIso(page);
-  const tray = await showContext(page);
-  await expect(tray.locator('li[data-key^="g:"]')).toHaveText([new RegExp(`^◇\\s*Rate ${name}\\s*your understanding\\s*\\d+`)]);
-  await pane(page).getByRole("button", { name: "Context", exact: true }).click();
-  await box(page).fill(`understand ${id}`);
-  await box(page).press("Enter");
-  const turn = page.getByRole("log", { name: "The conversation with Iso" }).locator(".turn").last();
-  await expect(turn).toHaveAttribute("data-state", "done");
-
-  // Iso's reading, and your scratchpad, kept.
-  if (test.info().project.name.startsWith("phone")) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Note/ }).click();
-  await expect(note.locator(".reading")).toHaveText("You can say what it measures, and why.");
-  // The scratchpad is the note editor (V9): Markdown as you type.
-  await note.getByLabel("Scratchpad").fill(`Mine, **${name}**.`);
-  await expect(note.locator(".u h2 .state")).toHaveText("saved", { timeout: 8000 });
-  await page.screenshot({ path: `test-results/screens/${name}-understanding.png`, fullPage: true });
-  await page.reload();
-  await expect(page.locator('[data-pane="note"]').getByLabel("Scratchpad")).toContainText(`Mine, ${name}.`);
-  await expect(page.locator('[data-pane="note"] .pad .cm-lp-strong').first()).toContainText(name);
-  await page.locator('[data-pane="note"]').getByRole("button", { name: "Understanding note", exact: true }).click();
-});
-
 test("the Context view lists what the next turn is sent, a row each with its size and share: a turn left out, a note Iso read kept in hand, earlier turns summed up (M15)", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toIso(page);

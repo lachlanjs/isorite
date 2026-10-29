@@ -88,7 +88,7 @@ export function toTurns(messages: Message[], { live = new Map<string, string>(),
 /** What is asked from a page, with what was given in the Iso pane's context: notes and folders by name, for the
  *  agent to read with isorite's tools, and passages as they are. */
 export function given(asked: string, parts: Given[], title: (id: string) => string): string {
-  const notes = parts.filter((p) => p.kind === "note" || p.kind === "understanding").map((p) => `- ${title(p.id)} (${p.id})`);
+  const notes = parts.filter((p) => p.kind === "note").map((p) => `- ${title(p.id)} (${p.id})`);
   const folders = parts.filter((p) => p.kind === "folder").map((p) => `- the folder ${p.id}`);
   const passages = parts.flatMap((p) => (p.kind === "passage" ? [`From ${title(p.id)} (${p.id}):\n${p.text.split("\n").map((l) => "> " + l).join("\n")}`] : []));
   const out = [asked.trim()];

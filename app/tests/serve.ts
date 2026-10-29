@@ -90,11 +90,6 @@ async function provider(): Promise<void> {
       data({ choices: [{ delta: { content: "Here is the rewrite.\n" } }] });
       for (let k = 1; k <= count; k++) data({ choices: [{ delta: { content: `⟦${k}⟧${asked.includes("drop") && k === 2 ? "" : ` rewritten ${k} `}⟦/${k}⟧\n` } }] });
       if (!asked.includes("quiet")) data({ choices: [{ delta: { content: "⟦note⟧I rewrote what you chose, **plainly**.⟦/note⟧" } }] });
-    } else if (/\bunderstand (\S+)/.test(asked) && !looked) {
-      // Understand mode (M10): "understand <id>" writes Iso's reading of it.
-      const id = /\bunderstand (\S+)/.exec(asked)![1]!;
-      const call = { name: "write_understanding", arguments: JSON.stringify({ id, reading: "You can say what it measures, and why." }) };
-      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: call }] } }] });
     } else if (/\bquestion (\S+)/.test(asked) && !looked) {
       // M12: "question <id>" asks one back about the note; "offer <id>" offers your words for it.
       const id = /\bquestion (\S+)/.exec(asked)![1]!;

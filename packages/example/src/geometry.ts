@@ -42,7 +42,7 @@ export const ISO_QUESTIONS = {
   disc: { title: "What makes T a disc?", text: "You used χ(T) = 1. Does the triangle have to lie in one coordinate patch?", about: [TRIANGLE] },
 };
 
-/** Iso's reading of you on Gauss–Bonnet, each sentence resting on what you can open. */
+/** Iso's answer to where you stand on Gauss–Bonnet, each sentence resting on what you can open. */
 export const READING = `You can state it and use it: the [examples](/${BONNET}.md) are yours, and you [solved the torus](/${TORUS}.md). [The proof sketch](/${BONNET}.md) is still mine, untouched: you have not yet said it in your own words. [Where compactness is used](/${COMPACT}.md) is open, and so is [the triangle](/${TRIANGLE}.md), whose solution leans on a step not yet shown.`;
 
 const anchor = (text: string): Anchor => ({ text, nth: 0 });
@@ -151,15 +151,12 @@ export async function buildGeometry(sources: Sources, code: Record<string, strin
   on(1, 50, () => write(CYLINDER, solution(final(CYLINDER)) + "\n"));
   on(0, -90, async () => { await write(CYLINDER, final(CYLINDER)); await engine.setDone(CYLINDER, true, (await engine.readNote(CYLINDER)).version); });
 
-  on(1, 55, async () => engine.saveScratchpad(BONNET, "Compact: I think it is only that the triangulation is finite. Check against the Möbius band, which is compact and still fails, so orientation must be a separate matter.", null));
-
-  // ---- today: Iso's reading of you on Gauss–Bonnet
+  // ---- today: where you stand on Gauss–Bonnet, as Iso reads it from your notes
   on(0, -40, async () => {
     replies.push(
       { calls: [{ name: "read_note", arguments: { id: BONNET } }, { name: "read_note", arguments: { id: COMPACT } }], usage: { in: 5400, out: 60, usd: 0.0071 } },
-      { calls: [{ name: "write_understanding", arguments: { id: BONNET, reading: READING } }], usage: { in: 7200, out: 150, cached: 4200, usd: 0.0103 } },
-      { text: "I have written my reading of you on Gauss–Bonnet.", usage: { in: 7500, out: 20, cached: 7000, usd: 0.0037 } });
-    const { turn: id } = await engine.converse({ mode: "ask", asked: "where do I stand on Gauss–Bonnet?", tier: "mid", given: [{ kind: "understanding", id: BONNET }] });
+      { text: READING, usage: { in: 7200, out: 150, cached: 4200, usd: 0.0103 } });
+    const { turn: id } = await engine.converse({ mode: "ask", asked: "where do I stand on Gauss–Bonnet?", tier: "mid", given: [{ kind: "note", id: BONNET }] });
     await finished(id);
   });
 

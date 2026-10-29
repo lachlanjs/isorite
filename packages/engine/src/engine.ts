@@ -5,11 +5,10 @@
 import {
   AGENTS_FILE, STRENGTH, unwrap, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest, type UnderstandingReport } from "./api.ts";
+import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Away, type Similar } from "./lookup.ts";
-import { UNDERSTANDING_DIR, UNDERSTANDING_PREFIX, isUnderstandingId, parseUnderstanding, understandingId, understandingText } from "./understand.ts";
 import { AGE_OFF, briefingText, handOf, readHand, type Briefing, type Hand, type HandLine } from "./hand.ts";
 import { ARTIFACT_ROUNDS, COMPACT, CONVERSATIONS_DIR, ISORITE, PRACTICE, MODES, conversationPath, turnTools, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
@@ -34,7 +33,7 @@ const SIGN_IN_MS = 10 * 60_000;
 export interface EngineOptions {
   /** The knowledge base's folder. */
   notes: Files;
-  /** isorite's own files for this base: its journals, conversations and Understanding notes. On disk, the notes'
+  /** isorite's own files for this base: its journals, conversations and drafts. On disk, the notes'
    *  `.isorite/` folder (format 2); on the guide's site and in the tests, files in memory. */
   own: Files;
   clock: Clock;
@@ -83,8 +82,8 @@ export const ARTIFACT_TOKENS = 32_000;
 export const DRAFT_PREFIX = "@draft/", DRAFT_DIR = "drafts";
 export const isDraftId = (id: string): boolean => id.startsWith(DRAFT_PREFIX);
 /** A note's id without the prefix that says which of isorite's folders it is in. */
-const bare = (id: string): string => (isDraftId(id) ? id.slice(DRAFT_PREFIX.length) : isUnderstandingId(id) ? id.slice(UNDERSTANDING_PREFIX.length) : id);
-/** In the knowledge base itself: not one of isorite's own notes (a draft, an Understanding note), whose ids begin "@". */
+const bare = (id: string): string => (isDraftId(id) ? id.slice(DRAFT_PREFIX.length) : id);
+/** In the knowledge base itself: not one of isorite's own notes (a draft), whose ids begin "@". */
 const inBase = (id: string): boolean => !id.startsWith("@");
 
 const BAD_PART = /^\.|[\0\\:*?"<>|]|^\s|\s$/;
@@ -659,12 +658,13 @@ export class Engine implements Api {
     });
   }
 
-  /** Where a note's file is: drafts and Understanding notes are among isorite's own files. */
+  /** Where a note's file is: drafts are among isorite's own files. */
   private where(id: string): { files: Files; path: string } {
     // An artifact (M23) is journalled as a note is, by its path: Iso's rewrites of it are marked and undone the same way.
     if (inBase(id) && citeKind(id) === "artifact") return { files: this.opts.notes, path: checkNoteId(id) };
     if (!inBase(id)) {
-      return { files: this.opts.own, path: `${isDraftId(id) ? DRAFT_DIR : UNDERSTANDING_DIR}/${checkNoteId(bare(id))}.md` };
+      if (!isDraftId(id)) throw new EngineError(`there is no note ${id}`);
+      return { files: this.opts.own, path: `${DRAFT_DIR}/${checkNoteId(bare(id))}.md` };
     }
     return { files: this.opts.notes, path: `${checkNoteId(id)}.md` };
   }
@@ -1175,7 +1175,6 @@ export class Engine implements Api {
       if (g?.kind === "folder") { if (id) checkNoteId(id); return { kind: "folder", id }; }
       if (!inBase(checkNoteId(id))) throw new EngineError("only notes of the base are given to Iso");
       if (g?.kind === "note") return { kind: "note", id };
-      if (g?.kind === "understanding") return { kind: "understanding", id };
       if (g?.kind === "passage" && typeof g.text === "string" && g.text.trim() && g.text.length <= 20_000) return { kind: "passage", id, text: g.text };
       throw new EngineError("a part given to Iso is a note, a folder or a passage");
     });
@@ -1198,11 +1197,6 @@ export class Engine implements Api {
       }
       const c = this.bundle.concepts.get(g.id);
       if (!c) continue;
-      if (g.kind === "understanding") {
-        const u = await this.understanding(g.id);
-        out.push({ kind: "understanding", id: g.id, title: c.title, reading: u.reading });
-        continue;
-      }
       if (g.kind === "passage") out.push({ kind: "passage", id: g.id, title: c.title, text: g.text });
       else {
         const open = this.openAbout(g.id).filter((q) => !off.has(`q:${q.id}`));
@@ -1273,7 +1267,7 @@ export class Engine implements Api {
       const s = sentAll.find((x) => x.id === g.id && x.kind === g.kind && (g.kind !== "passage" || (x.kind === "passage" && x.text === g.text)));
       if (!s) continue;
       const k = givenKey(g);
-      rows.push({ key: k, group: "notes", kind: g.kind, title: g.kind === "folder" ? g.id || "the top of the base" : title(g.id), detail: g.kind === "passage" ? "a passage" : g.kind === "folder" ? `${s.kind === "folder" ? s.notes.length : 0} notes listed` : g.kind === "understanding" ? "your understanding" : "", tokens: scaled(estimate(sentText(s))), on: !w.off.has(k), by: "you", given: g });
+      rows.push({ key: k, group: "notes", kind: g.kind, title: g.kind === "folder" ? g.id || "the top of the base" : title(g.id), detail: g.kind === "passage" ? "a passage" : g.kind === "folder" ? `${s.kind === "folder" ? s.notes.length : 0} notes listed` : "", tokens: scaled(estimate(sentText(s))), on: !w.off.has(k), by: "you", given: g });
     }
     for (const h of w.hand.held) {
       if (!this.bundle.concepts.has(h.id) || w.givenOn.some((g) => g.kind === "note" && g.id === h.id)) continue;
@@ -1404,7 +1398,7 @@ export class Engine implements Api {
       const big = [...w.built.parts].sort((a, b) => b.tokens - a.tokens)[0]!, k = (n: number) => `${Math.round(n / 1000)}k`;
       throw new EngineError(`This turn would be sent about ${k(size())} tokens, more than the ${k(limit)} the model takes. The largest part is ${big.name} (${k(w.scaled(big.tokens))}): switch parts off in the Context view.`, 413);
     }
-    const sent = [...w.sent, ...w.reads], own = turnTools(mode, sent);
+    const sent = [...w.sent, ...w.reads], own = turnTools(mode);
     // What is in hand as it was read, for the look-ups not to send it twice; and what you gave whole.
     const inHand = new Map<string, string[] | "whole">(w.reads.flatMap((r) => (r.kind === "read" ? [[r.id, r.sections] as const] : [])));
     for (const g of w.givenOn) if (g.kind === "note") inHand.set(g.id, "whole");
@@ -1590,17 +1584,6 @@ export class Engine implements Api {
       await t.item({ kind: "offer", id: newId(this.opts.clock.now()), note: id, text });
       return `It is offered to them for ${agents ? "their AGENTS.md" : title(id)}.`;
     }
-    if (name === "write_understanding") {
-      const id = noteId(this.bundle, args.id);
-      if (!id) return `There is no note ${String(args.id ?? "")}.`;
-      const reading = String(args.reading ?? "").trim();
-      if (!reading) return "Give your reading.";
-      const uid = understandingId(id), was = await this.readNote(uid).catch(() => null);
-      const text = understandingText(id, title(id), { ...parseUnderstanding(was?.text ?? null), reading });
-      const saved = await this.one(() => this.put(uid, text, was?.version ?? null, "edit", {}, t.who));
-      if (saved.entry) await t.item({ kind: "change", note: uid, entry: saved.entry, why: was ? "edit" : "create", title: `Understanding · ${title(id)}`, added: 0, removed: 0 });
-      return `Your reading of ${title(id)} is written.`;
-    }
     if (name === "read_data") {
       const path = filePathOf(args.path);
       if (!path) return `${String(args.path ?? "")} is not a file's path in their base.`;
@@ -1669,24 +1652,6 @@ export class Engine implements Api {
     ];
     const ran = run ? "It was run, with every control touched" : "It couldn't be run here (no browser), so only its rules were checked";
     return `${was === null ? "Written" : "Written anew"}: ${path}. ${ran}${problems.length ? `, and:\n${problems.map((p) => `- ${p}`).join("\n")}\nFix these and call write_artifact again with the whole file.` : run ? ", with no error." : "."}`;
-  }
-
-  /** A note's Understanding note (M10): Iso's reading and your scratchpad. */
-  async understanding(note: string): Promise<UnderstandingReport> {
-    if (!inBase(checkNoteId(note))) throw new EngineError("only a note of the base has an Understanding note");
-    const uid = understandingId(note);
-    const source = await this.readNote(uid).catch(() => null);
-    return { note, ...parseUnderstanding(source?.text ?? null), version: source?.version ?? null };
-  }
-
-  /** Your scratchpad in a note's Understanding note: yours alone; Iso does not write it. `base` as for saveNote, or
-   *  null when there is no Understanding note yet. */
-  async saveScratchpad(note: string, scratchpad: string, base: string | null): Promise<UnderstandingReport> {
-    if (!inBase(checkNoteId(note))) throw new EngineError("only a note of the base has an Understanding note");
-    const uid = understandingId(note), was = await this.readNote(uid).catch(() => null);
-    const title = this.bundle.concepts.get(note)?.title ?? note;
-    await this.one(() => this.put(uid, understandingText(note, title, { ...parseUnderstanding(was?.text ?? null), scratchpad }), base));
-    return this.understanding(note);
   }
 
   /** A question asked in a turn, made a question note: in the folder of the first note it is about, named by its

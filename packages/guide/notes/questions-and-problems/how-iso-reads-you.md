@@ -1,11 +1,9 @@
 ---
 type: Concept
 title: How Iso reads you
-description: Iso's reading of where you stand on a note, kept beside it.
+description: Iso reads where you stand from your own notes, questions and problems.
 ---
 
-When you work through a note with [Iso](/iso/iso.md "requires"), it may keep an Understanding note beside it: what you can do with the idea, what you have not met yet, and the evidence, as links to your own words, [questions](/questions-and-problems/questions.md "uses") and [problems](/questions-and-problems/problems.md "uses").
+[Iso](/iso/iso.md "requires") keeps no score and no record of you apart from your notes. Where you stand is in what you wrote: your words in a note, your [questions](/questions-and-problems/questions.md "uses") open and resolved, the [problems](/questions-and-problems/problems.md "uses") you have solved and not.
 
-It is Iso's reading, not a mark, and it changes as you go. Open it with the sprig in the Note pane's header, which shows the note's Understanding note in place of the note. Iso is sent the open note's Understanding note, and answers by where you stand.
-
-Below Iso's reading is a space that is yours, to write in as you like.
+Asked to explain, it reads those first and asks where you stand before it explains. Where it finds your understanding stops, it offers that to you as a question to keep, or a problem to try, so the place is marked in your base and not only in the conversation.

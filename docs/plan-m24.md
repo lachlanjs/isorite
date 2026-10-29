@@ -49,6 +49,10 @@ Notes and replies are not wrapped at a fixed width: a paragraph is one line, and
 - Iso's replies in the pane, if they're wrapped there too;
 - the repository's own docs, written so far at 120 characters: rewrapped.
 
+### Understanding, phased out
+
+Done first, before the surfaces, so nothing more is styled for it. The Understanding note (Iso's reading of you and your scratchpad beside each note), its button in the Note pane's header, its part in what Iso is sent, `write_understanding` and its API go. Iso is told instead to read where you stand from the notes themselves, and to offer where it stops as a question to keep or a problem to try. The files already in `.isorite/understanding/` are left as they are: nothing reads or writes them. Old conversations read, with what they gave or wrote of an Understanding note passed over.
+
 ### Small ones
 
 - **T's layer closes after 10 minutes idle.**

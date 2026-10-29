@@ -190,7 +190,7 @@ study base bundle ─────┴─► mapModel (core) ─► gridLayout (co
 
 ## 8. Study
 
-Exercises, their marking, the study record's levels and the six squares were built in milestone 4 and removed in milestone 12 (`docs/plan-m12.md`). Understanding is shown by the notes themselves: whose words they are, the open questions and problems beside them, and Iso's reading in each note's Understanding note.
+Exercises, their marking, the study record's levels and the six squares were built in milestone 4 and removed in milestone 12 (`docs/plan-m12.md`). Understanding is shown by the notes themselves: whose words they are, the open questions and problems beside them. Each note's Understanding note, Iso's reading of you (M10), was removed in milestone 24: Iso reads where you stand from the notes, and offers where it stops as a question or a problem.
 
 ## 9. Events
 
@@ -220,7 +220,7 @@ The interface plays sound (later) by listening to this same stream and to its ow
 
 - The notes and their `.isorite/` sync by plain git, as one repository.
 - The knowledge base can conflict like any text in git. isorite shows a conflicted note as conflicted and does not resolve it silently.
-- `.isorite/` cannot conflict in its `.jsonl` files (union merge, ids). Its Understanding notes are notes and can.
+- `.isorite/` cannot conflict in its `.jsonl` files (union merge, ids). Its drafts are notes and can.
 - **What the slice must hold to:** every entry and event has a ULID and a device; nothing personal is written to the knowledge base; caches stay outside both repositories.
 
 ### The terminal

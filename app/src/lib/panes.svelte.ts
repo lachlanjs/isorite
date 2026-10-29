@@ -36,8 +36,6 @@ class Panes {
   show = $state<Record<Pane, boolean>>(json("isorite.show", { note: true, atlas: true, iso: true }));
   widths = $state<Record<Pane, number>>(json("isorite.widths", WIDTHS));
   on = $state<Record<Switch, boolean>>(json("isorite.switches", OFF));
-  /** The Note pane shows the note's Understanding note in place of the note (the sprig in its header). */
-  understanding = $state(read("isorite.understanding", "") === "1");
   /** The pane keys and new things go to. */
   focus = $state<Pane>("note");
   /** A phone's width: one pane at a time. */
@@ -89,9 +87,7 @@ class Panes {
   flip(k: Switch, to = !this.on[k]): void {
     this.on[k] = to;
     keep("isorite.switches", JSON.stringify(this.on));
-    if (k === "notes" || k === "files" || k === "run") this.onMode?.();
   }
-  showUnderstanding(to = !this.understanding): void { this.understanding = to; keep("isorite.understanding", to ? "1" : ""); this.onMode?.(); }
 
   /** Whether you are working in a pane: typing in it. */
   busy(p: Pane): boolean {
@@ -105,8 +101,6 @@ class Panes {
   setTerminal(on: boolean): void { this.terminal = on; }
   /** What Iso may do now. */
   get mode(): Mode { return this.terminal && (this.on.files || this.on.run) ? "build" : this.on.notes ? "write" : "ask"; }
-  /** Set by the tray: what a change of what Iso may do, or of the Understanding note shown, does to what Iso is sent. */
-  onMode: (() => void) | null = null;
 
   setLast(id: string): void { if (id && !id.startsWith("@")) { this.last = id; keep(kept("isorite.last"), id); } }
 

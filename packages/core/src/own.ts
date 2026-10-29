@@ -4,7 +4,7 @@
 //   .isorite/.gitattributes            *.jsonl merge=union, so two devices' lines merge
 //   .isorite/journal/<note id>.jsonl   one journal per note (journal.ts)
 //   .isorite/conversations/<id>.jsonl  Iso's conversations
-//   .isorite/understanding/<id>.md     a note's Understanding note
+//   .isorite/understanding/<id>.md     a note's Understanding note, before M24 (no longer read or written)
 //   .isorite/drafts/<id>.md            notes Iso has written that are not in the base yet
 //   .isorite/record/<device>.jsonl     this device's record of usage: context cleared, what turns cost
 //   .isorite/settings.toml             the base's settings: its repository, where code links point (M12)
@@ -39,8 +39,8 @@ function checkId(id: string): string {
   return id;
 }
 
-/** Where a note's journal is. Drafts and Understanding notes are journalled under their `@draft/` and
- *  `@understanding/` ids. */
+/** Where a note's journal is. Drafts are journalled under their `@draft/` ids (and Understanding notes were, before
+ *  M24, under `@understanding/`). */
 export const journalPath = (noteId: string): string => `journal/${checkId(noteId)}.jsonl`;
 /** This device's record of usage: what was cleared from Iso's context, and what each turn cost (record.ts). */
 export const recordPath = (device: string): string => `record/${checkId(device)}.jsonl`;

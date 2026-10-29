@@ -113,9 +113,6 @@ export interface TerminalPermission { id: string; action: string; resources: str
 /** A note for Iso that is not in the base yet. */
 export interface DraftSummary { id: string; title: string }
 
-/** A note's Understanding note (M10): Iso's reading of your understanding, and your scratchpad (`version` is the
- *  file's, null before there is one). */
-export interface UnderstandingReport { note: string; reading: string; scratchpad: string; version: string | null }
 
 /** What a request to Iso would be sent now, part by part, and what the session has cost. Sizes are estimates
  *  (four characters a token) until a provider's own count replaces them. */
@@ -143,7 +140,7 @@ export interface ContextReport {
 export interface HandRow {
   key: string;
   group: "notes" | "conversation" | "fixed";
-  kind: "note" | "folder" | "passage" | "understanding" | "read" | "question" | "turn" | "briefing" | "instructions" | "agents" | "message";
+  kind: "note" | "folder" | "passage" | "read" | "question" | "turn" | "briefing" | "instructions" | "agents" | "message";
   title: string;
   detail: string;
   tokens: number;
@@ -342,10 +339,6 @@ export interface Api {
   /** The base's own instructions, AGENTS.md at the top of the notes (M15): null while there is none. */
   agents(): Promise<{ text: string | null }>;
   saveAgents(text: string): Promise<void>;
-  /** A note's Understanding note. */
-  understanding(note: string): Promise<UnderstandingReport>;
-  /** Save your scratchpad in a note's Understanding note. */
-  saveScratchpad(note: string, scratchpad: string, base: string | null): Promise<UnderstandingReport>;
   /** Put back every note a turn changed as it was before the turn. A note changed since is left as it is, and said. */
   undoTurn(conversation: string, turn: string): Promise<{ notes: string[]; left: string[] }>;
   /** Name the repository the base's code links point into, unless one is named: true if it was (M12). */

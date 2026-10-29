@@ -141,25 +141,15 @@ test("Write mode: an edit whose passage is not found is said to Iso; moving asks
   expect(notes.files.get("basics/entropy.md")).toContain("Mine.");
 });
 
-test("given an Understanding note, Iso is sent its reading of you, asks before it explains, may rewrite it, and leaves your scratchpad alone", async () => {
-  const { engine, ended, sent, study } = await open([
-    { calls: [{ name: "write_understanding", arguments: { id: "basics/entropy", reading: "You can derive it." } }] },
-    { text: ["Well done."] },
-    { text: ["Where were we?"] },
-  ]);
-  await engine.saveScratchpad("basics/entropy", "My own words.", null);
-  const { conversation, turn } = await engine.converse({ mode: "ask", asked: "why is it largest when even?", tier: "mid", given: [{ kind: "understanding", id: "basics/entropy" }] });
-  await ended(turn);
-  expect(JSON.stringify(sent[0]!.messages[0]!.content)).toContain("# Their understanding");
-  expect(String(sent[0]!.messages[1]!.content)).toContain("## Their understanding of Entropy (/basics/entropy.md)\n\nYour reading so far: none yet.");
-  expect(sent[0]!.tools!.map((t) => t.function.name)).toEqual(["search_notes", "outline_note", "read_note", "point_to_note", "ask_question", "offer_text", "read_data", "write_understanding"]);
-  expect(await engine.understanding("basics/entropy")).toMatchObject({ reading: "You can derive it.", scratchpad: "My own words." });
-  expect(study.files.get("understanding/basics/entropy.md")).toContain("## Iso's reading\n\nYou can derive it.\n\n## Scratchpad\n\nMy own words.");
-  expect((await engine.journal("@understanding/basics/entropy")).at(-1)).toMatchObject({ who: "iso:openrouter/anthropic/claude-sonnet-5.5" });
-  // The next turn is told the reading.
-  const next = await engine.converse({ conversation, mode: "ask", asked: "go on", tier: "mid", given: [{ kind: "understanding", id: "basics/entropy" }] });
-  await ended(next.turn);
-  expect(String(sent[2]!.messages[1]!.content)).toContain("## Their understanding of Entropy (/basics/entropy.md)\n\nYour reading so far: You can derive it.");
+test("a conversation from before M24 reads: an Understanding note given, and Iso's reading written into it, passed over", () => {
+  const lines = [
+    { kind: "turn", id: "01K7A000000000000000000001", conversation: "01K7A000000000000000000000", at: "2026-10-22T09:00:00Z", session: "s", mode: "ask", asked: "why?", given: [{ kind: "note", id: "basics/entropy" }, { kind: "understanding", id: "basics/entropy" }], tier: "mid" },
+    { kind: "item", turn: "01K7A000000000000000000001", item: { kind: "change", note: "@understanding/basics/entropy", entry: "e", why: "edit", title: "Understanding · Entropy", added: 0, removed: 0 } },
+    { kind: "item", turn: "01K7A000000000000000000001", item: { kind: "text", text: "Because." } },
+    { kind: "end", turn: "01K7A000000000000000000001", state: "done" },
+  ].map((l) => JSON.stringify(l)).join("\n");
+  const [t] = readTurns(lines);
+  expect(t).toMatchObject({ given: [{ kind: "note", id: "basics/entropy" }], items: [{ kind: "text", text: "Because." }] });
 });
 
 test("a conversation from before M12 reads: Understand mode as Ask, and what it recorded passed over", () => {

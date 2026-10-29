@@ -123,7 +123,7 @@ test("over the model's limit, the earliest turns are summed up before the turn i
 });
 
 test("sizes are as the provider counted, once it has: the estimate times its count for it", async () => {
-  const { engine, ask } = await open([{ text: ["Bits."], usage: { prompt_tokens: 4000, completion_tokens: 2, cost: 0.001 } }]);
+  const { engine, ask } = await open([{ text: ["Bits."], usage: { prompt_tokens: 6000, completion_tokens: 2, cost: 0.001 } }]);
   const before = await engine.turnContext({ mode: "ask", tier: "low", given: [] });
   expect(before.counted).toBe(false);
   const c = await ask("unit?");

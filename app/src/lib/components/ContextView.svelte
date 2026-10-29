@@ -9,7 +9,7 @@
 
   const short = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n));
   const GROUPS = ["notes", "conversation", "fixed"] as const;
-  const MARK: Record<HandRow["kind"], string> = { note: "◆", folder: "▭", passage: "“", understanding: "◇", read: "◇", question: "?", turn: "›", briefing: "≡", instructions: "", agents: "", message: "" };
+  const MARK: Record<HandRow["kind"], string> = { note: "◆", folder: "▭", passage: "“", read: "◇", question: "?", turn: "›", briefing: "≡", instructions: "", agents: "", message: "" };
 
   const report = $derived(converse.report);
   const build = $derived(panes.mode === "build");

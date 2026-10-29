@@ -24,7 +24,7 @@ A hidden folder in the notes, committed with them. Made, with its `.gitattribute
   .gitattributes                  *.jsonl merge=union
   journal/<note id>.jsonl         section 3
   conversations/<id>.jsonl        Iso's conversations
-  understanding/<note id>.md      a note's Understanding note
+  understanding/<note id>.md      a note's Understanding note, before M24: no longer read or written, left as it was
   drafts/<id>.md                  notes for Iso that are not in the base yet
   record/<device>.jsonl           section 4
   settings.toml                   the base's settings: its repository

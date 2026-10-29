@@ -97,8 +97,6 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     search: (query) => ask(`search?q=${encodeURIComponent(query)}`),
     ask: (request) => write("POST", "iso/ask", request),
     converse: (request) => write("POST", "iso/converse", request),
-    understanding: (note) => ask("understanding" + q(note)),
-    saveScratchpad: (note, scratchpad, base) => write("POST", "understanding/scratchpad" + q(note), { scratchpad, base }),
     undoTurn: (conversation, turn) => write("POST", "iso/undo", { conversation, turn }),
     setContext: (conversation, part, on) => write("POST", "iso/context", { conversation, part, on }),
     compact: (conversation, keep) => write("POST", "iso/compact", { conversation, ...(keep === undefined ? {} : { keep }) }),
