@@ -1,48 +1,36 @@
 # Milestone 20: several bases, and the agent's memory
 
-Written 2026-10-26, for approval. Branch `m20-bases`, from `main` at `e29c095` (0.7.0). It was proposed after your
-note on rdstudio's global bundle, and comes before Obsidian import.
+Written 2026-10-26, for approval. Branch `m20-bases`, from `main` at `e29c095` (0.7.0). It was proposed after your note on rdstudio's global bundle, and comes before Obsidian import.
 
-Your aside, in your words: rdstudio's global agent OKF "was very useful in practice and the agent would often store
-things in memory that were genuinely useful later down the track". You'd like to:
+Your aside, in your words: rdstudio's global agent OKF "was very useful in practice and the agent would often store things in memory that were genuinely useful later down the track". You'd like to:
 - open a session in a project with isorite, in the web UI and the TUI;
 - and have a web UI showing the model's global context as the agent learns new things;
-- which generalises to "activate access to multiple knowledge bases at once and easily switch between them in the
-  UI".
+- which generalises to "activate access to multiple knowledge bases at once and easily switch between them in the UI".
 
 So M20 does two things:
-- **Several bases at once:** one isorite server holds several knowledge bases. Each base has its own page, and you
-  switch between them from the pane header. You choose which bases the agent and Iso may use.
-- **The agent's memory:** a base of its own (`memory`), lent to every session. The agent reads it and writes what is
-  worth keeping there. You watch it learn in that base's own tab, as you watch Iso in a project.
+- **Several bases at once:** one isorite server holds several knowledge bases. Each base has its own page, and you switch between them from the pane header. You choose which bases the agent and Iso may use.
+- **The agent's memory:** a base of its own (`memory`), lent to every session. The agent reads it and writes what is worth keeping there. You watch it learn in that base's own tab, as you watch Iso in a project.
 
 Nothing about a note's format changes. A base is still a folder of Markdown with its `.isorite/`.
 
 ## 1. What is there today
 
-Found by reading `packages/server/src/{serve,http,term,mcp,config}.ts`, `packages/engine/src/engine.ts` (the agent
-tools), `packages/opencode/plugin/server.ts`, `app/src/lib/{api,app.svelte}.ts` and `+layout.svelte`, at `e29c095`;
-and rdstudio's `decisions/multiple-bundles.md`, `tasks/T13-global-bundle.md` and `tasks/T47-mounts.md`.
+Found by reading `packages/server/src/{serve,http,term,mcp,config}.ts`, `packages/engine/src/engine.ts` (the agent tools), `packages/opencode/plugin/server.ts`, `app/src/lib/{api,app.svelte}.ts` and `+layout.svelte`, at `e29c095`; and rdstudio's `decisions/multiple-bundles.md`, `tasks/T13-global-bundle.md` and `tasks/T47-mounts.md`.
 
 - **One server, one base:**
   - `isorite serve <notes>` opens one `Engine` and serves the app and `/api/*` for it on port 4767.
-  - `isorite term` and `isorite mcp` start that server, or use the one already on the port. They refuse when it is
-    serving another base ("port 4767 is serving x, not y").
+  - `isorite term` and `isorite mcp` start that server, or use the one already on the port. They refuse when it is serving another base ("port 4767 is serving x, not y").
 - **The agent's tools** come from the server (`/api/agent/tools`, `/api/agent/look`):
   - `brief_base`, `search_notes`, `find_similar`, `outline_note`, `read_note`, `edit_note` and `write_note`;
   - the same tools for OpenCode's plugin and over MCP;
   - each look-up is drawn on the Atlas as the agent's path;
   - each change is written at once, entered under `agent:<name>`, and marked as its words, for you to undo.
 - **The base's instructions** are `AGENTS.md` at the notes' root. Iso and the terminal agent are both given it.
-- **The app** asks `api/` relative to its page, and is built with relative paths and hash routing. So it can be
-  served from any folder, as the guide's site is under `/isorite/`.
-- **There's no header above the panes (M10b).** Each pane has its own header: its name, then its switches, tools and
-  settings. The base's name is shown only in the Note pane's settings.
+- **The app** asks `api/` relative to its page, and is built with relative paths and hash routing. So it can be served from any folder, as the guide's site is under `/isorite/`.
+- **There's no header above the panes (M10b).** Each pane has its own header: its name, then its switches, tools and settings. The base's name is shown only in the Note pane's settings.
 - **The boards:**
-  - `Bases` is the old two-base picture: the knowledge base, and the study base laid over it. Its study base was
-    retired in M12, so it doesn't cover this.
-  - `Header-Context` shows the header's path as `dmft / self-consistency condition`, the base's name first. That's
-    where the switcher goes (§2.3).
+  - `Bases` is the old two-base picture: the knowledge base, and the study base laid over it. Its study base was retired in M12, so it doesn't cover this.
+  - `Header-Context` shows the header's path as `dmft / self-consistency condition`, the base's name first. That's where the switcher goes (§2.3).
   - No board shows a switcher or a memory base. I'd draw them in the app, after these two, and send screenshots.
 - **What rdstudio did (T13):**
   - a private `~/knowledge` bundle, made by `rdstudio global init`, with its path in `config.toml`;
@@ -64,33 +52,24 @@ and rdstudio's `decisions/multiple-bundles.md`, `tasks/T13-global-bundle.md` and
   [bases.isorite]
   path = "~/isorite/notes"
   ```
-- **Remembered as you go:** `isorite serve`, `term` and `mcp` add each base they open to this table, under its
-  folder's name (Q92). If two folders share a name, the second gets a suffix.
-- **What the page can do:** it can switch to a listed base and set its `lend`. It can't add a path. Like the
-  provider's setup (M18), that only works from this machine.
+- **Remembered as you go:** `isorite serve`, `term` and `mcp` add each base they open to this table, under its folder's name (Q92). If two folders share a name, the second gets a suffix.
+- **What the page can do:** it can switch to a listed base and set its `lend`. It can't add a path. Like the provider's setup (M18), that only works from this machine.
 - **`isorite bases`** lists them: name, path, lent or not, and open or not.
 
 **2. One server, several bases.**
-- **Opened as needed:** the server keeps one engine per base, opened the first time the base is asked for. The base
-  it was started for opens at once, and so does every lent base.
-- **Each base has its own engine,** as now: its own journal, watcher, search index and event stream. The model for
-  search by meaning is loaded once and shared.
-- **Each base has its own address:** `/b/<name>/` for the app and `/b/<name>/api/*` for the API. `/` and `/api/*`
-  stay as the base the server was started for, so links, the plugin and the MCP bridge keep working unchanged.
-- **A second base on a running server:** `isorite term <base>` and `mcp <base>` on a server that already holds
-  another base now add theirs to it. They no longer refuse.
+- **Opened as needed:** the server keeps one engine per base, opened the first time the base is asked for. The base it was started for opens at once, and so does every lent base.
+- **Each base has its own engine,** as now: its own journal, watcher, search index and event stream. The model for search by meaning is loaded once and shared.
+- **Each base has its own address:** `/b/<name>/` for the app and `/b/<name>/api/*` for the API. `/` and `/api/*` stay as the base the server was started for, so links, the plugin and the MCP bridge keep working unchanged.
+- **A second base on a running server:** `isorite term <base>` and `mcp <base>` on a server that already holds another base now add theirs to it. They no longer refuse.
   - So one project terminal and the memory tab share one server.
   - A second project's terminal can use the same server too, on another port for OpenCode.
-- **When the server stops:** a server that `term` started still stops with its terminal. If another terminal is
-  still using it, it stays until that one is done too.
+- **When the server stops:** a server that `term` started still stops with its terminal. If another terminal is still using it, it stays until that one is done too.
 
 **3. Switching, in the UI.**
-- **One base per window or tab** (Q91). The three panes show the same base, because a note's links, the Atlas and
-  Iso's context are all one base's.
+- **One base per window or tab** (Q91). The three panes show the same base, because a note's links, the Atlas and Iso's context are all one base's.
 - **Side by side:** two tabs, or two windows. For example, the project in one and `memory` beside it.
 - **The switcher:**
-  - the base's name, faint, before the pane name in the header of whichever pane stands first. That's the board's
-    `dmft / …` path, with no new header;
+  - the base's name, faint, before the pane name in the header of whichever pane stands first. That's the board's `dmft / …` path, with no new header;
   - clicking it opens a small list of the known bases, each with its folder as a tooltip;
   - a lent base has a switch that says so, and the base you're in is ticked;
   - choosing a base opens it in this tab; Ctrl or middle click opens it in a new one.
@@ -98,24 +77,17 @@ and rdstudio's `decisions/multiple-bundles.md`, `tasks/T13-global-bundle.md` and
 - **The guide's public site** has only its one base, so it shows no switcher.
 
 **4. The agent, and Iso, across bases.**
-- **Tools take a base:** every agent tool takes an optional `base`, which is one of the bases lent to the session.
-  Without one, a tool acts on the base the session is for.
-- **Notes from another base** are named with the base first, as `memory:tools/opencode-config`. Tools accept
-  that form too.
-- **`brief_base`** names the lent bases, with each one's description from its `AGENTS.md`'s first line. With
-  `base`, it briefs that base.
+- **Tools take a base:** every agent tool takes an optional `base`, which is one of the bases lent to the session. Without one, a tool acts on the base the session is for.
+- **Notes from another base** are named with the base first, as `memory:tools/opencode-config`. Tools accept that form too.
+- **`brief_base`** names the lent bases, with each one's description from its `AGENTS.md`'s first line. With `base`, it briefs that base.
 - **Writing:**
   - the agent writes to any lent base as it writes now: at once, entered under its name, its words marked;
   - you undo its words in that base's page;
   - there are no links between bases, as in rdstudio: a note links only within its own base.
-- **The Atlas** of the base an agent reads in draws its path. Its memory tab lights as it looks there, and a note it
-  writes appears there marked as its own.
-- **Iso** may read lent bases with the same `base` argument. It changes notes only in the base whose page it's in
-  (Q94).
-- **The Iso pane** shows a step or a citation in another base by its base and title. Clicking it opens that note in
-  that base's page, in a new tab.
-- **The TUI** stays on the project's base. A tool line that reads or writes another base names it
-  (`memory: OpenCode's config`).
+- **The Atlas** of the base an agent reads in draws its path. Its memory tab lights as it looks there, and a note it writes appears there marked as its own.
+- **Iso** may read lent bases with the same `base` argument. It changes notes only in the base whose page it's in (Q94).
+- **The Iso pane** shows a step or a citation in another base by its base and title. Clicking it opens that note in that base's page, in a new tab.
+- **The TUI** stays on the project's base. A tool line that reads or writes another base names it (`memory: OpenCode's config`).
 
 **5. The memory base.**
 - **`isorite memory [folder]`** (default `~/isorite-memory`) does these steps:
@@ -125,32 +97,27 @@ and rdstudio's `decisions/multiple-bundles.md`, `tasks/T13-global-bundle.md` and
   - lists it in `config.toml` as `memory`, lent.
 - **Run again,** it says where the memory is and whether it's lent.
 - **Its `AGENTS.md`** is the practice the agent follows. It's a draft, yours to change. In short:
-  - Memory is for what will be useful in other projects and later sessions: how you like to work, tools and how
-    they're set up, mistakes not to repeat, decisions and their reasons.
+  - Memory is for what will be useful in other projects and later sessions: how you like to work, tools and how they're set up, mistakes not to repeat, decisions and their reasons.
   - It isn't for what a project's own files or notes already say, and never for secrets.
   - One note for each thing worth keeping, with its why and when it applies, linked to related notes.
   - Look in memory at the start of a task, and before asking you something you may have said before.
   - Update a note that's there rather than writing a second. Delete one that turns out to be wrong.
   - Folders by kind: `you/`, `tools/`, `practice/`, `projects/`.
-- **The agent's instructions** (the OpenCode plugin and MCP) get one line: the lent bases by name, and "follow each
-  base's practice: brief it first". The memory base's own `AGENTS.md` says how to remember. So you can change the
-  practice without a new isorite.
+- **The agent's instructions** (the OpenCode plugin and MCP) get one line: the lent bases by name, and "follow each base's practice: brief it first". The memory base's own `AGENTS.md` says how to remember. So you can change the practice without a new isorite.
 - **Watching it learn:**
   - the memory base open in a tab shows each note the agent reads lit on the Atlas;
   - each note it writes appears there, marked as its own;
   - the timeline holds its changes, each with what you'd asked it (the `asked` it's already given).
   - I don't plan a separate view for this. If the timeline doesn't show it well enough, Q96 asks.
 
-**6. Over MCP** (Claude Code, Pi): the same tools, with `base`, from the same server. A Claude Code session can then
-use isorite's memory as well as its own.
+**6. Over MCP** (Claude Code, Pi): the same tools, with `base`, from the same server. A Claude Code session can then use isorite's memory as well as its own.
 
 ## 3. Tests
 
 - **Unit (server):**
   - the `[bases]` table: read, added to as bases are opened, and names deduplicated;
   - `isorite bases`;
-  - `isorite memory`: makes the base, its git repository, its `AGENTS.md` and its config entry, and running it again
-    changes nothing;
+  - `isorite memory`: makes the base, its git repository, its `AGENTS.md` and its config entry, and running it again changes nothing;
   - `/b/<name>/api/*` reaches that base's engine;
   - `/api/*` reaches the first base;
   - an unknown name is a 404;
@@ -162,22 +129,18 @@ use isorite's memory as well as its own.
   - a base that isn't lent is refused, in words the agent can act on;
   - `write_note` with `base` writes there, under the agent's name;
   - Iso is refused a write to another base.
-- **OpenCode (scripted, as `packages/opencode/test` does now):** the plugin's tools carry `base`, and the
-  instruction line names the lent bases.
+- **OpenCode (scripted, as `packages/opencode/test` does now):** the plugin's tools carry `base`, and the instruction line names the lent bases.
 - **Browser (new `bases.spec.ts`, four projects):**
   - two bases on one server: the switcher lists both, and choosing one shows its notes;
   - Ctrl+click opens a new tab;
   - the lent switch is kept;
-  - a scripted agent writes to `memory`, and the memory tab shows the note on its Atlas, marked as the agent's, and
-    in its timeline;
+  - a scripted agent writes to `memory`, and the memory tab shows the note on its Atlas, marked as the agent's, and in its timeline;
   - a citation `memory:…` in Iso's pane opens that base;
   - on a phone, the switcher is in the header on screen.
 - **The eval:**
-  - one case for Iso, where the answer is in a lent memory base: it has to look there (`base: "memory"`) and
-    mustn't write;
+  - one case for Iso, where the answer is in a lent memory base: it has to look there (`base: "memory"`) and mustn't write;
   - mid tier, about $0.02.
-  - The agent's side is tested with the scripted OpenCode rather than a real model. A real check on a temporary
-    copy, once, at about $0.05, is in the order of work.
+  - The agent's side is tested with the scripted OpenCode rather than a real model. A real check on a temporary copy, once, at about $0.05, is in the order of work.
 - **The site:** the guide's public site still has no switcher, and passes as it does.
 
 ## 4. The boards
@@ -190,8 +153,7 @@ use isorite's memory as well as its own.
 
 ## 5. Docs and the guide
 
-- **The guide:** a new note, *Several bases, and the agent's memory* (`notes/terminal/memory.md`), with a problem
-  note, *Let the agent remember*, to mark solved. The *isorite term* note links to it.
+- **The guide:** a new note, *Several bases, and the agent's memory* (`notes/terminal/memory.md`), with a problem note, *Let the agent remember*, to mark solved. The *isorite term* note links to it.
 - **`docs/setup.md`:** the `[bases]` table and `lend`.
 - **`docs/terminal.md`:** `isorite memory` and the `base` argument.
 - **`isorite help setup`** (`setup-for-agents.md`): the same, for an AI helping you.
@@ -200,39 +162,27 @@ use isorite's memory as well as its own.
 ## 6. Order of work
 
 1. `[bases]` in the config, remembered as bases are opened; `isorite bases`.
-2. The server holding several engines: `/b/<name>/`, lent bases opened at the start, and `term` and `mcp` adding a
-   base to a running server.
+2. The server holding several engines: `/b/<name>/`, lent bases opened at the start, and `term` and `mcp` adding a base to a running server.
 3. `base` on the agent's tools and on Iso's look-ups; `memory:` ids; the plugin's and MCP's instruction line.
-4. The switcher in the first pane's header, with `lend` and opening in a new tab; links between bases in the Iso
-   pane.
+4. The switcher in the first pane's header, with `lend` and opening in a new tab; links between bases in the Iso pane.
 5. `isorite memory` and its `AGENTS.md`.
-6. The guide's note and problem, the docs, the eval case, and a real check on a temporary copy (about $0.05, with
-   the cost reported).
+6. The guide's note and problem, the docs, the eval case, and a real check on a temporary copy (about $0.05, with the cost reported).
 7. Tests, screenshots against the boards, and a write-up as §8 here. Version 0.8.0.
 
 ## 7. Questions
 
 - **Q91: one base per window, or a base per pane?** *Recommended: per window*, with side by side meaning two tabs.
-  - A pane showing another base would need the Atlas, a note's links and Iso's context to cross bases, which is
-    the cross-base linking rdstudio decided against.
+  - A pane showing another base would need the Atlas, a note's links and Iso's context to cross bases, which is the cross-base linking rdstudio decided against.
   - Two tabs give you the project and its memory side by side already, each live.
-- **Q92: should bases be remembered as you open them?** *Recommended: yes*, under the folder's name in
-  `config.toml`. That way the switcher lists what you've used without any setting up.
+- **Q92: should bases be remembered as you open them?** *Recommended: yes*, under the folder's name in `config.toml`. That way the switcher lists what you've used without any setting up.
   - The other choice is listing only bases you name with `isorite bases add`.
   - Either way, the page can switch between listed bases but can't add a path.
-- **Q93: does the agent write to memory at once?** *Recommended: yes*, entered and marked as its words, as it writes
-  notes in the project now. You undo what you don't want.
-  - The alternative is that its memory writes are proposals for you to keep. That's safer, but it would stop the
-    learning you liked unless you keep up with it.
-- **Q94: may Iso use lent bases?** *Recommended: Iso reads them but writes only in its own base*, so Iso in a
-  project knows what the memory knows, and a project's Iso can't change your memory.
+- **Q93: does the agent write to memory at once?** *Recommended: yes*, entered and marked as its words, as it writes notes in the project now. You undo what you don't want.
+  - The alternative is that its memory writes are proposals for you to keep. That's safer, but it would stop the learning you liked unless you keep up with it.
+- **Q94: may Iso use lent bases?** *Recommended: Iso reads them but writes only in its own base*, so Iso in a project knows what the memory knows, and a project's Iso can't change your memory.
   - The other choices are Iso writing to memory as the agent does, or Iso not using other bases at all.
-- **Q95: where does the memory live, and as a git repository?** *Recommended: `~/isorite-memory`, named `memory`,
-  made a private git repository by `isorite memory`*, as rdstudio's `~/knowledge` was. `isorite memory <folder>`
-  puts it elsewhere.
-- **Q96: is the timeline enough to watch it learn?** *Recommended: yes for M20*, since it already shows each change
-  with what you'd asked. A later view, "what the agent learned this week", could come after you've used it for a
-  while.
+- **Q95: where does the memory live, and as a git repository?** *Recommended: `~/isorite-memory`, named `memory`, made a private git repository by `isorite memory`*, as rdstudio's `~/knowledge` was. `isorite memory <folder>` puts it elsewhere.
+- **Q96: is the timeline enough to watch it learn?** *Recommended: yes for M20*, since it already shows each change with what you'd asked. A later view, "what the agent learned this week", could come after you've used it for a while.
 - **Answered 2026-10-26:** Q91–Q96 as recommended.
 - **Not in M20:**
   - links between bases;
@@ -245,61 +195,40 @@ use isorite's memory as well as its own.
 
 On branch `m20-bases`, version 0.8.0.
 
-- **The list of bases** is `~/.config/isorite/bases.toml`, beside `config.toml`, not a table inside it (a
-  departure). `config.toml` is written by hand, holds the key and has comments, and adding a row each time a base
-  is opened would have rewritten it.
-  - `knownBases`, `rememberBase` (under the folder's name, `-2` for a second folder of that name) and `lendBase`
-    are in `config.ts`.
+- **The list of bases** is `~/.config/isorite/bases.toml`, beside `config.toml`, not a table inside it (a departure). `config.toml` is written by hand, holds the key and has comments, and adding a row each time a base is opened would have rewritten it.
+  - `knownBases`, `rememberBase` (under the folder's name, `-2` for a second folder of that name) and `lendBase` are in `config.ts`.
   - `isorite bases` lists the bases; `isorite bases lend <name>` lends one and `keep <name>` stops.
 - **One server, several bases** (`server/src/bases.ts`):
-  - `Bases` opens a base's engine and app the first time it's asked for, and the lent ones at the start. Every
-    base shares one embedder, one token and the provider's relay, and the provider's setup is kept into use in all
-    of them.
+  - `Bases` opens a base's engine and app the first time it's asked for, and the lent ones at the start. Every base shares one embedder, one token and the provider's relay, and the provider's setup is kept into use in all of them.
   - `openServer` is the testable half of `serve`.
-  - The routes: `/api/bases` (the list), `/api/bases/lend` and `/api/bases/open` (from this machine only), and
-    `/api/server/hold`, a stream that holds a server open while `isorite term` or `mcp` is using it.
-- **A base's page** is the app's own page with `?base=<name>`, and its API is `/b/<name>/api/` (a departure from
-  `/b/<name>/` as the page).
-  - SvelteKit's hash router puts a slash after its base, but its links have none, so every link would have
-    reloaded the page.
+  - The routes: `/api/bases` (the list), `/api/bases/lend` and `/api/bases/open` (from this machine only), and `/api/server/hold`, a stream that holds a server open while `isorite term` or `mcp` is using it.
+- **A base's page** is the app's own page with `?base=<name>`, and its API is `/b/<name>/api/` (a departure from `/b/<name>/` as the page).
+  - SvelteKit's hash router puts a slash after its base, but its links have none, so every link would have reloaded the page.
   - `/b/<name>` sends you to `?base=<name>`.
-  - What the browser keeps for a base (the note last open, unsaved text, drafts' places on the Atlas) is kept
-    under its name (`here.ts`).
-- **`isorite term` and `mcp`** add their base to a server that's already running, and say its page. A server they
-  start is `--held`: it stops a second after the last one using it lets go.
-  - That stream has to be read for as long as it's held. Node's fetch lets an unread body go once nothing refers
-    to it, and the server stopped mid-session (the terminal's end-to-end tests caught it).
+  - What the browser keeps for a base (the note last open, unsaved text, drafts' places on the Atlas) is kept under its name (`here.ts`).
+- **`isorite term` and `mcp`** add their base to a server that's already running, and say its page. A server they start is `--held`: it stops a second after the last one using it lets go.
+  - That stream has to be read for as long as it's held. Node's fetch lets an unread body go once nothing refers to it, and the server stopped mid-session (the terminal's end-to-end tests caught it).
 - **The tools:**
   - every agent tool takes `base`, and a note can be named `memory:<id>`;
   - a look in another base is drawn on that base's Atlas, and ends with the turn;
   - the agent writes there under its name;
   - `brief_base` lists the lent bases, each with the first line of its `AGENTS.md`;
   - an unknown or unlent base is refused, naming the bases that are lent.
-  - Iso gets the same `base` on its look-ups, a section naming the lent bases, and a step with `away` (not drawn on
-    this base's Atlas). A change to another base is refused.
+  - Iso gets the same `base` on its look-ups, a section naming the lent bases, and a step with `away` (not drawn on this base's Atlas). A change to another base is refused.
   - OpenCode's plugin and the MCP bridge tell the agent which bases are lent.
 - **The app:**
-  - `BaseSwitch` shows the base's name before the first pane's name (each pane's, on a phone). It opens the list,
-    where each base is a link (Ctrl-click for a new tab), the one here is ticked, and each has a lent switch (only
-    from this machine).
+  - `BaseSwitch` shows the base's name before the first pane's name (each pane's, on a phone). It opens the list, where each base is a link (Ctrl-click for a new tab), the one here is ticked, and each has a lent switch (only from this machine).
   - Iso's steps, and the terminal's tool lines in another base, link to that note in its own page, in a new tab.
-- **`isorite memory`** (`server/src/memory.ts`) makes `~/isorite-memory`: the base, `git init`, its `AGENTS.md`
-  (the practice in §2.5) and its row, lent. Run again, it says where the memory is and changes nothing.
-- **The guide:** *Several bases, and the agent's memory* (`terminal/memory`) and the problem *Let the agent remember*
-  (renamed from *Give the agent a memory*, which the finder took for the answer to "how do I give Iso a note?").
-- **The eval:** `look-in-the-memory`, with a memory holding how they like numbers given. Mid tier, one run: 3/3,
-  $0.035.
-- **The docs:** `setup.md` §5, `terminal.md` (*The agent's memory, and other bases*), `setup-for-agents.md`
-  (commands and files), and the npm README.
+- **`isorite memory`** (`server/src/memory.ts`) makes `~/isorite-memory`: the base, `git init`, its `AGENTS.md` (the practice in §2.5) and its row, lent. Run again, it says where the memory is and changes nothing.
+- **The guide:** *Several bases, and the agent's memory* (`terminal/memory`) and the problem *Let the agent remember* (renamed from *Give the agent a memory*, which the finder took for the answer to "how do I give Iso a note?").
+- **The eval:** `look-in-the-memory`, with a memory holding how they like numbers given. Mid tier, one run: 3/3, $0.035.
+- **The docs:** `setup.md` §5, `terminal.md` (*The agent's memory, and other bases*), `setup-for-agents.md` (commands and files), and the npm README.
 - **Not done:** the real check of the terminal's agent on a temporary copy.
-  - It needs the provider's key under a temporary configuration, and the key isn't to be copied. Under the real
-    configuration it would write the temporary bases into your `bases.toml`.
-  - The agent's side is tested end to end with the scripted gateway instead: the OpenCode tests and
-    `bases.spec.ts`.
+  - It needs the provider's key under a temporary configuration, and the key isn't to be copied. Under the real configuration it would write the temporary bases into your `bases.toml`.
+  - The agent's side is tested end to end with the scripted gateway instead: the OpenCode tests and `bases.spec.ts`.
   - Your own use of `isorite memory` with `isorite term` is the real check.
 - **Tests:**
-  - unit: core 303, engine 125 (5 new, `bases.test.ts`), example 11, guide 9, OpenCode 43, server 100 (7 new in
-    `bases.test.ts`, 1 in `terminal.test.ts`), app 51;
+  - unit: core 303, engine 125 (5 new, `bases.test.ts`), example 11, guide 9, OpenCode 43, server 100 (7 new in `bases.test.ts`, 1 in `terminal.test.ts`), app 51;
   - browser: 226 passed and 18 skipped (16 new in `bases.spec.ts`);
   - site: 8 passed;
   - `svelte-check` is clean, and the autofixer reports no issues.

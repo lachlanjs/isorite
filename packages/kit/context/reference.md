@@ -1,8 +1,6 @@
 # The kit (isorite kit 1)
 
-An artifact is one HTML file: markup, perhaps a script, and a manifest in its `<head>`. isorite gives it the kit:
-the look (every colour, font and corner), the elements below, and `window.iso`. Write what it shows and does, never
-how it looks: no colour, font family or border-radius of your own.
+An artifact is one HTML file: markup, perhaps a script, and a manifest in its `<head>`. isorite gives it the kit: the look (every colour, font and corner), the elements below, and `window.iso`. Write what it shows and does, never how it looks: no colour, font family or border-radius of your own.
 
 ## The file
 
@@ -34,16 +32,12 @@ how it looks: no colour, font family or border-radius of your own.
 ## Layout
 
 - `<iso-grid>`: panels in two columns (`style="--cols: 3"` for three); `<iso-panel class="wide">` spans the row.
-- `<iso-panel>`: its first child is `<h2>`; a `<span>` in the `h2` is a soft aside. A `<p>` in a panel is a
-  caption: what the panel shows, in a sentence.
+- `<iso-panel>`: its first child is `<h2>`; a `<span>` in the `h2` is a soft aside. A `<p>` in a panel is a caption: what the panel shows, in a sentence.
 - `<iso-row>`: controls side by side. `<iso-stats>`: big numbers side by side.
 
 ## Data, with no script
 
-Every element with `data="file.csv"` reads it itself. Several files are one table:
-`data="euler.csv leapfrog.csv"` adds a column `file` (`euler`, `leapfrog`) to compare them with `by="file"`.
-`where="integrator=leapfrog"` keeps some rows; `where="t<=$t"` compares with a control's value. `abs(col)` is a
-column's size.
+Every element with `data="file.csv"` reads it itself. Several files are one table: `data="euler.csv leapfrog.csv"` adds a column `file` (`euler`, `leapfrog`) to compare them with `by="file"`. `where="integrator=leapfrog"` keeps some rows; `where="t<=$t"` compares with a control's value. `abs(col)` is a column's size.
 
 - `<iso-chart data="f.csv" x="t" y="energy" by="body">`: a chart.
   - `type`: `line` (default), `dot`, `bar`, `area`, `step`.
@@ -51,19 +45,15 @@ column's size.
   - `by`: a column whose values are the series.
   - `x-scale`, `y-scale`: `linear` or `log`, or `$name` to follow a control (`y-scale="$scale"`).
   - `x-label`, `y-label`: the axis with its unit (`"time (s)"`). `height` in pixels (260).
-  - `at="t"`: follows the control `t`. A rule where x is its value; or, when the data has a column `t` and x is
-    another column (a path in x and y over time), a dot on each series at the row whose `t` is nearest it.
+  - `at="t"`: follows the control `t`. A rule where x is its value; or, when the data has a column `t` and x is another column (a path in x and y over time), a dot on each series at the row whose `t` is nearest it.
 - `<iso-table data="f.csv" columns="a b c" limit="50">`: the rows.
-- `<iso-stat data="f.csv" column="err" of="max" label="worst error" tone="gold">`: one number. `of`: `min`, `max`,
-  `mean`, `sum`, `count`, `first`, `last`. Tones: `gold`, `blue`, `green`, `rose`. Without `data`, set it from a
-  script: `el.value = 0.0023`.
+- `<iso-stat data="f.csv" column="err" of="max" label="worst error" tone="gold">`: one number. `of`: `min`, `max`, `mean`, `sum`, `count`, `first`, `last`. Tones: `gold`, `blue`, `green`, `rose`. Without `data`, set it from a script: `el.value = 0.0023`.
 - `<iso-chart3d data="f.csv" x="x" y="y" z="z" by="body" at="t">`: points or paths in 3D, turned by dragging.
 - `<iso-model src="part.glb">`: a 3D model (glTF, GLB, STL, OBJ), turned by dragging. List it in isorite:uses.
 
 ## Text and maths
 
-- A `<p>` in a panel is its caption. Maths is written as in a note: `$E = \tfrac12 m v^2$` inline, `$$…$$` on a
-  line of its own; the kit sets it. `<iso-math>\frac{a}{b}</iso-math>` is a formula alone.
+- A `<p>` in a panel is its caption. Maths is written as in a note: `$E = \tfrac12 m v^2$` inline, `$$…$$` on a line of its own; the kit sets it. `<iso-math>\frac{a}{b}</iso-math>` is a formula alone.
 - Never name the theme's colours in text ("the lattice line"): a chart's legend says which series is which.
 
 ## Controls
@@ -83,14 +73,10 @@ For a simulation or anything computed. Put it at the end of the body.
 - `const rows = await iso.data("f.csv")`: the rows as objects, numbers as numbers.
 - `iso.state.name`, `iso.watch((name) => …)`: the shared state; `watch` runs after any change.
 - `iso.loop((dt, t) => …)`: runs every frame (dt in seconds), paused when hidden. Returns a stop function.
-- `<iso-canvas height="320" id="sim">` and `document.getElementById("sim").draw = (ctx, w, h, t) => { … }`: draw on
-  a canvas sized to its panel; call `.redraw()` after a change. `t` is the theme: `t.text`, `t.soft`, `t.faint`,
-  `t.line`, `t.lattice` (blue), `t.growth` (gold), `t.malachite` (green), `t.rose`, `t.series[i]`, `t.ui` (the font).
-- A chart of what the script computes: `chart.rows = [{ t: 0, energy: -1.3 }, …]` on an `<iso-chart>` with no
-  `data`.
+- `<iso-canvas height="320" id="sim">` and `document.getElementById("sim").draw = (ctx, w, h, t) => { … }`: draw on a canvas sized to its panel; call `.redraw()` after a change. `t` is the theme: `t.text`, `t.soft`, `t.faint`, `t.line`, `t.lattice` (blue), `t.growth` (gold), `t.malachite` (green), `t.rose`, `t.series[i]`, `t.ui` (the font).
+- A chart of what the script computes: `chart.rows = [{ t: 0, energy: -1.3 }, …]` on an `<iso-chart>` with no `data`.
 - `iso.format(x)`: a number to read (3 figures, 2.3×10⁻³). `iso.tokens()`: the theme, as `t` above.
-- In CSS: `var(--text)`, `var(--text-soft)`, `var(--text-faint)`, `var(--line)`, `var(--lattice)`, `var(--growth)`,
-  `var(--malachite)`, `var(--rose)`, `var(--font-ui)`, `var(--font-text)`.
+- In CSS: `var(--text)`, `var(--text-soft)`, `var(--text-faint)`, `var(--line)`, `var(--lattice)`, `var(--growth)`, `var(--malachite)`, `var(--rose)`, `var(--font-ui)`, `var(--font-text)`.
 
 ## Rules (write_artifact checks them, and refuses a file that breaks one)
 
@@ -103,5 +89,4 @@ For a simulation or anything computed. Put it at the end of the body.
 
 ## What good is
 
-Every panel answers a question about the data, with a caption saying what to see. Numbers are read out. Axes say
-what they measure, with units. Controls change what is drawn at once. Nothing is decoration.
+Every panel answers a question about the data, with a caption saying what to see. Numbers are read out. Axes say what they measure, with units. Controls change what is drawn at once. Nothing is decoration.

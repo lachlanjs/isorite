@@ -1,8 +1,6 @@
 # Iso's eval cases
 
-One JSON file per case, run by `npm run eval:iso` (scripts/eval-iso.ts) on a fresh copy of the example base (the
-N-body notes), against the provider in `~/.config/isorite/config.toml`. Plain JSON, so that a prompt optimiser
-(DSPy's GEPA, say) could use the same cases and checks later.
+One JSON file per case, run by `npm run eval:iso` (scripts/eval-iso.ts) on a fresh copy of the example base (the N-body notes), against the provider in `~/.config/isorite/config.toml`. Plain JSON, so that a prompt optimiser (DSPy's GEPA, say) could use the same cases and checks later.
 
 ```jsonc
 {
@@ -19,12 +17,4 @@ N-body notes), against the provider in `~/.config/isorite/config.toml`. Plain JS
 }
 ```
 
-Checks: `{"called": [tools]}` and `{"notCalled": [tools]}` (the judged turn's tool calls); `{"says": "regex"}` and
-`{"saysNot": "regex"}` (its reply, case-insensitive); `{"linksResolve": true}` (every link in its reply names a
-note); `{"changed": [ids]}` (exactly these notes changed, none other; `[]` for none); `{"created": "folder/"}` (one
-note made, in that folder, with frontmatter type and title, and a link that resolves); `{"createdNot": "regex"}`
-(no note made whose title matches); `{"editLines": n}` (at most n lines changed in all); `{"changedSays": "regex"}`
-(the changed text matches); `{"notRead": [ids]}` (not read again in the judged turn); `{"briefing": {"open":
-"regex", "notes": [ids]}}` (the compaction picked these); `{"words": n}` (the reply is at most n words); `{"unchanged": [ids]}` (these notes not touched); `{"asks": true}`
-(it asks back: ask_question, or a question in its reply); `{"diagram": true}` (its reply has a mermaid block that Pele can draw; `false`: none); `{"lookedIn": "memory"}` (it
-looked in that lent base).
+Checks: `{"called": [tools]}` and `{"notCalled": [tools]}` (the judged turn's tool calls); `{"says": "regex"}` and `{"saysNot": "regex"}` (its reply, case-insensitive); `{"linksResolve": true}` (every link in its reply names a note); `{"changed": [ids]}` (exactly these notes changed, none other; `[]` for none); `{"created": "folder/"}` (one note made, in that folder, with frontmatter type and title, and a link that resolves); `{"createdNot": "regex"}` (no note made whose title matches); `{"editLines": n}` (at most n lines changed in all); `{"changedSays": "regex"}` (the changed text matches); `{"notRead": [ids]}` (not read again in the judged turn); `{"briefing": {"open": "regex", "notes": [ids]}}` (the compaction picked these); `{"words": n}` (the reply is at most n words); `{"unchanged": [ids]}` (these notes not touched); `{"asks": true}` (it asks back: ask_question, or a question in its reply); `{"diagram": true}` (its reply has a mermaid block that Pele can draw; `false`: none); `{"lookedIn": "memory"}` (it looked in that lent base).

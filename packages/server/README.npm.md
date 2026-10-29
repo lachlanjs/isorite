@@ -9,8 +9,7 @@ npm install -g isorite
 isorite guide               # the guide: a knowledge base about isorite, with things to do, in ~/isorite-guide
 ```
 
-On your own notes, a folder of Markdown files (`isorite new <notes>` starts one). They're drawn as you write them:
-maths, code coloured by its language, and Mermaid diagrams.
+On your own notes, a folder of Markdown files (`isorite new <notes>` starts one). They're drawn as you write them: maths, code coloured by its language, and Mermaid diagrams.
 
 ```sh
 isorite serve <notes>       # the browser, at http://localhost:4767/; set up Iso's provider in Iso's settings
@@ -19,9 +18,7 @@ isorite model               # optional: search by meaning (fetches a 53 MB model
 isorite memory              # optional: the agent's memory, a base of its own lent to every session
 ```
 
-Setting it up, at work too (a company's gateway, a client certificate, a proxy): `docs/setup.md` in this package.
-When something fails, `isorite doctor` says what to change; `isorite doctor --report` gives it as one block, its
-secrets hidden, to paste to someone helping. For an AI helping you: `isorite help setup`.
+Setting it up, at work too (a company's gateway, a client certificate, a proxy): `docs/setup.md` in this package. When something fails, `isorite doctor` says what to change; `isorite doctor --report` gives it as one block, its secrets hidden, to paste to someone helping. For an AI helping you: `isorite help setup`.
 
 The guide in a browser alone: https://lachlanjs.github.io/isorite/
 

@@ -75,57 +75,23 @@ The tutorial's L4 (terminal) and E3 (building) wait until after the trial, so th
 
 Steps 1 to 6 on `m11-terminal`, with `--tailnet` dropped (Q24). How to use it: `docs/terminal.md`.
 
-- **Serve and attach** (`packages/server/src/term.ts`). `isorite term` starts `opencode2 serve` on a free port on
-  127.0.0.1 with a random password (its output in `$TMPDIR/isorite-opencode-<port>.log`), tells the isorite server
-  where it is (`POST /api/terminal/attach`, which takes only a URL on this machine), and opens the TUI with
-  `--server`. Both halves of the plugin load as before: M6's ten end-to-end tests pass unchanged in this arrangement.
-  Closing the terminal detaches and stops both servers.
-- **The session followed** (`packages/server/src/terminal.ts`). The isorite server is OpenCode's only other client
-  (`@opencode/client` 2.0.32, as Q23). It follows the session the terminal last viewed, else the latest; reads its
-  messages (the latest 200, the most OpenCode gives at once) again after each step, tool call and permission, adds
-  text as it streams, and sends the pages the whole session as a `terminal` event. Turns are made from OpenCode's
-  messages as `spike/probe.ts` recorded them: a prompt, its text, a line per tool call (a command's output, an
-  edit's or write's diff, a look-up's note), and how it ended.
-- **Acting from a page**: `/api/terminal/prompt` (what is asked, with the notes and passages given: notes by name
-  for the agent to read with isorite's tools, passages quoted), `/stop` (OpenCode's interrupt), `/permission` (only
-  a permission the session is asking). All are writes: the token and the Origin, as every write.
-- **Build mode in Iso's pane** (`TerminalTurns.svelte`, `terminal.svelte.ts`). The `>_` mode is there only while a
-  terminal is attached. Each turn says whether it was asked in the terminal or here; a command or file line opens on
-  its output or diff; a look-up or a changed note opens the note (a changed note in its Iso lens); a permission is
-  asked under its tool call with Allow once / Always allow this / Don't allow. The box sends to the session, the
-  square stops it. The foot shows the model and the tokens, and the cost only when OpenCode knows it.
-- **The agent's changes to notes** are written at once, as Write mode's (Q20): `propose_note_edit` and
-  `propose_note_write` became `edit_note` and `write_note` (`Api.agentWrite`), entered in the note's journal under
-  `agent:opencode` with what was asked, its words marked by the core's authorship as Iso's are. A new note is made
-  where the agent meant, not as a draft. The plugin's safety net makes OpenCode's own `edit` or `write` on a note the
-  same change. The terminal's tour and the browser tutorial's L4 say so; the tour's replay was recorded again.
-- **Models**: with no `ISORITE_GATEWAY_*`, `isorite term` gives OpenCode Iso's provider from `config.toml` (OpenRouter
-  unless `[provider] url` names another), its tiers as models (mid the default, then max and low), and the key in
-  OpenCode's server's environment only. `~/.config/isorite/opencode/local.json`, yours and never rewritten, is laid
-  over the settings isorite writes (permissions, other providers).
-- **A package for the work machine**: `ISORITE_VERSION=0.2.0-trial.1 npm run package`, then `npm pack` in
-  `.npm/isorite`, gives a 5.5 MB tarball; installed into an empty prefix it ran the real-model check below.
+- **Serve and attach** (`packages/server/src/term.ts`). `isorite term` starts `opencode2 serve` on a free port on 127.0.0.1 with a random password (its output in `$TMPDIR/isorite-opencode-<port>.log`), tells the isorite server where it is (`POST /api/terminal/attach`, which takes only a URL on this machine), and opens the TUI with `--server`. Both halves of the plugin load as before: M6's ten end-to-end tests pass unchanged in this arrangement. Closing the terminal detaches and stops both servers.
+- **The session followed** (`packages/server/src/terminal.ts`). The isorite server is OpenCode's only other client (`@opencode/client` 2.0.32, as Q23). It follows the session the terminal last viewed, else the latest; reads its messages (the latest 200, the most OpenCode gives at once) again after each step, tool call and permission, adds text as it streams, and sends the pages the whole session as a `terminal` event. Turns are made from OpenCode's messages as `spike/probe.ts` recorded them: a prompt, its text, a line per tool call (a command's output, an edit's or write's diff, a look-up's note), and how it ended.
+- **Acting from a page**: `/api/terminal/prompt` (what is asked, with the notes and passages given: notes by name for the agent to read with isorite's tools, passages quoted), `/stop` (OpenCode's interrupt), `/permission` (only a permission the session is asking). All are writes: the token and the Origin, as every write.
+- **Build mode in Iso's pane** (`TerminalTurns.svelte`, `terminal.svelte.ts`). The `>_` mode is there only while a terminal is attached. Each turn says whether it was asked in the terminal or here; a command or file line opens on its output or diff; a look-up or a changed note opens the note (a changed note in its Iso lens); a permission is asked under its tool call with Allow once / Always allow this / Don't allow. The box sends to the session, the square stops it. The foot shows the model and the tokens, and the cost only when OpenCode knows it.
+- **The agent's changes to notes** are written at once, as Write mode's (Q20): `propose_note_edit` and `propose_note_write` became `edit_note` and `write_note` (`Api.agentWrite`), entered in the note's journal under `agent:opencode` with what was asked, its words marked by the core's authorship as Iso's are. A new note is made where the agent meant, not as a draft. The plugin's safety net makes OpenCode's own `edit` or `write` on a note the same change. The terminal's tour and the browser tutorial's L4 say so; the tour's replay was recorded again.
+- **Models**: with no `ISORITE_GATEWAY_*`, `isorite term` gives OpenCode Iso's provider from `config.toml` (OpenRouter unless `[provider] url` names another), its tiers as models (mid the default, then max and low), and the key in OpenCode's server's environment only. `~/.config/isorite/opencode/local.json`, yours and never rewritten, is laid over the settings isorite writes (permissions, other providers).
+- **A package for the work machine**: `ISORITE_VERSION=0.2.0-trial.1 npm run package`, then `npm pack` in `.npm/isorite`, gives a 5.5 MB tarball; installed into an empty prefix it ran the real-model check below.
 
-**Tests:** server 30 (new: the turns, the prompt, the models), engine 86, core 323, opencode 51 (new end to end: a
-page reads the terminal's session, asks in it with a note given, and answers a command's permission, against
-OpenCode 2.0.32 in tmux); in the browser `build.spec.ts` attaches a real OpenCode server for its own run, at both
-widths on both grounds.
+**Tests:** server 30 (new: the turns, the prompt, the models), engine 86, core 323, opencode 51 (new end to end: a page reads the terminal's session, asks in it with a note given, and answers a command's permission, against OpenCode 2.0.32 in tmux); in the browser `build.spec.ts` attaches a real OpenCode server for its own run, at both widths on both grounds.
 
-**Real model**, once, on a temporary copy of the example base, through the installed tarball, with your OpenRouter
-key read by isorite from its config: asked in the terminal "what does my note on leapfrog say about energy?" on
-`anthropic/claude-sonnet-5.5`. It looked over the base, searched, read Leapfrog, and answered with a citation; the
-pane's view had the same turn. 42,937 tokens in, 269 out, over four calls, almost all of it OpenCode's system prompt
-and tools, sent with each call. OpenCode reported no cost for a gateway model.
+**Real model**, once, on a temporary copy of the example base, through the installed tarball, with your OpenRouter key read by isorite from its config: asked in the terminal "what does my note on leapfrog say about energy?" on `anthropic/claude-sonnet-5.5`. It looked over the base, searched, read Leapfrog, and answered with a citation; the pane's view had the same turn. 42,937 tokens in, 269 out, over four calls, almost all of it OpenCode's system prompt and tools, sent with each call. OpenCode reported no cost for a gateway model.
 
 **Not done, or done differently:**
-- Undo from Build mode's line: a changed note is undone from its timeline (or the note's Iso lens), not from the
-  pane.
-- The Note pane's M6 *send to agent* is still there beside *send to Iso*; in Build mode, what is given to Iso goes
-  to the terminal, which does the same. To remove after the trial.
-- The plugin still ends an agent's turn (for the Atlas) half a second after the session settles, not from
-  `session.execution.*`; the pane's own turns use OpenCode's events.
-- Sessions older than the latest 200 messages are not shown; a session the terminal never viewed is followed only
-  when it is the latest.
+- Undo from Build mode's line: a changed note is undone from its timeline (or the note's Iso lens), not from the pane.
+- The Note pane's M6 *send to agent* is still there beside *send to Iso*; in Build mode, what is given to Iso goes to the terminal, which does the same. To remove after the trial.
+- The plugin still ends an agent's turn (for the Atlas) half a second after the session settles, not from `session.execution.*`; the pane's own turns use OpenCode's events.
+- Sessions older than the latest 200 messages are not shown; a session the terminal never viewed is followed only when it is the latest.
 - `--tailnet` (dropped), Windows (not tried), the tutorial's L4 and E3 (after the trial).
 
 ## Set aside for after the trial (from your answers of 2026-10-23)

@@ -176,8 +176,7 @@ This is the content of `knowledge/design/isorite-style.md` in rdstudio, which wa
 
 Each of lattice, growth and rose has a soft form for a tinted ground: the colour at 16% over the ground in dark, 10% in light.
 
-**Rose** is only for: an error, a conflict, a wrong answer, a delete or other thing that cannot be undone, a broken link. Never decoration, never a warning short of failure.
-**Gold** is only for: Iso's diamond, the seed being worked on, Iso's unkept text, the path Iso is taking on the map. Never a warning.
+**Rose** is only for: an error, a conflict, a wrong answer, a delete or other thing that cannot be undone, a broken link. Never decoration, never a warning short of failure. **Gold** is only for: Iso's diamond, the seed being worked on, Iso's unkept text, the path Iso is taking on the map. Never a warning.
 
 ### Contrast (Measured, WCAG)
 

@@ -1,14 +1,8 @@
 # Setting isorite up: for an AI helping someone
 
-You're helping someone set up isorite: a local web app over a folder of Markdown notes (the browser), an agent in it
-called Iso, and `isorite term`, which runs OpenCode 2 beside the notes. This is everything isorite reads, writes and
-runs for the setup, and how each failure shows. `isorite help setup` prints this file.
+You're helping someone set up isorite: a local web app over a folder of Markdown notes (the browser), an agent in it called Iso, and `isorite term`, which runs OpenCode 2 beside the notes. This is everything isorite reads, writes and runs for the setup, and how each failure shows. `isorite help setup` prints this file.
 
-**Start here:** ask them to run `isorite doctor --report` (add the notes folder if they have one) and paste what it
-prints. It shows isorite's and Node's versions, the platform, the configuration with secrets replaced by their
-lengths, the environment variables isorite reads, and a line for each check, ✓ passed, ✗ failed, ! a warning, –
-skipped. Most failures say what to change. Never ask them to paste a key or passphrase, and don't ask them to
-turn off certificate checking (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
+**Start here:** ask them to run `isorite doctor --report` (add the notes folder if they have one) and paste what it prints. It shows isorite's and Node's versions, the platform, the configuration with secrets replaced by their lengths, the environment variables isorite reads, and a line for each check, ✓ passed, ✗ failed, ! a warning, – skipped. Most failures say what to change. Never ask them to paste a key or passphrase, and don't ask them to turn off certificate checking (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
 
 ## Commands
 
@@ -44,9 +38,7 @@ isorite never reads or changes the person's own OpenCode settings (`~/.config/op
 
 ## config.toml
 
-The person can set all of this from Iso's settings in the browser (M18: on `localhost` only; checked as `doctor`
-checks it, kept into use without a restart). The page writes the same fields; it drops comments, keeping the file
-as it was once as `config.toml.bak`. Writing it by hand needs the server restarted.
+The person can set all of this from Iso's settings in the browser (M18: on `localhost` only; checked as `doctor` checks it, kept into use without a restart). The page writes the same fields; it drops comments, keeping the file as it was once as `config.toml.bak`. Writing it by hand needs the server restarted.
 
 ```toml
 [provider]
@@ -81,8 +73,7 @@ max = "…"                             # most able
 
 Rules:
 
-- With `url` set and no `[tiers]`, OpenRouter's names are used (`anthropic/claude-…`). A gateway usually answers
-  404 to them. Doctor warns: name the gateway's models under `[tiers]`.
+- With `url` set and no `[tiers]`, OpenRouter's names are used (`anthropic/claude-…`). A gateway usually answers 404 to them. Doctor warns: name the gateway's models under `[tiers]`.
 - `pfx` and `cert` can't both be named. `cert` and `cert_key` go together.
 - A `"$NAME"` value whose variable isn't set is an error naming both.
 - Certificates are used only over https, and only for the provider's own address.
@@ -103,22 +94,11 @@ Rules:
 
 ## How requests reach the provider
 
-- **Iso** (in the isorite server) posts to `<url>/chat/completions?<query>`, streaming, with the key (in
-  `Authorization: Bearer` or `key_header`), `headers`, and `stream_options` unless `stream_usage = false`. With a
-  certificate or `ca`, it goes by `node:https` with them, through `HTTPS_PROXY` if set. Otherwise it uses Node's
-  fetch.
-- **The terminal**: OpenCode is configured with the provider at `http://127.0.0.1:<port>/api/gateway`, the isorite
-  server's relay, and with the server's token as its key. The relay adds the real key, certificate, headers and
-  query, and passes `/chat/completions` and `/models` on. So whatever works for Iso works for the terminal. The
-  relay answers only on 127.0.0.1, and only that token.
-- **Retries.** A 502, 503 or 504, a dropped connection or a timeout is asked again up to 3 times (after about 1, 2
-  and 4 s), and a 429 once (after its `Retry-After`, if 10 s or less), but only before any of the reply has come.
-  The relay does the same before it passes anything to OpenCode (which retries on its own as well). 4xx answers
-  and names not found are the settings', and are not asked again.
-- **An empty reply.** A reply cut off at its length limit with nothing written (a reasoning model that spent the
-  budget thinking) is asked once more with three times the room.
-- With no key and no certificate in `config.toml`, and no `ISORITE_GATEWAY_*`, OpenCode uses its own models.
-  `isorite term` prints which models it uses, and from where.
+- **Iso** (in the isorite server) posts to `<url>/chat/completions?<query>`, streaming, with the key (in `Authorization: Bearer` or `key_header`), `headers`, and `stream_options` unless `stream_usage = false`. With a certificate or `ca`, it goes by `node:https` with them, through `HTTPS_PROXY` if set. Otherwise it uses Node's fetch.
+- **The terminal**: OpenCode is configured with the provider at `http://127.0.0.1:<port>/api/gateway`, the isorite server's relay, and with the server's token as its key. The relay adds the real key, certificate, headers and query, and passes `/chat/completions` and `/models` on. So whatever works for Iso works for the terminal. The relay answers only on 127.0.0.1, and only that token.
+- **Retries.** A 502, 503 or 504, a dropped connection or a timeout is asked again up to 3 times (after about 1, 2 and 4 s), and a 429 once (after its `Retry-After`, if 10 s or less), but only before any of the reply has come. The relay does the same before it passes anything to OpenCode (which retries on its own as well). 4xx answers and names not found are the settings', and are not asked again.
+- **An empty reply.** A reply cut off at its length limit with nothing written (a reasoning model that spent the budget thinking) is asked once more with three times the room.
+- With no key and no certificate in `config.toml`, and no `ISORITE_GATEWAY_*`, OpenCode uses its own models. `isorite term` prints which models it uses, and from where.
 
 ## What working looks like
 
@@ -168,11 +148,6 @@ Rules:
 
 ## Another model for search by meaning
 
-Any ONNX model that gives 384 numbers for a text, with its `tokenizer.json`, can stand in for granite:
-`isorite model --from <folder>`. It's checked by use (loaded, and asked for one vector), copied into the models
-folder, and used from then on; each base's vectors are made again with it. An optional `isorite-model.json` beside
-its files gives `{"name": "…", "pooling": "cls" | "mean"}`: `cls` (the default) takes the first token's state, as
-granite is used; `mean` averages them all, as sentence-transformers models such as all-MiniLM-L6-v2 are used.
+Any ONNX model that gives 384 numbers for a text, with its `tokenizer.json`, can stand in for granite: `isorite model --from <folder>`. It's checked by use (loaded, and asked for one vector), copied into the models folder, and used from then on; each base's vectors are made again with it. An optional `isorite-model.json` beside its files gives `{"name": "…", "pooling": "cls" | "mean"}`: `cls` (the default) takes the first token's state, as granite is used; `mean` averages them all, as sentence-transformers models such as all-MiniLM-L6-v2 are used.
 
-If the gateway isn't OpenAI-compatible (Bedrock's or Vertex's own APIs, for example), isorite can't use it directly.
-An OpenAI-compatible proxy in front of it, such as LiteLLM, can.
+If the gateway isn't OpenAI-compatible (Bedrock's or Vertex's own APIs, for example), isorite can't use it directly. An OpenAI-compatible proxy in front of it, such as LiteLLM, can.

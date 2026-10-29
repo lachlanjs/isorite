@@ -1,124 +1,60 @@
 ## What is Isorite?
 
-Isorite is an agentic harness for enhanced understanding.
-It can be used as a tool for project management, learning and planning.
-Isorite can be self-hosted within your codebase, or installed on your device (including mobile), driven through a web-based interface and connected to your familiar terminal-based workflow.
-It can be used by a team, or the individual, for learning and project enterprises (or both!).
-It can be connected to your Github or Gitlab project and operates on data you solely own.
-The platform is free, with LLM services provided through a paid API of your choice.
+Isorite is an agentic harness for enhanced understanding. It can be used as a tool for project management, learning and planning. Isorite can be self-hosted within your codebase, or installed on your device (including mobile), driven through a web-based interface and connected to your familiar terminal-based workflow. It can be used by a team, or the individual, for learning and project enterprises (or both!). It can be connected to your Github or Gitlab project and operates on data you solely own. The platform is free, with LLM services provided through a paid API of your choice.
 
 ## Brand, aesthetic, theme and design purpose
 
-Isorite is a portmanteau of "isomorphism" (the mathematical word for a structure-preserving one-to-one mapping between two sets of things) and "dendrite" (a branching structure associated with the neuron cell body which integrates inputs in complex and non-linear ways).
-In the very name, Isorite stands for human understanding which precisely maps onto progress and agent understanding.
-"Isorite" also sounds a bit like a form of mineral (like Pyrite or Celestite or Dolerite). 
-This, in addition to mathematical and neuronal themes, inpires the aesthetic of Isorite.
+Isorite is a portmanteau of "isomorphism" (the mathematical word for a structure-preserving one-to-one mapping between two sets of things) and "dendrite" (a branching structure associated with the neuron cell body which integrates inputs in complex and non-linear ways). In the very name, Isorite stands for human understanding which precisely maps onto progress and agent understanding. "Isorite" also sounds a bit like a form of mineral (like Pyrite or Celestite or Dolerite). This, in addition to mathematical and neuronal themes, inpires the aesthetic of Isorite.
 
-The interface presents as clean, minimalistic, geometric and natural.
-It feels like an appropriate home for grand, intelligent and structured thinking, rather than productivity-motivated speed.
-Isorite's design in terms of form and function aims to engage the user in a healthy manner, and adopts tried and true psychological tricks to do so.
-This informs the minimalism, engaging visual elements, and cohesive engagement of senses.
+The interface presents as clean, minimalistic, geometric and natural. It feels like an appropriate home for grand, intelligent and structured thinking, rather than productivity-motivated speed. Isorite's design in terms of form and function aims to engage the user in a healthy manner, and adopts tried and true psychological tricks to do so. This informs the minimalism, engaging visual elements, and cohesive engagement of senses.
 
-The colorscheme of Isorite conforms to mineral-like palette.
-Veins of pyrite gold, icy white, and smoky obsidian, with malachite, rhodochrosite and and azurite surfaces atop quartz and lapis backgrounds (depending on colour palette).
+The colorscheme of Isorite conforms to mineral-like palette. Veins of pyrite gold, icy white, and smoky obsidian, with malachite, rhodochrosite and and azurite surfaces atop quartz and lapis backgrounds (depending on colour palette).
 
-Lines are straight, taken either NWSE or at 45 degrees in some locations (such as Atlas paths).
-Corners of boxed areas are trimmed at 45degrees.
+Lines are straight, taken either NWSE or at 45 degrees in some locations (such as Atlas paths). Corners of boxed areas are trimmed at 45degrees.
 
 L-systems and cellular automata are used in opportune locations to provide visual flair and identity. (logo, ends of routes, hidden in background, loading animations, agent-thinking).
 
-The GUI uses animations in appropriate locations where they provide meaningful effects.
-For example, when the agent's thinking is shown, its visual trace through the knowledge base (through RAG semantic search and knowledge base traversal) is displayed with an animation reflecting the path taken.
+The GUI uses animations in appropriate locations where they provide meaningful effects. For example, when the agent's thinking is shown, its visual trace through the knowledge base (through RAG semantic search and knowledge base traversal) is displayed with an animation reflecting the path taken.
 
-Some aspects of the UI adopt a terminal-feel inspired by Alien-Isolation's UI design, which emulates low-fidelity computer systems which get the job done without needing to be unnecessarily complex or flashy.
-Alien isolation grabs the user's attention with clear vector-style graphics, labels inline to box edges, and flashing animations to draw visual attention.
+Some aspects of the UI adopt a terminal-feel inspired by Alien-Isolation's UI design, which emulates low-fidelity computer systems which get the job done without needing to be unnecessarily complex or flashy. Alien isolation grabs the user's attention with clear vector-style graphics, labels inline to box edges, and flashing animations to draw visual attention.
 
-Sound design is employed in Isorite to engage the user's senses further.
-Sounds are provided for typical UI interactions, as well as other distinguishing events such as Agent thinking, and study practice / success.
-The timbre of the sound aims to reflect the minimal, organic and crystalline mood of the interface.
-Sounds should have an emphasis on variation, either being largely generative or having a healthy sample selection, while maintaining distinct identity connected to their event/purpose.
-Some candidate sounds include subtle space drums, subtle percussive hits on organic surfaces and low-pass-filtered piano embellishments where melodic sound is appropriate.
-Some candidate effects include reverb, granulation, generative randomness and frequency filtering associated to different UI layers.
-Background sound should provide a stimulating but unobtrusive canvas which blends with the sounds attributed to UI events.
-It should evolve freely and conform to 1/f scaling (which is known to be stimulating to human beings - search Komerebi or Ocean Waves).
+Sound design is employed in Isorite to engage the user's senses further. Sounds are provided for typical UI interactions, as well as other distinguishing events such as Agent thinking, and study practice / success. The timbre of the sound aims to reflect the minimal, organic and crystalline mood of the interface. Sounds should have an emphasis on variation, either being largely generative or having a healthy sample selection, while maintaining distinct identity connected to their event/purpose. Some candidate sounds include subtle space drums, subtle percussive hits on organic surfaces and low-pass-filtered piano embellishments where melodic sound is appropriate. Some candidate effects include reverb, granulation, generative randomness and frequency filtering associated to different UI layers. Background sound should provide a stimulating but unobtrusive canvas which blends with the sounds attributed to UI events. It should evolve freely and conform to 1/f scaling (which is known to be stimulating to human beings - search Komerebi or Ocean Waves).
 
 ## Why Isorite?
 
-Isorite aims to address a fundamental issue with AI-driven development, which is that it undermines human understanding in favour of productivity and speed.
-Isorite also offers a solution to the issue that LLMs are not having the positive effect on education that they should.
-Lastly, Isorite also offers new ways of mapping and visualizing knowledge which are cleaner and more digestible than that of force-directed graph representations popularized by wiki-style personal-knowledge-management tools such as Obsidian.
+Isorite aims to address a fundamental issue with AI-driven development, which is that it undermines human understanding in favour of productivity and speed. Isorite also offers a solution to the issue that LLMs are not having the positive effect on education that they should. Lastly, Isorite also offers new ways of mapping and visualizing knowledge which are cleaner and more digestible than that of force-directed graph representations popularized by wiki-style personal-knowledge-management tools such as Obsidian.
 
 ### Chat-style Agentic harnesses
 
-Agentic chat-interfaces bear striking resemblance to poker machines.
-Minimal user-input sits between long waits with flashy presentation as the agent thinks and returns with a *possible* solution.
-Users become addicted to this process, as "one-more-prompt" feels like it could be the difference between leaving with nothing and striking gold.
-The simplistic interface discourages deeper structured thinking in other interfaces.
-Isorite aims to encourage the user to work more hand-in-hand with the LLM.
-It does not go as far as an LLM autocomplete would, where the AI is assistant to the human, but it does not strip away the human's agency in thought entirely.
-Isorite sits in the middle.
-Isorite does provide a TUI interface purely for programming-based (or similar) work where the abilities to edit files outside the knowledge bundle, execute commands, and integrate other tools from the AI ecosystem are required.
-This TUI still connects to the browser-based GUI interface and demonstrates the way in which the agent is retreiving and surfacing critical information.
+Agentic chat-interfaces bear striking resemblance to poker machines. Minimal user-input sits between long waits with flashy presentation as the agent thinks and returns with a *possible* solution. Users become addicted to this process, as "one-more-prompt" feels like it could be the difference between leaving with nothing and striking gold. The simplistic interface discourages deeper structured thinking in other interfaces. Isorite aims to encourage the user to work more hand-in-hand with the LLM. It does not go as far as an LLM autocomplete would, where the AI is assistant to the human, but it does not strip away the human's agency in thought entirely. Isorite sits in the middle. Isorite does provide a TUI interface purely for programming-based (or similar) work where the abilities to edit files outside the knowledge bundle, execute commands, and integrate other tools from the AI ecosystem are required. This TUI still connects to the browser-based GUI interface and demonstrates the way in which the agent is retreiving and surfacing critical information.
 
 ### Education/learning apps
 
-Education has not reaped the reward of LLMs as of late-2026.
-In theory, a wide cohort of students and learners should have access to their own personal experts tutors (a service as of yet approached only by the most prestiguous schools and higher-education institutions in the world - or for those who can afford personal tutoring services).
-Isorite aims to help address this in its learning/study functionality.
-Through the knowledge bundle, the agent can form a clearer picture of the shape and quality of the learner's understanding.
-The agent can then make tailored decisions about next steps for the user in terms of developing their understanding and problem-solving capabilities. 
-Isorite does not adopt a one-dimensional approach to learning, where other education apps tend to.
-For instance, many education apps opt for quiz-style recall or association questions, incentivised by "streaks" (which are a poor measure of learning outcomes).
-"Micro-learning" apps adopt a philosophy of bite-sized chunks of information while employing reminder/notification systems to encourage the user to stick to their habit.
-Isorite takes lessons from these attempts and modifies their delivery while adding its own learning functionality and agent systems to enhance the learning experience both for projects and for pure scholarly enterprises.
+Education has not reaped the reward of LLMs as of late-2026. In theory, a wide cohort of students and learners should have access to their own personal experts tutors (a service as of yet approached only by the most prestiguous schools and higher-education institutions in the world - or for those who can afford personal tutoring services). Isorite aims to help address this in its learning/study functionality. Through the knowledge bundle, the agent can form a clearer picture of the shape and quality of the learner's understanding. The agent can then make tailored decisions about next steps for the user in terms of developing their understanding and problem-solving capabilities. Isorite does not adopt a one-dimensional approach to learning, where other education apps tend to. For instance, many education apps opt for quiz-style recall or association questions, incentivised by "streaks" (which are a poor measure of learning outcomes). "Micro-learning" apps adopt a philosophy of bite-sized chunks of information while employing reminder/notification systems to encourage the user to stick to their habit. Isorite takes lessons from these attempts and modifies their delivery while adding its own learning functionality and agent systems to enhance the learning experience both for projects and for pure scholarly enterprises.
 
 ### Personal Knowledge Management
 
-Personal Knowledge Management (or PKM) has made for a zeitgeist in recent years.
-Apps such as Obsidian, LogSeq and Notion have popularized the use of technology to build "second-brains" which are curated and interacted with in the same manner as a wiki. 
-The premise suggested by network-visualisations, wide plugin ecosystems, and broad applications and generality, is tantalising.
-Moreover, the rise of LLMs reinvigorated this hype, with a leading researcher (Andrej Karpathy) popularising the attractive concept of the LLM-wiki.
-"Let the agent manage your second brain" became a sexy slogan hypnotizing technological early adopters in an unsophisticated manner.
-However, in practice many of these features fall flat.
-For one, the network-style visualisation is ineffective and uninterpretable when the number of nodes/connections exceeds a threshold.
-Secondly, the extensibility of these systems compromises structure and leads to a trap wherein an overengineered PKM system detracts from the actual goal of learning and understanding.
-Isorite keeps the feature set as minimal as possible, encourages and rewards user-engagement, reinvents the visualisation of the knowledge bundle, as well as the relationship between the user, the agent, and the "wiki".
+Personal Knowledge Management (or PKM) has made for a zeitgeist in recent years. Apps such as Obsidian, LogSeq and Notion have popularized the use of technology to build "second-brains" which are curated and interacted with in the same manner as a wiki. The premise suggested by network-visualisations, wide plugin ecosystems, and broad applications and generality, is tantalising. Moreover, the rise of LLMs reinvigorated this hype, with a leading researcher (Andrej Karpathy) popularising the attractive concept of the LLM-wiki. "Let the agent manage your second brain" became a sexy slogan hypnotizing technological early adopters in an unsophisticated manner. However, in practice many of these features fall flat. For one, the network-style visualisation is ineffective and uninterpretable when the number of nodes/connections exceeds a threshold. Secondly, the extensibility of these systems compromises structure and leads to a trap wherein an overengineered PKM system detracts from the actual goal of learning and understanding. Isorite keeps the feature set as minimal as possible, encourages and rewards user-engagement, reinvents the visualisation of the knowledge bundle, as well as the relationship between the user, the agent, and the "wiki".
 
 ## Supporting Isorite
 
-Isorite is not a paid application.
-Users may donate to the developer if they wish.
-Users pay for their own LLM usage through their chosen API.
+Isorite is not a paid application. Users may donate to the developer if they wish. Users pay for their own LLM usage through their chosen API.
 
 ## Isorite - Knowledge Base and document format
 
-Isorite was inspired by the publication of "Open Knowledge Format" (or OKF) by Google.
-This represented a leading AI company acknowledging the promise of the concept of the LLM-wiki as an extension of RAG.
-Isorite adopts the OKF format for its notes.
-If departures from the OKF 0.2 standard are necessary, then Isorite will have its own standard.
-Primarily, the concept of linked notes qualified by edge identities (requires, uses, mentions, see also) is of use.
-Frontmatter which might aid search, as well as rich markdown formatting allowing for LaTeX, mermaid diagrams, code blocks with highlighting, tables, headings, line breaks, image embeds - are all important.
-Additional notes / information may be attached for educational purposes for use behind the scenes by the agent, and these must be tailored to the particular user, and not shared.
-Properties of understanding, last date of review, etc.
-Additionally, some tags may be inserted which code for information which the GUI uses to render AI-generated content until it is reviewed and accepted into the document.
-This allows the user the leave the application and come back to it without losing progress that was half-way through.
+Isorite was inspired by the publication of "Open Knowledge Format" (or OKF) by Google. This represented a leading AI company acknowledging the promise of the concept of the LLM-wiki as an extension of RAG. Isorite adopts the OKF format for its notes. If departures from the OKF 0.2 standard are necessary, then Isorite will have its own standard. Primarily, the concept of linked notes qualified by edge identities (requires, uses, mentions, see also) is of use. Frontmatter which might aid search, as well as rich markdown formatting allowing for LaTeX, mermaid diagrams, code blocks with highlighting, tables, headings, line breaks, image embeds - are all important. Additional notes / information may be attached for educational purposes for use behind the scenes by the agent, and these must be tailored to the particular user, and not shared. Properties of understanding, last date of review, etc. Additionally, some tags may be inserted which code for information which the GUI uses to render AI-generated content until it is reviewed and accepted into the document. This allows the user the leave the application and come back to it without losing progress that was half-way through.
 
-At the end of the day, it is essential that the user is able to export the knowledge base in a raw format, with and without the teaching metadata associated with it. 
-The user should always have sovereignty over their data.
+At the end of the day, it is essential that the user is able to export the knowledge base in a raw format, with and without the teaching metadata associated with it.  The user should always have sovereignty over their data.
 
-In addition to the primary markdown documents are *artifacts*. These are based in HTML instead of markdown, but inherit the style of Isorite. 
-These should allow for even richer formats, but will not be editable. 
+In addition to the primary markdown documents are *artifacts*. These are based in HTML instead of markdown, but inherit the style of Isorite.  These should allow for even richer formats, but will not be editable.
 
 ## Isorite - Atlas
 
-The Atlas displays a visual map of the knowledge bundle.
-The Atlas aims to significantly improve upon the concept of the force-directed network representation.
+The Atlas displays a visual map of the knowledge bundle. The Atlas aims to significantly improve upon the concept of the force-directed network representation.
 
 ### Why not a force-directed graph
 
-A force-directed graph shows every note and every link at once, at one scale, in positions that mean nothing.
-It stops being readable at a few hundred notes, and it looks different every time it is opened.
-The Atlas is a map instead: where a note sits says something, the same base always gives the same map, and no more is drawn than can be read at the current zoom.
+A force-directed graph shows every note and every link at once, at one scale, in positions that mean nothing. It stops being readable at a few hundred notes, and it looks different every time it is opened. The Atlas is a map instead: where a note sits says something, the same base always gives the same map, and no more is drawn than can be read at the current zoom.
 
 ### What it is made of
 
@@ -157,10 +93,7 @@ State is carried by fill and by line, never by hue alone, so the map reads in mo
 | Needs work, or changed since you understood it | a notch cut from the top right corner |
 | Kind of note (definition, theorem, example, reference, ...) | a small glyph |
 
-**Lenses** choose what the tones mean, one at a time:
-*Understanding* (the default in Study mode) shows where you stand;
-*Activity* (the default in Project mode) shows what changed this week, month and quarter;
-*Health* shows what has been checked by a person, tested by an exercise, and is current.
+**Lenses** choose what the tones mean, one at a time: *Understanding* (the default in Study mode) shows where you stand; *Activity* (the default in Project mode) shows what changed this week, month and quarter; *Health* shows what has been checked by a person, tested by an exercise, and is current.
 
 ### Using it
 
@@ -172,9 +105,7 @@ State is carried by fill and by line, never by hue alone, so the map reads in mo
 
 ### Iso on the Atlas
 
-Iso is asked on the map itself, with no side panel.
-What is pointed at is the subject: a note, a folder, or open ground for the whole base.
-The same three kinds of request as in the editor apply (see below):
+Iso is asked on the map itself, with no side panel. What is pointed at is the subject: a note, a folder, or open ground for the whole base. The same three kinds of request as in the editor apply (see below):
 
 | Kind | Iso may change | What you see |
 |---|---|---|
@@ -192,9 +123,7 @@ The same three kinds of request as in the editor apply (see below):
 | A fill and a number | the answer rests on this note; the number is its place in the answer |
 | Fainter | opened and not used |
 
-Each note the answer rests on carries a sentence quoted from it, checked against the note's text so that a quotation is always real.
-A question that was asked is kept and can be played again on the map without calling the model.
-The same drawing shows a terminal agent's path through the base, live, while it works (see the TUI).
+Each note the answer rests on carries a sentence quoted from it, checked against the note's text so that a quotation is always real. A question that was asked is kept and can be played again on the map without calling the model. The same drawing shows a terminal agent's path through the base, live, while it works (see the TUI).
 
 ### What it must hold to
 
@@ -216,9 +145,7 @@ The Isorite editor is a rich markdown live-preview editor (similar to Obsidian) 
 
 ### Seeds: Iso asked in place
 
-There is no chat panel.
-Iso is asked where the work is, by a *seed*: a prompt planted in the note, on a new line or under a selection, with a key or a button.
-(The name is a working one. A seed crystal is what a crystal grows from, and the axiom of an L-system is its seed.)
+There is no chat panel. Iso is asked where the work is, by a *seed*: a prompt planted in the note, on a new line or under a selection, with a key or a button. (The name is a working one. A seed crystal is what a crystal grows from, and the axiom of an L-system is its seed.)
 
 Before asking, the kind of reply is chosen. This is the heart of the system: **what Iso may change is decided by the person, before Iso answers.**
 
@@ -252,8 +179,7 @@ Iso's text is never silently the person's.
 
 ### In Study mode
 
-In an exercise Iso does not write the answer.
-The same in-place interface offers a hint, feedback on the working so far, and discussion, each attached to the passage it is about.
+In an exercise Iso does not write the answer. The same in-place interface offers a hint, feedback on the working so far, and discussion, each attached to the passage it is about.
 
 ### Not settled
 
@@ -262,16 +188,13 @@ The same in-place interface offers a hint, feedback on the working so far, and d
 - Whether kept answers and parked questions are passed to other agents.
 ## Isorite - Review feature
 
-The Isorite review feature allows the user to peer into the history of their knowledge/study base.
-It provides them with a detailed tour of what was accomplished in the last session.
+The Isorite review feature allows the user to peer into the history of their knowledge/study base. It provides them with a detailed tour of what was accomplished in the last session.
 
-It exists to slow the user down in the right place.
-Seeing each change again, with what was asked for it, encourages changes made in purposeful and logical chunks, and it is where the user finds out whether they still understand what their base now says.
+It exists to slow the user down in the right place. Seeing each change again, with what was asked for it, encourages changes made in purposeful and logical chunks, and it is where the user finds out whether they still understand what their base now says.
 
 ### The journal
 
-Every change to a note is an entry in a history kept for that note, which is only ever added to.
-Each entry records:
+Every change to a note is an entry in a history kept for that note, which is only ever added to. Each entry records:
 
 - **who:** the person, Iso (and which model), or another agent (a terminal harness, by name);
 - **what was asked,** where the change came from a seed;
@@ -284,8 +207,7 @@ Rules that keep it readable:
 - Keeping Iso's text is the entry. Asking is not. An answer that changed nothing is still an entry, so it has a place in the history.
 - A change made outside Isorite (another editor, a terminal agent) is found the next time the note is read, and entered under whoever made it.
 
-Git stays what it is: the project's history by commit.
-The journal is finer, is about one note, and knows what was asked.
+Git stays what it is: the project's history by commit. The journal is finer, is about one note, and knows what was asked.
 
 ### The timeline
 
@@ -317,26 +239,15 @@ Optional, beside the note, off by default.
 
 ## Isorite - TUI
 
-Isorite ships a TUI (either standalone custom, or an overhaul plugin for existing agent harnesses) - which provides the brand of Isorite as well as specific connectivity to the web interface which demonstrates the agent's use of the knowledge base live while doing other agentic work (such as tool calling, editing, command execution).
-Additional features are also implemented where possible to reflect what can be done in Isorite's web interface, but the Atlas is probably mostly out of scope here.
-The TUI would also naturally lack sounds.
-The TUI aims to preserve as much style as possible in monospace.
-It is recommended that the user have fully featured nerd fonts enabled to facilitate this.
-The user is able to highlight relevant knowledge from the knowledge base and this will be made directly available to the agent running in the connected TUI session. 
-They are also able to see how the agent thinks through the highlighting of nodes and paths in the Atlas.
+Isorite ships a TUI (either standalone custom, or an overhaul plugin for existing agent harnesses) - which provides the brand of Isorite as well as specific connectivity to the web interface which demonstrates the agent's use of the knowledge base live while doing other agentic work (such as tool calling, editing, command execution). Additional features are also implemented where possible to reflect what can be done in Isorite's web interface, but the Atlas is probably mostly out of scope here. The TUI would also naturally lack sounds. The TUI aims to preserve as much style as possible in monospace. It is recommended that the user have fully featured nerd fonts enabled to facilitate this. The user is able to highlight relevant knowledge from the knowledge base and this will be made directly available to the agent running in the connected TUI session. They are also able to see how the agent thinks through the highlighting of nodes and paths in the Atlas.
 
 ## Isorite - Study Base, Mode and format
 
-A study base is a distinct but connected entity to a knowledge base.
-When associated with a knowledge base, it should exist *adjacent* to it in the filesystem, not within it (separate repositories).
-The mapping from knowledge base to its associated study knowledge base should be stored in the user's ~/.config directory.
-If a knowledge base does not have a known study base associated with it, then the user can be prompted when trying to switch to study mode to choose and existing study base or to create a new one. 
+A study base is a distinct but connected entity to a knowledge base. When associated with a knowledge base, it should exist *adjacent* to it in the filesystem, not within it (separate repositories). The mapping from knowledge base to its associated study knowledge base should be stored in the user's ~/.config directory. If a knowledge base does not have a known study base associated with it, then the user can be prompted when trying to switch to study mode to choose and existing study base or to create a new one.
 
-If a study knowledge base is present, then study mode can be enabled.
-Study mode adds certain learning-related features while also stripping away certain unnecessary parts of Isorite, presenting a "zen"-friendly space for study with a distinct feel.
+If a study knowledge base is present, then study mode can be enabled. Study mode adds certain learning-related features while also stripping away certain unnecessary parts of Isorite, presenting a "zen"-friendly space for study with a distinct feel.
 
-A study knowledge base adds new notes to the existing set of documents in the knowledge base.
-These appear (but are visually distinct) in the Atlas.
+A study knowledge base adds new notes to the existing set of documents in the knowledge base. These appear (but are visually distinct) in the Atlas.
 
 Study documents contain things like:
 
@@ -350,30 +261,19 @@ Exercises contain a specialised format in tags which are not rendered in raw for
 
 Multiple choice is similar.
 
-The important thing to note about these documents is that they are mostly raw markdown, and it is the data added on top which makes a difference.
-The user will be free to write as much as they like in the form of working in these documents, before highlighting their given answer when appropriate.
-This allows Iso to review the full thought process and provide more detailed feedback on what went wrong if necessary.
-This is what the perfect tutor would do, but it remains essential that the user puts in the effort to facilitate that.
-I think this is what most education apps lack.
+The important thing to note about these documents is that they are mostly raw markdown, and it is the data added on top which makes a difference. The user will be free to write as much as they like in the form of working in these documents, before highlighting their given answer when appropriate. This allows Iso to review the full thought process and provide more detailed feedback on what went wrong if necessary. This is what the perfect tutor would do, but it remains essential that the user puts in the effort to facilitate that. I think this is what most education apps lack.
 
-The study base should also house a hidden knowledge base purely for Iso's teaching purposes.
-This helps Iso to get up to speed in a fresh session about where the user is at in their learning journey, what should be studied next, how regular the user's study habits are, etc.
-This is all available for the user to export if they wish.
+The study base should also house a hidden knowledge base purely for Iso's teaching purposes. This helps Iso to get up to speed in a fresh session about where the user is at in their learning journey, what should be studied next, how regular the user's study habits are, etc. This is all available for the user to export if they wish.
 
 The study base also adds extra data on top of the knowledge base notes to identify which concepts the user has learned, and what their level of understanding is about them.
 
 Notes in the study base can link to notes in the knowledge base, but not vice versa.
 
-When a knowledge base is initially created for study purposes, a feature for building the initial knowledge base (and later for expanding it) will be available.
-This process will be driven by the agent and will use web search and research tools to gather relevant context and documents before assembling it into the Isorite format.
-All references for such knowledge must be given in the relevant documents in which they are used.
-The user can elect to supply suggested resources in the form of URLs and PDFs.
-Iso must report to the user that they can access and read these resources reliably.
+When a knowledge base is initially created for study purposes, a feature for building the initial knowledge base (and later for expanding it) will be available. This process will be driven by the agent and will use web search and research tools to gather relevant context and documents before assembling it into the Isorite format. All references for such knowledge must be given in the relevant documents in which they are used. The user can elect to supply suggested resources in the form of URLs and PDFs. Iso must report to the user that they can access and read these resources reliably.
 
 ## Isorite - Agent (Iso)
 
-Iso is Isorite's LLM agent.
-Iso is tailored to Isorite's specific mission and use case.
+Iso is Isorite's LLM agent. Iso is tailored to Isorite's specific mission and use case.
 
 Iso can be used in the Atlas, note editor, and in exercises, each of which have slightly modified system prompts.
 
@@ -387,16 +287,11 @@ Usage (in currency and tokens) should always be shown for:
 
 ### Providers
 
-The user could be pointed to a detailed guide on which LLM providers are *safe* in the sense of their data not being sold.
-This should accompany pricing information.
-Later on, it may be useful to note which LLMs are best for providing a good learning experience.
-At the end of the day, the user is completely free to choose which provider they want to use, and they can limit and control the cost of their usage through their API key on the OpenRouter platform for instance.
+The user could be pointed to a detailed guide on which LLM providers are *safe* in the sense of their data not being sold. This should accompany pricing information. Later on, it may be useful to note which LLMs are best for providing a good learning experience. At the end of the day, the user is completely free to choose which provider they want to use, and they can limit and control the cost of their usage through their API key on the OpenRouter platform for instance.
 
 ### Context
 
-The management of Agent context is essential for providing a relevant agentic experience and saving the user's money.
-The Isorite format will be leveraged to improve both the retrieval of relevant information as well as the compaction of context. 
-Context comprises:
+The management of Agent context is essential for providing a relevant agentic experience and saving the user's money. The Isorite format will be leveraged to improve both the retrieval of relevant information as well as the compaction of context. Context comprises:
 
 - The Isorite system prompt (provides the Iso identity and purpose for either Project mode or Study mode)
 - The user's prompt
@@ -406,5 +301,4 @@ Context comprises:
 
 ## Platforms
 
-Isorite will be distributed as a github repo, npm package, and Tauri App, as well as shipping either a custom TUI harness or overhaul plugins for existing popular TUI agent harnesses (OpenCode, Claude Code, Pi, Hermes).
-On mobile platforms in particular, Isorite will connect with the user's Github account to find, download and create knowledge/study bases.
+Isorite will be distributed as a github repo, npm package, and Tauri App, as well as shipping either a custom TUI harness or overhaul plugins for existing popular TUI agent harnesses (OpenCode, Claude Code, Pi, Hermes). On mobile platforms in particular, Isorite will connect with the user's Github account to find, download and create knowledge/study bases.

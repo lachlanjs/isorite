@@ -1,7 +1,6 @@
 # Sources
 
-Screenshots of Alien: Isolation (Creative Assembly, 2014). Copyright the game's publishers; here for private
-reference only.
+Screenshots of Alien: Isolation (Creative Assembly, 2014). Copyright the game's publishers; here for private reference only.
 
 | File | What it shows | From |
 |---|---|---|
@@ -16,8 +15,7 @@ reference only.
 
 ## Not downloaded
 
-The wiki's image server refused automated downloads, and I didn't work around that. Two more to open yourself if you
-want them:
+The wiki's image server refused automated downloads, and I didn't work around that. Two more to open yourself if you want them:
 
 - https://avp.fandom.com/wiki/File:Alien_Isolation_Map_-2.png
 - https://avp.fandom.com/wiki/File:Alien_Isolation_motion_tracker_Nostromo.jpg (the motion tracker, close up)

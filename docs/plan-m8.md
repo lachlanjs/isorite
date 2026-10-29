@@ -1,9 +1,6 @@
 # Milestone 8: L1, the knowledge base, and the tutorial's mechanics
 
-Written 2026-10-20. Branch `m8-l1`. The tutorial replaces the week of use (decided 2026-10-19), and the tutorial's
-sections are planned and approved one at a time on the refinement page (`.refine/`, served on port 4780). This plan
-is the build behind L1's approved objectives. Its items are numbered as on the page; the page holds Lachlan's own
-words for each, and the readings they agreed.
+Written 2026-10-20. Branch `m8-l1`. The tutorial replaces the week of use (decided 2026-10-19), and the tutorial's sections are planned and approved one at a time on the refinement page (`.refine/`, served on port 4780). This plan is the build behind L1's approved objectives. Its items are numbered as on the page; the page holds Lachlan's own words for each, and the readings they agreed.
 
 ## 1. What is built
 
@@ -20,11 +17,7 @@ words for each, and the readings they agreed.
 | T7 | No diamond beside the section's name. Done sections and steps show ticks (T2). | `Tutorial.svelte` |
 | T8 | A step that moves to another note says so in its text. | `steps.ts` |
 
-How redo works (T3): when a step begins, the tutorial reads every note of the base through the Api and keeps the
-texts. On redo it compares the base with that copy. A note made since is deleted, a note deleted since is made
-again, a moved note is moved back, and a changed note is saved with its old text. Each of these is an ordinary
-change in the journal, so the timeline still tells the truth. This goes through the Api, so it works both in the
-page's own engine and against `isorite --tutorial`'s server.
+How redo works (T3): when a step begins, the tutorial reads every note of the base through the Api and keeps the texts. On redo it compares the base with that copy. A note made since is deleted, a note deleted since is made again, a moved note is moved back, and a changed note is saved with its old text. Each of these is an ordinary change in the journal, so the timeline still tells the truth. This goes through the Api, so it works both in the page's own engine and against `isorite --tutorial`'s server.
 
 **Editing (K1–K3, B1).**
 - **K1:** Ctrl+S goes from the tutorial's text and from the key help. L1 says that saving is automatic.
