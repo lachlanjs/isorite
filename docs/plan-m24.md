@@ -66,3 +66,7 @@ None open.
 ## After M24
 
 - **Live code in a note** (Lachlan, 2026-10-29; a milestone of its own): link to a range of lines in the repository, or to something tree-sitter can name (a class, a function), and embed that code in the note, so the note shows the code as it is now when it changes. Builds on M12's code links (`code:path#L1`) and their broken mark.
+
+## Released
+
+isorite 0.12.0, 2026-10-29: M24 built in four steps (the foundation; the surfaces D, N, G, J; Iso's I, K, O; T and R), with the understanding feature phased out, Iso's writing kept to one line per paragraph, the repository's docs rewrapped, and the Atlas's names drawn at the screen's pixels, growing in steps as you zoom in. H's gold seam for Iso's words is left for provenance's own pass.
