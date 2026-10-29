@@ -44,6 +44,12 @@
   --text-size: 18px;
   --measure: 680px;
 
+  /* Light on a face (the lustre, M24): its colour, and how strong it is on this ground. */
+  --sheen: 255 248 225; --sheen-k: 1;
+  /* Motion (M24): acknowledge, change, a result worth noticing; ease-out to arrive, ease-in to leave. */
+  --t-ack: 120ms; --t-change: 260ms; --t-result: 600ms;
+  --ease-out: cubic-bezier(.2, .7, .2, 1); --ease-in: cubic-bezier(.6, 0, .8, .3);
+
   /* Space: a 4px base. */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px; --space-12: 48px; --space-16: 64px;
 }
@@ -60,6 +66,7 @@
   --rose: #A81E48;
   --requires: #6A3FC0; --builds: #B5521B;
   --soft: 10%;
+  --sheen: 14 23 38; --sheen-k: .55;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-ground="lapis"]) {
@@ -71,8 +78,9 @@
     --growth: #8C6200; --growth-deep: #D9A21B;
     --malachite: #0B6B4A; --malachite-deep: #2FA37A;
     --rose: #A81E48;
-  --requires: #6A3FC0; --builds: #B5521B;
+    --requires: #6A3FC0; --builds: #B5521B;
     --soft: 10%;
+    --sheen: 14 23 38; --sheen-k: .55;
   }
 }
 
@@ -87,6 +95,20 @@ a:hover { color: var(--lattice-deep); text-decoration: underline; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--lattice); outline-offset: 2px; }
+/* The states every control shares (M24, P; lustre.ts): where the keyboard is, corner brackets round it, not an
+   outline; touched, a band of light, dithered, across its face. What takes text keeps its own sign. */
+:focus-visible:not(input, textarea, select, [contenteditable]) { outline: none; }
+.brackets {
+  position: fixed; z-index: 1000; pointer-events: none; --b: var(--text); --l: 7px; --w: 1.5px;
+  background:
+    linear-gradient(var(--b), var(--b)) top left / var(--l) var(--w) no-repeat, linear-gradient(var(--b), var(--b)) top left / var(--w) var(--l) no-repeat,
+    linear-gradient(var(--b), var(--b)) top right / var(--l) var(--w) no-repeat, linear-gradient(var(--b), var(--b)) top right / var(--w) var(--l) no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom left / var(--l) var(--w) no-repeat, linear-gradient(var(--b), var(--b)) bottom left / var(--w) var(--l) no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom right / var(--l) var(--w) no-repeat, linear-gradient(var(--b), var(--b)) bottom right / var(--w) var(--l) no-repeat;
+}
+/* Chosen (P): solid, in its own colour (--c) or the lattice, cut at two corners as a chip is. Open: a bar. */
+:root { --chosen-cut: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); }
+canvas.lustre { position: fixed; z-index: 999; pointer-events: none; image-rendering: pixelated; }
 ::selection { background: color-mix(in srgb, var(--lattice) 40%, transparent); }
 .soft { color: var(--text-soft); }
 .faint { color: var(--text-faint); }

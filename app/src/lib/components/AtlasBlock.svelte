@@ -47,26 +47,35 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:linked class:dim={dim && !num && !iso && !linked && !given} class:far={far > 1} class:pick={num > 0} class:given class:held={held === "on"} class:aside={held === "aside"} class:changed class:pointed={!!pointed} class:here class:file={!!file} aria-current={here ? "page" : undefined} {href} aria-label={num ? `${title}: linked, number ${num}` : `${kind === "question" ? "Question: " : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in Iso's context" : held === "on" ? ": read by Iso, in hand" : held === "aside" ? ": read by Iso, set aside" : ""}${changed ? ", changed by Iso" : ""}${pointed ? `, Iso points to it: ${pointed}` : ""}`} title={pointed || (given ? "In Iso's context: shift+click takes it back" : held === "on" ? "Read by Iso, in hand: shift+click sets it aside" : held === "aside" ? "Read by Iso, set aside: shift+click puts it in hand again" : undefined)} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
+<a data-lustre class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:linked class:dim={dim && !num && !iso && !linked && !given} class:far={far > 1} class:pick={num > 0} class:given class:held={held === "on"} class:aside={held === "aside"} class:changed class:pointed={!!pointed} class:here class:file={!!file} aria-current={here ? "page" : undefined} {href} aria-label={num ? `${title}: linked, number ${num}` : `${kind === "question" ? "Question: " : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in Iso's context" : held === "on" ? ": read by Iso, in hand" : held === "aside" ? ": read by Iso, set aside" : ""}${changed ? ", changed by Iso" : ""}${pointed ? `, Iso points to it: ${pointed}` : ""}`} title={pointed || (given ? "In Iso's context: shift+click takes it back" : held === "on" ? "Read by Iso, in hand: shift+click sets it aside" : held === "aside" ? "Read by Iso, set aside: shift+click puts it in hand again" : undefined)} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
-  onfocus={() => onpoint(true)} onblur={() => onpoint(false)}>{#if kind}<svg class="notch" viewBox="0 0 16 16" aria-hidden="true">{#if kind === "question"}<path d="M8 2.5L13.5 8L8 13.5L2.5 8Z" fill={done ? "currentColor" : "none"} />{:else}<path d="M8 2.5l5.8 10.5H2.2z" fill={done ? "currentColor" : "none"} />{/if}</svg>{/if}{#if file}<Glyph kind={file} size={11} />{/if}<span class="t">{#if file && /^[^\s]+\.\w+$/.test(title)}{title.slice(0, title.lastIndexOf("."))}<wbr />{title.slice(title.lastIndexOf("."))}{:else}{title}{/if}</span>{#if num}<b class="num">{num}</b>{/if}{#if order}<b class="order" aria-hidden="true">{order}</b>{/if}{#if changed}<i class="dia" aria-hidden="true"></i>{/if}</a>
+  onfocus={() => onpoint(true)} onblur={() => onpoint(false)}>{#if kind}<svg class="notch" viewBox="0 0 16 16" aria-hidden="true">{#if kind === "question"}<path d="M8 2.5L13.5 8L8 13.5L2.5 8Z" fill={done ? "currentColor" : "none"} />{:else}<path d="M8 2.5l5.8 10.5H2.2z" fill={done ? "currentColor" : "none"} />{/if}</svg>{/if}<span class="inner">{#if file}<Glyph kind={file} size={11} />{/if}<span class="t">{#if file && /^[^\s]+\.\w+$/.test(title)}{title.slice(0, title.lastIndexOf("."))}<wbr />{title.slice(title.lastIndexOf("."))}{:else}{title}{/if}</span></span>{#if num}<b class="num">{num}</b>{/if}{#if order}<b class="order" aria-hidden="true">{order}</b>{/if}{#if changed}<i class="dia" aria-hidden="true"></i>{/if}</a>
 
 <style>
   /* In the map's units: the layer the block is in is scaled to the zoom, and --px is a screen pixel in it. */
   .n {
     position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(var(--w) * var(--u)); height: calc(var(--h) * var(--u));
-    padding: 0 11px; display: flex; align-items: center; overflow: hidden;
-    font: 12px/15px var(--font-ui); color: var(--text-soft); text-decoration: none;
-    background: var(--ground-1); border: var(--px) solid var(--line-strong); transition: opacity .15s;
+    overflow: hidden; color: var(--text-soft); text-decoration: none; --glint: .3;
+    background: var(--ground-2); border: var(--px) solid var(--line-strong); transition: opacity .15s;
   }
   .n:hover { color: var(--text); text-decoration: none; }
   /* A file (M23): its glyph, its name in the faint ink, a lighter edge, and no fill of its own. */
   .n.file { gap: 6px; color: var(--text-faint); background: var(--ground-0); border-style: dashed; border-color: var(--line-strong); }
   .n.file :global(.glyph) { color: var(--text-soft); }
-  .t { display: none; overflow: hidden; overflow-wrap: break-word; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; }
+  /* Its name at the screen's own pixels (M24): the block's size at the zoom, scaled back, so the text is laid out
+     and drawn at 11 px whatever the zoom, and takes the lines the block has room for. */
+  .inner {
+    position: absolute; left: 0; top: 0; width: calc(100% * var(--k)); height: calc(100% * var(--k)); transform-origin: 0 0; transform: scale(var(--ik));
+    padding: 0 6px; display: flex; align-items: center; gap: 6px; font: 11px/14px var(--font-ui); container-type: size;
+  }
+  .t { display: none; overflow: hidden; overflow-wrap: normal; min-width: 0; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; }
   :global(.atlas-world.labels) .t { display: -webkit-box; }
+  @container (max-width: 72px) { .inner > :first-child { margin-left: -2px; } .inner > :last-child { margin-right: -2px; } .inner > * { font-size: 10px; line-height: 12px; } .t { hyphens: auto; overflow-wrap: anywhere; } }
+  @container (max-height: 48px) { .t { -webkit-line-clamp: 2; line-clamp: 2; } }
+  @container (max-height: 32px) { .t { -webkit-line-clamp: 1; line-clamp: 1; } }
+  @container (max-height: 17px) or (max-width: 40px) { :global(.atlas-world.labels) .t { display: none; } }
   /* A kind's glyph (M12) in a notch in the top edge, as a folder's name sits in its frame. */
   .question, .problem { overflow: visible; }
   .notch { position: absolute; top: -7px; left: 9px; width: 14px; height: 14px; padding: 0 2px; box-sizing: content-box; background: var(--behind); fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -91,7 +100,6 @@
      keeps its size on screen. */
   .pick { outline: calc(2 * var(--px)) solid var(--lattice); outline-offset: calc(3 * var(--px)); color: var(--text); overflow: visible; }
   .num { position: absolute; top: -10px; right: -10px; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; background: var(--lattice); color: var(--ground-0); font-size: 11px; font-weight: 700; z-index: 1; scale: var(--ik); }
-  .n:focus-visible { outline: calc(2 * var(--px)) solid var(--lattice); outline-offset: calc(2 * var(--px)); }
   /* Open in the Note pane (M17): a bar three pixels wide inside the left edge, in the text's colour. */
   .here { box-shadow: inset calc(3 * var(--px)) 0 0 var(--text); color: var(--text); }
   .mo-you { outline: calc(2.5 * var(--px)) solid var(--lattice); outline-offset: calc(3 * var(--px)); z-index: 3; }

@@ -2,6 +2,7 @@
   // The terminal's session in Iso's pane, Build mode (M11): each prompt (from the terminal or from here), what the
   // agent said, a line for each tool call (a command with its output, a file with its diff, a look-up in the base
   // with its note), and what it asks before doing, answered here or in the terminal, whichever is first.
+  import Drawing from "./Drawing.svelte";
   import type { TerminalItem, TerminalPermission, TerminalTurn } from "@isorite/engine";
   import { tick } from "svelte";
   import { app } from "$lib/app.svelte.ts";
@@ -76,7 +77,7 @@
     <div class="you"><p class="asked">{t.asked}</p><span class="from">{t.from === "here" ? "from here" : "in the terminal"}</span></div>
     {#each t.items as i, k (k)}{@render item(i)}{/each}
     {#if t.state === "running"}
-      <p class="doing" role="status"><i class="spin" aria-hidden="true"></i>OpenCode is at work</p>
+      <p class="doing" role="status"><Drawing />OpenCode is at work</p>
     {:else if t.state === "stopped"}
       <p class="faint end">stopped</p>
     {:else if t.state === "failed"}
@@ -123,10 +124,7 @@
   .acts button { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
   .acts button:hover { color: var(--text); }
   .acts .no { color: var(--text-faint); }
-  .doing { padding-left: 16px; font-size: 12px; color: var(--text-faint); position: relative; }
-  .doing .spin { position: absolute; left: 1px; top: 4px; width: 8px; height: 8px; border: 1px solid var(--growth); animation: spin 1.2s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .doing { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-faint); }
   .bad { color: var(--rose); font-size: 12px; padding-left: 16px; }
   .end { font-size: 12px; padding-left: 16px; }
-  @media (prefers-reduced-motion: reduce) { .doing .spin { animation: none; } }
 </style>

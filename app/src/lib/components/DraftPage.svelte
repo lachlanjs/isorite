@@ -2,6 +2,7 @@
   // A note written for Iso (the Desktop-Ask and Desktop-Review boards). It is not in the base: you write what
   // you understand and what you want, link the notes it should rest on, and send it. Iso's reply arrives under
   // your prompt, between the dotted rules, and is kept as a note in a folder you choose, or discarded.
+  import Drawing from "./Drawing.svelte";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -97,7 +98,7 @@
 
 <article class="draft">
   {#if note.loaded === "loading"}
-    <p class="faint col">opening…</p>
+    <p class="faint col"><Drawing label="opening" /></p>
   {:else if note.loaded !== "ready"}
     <div class="col"><p class="soft">This note for Iso is not here any more. It was kept as a note, or discarded.</p><p><a href={resolve("/notes")}>all notes</a></p></div>
   {:else}

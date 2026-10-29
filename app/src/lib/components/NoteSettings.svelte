@@ -146,11 +146,11 @@
   .ask { display: flex; flex-direction: column; gap: var(--space-2); color: var(--text-soft); font-size: 13px; }
   .problem { margin: 0; color: var(--rose); font-size: 12px; }
   .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
-  .btn.on { --fill: var(--text); color: var(--ground-0); font-weight: 700; }
+  .btn.on { --fill: var(--lattice); color: var(--ground-0); font-weight: 700; }
   .icons { display: flex; align-items: center; gap: 2px; }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); background: none; border: 0; padding: 0; cursor: pointer; }
   .icon:hover, .icon:focus-visible { color: var(--text); }
-  .icon[aria-pressed="true"] { color: var(--text); background: var(--ground-3); }
+  .icon[aria-pressed="true"] { background: var(--c, var(--lattice)); color: var(--ground-0); --cut: 4px; clip-path: var(--chosen-cut); }
   .icon.off { opacity: 0.45; background: none; }
   .foot { border-top: 1px solid var(--line); padding-top: var(--space-3); margin: 0; font-size: 12px; }
 </style>

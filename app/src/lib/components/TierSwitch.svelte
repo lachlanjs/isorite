@@ -22,9 +22,10 @@
 
 <style>
   .tiers { font: 11px var(--font-ui); color: var(--text-faint); align-self: center; }
-  .wide { display: inline-flex; gap: 6px; margin-right: 6px; }
-  .wide button, .narrow { background: none; border: 0; border-bottom: 1px solid transparent; padding: 1px 0; font: inherit; color: inherit; cursor: pointer; }
-  .wide button[aria-checked="true"], .narrow { color: var(--text); border-bottom-color: var(--growth); }
+  .wide { display: inline-flex; gap: 2px; margin-right: 6px; }
+  .wide button, .narrow { background: none; border: 0; padding: 2px 4px; font: inherit; color: inherit; cursor: pointer; --cut: 3px; clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px); }
+  /* Chosen (P): solid, in gold, since the model is Iso's. */
+  .wide button[aria-checked="true"], .narrow { color: var(--ground-0); background: var(--growth); }
   .wide button:hover { color: var(--text); }
   .narrow { display: none; width: 14px; margin-right: 6px; }
   @media (max-width: 760px) { .wide { display: none; } .narrow { display: inline-block; } }

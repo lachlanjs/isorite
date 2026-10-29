@@ -6,12 +6,15 @@
   // carries: the count says how many. A lit line is 3 px however many links run along it, as on the boards; one
   // whose links run both ways stands still. Iso's steps along links are gold, as its lines on Desktop-Think, and a
   // note for Iso has a blue line to each note it links to.
-  let { k, rest, hot, counts, sent = [], grown = [], beat = "", retracting = [] }: {
+  let { k, rest, hot, counts, pointed = false, sent = [], grown = [], beat = "", retracting = [] }: {
     /** The zoom: paths are given at zoom 1. */
     k: number;
     /** `strong`: a "requires" runs along it. A route of weaker links only is drawn lighter. `trunk`: between two folders. */
     rest: { key: string; d: string; count: number; strong: boolean; trunk: boolean }[];
     hot: { key: string; d: string; kind: "requires" | "builds" | "uses" | "iso"; count: number; still: boolean }[];
+    /** The note's links are lit because it is pointed at, not chosen (M24): they draw out along their length in
+     *  blue, and stand. Chosen, they run in their kinds' colours. */
+    pointed?: boolean;
     /** The lit links of each kind, however their lines merge: said on the layer, for whoever reads it. */
     counts: { requires: number; builds: number; uses: number };
     /** A note for Iso's lines to the notes it links to. */
@@ -35,7 +38,10 @@
     {:else if beat === ""}
       {#each rest as r (r.key)}<path class={r.strong ? "base" : "base weak"} class:trunk={r.trunk} d={r.d} />{/each}
       {#each sent as r (r.key)}<path class="sent" d={r.d} />{/each}
-      {#each hot as r (r.key)}<path class="lit {r.kind}" class:still={r.still} d={r.d} />{/each}
+      {#each hot as r (r.key)}
+        {#if pointed && r.kind !== "iso"}<path class="along touch" pathLength="1" d={r.d} style:stroke-width="{2 / k}px" />
+        {:else}<path class="lit {r.kind}" class:still={r.still} d={r.d} />{/if}
+      {/each}
     {/if}
     <!-- Measured along its own length (pathLength), so drawn in the map's units: its width is set by the zoom. -->
     {#each grown as r (r.key)}<path class="grown" pathLength="1" d={r.d} style:stroke-width="{3 / k}px" />{/each}
@@ -64,7 +70,8 @@
   .along { vector-effect: none; stroke-dasharray: 1; stroke-linecap: butt; }
   .retract { stroke-dashoffset: 0; animation: retract 0.22s ease-in forwards; }
   .draw { stroke-dashoffset: 1; animation: draw 0.34s ease-out forwards; }
+  .touch { stroke: var(--lattice); stroke-dashoffset: 1; animation: draw var(--t-change) var(--ease-out) forwards; }
   @keyframes retract { to { stroke-dashoffset: 1; } }
   @keyframes draw { to { stroke-dashoffset: 0; } }
-  @media (prefers-reduced-motion: reduce) { .lit { animation: none; } .grown { animation: none; stroke-dashoffset: 0; opacity: .6; } }
+  @media (prefers-reduced-motion: reduce) { .lit { animation: none; } .touch { animation: none; stroke-dashoffset: 0; } .grown { animation: none; stroke-dashoffset: 0; opacity: .6; } }
 </style>

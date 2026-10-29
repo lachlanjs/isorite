@@ -69,7 +69,7 @@
   .side { position: absolute; top: 16px; right: 16px; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .icon:hover, .icon:focus-visible { color: var(--text); }
-  .icon[aria-pressed="true"] { color: var(--text-soft); }
+  .icon[aria-pressed="true"] { background: var(--c, var(--lattice)); color: var(--ground-0); --cut: 4px; clip-path: var(--chosen-cut); }
   /* The session's timeline on a phone's Atlas is still open on the boards. */
   @media (max-width: 600px) { .side { display: none; } }
 </style>

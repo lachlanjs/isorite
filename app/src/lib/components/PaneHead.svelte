@@ -77,13 +77,11 @@
   .switches { display: flex; align-items: center; gap: 1px; margin-left: -4px; }
   .sw { position: relative; width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .sw:hover, .sw:focus-visible { color: var(--text); }
-  .sw[aria-pressed="true"] { color: var(--c); }
-  .sw[aria-pressed="true"]::after { content: ""; position: absolute; left: 7px; right: 7px; bottom: 1px; height: 2px; background: var(--c); }
+  .sw[aria-pressed="true"] { background: var(--c, var(--lattice)); color: var(--ground-0); --cut: 4px; clip-path: var(--chosen-cut); }
   .grow { flex: 1 1 auto; }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; background: none; border: 0; padding: 0; cursor: pointer; }
   .icon:hover, .icon:focus-visible { color: var(--text); }
-  .gear[aria-expanded="true"] { color: var(--text); background: var(--ground-2); }
-  .gear[aria-expanded="true"] rect { fill: var(--ground-2); }
+  .gear[aria-expanded="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
   .settings { --inside: var(--ground-2); position: absolute; z-index: 21; top: 54px; right: 8px; width: min(400px, calc(100% - 16px)); padding: 0; white-space: normal; user-select: text; }
   .inner { max-height: calc(100dvh - 140px); overflow: auto; padding: 24px 18px 14px; display: flex; flex-direction: column; gap: var(--space-6); }
   .settings:focus-visible { outline: none; }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Drawing from "./Drawing.svelte";
   import { agentName } from "@isorite/core";
   import { resolve } from "$app/paths";
   // A note, open for writing: its title, its details when they are wanted, and its text. Saving is the
@@ -213,7 +214,7 @@
 
 <article class="note" bind:this={noteEl} class:timed={timeline && note.loaded === "ready" && !asSource}>
   {#if note.loaded === "loading"}
-    <p class="faint">opening…</p>
+    <p class="faint"><Drawing label="opening" /></p>
   {:else if note.loaded === "missing"}
     <p class="soft">There is no note at <span class="faint">{id}</span>.</p>
     <p><a href={resolve("/notes")}>all notes</a></p>
@@ -316,7 +317,7 @@
   /* Where the pane leaves room (a container query: the note may stand beside the Atlas), the margin is the page's own, beside the text and level with the title, 8 px down
      (Study-Fit), and the text starts under the title as in any note. */
   .tools .btn { height: 28px; font-size: 12px; }
-  .tools .btn[aria-pressed="true"] { color: var(--text); --fill: var(--ground-3); }
+  .tools .btn[aria-pressed="true"] { color: var(--ground-0); --fill: var(--lattice); }
   /* The quiet icon buttons: the timeline's, and with a version shown, restore and back to now. Faint until pointed at. */
   .icon { width: 28px; height: 28px; display: inline-grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .icon:hover:not(:disabled), .icon:focus-visible { color: var(--text); }

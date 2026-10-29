@@ -81,8 +81,7 @@
   li.here a { color: var(--text); }
   .lend { position: relative; width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .lend:hover:not(:disabled), .lend:focus-visible { color: var(--text); }
-  .lend[aria-pressed="true"] { color: var(--growth); }
-  .lend[aria-pressed="true"]::after { content: ""; position: absolute; left: 7px; right: 7px; bottom: 1px; height: 2px; background: var(--growth); }
+  .lend[aria-pressed="true"] { --c: var(--growth); background: var(--c, var(--lattice)); color: var(--ground-0); --cut: 4px; clip-path: var(--chosen-cut); }
   .lend:disabled { cursor: default; }
   .bad { color: var(--rose); font-size: 12px; margin: 8px 0 0; white-space: normal; }
 </style>

@@ -3,6 +3,7 @@
   // ask for folded under the address and key. Checked as isorite doctor checks it, before it is kept; kept, it is
   // in use at once. Secrets go to the server and never come back: they show as held. The setup is changed only
   // from this machine; elsewhere it is shown, the key and the check still to hand.
+  import Drawing from "./Drawing.svelte";
   import { OPENROUTER } from "@isorite/engine";
   import type { ProviderSetup, Settings, SetupCheck, SetupDraft, SetupPair, SetupView, Tier } from "@isorite/engine";
   import type { SetupApi } from "$lib/api.ts";
@@ -108,15 +109,15 @@
   <h2 class="label">the provider</h2>
   <span class="grow"></span>
   <button class="icon" type="button" aria-label="check" title={local && changed ? "check this setup before keeping it: its models, a few words from each, a tool call (a few hundred tokens)" : "check the setup kept: its models, a few words from each, a tool call (a few hundred tokens)"} disabled={busy !== ""} aria-busy={busy === "check"} onclick={check}>
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.9-3.5h3.3" stroke="currentColor" stroke-width="1.3" fill="none" /></svg>
+    {#if busy === "check"}<Drawing width={20} />{:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.9-3.5h3.3" stroke="currentColor" stroke-width="1.3" fill="none" /></svg>{/if}
   </button>
   {#if local}
     <button class="icon" type="button" aria-label="keep" title="keep it, in use at once (config.toml is written again, without its comments: the first time, the file as it was is kept beside it as config.toml.bak). A running isorite term takes new models when it is next started" disabled={!changed || busy !== ""} aria-busy={busy === "keep"} onclick={keep}>
-      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" stroke="currentColor" stroke-width="1.4" fill="none" /></svg>
+      {#if busy === "keep"}<Drawing width={20} />{:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" stroke="currentColor" stroke-width="1.4" fill="none" /></svg>{/if}
     </button>
   {/if}
   <button class="icon" type="button" aria-label="copy the report" title="copy isorite doctor's report, its secrets hidden, to paste to someone helping (it checks the provider too)" disabled={busy !== ""} aria-busy={busy === "report"} onclick={copyReport}>
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="3.5" y="2.5" width="9" height="11.5" rx="1" stroke="currentColor" stroke-width="1.2" fill="none" /><path d="M6 2.5V1.5h4v1M5.8 6.5h4.4M5.8 9h4.4M5.8 11.5h2.6" stroke="currentColor" stroke-width="1.2" fill="none" /></svg>
+    {#if busy === "report"}<Drawing width={20} />{:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="3.5" y="2.5" width="9" height="11.5" rx="1" stroke="currentColor" stroke-width="1.2" fill="none" /><path d="M6 2.5V1.5h4v1M5.8 6.5h4.4M5.8 9h4.4M5.8 11.5h2.6" stroke="currentColor" stroke-width="1.2" fill="none" /></svg>{/if}
   </button>
 </div>
 
@@ -218,8 +219,7 @@
   .icon { width: 28px; height: 28px; display: inline-grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .icon:hover:not(:disabled), .icon:focus-visible { color: var(--text); }
   .icon:disabled { opacity: 0.35; cursor: default; }
-  .icon[aria-busy="true"] { opacity: 1; color: var(--text); animation: pulse 1s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: 0.4; } }
+  .icon[aria-busy="true"] { opacity: 1; color: var(--text); }
   .checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
   .checks li { display: grid; grid-template-columns: 1em auto 1fr; gap: 0 var(--space-2); align-items: baseline; }
   .checks .said { overflow-wrap: anywhere; }

@@ -480,13 +480,12 @@ test("the wheel zooms smoothly: the map goes to the zoom the wheel asks for over
   const soon = await cell(page);
   expect(soon).toBeLessThan(before * 1.8);
   await expect.poll(() => cell(page)).toBeCloseTo(before * Math.exp(0.6), 1);
-  // The title stays as it was set: the same lines at any zoom.
-  const lines = () => note(page, "coding/huffman-codes").locator(".t").evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight) / Number(getComputedStyle(el.closest(".scaled")!).transform.split(",")[0]!.slice(7))));
+  // The title is drawn at the screen's own pixels (M24): 10 or 11 px on screen, whatever the zoom.
+  const px = () => note(page, "coding/huffman-codes").locator(".t").evaluate((el) => Math.round(parseFloat(getComputedStyle(el).fontSize) * el.getBoundingClientRect().height / (el as HTMLElement).offsetHeight * 10) / 10);
   await page.mouse.wheel(0, -400);
   await expect.poll(() => cell(page)).toBeCloseTo(before * Math.exp(1.2), 1);
-  const at = await lines();
-  expect(at).toBeGreaterThan(0);
+  expect([10, 11]).toContain(await px());
   await page.mouse.wheel(0, 300);
   await expect.poll(() => cell(page)).toBeCloseTo(before * Math.exp(0.75), 1);
-  expect(await lines()).toBe(at);
+  expect([10, 11]).toContain(await px());
 });

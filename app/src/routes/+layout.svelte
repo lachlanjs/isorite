@@ -9,6 +9,7 @@
   import { page } from "$app/state";
   import { app } from "$lib/app.svelte.ts";
   import { onMount } from "svelte";
+  import { install as states } from "$lib/lustre.ts";
   import AtlasPane from "$lib/components/AtlasPane.svelte";
   import IsoPane from "$lib/components/IsoPane.svelte";
   import NoteList from "$lib/components/NoteList.svelte";
@@ -31,6 +32,7 @@
   $effect(() => { if (page.route.id === "/n/[...id]" && page.params.id) panes.setLast(page.params.id); });
   // The notes open over a note close when a note is chosen from them.
   $effect(() => { void page.url.href; panes.tree = false; });
+  onMount(states);
   onMount(() => {
     const media = matchMedia("(max-width: 760px)");
     panes.narrow = media.matches;
@@ -255,7 +257,7 @@
   .divider:focus-visible { outline: none; }
   .tree { position: absolute; left: 0; right: 0; bottom: 0; top: 40px; z-index: 7; overflow: auto; background: var(--ground-0); }
   button.icon { background: none; border: 0; padding: 0; cursor: pointer; }
-  button.icon[aria-pressed="true"] { color: var(--text); background: var(--ground-2); }
+  button.icon[aria-pressed="true"] { background: var(--c, var(--lattice)); color: var(--ground-0); --cut: 4px; clip-path: var(--chosen-cut); }
   .tabs { display: none; }
   @media (max-width: 760px) {
     .tree { top: 48px; }
