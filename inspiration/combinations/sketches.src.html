@@ -79,6 +79,18 @@
   .sheen::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(115deg, transparent 40%, rgb(var(--sheen) / calc(var(--glint) * .5)) 49%, rgb(var(--sheen) / var(--glint)) 50%, rgb(var(--sheen) / calc(var(--glint) * .5)) 51%, transparent 60%); transform: translateX(-120%); }
   .sheen:hover::before, .sheen:focus-visible::before, .sheen.glint::before { transform: translateX(120%); transition: transform 700ms cubic-bezier(.2, .7, .2, 1); }
 
+  /* ---------------------------------------------------------------- C′: lustre, dithered. A canvas of whole cells over
+     the face, scaled up without smoothing; the script draws each variant. */
+  .dz-grid { display: grid; gap: 33px; margin-top: 22px; }
+  .dzv h3 { font: 11px/11px var(--display); text-transform: uppercase; margin: 0 0 8px; color: var(--text); }
+  .dzv .row { margin-top: 12px; }
+  canvas.dz { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; image-rendering: pixelated; }
+  .drow { --edge: var(--line-strong); --face: var(--ground-1); --ink: var(--text); --glint: .3; display: grid; grid-template-columns: 3ch 1fr auto; gap: 14px; align-items: baseline; width: min(100%, 360px); padding: 10px 14px; cursor: pointer; }
+  .drow:hover, .drow:focus-visible { --edge: var(--lattice); outline: none; }
+  .drow .n { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .drow .t { font: 17px/24px var(--serif); }
+  .drow .k { color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+
   /* ---------------------------------------------------------------- C */
   .btn { --edge: var(--line-strong); --face: var(--ground-2); --ink: var(--text-soft); font: 12px/1 var(--ui); letter-spacing: .08em; text-transform: uppercase; padding: 13px 19px; cursor: pointer; }
   .btn:focus-visible { outline: none; }
@@ -320,6 +332,16 @@
       <button class="btn blue chamfer sheen">New note</button>
       <button class="btn blue chamfer sheen">Move</button>
     </div>
+  </section>
+
+  <section>
+    <h2>C′ · Lustre, digital</h2>
+    <p>The same touch drawn in whole pixels: the band is dithered instead of blended, and moves in frames instead of gliding. The edge and face change as in C. Hover or tab to each; the frame rate sets how stepped it is.</p>
+    <div class="bar-top">
+      <div class="seg" role="group" aria-label="Frame rate"><button type="button" data-fps="12" aria-pressed="false">12 fps</button><button type="button" data-fps="24" aria-pressed="true">24 fps</button><button type="button" data-fps="60" aria-pressed="false">60 fps</button></div>
+      <div class="seg" role="group" aria-label="Loop"><button type="button" data-loopall="0" aria-pressed="true">on touch</button><button type="button" data-loopall="1" aria-pressed="false">loop all</button></div>
+    </div>
+    <div class="dz-grid" id="dz"></div>
   </section>
 
   <section>
@@ -642,6 +664,82 @@
     const x = 16.5 + i * 116, w = full ? 104 : 96, h = full ? 50 : 30, y = full ? 20.5 : 30.5;
     return `<g transform="translate(${x} ${y})"><rect class="box" width="${w}" height="${h}"${full ? "" : ' style="fill:var(--ground-1)"'}/><g transform="translate(6 ${full ? 6 : 7}) scale(.75)" style="fill:none;stroke:var(--text-soft);stroke-width:1.5">${g[k]}</g><text class="name" x="${full ? 9 : 22}" y="${full ? 36 : 19}">${name}</text></g><text class="count" x="${x}" y="88">${k}</text>`;
   }).join("")}</svg></div>`;
+  // C′: lustre, dithered. Each variant gives, for a frame at time t (0 to 1) on a face W by H cells, how lit each cell
+  // is (0 to 1). The band leans as C's does: u = x + y/2 is constant along it.
+  function bayer(n) {
+    let m = [[0]];
+    while (m.length < n) { const s = m.length, k = []; for (let y = 0; y < 2 * s; y++) { k.push([]); for (let x = 0; x < 2 * s; x++) k[y].push(4 * m[y % s][x % s] + [[0, 2], [3, 1]][Math.floor(y / s)][Math.floor(x / s)]); } m = k; }
+    return m.map((r) => r.map((v) => (v + .5) / (n * n)));
+  }
+  const B4 = bayer(4), B8 = bayer(8);
+  function band(W, H, t, wide = .1) {
+    const bw = Math.max(4, Math.round(W * wide)), p = Math.round(-bw + t * (W + H / 2 + 2 * bw));
+    return { bw, p, at: (u) => Math.max(0, 1 - Math.abs(u - p) / bw) };
+  }
+  const VARIANTS = [
+    { name: "1 · Ordered", cell: 2, about: "A 4×4 Bayer dither, 2 px cells. The band is a cross-hatch that thins at its edges.",
+      frame: (W, H, t) => { const b = band(W, H, t); return (x, y) => +(b.at(x + y / 2) > B4[y % 4][x % 4]); } },
+    { name: "2 · Fine", cell: 1, about: "An 8×8 Bayer dither at 1 px: closer to C's soft band, still no blending.",
+      frame: (W, H, t) => { const b = band(W, H, t); return (x, y) => +(b.at(x + y / 2) > B8[y % 8][x % 8]); } },
+    { name: "3 · Static", cell: 2, about: "Noise instead of a pattern, drawn fresh each frame, so the band sparkles as it crosses.",
+      frame: (W, H, t) => { const b = band(W, H, t); return (x, y) => +(b.at(x + y / 2) > Math.random()); } },
+    { name: "4 · Wake", cell: 2, about: "A hard leading edge, and behind it a trail that dithers away: light passing, then decaying.",
+      frame: (W, H, t) => { const b = band(W, H, t * 1.25, .08); return (x, y) => { const d = b.p - (x + y / 2); return d < 0 ? 0 : d < 1 ? 1 : +(Math.max(0, 1 - d / (b.bw * 3)) > B4[y % 4][x % 4]); }; } },
+    { name: "5 · Raster", cell: 2, about: "A CRT redraw: the band runs top to bottom on alternate lines, as a screen refreshes.",
+      frame: (W, H, t) => { const bw = Math.max(2, Math.round(H * .18)), p = Math.round(-bw + t * (H + 2 * bw)); return (x, y) => y % 2 ? 0 : +(Math.max(0, 1 - Math.abs(y - p) / bw) > B4[(y >> 1) % 4][x % 4]); } },
+    { name: "6 · Halftone", cell: 1, about: "Dots on a 4 px grid that grow with the light: print, not screen.",
+      frame: (W, H, t) => { const b = band(W, H, t); return (x, y) => { const cx = (x & ~3) + 1.5, cy = (y & ~3) + 1.5, r = b.at(cx + cy / 2) * 2.4; return +((x - cx) ** 2 + (y - cy) ** 2 < r * r); }; } },
+    { name: "7 · Tear", cell: 2, about: "Two levels, solid and checkered, with rows slipping sideways each frame: a signal glitching.",
+      frame: (W, H, t) => { const b = band(W, H, t, .07), o = Array.from({ length: H }, () => (Math.random() < .3 ? Math.floor(Math.random() * 5) - 2 : 0)); return (x, y) => { const i = b.at(x + o[y] + y / 2); return i > .55 ? 1 : i > .15 ? (x + y) % 2 : 0; }; } },
+    { name: "8 · Posterised", cell: 3, about: "No dither: three flat levels in 3 px cells. The plainest digital form.",
+      frame: (W, H, t) => { const b = band(W, H, t, .12); return (x, y) => Math.ceil(b.at(x + y / 2) * 3) / 3; } },
+  ];
+  let FPS = 24;
+  const DUR = 640, still = matchMedia("(prefers-reduced-motion: reduce)"), runs = new WeakMap();
+  function dither(el) {
+    if (still.matches) return;
+    const v = VARIANTS[el.dataset.v];
+    let c = el.querySelector("canvas.dz");
+    if (!c) { c = document.createElement("canvas"); c.className = "dz"; el.append(c); }
+    const box = el.getBoundingClientRect(), W = Math.ceil(box.width / v.cell), H = Math.ceil(box.height / v.cell);
+    c.width = W; c.height = H;
+    const cs = getComputedStyle(el), [R, G, B] = cs.getPropertyValue("--sheen").trim().split(/\s+/).map(Number);
+    const peak = Math.min(1, (parseFloat(cs.getPropertyValue("--glint")) || .55) * 1.4), ctx = c.getContext("2d"), img = ctx.createImageData(W, H), d = img.data;
+    const run = {}, t0 = performance.now(), fps = FPS;
+    runs.set(el, run);
+    let last = -1;
+    const step = (now) => {
+      if (runs.get(el) !== run) return;
+      const t = Math.min(1, (now - t0) / DUR), f = Math.floor(((now - t0) / 1000) * fps);
+      if (t === 1) { ctx.clearRect(0, 0, W, H); return; }
+      if (f !== last) {
+        last = f;
+        const lit = v.frame(W, H, Math.min(1, (f * 1000) / fps / DUR));
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = (y * W + x) * 4; d[i] = R; d[i + 1] = G; d[i + 2] = B; d[i + 3] = lit(x, y) * peak * 255; }
+        ctx.putImageData(img, 0, 0);
+      }
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  const dz = document.getElementById("dz");
+  VARIANTS.forEach((v, k) => {
+    dz.insertAdjacentHTML("beforeend", `<div class="dzv"><h3>${v.name}</h3><p>${v.about}</p><div class="row">
+      <button class="btn gold chamfer" data-v="${k}">Check my understanding</button><button class="btn gold solid chamfer" data-v="${k}">Ask Iso</button><button class="btn blue chamfer" data-v="${k}">New note</button>
+      <div class="drow chamfer" tabindex="0" data-v="${k}"><span class="n">006</span><span class="t">Surprise</span><span class="k">concept</span></div></div></div>`);
+  });
+  for (const el of dz.querySelectorAll("[data-v]")) for (const e of ["pointerenter", "focus"]) el.addEventListener(e, () => dither(el));
+  for (const b of document.querySelectorAll("button[data-fps]")) b.addEventListener("click", () => {
+    FPS = +b.dataset.fps;
+    b.parentElement.querySelectorAll("button").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+  });
+  let looping = 0;
+  for (const b of document.querySelectorAll("button[data-loopall]")) b.addEventListener("click", () => {
+    clearInterval(looping); looping = 0;
+    if (b.dataset.loopall === "1") looping = setInterval(() => dz.querySelectorAll("[data-v]").forEach(dither), 1800);
+    b.parentElement.querySelectorAll("button").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+  });
+
   // T: a layer's date under the title while it's under the pointer.
   const when = document.getElementById("when");
   for (const i of document.querySelectorAll("#column i")) { i.addEventListener("mouseenter", () => { when.textContent = i.dataset.w; }); i.addEventListener("mouseleave", () => { when.textContent = ""; }); }
