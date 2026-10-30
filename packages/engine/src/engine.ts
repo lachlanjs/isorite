@@ -10,7 +10,7 @@ import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fi
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Away, type Similar } from "./lookup.ts";
 import { AGE_OFF, briefingText, handOf, readHand, type Briefing, type Hand, type HandLine } from "./hand.ts";
-import { ARTIFACT_ROUNDS, COMPACT, CONVERSATIONS_DIR, ISORITE, PRACTICE, MODES, conversationPath, turnTools, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
+import { ARTIFACT_ROUNDS, ASK_QUESTION, OFFER_TEXT, COMPACT, CONVERSATIONS_DIR, ISORITE, PRACTICE, MODES, conversationPath, turnTools, readTurns, sentText, turnExchange, turnMessages, type Decision, type Given, type Sent, type Turn, type TurnItem, type TurnLine } from "./turn.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
 import { KEY, SPEND_CAP, OPENROUTER, TIERS, complete, pkce, randomToken, type Message, type ProviderConfig, type ToolDef } from "./provider.ts";
 import type { Clock, Files, Http, Secrets } from "./ports.ts";
@@ -336,7 +336,7 @@ export class Engine implements Api {
   // ------------------------------------------------------------ terminal agents
 
   async agentTools(): Promise<ToolDef[]> {
-    const tools = [BRIEF, TOOLS[0]!, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1), EDIT_NOTE, WRITE_NOTE];
+    const tools = [BRIEF, TOOLS[0]!, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1), EDIT_NOTE, WRITE_NOTE, ASK_QUESTION, OFFER_TEXT];
     // While a server holds other bases, every tool takes one (M20); which are lent is asked at each call.
     return this.opts.elsewhere ? withBase(tools, this.lent().map((l) => l.name), true) : tools;
   }
@@ -386,6 +386,7 @@ export class Engine implements Api {
         : { oldString: str(args.oldString, "oldString"), newString: str(args.newString, "newString"), replaceAll: args.replaceAll === true };
       return this.agentWrite({ agent, session, note: str(args.note, "note"), asked, edit });
     }
+    if (tool === ASK_QUESTION.function.name || tool === OFFER_TEXT.function.name) return { text: this.agentOffer(agent, session, tool, args) };
     const turn = this.turns.get(`${agent}/${session}`) ?? this.startTurn(agent, session);
     const { text, step } = await turn.lookup.call(tool, JSON.stringify(args));
     this.publish({ type: "agent-step", request: turn.request, agent, session, step });
@@ -456,6 +457,72 @@ export class Engine implements Api {
 
   async agentReceived(id: string, agent: string): Promise<void> {
     this.publish({ type: "agent-received", id, agent });
+  }
+
+  /** What agents asked back or offered (M25), by id, until kept. In memory: a question not kept is a passing one. */
+  private offered = new Map<string, { agent: string; item: Extract<TurnItem, { kind: "question" | "offer" }> }>();
+
+  /** An agent's ask_question or offer_text, checked as Iso's are, put to the person to keep or not. */
+  private agentOffer(agent: string, session: string, tool: string, args: Record<string, unknown>): string {
+    const id = newId(this.opts.clock.now());
+    let item: Extract<TurnItem, { kind: "question" | "offer" }>;
+    if (tool === ASK_QUESTION.function.name) {
+      const title = String(args.title ?? "").trim().replace(/\s+/g, " ").slice(0, 200);
+      if (!title) return "Give the question, in title.";
+      const about = [...new Set((Array.isArray(args.about) ? args.about : [args.about]).map((a) => noteId(this.bundle, a)).filter((a): a is string => Boolean(a)))];
+      if (!about.length) return "Give the ids of the notes it is about, in about.";
+      item = { kind: "question", id, title, text: String(args.text ?? "").trim().slice(0, 4000), about };
+    } else {
+      const agents = /^\/?AGENTS(\.md)?$/i.test(String(args.id ?? "").trim());
+      const note = agents ? AGENTS_FILE : noteId(this.bundle, args.id);
+      if (!note) return `There is no note ${String(args.id ?? "")}.`;
+      const text = String(args.text ?? "").trim().slice(0, 8000);
+      if (!text) return "Give the passage, in text.";
+      item = { kind: "offer", id, note, text };
+    }
+    this.offered.set(id, { agent, item });
+    this.publish({ type: "agent-item", agent, session, item });
+    return item.kind === "question" ? "It is put to them. They can make it a question note." : `It is offered to them for ${item.note === AGENTS_FILE ? "their AGENTS.md" : this.titleOf(item.note, "")}.`;
+  }
+
+  async agentTake(id: string): Promise<{ note: string }> {
+    const o = this.offered.get(id);
+    if (!o) throw new EngineError("there is no such question or offer, or it was kept already", 404);
+    const i = o.item;
+    let note: string;
+    if (i.kind === "question") note = (await this.one(() => this.makeQuestion(i, "you"))).id;
+    else if (i.note === AGENTS_FILE) {
+      const now = (await this.agentsFile()) ?? "";
+      await this.one(() => this.opts.notes.write(AGENTS_FILE, `${now.replace(/\s*$/, "")}${now.trim() ? "\n\n" : ""}${i.text}\n`));
+      note = AGENTS_FILE;
+    } else {
+      if (!this.bundle.concepts.has(i.note)) throw new EngineError("the note it was for is gone", 409);
+      const now = await this.readNote(i.note);
+      await this.one(() => this.put(i.note, `${now.text.replace(/\s*$/, "")}\n\n${i.text}\n`, now.version));
+      note = i.note;
+    }
+    this.offered.delete(id);
+    this.publish({ type: "agent-taken", id, note });
+    return { note };
+  }
+
+  async agentChanged({ agent, note, asked }: { agent: string; note: string; asked: string }): Promise<void> {
+    const id = noteId(this.bundle, note) ?? (await this.onDisk(note.replace(/^\/+/, "").replace(/\.md$/i, "")));
+    if (!id) return;
+    const who = `agent:${agent}`;
+    await this.one(async () => {
+      const { files, path } = this.where(id);
+      const now = await files.read(path);
+      if (now === null) return;
+      const entries = await this.journal(id);
+      const entry = change(entries, now, await this.stamp(who), "edit", asked ? { asked } : {});
+      if (!entry) return;
+      await this.enter(id, entries, entry);
+      this.files.set(path, { path, text: now });
+      this.built = this.index = null;
+      this.embedSoon();
+      this.publish({ type: "note-changed", id, version: hashText(now), who });
+    });
   }
 
   /** A turn is looked up in the base as it is when the turn begins, as Iso's requests are. */

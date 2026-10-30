@@ -19,6 +19,7 @@ import { mirrorOf, modelDir, modelInfo, modelPlaces, RELEASE, RELEASE_SHA256, ty
 import { locate } from "./serve.ts";
 import { asksPassword, serving } from "./term.ts";
 import { findBrowser } from "./render.ts";
+import { proposal, writeProposal } from "./connect.ts";
 
 export type Outcome = "ok" | "fail" | "warn" | "skip";
 export interface Check { step: string; outcome: Outcome; said: string }
@@ -36,6 +37,8 @@ export interface DoctorOptions {
   http?: Http;
   /** How OpenCode's version is asked (tests). */
   probe?: Probe;
+  /** Asks a yes or no on the terminal (M25: whether to write the project's MCP config); none, nothing is asked. */
+  ask?: (question: string) => Promise<boolean>;
   /** The git to time (tests). */
   git?: string;
   version?: string;
@@ -220,6 +223,16 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
       if (repository) {
         const at = resolve(notes, repository);
         say("repository", existsSync(at) && statSync(at).isDirectory() ? "ok" : "fail", existsSync(at) ? at : `${OWN_DIR}/${SETTINGS_FILE} names ${repository}, and there is no folder at ${at}`);
+      }
+      // The project's MCP config (M25): what a harness reads to find the base, offered, then written on a yes.
+      const { repo, files } = proposal(notes);
+      const missing = files.filter((f) => !f.current);
+      say("agents", missing.length ? "warn" : "ok", missing.length
+        ? `${missing.map((f) => `${f.file} (${f.harness})`).join(" and ")} in ${repo} ${missing.length === 1 ? "doesn't name" : "don't name"} this base, so ${missing.length === 1 ? "that harness doesn't" : "those harnesses don't"} find it`
+        : `${files.map((f) => f.file).join(" and ")} in ${repo} name this base`);
+      if (missing.length && o.ask && !o.report) {
+        for (const f of missing) out(`\n${join(repo, f.file)} would be${f.before === null ? " made" : ""}:\n${f.after}`);
+        if (await o.ask(`Write ${missing.length === 1 ? "it" : "them"}? Commit ${missing.length === 1 ? "it" : "them"} with the project.`)) out(`written: ${writeProposal(notes).join(", ") || "nothing (not JSON as it is)"}`);
       }
       // The base's vectors, if made: by the model there is now, or made again when it is next opened.
       const vectors = join(cacheDir(env), `vectors-${createHash("sha256").update(notes).digest("hex").slice(0, 16)}.json`);

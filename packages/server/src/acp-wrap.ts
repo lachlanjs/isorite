@@ -12,7 +12,11 @@ import { basename } from "node:path";
 import { ensureServer, MAIN, tokenOf } from "./term.ts";
 import { TOKEN_HEADER } from "./http.ts";
 import { self } from "./self.ts";
-import type { Command, Rpc, Way } from "./acp.ts";
+import { ACP_SESSION, type Command, type Rpc, type Way } from "./acp.ts";
+import { agentName } from "./mcp-http.ts";
+import { existsSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { OWN_DIR } from "@isorite/core";
 
 export interface AcpOptions {
   /** The agent's own ACP command, as a shell runs it: `opencode acp`, `omp acp`. */
@@ -24,15 +28,47 @@ export interface AcpOptions {
 }
 
 const OPENS = new Set(["session/new", "session/load", "session/resume", "session/fork"]);
-/** A name the Atlas can show: small letters, digits and dashes. */
-const named = (s: string): string => s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "agent";
+const SKIP = new Set(["node_modules", ".git", OWN_DIR, "dist", "build", "target", ".venv"]);
+
+/** The base for a session started in `cwd`: the folder itself or one above it holding .isorite/, else the first
+ *  below it, three levels down at most (a base inside the repository, as notes/); or none. */
+export function findBase(cwd: string): string | null {
+  for (let at = cwd; ; at = dirname(at)) {
+    if (existsSync(join(at, OWN_DIR))) return at;
+    if (dirname(at) === at) break;
+  }
+  let level = [cwd];
+  for (let depth = 0; depth < 3 && level.length; depth++) {
+    const next: string[] = [];
+    for (const dir of level) {
+      let names: string[] = [];
+      try { names = readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory() && !SKIP.has(d.name) && !d.name.startsWith(".")).map((d) => d.name).sort(); } catch { continue; }
+      for (const n of names) { if (existsSync(join(dir, n, OWN_DIR))) return join(dir, n); next.push(join(dir, n)); }
+    }
+    level = next;
+  }
+  return null;
+}
 
 export async function acp(path: string | undefined, { agent, port = 4767, input = process.stdin, output = process.stdout, env = process.env }: AcpOptions): Promise<number> {
+  // Without a base named, the one in the folder the front end started this in (the repository's notes).
+  path ??= findBase(process.cwd()) ?? undefined;
   const server = await ensureServer(path, { port, env, say: (line) => process.stderr.write(line + "\n") });
   const { url } = server;
   const token = await tokenOf(url);
   const child = spawn(agent, { shell: true, stdio: ["pipe", "pipe", "inherit"], env });
-  let name = named(basename(agent.trim().split(/\s+/)[0] ?? "agent"));
+  let name = agentName(basename(agent.trim().split(/\s+/)[0] ?? "agent"));
+  /** Whether the agent takes MCP over HTTP: then isorite's is given as the base's address, not a command. */
+  let httpMcp = false;
+  /** Notes and passages given in the pane, put before the next prompt from either place. */
+  let given = "";
+  const withGiven = (prompt: unknown): unknown[] => {
+    const blocks = Array.isArray(prompt) ? prompt : [];
+    if (!given) return blocks;
+    const text = given;
+    given = "";
+    return [{ type: "text", text }, ...blocks];
+  };
 
   // What passed, told to the server in batches.
   let batch: { way: Way; message: Rpc }[] = [];
@@ -62,14 +98,15 @@ export async function acp(path: string | undefined, { agent, port = 4767, input 
   let ours = 0;
 
   const isoriteMcp = () => {
-    const again = self(MAIN, ["mcp", ...(path ? [path] : []), "--port", String(port), "--agent", name]);
+    if (httpMcp) return { type: "http", name: "isorite", url: `${url}/mcp?${new URLSearchParams({ agent: name, session: ACP_SESSION })}`, headers: [] };
+    const again = self(MAIN, ["mcp", ...(path ? [path] : []), "--port", String(port), "--agent", name, "--session", ACP_SESSION]);
     return { name: "isorite", command: again.command, args: again.args, env: [] };
   };
   const sendWaiting = () => {
     if (!session || busy() || !waiting.length) return;
     const text = waiting.shift()!;
     const id = `isorite-${++ours}`;
-    const request = { id, method: "session/prompt", params: { sessionId: session, prompt: [{ type: "text", text }] } };
+    const request = { id, method: "session/prompt", params: { sessionId: session, prompt: withGiven([{ type: "text", text }]) } };
     asked.set(id, "session/prompt");
     tap("ours", request);
     toAgent(request);
@@ -91,6 +128,7 @@ export async function acp(path: string | undefined, { agent, port = 4767, input 
           if (!servers.some((s) => s.name === "isorite")) m = { ...m, params: { ...m.params, mcpServers: [...servers, isoriteMcp()] } };
         }
         if (m.method === "session/load" || m.method === "session/resume") session = String(m.params?.sessionId ?? "") || session;
+        if (m.method === "session/prompt" && given) m = { ...m, params: { ...m.params, prompt: withGiven(m.params?.prompt) } };
       }
       if (!m.method && key !== null && answered.has(key)) { answered.delete(key); continue; }
       if (!m.method && key !== null) agentAsked.delete(key);
@@ -112,7 +150,8 @@ export async function acp(path: string | undefined, { agent, port = 4767, input 
         asked.delete(key);
         if (method === "initialize") {
           const info = m.result?.agentInfo as { name?: string } | undefined;
-          if (info?.name) name = named(info.name);
+          if (info?.name) name = agentName(info.name);
+          httpMcp = Boolean((m.result?.agentCapabilities as { mcpCapabilities?: { http?: boolean } } | undefined)?.mcpCapabilities?.http);
         }
         if (method === "session/new" && typeof m.result?.sessionId === "string") session = m.result.sessionId;
         tap("out", m);
@@ -152,6 +191,7 @@ export async function acp(path: string | undefined, { agent, port = 4767, input 
   })();
   function command(c: Command): void {
     if (c.type === "prompt") { waiting.push(c.text); sendWaiting(); }
+    if (c.type === "give") given = c.text;
     if (c.type === "cancel" && session) { const m = { method: "session/cancel", params: { sessionId: session } }; tap("ours", m); toAgent(m); }
     if (c.type === "permission" && agentAsked.has(c.id)) {
       const id = agentAsked.get(c.id)!;

@@ -46,11 +46,11 @@ test("isorite mcp: the base's tools over stdio, each look-up a step on the Atlas
   };
 
   const init = await call("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } });
-  expect(init.result).toMatchObject({ protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "isorite" } });
+  expect(init.result).toMatchObject({ protocolVersion: "2025-06-18", capabilities: { tools: {}, resources: {} }, serverInfo: { name: "isorite" } });
   input.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
 
   const listed = (await call("tools/list")).result as { tools: { name: string; inputSchema: { type: string } }[] };
-  expect(listed.tools.map((t) => t.name)).toEqual(["brief_base", "search_notes", "outline_note", "read_note", "edit_note", "write_note"]);
+  expect(listed.tools.map((t) => t.name)).toEqual(["brief_base", "search_notes", "outline_note", "read_note", "edit_note", "write_note", "ask_question", "offer_text"]);
   expect(listed.tools[1]!.inputSchema.type).toBe("object");
 
   // What the browser hears, from here on.

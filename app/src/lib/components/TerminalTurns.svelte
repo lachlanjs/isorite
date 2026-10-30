@@ -20,8 +20,12 @@
     search_notes: "searched", find_similar: "by meaning", outline_note: "outlined", read_note: "read", brief_base: "looked over", edit_note: "changed", write_note: "wrote" };
   /** A note it changed opens in the note's Iso lens, where its words are marked (and the timeline undoes them). */
   const CHANGES = new Set(["edit_note", "write_note"]);
-  function open(name: string, id: string): void { if (CHANGES.has(name)) panes.flip("provenance", true); void panes.open(id, true); }
-  const verb = (name: string): string => VERB[name] ?? name.replaceAll("_", " ");
+  function open(name: string, id: string): void { if (CHANGES.has(bare(name))) panes.flip("provenance", true); void panes.open(id, true); }
+  /** isorite's own tools, as a harness names those of an MCP server (mcp__isorite__read_note, isorite_read_note). */
+  const bare = (name: string): string => name.replace(/^(mcp_+)?isorite[_:]+/, "");
+  const verb = (name: string): string => VERB[bare(name)] ?? bare(name).replaceAll("_", " ");
+  /** A question back or an offer stands as itself (M25), not as the call that made it. */
+  const itself = (i: TerminalItem): boolean => i.kind === "tool" && /^(ask_question|offer_text)$/.test(bare(i.name));
   const WHAT: Record<string, string> = { shell: "run", edit: "edit", write: "write", read: "read", webfetch: "fetch", external_directory: "reach outside the project" };
   const asks = (p: TerminalPermission): string => `${WHAT[p.action] ?? p.action} ${p.resources.join(", ")}`.trim();
   /** The asking that belongs to a tool call, drawn under it; the rest at the turn's end. */
@@ -34,7 +38,7 @@
 
 {#snippet permit(p: TerminalPermission)}
   <div class="permit" role="group" aria-label="The terminal's agent asks before it does this">
-    <p>OpenCode wants to <code>{asks(p)}</code>.</p>
+    <p>{view?.agent || "The agent"} wants to <code>{asks(p)}</code>.</p>
     <p class="acts"><button type="button" onclick={() => void terminal.reply(p.id, "once")}>Allow once</button><button type="button" onclick={() => void terminal.reply(p.id, "always")}>Always allow this</button><button type="button" class="no" onclick={() => void terminal.reply(p.id, "reject")}>Don't allow</button></p>
   </div>
 {/snippet}
@@ -43,6 +47,22 @@
   {#if i.kind === "text"}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
     <div class="said prose" use:drawn={{ given: i.text, copy: true }}>{@html render(i.text)}</div>
+  {:else if i.kind === "question"}
+    <!-- A question the agent asked back through isorite (M25), as Iso's are: a rose ◇ and "keep", which makes it a
+         question note, yours. Kept, it is a link to the note. -->
+    <div class="asks" data-question={i.id} data-to={i.made ?? `?${i.id}`}>
+      <p><svg class="qm" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.5L13.5 8L8 13.5L2.5 8Z" /></svg>{#if i.made}<button type="button" class="note-link" data-to={i.made} onclick={() => open("read", i.made!)}>{i.title}</button>{:else}<span class="qt">{i.title}</span>
+        <button class="keep" type="button" data-lustre aria-label="Keep “{i.title}” as an open question" title="Keep as an open question about {i.about.map(titleOf).join(", ")}" onclick={() => void terminal.take(i.id)}>keep</button>{/if}</p>
+      {#if i.text}<p class="qb">{i.text}</p>{/if}
+    </div>
+  {:else if i.kind === "offer"}
+    <!-- Words the agent offered for a note (M25): inserted at the end of it, as yours, or not. -->
+    <div class="offer" data-offer={i.id}>
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
+      <div class="prose yours" use:drawn={i.text}>{@html render(i.text)}</div>
+      <p class="for">{#if i.note === "AGENTS.md"}<span>AGENTS.md</span>{:else}<button type="button" class="note-link" data-to={i.note} onclick={() => open("read", i.note)}>{titleOf(i.note)}</button>{/if}
+        {#if i.taken}<span class="in">inserted</span>{:else}<button class="insert" type="button" aria-label="Insert into {titleOf(i.note)} as yours" onclick={() => void terminal.take(i.id)}>insert</button>{/if}</p>
+    </div>
   {:else}
     <div class="tool" data-status={i.status}>
       {#if i.output || i.diff}
@@ -68,16 +88,16 @@
   {/each}
   {#each loose as p (p.id)}{@render permit(p)}{/each}
   {#if !view?.turns.length}
-    <p class="faint">The terminal's session shows here: what is asked there or here, what OpenCode does, and what it asks before doing.</p>
+    <p class="faint">The terminal's session shows here: what is asked there or here, what {view?.agent || "the agent"} does, and what it asks before doing.</p>
   {/if}
 </div>
 
 {#snippet turn(t: TerminalTurn)}
   <article class="turn" data-state={t.state}>
     <div class="you"><p class="asked">{t.asked}</p><span class="from">{t.from === "here" ? "from here" : "in the terminal"}</span></div>
-    {#each t.items as i, k (k)}{@render item(i)}{/each}
+    {#each t.items as i, k (k)}{#if !itself(i)}{@render item(i)}{/if}{/each}
     {#if t.state === "running"}
-      <p class="doing" role="status"><Drawing />OpenCode is at work</p>
+      <p class="doing" role="status"><Drawing />{view?.agent || "The agent"} is at work</p>
     {:else if t.state === "stopped"}
       <p class="faint end">stopped</p>
     {:else if t.state === "failed"}
@@ -124,6 +144,19 @@
   .acts button { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
   .acts button:hover { color: var(--text); }
   .acts .no { color: var(--text-faint); }
+  .asks { padding-left: 16px; display: grid; gap: 2px; font-size: 13px; }
+  .asks p { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .asks .qm { margin-left: -17px; margin-right: 4px; color: var(--rose); flex: none; }
+  .asks .qt { color: var(--text); overflow-wrap: anywhere; }
+  .asks .note-link { color: var(--text); }
+  .asks .qb { color: var(--text-soft); font-size: 12.5px; display: block; }
+  .asks .keep { --cut: 5px; flex: none; margin-left: 4px; height: 22px; padding: 0 9px; background: none; border: 1px solid var(--rose); color: var(--rose); font: 10px/20px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; cursor: pointer; --glint: .4; transition: background-color var(--t-ack) var(--ease-out); }
+  .asks .keep:hover { background: var(--rose-soft); }
+  .offer { margin-left: 16px; border-left: 2px solid var(--line-strong); padding: 2px 0 2px 12px; display: grid; gap: 4px; }
+  .offer .yours { font: 15px/1.6 var(--font-text); color: var(--text); overflow-wrap: anywhere; }
+  .offer .for { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-faint); }
+  .offer .in { color: var(--malachite); }
+  .offer .insert { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
   .doing { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-faint); }
   .bad { color: var(--rose); font-size: 12px; padding-left: 16px; }
   .end { font-size: 12px; padding-left: 16px; }

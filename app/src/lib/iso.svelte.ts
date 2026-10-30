@@ -117,7 +117,7 @@ export class NoteIso {
       if (settled && this.editing?.id === settled) this.editing = null;
       return;
     }
-    if (e.type === "note-changed" || e.type === "record" || e.type === "agent-sent" || !("note" in e) || e.note !== this.note.id) return;
+    if (e.type === "note-changed" || e.type === "record" || e.type === "agent-sent" || e.type === "agent-taken" || !("note" in e) || e.note !== this.note.id) return;
     if (e.type === "iso-start") {
       // Sent from here: the block is up already and now learns its request's id. Sent from another tab: it is put up.
       if (this.asking && !this.asking.request) { this.asking = { ...this.asking, request: e.request }; return; }

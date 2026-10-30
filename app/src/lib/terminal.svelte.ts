@@ -56,6 +56,8 @@ class TerminalState {
   }
   async stop(): Promise<void> { try { await this.api?.stop(); } catch (e) { this.problem = (e as Error).message; } }
   async reply(id: string, decision: Decision): Promise<void> { try { await this.api?.reply(id, decision); } catch (e) { this.problem = (e as Error).message; } }
+  /** Keep a question the agent asked back, or a passage it offered (M25). */
+  async take(id: string): Promise<void> { try { await this.api?.take(id); } catch (e) { this.problem = (e as Error).message; } }
 }
 
 export const terminal = new TerminalState();

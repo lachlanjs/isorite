@@ -139,7 +139,7 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
     make: async (known) => {
       const api = await openEngine({ notes: known.path }, device, config, live.http, model, secrets, { name: known.name, elsewhere: bases, embedder });
       api.setProvider(live.provider, live.http);
-      const acp = new AcpFollower();
+      const acp = new AcpFollower({ api, notes: known.path });
       const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, terminal: new Following(new Terminal(), acp), acp, gateway, setup, bases, base: known.name });
       return { engine: api, fetch: app.fetch };
     },

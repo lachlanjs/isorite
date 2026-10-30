@@ -13,6 +13,9 @@ import type { BasesPort } from "./bases.ts";
 import type { Setup } from "./setup.ts";
 import { given as withGiven, type Terminal } from "./terminal.ts";
 import type { AcpFollower, Following, Rpc } from "./acp.ts";
+import { McpEndpoint, agentName, clientName, type Rpc as McpRpc } from "./mcp-http.ts";
+import { VERSION } from "./version.ts";
+import { proposal, writeProposal } from "./connect.ts";
 
 export const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
 export const TOKEN_HEADER = "x-isorite-token";
@@ -303,6 +306,15 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   post("/api/agent/send", z.object({ note: z.string().max(400), passage: z.string().max(10_000).optional(), said: z.string().max(4000) }).strict(), (_c, b) => api.agentSend(b));
   post("/api/agent/received", z.object({ id: z.string().max(64), agent: AgentName }).strict(), (_c, b) => api.agentReceived(b.id, b.agent));
   post("/api/agent/status", AgentStatus, (_c, b) => api.agentStatus(b.agent, b.session, b.busy));
+  post("/api/agent/take", z.object({ id: z.string().max(64) }).strict(), (_c, b) => api.agentTake(b.id));
+  // The project's MCP config (M25): shown, then written on a yes, from this machine only.
+  if (notes) {
+    app.get("/api/connect", (c) => answer(c, async () => proposal(notes)));
+    post("/api/connect", z.object({ files: z.array(z.string().max(200)).max(10).optional() }).strict(), async (c, b) => {
+      if (!local(c)) throw new EngineError("the project's files are written only from this machine", 403);
+      return { written: writeProposal(notes, b.files) };
+    });
+  }
 
   // The terminal's session (M11). `isorite term` attaches OpenCode's server, on this machine only; pages read the
   // session, ask in it, stop it and answer what it asks, and never reach OpenCode themselves.
@@ -326,9 +338,37 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     post("/api/terminal/permission", z.object({ id: z.string().max(200), decision: z.enum(["once", "always", "reject"]) }).strict(), async (_c, b) => { await terminal.reply(b.id, b.decision).catch(failed); });
   }
 
+  // The base's tools over MCP (M25), for an agent on this machine: Streamable HTTP, a JSON answer to each request.
+  // No token: the agent's harness is given this address in its config, and only this machine is answered.
+  const endpoint = new McpEndpoint(api, { base: base ?? "notes", version: VERSION });
+  app.post("/mcp", async (c) => {
+    if (!local(c)) return refuse(c, 403, "MCP is answered only on this machine");
+    let origin = "";
+    try { origin = c.req.header("origin") ? new URL(c.req.header("origin")!).hostname : ""; } catch { origin = "?"; }
+    if (origin && !LOOPBACK.has(origin.replace(/^\[|\]$/g, ""))) return refuse(c, 403, "cross-origin request refused");
+    let raw: unknown;
+    try { raw = JSON.parse(await c.req.text()); } catch { return reply(c, 400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "not JSON" } }); }
+    const named = c.req.query("agent");
+    const quiet = Number(c.req.query("quiet"));
+    const who = (rpc: McpRpc) => {
+      const agent = named && /^[a-z0-9][a-z0-9-]{0,39}$/.test(named) ? named : agentName(clientName(rpc) ?? "mcp");
+      const asked = acp?.asked(agent) ?? "";
+      return { agent, session: (c.req.query("session") ?? "http").slice(0, 200), ...(asked ? { asked } : {}), ...(quiet >= 100 && quiet <= 600_000 ? { quiet } : {}) };
+    };
+    const answers = (await Promise.all((Array.isArray(raw) ? raw : [raw]).map((r) => endpoint.answer(r as McpRpc, who(r as McpRpc))))).filter((a) => a !== null);
+    if (!answers.length) return c.body(null, 202);
+    return reply(c, 200, Array.isArray(raw) ? answers : answers[0]);
+  });
+  app.on(["GET", "DELETE"], "/mcp", (c) => c.body(null, 405, { Allow: "POST" }));
+
   // An ACP agent's session (M25, the spike): `isorite acp`, on this machine, tells what passed between its front end
   // and the agent, and listens for what the pane asks. Asked as the page asks: the Origin and the token.
   if (acp) {
+    // Notes and passages given in the pane, put before the next prompt, asked there or in the front end.
+    post("/api/acp/give", z.object({ given: z.array(Given).max(40) }).strict(), async (_c, b) => {
+      const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
+      await acp.give(withGiven("", b.given, (id) => titles.get(id) ?? id).trim()).catch((e: Error) => { throw new EngineError(e.message, 409); });
+    });
     post("/api/acp/tap", z.object({ messages: z.array(z.object({ way: z.enum(["in", "out", "ours"]), message: z.record(z.string(), z.unknown()) }).strict()).max(1000) }).strict(), async (_c, b) => { acp.tap(b.messages as { way: "in" | "out" | "ours"; message: Rpc }[]); });
     app.get("/api/acp/commands", (c) => {
       if (!local(c) || c.req.header(TOKEN_HEADER) !== token) return refuse(c, 403, "bad token");

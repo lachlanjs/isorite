@@ -161,7 +161,7 @@ test("the device id is made once and kept, readable by its owner only", () => {
 
 test("a terminal agent is offered the tools and looks up as the page writes: from the origin, with the token", async () => {
   const tools = await (await fetch(url + "/api/agent/tools")).json() as { function: { name: string } }[];
-  expect(tools.map((t) => t.function.name)).toEqual(["brief_base", "search_notes", "outline_note", "read_note", "edit_note", "write_note"]);
+  expect(tools.map((t) => t.function.name)).toEqual(["brief_base", "search_notes", "outline_note", "read_note", "edit_note", "write_note", "ask_question", "offer_text"]);
   const look = { agent: "opencode", session: "ses_1", tool: "search_notes", args: { query: "surprise" } };
   const found = await write("/api/agent/look", look, { method: "POST" });
   expect(found.status).toBe(200);
@@ -269,4 +269,44 @@ test("isorite check names a missing picture as one, and --unused lists the pictu
     "unused  combat/hitboxes/spare.png",
     "1 picture no note shows",
   ]);
+});
+
+test("MCP over HTTP at /mcp (M25): stateless, a JSON answer to each request, the agent named by the address; ask_question kept as a note", async () => {
+  const mcp = (body: unknown, query = "?agent=omp&session=s1", headers: Record<string, string> = {}) =>
+    fetch(`${url}/mcp${query}`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", ...headers }, body: JSON.stringify(body) });
+  const rpc = async (method: string, params: object = {}, query?: string) => (await (await mcp({ jsonrpc: "2.0", id: 1, method, params }, query)).json()) as { result?: any; error?: { code: number } };
+
+  // An older client opens with initialize; a newer one asks server/discover; neither is given a session.
+  const opened = await mcp({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "Claude Code", version: "2" } } });
+  expect(opened.headers.get("mcp-session-id")).toBeNull();
+  expect(await opened.json()).toMatchObject({ result: { protocolVersion: "2025-06-18", capabilities: { tools: {}, resources: {} }, serverInfo: { name: "isorite" } } });
+  expect((await rpc("server/discover")).result).toMatchObject({ supportedVersions: expect.arrayContaining(["2026-07-28"]), instructions: expect.stringContaining("[the phrase](/folder/note.md)") });
+  expect((await mcp({ jsonrpc: "2.0", method: "notifications/initialized" })).status).toBe(202);
+  expect((await fetch(`${url}/mcp`)).status).toBe(405);
+
+  const tools = (await rpc("tools/list")).result.tools.map((t: { name: string }) => t.name);
+  expect(tools).toEqual(expect.arrayContaining(["brief_base", "read_note", "ask_question", "offer_text"]));
+  expect((await rpc("resources/list")).result.resources).toContainEqual({ uri: "isorite://notes/basics/entropy", name: "basics/entropy", title: "Entropy", mimeType: "text/markdown" });
+  expect((await rpc("resources/read", { uri: "isorite://notes/basics/entropy" })).result.contents[0].text).toContain("The average surprise.");
+  expect((await rpc("nothing/here")).error?.code).toBe(-32601);
+
+  // A question back is put to the person (an event for the pane), and made a note when kept.
+  const heard: any[] = [], abort = new AbortController();
+  void fetch(`${url}/api/events`, { signal: abort.signal }).then(async (r) => {
+    for await (const chunk of r.body!) for (const m of new TextDecoder().decode(chunk as Uint8Array).matchAll(/^data: (\{"type":"agent-item".*)$/gm)) heard.push(JSON.parse(m[1]!));
+  }).catch(() => undefined);
+  await new Promise((r) => setTimeout(r, 150));
+  const asked = await rpc("tools/call", { name: "ask_question", arguments: { title: "Why is it an average?", text: "", about: ["basics/entropy"] } });
+  expect(asked.result.content[0].text).toMatch(/put to them/);
+  await expect.poll(() => heard.length).toBe(1);
+  expect(heard[0]).toMatchObject({ agent: "omp", session: "s1", item: { kind: "question", title: "Why is it an average?", about: ["basics/entropy"] } });
+  abort.abort();
+  const kept = await write("/api/agent/take", { id: heard[0].item.id }, { method: "POST" });
+  expect(kept.status).toBe(200);
+  const { note } = (await kept.json()) as { note: string };
+  expect(readFileSync(join(notes, `${note}.md`), "utf8")).toContain("Why is it an average?");
+  expect((await write("/api/agent/take", { id: heard[0].item.id }, { method: "POST" })).status).toBe(404);
+
+  // No page from elsewhere.
+  expect((await mcp({ jsonrpc: "2.0", id: 1, method: "ping" }, "", { Origin: "https://evil.example" })).status).toBe(403);
 });

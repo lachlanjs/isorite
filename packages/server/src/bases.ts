@@ -114,7 +114,7 @@ export class Bases implements Elsewhere, BasesPort {
     const m = /^\/b\/([^/]+)(\/.*)?$/.exec(url.pathname);
     if (!m || !NAME.test(m[1]!)) return (await this.get(this.first)!).fetch(req, env);
     const name = m[1]!;
-    if (!m[2]?.startsWith("/api/")) return new Response(null, { status: 302, headers: { Location: `/?base=${name}${m[2]?.startsWith("/#") ? m[2].slice(1) : ""}` } });
+    if (!m[2]?.startsWith("/api/") && m[2] !== "/mcp") return new Response(null, { status: 302, headers: { Location: `/?base=${name}${m[2]?.startsWith("/#") ? m[2].slice(1) : ""}` } });
     const opening = this.get(name);
     if (!opening) return new Response(JSON.stringify({ error: `no base ${name} is known here: isorite bases lists them` }), { status: 404, headers: { "Content-Type": "application/json" } });
     let opened: Opened;

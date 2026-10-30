@@ -23,6 +23,8 @@ export interface TerminalApi {
   prompt(asked: string, given: Given[]): Promise<void>;
   stop(): Promise<void>;
   reply(id: string, decision: Decision): Promise<void>;
+  /** Keep what the agent asked back or offered (M25). */
+  take(id: string): Promise<{ note: string }>;
 }
 
 /** The provider's setup (M18), through the isorite server: there is none for the engine in the page (the guide's site). */
@@ -134,6 +136,9 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     agentSend: (sent) => write("POST", "agent/send", sent),
     agentReceived: async (id, agent) => { await write("POST", "agent/received", { id, agent }); },
     agentStatus: async (agent, session, busy) => { await write("POST", "agent/status", { agent, session, busy }); },
+    agentTake: (id) => write("POST", "agent/take", { id }),
+    // Told by isorite acp to the server, never by a page.
+    agentChanged: async () => { throw new Error("only isorite acp tells the server of an agent's change"); },
     setup: {
       view: () => ask<SetupView>("settings/provider"),
       keep: (draft) => write("PUT", "settings/provider", draft),
@@ -150,11 +155,12 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       prompt: async (asked, given) => { await write("POST", "terminal/prompt", { asked, given }); },
       stop: async () => { await write("POST", "terminal/stop", {}); },
       reply: async (id, decision) => { await write("POST", "terminal/permission", { id, decision }); },
+      take: (id) => write("POST", "agent/take", { id }),
     },
     events(listener) {
       const source = new EventSource(root + "events");
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
-      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-item", "iso-answer", "iso-taken", "iso-done", "iso-stopped", "iso-failed", "iso-retry", "context", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "terminal"] satisfies EngineEvent["type"][];
+      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-item", "iso-answer", "iso-taken", "iso-done", "iso-stopped", "iso-failed", "iso-retry", "context", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "agent-item", "agent-taken", "terminal"] satisfies EngineEvent["type"][];
       for (const type of types) source.addEventListener(type, on);
       return () => source.close();
     },

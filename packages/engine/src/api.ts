@@ -103,13 +103,15 @@ export interface ConversationSummary { id: string; at: string; last: string; ask
 
 /** The terminal's session (M11), as the Iso pane's Build mode draws it: read by the isorite server from OpenCode's
  *  own server, which `isorite term` starts and the terminal is attached to. `connected` is false when no terminal is. */
-export interface TerminalView { connected: boolean; session: string | null; title: string; busy: boolean; turns: TerminalTurn[]; asking: TerminalPermission[]; cost: number; tokens: { input: number; output: number }; model: string }
+export interface TerminalView { connected: boolean; /** The agent, as it names itself: OpenCode, omp. */ agent: string; session: string | null; title: string; busy: boolean; turns: TerminalTurn[]; asking: TerminalPermission[]; cost: number; tokens: { input: number; output: number }; model: string }
 /** A prompt and what the agent did with it. `from` says where it was asked: in the terminal, or from a page. */
 export interface TerminalTurn { id: string; asked: string; from: "terminal" | "here"; items: TerminalItem[]; state: "running" | "done" | "stopped" | "failed" }
 export type TerminalItem =
   | { kind: "text"; text: string }
   /** A tool call. `title` is what it acted on (a command, a file, a note); `diff` an edit's lines, `-` and `+`. */
-  | { kind: "tool"; id: string; name: string; title: string; status: "running" | "done" | "failed"; output: string; note?: string; diff?: string[]; base?: string };
+  | { kind: "tool"; id: string; name: string; title: string; status: "running" | "done" | "failed"; output: string; note?: string; diff?: string[]; base?: string }
+  /** What the agent asked back, or offered, through isorite's MCP (M25): kept as Iso's are, or not. */
+  | Extract<TurnItem, { kind: "question" | "offer" }>;
 /** The agent asks before doing: `action` (as `shell`) on `resources` (as the command). */
 export interface TerminalPermission { id: string; action: string; resources: string[]; tool?: string }
 
@@ -257,6 +259,10 @@ export type EngineEvent =
   | { type: "agent-sent"; id: string; note: string; title: string; passage?: string; said: string; text: string }
   /** An agent took what was sent into one of its sessions. */
   | { type: "agent-received"; id: string; agent: string }
+  /** An agent asked a question back or offered a passage (M25), for the person to keep or not. */
+  | { type: "agent-item"; agent: string; session: string; item: Extract<TurnItem, { kind: "question" | "offer" }> }
+  /** What an agent offered was kept: the question made a note, or the passage put in one. */
+  | { type: "agent-taken"; id: string; note: string }
   /** The terminal's session changed (M11): the whole of it, as the isorite server reads it. Not the engine's own. */
   | { type: "terminal"; terminal: TerminalView };
 
@@ -402,6 +408,12 @@ export interface Api {
   agentReceived(id: string, agent: string): Promise<void>;
   /** An agent's session became busy (a turn begins) or idle (it ends). */
   agentStatus(agent: string, session: string, busy: boolean): Promise<void>;
+  /** Keep what an agent offered with ask_question or offer_text (M25): the question made a note, or the passage
+   *  inserted at the end of its note, as Iso's are kept. */
+  agentTake(id: string): Promise<{ note: string }>;
+  /** An agent changed a note's file with its own tools, in a turn isorite saw (M25): entered in its journal under the
+   *  agent's name, with what was asked, not as a change made elsewhere. */
+  agentChanged(change: { agent: string; note: string; asked: string }): Promise<void>;
   /** Listen to everything the engine does, until the returned function is called. */
   events(listener: (event: EngineEvent) => void): () => void;
 }

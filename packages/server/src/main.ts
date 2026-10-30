@@ -135,10 +135,11 @@ export function main(argv: string[]): number | Promise<number> {
     if (command === "term" || command === "mcp") {
       const flag = (name: string) => { const at = rest.indexOf(name); return at < 0 ? undefined : rest[at + 1]; };
       const port = flag("--port") === undefined ? undefined : Number(flag("--port")), agent = flag("--agent");
+      const session = flag("--session");
       if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
       if (agent !== undefined && !/^[a-z0-9][a-z0-9-]{0,39}$/.test(agent)) { console.error("--agent takes a name in small letters, digits and dashes"); return 2; }
-      const path = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port" && rest[i - 1] !== "--agent");
-      const run = command === "term" ? term(path, port === undefined ? {} : { port }) : mcp(path, { ...(port === undefined ? {} : { port }), ...(agent ? { agent } : {}) });
+      const path = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port" && rest[i - 1] !== "--agent" && rest[i - 1] !== "--session");
+      const run = command === "term" ? term(path, port === undefined ? {} : { port }) : mcp(path, { ...(port === undefined ? {} : { port }), ...(agent ? { agent } : {}), ...(session && /^[\w-]{1,200}$/.test(session) ? { session } : {}) });
       return run.catch((e: Error) => { console.error(e.message); return 2; });
     }
     // The spike of M25: not listed yet.
@@ -171,7 +172,13 @@ export function main(argv: string[]): number | Promise<number> {
       const at = rest.indexOf("--port"), port = at < 0 ? undefined : Number(rest[at + 1]);
       if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
       const folder = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port");
-      return doctor(folder, { report: rest.includes("--report"), offline: rest.includes("--offline"), version: VERSION, ...(port === undefined ? {} : { port }) });
+      // Asked only at a terminal: piped or in a script, doctor only says.
+      const ask = process.stdin.isTTY && process.stdout.isTTY ? async (question: string) => {
+        const { createInterface } = await import("node:readline/promises");
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        try { return /^y(es)?$/i.test((await rl.question(`${question} [y/N] `)).trim()); } finally { rl.close(); }
+      } : undefined;
+      return doctor(folder, { report: rest.includes("--report"), offline: rest.includes("--offline"), version: VERSION, ...(port === undefined ? {} : { port }), ...(ask ? { ask } : {}) });
     }
     if (command === "example" && rest.find((r) => !r.startsWith("--"))) {
       const folder = rest.find((r) => !r.startsWith("--"))!;
