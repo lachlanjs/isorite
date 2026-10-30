@@ -1,6 +1,20 @@
 # The terminal: what to build it on (research, 2026-10-30)
 
-Done before M25 (`plan-m25.md`) at Lachlan's request: whether OpenCode 2 stays isorite's terminal, and if not, the best thing to build an agentic terminal on. Facts from the projects' own pages and npm on 2026-10-30; where only secondary sources said something, it is marked.
+Done before the install milestone (now M26, `plan-m26.md`) at Lachlan's request: whether OpenCode 2 stays isorite's terminal, and if not, the best thing to build an agentic terminal on. Facts from the projects' own pages and npm on 2026-10-30; where only secondary sources said something, it is marked.
+
+**Superseded the same day.** After looking at omp and Tern (below), the direction changed: isorite builds no terminal and no agent of its own, and attaches to the agent you already use over MCP and ACP (`plan-m25.md`). Recommendation D below is not being pursued. The library comparison stands, as a record.
+
+## omp and Tern (2026-10-30)
+
+- **omp (Oh My Pi)**, Stencil Labs' fork of Pi: the harness doing as much as it can. Hash-anchored edits (a stale edit is refused), language servers and debuggers, subagents in worktrees, an advisor model, browser and desktop control, memory tools, 40+ providers. Bun plus a native Rust core of about 80,000 lines; MIT. Speaks ACP (`omp acp`). In Composio's test of eight harnesses on one model, Pi passed 20/30 and omp 17/30 at about 3.7× the cost per task passed; OpenCode passed 14.
+- **Tern**, Stencil's terminal (closed beta, source not public; macOS, iOS, the browser, remote servers): sessions kept by a background service, live across devices over QUIC and Tailscale, programs drawn natively through its own protocol, built-in blocks (git, SQLite, Jupyter, kanban). Built for omp.
+- **What isorite takes from them:** where and how an agent runs, persists or is drawn is the host's; what the agent knows, and how understanding builds up in notes and the Atlas, is isorite's. Tern is reached through omp's MCP and a browser pane first, through ACP if it ever hosts agents that way.
+
+## ACP and MCP, as of 2026-10-30
+
+- **ACP:** v1 stable, v2 in draft (July 2026); SDK `@agentclientprotocol/sdk` 2.1. Stable: session list, resume, close, delete; titles; message ids; usage (context used, cost); tool call names; elicitation; extra workspace folders; a registry of agents. Drafts: proxy chains and MCP over ACP. A transports group is standardising WebSocket and HTTP. Several clients on one live session is not specified; isorite's wrapper sidesteps it by holding the one connection.
+- **MCP 2026-07-28:** stateless (no handshake, no session id; client info on every request); roots, sampling and logging deprecated; extensions, with MCP Apps (HTML drawn by the host) and Tasks the first. The roadmap (August 2026) adds events pushed from the server and progressive discovery of tools.
+- **Shaping context:** a server shapes what it puts in (tool results, resources, prompts, instructions) and a wrapper can prepend to prompts, but neither sees or changes the harness's whole window: its system prompt, other tools' results, or what compaction dropped.
 
 ## What the terminal is now
 
