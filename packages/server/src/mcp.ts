@@ -8,7 +8,7 @@
 
 import { createInterface } from "node:readline";
 import { randomBytes } from "node:crypto";
-import { ensureServer } from "./term.ts";
+import { ensureServer } from "./running.ts";
 import { TOKEN_HEADER } from "./http.ts";
 import { QUIET_MS, agentName, clientName, type Rpc } from "./mcp-http.ts";
 

@@ -1,18 +1,15 @@
 // isorite guide [<folder>] (M16): the guide, a knowledge base about isorite, written into a folder of yours and
-// served as any base is. Run again, it opens the same folder, with what you changed in it. Iso is your provider's
-// model when one is set up, and the guide's finder when not.
+// served as any base is. Run again, it opens the same folder, with what you changed in it. The pane offers to attach
+// your own agent, as for any base.
 
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { OWN_DIR, StudyError } from "@isorite/core";
-import { finderHttp, START } from "@isorite/guide";
+import { START } from "@isorite/guide";
 import { loadGuide, loadGuidePictures } from "@isorite/guide/node";
-import { hasModel } from "./config.ts";
 import { serve } from "./serve.ts";
-import { openBrowser } from "./term.ts";
-
-export { hasModel };
+import { openBrowser } from "./running.ts";
 
 export const GUIDE_FOLDER = join(homedir(), "isorite-guide");
 
@@ -32,10 +29,8 @@ export function writeGuide(folder: string): { notes: string; fresh: boolean } {
 
 export async function guide(folder = GUIDE_FOLDER, { port = 4767, out = console.log }: { port?: number; out?: (line: string) => void } = {}): Promise<void> {
   const { notes, fresh } = writeGuide(folder);
-  const model = await hasModel();
   out(fresh ? `isorite guide: written to ${notes}; it is yours to change, and run again it opens as you left it` : `isorite guide: ${notes}, as you left it`);
-  out(model ? "  Iso: your provider's model" : "  Iso: the guide's finder, which answers with the notes that match (no model is set up)");
   out(`  start at http://localhost:${port}/#/n/${START}`);
-  await serve(notes, { port, stand: finderHttp(16) });
+  await serve(notes, { port });
   if (process.env.ISORITE_NO_BROWSER !== "1") openBrowser(`http://localhost:${port}/#/n/${START}`);
 }

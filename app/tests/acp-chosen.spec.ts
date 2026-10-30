@@ -23,13 +23,9 @@ test("an agent chosen for the pane: the registry's listed, a command attached, a
   await page.goto("#/n/basics/bit");
   await toIso(page);
   const pane = page.locator('[data-pane="iso"]');
-  // An empty conversation (once the last one has loaded, it may have turns): how to attach one.
-  const fresh = pane.getByRole("button", { name: "A new conversation" });
+  // No agent attached: how to attach one.
   const attach = pane.getByRole("region", { name: "Attach your agent" });
-  await expect(async () => {
-    if (await fresh.isEnabled()) await fresh.click();
-    await expect(attach).toContainText("Here, in this pane", { timeout: 1000 });
-  }).toPass({ timeout: 15_000 });
+  await expect(attach).toContainText("Here, in this pane", { timeout: 15_000 });
 
   // The registry's agents, to choose from; or a command of your own.
   await attach.getByRole("button", { name: "choose one" }).click();
@@ -39,18 +35,20 @@ test("an agent chosen for the pane: the registry's listed, a command attached, a
   await attach.getByRole("button", { name: "attach it" }).click();
 
   // Started for this base: the pane is its session, asked here.
-  const log = page.getByRole("log", { name: "The terminal's session" });
+  const log = page.getByRole("log", { name: "The agent's session" });
   await expect(log).toContainText("Scripted's session shows here", { timeout: 30_000 });
   const name = test.info().project.name;
-  await page.getByRole("textbox", { name: "Message Iso" }).fill(`read basics/bit.md\n${name}`);
-  await page.getByRole("textbox", { name: "Message Iso" }).press("Enter");
+  await page.getByRole("textbox", { name: "Message the agent" }).fill(`read basics/bit.md\n${name}`);
+  await page.getByRole("textbox", { name: "Message the agent" }).press("Enter");
   const turn = log.locator(".turn").filter({ hasText: name });
   await expect(turn.locator(".from")).toHaveText("from here");
   await expect(turn.locator(".said a[href]")).toHaveText("as the note says", { timeout: 30_000 });
 
-  // Stopped from the drawer: the pane is Iso's again, with how to attach one.
+  // Stopped from the drawer: the pane says again how to attach one.
   await page.getByRole("button", { name: "Sessions" }).click();
   await expect(page.getByText("Started for this pane:")).toBeVisible();
   await page.getByRole("button", { name: "stop it" }).click();
+  await page.getByRole("button", { name: "Sessions" }).click();
   await expect(log).toBeHidden({ timeout: 15_000 });
+  await expect(attach).toBeVisible();
 });

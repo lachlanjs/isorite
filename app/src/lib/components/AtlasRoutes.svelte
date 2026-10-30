@@ -6,7 +6,7 @@
   // carries: the count says how many. A lit line is 3 px however many links run along it, as on the boards; one
   // whose links run both ways stands still. Iso's steps along links are gold, as its lines on Desktop-Think, and a
   // note for Iso has a blue line to each note it links to.
-  let { k, rest, hot, counts, pointed = false, sent = [], grown = [], beat = "", retracting = [] }: {
+  let { k, rest, hot, counts, pointed = false, grown = [], beat = "", retracting = [] }: {
     /** The zoom: paths are given at zoom 1. */
     k: number;
     /** `strong`: a "requires" runs along it. A route of weaker links only is drawn lighter. `trunk`: between two folders. */
@@ -17,8 +17,6 @@
     pointed?: boolean;
     /** The lit links of each kind, however their lines merge: said on the layer, for whoever reads it. */
     counts: { requires: number; builds: number; uses: number };
-    /** A note for Iso's lines to the notes it links to. */
-    sent?: { key: string; d: string }[];
     /** Links just made, drawn growing from one end to the other, then gone (K3). */
     grown?: { key: string; d: string }[];
     /** A new layout's beats (V7): the old lines retract, nothing is drawn while things move, the new lines draw out. */
@@ -37,7 +35,6 @@
       {#each rest as r (r.key)}<path class="along draw {r.strong ? 'base' : 'base weak'}" class:trunk={r.trunk} pathLength="1" d={r.d} style:stroke-width={width(r)} />{/each}
     {:else if beat === ""}
       {#each rest as r (r.key)}<path class={r.strong ? "base" : "base weak"} class:trunk={r.trunk} d={r.d} />{/each}
-      {#each sent as r (r.key)}<path class="sent" d={r.d} />{/each}
       {#each hot as r (r.key)}
         {#if pointed && r.kind !== "iso"}<path class="along touch" pathLength="1" d={r.d} style:stroke-width="{2 / k}px" />
         {:else}<path class="lit {r.kind}" class:still={r.still} d={r.d} />{/if}
@@ -59,7 +56,6 @@
   .requires { stroke: var(--requires); }
   .builds { stroke: var(--builds); }
   .iso { stroke: var(--growth); stroke-width: 2.5px; } /* as the boards' .au */
-  .sent { stroke: var(--lattice); stroke-width: 2px; } /* as the boards' .me */
   .uses { stroke: var(--text-soft); stroke-width: 1.5px; stroke-dasharray: none; animation: none; }
   @keyframes run { to { stroke-dashoffset: -12; } }
   /* Slow enough to follow (Lachlan, 2026-10-20): a moment's wait, 1.8 s to grow, 2 s to stand, then it fades. */

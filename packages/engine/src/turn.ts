@@ -1,13 +1,14 @@
-// A conversation with Iso in its own pane (M10): what a turn is, how it is kept, and what Iso is told in each mode.
-// The conversation is kept in .isorite/, one file each, `conversations/<id>.jsonl`, a line per turn, per thing
-// that happened in it and per ending, only ever added to, like a journal. What Iso changes in a note is in that
-// note's journal; the conversation names the entry.
+// A conversation with Iso in its own pane (M10, until M25 retired Iso's loop): what a turn was, and how it is kept,
+// to be read. The conversation is in .isorite/, one file each, `conversations/<id>.jsonl`, a line per turn, per
+// thing that happened in it and per ending. What Iso changed in a note is in that note's journal; the conversation
+// names the entry. Kept here too: what an agent is told of the base, and the tools isorite gives any agent that
+// came from Iso (M25): asking back, offering text, and artifacts.
 
 import type { Cost } from "@isorite/core";
-import { FORMAT_RULES, estimate, type Exchange, type Part } from "./iso.ts";
-import { ROUNDS } from "./loop.ts";
-import type { Step } from "./lookup.ts";
-import type { Message, Tier, ToolDef } from "./provider.ts";
+import type { Step, ToolDef } from "./lookup.ts";
+
+/** The tier a turn was asked on, when isorite called a model itself. */
+export type Tier = "low" | "mid" | "max";
 
 /** What Iso may do (M12: worked out in the app from the switches in Iso's pane): read only, change the notes, or
  *  change and run the project, which is the terminal's (M11). Conversations from before M12 may name a fourth,
@@ -101,13 +102,7 @@ export function readTurns(text: string): Turn[] {
   return [...turns.values()].map((t) => (t.state === "running" ? { ...t, state: "stopped" as const } : t)).sort((a, b) => (a.id < b.id ? -1 : 1));
 }
 
-// ------------------------------------------------------------ what Iso is told
-
-const WHO = `You are Iso, the companion in isorite, an app for understanding a subject by
-writing it down. The person keeps a knowledge base: a folder of Markdown notes
-with links between them. They are talking with you in isorite's Iso pane,
-beside their notes and the Atlas, the map of their base. What you look up and
-what you change is shown to them there as you do it.`;
+// ------------------------------------------------------------ what an agent is told
 
 /** What isorite is, as the notes on disk have it (docs/format.md). The example is loaded by core in a test, so
  *  what Iso is told stays what isorite reads. */
@@ -173,54 +168,9 @@ export const LEARNING = `# Their learning
   them as a question to keep (ask_question) or a problem to try.
 - Check a solution; never solve it for them.`;
 
-const ASK = `# Ask mode: what you may do
-
-You read their notes and answer. You cannot change anything in this mode: no
-note, no folder.
-
-- Answer what they ask, in plain prose. Short: a few sentences to a few
-  paragraphs, unless more is asked for. Markdown and maths are shown as they
-  are in their notes.
-- Rest on their notes where the base says something: look first, and link to
-  the notes you used, so they can open them. Where the base does not hold what
-  is asked, answer from what you know of the subject, exactly, and say that
-  their notes do not cover it.
-- Cite in the sentence: the phrase that rests on a note is the link to it,
-  with its kind. No numbered references and no list of sources at the end;
-  the notes you read are shown under your reply.
-- When one of their notes would help them and they may not know it, point it
-  out with point_to_note. Use it sparingly: one or two notes.
-- Never invent a note, a link or a quotation.`;
-
-const WRITE = `# Write mode: what you may do
-
-You may change their knowledge base: edit notes, make new ones, move them and
-delete them. What you change goes into their notes at once. They see every
-change marked as yours, and can undo it.
-
-- Do what they ask, and only that. Change the least that does it: edit the
-  passage that needs it with edit_note, not the whole note. Keep their words,
-  links, maths and voice wherever the request does not call for a change.
-- Look before you write: read the part of the note you change, and the notes
-  it rests on, so what you write agrees with the base and links to it.
-- A new note (write_note) is written as one of theirs: frontmatter with type
-  and title, their notation, their level, plain words, linked to the notes it
-  rests on.
-- Write each paragraph and each list item on one line. Do not break lines at a
-  width: the editor wraps them to the pane.
-- Moving or deleting a note is asked of them before it happens. Do it only
-  when they asked for it.
-- When you are done, say in a sentence or two what you changed and why. Do not
-  repeat the text you wrote: they see it in the note.
-- Never invent a note, a link or a quotation.`;
-
-
-/** The rounds of tools a turn in write mode may have at least: an artifact takes a recipe, the data, a write, a fix. */
-export const ARTIFACT_ROUNDS = 6;
-
 /** Building an artifact (M23, plan-m23 §3.7): in stages, so a small model's window holds it. This much always; the
  *  recipe and the kit's reference only from artifact_recipe. */
-const ARTIFACTS = `# Artifacts
+export const ARTIFACTS = `# Artifacts
 
 An artifact is an HTML page beside their notes that isorite shows working: a
 dashboard of their data, a comparison, a simulation, an explorable
@@ -237,83 +187,9 @@ or try; not for what an answer or a note says as well.
 4. Say in a sentence what it shows, linked: [what it shows](/folder/name.html).
    Link it from the note it belongs to if they want it there.`;
 
-const ASKING = (write: boolean) => `# Asking back, and their own answers
-
-- Where a question to them would do more than an answer (what is unclear in
-  a note, a step left unstated, a case not yet thought through), ask it with
-  ask_question: a short title in their words, a line or two of body, and the
-  notes it is about.${write ? " It is made a question note in their base." : " They can make it a question note in their base."}
-  One or two at most. Not for what you could simply tell them.
-- Where they have answered something in what they wrote to you that a note
-  of theirs lacks, offer it with offer_text rather than telling them to add
-  it: their own sentences, joined lightly, nothing of yours added. They
-  insert it as theirs, or not.
-- Where they say how they want their notes kept, or you kept (a notation, a
-  level, a way of working), offer it as a line for their AGENTS.md: offer_text
-  with the id AGENTS.md, in their words.`;
-
-const CHECKING = `# Checking a solution
-
-A problem of theirs is in hand, with what they have written towards solving it.
-Check it, step by step.
-
-- Say what holds, plainly, and where a step does not follow, say which and
-  why.
-- Where the solution leans on something it does not state, ask about it with
-  ask_question rather than supplying it.
-- Never say it is solved, and never change whether it is marked solved: that
-  is theirs alone. Do not mention marking.`;
-
-const MODE_RULES: Record<Exclude<Mode, "build">, string> = { ask: ASK, write: WRITE };
-
-const LOOKING = (rounds: number, meaning: boolean, lookup: boolean) => lookup ? `# Looking things up
-
-- Look up only what the request needs. search_notes finds notes by their
-  words; outline_note shows a note's headings and links; read_note reads one
-  section. Prefer a section to a whole note. Follow links one step at a time.${meaning ? `
-- find_similar finds notes by meaning, when their words have not found them.` : ""}
-- What is under "Notes you read earlier" is in hand already, as you read it:
-  do not read it again. A note "set aside" can be read again if you need it.
-- You may call several tools at once, over ${rounds} rounds at most; then reply.
-- Say nothing between tool calls. Only the reply is shown.` : `# Looking things up
-
-They chose what you are sent and asked you not to look further: you have no
-tools for searching or reading. Answer from what is below, and say plainly what
-you would need to look at to say more.`;
-
-/** What a compaction is told (M15): to pick, as typed fields, what of the earlier turns still matters. The
- *  briefing is written from them in code (briefingText). */
-export const COMPACT = `You sum up the earlier turns of a conversation in isorite, between a person and
-Iso, about their knowledge base of notes. What you write stands for those turns
-from now on: Iso will be sent it instead of them.
-
-Answer with one JSON object and nothing else:
-{"settled": [], "open": [], "preferences": [], "notes": []}
-
-- settled: what was asked and answered or decided that still matters, a
-  sentence each, in the terms they used.
-- open: threads not finished: a question not answered, a change not made, a
-  doubt raised.
-- preferences: what they said they want from Iso or for their notes (a
-  notation, a level, a way of working), in their words.
-- notes: the ids of the notes the talk turned on (as basics/entropy), eight at
-  most.
-
-Four items at most in each list, and none where there are none. Never add what
-was not said.`;
-
 const str = { type: "string" } as const;
 const fn = (name: string, description: string, properties: Record<string, unknown>, required: string[]): ToolDef => ({ type: "function", function: { name, description, parameters: { type: "object", properties, required, additionalProperties: false } } });
 
-export const POINT_TO_NOTE = fn("point_to_note", "Point the person to one of their notes: it is marked on their Atlas, with why. For a note that would help them that they may not know of.",
-  { id: { ...str, description: "The note's id or path." }, why: { ...str, description: "Why, in a short sentence to them." } }, ["id", "why"]);
-export const EDIT_NOTE = fn("edit_note", "Replace one passage of a note with new text. `old` must be exactly as it is in the note, and must occur in it once: read it first. Give enough of it to be unique. An empty `new` takes the passage out.",
-  { id: { ...str, description: "The note's id or path." }, old: { ...str, description: "The passage as it is now, exactly." }, new: { ...str, description: "What it becomes." } }, ["id", "old", "new"]);
-export const WRITE_NOTE = fn("write_note", "Make a new note, or write a note's whole text anew. For a new note give its whole file: frontmatter (type, title) then the body. Prefer edit_note for a change to a note that exists.",
-  { id: { ...str, description: "The note's id: folder/name, lower case with hyphens. A new folder is made for it." }, text: { ...str, description: "The note's whole file." } }, ["id", "text"]);
-export const MOVE_NOTE = fn("move_note", "Move or rename a note. Links to it are changed to match. They are asked first.",
-  { id: str, to: { ...str, description: "Its new id: folder/name." } }, ["id", "to"]);
-export const DELETE_NOTE = fn("delete_note", "Delete a note. They are asked first. Its history stays.", { id: str }, ["id"]);
 export const ASK_QUESTION = fn("ask_question", "Ask them a question back, kept as an open question in their base, about one or more of their notes.",
   { title: { ...str, description: "The question, short, ending in a question mark." }, text: { ...str, description: "A line or two on what is asked, or empty." }, about: { type: "array", items: str, description: "The ids of the notes it is about." } }, ["title", "text", "about"]);
 export const READ_DATA = fn("read_data", "A data file's shape: its columns with their types and ranges, the row count and the first rows. Read it before writing anything that uses the file, so the column names are real.",
@@ -326,99 +202,3 @@ export const WRITE_ARTIFACT = fn("write_artifact", "Write an artifact: a whole H
 export const READ_ARTIFACT = fn("read_artifact", "An artifact's whole file, to change it and write it again.", { path: { ...str, description: "folder/name.html" } }, ["path"]);
 export const OFFER_TEXT = fn("offer_text", "Offer them their own answers, lightly joined, to insert at the end of a note as their writing. Only their words.",
   { id: { ...str, description: "The note's id, or AGENTS.md for a line of their instructions for the base." }, text: { ...str, description: "The passage, in Markdown." } }, ["id", "text"]);
-
-/** The tools each mode adds to looking things up. */
-export const MODE_TOOLS: Record<Exclude<Mode, "build">, ToolDef[]> = {
-  ask: [POINT_TO_NOTE, ASK_QUESTION, OFFER_TEXT, READ_DATA],
-  write: [EDIT_NOTE, WRITE_NOTE, MOVE_NOTE, DELETE_NOTE, POINT_TO_NOTE, ASK_QUESTION, OFFER_TEXT, READ_DATA, ARTIFACT_RECIPE, WRITE_ARTIFACT, READ_ARTIFACT],
-};
-
-/** A turn's own tools: its mode's. */
-export function turnTools(mode: Exclude<Mode, "build">): ToolDef[] {
-  return MODE_TOOLS[mode];
-}
-
-/** A note, folder or passage as it is sent: what was given, read now. */
-export type Sent =
-  /** A note; a problem says so (`of`); the questions about it still open go with it (`open`). */
-  | { kind: "note"; id: string; title: string; text: string; of?: "question" | "problem"; open?: { id: string; title: string }[] }
-  | { kind: "folder"; id: string; notes: { id: string; title: string; description: string }[] }
-  | { kind: "passage"; id: string; title: string; text: string }
-  /** A note Iso read earlier in the conversation, as it read it: the sections, or all of it (M15). */
-  | { kind: "read"; id: string; title: string; text: string; sections: string[] | "whole" };
-
-export function sentText(s: Sent): string {
-  if (s.kind === "note") {
-    const open = s.open?.length ? `\n\nOpen questions about it:\n${s.open.map((q) => `- ${q.title} (/${q.id}.md)`).join("\n")}` : "";
-    return `## ${s.of === "problem" ? "A problem: " : s.of === "question" ? "A question: " : ""}${s.title} (/${s.id}.md)\n\n${s.text}${open}`;
-  }
-  if (s.kind === "passage") return `## A passage they chose in ${s.title} (/${s.id}.md)\n\n${s.text.split("\n").map((l) => `> ${l}`).join("\n")}`;
-  if (s.kind === "read") return `## ${s.title} (/${s.id}.md)${s.sections === "whole" ? "" : `, ${s.sections.length === 1 ? "the section" : "the sections"} ${s.sections.map((x) => `"${x}"`).join(", ")}`}\n\n${s.text}`;
-  return `## The folder ${s.id || "at the top of the base"}: its notes\n\n${s.notes.map((n) => `- ${n.title} (/${n.id}.md)${n.description ? `: ${n.description}` : ""}`).join("\n") || "(empty)"}`;
-}
-
-/** An earlier turn as it is sent: in the shape `conversation()` shortens. */
-export function turnExchange(t: Turn): Exchange {
-  const text = t.items.filter((i) => i.kind === "text").map((i) => i.text).join("\n\n").trim();
-  const changed = t.items.flatMap((i) => (i.kind === "change" ? [`${i.why === "create" ? "made" : i.why === "delete" ? "deleted" : i.why === "move" ? "moved" : "changed"} ${i.title} (/${i.note}.md)`] : []));
-  const asked = t.items.flatMap((i) => (i.kind === "question" ? [`You asked them: ${i.title}${i.made ? ` (/${i.made}.md)` : ""}.`] : i.kind === "offer" ? [`You offered them a passage for /${i.note}.md, which they ${i.taken ? "inserted" : "have not inserted"}.`] : []));
-  const gave = t.given.map((g) => (g.kind === "passage" ? `a passage of /${g.id}.md` : `/${g.id}${g.kind === "note" ? ".md" : "/"}`));
-  return {
-    id: t.id, note: "",
-    text: `In ${t.mode} mode they asked${gave.length ? `, giving you ${gave.join(", ")}` : ""}: ${t.asked}\n\nYou wrote:\n\n${text || "(nothing)"}\n\n${changed.length ? `You ${changed.join("; ")}.` : t.state === "done" ? "" : `The turn was ${t.state}.`}${asked.length ? `\n\n${asked.join("\n")}` : ""}`.trim(),
-  };
-}
-
-export interface AskedTurn {
-  mode: Exclude<Mode, "build">;
-  tier: Tier;
-  meaning: boolean;
-  lookup: boolean;
-  earlier: Turn[];
-  /** Briefings that stand for earlier turns (compaction), as written, oldest first. */
-  briefings?: string[];
-  sent: Sent[];
-  /** Notes Iso read earlier and set aside (aged off, or switched off): one line each, to be read again if needed. */
-  aside?: { id: string; title: string }[];
-  /** The base's own instructions (AGENTS.md at the top of the notes), when on. */
-  agents?: string;
-  asked: string;
-  /** Code links broken since Iso was last told (Q27). */
-  broken?: { id: string; title: string; href: string }[];
-  /** Other bases lent to Iso to read (M20), each with a line on what it holds. */
-  lent?: { name: string; about: string }[];
-}
-
-/** The messages for a turn, and what they hold, part by part. */
-export function turnMessages(a: AskedTurn): { messages: Message[]; parts: Part[] } {
-  const checking = a.sent.some((s) => s.kind === "note" && s.of === "problem");
-  // In layers, the same for every turn but the mode's and the parts given: so the provider's cache holds.
-  const system = [WHO, ISORITE, PRACTICE, LEARNING, MODE_RULES[a.mode], ...(a.mode === "write" ? [ARTIFACTS] : []), ASKING(a.mode === "write"), ...(checking ? [CHECKING] : []), FORMAT_RULES, LOOKING(a.mode === "write" ? Math.max(ROUNDS[a.tier], ARTIFACT_ROUNDS) : ROUNDS[a.tier], a.meaning, a.lookup)].join("\n\n");
-  // Every earlier turn that is on, whole, after the briefings that stand for the ones before them: nothing is
-  // shortened or left out here that the person did not switch off.
-  const briefed = a.briefings?.length ? `# Earlier in this conversation, summed up\n\n${a.briefings.join("\n\n---\n\n")}` : "";
-  const talk = a.earlier.map((t) => turnExchange(t).text).join("\n\n---\n\n");
-  const earlier = [briefed, talk ? `# Earlier in this conversation\n\n${talk}` : ""].filter(Boolean).join("\n\n");
-  const given = a.sent.filter((s) => s.kind !== "read"), reads = a.sent.filter((s) => s.kind === "read");
-  const gave = given.length ? `# What they gave you\n\n${given.map(sentText).join("\n\n")}` : "";
-  const held = reads.length ? `# Notes you read earlier in this conversation\n\n${reads.map(sentText).join("\n\n")}` : "";
-  const aside = a.aside?.length ? `# Read earlier, set aside\n\n${a.aside.map((n) => `- ${n.title} (/${n.id}.md)`).join("\n")}` : "";
-  const agents = a.agents?.trim() ? `# Their instructions for this knowledge base (AGENTS.md)\n\n${a.agents.trim()}` : "";
-  // Other bases lent to Iso (M20): the agent's memory, read before asking what it may say.
-  const lent = a.lookup && a.lent?.length ? `# Other knowledge bases lent to you\n\nYou may read these with the same look-up tools, giving their base; you change notes only in this one. Look in them where what is asked may be there: how the person works, their tools, what was settled before.\n\n${a.lent.map((l) => `- ${l.name}: ${l.about}`).join("\n")}` : "";
-  const broken = a.broken?.length ? `# Code links that no longer resolve\n\nSince you were last told, these links in their notes point to files no longer in their repository. Mention it only where it bears on what they ask.\n\n${a.broken.map((b) => `- in ${b.title} (/${b.id}.md): ${b.href}`).join("\n")}` : "";
-  const request = `# What they ask now\n\n${a.asked}`;
-  return {
-    // In the order least likely to change first, so the provider's cache holds as far as it can.
-    messages: [{ role: "system", content: [{ text: system, cache: true }] }, { role: "user", content: [agents, lent, earlier, gave, held, aside, broken, request].filter(Boolean).join("\n\n") }],
-    parts: [
-      { name: "instructions and tools", detail: `${a.mode} mode${checking ? ", checking" : ""}${a.lookup ? "" : ", no look-ups"}`, tokens: estimate(system) + estimate(lent) + (a.lookup ? 500 : 0) + turnTools(a.mode).length * 120 },
-      { name: "earlier in this conversation", detail: a.earlier.length ? `${a.earlier.length} ${a.earlier.length === 1 ? "turn" : "turns"}` : "", tokens: estimate(earlier) },
-      ...(agents ? [{ name: "their instructions" as const, detail: "AGENTS.md", tokens: estimate(agents) }] : []),
-      { name: "what you gave", detail: given.length ? `${given.length} ${given.length === 1 ? "part" : "parts"}` : "nothing", tokens: estimate(gave) },
-      ...(reads.length || aside ? [{ name: "notes Iso read" as const, detail: `${reads.length} in hand${a.aside?.length ? `, ${a.aside.length} set aside` : ""}`, tokens: estimate(held) + estimate(aside) }] : []),
-      ...(broken ? [{ name: "code links broken" as const, detail: `${a.broken!.length}`, tokens: estimate(broken) }] : []),
-      { name: "your message", detail: "", tokens: estimate(request) },
-    ],
-  };
-}

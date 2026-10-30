@@ -20,10 +20,44 @@ async function open(similar = false) {
   return { engine, events };
 }
 
-test("an agent is offered a brief of the base and Iso's look-ups, find_similar only where there is a search by meaning", async () => {
+test("an agent is offered a brief of the base, the look-ups, and artifacts; find_similar only where there is a search by meaning", async () => {
   const names = async (similar: boolean) => (await (await open(similar)).engine.agentTools()).map((t) => t.function.name);
-  expect(await names(false)).toEqual(["brief_base", "search_notes", "outline_note", "read_note", "edit_note", "write_note", "ask_question", "offer_text"]);
-  expect(await names(true)).toEqual(["brief_base", "search_notes", "find_similar", "outline_note", "read_note", "edit_note", "write_note", "ask_question", "offer_text"]);
+  const rest = ["outline_note", "read_note", "edit_note", "write_note", "ask_question", "offer_text", "read_data", "artifact_recipe", "write_artifact", "read_artifact"];
+  expect(await names(false)).toEqual(["brief_base", "search_notes", ...rest]);
+  expect(await names(true)).toEqual(["brief_base", "search_notes", "find_similar", ...rest]);
+});
+
+test("an agent builds an artifact (M23, an agent's since M25): a recipe, the data's shape, a file refused while a rule is broken, then written with its manifest under its name, and run", async () => {
+  const { engine } = await open();
+  const notes = (engine as unknown as { opts: { notes: MemoryFiles } }).opts.notes;
+  await notes.write("basics/runs.csv", "t,e\n0,1\n1,0.5\n");
+  const ran: string[] = [];
+  (engine as unknown as { opts: { renderArtifact: (p: string, h: string) => Promise<unknown> } }).opts.renderArtifact = async (p) => { ran.push(p); return { rendered: true, errors: ["<iso-chart>: a complaint"], drawn: 12 }; };
+  const call = async (tool: string, args: Record<string, unknown>) => (await engine.agentLook({ agent: "claude", session: "s1", tool, args, asked: "chart the run" })).text;
+  const BODY = (y: string) => `<iso-page><iso-panel><h2>Energy</h2><iso-chart data="runs.csv" x="t" y="${y}"></iso-chart></iso-panel></iso-page>`;
+  const brief = (await engine.agentLook({ agent: "claude", session: "s1", tool: "brief_base", args: {} })).text;
+  expect(brief).toContain("# Artifacts");
+  expect(brief).not.toContain("AGENTS.md");
+  await engine.saveAgents("Write in British English.");
+  expect((await engine.agentLook({ agent: "claude", session: "s1", tool: "brief_base", args: {} })).text).toContain("# Their instructions for this knowledge base (AGENTS.md)\n\nWrite in British English.");
+  const recipe = await call("artifact_recipe", { name: "dashboard" });
+  expect(recipe).toContain("# The kit (isorite kit 1)");
+  expect(recipe).toContain("# The recipe: dashboard");
+  expect(await call("read_data", { path: "basics/runs.csv" })).toBe("basics/runs.csv: 2 rows, 2 columns\n- t: number, 0 to 1 (mean 0.5)\n- e: number, 0.5 to 1 (mean 0.75)\nFirst rows:\nt,e\n0,1\n1,0.5");
+  const refused = await call("write_artifact", { path: "basics/energy.html", title: "Energy", description: "The run's energy.", uses: ["runs.csv"], html: BODY("energy") + "<style>h2{color:#fff}</style>" });
+  expect(refused).toMatch(/^Not written: rules are broken\./);
+  expect(refused).toContain('runs.csv has no column "energy" (it has t, e)');
+  expect(refused).toContain("a colour of its own (#fff)");
+  expect(notes.files.has("basics/energy.html")).toBe(false);
+  // uses left empty, as a weak model leaves it: what the file reads is used all the same.
+  expect(await call("write_artifact", { path: "basics/energy.html", title: "Energy", description: "The run's energy.", uses: [], html: BODY("e") })).toBe("Written: basics/energy.html. It was run, with every control touched, and:\n- it reported: <iso-chart>: a complaint\nFix these and call write_artifact again with the whole file.");
+  expect(ran).toEqual(["basics/energy.html"]);
+  const html = notes.files.get("basics/energy.html")!;
+  expect(html).toContain("<title>Energy</title>");
+  expect(html).toContain('<meta name="isorite:uses" content="runs.csv">');
+  expect(html).toContain('<meta name="author" content="claude">');
+  expect((await engine.journal("basics/energy.html")).at(-1)).toMatchObject({ kind: "change", who: "agent:claude", asked: "chart the run" });
+  expect(await call("read_artifact", { path: "basics/energy.html" })).toBe(html);
 });
 
 test("the brief names the base, its folders and how many notes each holds, and is no step on the map", async () => {

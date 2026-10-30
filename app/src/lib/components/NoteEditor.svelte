@@ -22,7 +22,7 @@
   import IsoBlock from "./IsoBlock.svelte";
   import IsoChange from "./IsoChange.svelte";
 
-  // Without `iso` (a note written for Iso) there is no prompt line and nothing is laid over the text.
+  // Without `iso` nothing is laid over the text.
   // `touched` is what a moment of the timeline changed, by line of the whole file, while it is pointed at.
   // `lens` is what the note's Iso lens marks (M10), by character of the whole file: Iso's words, and what was given to Iso.
   let { note, iso, source, placeholder, touched = null, lens = [] }: { note: NoteSession; iso?: NoteIso; source: boolean; placeholder?: string; touched?: Touched | null; lens?: Mark[] } = $props();
@@ -92,7 +92,7 @@
     const within = (kind: Mark["kind"]) => (s: { from: number; to: number }): Mark => ({ kind, from: s.from - head.chars, to: s.to - head.chars });
     return {
       blocks: iso.layout.blocks.map((b) => ({ key: b.key, line: Math.max(0, b.line - head.lines) })).sort((a, b) => a.line - b.line),
-      marks: [...iso.layout.picked.map(within("picked")), ...iso.layout.old.map(within("old")), ...lens.map((m) => within(m.kind)(m))].filter((m) => m.to > 0),
+      marks: [...iso.layout.old.map(within("old")), ...lens.map((m) => within(m.kind)(m))].filter((m) => m.to > 0),
       inline: iso.layout.inline.map((i) => ({ key: i.key, at: i.at - head.chars })).filter((i) => i.at >= 0),
     };
   });
@@ -133,10 +133,6 @@
           requestAnimationFrame(() => document.getElementById("iso-box")?.focus());
         },
         onCursor: (w: Where) => { iso.cursor = { line: w.line + head.lines, from: w.from + head.chars, to: w.to + head.chars }; },
-        // While the prompt asks for a rewrite, text selected in the note is chosen for it.
-        picking: () => iso.picking,
-        onPick: (ranges: { from: number; to: number }[]) => iso.pick(ranges.map((r) => ({ from: r.from + head.chars, to: r.to + head.chars }))),
-        onUnpick: (at: number) => iso.unpick(at + head.chars),
         mountOverlay: (el: HTMLElement, key: string) => {
           // "r:…" is one change of a rewrite.
           const piece = mount(key.startsWith("r:") ? IsoChange : IsoBlock, { target: el, props: { iso, key } });

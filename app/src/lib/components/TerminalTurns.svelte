@@ -1,12 +1,12 @@
 <script lang="ts">
-  // The terminal's session in Iso's pane, Build mode (M11): each prompt (from the terminal or from here), what the
-  // agent said, a line for each tool call (a command with its output, a file with its diff, a look-up in the base
-  // with its note), and what it asks before doing, answered here or in the terminal, whichever is first. An agent's
-  // session over ACP (M25) is drawn as Iso's were (M24): what was given before a prompt, the crystal growing while it
-  // works, and once a turn is over the notes it drew on as parts under the reply, lit with the phrases citing them
-  // and with the note on the Atlas when pointed at.
+  // An agent's session in Iso's pane (M11; over ACP since M25): each prompt (from its front end or from here), what
+  // the agent said, a line for each tool call (a command with its output, a file with its diff, a look-up in the base
+  // with its note), and what it asks before doing, answered here or in its front end, whichever is first. Drawn as
+  // Iso's turns were (M24): what was given before a prompt, the crystal growing while it works, and once a turn is
+  // over the notes it drew on as parts under the reply, lit with the phrases citing them and with the note on the
+  // Atlas when pointed at. A conversation with Iso from before M25 is read here the same way.
+  import AttachAgent from "./AttachAgent.svelte";
   import Crystal from "./Crystal.svelte";
-  import Drawing from "./Drawing.svelte";
   import type { Given, TerminalItem, TerminalPermission, TerminalTurn } from "@isorite/engine";
   import { tick } from "svelte";
   import { app } from "$lib/app.svelte.ts";
@@ -18,7 +18,7 @@
   import { terminal } from "$lib/terminal.svelte.ts";
 
   let list = $state<HTMLElement>();
-  const view = $derived(terminal.view);
+  const view = $derived(terminal.session);
   const titleOf = (id: string): string => app.listing.notes.find((n) => n.id === id)?.title ?? id.split("/").at(-1) ?? id;
   /** What a tool did, in a word, as the Iso pane says its own steps. */
   const VERB: Record<string, string> = { shell: "ran", bash: "ran", read: "read", write: "wrote", edit: "edited", glob: "found", grep: "searched", webfetch: "fetched", websearch: "searched the web",
@@ -71,7 +71,7 @@
 </script>
 
 {#snippet permit(p: TerminalPermission)}
-  <div class="permit" role="group" aria-label="The terminal's agent asks before it does this">
+  <div class="permit" role="group" aria-label="The agent asks before it does this">
     <p>{view?.agent || "The agent"} wants to <code>{asks(p)}</code>.</p>
     <p class="acts"><button type="button" onclick={() => void terminal.reply(p.id, "once")}>Allow once</button><button type="button" onclick={() => void terminal.reply(p.id, "always")}>Always allow this</button><button type="button" class="no" onclick={() => void terminal.reply(p.id, "reject")}>Don't allow</button></p>
   </div>
@@ -115,16 +115,18 @@
   {/if}
 {/snippet}
 
-<div class="chat" bind:this={list} role="log" aria-label="The terminal's session" aria-live="polite" onpointerover={pointAt} onpointerleave={() => pointing.set("iso", null)}>
+<div class="chat" bind:this={list} role="log" aria-label="The agent's session" aria-live="polite" onpointerover={pointAt} onpointerleave={() => pointing.set("iso", null)}>
   {#if view?.title}<p class="title faint">{view.title}</p>{/if}
   {#each view?.turns ?? [] as t (t.id)}
     {@render turn(t)}
   {/each}
   {#each loose as p (p.id)}{@render permit(p)}{/each}
   {#if !view?.turns.length}
-    <p class="faint">{view?.via === "acp" ? `${view.agent || "The agent"}'s session shows here: what is asked in its terminal or here, what it does, and what it asks before doing. Notes put in the tray go before the next prompt.` : `The terminal's session shows here: what is asked there or here, what ${view?.agent || "the agent"} does, and what it asks before doing.`}</p>
+    <p class="faint">{view?.agent || "The agent"}'s session shows here: what is asked in its front end or here, what it does, and what it asks before doing. Notes put in the tray go before the next prompt.</p>
   {/if}
-  {#if view?.reading}<p class="faint">Kept here; {view.agent} isn't attached to carry it on.</p>{/if}
+  {#if terminal.old}<p class="faint">A conversation with Iso, from before isorite attached your own agent: kept to read.</p>
+  {:else if view?.reading}<p class="faint">Kept here; {view.agent} isn't attached to carry it on.</p>{/if}
+  {#if !terminal.connected}<AttachAgent />{/if}
 </div>
 
 {#snippet turn(t: TerminalTurn)}
@@ -133,10 +135,10 @@
       {#if t.given?.length}
         <span class="gave">{#each t.given as g, k (k)}<span class="chip" data-to={g.kind === "note" ? g.id : undefined}><span class="k" aria-hidden="true">{SYM[g.kind]}</span><span class="t">{g.kind === "passage" ? g.text : g.kind === "folder" ? g.id || "the base" : titleOf(g.id)}</span></span>{/each}</span>
       {/if}
-      <span class="from">{t.from === "here" ? "from here" : "in the terminal"}</span></div>
-    {#each t.items as i, k (k)}{#if !itself(i) && !(view?.via === "acp" && folded(t, i))}{@render item(i)}{/if}{/each}
-    {#if view?.via === "acp" && t.state !== "running" && drew(t).length}
-      <div class="parts" role="group" aria-label="What {view.agent || 'the agent'} drew on">
+      <span class="from">{terminal.old ? "" : t.from === "here" ? "from here" : "in its front end"}</span></div>
+    {#each t.items as i, k (k)}{#if !itself(i) && !folded(t, i)}{@render item(i)}{/if}{/each}
+    {#if t.state !== "running" && drew(t).length}
+      <div class="parts" role="group" aria-label="What {view?.agent || 'the agent'} drew on">
         {#each drew(t) as id (id)}
           <button type="button" class="part" class:lit={lit === id} data-to={id} data-lustre onclick={() => void panes.open(id, true)}><s aria-hidden="true"></s><b>{titleOf(id)}</b>{folderOf(id)}</button>
         {/each}
@@ -144,11 +146,11 @@
     {/if}
     {#if t.state === "running"}
       <!-- At work (M24, I): over ACP, the session's crystal grows. -->
-      <p class="doing" role="status">{#if view?.via === "acp" && view.session}<Crystal id={view.session} size={28} growing />{:else}<Drawing />{/if}{view?.agent || "The agent"} is at work</p>
+      <p class="doing" role="status">{#if view?.session}<Crystal id={view.session} size={28} growing />{/if}{view?.agent || "The agent"} is at work</p>
     {:else if t.state === "stopped"}
       <p class="faint end">stopped</p>
     {:else if t.state === "failed"}
-      <p class="bad" role="alert">The turn failed; the terminal says why.</p>
+      <p class="bad" role="alert">The turn failed{terminal.old ? "" : `; ${view?.agent || "the agent"} says why in its front end`}.</p>
     {/if}
   </article>
 {/snippet}

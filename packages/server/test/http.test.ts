@@ -22,7 +22,7 @@ beforeAll(async () => {
   study = join(notes, ".isorite");
   mkdirSync(join(root, "web"));
   writeFileSync(join(root, "web", "index.html"), "<!doctype html><title>isorite</title>");
-  const api = await openEngine(locate(notes),"testdev1", join(root, "config.toml"), undefined, null);
+  const api = await openEngine(locate(notes), "testdev1", null);
   server = nodeServe({ fetch: createApp({ api, token: TOKEN, loopback: true, web: join(root, "web") }).fetch, hostname: "127.0.0.1", port: 0 });
   await new Promise((done) => server.once("listening", done));
   url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -85,23 +85,14 @@ test("each write that should be refused is", async () => {
   }
   expect((await fetch(url + "/api/note?id=no/such")).status).toBe(404);
   expect((await fetch(url + "/api/nothing")).status).toBe(404);
-  // Signing in at the provider is a write like any other: another site cannot begin one, nor finish one.
-  expect(await refused(write("/api/settings/connect", { callback: "http://evil.example/" }, { method: "POST", headers: { Origin: "http://evil.example" } }))).toEqual([403, "cross-origin request refused"]);
-  expect(await refused(write("/api/settings/connected", { code: "c", state: "s" }, { method: "POST", headers: { [TOKEN_HEADER]: "wrong" } }))).toEqual([403, "bad token"]);
-  expect((await write("/api/settings/connected", { code: "c", state: "s" }, { method: "POST" })).status).toBe(409);
-});
-
-test("signing in at the provider begins with its page, PKCE and all", async () => {
-  const res = await write("/api/settings/connect", { callback: url + "/" }, { method: "POST" });
-  const sent = new URL(((await res.json()) as { url: string }).url);
-  expect(sent.origin + sent.pathname).toBe("https://openrouter.ai/auth");
-  expect(Object.fromEntries(sent.searchParams)).toMatchObject({ callback_url: url + "/", code_challenge_method: "S256", key_label: "isorite" });
-  expect(await (await fetch(url + "/api/settings")).json()).toMatchObject({ connect: true, key: false });
+  // Another site cannot write, nor a page without the token.
+  expect(await refused(write("/api/agents", { text: "x" }, { method: "POST", headers: { Origin: "http://evil.example" } }))).toEqual([403, "cross-origin request refused"]);
+  expect(await refused(write("/api/agents", { text: "x" }, { method: "POST", headers: { [TOKEN_HEADER]: "wrong" } }))).toEqual([403, "bad token"]);
 });
 
 test("a name that is not this machine's is not answered", async () => {
   // A page on another site whose name has been pointed at this machine arrives with its own name as the Host.
-  const app = createApp({ api: await openEngine(locate(study), "testdev1", join(root, "config.toml"), undefined, null), token: TOKEN, loopback: true, web: join(root, "web") });
+  const app = createApp({ api: await openEngine(locate(study), "testdev1", null), token: TOKEN, loopback: true, web: join(root, "web") });
   const as = (host: string, path: string) => app.request("http://x" + path, { headers: { host } });
   expect((await as("evil.example", "/api/session")).status).toBe(403);
   const page = await as("evil.example:4767", "/");
@@ -109,7 +100,7 @@ test("a name that is not this machine's is not answered", async () => {
   expect(await page.text()).toContain("--allow-host");
   // A tailnet's name is answered (tailscale serve), and so is a name allowed when it was started.
   expect((await as("laptop.tail1234.ts.net", "/")).status).toBe(200);
-  const named = createApp({ api: await openEngine(locate(study), "testdev1", join(root, "config.toml"), undefined, null), token: TOKEN, loopback: true, web: null, allowHosts: ["Notes.Example"] });
+  const named = createApp({ api: await openEngine(locate(study), "testdev1", null), token: TOKEN, loopback: true, web: null, allowHosts: ["Notes.Example"] });
   expect((await named.request("http://x/api/session", { headers: { host: "notes.example" } })).status).toBe(200);
   expect((await as("localhost:4767", "/api/session")).status).toBe(200);
   expect((await as("127.0.0.1:4767", "/api/session")).status).toBe(200);
@@ -161,7 +152,7 @@ test("the device id is made once and kept, readable by its owner only", () => {
 
 test("a terminal agent is offered the tools and looks up as the page writes: from the origin, with the token", async () => {
   const tools = await (await fetch(url + "/api/agent/tools")).json() as { function: { name: string } }[];
-  expect(tools.map((t) => t.function.name)).toEqual(["brief_base", "search_notes", "outline_note", "read_note", "edit_note", "write_note", "ask_question", "offer_text"]);
+  expect(tools.map((t) => t.function.name)).toEqual(["brief_base", "search_notes", "outline_note", "read_note", "edit_note", "write_note", "ask_question", "offer_text", "read_data", "artifact_recipe", "write_artifact", "read_artifact"]);
   const look = { agent: "opencode", session: "ses_1", tool: "search_notes", args: { query: "surprise" } };
   const found = await write("/api/agent/look", look, { method: "POST" });
   expect(found.status).toBe(200);
@@ -196,7 +187,7 @@ test("a base's code links resolve against the repository its settings name, from
   writeFileSync(join(at, "code", "src", "sim.py"), "");
   writeFileSync(join(base, ".isorite", "settings.toml"), 'repository = "../code"\n');
   writeFileSync(join(base, "step.md"), "---\ntype: Concept\ntitle: Step\n---\n\n[here](code:src/sim.py) and [gone](code:src/old.py)\n");
-  const api = await openEngine(locate(base), "testdev1", join(root, "config.toml"), undefined, null);
+  const api = await openEngine(locate(base), "testdev1", null);
   expect((await api.map()).notes.step!.links!.map((l) => l.broken ?? false)).toEqual([false, true]);
 });
 

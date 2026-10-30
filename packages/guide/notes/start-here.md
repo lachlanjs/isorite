@@ -4,7 +4,7 @@ title: Start here
 description: What isorite is, its three panes, and how this guide works.
 ---
 
-isorite is a home for what you are coming to understand: notes in Markdown, a map of what rests on what, and Iso, an agent who reads your notes with you.
+isorite is a home for what you are coming to understand: notes in Markdown, a map of what rests on what, and Iso, the pane where the agent you already use reads your notes with you.
 
 This guide is a knowledge base like any other, and its subject is isorite. Read it in isorite, and use isorite to read it.
 
@@ -12,7 +12,7 @@ This guide is a knowledge base like any other, and its subject is isorite. Read 
 
 - **The note**, open to read and write. This one is open there now.
 - **The Atlas**, the map of the notes: each folder a frame, each note a block, each line a link. It starts from [the Atlas](/atlas/the-atlas.md "uses").
-- **Iso**, the conversation with the agent: [Iso](/iso/iso.md "uses").
+- **Iso**, your agent's session: [Iso](/iso/iso.md "uses").
 
 Each pane's header has its switches: [the switches](/atlas/the-switches.md "uses") says what they are.
 
@@ -34,6 +34,6 @@ Then these, in any order:
 
 [[!ask-iso]]
 
-[[!give-and-switch-off]]
+[[!give-it-notes]]
 
 Write what you like in [your notes](/your-notes.md "see also"): the guide is yours to change. When you are ready for your own base, see [starting a base](/your-own-base/starting-a-base.md "see also").

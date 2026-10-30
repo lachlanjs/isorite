@@ -15,7 +15,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { basesPath, readConfig, table, writeConfig } from "./config.ts";
 import { cacheDir } from "./embedder.ts";
-import { MAIN } from "./term.ts";
+import { MAIN } from "./running.ts";
 import { self } from "./self.ts";
 
 export const REGISTRY = "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json";

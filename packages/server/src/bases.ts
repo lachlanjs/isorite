@@ -11,7 +11,7 @@ import { knownBases, lendBase, rememberBase, type KnownBase } from "./config.ts"
 export interface BaseView { name: string; path: string; lend: boolean; open: boolean }
 
 /** What a base's app is told of the others: the list, and, from this machine only, lending one, opening one by its
- *  folder (isorite term and mcp, for a server that holds another), and holding the server open. */
+ *  folder (isorite acp and mcp, for a server that holds another), and holding the server open. */
 export interface BasesPort {
   list(): BaseView[];
   lend(name: string, on: boolean): Promise<boolean>;
@@ -34,7 +34,7 @@ export class Bases implements Elsewhere, BasesPort {
   #holds = 0;
   readonly #idle: (() => void) | undefined;
 
-  /** `make` opens a base; `idle` is called when the last hold is let go (a server isorite term started). */
+  /** `make` opens a base; `idle` is called when the last hold is let go (a server isorite acp or mcp started). */
   constructor({ config, first, make, idle }: { config: string; first: string; make: (base: KnownBase) => Promise<Opened>; idle?: () => void }) {
     this.#config = config;
     this.first = first;

@@ -1,11 +1,10 @@
 <script lang="ts">
-  // One block Iso has in a note: the line a prompt is written on, its reply as it arrives, text of its waiting
-  // to be kept, or why a request came to nothing. Its text sits between two dotted rules, never in a box
-  // (the Desktop-Editor board). The block is laid over the note; it is not in the note's file.
+  // One block Iso has in a note: text it offered before M25 retired its own loop, waiting to be kept, or why a keep
+  // or removal came to nothing. Its text sits between two dotted rules, never in a box (the Desktop-Editor board).
+  // The block is laid over the note; it is not in the note's file.
   //
   // A rewrite's changes are not here: each is set in the text beside the passage it would replace
   // (IsoChange.svelte). What Iso says of them is text of its like any other, and has a block.
-  import { tick } from "svelte";
   import type { NoteIso } from "$lib/iso.svelte.ts";
   import { render } from "$lib/markdown.ts";
   import { drawn } from "$lib/drawn.ts";
@@ -17,52 +16,9 @@
   const waiting = $derived(Boolean(proposal) && iso.busy === proposal?.id);
   const lost = $derived(iso.changes.filter((c) => !c.at));
 
-  let asked = $state("");
-  let field = $state<HTMLTextAreaElement>();
-
-  $effect(() => { if (key === "prompt") void tick().then(() => field?.focus()); });
-
-  const lastStep = $derived(iso.asking?.steps.at(-1)?.said ?? "");
-  const rewriting = $derived((iso.asking?.regions.length ?? 0) > 0);
-  const rewrite = $derived(iso.prompt?.mode === "rewrite");
-  const picked = $derived(iso.prompt?.regions.length ?? 0);
-  const ready = $derived(Boolean(asked.trim()) && (!rewrite || picked > 0));
-
-  function promptKey(e: KeyboardEvent) {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void iso.ask(asked); }
-    else if (e.key === "Escape") { e.preventDefault(); iso.prompt = null; }
-  }
 </script>
 
-{#if key === "prompt"}
-  <!-- The prompt line (Q6): for a rewrite of what is selected, how; on an empty line, what to write there. A question
-       written in the note is asked as it stands, and needs no prompt. -->
-  <div class="between">
-    {#if rewrite}<span class="soft picked" role="status">{picked === 0 ? "select text in the note to rewrite" : `rewriting ${picked} ${picked === 1 ? "passage" : "passages"} · select more, or click one to drop it`}</span>{/if}
-    <div class="ask">
-      <i class="dia open" aria-hidden="true"></i>
-      <textarea bind:this={field} bind:value={asked} rows="1" aria-label="Ask Iso" onkeydown={promptKey}
-        placeholder={rewrite ? "how should Iso rewrite it?" : "what should Iso write here?"}></textarea>
-    </div>
-    <div class="foot">
-      <span class="grow"></span>
-      <button class="link faint" type="button" onclick={() => (iso.prompt = null)}>cancel</button>
-      <button class="btn primary" type="button" disabled={!ready} onclick={() => iso.ask(asked)}>ask Iso</button>
-    </div>
-  </div>
-{:else if key === "asking" && iso.asking}
-  <div class="between working" aria-live="polite">
-    <!-- A rewrite's reply is marks and passages until it is taken apart: it is shown when it is whole. -->
-    {#if iso.asking.text && !rewriting}<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-      <div class="prose said" use:drawn={iso.asking.text}>{@html render(iso.asking.text)}</div>{/if}
-    <div class="foot">
-      <i class="dia" aria-hidden="true"></i>
-      <span class="soft doing">{iso.asking.text ? (rewriting ? "Iso is rewriting" : "Iso is writing") : "Iso is thinking"}{#if lastStep}<span class="faint"> · {lastStep}</span>{/if}</span>
-      <span class="grow"></span>
-      <button class="link" type="button" onclick={() => iso.halt()}>stop</button>
-    </div>
-  </div>
-{:else if key === "failed" && iso.failed}
+{#if key === "failed" && iso.failed}
   <div class="between stopped" role="alert">
     <p class="bad">{iso.failed.message}</p>
     <div class="foot"><span class="grow"></span><button class="link" type="button" onclick={() => (iso.failed = null)}>dismiss</button></div>
@@ -122,20 +78,12 @@
   .said :global(.katex-display > .katex) { font-size: 1.17em; }
   .foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .foot .dia { margin: 0 8px 0 3px; }
-  .doing { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; }
   .bad { color: var(--rose); }
-  .picked { font-size: 12px; }
   .lost { font: var(--text-size)/1.55 var(--font-text); }
   .strike { text-decoration: line-through; color: var(--text-faint); }
 
   .link { background: none; border: 0; padding: 6px 4px; color: var(--lattice); white-space: nowrap; }
-  .link.faint { color: var(--text-faint); }
 
-  .ask { display: flex; align-items: flex-start; gap: 11px; }
-  .ask .dia { margin: 7px 0 0 3px; }
-  /* What you ask is written in the note's own type, not the interface's (I2). */
-  .ask textarea { flex: 1 1 auto; min-width: 0; background: none; border: 0; padding: 0; resize: none; field-sizing: content; font: var(--text-size)/1.55 var(--font-text); color: var(--text); }
-  .ask textarea:focus-visible, .revision:focus-visible { outline: none; }
-  .ask textarea::placeholder { color: var(--text-faint); }
+  .revision:focus-visible { outline: none; }
   .revision { width: 100%; background: var(--ground-1); border: 0; border-left: 2px solid var(--growth); padding: 8px 12px; resize: vertical; font: 14px/1.6 var(--font-ui); color: var(--text); }
 </style>

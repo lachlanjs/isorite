@@ -1,7 +1,7 @@
 ---
 type: Concept
 title: Starting a base
-description: Installing isorite, making a base, and giving Iso a model.
+description: Installing isorite, making a base, and attaching your agent.
 ---
 
 isorite runs on your own machine, with Node 24 or later:
@@ -14,8 +14,8 @@ isorite serve ~/notes/physics
 
 `isorite new` makes an empty base, and `isorite serve` opens it in the browser. A folder of Markdown you have already is a base as it is.
 
-For Iso, give isorite a provider and its key, in Iso's settings (the icon at the right of Iso's pane head): OpenRouter, with a key pasted or made by signing in, or a gateway of your own, with its address, key, headers and certificate. It is checked there before it is kept, and in use at once. `isorite doctor` checks it from the terminal too. The steps are in the guide on GitHub: [setting up](https://github.com/lachlanjs/isorite/blob/main/docs/setup.md).
+isorite calls no model itself: it attaches to the agent you already use, set up as it is for its own terminal, with its own key and model. From Iso's pane, choose one, or give isorite's MCP to the agent in its own terminal: see [your own agent](/terminal/your-own-agent.md "see also"). `isorite doctor` checks what isorite needs, and offers the project's MCP config. The steps are in the guide on GitHub: [setting up](https://github.com/lachlanjs/isorite/blob/main/docs/setup.md).
 
-`isorite guide` puts this guide in a folder of your own, where Iso is the real model.
+`isorite guide` puts this guide in a folder of your own, where your own agent can be attached.
 
 Then [keep it well](/your-own-base/keeping-a-base-well.md "see also").

@@ -38,7 +38,7 @@ test("a problem marked solved is ticked on the Atlas, kept over a reload, and go
   await start(page);
   await (await embed(page)).click();
   await expect(page).toHaveURL(/#\/n\/solve-this-one$/);
-  await page.locator('[data-pane="note"] .done-tg').click();
+  await page.locator('[data-pane="note"]').getByRole("button", { name: "◇ unsolved" }).click();
   await expect(solveThisOne(page)).toHaveClass(/\bdone\b/);
   await page.reload();
   await expect(solveThisOne(page)).toHaveClass(/\bdone\b/, { timeout: 15_000 });
@@ -53,7 +53,7 @@ test("a problem marked solved is ticked on the Atlas, kept over a reload, and go
 test("the finder answers what is asked with the notes that match, and says it is no model", async ({ page }) => {
   await start(page);
   if (phone(page)) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
-  const box = page.getByRole("textbox", { name: "Message Iso" });
+  const box = page.getByRole("textbox", { name: "Message the agent" });
   await box.fill("what is the Atlas?");
   await box.press("Enter");
   const said = page.locator('[data-pane="iso"] .said').last();

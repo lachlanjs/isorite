@@ -28,7 +28,7 @@ async function showContext(page: Page, back?: "Note" | "Atlas") {
     // The row has scrolled back to the pane before anything is pressed in it.
     await expect.poll(async () => (await page.locator(`[data-pane="${back.toLowerCase()}"]`).boundingBox())?.x).toBe(0);
   }
-  return page.getByRole("list", { name: "The notes Iso has" });
+  return page.getByRole("list", { name: "What you gave Iso" });
 }
 
 test("the map draws the base: its folders, its notes, and the routes between them", async ({ page }) => {
@@ -324,7 +324,7 @@ test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given t
   await page.waitForTimeout(800);
   await page.mouse.up();
   await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
-  await expect(tray.locator('li[data-key^="g:"]')).toHaveText([/^◆\s*Huffman codes\s*\d+/]);
+  await expect(tray.locator("li")).toHaveText([/^◆\s*Huffman codes\s*$/]);
   await page.mouse.move(huffman.x - 60, huffman.y + 120); // off it, so it is not lit by pointing
   await expect(note(page, "coding/huffman-codes")).not.toHaveClass(/\bat\b/); // held, not chosen
   if ((page.viewportSize()?.width ?? 1280) <= 760) return; // carrying is a mouse's: a phone holds
@@ -336,47 +336,10 @@ test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given t
   await page.mouse.move(iso.x + 80, iso.y + 200, { steps: 8 });
   await expect(page.locator(".carried")).toHaveText("▣ Surprise");
   await page.mouse.up();
-  await expect(tray.locator('li[data-key^="g:"]')).toHaveText([/^◆\s*Huffman codes\s*\d+/, /^◆\s*Surprise\s*\d+/]);
+  await expect(tray.locator("li")).toHaveText([/^◆\s*Huffman codes\s*$/, /^◆\s*Surprise\s*$/]);
   // Taken out again.
   await tray.getByRole("button", { name: "Take Huffman codes out of Iso's context" }).click();
-  await expect(tray.locator('li[data-key^="g:"]')).toHaveText([/^◆\s*Surprise\s*\d+/]);
-});
-
-test("notes are picked on the map for a request: numbered in order, sized in the dock, and taken away again", async ({ page }) => {
-  // No note for Iso is started from the app now: one made by the Api.
-  await atlas(page);
-  const made = (await (await page.request.post("api/drafts", { headers: await session(page), data: {} })).json()) as { id: string };
-  await page.goto(`#/draft/${made.id.slice("@draft/".length)}`);
-  await page.getByLabel("Title", { exact: true }).fill("Codes, in my words");
-  await page.locator(".cm-content").click();
-  await page.keyboard.type("A code is short where the source is likely.");
-  await page.getByRole("button", { name: "[ + pick on the atlas ]" }).click();
-  await expect(page).toHaveURL(/\?pick=/);
-
-  const dock = page.getByRole("region", { name: "Notes linked to the note for Iso" });
-  await expect(dock).toContainText("Codes, in my words");
-  await expect(dock).toContainText("0 linked");
-  await expect(page.getByText("click a note to link it")).toBeAttached();
-  await note(page, "coding/huffman-codes").click();
-  await note(page, "basics/surprise").click();
-  await expect(note(page, "coding/huffman-codes").locator(".num")).toHaveText("1");
-  await expect(note(page, "basics/surprise").locator(".num")).toHaveText("2");
-  await expect(dock).toContainText(/2 linked · \d+ tokens/);
-  await look(page, "atlas-pick");
-  // A click here links; it neither chooses the note nor opens it.
-  await expect(page).toHaveURL(/\?pick=/);
-  await expect(note(page, "coding/huffman-codes")).not.toHaveClass(/\bat\b/);
-
-  await note(page, "coding/huffman-codes").click();
-  await expect(note(page, "coding/huffman-codes").locator(".num")).toHaveCount(0);
-  await expect(note(page, "basics/surprise").locator(".num")).toHaveText("1");
-  await note(page, "coding/kraft-inequality").click();
-  await expect(dock).toContainText("2 linked");
-
-  await dock.getByRole("link", { name: "back to it" }).click();
-  await expect(page.locator(".deck .chip")).toHaveText(["Surprise", "Kraft inequality"]);
-  await expect(page.locator(".cm-content")).toContainText("A code is short where the source is likely.");
-  await page.getByRole("button", { name: "[ discard ]" }).click();
+  await expect(tray.locator("li")).toHaveText([/^◆\s*Surprise\s*$/]);
 });
 
 test("lines from notes to their folder's wall are drawn at rest when asked for (key l)", async ({ page }) => {
@@ -414,11 +377,11 @@ test("the grid is fine, coarse or coarser (key c), and the map draws on each", a
   }
 });
 
-test("a terminal agent's look-ups are drawn as Iso's are: what it searched, what it reached along a link, what it reads; its turn ends idle", async ({ page, request, baseURL }) => {
+test("an agent's look-ups through isorite's MCP are drawn on the Atlas: what it searched, what it reached along a link, what it reads; its turn ends idle", async ({ page, request, baseURL }) => {
   await atlas(page);
   // Drawn with Iso's context on, the diamond in the Atlas's header (M12).
   await setSwitch(page, "context", true);
-  // As isorite term's plugin asks: from the server's origin, with the token it hands out.
+  // As a harness's plugin asks: from the server's origin, with the token it hands out.
   const { token } = await (await request.get("api/session")).json() as { token: string };
   const headers = { Origin: new URL(baseURL!).origin, "x-isorite-token": token };
   const session = `ses-${test.info().project.name}`;
@@ -429,7 +392,7 @@ test("a terminal agent's look-ups are drawn as Iso's are: what it searched, what
   expect((await lookup("search_notes", { query: "kraft" })).ok()).toBe(true);
   await lookup("read_note", { id: "coding/kraft-inequality" });
   await lookup("read_note", { id: "/coding/source-coding.md" }); // the note it rests on, along its link
-  await expect(page.getByText("OpenCode is reading Source coding in the terminal")).toBeAttached();
+  await expect(page.getByText("OpenCode is reading Source coding in its own terminal")).toBeAttached();
   await expect(note(page, "coding/source-coding")).toHaveClass(/\bp-used\b/);
   await expect(note(page, "coding/kraft-inequality")).toHaveClass(/\bp-key\b/);
   await expect(page.locator(".routes path.iso")).toHaveCount(1);

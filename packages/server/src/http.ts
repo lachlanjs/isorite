@@ -8,11 +8,9 @@ import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { Conflict, EngineError, MAX_FILE_BYTES, MAX_NOTE_BYTES, type Api, type Choice, type Given as GivenPart } from "@isorite/engine";
+import { Conflict, EngineError, MAX_FILE_BYTES, MAX_NOTE_BYTES, type Api, type Given as GivenPart } from "@isorite/engine";
 import type { BasesPort } from "./bases.ts";
-import type { Setup } from "./setup.ts";
-import { given as withGiven, type Terminal } from "./terminal.ts";
-import type { AcpFollower, Following, Rpc } from "./acp.ts";
+import { given as withGiven, type AcpFollower, type Rpc } from "./acp.ts";
 import { McpEndpoint, agentName, clientName, type Rpc as McpRpc } from "./mcp-http.ts";
 import { VERSION } from "./version.ts";
 import { proposal, writeProposal } from "./connect.ts";
@@ -30,16 +28,11 @@ export interface ServerOptions {
   web: string | null;
   /** Other names this server may be reached by (isorite serve --allow-host). */
   allowHosts?: Iterable<string>;
-  /** Where the knowledge base is on disk, for a terminal agent's harness to tell its notes from code. */
+  /** Where the knowledge base is on disk, for an agent's harness to tell its notes from code. */
   notes?: string;
-  /** The terminal's session, when `isorite term` attaches one (M11), or an ACP agent's through `isorite acp` (M25). */
-  terminal?: Terminal | Following;
-  /** Where `isorite acp` tells what passed between a front end and its agent (M25). */
+  /** The agents' sessions, through `isorite acp` (M25): what passed between a front end and its agent, and the pane's
+   *  view of one. */
   acp?: AcpFollower;
-  /** The provider, relayed at /api/gateway for OpenCode: it asks with the token as its key (M13). */
-  gateway?: (path: string, req: Request) => Promise<Response>;
-  /** The provider's setup, from Iso's settings (M18). */
-  setup?: Setup;
   /** The agent chosen in the base's settings, started for the pane (M25). */
   agents?: AgentRunner;
   /** The other bases the server holds (M20), and this one's name among them. */
@@ -58,34 +51,13 @@ export const PICTURE_CSP = "sandbox; default-src 'none'; img-src data:; style-sr
 
 const Edit = z.object({ base: z.string().max(64), text: z.string() }).strict();
 const Make = z.object({ text: z.string() }).strict();
-const Anchor = z.object({ text: z.string(), nth: z.number().int().min(0) }).strict();
-const Tier = z.enum(["low", "mid", "max"]);
-/** What you chose of Iso's context (I3): parts switched off by id, and whether it may look up more. */
-const ChoiceSchema = z.object({ off: z.array(z.string().max(400)).max(500).optional(), lookup: z.boolean().optional() }).strict();
-const Ask = z.discriminatedUnion("form", [
-  z.object({ note: z.string(), form: z.literal("insert"), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier, choice: ChoiceSchema.optional() }).strict(),
-  z.object({ note: z.string(), form: z.literal("rewrite"), regions: z.array(Anchor).min(1).max(40), after: Anchor.nullable(), before: Anchor.nullable(), asked: z.string(), tier: Tier, choice: ChoiceSchema.optional() }).strict(),
-  z.object({ note: z.string(), form: z.literal("note"), tier: Tier }).strict(),
-]);
 const Given = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("note"), id: z.string().max(400) }).strict(),
   z.object({ kind: z.literal("folder"), id: z.string().max(400) }).strict(),
   z.object({ kind: z.literal("passage"), id: z.string().max(400), text: z.string().max(20_000) }).strict(),
 ]);
-const Mode = z.enum(["ask", "write", "build"]);
-const TurnAsk = z.object({ conversation: z.string().max(64).optional(), mode: Mode, asked: z.string().max(8000), given: z.array(Given).max(40), tier: Tier, lookup: z.boolean().optional(), off: z.array(z.string().max(320)).max(500).optional() }).strict();
-const TurnShape = TurnAsk.omit({ asked: true });
 const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
 const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
-const Key = z.object({ key: z.string().nullable() }).strict();
-const Pair = z.object({ name: z.string().max(200), value: z.string().max(4000), held: z.boolean().optional() }).strict();
-const Path = z.string().max(1000);
-const SetupDraft = z.object({
-  kind: z.enum(["openrouter", "gateway"]), name: z.string().max(100), url: z.string().max(2000), keyHeld: z.boolean(), keyHeader: z.string().max(200), keyPrefix: z.string().max(50).default(""),
-  headers: z.array(Pair).max(40), query: z.array(Pair).max(40), pfx: Path, passphraseHeld: z.boolean(), cert: Path, certKey: Path, ca: Path,
-  streamUsage: z.boolean(), maxTokens: z.number().int().positive().max(1_000_000).nullable(), tiers: z.object({ low: z.string().max(200), mid: z.string().max(200), max: z.string().max(200) }).strict(),
-  key: z.string().max(400).nullable().optional(), passphrase: z.string().max(1000).nullable().optional(),
-}).strict();
 const AgentName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/);
 const AgentLook = z.object({ agent: AgentName, session: z.string().min(1).max(200), tool: z.string().max(64), args: z.record(z.string(), z.unknown()), asked: z.string().max(4000).optional() }).strict();
 const AgentEdit = z.union([
@@ -95,7 +67,7 @@ const AgentEdit = z.union([
 const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal, acp, gateway, setup, bases, base, agents }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes, acp, bases, base, agents }: ServerOptions): Hono {
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -146,15 +118,6 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   const id = (c: Context): string => c.req.query("id") ?? "";
 
   app.use("/api/*", async (c, next) => (hostOk(c) ? next() : refuse(c, 403, NOT_HERE)));
-
-  // The provider, for OpenCode: with its certificate, headers, query and key added here, so that OpenCode is given
-  // none of them. It asks as an OpenAI-compatible client does, with the token as its Bearer key, and no Origin; a
-  // page on another site cannot send that header without a preflight, which this server does not answer.
-  app.on(["GET", "POST"], "/api/gateway/*", (c) => {
-    if (!gateway) return refuse(c, 404, "this server relays no provider");
-    if (c.req.header("authorization") !== `Bearer ${token}`) return refuse(c, 403, "bad token");
-    return gateway(c.req.path.slice("/api/gateway".length), c.req.raw);
-  });
 
   // The token is given to the page that asks from this origin. Another site's page cannot read the reply.
   app.get("/api/session", (c) => answer(c, async () => ({ ...(await api.session()), token })));
@@ -218,24 +181,10 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
       const sent = await body(c, shape);
       return sent instanceof Response ? sent : answer(c, async () => (await act(c, sent)) ?? {});
     });
-  post("/api/iso/ask", Ask, (_c, b) => api.ask(b));
-  post("/api/iso/converse", TurnAsk, (_c, b) => api.converse(b));
-  post("/api/iso/take", z.object({ conversation: z.string().max(64), turn: z.string().max(64), item: z.string().max(64) }).strict(), (_c, b) => api.takeItem(b.conversation, b.turn, b.item));
-  post("/api/iso/context", z.object({ conversation: z.string().max(64), part: z.string().max(320), on: z.boolean() }).strict(), (_c, b) => api.setContext(b.conversation, b.part, b.on));
-  post("/api/iso/compact", z.object({ conversation: z.string().max(64), keep: z.number().int().min(0).max(1000).optional() }).strict(), (_c, b) => api.compact(b.conversation, b.keep));
   app.get("/api/agents", (c) => answer(c, () => api.agents()));
   post("/api/agents", z.object({ text: z.string().max(50_000) }).strict(), (_c, b) => api.saveAgents(b.text));
-  post("/api/iso/branch", z.object({ conversation: z.string().max(64) }).strict(), (_c, b) => api.branch(b.conversation));
-  post("/api/iso/undo", z.object({ conversation: z.string().max(64), turn: z.string().max(64) }).strict(), (_c, b) => api.undoTurn(b.conversation, b.turn));
-  post("/api/iso/answer", z.object({ turn: z.string().max(64), permission: z.string().max(64), decision: z.enum(["once", "always", "reject"]) }).strict(), (_c, b) => api.answer(b.turn, b.permission, b.decision));
   app.get("/api/conversations", (c) => answer(c, () => api.conversations()));
   app.get("/api/conversation", (c) => answer(c, async () => (await api.conversation(c.req.query("id") || undefined)) ?? { id: "", turns: [] }));
-  app.get("/api/turn/context", (c) => answer(c, () => {
-    let raw: unknown = {};
-    try { raw = JSON.parse(c.req.query("turn") ?? "{}"); } catch { /* the shape check says so */ }
-    return api.turnContext(TurnShape.parse(raw));
-  }));
-  post("/api/iso/stop", z.object({ request: z.string().max(64) }).strict(), (_c, b) => api.stop(b.request));
   post("/api/note/restore", z.object({ entry: z.string().max(64), base: z.string().max(64) }).strict(), (c, b) => api.restore(id(c), b.entry, b.base));
   post("/api/note/move", z.object({ to: z.string().max(400), base: z.string().max(64) }).strict(), (c, b) => api.moveNote(id(c), b.to, b.base));
   post("/api/note/delete", z.object({ base: z.string().max(64) }).strict(), (c, b) => api.deleteNote(id(c), b.base));
@@ -243,36 +192,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   post("/api/proposal/keep", Named, (c, b) => api.keep(id(c), b.proposal, b.region));
   post("/api/proposal/revise", Revised, (c, b) => api.revise(id(c), b.proposal, b.text));
   post("/api/proposal/discard", Named, (c, b) => api.discard(id(c), b.proposal, b.region));
-  app.get("/api/drafts", (c) => answer(c, () => api.drafts()));
-  post("/api/drafts", z.object({}).strict(), () => api.createDraft());
-  post("/api/draft/keep", z.object({ proposal: z.string().max(64), folder: z.string().max(400) }).strict(), (c, b) => api.keepDraft(id(c), b.proposal, b.folder));
-  post("/api/draft/discard", z.object({}).strict(), (c) => api.discardDraft(id(c)));
-  app.get("/api/context", (c) => answer(c, () => api.context(c.req.query("id") || undefined, choiceOf(c.req.query("choice")))));
-  post("/api/context/clear", z.object({}).strict(), () => api.clearConversation());
-  // The key goes in and never comes out: settings say only whether one is held.
-  app.get("/api/settings", (c) => answer(c, () => api.settings()));
-  post("/api/settings/key", Key, async (_c, b) => { const s = await api.setKey(b.key); await setup?.changed(); return api.settings().catch(() => s); }, "put");
-  app.get("/api/spend", (c) => answer(c, () => api.spend()));
-  post("/api/settings/spend-cap", z.object({ usd: z.number().positive().max(1e6).nullable() }).strict(), (_c, b) => api.setSpendCap(b.usd), "put");
-  // Or made by signing in at the provider: the page to go to, and the code it comes back with, which the engine
-  // exchanges for the key itself. The page never holds the key.
-  post("/api/settings/connect", z.object({ callback: z.string().max(2000) }).strict(), (_c, b) => api.connect(b.callback));
-  post("/api/settings/connected", z.object({ code: z.string().min(1).max(2000), state: z.string().min(1).max(200) }).strict(), async (_c, b) => { const s = await api.connected(b.code, b.state); await setup?.changed(); return api.settings().catch(() => s); });
-  // The provider's setup (M18): shown anywhere, changed only from this machine, since the key goes where it says.
-  // From elsewhere, only the setup as kept is checked.
-  if (setup) {
-    const FROM_HERE = "The provider's setup is changed only from this machine (localhost): the key goes where it says.";
-    const here = (c: Context) => { if (!local(c)) throw new EngineError(FROM_HERE, 403); };
-    app.get("/api/settings/provider", (c) => answer(c, async () => setup.view(local(c))));
-    post("/api/settings/provider", SetupDraft, (c, b) => { here(c); return setup.keep(b, true); }, "put");
-    post("/api/settings/provider/check", z.object({ draft: SetupDraft.nullable() }).strict(), (c, b) => setup.check(local(c) ? b.draft : null));
-    post("/api/settings/provider/models", z.object({ draft: SetupDraft.nullable() }).strict(), async (c, b) => ({ models: await setup.models(local(c) ? b.draft : null) }));
-    // A post, as the check is: it asks the provider, which costs, so another site's page may not set it off.
-    post("/api/settings/report", z.object({}).strict(), async () => ({ text: await setup.report() }));
-  }
-
   // The bases this server holds (M20): listed for the switcher; lent, opened by folder and held open only from this
-  // machine, as the provider's setup is (M18).
+  // machine.
   if (bases) {
     app.get("/api/bases", (c) => answer(c, async () => ({ here: base ?? "", local: local(c), bases: bases.list() })));
     const mine = (c: Context) => { if (!local(c)) throw new EngineError("the bases are changed only from this machine", 403); };
@@ -286,7 +207,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
       if (!isAbsolute(b.path) || !existsSync(b.path) || !statSync(b.path).isDirectory()) throw new EngineError(`no folder at ${b.path}`, 404);
       return bases.open(b.path);
     });
-    // Held open while the stream is: isorite term and mcp hold a server they started until they are done with it.
+    // Held open while the stream is: isorite acp and mcp hold a server they started until they are done with it.
     app.get("/api/server/hold", (c) => {
       if (!local(c)) return refuse(c, 403, "held only from this machine");
       return streamSSE(c, async (stream) => {
@@ -300,7 +221,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     });
   }
 
-  // A terminal agent (isorite term, or another harness through MCP) looks things up with Iso's tools; the Atlas
+  // An agent (through isorite's MCP, or a harness's plugin) looks things up with isorite's tools; the Atlas
   // draws its steps. It is a process on this machine, and asks as the page does: the Origin and the token.
   app.get("/api/agent/tools", (c) => answer(c, () => api.agentTools()));
   post("/api/agent/look", AgentLook, (_c, b) => api.agentLook(b));
@@ -331,31 +252,22 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     });
   }
 
-  // The terminal's session (M11). `isorite term` attaches OpenCode's server, on this machine only; pages read the
-  // session, ask in it, stop it and answer what it asks, and never reach OpenCode themselves.
-  if (terminal) {
-    const Local = z.string().max(200).refine((u) => { try { const h = new URL(u).hostname; return h === "127.0.0.1" || h === "localhost" || h === "[::1]"; } catch { return false; } }, "OpenCode's server must be on this machine");
-    post("/api/terminal/attach", z.object({ url: Local, password: z.string().min(1).max(200), directory: z.string().max(4000) }).strict(), async (_c, b) => {
-      await terminal.attach(b).catch((e: Error) => { throw new EngineError(`OpenCode's server did not answer: ${e.message}`, 502); });
-      // The folder the terminal runs in is the base's repository, the first time (Q28): code links point into it.
-      if (b.directory && notes) await api.nameRepository(isAbsolute(b.directory) ? relative(notes, b.directory) || "." : b.directory);
-    });
-    post("/api/terminal/detach", z.object({}).strict(), async () => { terminal.detach(); });
-    app.get("/api/terminal", (c) => answer(c, async () => terminal.view()));
+  // The pane's agent session (M11, on ACP since M25): pages read it, ask in it, stop it and answer what it asks,
+  // and never reach the agent themselves.
+  if (acp) {
+    app.get("/api/terminal", (c) => answer(c, async () => acp.view()));
     const failed = (e: Error) => { throw new EngineError(e.message, 409); };
     post("/api/terminal/prompt", z.object({ asked: z.string().min(1).max(8000), given: z.array(Given).max(40) }).strict(), async (_c, b) => {
       const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
-      const broken = await api.brokenNews("agent");
+      const broken = await api.brokenNews();
       const news = broken.length ? `\n\n(isorite: code links in the notes that no longer resolve: ${broken.map((x) => `${x.href} in /${x.id}.md`).join("; ")}.)` : "";
       const title = (id: string) => titles.get(id) ?? id;
-      // An agent's session over ACP is given what was given apart, once a session (M25); OpenCode's, in the prompt.
-      if (acp && "acp" in terminal && terminal.following() === acp) {
-        await acp.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim()).catch(failed);
-        await acp.prompt(b.asked.trim() + news).catch(failed);
-      } else await terminal.prompt(withGiven(b.asked, b.given, title) + news).catch(failed);
+      // What was given goes apart, once a session (M25).
+      await acp.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim()).catch(failed);
+      await acp.prompt(b.asked.trim() + news).catch(failed);
     });
-    post("/api/terminal/stop", z.object({}).strict(), async () => { await terminal.interrupt().catch(failed); });
-    post("/api/terminal/permission", z.object({ id: z.string().max(200), decision: z.enum(["once", "always", "reject"]) }).strict(), async (_c, b) => { await terminal.reply(b.id, b.decision).catch(failed); });
+    post("/api/terminal/stop", z.object({}).strict(), async () => { await acp.interrupt().catch(failed); });
+    post("/api/terminal/permission", z.object({ id: z.string().max(200), decision: z.enum(["once", "always", "reject"]) }).strict(), async (_c, b) => { await acp.reply(b.id, b.decision).catch(failed); });
   }
 
   // The base's tools over MCP (M25), for an agent on this machine: Streamable HTTP, a JSON answer to each request.
@@ -426,11 +338,11 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   };
   app.get("/api/events", (c) => streamSSE(c, async (stream) => {
     const stop = api.events((event) => { void stream.writeSSE({ event: event.type, data: JSON.stringify(event) }); });
-    const send = (view: ReturnType<Terminal["view"]>) => { void stream.writeSSE({ event: "terminal", data: JSON.stringify({ type: "terminal", terminal: view }) }).catch(() => undefined); };
-    const unfollow = terminal?.listen(send);
+    const send = (view: ReturnType<AcpFollower["view"]>) => { void stream.writeSSE({ event: "terminal", data: JSON.stringify({ type: "terminal", terminal: view }) }).catch(() => undefined); };
+    const unfollow = acp?.listen(send);
     const beat = setInterval(() => { void stream.write(": still here\n\n"); }, 25_000);
     await stream.writeSSE({ event: "open", data: "{}" });
-    if (terminal?.view().connected) send(terminal.view());
+    if (acp?.view().connected) send(acp.view());
     streams.set(stream, c.req.query("agent") === undefined);
     watchers();
     await new Promise<void>((done) => stream.onAbort(done));
@@ -459,13 +371,4 @@ function staticFile(c: Context, web: string): Response {
   return c.body(new Uint8Array(readFileSync(file)), 200, {
     "Content-Type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream", "Cache-Control": cache, "X-Content-Type-Options": "nosniff",
   });
-}
-
-/** The choice of what Iso is sent, as the context route takes it: JSON, and only its known fields kept. */
-function choiceOf(raw: string | undefined): Choice | undefined {
-  if (!raw) return undefined;
-  try {
-    const c = JSON.parse(raw) as { off?: unknown; lookup?: unknown };
-    return { ...(Array.isArray(c.off) ? { off: c.off.filter((x): x is string => typeof x === "string").slice(0, 500) } : {}), ...(typeof c.lookup === "boolean" ? { lookup: c.lookup } : {}) };
-  } catch { return undefined; }
 }

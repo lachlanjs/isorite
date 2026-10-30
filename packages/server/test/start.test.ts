@@ -9,7 +9,6 @@ import { gitInit, plainGitEnv, repoOf } from "../src/git.ts";
 import { starting } from "../src/main.ts";
 import { memory } from "../src/memory.ts";
 import { defaultStudyPath } from "../src/studybase.ts";
-import { startOpenCode } from "../src/term.ts";
 
 const temp = () => mkdtempSync(join(tmpdir(), "isorite-git-"));
 
@@ -71,17 +70,8 @@ test.skipIf(process.platform === "win32")("git init that hangs is given up on, a
 test("the commands that start something say so at once, and once only when run again with the proxy on", () => {
   const said: string[] = [];
   const write = (s: string) => { said.push(s); return true; };
-  for (const command of ["serve", "term", "mcp", "guide"]) expect(starting([command, "notes"], {}, write)).toBe(true);
+  for (const command of ["serve", "acp", "mcp", "guide"]) expect(starting([command, "notes"], {}, write)).toBe(true);
   expect(starting(["check", "notes"], {}, write)).toBe(false);
-  expect(starting(["term"], { ISORITE_STARTING: "1" }, write)).toBe(false);
+  expect(starting(["mcp"], { ISORITE_STARTING: "1" }, write)).toBe(false);
   expect(said).toEqual(Array(4).fill("isorite: starting…\n"));
 });
-
-test.skipIf(process.platform === "win32")("an OpenCode whose server doesn't answer is said to be waited for, and its log named when given up", async () => {
-  const bin = temp();
-  writeFileSync(join(bin, "opencode"), "#!/bin/sh\nsleep 60\n");
-  chmodSync(join(bin, "opencode"), 0o755);
-  const said: string[] = [];
-  await expect(startOpenCode(join(bin, "opencode"), { cwd: bin, env: process.env, wait: 3000, say: (l) => said.push(l) })).rejects.toThrow(/did not start; its output is in/);
-  expect(said).toEqual(["isorite: waiting for OpenCode's server"]);
-}, 10_000);

@@ -45,3 +45,30 @@ export function rerun(env: NodeJS.ProcessEnv, argv: string[] = process.argv, exe
     child.once("exit", (code, signal) => done(code ?? 128 + (signal ? constants.signals[signal] : 0)));
   });
 }
+
+const UNTRUSTED = new Set(["SELF_SIGNED_CERT_IN_CHAIN", "DEPTH_ZERO_SELF_SIGNED_CERT", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "UNABLE_TO_GET_ISSUER_CERT", "UNABLE_TO_GET_ISSUER_CERT_LOCALLY"]);
+
+/** Why a request did not reach `url`, and what to change: the reason Node keeps in the error's cause (a fetch says
+ *  only "fetch failed"), with one line of advice for the common ones. */
+export function unreachable(err: unknown, url: string): string {
+  let reason = err as { code?: string; message?: string; cause?: unknown } | undefined, code = "", said = "";
+  while (reason) {
+    if (reason.code) code = reason.code;
+    if (reason.message) said = reason.message;
+    reason = reason.cause as typeof reason;
+  }
+  said = said.split("\n")[0]!.replace(/^[0-9A-F]{8,}:error:[0-9A-F]+:SSL routines:[^:]*:/, "").replace(/:\.\.\/deps\/.*$/, "");
+  let host = url;
+  try { host = new URL(url).host; } catch { /* as given */ }
+  const proxy = /Proxy response \((\d{3})\)/.exec(said)?.[1];
+  const advice =
+    proxy === "407" ? "The proxy (HTTPS_PROXY) refused with 407: it wants credentials of its own, as http://user:password@proxy:port in HTTPS_PROXY, or its own sign-in. isorite can't answer a proxy that signs in by Kerberos or NTLM."
+    : proxy ? `The proxy (HTTPS_PROXY) answered ${proxy}: check HTTPS_PROXY, and NO_PROXY for hosts reached directly.`
+    : UNTRUSTED.has(code) ? "Its certificate is signed by an authority not trusted here, often a company's own. Add it to the system's authorities (isorite trusts those), or set NODE_EXTRA_CA_CERTS to its certificate (a .pem)."
+    : code === "CERT_HAS_EXPIRED" ? "Its certificate has expired."
+    : code === "ENOTFOUND" || code === "EAI_AGAIN" ? `The name ${host} could not be found: check whether it is only found on the company's network or VPN.`
+    : code === "ECONNREFUSED" ? `Nothing answers at ${host}.`
+    : code === "ETIMEDOUT" || code === "UND_ERR_CONNECT_TIMEOUT" || code === "ENETUNREACH" || code === "EHOSTUNREACH" ? `${host} did not answer. If the company's network reaches it through a proxy, set HTTPS_PROXY.`
+    : "";
+  return [said || (err as Error)?.message || "no reason given", code && !said.includes(code) ? ` (${code})` : "", advice ? `. ${advice}` : ""].join("");
+}

@@ -14,19 +14,15 @@
   import IsoPane from "$lib/components/IsoPane.svelte";
   import NoteList from "$lib/components/NoteList.svelte";
   import PaneHead from "$lib/components/PaneHead.svelte";
-  import { converse } from "$lib/converse.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
   import { PANES, panes, type Pane, type Switch } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import IsoGauge from "$lib/components/IsoGauge.svelte";
   import Crystal from "$lib/components/Crystal.svelte";
-  import TierSwitch from "$lib/components/TierSwitch.svelte";
   import IsoSettings from "$lib/components/IsoSettings.svelte";
   import NoteSettings from "$lib/components/NoteSettings.svelte";
 
   let { children }: { children: Snippet } = $props();
-  // Back from signing in at the provider: Iso's settings open to say how it went.
-  if (app.signIn !== null) panes.settings = "iso";
 
   // The three panes (M10). The Note pane shows the route's page; the Atlas and Iso stand in the shell, so they keep
   // their state while notes open and close.
@@ -109,15 +105,13 @@
   }
   const NAME: Record<Pane, string> = { note: "Note", atlas: "Atlas", iso: "Iso" };
   // The panes' switches (M12), each its letter with Alt.
-  const SWITCH_KEYS: Record<string, Switch> = { p: "provenance", t: "timeline", q: "questions", b: "problems", w: "web", k: "code", i: "pictures", c: "context", n: "notes", f: "files", r: "run" };
-  const inNote = $derived(page.route.id === "/n/[...id]" || page.route.id === "/draft/[id]");
-  // Iso's request as the map shows it: running, or how it ended until the map lets it go.
-  // A turn in Iso's pane tells itself there; the Atlas's header tells of a request in a note, Iso's of a terminal agent.
-  const run = $derived(app.atlas && !app.atlas.pick && app.iso?.start?.place.form !== "turn" ? app.iso : null);
+  const SWITCH_KEYS: Record<string, Switch> = { p: "provenance", t: "timeline", q: "questions", b: "problems", w: "web", k: "code", i: "pictures", c: "context", f: "files", r: "run" };
+  const inNote = $derived(page.route.id === "/n/[...id]");
+  // An agent's turn as the map shows it: running, or how it ended until the map lets it go. A session the pane
+  // carries tells itself there; Iso's header tells of an agent's turn through MCP alone, in its own terminal.
+  const run = $derived(app.atlas ? app.iso : null);
   const running = $derived(run?.state === "reading" || run?.state === "writing");
-  const runTitle = $derived(run ? (app.listing.notes.find((n) => n.id === run.note)?.title ?? "your note") : "");
-  const stop = (): void => { if (run) void app.api.stop(run.request); };
-  // A terminal agent's turn: who it is, and the note it has opened last.
+  // Who it is, and the note it has opened last.
   const agentNamed = $derived(agentName(run?.agent));
   const agentReading = $derived.by(() => {
     const id = run?.steps.findLast((s) => s.opened && !s.failed)?.opened;
@@ -154,17 +148,7 @@
           {:else if p === "atlas"}
             <PaneHead pane="atlas" first={panes.narrow || standing[0] === "atlas"} name="Atlas" settings={atlasSettings}>
               {#snippet tools()}
-                <!-- Iso's request in a note, as the Atlas draws it: not for the note open beside it, which says so itself. -->
-                {#if run && !run.agent && (!app.open || run.note !== app.open) && (running || !app.atlas?.chosen)}
-                  {#if running}
-                    <span class="says">{run.note.startsWith("@draft/") ? "your note opens when Iso is done" : `Iso is answering in ${runTitle}`}</span>
-                    <button class="link" type="button" onclick={stop}>stop</button>
-                  {:else}
-                    <span class="says" class:bad={run.state === "failed"} title="click open ground to let its path go">{run.state === "done" ? `Iso is done in ${runTitle}` : run.state === "stopped" ? "Iso was stopped" : `Iso could not answer: ${run.message}`}</span>
-                  {/if}
-                {:else if app.atlas?.pick}
-                  <span class="says">click a note to link it, again to take it away</span>
-                {:else if app.atlas?.chosen && app.atlas.steps}
+                {#if app.atlas?.chosen && app.atlas.steps}
                   <span class="says">{app.atlas.steps} {app.atlas.steps === 1 ? "step" : "steps"} back</span>
                 {/if}
                 {#if app.atlas?.here}<span class="where soft">{app.atlas.here}</span><button class="btn out" type="button" onclick={app.atlas.out}>↑ out</button>{/if}
@@ -177,31 +161,24 @@
               {#snippet tools()}
                 <!-- An agent's turn told in Iso's header, unless its session is the pane's (M25), where it shows itself. -->
                 {#if run?.agent && !terminal.acp}
-                  <span class="says" title={running ? "" : "click open ground on the Atlas to let its path go"}>{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentNamed}'s turn is done`}</span>
+                  <span class="says" title={running ? "" : "click open ground on the Atlas to let its path go"}>{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in its own terminal` : `${agentNamed}'s turn is done`}</span>
                 {/if}
-                {#if panes.mode !== "build"}<TierSwitch />{/if}
                 <IsoGauge />
-                <!-- The drawer of past conversations (M24, K), under this one's crystal; with an agent attached (M25), its
-                     sessions, live and kept. -->
-                {#if panes.mode !== "build" || terminal.acp}
-                  {@const shownId = terminal.acp ? terminal.view?.session : converse.id}
-                  <button class="icon past" type="button" aria-label={terminal.acp ? "Sessions" : "Past conversations"} aria-pressed={converse.view === "past"} title={terminal.acp ? "The agents' sessions" : "Past conversations"} onclick={() => { if (terminal.acp) { converse.view = converse.view === "past" ? "chat" : "past"; terminal.refresh(); } else void converse.drawer(); }}>
-                    {#if shownId}<Crystal id={shownId} size={20} />{:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 4.5h11v8h-11zM2.5 7.5h11M6.5 10h3" /></svg>{/if}
-                  </button>
-                {/if}
-                <!-- What the next turn is sent (I8), with how many parts you gave; a new conversation. -->
-                <button class="icon ctx" type="button" aria-label="Context" aria-pressed={converse.view === "context"} title="What Iso is sent, part by part" onclick={() => (converse.view = converse.view === "context" ? "chat" : "context")}>
-                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h6" /></svg>
-                  {#if tray.sent.length}{#key tray.fresh}<span class="n" class:pulse={converse.view === "chat" && tray.fresh !== ""}>{tray.sent.length}</span>{/key}{/if}
+                <!-- The drawer (M24, K): the agents' sessions, live and kept (M25), and Iso's own conversations from
+                     before, under the crystal of the one shown. -->
+                {@const shownId = terminal.session?.session}
+                <button class="icon past" type="button" aria-label="Sessions" aria-pressed={terminal.shown === "past"} title="The agents' sessions, and Iso's earlier conversations" onclick={() => void terminal.drawer()}>
+                  {#if shownId}<Crystal id={shownId} size={20} />{:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 4.5h11v8h-11zM2.5 7.5h11M6.5 10h3" /></svg>{/if}
                 </button>
-                {#if terminal.acp && terminal.view?.connected}
-                  <button class="icon" type="button" aria-label="A new session" title="A new session with {terminal.view.agent}, from here" onclick={() => { void terminal.fresh(terminal.view?.agentId ?? ""); converse.view = "chat"; }}>
+                <!-- What the agent has in hand (I8, M25), with how many parts are in the tray; a new session. -->
+                <button class="icon ctx" type="button" aria-label="Context" aria-pressed={terminal.shown === "context"} title="What the agent has in hand, and what the tray gives it" onclick={() => (terminal.shown = terminal.shown === "context" ? "session" : "context")}>
+                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h6" /></svg>
+                  {#if tray.sent.length}{#key tray.fresh}<span class="n" class:pulse={terminal.shown === "session" && tray.fresh !== ""}>{tray.sent.length}</span>{/key}{/if}
+                </button>
+                {#if terminal.view?.connected}
+                  <button class="icon" type="button" aria-label="A new session" title="A new session with {terminal.view.agent}, from here" onclick={() => { void terminal.fresh(terminal.view?.agentId ?? ""); terminal.shown = "session"; }}>
                     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.5v9M3.5 8h9" /></svg>
                   </button>
-                {:else}
-                <button class="icon" type="button" aria-label="A new conversation" title="A new conversation: nothing earlier is sent" disabled={panes.mode === "build" || !!converse.running || !converse.turns.length} onclick={() => { converse.fresh(); converse.view = "chat"; }}>
-                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.5v9M3.5 8h9" /></svg>
-                </button>
                 {/if}
               {/snippet}
             </PaneHead>
@@ -237,7 +214,6 @@
 <style>
   .says { overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 12px; color: var(--text-soft); flex: 0 1 auto; }
   @media (max-width: 760px) { .says { flex: none; } }
-  .link { background: none; border: 0; padding: 4px 0; color: var(--lattice); white-space: nowrap; font-size: 12px; flex: none; cursor: pointer; }
   .out { height: 28px; padding: 0 10px; font-size: 12px; flex: none; }
   .where { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 12px; }
   /* Out of a folder is the phone's (Mobile-Atlas): on a desktop a click on open ground steps out. */

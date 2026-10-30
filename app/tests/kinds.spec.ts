@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { attach, box, log } from "./agent.ts";
 
 // Open questions and problems (M12): a question embedded in a note is a callout there and opens; its title row
 // resolves it, yours alone; the note it is about lists it at its foot; a problem is made from the note's settings.
@@ -65,52 +66,51 @@ test("a problem using the note open is made from the Note pane's settings, untit
   await remove(page, `basics/two-coins-${name}`);
 });
 
-test("Iso asks a question back: it stands dotted on the Atlas where it would go, and keep makes it an open question, yours; your words offered back are inserted as yours", async ({ page }) => {
+test("the agent asks a question back: it stands dotted on the Atlas where it would go, and keep makes it an open question, yours; your words offered back are inserted as yours", async ({ page }) => {
   const name = `${test.info().project.name}-${Date.now().toString(36)}`, n = `channels/asked-${name}`;
   await make(page, n, `---\ntype: Concept\ntitle: Asked ${name}\n---\n\nPlain.\n`);
-  await page.goto(`#/n/${n}`);
-  await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Plain.");
-  if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
-  const box = page.getByRole("textbox", { name: "Message Iso" }), log = page.getByRole("log", { name: "The conversation with Iso" });
-  // A conversation of its own: the projects run side by side on one server.
-  const fresh = page.locator('[data-pane="iso"]').getByRole("button", { name: "A new conversation" });
-  if (await fresh.isEnabled()) await fresh.click();
-  await box.fill(`question ${n}`);
-  await box.press("Enter");
-  const asked = log.locator(".turn").last();
-  await expect(asked).toHaveAttribute("data-state", "done");
-  const q = `Why does asked-${name} hold?`;
-  await expect(asked.locator(".asks")).toContainText(q);
-  // Not kept yet (M24, R): on the Atlas, dotted, in the folder of the note it is about.
-  const atlas = page.locator('[data-pane="atlas"]'), prospect = atlas.getByRole("link", { name: `Asked by Iso, not kept: ${q}` });
-  await expect(prospect).toHaveClass(/\bprospect\b/);
-  if (!phone()) {
-    const [inside, folder] = [(await prospect.boundingBox())!, (await atlas.locator('[data-folder="channels"]').first().boundingBox())!];
-    expect(inside.x >= folder.x && inside.y >= folder.y && inside.x + inside.width <= folder.x + folder.width && inside.y + inside.height <= folder.y + folder.height).toBe(true);
-  }
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: `test-results/screens/${test.info().project.name}-iso-asks-prospect.png`, fullPage: true });
-  await asked.getByRole("button", { name: `Keep “${q}” as an open question` }).click();
-  // Kept: the note stands in its place, and the dotted one is gone.
-  await expect(prospect).toHaveCount(0);
-  await expect(atlas.locator(`[data-note="channels/why-does-asked-${name}-hold"]`)).toHaveCount(1);
-  const made = asked.locator(".asks").getByRole("button", { name: q, exact: true });
-  await expect(made).toBeVisible();
-  const file = ((await (await page.request.get(`api/note?id=channels/why-does-asked-${name}-hold`)).json()) as { text: string }).text;
-  expect(file).toContain(`type: Question\ntitle: "${q}"\nabout: [${n}]\n`);
+  const agent = await attach();
+  try {
+    await page.goto(`#/n/${n}`);
+    await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Plain.");
+    if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
+    const q = `Why does asked-${name} hold?`;
+    await box(page).fill(`ask ${n} ${q}`);
+    await box(page).press("Enter");
+    const asked = log(page).locator(".turn").last();
+    await expect(asked).toHaveAttribute("data-state", "done");
+    await expect(asked.locator(".asks")).toContainText(q);
+    // Not kept yet (M24, R): on the Atlas, dotted, in the folder of the note it is about.
+    const atlas = page.locator('[data-pane="atlas"]'), prospect = atlas.getByRole("link", { name: `Asked back, not kept: ${q}` });
+    await expect(prospect).toHaveClass(/\bprospect\b/);
+    if (!phone()) {
+      const [inside, folder] = [(await prospect.boundingBox())!, (await atlas.locator('[data-folder="channels"]').first().boundingBox())!];
+      expect(inside.x >= folder.x && inside.y >= folder.y && inside.x + inside.width <= folder.x + folder.width && inside.y + inside.height <= folder.y + folder.height).toBe(true);
+    }
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: `test-results/screens/${test.info().project.name}-iso-asks-prospect.png`, fullPage: true });
+    await asked.getByRole("button", { name: `Keep “${q}” as an open question` }).click();
+    // Kept: the note stands in its place, and the dotted one is gone.
+    await expect(prospect).toHaveCount(0);
+    await expect(atlas.locator(`[data-note="channels/why-does-asked-${name}-hold"]`)).toHaveCount(1);
+    const made = asked.locator(".asks").getByRole("button", { name: q, exact: true });
+    await expect(made).toBeVisible();
+    const file = ((await (await page.request.get(`api/note?id=channels/why-does-asked-${name}-hold`)).json()) as { text: string }).text;
+    expect(file).toContain(`type: Question\ntitle: "${q}"\nabout: [${n}]\n`);
 
-  await box.fill(`offer ${n}`);
-  await box.press("Enter");
-  const offered = log.locator(".turn").last();
-  await expect(offered).toHaveAttribute("data-state", "done");
-  await expect(offered.locator(".offer .yours")).toHaveText("Because it is so, in my words.");
-  await page.screenshot({ path: `test-results/screens/${test.info().project.name}-iso-asks-back.png`, fullPage: true });
-  await offered.getByRole("button", { name: `Insert into Asked ${name} as yours` }).click();
-  await expect(offered.getByRole("img", { name: "Inserted" })).toBeVisible();
-  const after = ((await (await page.request.get(`api/note?id=${n}`)).json()) as { text: string }).text;
-  expect(after).toBe(`---\ntype: Concept\ntitle: Asked ${name}\n---\n\nPlain.\n\nBecause it is so, in my words.\n`);
-  await remove(page, `channels/why-does-asked-${name}-hold`);
-  await remove(page, n);
+    await box(page).fill(`offer ${n} Because it is so, in my words.`);
+    await box(page).press("Enter");
+    const offered = log(page).locator(".turn").last();
+    await expect(offered).toHaveAttribute("data-state", "done");
+    await expect(offered.locator(".offer .yours")).toHaveText("Because it is so, in my words.");
+    await page.screenshot({ path: `test-results/screens/${test.info().project.name}-iso-asks-back.png`, fullPage: true });
+    await offered.getByRole("button", { name: `Insert into Asked ${name} as yours` }).click();
+    await expect(offered.locator(".offer .in")).toHaveText("inserted");
+    const after = ((await (await page.request.get(`api/note?id=${n}`)).json()) as { text: string }).text;
+    expect(after).toBe(`---\ntype: Concept\ntitle: Asked ${name}\n---\n\nPlain.\n\nBecause it is so, in my words.\n`);
+    await remove(page, `channels/why-does-asked-${name}-hold`);
+    await remove(page, n);
+  } finally { agent.detach(); }
 });
 
 test("links out of the base: a code link set as code, struck through where its file is not in the repository; a web link dotted", async ({ page }) => {

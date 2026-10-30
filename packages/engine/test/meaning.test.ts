@@ -1,7 +1,6 @@
 import { expect, test } from "vitest";
 import { Bundle } from "@isorite/core";
-import { Engine, INLINE, Meaning, MemoryFiles, MemorySecrets, KEY, pieces, type Embedder, type EngineEvent } from "../src/index.ts";
-import { scripted } from "./scripted.ts";
+import { Engine, INLINE, Meaning, MemoryFiles, pieces, type Embedder, type EngineEvent } from "../src/index.ts";
 
 // A model for tests: a text's vector counts which of a few words it holds, so "nearest" can be reasoned about.
 const WORDS = ["entropy", "surprise", "channel", "capacity", "bit", "code", "noise", "average"];
@@ -68,10 +67,10 @@ test("a few missing pieces are made before the search; many are left to the back
   expect(found.hits[0]!.note).toBe("n/new");
 });
 
-test("in the engine: the base is embedded when opened and after a save, and Iso is offered the second tool", async () => {
-  const model = fake(), cache = new MemoryFiles(), provider = scripted([{ calls: [{ name: "find_similar", arguments: { text: "capacity of a channel with noise" } }] }, { text: ["See capacity."] }]);
+test("in the engine: the base is embedded when opened and after a save, and an agent is offered the second tool", async () => {
+  const model = fake(), cache = new MemoryFiles();
   const notes = new MemoryFiles(FILES);
-  const engine = await Engine.open({ notes, own: new MemoryFiles(), clock: { now: () => Date.parse("2026-10-13T09:00:00Z") }, device: "laptop1", name: "it", http: provider.http, secrets: new MemorySecrets({ [KEY]: "k" }), embedder: model, cache: { files: cache, name: "it.json" } });
+  const engine = await Engine.open({ notes, own: new MemoryFiles(), clock: { now: () => Date.parse("2026-10-13T09:00:00Z") }, device: "laptop1", name: "it", embedder: model, cache: { files: cache, name: "it.json" } });
   await engine.meaning!.refresh(engine.bundle);
   expect(await engine.meaning!.state(engine.bundle)).toEqual({ pieces: 4, missing: 0 });
 
@@ -81,12 +80,11 @@ test("in the engine: the base is embedded when opened and after a save, and Iso 
   expect(await engine.meaning!.state(engine.bundle)).toEqual({ pieces: 5, missing: 0 });
 
   const events: EngineEvent[] = [];
-  const done = new Promise<void>((r) => engine.events((e) => { events.push(e); if (e.type === "iso-done" || e.type === "iso-failed") r(); }));
-  await engine.ask({ note: "basics/entropy", form: "insert", after: null, before: null, asked: "what limits a channel", tier: "mid" });
-  await done;
-  expect(provider.sent[0]!.tools!.map((t) => t.function.name)).toContain("find_similar");
-  const step = events.find((e) => e.type === "iso-step");
+  engine.events((e) => events.push(e));
+  expect((await engine.agentTools()).map((t) => t.function.name)).toContain("find_similar");
+  await engine.agentLook({ agent: "claude", session: "s1", tool: "find_similar", args: { text: "capacity of a channel with noise" } });
+  const step = events.find((e) => e.type === "agent-step");
   expect(step).toMatchObject({ step: { how: "meaning" } });
-  expect(step?.type === "iso-step" && step.step.failed).toBeFalsy();
-  expect(step?.type === "iso-step" && step.step.notes[0]).toBe("channels/capacity");
+  expect(step?.type === "agent-step" && step.step.failed).toBeFalsy();
+  expect(step?.type === "agent-step" && step.step.notes[0]).toBe("channels/capacity");
 });

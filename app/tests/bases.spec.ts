@@ -1,6 +1,6 @@
 // Several bases on one server (M20): the switcher before the first pane's name, each base's page the app's with ?base=<name>, the
 // lent switch; the agent's memory lent to the project's agent, which looks and writes there, drawn on the memory's
-// own Atlas; and Iso reading the memory from the project, its step a link into that base's page.
+// own Atlas.
 
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { setSwitch } from "./switches.ts";
@@ -67,7 +67,7 @@ test("the project's agent looks and writes in its memory; the memory's own page 
   expect((await agent.tool("read_note", { id: "memory:tools/opencode" })).ok()).toBe(true);
   // Drawn on the memory's Atlas, where it read.
   await expect(page.locator('[data-note="tools/opencode"]')).toHaveClass(/\bp-used\b/);
-  await expect(page.getByText("OpenCode is reading OpenCode's config in the terminal")).toBeAttached();
+  await expect(page.getByText("OpenCode is reading OpenCode's config in its own terminal")).toBeAttached();
   const wrote = await agent.tool("write_note", { base: "memory", note: id, content: "---\ntype: Concept\ntitle: Short answers\n---\n\nThey like short answers.\n" }, "remember that I like short answers");
   expect(wrote.ok()).toBe(true);
   await agent.status(false);
@@ -77,18 +77,4 @@ test("the project's agent looks and writes in its memory; the memory's own page 
   const journal = await (await request.get(`b/memory/api/journal?id=${encodeURIComponent(id)}`)).json() as { by?: string; who?: string; asked?: string }[];
   expect(JSON.stringify(journal)).toContain("agent:opencode");
   expect(JSON.stringify(journal)).toContain("remember that I like short answers");
-});
-
-test("Iso in the project reads the memory; its step opens that note in the memory's page", async ({ page }) => {
-  await page.goto("#/n/basics/surprise");
-  if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
-  const box = page.getByRole("textbox", { name: "Message Iso" });
-  await box.fill(`recall where its config is, ${test.info().project.name}`);
-  await box.press("Enter");
-  const step = page.locator('[data-pane="iso"] a.away').last();
-  await expect(step).toContainText("memory: tools/opencode");
-  await expect(step).toHaveAttribute("href", /\?base=memory#\/n\/tools\/opencode$/);
-  await expect(step).toHaveAttribute("target", "_blank");
-  await expect(page.locator('[data-pane="iso"] .said').last()).toContainText("bits");
-  await look(page, "bases-iso-recall");
 });

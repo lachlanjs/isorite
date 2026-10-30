@@ -2,21 +2,16 @@
   // The Atlas: the base as a map. The layout is the core's, worked out in a worker; this holds the view (pan,
   // zoom, what is open at this zoom) and what is chosen, and hands each folder, block and route its place and
   // its marks. The marks are plain maps from a note to a mark, looked up while drawing.
-  import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { reach, STRENGTH } from "@isorite/core";
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
-  import type { How, MapReport, NoteSource } from "@isorite/engine";
-  import { linkedIn, placeOf, titleIn, withLink, withoutLink } from "$lib/atlas/picks.ts";
+  import type { How, MapReport } from "@isorite/engine";
   import { makeKind as makeNew, untitled } from "$lib/make.ts";
   import { tick, untrack } from "svelte";
-  import AtlasDock from "./AtlasDock.svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { pictureSrc } from "$lib/pictures.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
-  import { converse } from "$lib/converse.svelte.ts";
   import { pointing } from "$lib/pointing.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
   import { CELL, MAX_ZOOM, MIN_ZOOM, TITLE_UNITS, TITLE_PX, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
@@ -25,14 +20,6 @@
   import AtlasBlock from "./AtlasBlock.svelte";
   import AtlasFolder from "./AtlasFolder.svelte";
   import AtlasRoutes from "./AtlasRoutes.svelte";
-
-  let { pick = "" }: {
-    /** A note for Iso (`@draft/…`) that notes are being picked for: a click then links a note to it. */
-    pick?: string;
-  } = $props();
-
-  /** The most of the linked notes that is sent with a note for Iso (the engine's LINKED_BUDGET). */
-  const LINKED_BUDGET = 8000;
 
   let report = $state.raw<MapReport | null>(null);
   let laid = $state.raw<{ key: string; layout: Layout } | null>(null);
@@ -97,13 +84,12 @@
     leaves = on;
     try { localStorage.setItem("isorite.atlas.leaves", on ? "on" : "off"); } catch { /* storage unavailable: not remembered */ }
   }
-  /** The questions Iso asked in the conversation shown, or an agent in its session shown (M25), and you have not kept
-   *  (M24, R), while questions are on the map. */
+  /** The questions the agent asked back in its session shown (M25), or Iso in a conversation of its own being read,
+   *  and you have not kept (M24, R), while questions are on the map. */
   const prospects = $derived.by((): Prospect[] => {
     if (!panes.on.questions) return [];
     const out: Prospect[] = [];
-    for (const t of converse.turns) for (const i of t.items) if (i.kind === "question" && !i.made) out.push({ ref: `?${i.id}`, title: i.title, about: i.about });
-    if (panes.mode === "build") for (const t of terminal.view?.turns ?? []) for (const i of t.items) if (i.kind === "question" && !i.made) out.push({ ref: `?${i.id}`, title: i.title, about: i.about });
+    for (const t of terminal.session?.turns ?? []) for (const i of t.items) if (i.kind === "question" && !i.made) out.push({ ref: `?${i.id}`, title: i.title, about: i.about });
     return out;
   });
   async function load(): Promise<void> {
@@ -168,7 +154,7 @@
     void load();
     let again: ReturnType<typeof setTimeout> | undefined;
     const off = app.on((e) => {
-      if (e.type !== "note-changed" && e.type !== "record") return;
+      if (e.type !== "note-changed") return;
       clearTimeout(again);
       again = setTimeout(() => { void load(); }, 400);
     });
@@ -180,11 +166,8 @@
   const idx = $derived(L ? indexLayout(L) : null);
   const open = $derived(L ? openAt(L, drawnK) : "");
   // The whole map: what is on it, and half the margin round it, where the ways round the outside run.
-  // With a note for Iso being answered, its block beside the map is framed too.
   const whole = (): View => {
-    const m = (L?.margin ?? 0) / 2, box = { gx: m, gy: m, w: (L?.W ?? 1) - 2 * m, h: (L?.H ?? 1) - 2 * m }, d = origin?.draft ? origin : null;
-    // With room under it and to its right for what Iso is doing.
-    if (d && L) { const x1 = Math.max(box.gx + box.w, d.gx + Math.max(d.w, 240 / L.cell) + 2), y1 = Math.max(box.gy + box.h, d.gy + d.h + 70 / L.cell); box.gx = Math.min(box.gx, d.gx - 2); box.gy = Math.min(box.gy, d.gy - 2); box.w = x1 - box.gx; box.h = y1 - box.gy; }
+    const m = (L?.margin ?? 0) / 2, box = { gx: m, gy: m, w: (L?.W ?? 1) - 2 * m, h: (L?.H ?? 1) - 2 * m };
     return fit(box, size.w, size.h, 1, L?.cell);
   };
 
@@ -264,7 +247,7 @@
 
   // What is lit: the note chosen, or with none chosen the one pointed at. Its own links are drawn, one step each
   // way; the rest of what it requires is outlined, fainter the further back, and drawn only when asked for.
-  const at = $derived(pick ? "" : chosen || pointed); // while notes are picked, the marks are the picks alone
+  const at = $derived(chosen || pointed);
   const lit = $derived(at && report && idx?.at.has(at) ? reach(report.model, at) : null);
   type Mark = "at" | "req" | "bld" | "use" | "also";
   const marks = $derived.by(() => {
@@ -382,8 +365,8 @@
     const t = Math.min((cx - PIP_IN) / Math.max(Math.abs(dx), 1e-6), (cy - PIP_IN) / Math.max(Math.abs(dy), 1e-6));
     return { x: cx + dx * t, y: cy + dy * t, angle: Math.atan2(dy, dx) };
   }
-  const herePip = $derived(pick ? null : pipFor(hereAt));
-  const therePip = $derived(pick || thereAt === hereAt ? null : pipFor(thereAt));
+  const herePip = $derived(pipFor(hereAt));
+  const therePip = $derived(thereAt === hereAt ? null : pipFor(thereAt));
   function bringIn(i: number): void {
     if (!L) return;
     const n = L.items[i]!, u = L.cell * view.k;
@@ -391,30 +374,29 @@
     fly({ k: view.k, x: size.w / 2 - (n.gx + n.w / 2) * u, y: size.h / 2 - (n.gy + n.h / 2) * u });
   }
 
-  // ------------------------------------------------------------ Iso's path (Desktop-Think)
+  // ------------------------------------------------------------ the agent's path (Desktop-Think)
 
-  /** Iso's latest request, from whichever page sent it. */
-  const run = $derived(pick ? null : app.iso);
+  /** An agent's latest turn, from whichever session it is in. */
+  const run = $derived(app.iso);
   const running = $derived(run?.state === "reading" || run?.state === "writing");
-  /** Each note Iso opened, and how it got there: by its words, by its meaning, along a link, or named outright. */
+  /** Each note it opened, and how it got there: by its words, by its meaning, along a link, or named outright. */
   const reached = $derived.by(() => {
     const out = new Map<string, How>();
     for (const s of run?.steps ?? []) if (s.opened && !s.failed && !out.has(s.opened)) out.set(s.opened, s.how);
     return out;
   });
-  // The Iso lens (M10): what Iso is sent, what it changed in this conversation, what it points to, and the order
-  // it read in during its last turn. Iso's path is drawn only in this lens.
-  const isoLens = $derived(panes.on.context || !!pick);
+  // The Iso lens (M10, the agent's since M25): what is in the tray, what the session shown read and changed, and the
+  // order it read in during its last turn. The agent's path is drawn only in this lens.
+  const isoLens = $derived(panes.on.context);
   const givenNotes = $derived(new Set(tray.parts.filter((p) => p.kind === "note").map((p) => p.id)));
   const givenFolders = $derived(new Set(tray.parts.filter((p) => p.kind === "folder").map((p) => p.id)));
-  /** The notes Iso read in this conversation (M15): in hand, or set aside. */
-  const heldRows = $derived(new Map((converse.report?.rows ?? []).filter((r) => r.kind === "read").map((r) => [r.key.slice(2), r] as const)));
-  const lastTurn = $derived(converse.turns.at(-1));
-  const changedByIso = $derived(new Set(converse.turns.filter((t) => !t.items.some((i) => i.kind === "undone")).flatMap((t) => t.items.flatMap((i) => (i.kind === "change" && i.why !== "delete" ? [i.why === "move" ? i.to! : i.note] : [])))));
-  const pointedTo = $derived(new Map((lastTurn?.items ?? []).flatMap((i) => (i.kind === "point" ? [[i.note, i.why] as const] : []))));
+  const CHANGES = /(^|[_:./-])(edit_note|write_note|edit|write|patch)$/;
+  /** The notes the session shown read, and changed. */
+  const readNotes = $derived(new Set((terminal.session?.turns ?? []).flatMap((t) => t.items.flatMap((i) => (i.kind === "tool" && i.note && !i.base && i.status !== "failed" && !CHANGES.test(i.name) ? [i.note] : [])))));
+  const changedByIso = $derived(new Set((terminal.session?.turns ?? []).flatMap((t) => t.items.flatMap((i) => (i.kind === "tool" && i.note && !i.base && i.status !== "failed" && CHANGES.test(i.name) ? [i.note] : [])))));
   const readOrder = $derived.by(() => {
     const out = new Map<string, number>();
-    for (const i of lastTurn?.items ?? []) if (i.kind === "look" && i.step.opened && !i.step.failed && !out.has(i.step.opened)) out.set(i.step.opened, out.size + 1);
+    for (const i of terminal.session?.turns.at(-1)?.items ?? []) if (i.kind === "tool" && i.note && !i.base && i.status !== "failed" && !CHANGES.test(i.name) && !out.has(i.note)) out.set(i.note, out.size + 1);
     return out;
   });
   /** The note it is reading now. */
@@ -424,100 +406,13 @@
   let isoHot = $state.raw<Hot[]>([]);
   // Keyed apart from the chosen note's lit routes, which may run the same way.
   $effect(() => light(isoLinks, (h) => { isoHot = h.map((r) => ({ ...r, key: `iso:${r.key}` })); }));
-
-  // A note for Iso is not in the base: its block stands where the map was held for it, or beside the map, with
-  // a blue line to each note it links to. A note in the base asks from its own block.
-  let asking = $state.raw<NoteSource | null>(null);
-  $effect(() => {
-    const id = run?.note ?? "";
-    asking = null;
-    if (!id.startsWith("@draft/")) return;
-    let stale = false;
-    app.api.readNote(id).then((d) => { if (!stale) asking = d; }, () => undefined);
-    return () => { stale = true; };
-  });
-  const origin = $derived.by((): { gx: number; gy: number; w: number; h: number; draft: boolean; title: string } | null => {
-    if (!run || !L || !idx) return null;
-    if (!run.note.startsWith("@draft/")) {
-      const i = idx.at.get(run.note);
-      if (i === undefined) return null;
-      const s = L.items[shownAs(idx, open, i)]!;
-      return { gx: s.gx, gy: s.gy, w: s.w, h: s.h, draft: false, title: title(run.note) };
-    }
-    const w = Math.round(126 / L.cell), h = Math.round(77 / L.cell), name = asking ? titleIn(asking.text) || "a new note" : "";
-    const held = placeOf(run.note), at = held ? { gx: Math.round((held.gx * CELL) / L.cell), gy: Math.round((held.gy * CELL) / L.cell) } : null;
-    const clear = at && !L.items.some((n) => n.kind === "note" && at.gx < n.gx + n.w + 1 && n.gx < at.gx + w + 1 && at.gy < n.gy + n.h + 1 && n.gy < at.gy + h + 1);
-    if (clear) return { ...at, w, h, draft: true, title: name };
-    // Beside the map, the long way of the screen: at its right on a wide one, under it on a tall one.
-    const tops = L.items.filter((n) => n.parent < 0), right = Math.max(...tops.map((n) => n.gx + n.w)), foot = Math.max(...tops.map((n) => n.gy + n.h)), gap = Math.round(84 / L.cell);
-    return flow === "right" ? { gx: right + gap, gy: Math.round((L.H - h) / 2), w, h, draft: true, title: name } : { gx: Math.round((L.W - w) / 2), gy: foot + gap, w, h, draft: true, title: name };
-  });
-  /** The notes the note for Iso links to: what it was sent with. */
-  const sent = $derived(asking ? linkedIn(asking.text).filter((id) => report?.notes[id]) : []);
-  const sentLines = $derived.by(() => {
-    if (!origin?.draft || !L || !idx) return [];
-    return sent.flatMap((id) => {
-      const i = idx.at.get(id);
-      if (i === undefined) return [];
-      return [{ key: id, d: between(origin!, L!.items[shownAs(idx!, open, i)]!) }];
-    });
-  });
-  /** How a note is outlined for Iso's path: by keyword, by meaning, along a link (or named outright), or being read now. */
+  /** How a note is outlined for the agent's path: by keyword, by meaning, along a link (or named outright), or being read now. */
   const isoMark = (ref: string): "" | "key" | "sem" | "link" | "used" => {
     if (!isoLens) return "";
     if (ref === reading) return "used";
     const how = reached.get(ref);
     return how === "keyword" ? "key" : how === "meaning" ? "sem" : how ? "link" : "";
   };
-
-  // A note for Iso sent to be watched here opens again when Iso is done with it (even if that was before the
-  // map was up).
-  $effect(() => {
-    const r = run;
-    if (!r || r.request !== app.watching || r.state === "reading" || r.state === "writing") return;
-    app.watching = "";
-    if (r.state === "done") void goto(resolve("/draft/[id]", { id: r.note.slice("@draft/".length) }));
-  });
-  // A note for Iso being answered is framed with the map when it begins.
-  let framedFor = "";
-  $effect(() => {
-    if (!origin?.draft || !run || framedFor === run.request || !size.w) return;
-    framedFor = run.request;
-    if (!moved) view = whole();
-  });
-
-  // ------------------------------------------------------------ notes picked for a note for Iso
-
-  let draft = $state.raw<NoteSource | null>(null);
-  let notice = $state("");
-  $effect(() => {
-    draft = null; notice = "";
-    if (!pick) return;
-    let stale = false;
-    app.api.readNote(pick).then((d) => { if (!stale) draft = d; }, () => { if (!stale) notice = "that note for Iso is not here any more"; });
-    return () => { stale = true; };
-  });
-  const picked = $derived(draft ? linkedIn(draft.text).filter((id) => report?.notes[id] && !id.startsWith("@")) : []);
-  let writing: Promise<void> = Promise.resolve();
-  /** Link a note to the draft, or take away a link picked here. One at a time, each on the file as the last left it. */
-  function toggle(ref: string): void {
-    writing = writing.then(async () => {
-      if (!draft || ref.startsWith("@")) return;
-      // A request for an exercise is picked for what it tests; any other note for Iso, for what it links.
-      const change = (text: string): string | null => (linkedIn(text).includes(ref) ? withoutLink(text, ref) : withLink(text, ref, title(ref)));
-      const next = change(draft.text);
-      if (next === null) { notice = "linked in what you wrote: take it out there"; return; }
-      notice = "";
-      try { draft = await app.api.saveNote(pick, { base: draft.version, text: next }); }
-      catch {
-        // It changed under us (the draft's own page was still saving): once more, on what is there now.
-        try {
-          const now = await app.api.readNote(pick), again = change(now.text);
-          draft = again === null ? now : await app.api.saveNote(pick, { base: now.version, text: again });
-        } catch (e) { notice = `not linked: ${(e as Error).message}`; }
-      }
-    });
-  }
 
   // ------------------------------------------------------------ holding, to make a note or a folder (V6)
   //
@@ -546,7 +441,7 @@
   function holding(e: PointerEvent, at: { x: number; y: number }): void {
     unhold();
     if (offered && !(e.target instanceof Element && e.target.closest(".offer"))) offered = null;
-    if (pick || making || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock")) return;
+    if (making || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock")) return;
     const on = e.target.closest<HTMLElement>("[data-note]")?.dataset.note ?? "";
     if (on.startsWith("@")) return; // a note for Iso is not a place in the base
     if (on) {
@@ -567,6 +462,8 @@
   }
   /** A note held with a finger: what can be done with it, offered where it was held. */
   let offered = $state.raw<{ ref: string; x: number; y: number } | null>(null);
+  /** Why a note or folder could not be made here. */
+  let notice = $state("");
   /** A note given to Iso: into the tray, said on the map for a moment. */
   let given = $state("");
   let givenTimer: ReturnType<typeof setTimeout> | undefined;
@@ -578,15 +475,6 @@
   }
   /** Given to Iso if it isn't, else taken back. */
   function giveOrTake(ref: string, kind: "note" | "folder" = "note"): void {
-    // A note Iso read and holds is set aside; one set aside is held again.
-    const held = kind === "note" && !tray.has("note", ref) ? heldRows.get(ref) : undefined;
-    if (held) {
-      void converse.toggle(held);
-      given = `${title(ref)} is ${held.on ? "set aside" : "in Iso's hand again"}`;
-      clearTimeout(givenTimer);
-      givenTimer = setTimeout(() => (given = ""), 2200);
-      return;
-    }
     if (!tray.has(kind, ref)) { give(ref, kind); return; }
     const name = kind === "note" ? title(ref) : folderName(ref);
     tray.remove({ kind, id: ref, title: name });
@@ -667,7 +555,7 @@
   let press: Part | null = null;
   let carryAt = $state({ x: 0, y: 0 });
   function pressed(e: PointerEvent): Part | null {
-    if (pick || !(e.target instanceof Element)) return null;
+    if (!(e.target instanceof Element)) return null;
     const n = e.target.closest<HTMLElement>("[data-note]")?.dataset.note;
     if (n) return n.startsWith("@") ? null : { kind: "note", id: n, title: title(n) };
     // An open folder by its title; a closed one is a block, picked up anywhere on it.
@@ -756,7 +644,6 @@
     if (dragged) return;
     // A question Iso asked and not kept is kept, or not, in Iso's pane.
     if (ref.startsWith("?")) { panes.to("iso"); return; }
-    if (pick) { toggle(ref); return; }
     // Shift+click gives a note to Iso, or takes it back, with Iso's context shown or not (M14).
     if (e.shiftKey) { if (!ref.startsWith("@")) giveOrTake(ref); return; }
     // Chosen already: open it, beside the Atlas on a desktop (V1).
@@ -835,7 +722,7 @@
   /** What a note's block stands on: its folder's inside, which a kind's glyph in its top edge cuts the edge with. */
   const behind = (parent: number): string => (parent >= 0 && L!.items[parent]!.depth % 2 ? "var(--ground-1)" : "var(--ground-0)");
   $effect(() => {
-    app.atlas = { chosen: chosen ? title(chosen) : "", chosenId: chosen, steps: walk.length - 1, pick: !!pick, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out, fit: () => { moved = false; fly(whole()); } };
+    app.atlas = { chosen: chosen ? title(chosen) : "", chosenId: chosen, steps: walk.length - 1, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out, fit: () => { moved = false; fly(whole()); } };
     return () => { app.atlas = null; };
   });
 </script>
@@ -858,7 +745,7 @@
           <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} />
       {/each}
       </div>
-      <AtlasRoutes k={drawnK} {rest} pointed={!chosen && !!pointed} hot={[...(isoLens ? isoHot : []), ...hot, ...thereHot]} counts={litCount} sent={sentLines} {grown} {beat} {retracting} />
+      <AtlasRoutes k={drawnK} {rest} pointed={!chosen && !!pointed} hot={[...(isoLens ? isoHot : []), ...hot, ...thereHot]} counts={litCount} {grown} {beat} {retracting} />
       {#if labels && !beat}
         {#each rest as r (r.key)}
           {#if r.label}<span class="count {r.side}" style="--x:{r.mid[0]};--y:{r.mid[1]}">{r.count}</span>{/if}
@@ -868,7 +755,7 @@
       {#each notes as n (n.item.id)}
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} num={picked.indexOf(n.item.ref) + 1} iso={isoMark(n.item.ref)} linked={sent.includes(n.item.ref)} file={report.files?.[n.item.ref]?.kind ?? ""} prospect={n.item.ref.startsWith("?")} given={isoLens && givenNotes.has(n.item.ref)} held={isoLens && !givenNotes.has(n.item.ref) ? (heldRows.get(n.item.ref)?.on ? "on" : heldRows.has(n.item.ref) ? "aside" : "") : ""} changed={isoLens && changedByIso.has(n.item.ref)} pointed={isoLens ? (pointedTo.get(n.item.ref) ?? "") : ""} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={!!lit && !mark} href={noteHref(opens(n.item.ref))}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} iso={isoMark(n.item.ref)} file={report.files?.[n.item.ref]?.kind ?? ""} prospect={n.item.ref.startsWith("?")} given={isoLens && givenNotes.has(n.item.ref)} held={isoLens && !givenNotes.has(n.item.ref) && readNotes.has(n.item.ref) ? "on" : ""} changed={isoLens && changedByIso.has(n.item.ref)} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={!!lit && !mark} href={noteHref(opens(n.item.ref))}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; pointing.onAtlas = pointed; }} />
       {/each}
       {#each sats as s (s.key)}
@@ -886,15 +773,6 @@
         {/if}
       {/each}
       </div>
-      {#if origin}
-        <div class="asker" class:draft={origin.draft} style="--x:{origin.gx};--y:{origin.gy};--w:{origin.w};--h:{origin.h}">
-          {#if origin.draft}<a class="eph" href={resolve("/draft/[id]", { id: run!.note.slice("@draft/".length) })} aria-label="{origin.title}: your note for Iso"><span class="t">{origin.title}</span></a>{/if}
-          {#if running}
-            <svg class="loader" aria-hidden="true"><path d="M0 1H1000" /></svg>
-            <p class="doing" role="status"><i class="dia" aria-hidden="true"></i>{#if run!.state === "writing"}Iso is writing{:else if reading}Iso is reading <span class="c-gold">{title(reading)}</span>{:else}Iso is thinking{/if}</p>
-          {/if}
-        </div>
-      {/if}
       {#if grasp}
         <div class="grasp" class:folder={grasp.folder} style="--x:{grasp.gx};--y:{grasp.gy}">
           <svg viewBox="0 0 20 24" width="20" height="24" aria-hidden="true">{#if grasp.folder}<path d="M1.5 5.5h6l2 2.5h9v12.5h-17z" />{:else}<path d="M3.5 1.5h9l4.5 4.5v16.5h-13.5z M12.5 1.5v4.5h4.5" /><path class="ln" d="M6.5 11h7.5M6.5 14.5h7.5M6.5 18h5" />{/if}</svg>
@@ -909,15 +787,12 @@
           onclick={(e) => { e.stopPropagation(); bringIn(q.i); }}><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2 2l8 4-8 4z" /></svg></button>
       {/if}
     {/each}
-    {#if pick}
-      <AtlasDock title={draft ? titleIn(draft.text) : ""} picked={picked.map((id) => ({ id, title: title(id), tokens: report!.notes[id]?.tokens ?? 0 }))} budget={LINKED_BUDGET} {notice}
-        href={resolve("/draft/[id]", { id: pick.slice("@draft/".length) })} />
-    {:else if notice}
+    {#if notice}
       <p class="notice" role="alert">{notice}</p>
     {/if}
     {#if given}<p class="given" role="status">◆ {given}</p>{/if}
-    {#if panes.on.context && !pick && !given && panes.settings === "atlas"}
-      <p class="legend" aria-hidden="true"><span><i class="k g"></i>you gave it</span><span><i class="k h"></i>Iso read it</span><span><i class="k d"></i>Iso changed it</span><span><i class="k p"></i>Iso points to it</span><span><i class="k n">1</i>read, in order</span></p>
+    {#if panes.on.context && !given && panes.settings === "atlas"}
+      <p class="legend" aria-hidden="true"><span><i class="k g"></i>you gave it</span><span><i class="k h"></i>the agent read it</span><span><i class="k d"></i>the agent changed it</span><span><i class="k n">1</i>read, in order</span></p>
     {/if}
     {#if offered}
       {@const o = offered}
@@ -978,24 +853,11 @@
   .legend .g { background: var(--growth-soft); border: 1px solid var(--growth); }
   .legend .h { background: var(--lattice-soft); border: 1px solid var(--lattice); }
   .legend .d { width: 7px; height: 7px; background: var(--growth); transform: rotate(45deg); }
-  .legend .p { border: 1.5px dashed var(--growth); }
   .legend .n { width: 14px; height: 14px; background: var(--growth); color: var(--ground-0); font-size: 9px; font-weight: 700; }
   /* A note carried out of the Atlas towards Iso's pane. */
   .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font-size: 12px; white-space: nowrap; }
   .carried.over { border-color: var(--growth); }
   .notice { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--rose); color: var(--rose); font-size: 12px; z-index: 2; }
-  /* Iso's note while it is answered (Desktop-Think): the draft's block, dotted gold, and under it (or under the
-     note asking) a marching gold line and what Iso is doing. */
-  .asker { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(var(--w) * var(--u)); height: calc(var(--h) * var(--u)); pointer-events: none; z-index: 1; }
-  .eph { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 calc(11px * var(--k)); overflow: hidden; font-size: calc(12px * var(--k)); line-height: 1.25; color: var(--text); text-decoration: none; background: var(--growth-soft); border: 1.5px dotted var(--growth); pointer-events: auto; }
-  .eph .t { display: none; overflow: hidden; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; }
-  :global(.atlas-world.labels) .eph .t { display: -webkit-box; }
-  .loader { position: absolute; left: 0; top: calc(100% + 10px); width: 100%; height: 2px; overflow: hidden; }
-  .loader path { stroke: var(--growth); stroke-width: 2.5; stroke-dasharray: 2 3; animation: march .6s linear infinite; }
-  .doing { position: absolute; left: 0; top: calc(100% + 20px); width: max(100%, 240px); margin: 0; font-size: 12px; line-height: 18px; color: var(--text-soft); }
-  .doing .dia { margin: 0 8px 0 3px; }
-  .c-gold { color: var(--growth); }
-  @media (prefers-reduced-motion: reduce) { .loader path { animation: none; } }
   /* A pip at the edge (M17): towards the open note (the text's colour), or what is pointed at elsewhere. */
   .pip { position: absolute; z-index: 4; width: 22px; height: 22px; margin: -11px 0 0 -11px; display: grid; place-items: center; padding: 0; background: var(--ground-1); border: 1px solid var(--line-strong); color: var(--text); cursor: pointer; }
   .pip svg { transform: rotate(var(--a)); fill: currentColor; }

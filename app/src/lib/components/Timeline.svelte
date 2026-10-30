@@ -59,7 +59,7 @@
   .strata li + li { border-top: 1px solid var(--ground-1); }
   .layer { display: block; width: 100%; background: var(--lattice-soft); transition: filter var(--t-ack) var(--ease-out); }
   .layer.iso { background: var(--growth); }
-  .layer.agent { background: var(--text-faint); }
+  .layer.agent { background: var(--growth); } /* an agent's, as Iso's were (M25) */
   .layer.external { background: repeating-linear-gradient(135deg, var(--text-faint) 0 1px, transparent 1px 3px); }
   /* Iso's text offered and not kept, or removed: a layer that never set, its place kept. */
   .layer.iso.offered, .layer.iso.discarded { background: none; box-shadow: inset 0 0 0 1px var(--growth); }

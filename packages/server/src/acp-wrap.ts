@@ -16,7 +16,7 @@ import { PassThrough } from "node:stream";
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import { basename } from "node:path";
-import { ensureServer, MAIN, tokenOf } from "./term.ts";
+import { ensureServer, MAIN, tokenOf } from "./running.ts";
 import { TOKEN_HEADER } from "./http.ts";
 import { self } from "./self.ts";
 import { ACP_SESSION, type Command, type Rpc, type Way } from "./acp.ts";

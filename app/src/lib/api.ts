@@ -4,7 +4,7 @@
 
 import { pictureType } from "@isorite/core";
 import { baseHere } from "./here.ts";
-import type { Api, Decision, EngineEvent, Given, NoteSource, Session, SetupCheck, SetupDraft, SetupView, TerminalView } from "@isorite/engine";
+import type { Api, Decision, EngineEvent, Given, NoteSource, Session, TerminalView } from "@isorite/engine";
 
 /** A request the server refused. For a save that lost a race, `current` is the note as it is now (null: gone). */
 export class ApiError extends Error {
@@ -17,7 +17,7 @@ export class ApiError extends Error {
   }
 }
 
-/** The terminal's session (M11), through the isorite server: there only when `isorite term` runs beside it. */
+/** The pane's agent session (M11, on ACP since M25), through the isorite server; on the guide's site, the finder's. */
 export interface TerminalApi {
   view(): Promise<TerminalView>;
   prompt(asked: string, given: Given[]): Promise<void>;
@@ -47,19 +47,6 @@ export type AgentChoice = { id: string } | { command: string };
 export interface ChosenAgent { choice: AgentChoice | null; running: boolean; command: string; problem: string; said: string }
 export interface RegistryAgent { id: string; name: string; version: string; description: string; site: string; how: "npx" | "uvx" | "binary" | null }
 
-/** The provider's setup (M18), through the isorite server: there is none for the engine in the page (the guide's site). */
-export interface SetupApi {
-  view(): Promise<SetupView>;
-  /** Keep it, and take it into use. Only from this machine. */
-  keep(draft: SetupDraft): Promise<SetupView>;
-  /** Doctor's checks of the provider, on the draft (null: as kept). Nothing is written. */
-  check(draft: SetupDraft | null): Promise<SetupCheck[]>;
-  /** The models the provider lists. */
-  models(draft: SetupDraft | null): Promise<string[]>;
-  /** isorite doctor --report: one block, its secrets hidden. */
-  report(): Promise<string>;
-}
-
 /** The bases the server holds (M20), as the switcher lists them. */
 export interface BaseRow { name: string; path: string; lend: boolean; open: boolean }
 export interface BasesApi {
@@ -71,7 +58,7 @@ export interface BasesApi {
 /** Where the browser fetches a picture from (M22), so an `<img>` asks for it itself, cached and lazily. */
 export interface FileUrls { fileUrl(path: string, from?: "notes" | "code"): string }
 
-export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURIComponent(baseHere())}/api/` : "api/", document.baseURI).href): Api & FileUrls & { terminal: TerminalApi; setup: SetupApi; bases: BasesApi } {
+export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURIComponent(baseHere())}/api/` : "api/", document.baseURI).href): Api & FileUrls & { terminal: TerminalApi; bases: BasesApi } {
   let token: Promise<string> | null = null;
   const ask = async <T>(path: string, init?: RequestInit): Promise<T> => {
     let res: Response;
@@ -117,39 +104,17 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     map: () => ask("map"),
     timeline: () => ask("timeline"),
     search: (query) => ask(`search?q=${encodeURIComponent(query)}`),
-    ask: (request) => write("POST", "iso/ask", request),
-    converse: (request) => write("POST", "iso/converse", request),
-    undoTurn: (conversation, turn) => write("POST", "iso/undo", { conversation, turn }),
-    setContext: (conversation, part, on) => write("POST", "iso/context", { conversation, part, on }),
-    compact: (conversation, keep) => write("POST", "iso/compact", { conversation, ...(keep === undefined ? {} : { keep }) }),
-    branch: (conversation) => write("POST", "iso/branch", { conversation }),
     agents: () => ask("agents"),
     saveAgents: (text) => write("POST", "agents", { text }),
-    takeItem: (conversation, turn, item) => write("POST", "iso/take", { conversation, turn, item }),
-    // The server's own: it names the repository when a terminal attaches, and tells the terminal's agent.
+    // The server's own: it tells the agent of broken code links with its next prompt.
     nameRepository: async () => false,
     brokenNews: async () => [],
-    answer: async (turn, permission, decision) => { await write("POST", "iso/answer", { turn, permission, decision }); },
     conversations: () => ask("conversations"),
     conversation: async (id) => { const c = await ask<{ id: string; turns: [] }>("conversation" + (id ? q(id) : "")); return c.id ? c : null; },
-    turnContext: (request) => ask(`turn/context?turn=${encodeURIComponent(JSON.stringify(request))}`),
-    stop: async (request) => { await write("POST", "iso/stop", { request }); },
     keep: (id, proposal, region) => write("POST", "proposal/keep" + q(id), { proposal, ...(region === undefined ? {} : { region }) }),
     revise: async (id, proposal, text) => { await write("POST", "proposal/revise" + q(id), { proposal, text }); },
     discard: async (id, proposal, region) => { await write("POST", "proposal/discard" + q(id), { proposal, ...(region === undefined ? {} : { region }) }); },
-    drafts: () => ask("drafts"),
-    createDraft: () => write("POST", "drafts", {}),
-    keepDraft: (draft, proposal, folder) => write("POST", "draft/keep" + q(draft), { proposal, folder }),
-    discardDraft: async (draft) => { await write("POST", "draft/discard" + q(draft), {}); },
     setDone: (id, done, base) => write("POST", "note/done" + q(id), { done, base }),
-    context: (note, choice) => ask("context" + (note ? q(note) : "") + (choice ? `${note ? "&" : "?"}choice=${encodeURIComponent(JSON.stringify(choice))}` : "")),
-    clearConversation: async () => { await write("POST", "context/clear", {}); },
-    settings: () => ask("settings"),
-    setKey: (key) => write("PUT", "settings/key", { key }),
-    spend: () => ask("spend"),
-    setSpendCap: (usd) => write("PUT", "settings/spend-cap", { usd }),
-    connect: (callback) => write("POST", "settings/connect", { callback }),
-    connected: (code, state) => write("POST", "settings/connected", { code, state }),
     agentTools: () => ask("agent/tools"),
     agentLook: (look) => write("POST", "agent/look", look),
     agentWrite: (proposal) => write("POST", "agent/write", proposal),
@@ -162,13 +127,6 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     keepAgentRecord: async () => { throw new Error("only the server keeps an agent's session"); },
     agentRecords: () => ask("agent/records"),
     agentRecord: (agent, session) => ask(`agent/record?agent=${encodeURIComponent(agent)}&session=${encodeURIComponent(session)}`),
-    setup: {
-      view: () => ask<SetupView>("settings/provider"),
-      keep: (draft) => write("PUT", "settings/provider", draft),
-      check: (draft) => write("POST", "settings/provider/check", { draft }),
-      models: async (draft) => (await write<{ models: string[] }>("POST", "settings/provider/models", { draft })).models,
-      report: async () => (await write<{ text: string }>("POST", "settings/report", {})).text,
-    },
     bases: {
       list: () => ask("bases"),
       lend: async (name, lend) => (await write<{ bases: BaseRow[] }>("POST", "bases/lend", { name, lend })).bases,
@@ -192,7 +150,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     events(listener) {
       const source = new EventSource(root + "events");
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
-      const types = ["note-changed", "journal", "record", "iso-start", "iso-step", "iso-text", "iso-item", "iso-answer", "iso-taken", "iso-done", "iso-stopped", "iso-failed", "iso-retry", "context", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "agent-item", "agent-taken", "terminal"] satisfies EngineEvent["type"][];
+      const types = ["note-changed", "journal", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "agent-item", "agent-taken", "terminal"] satisfies EngineEvent["type"][];
       for (const type of types) source.addEventListener(type, on);
       return () => source.close();
     },

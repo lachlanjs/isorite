@@ -2,11 +2,11 @@
   // The agents' sessions (M25), in the drawer where Iso's conversations were (M24, K): each with its crystal, when it
   // was last added to, what was first asked, its agent, and how many turns and notes isorite saw. Live ones first,
   // growing while they work; then those the agents keep and those kept here. One chosen is shown: a live one followed,
-  // another carried on by its agent if it is attached, else read as it was kept.
+  // another carried on by its agent if it is attached, else read as it was kept. Under them, Iso's own conversations
+  // from before M25, to read.
   import type { AgentSession } from "@isorite/engine";
   import type { ChosenAgent, TerminalApi } from "$lib/api.ts";
   import { app } from "$lib/app.svelte.ts";
-  import { converse } from "$lib/converse.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
   import Crystal from "./Crystal.svelte";
 
@@ -22,7 +22,7 @@
   }
   const many = (n: number, one: string): string => `${n} ${one}${n === 1 ? "" : "s"}`;
   const sessions = $derived(terminal.view?.sessions ?? []);
-  const shown = (s: AgentSession): boolean => s.session === terminal.view?.session && s.agent === terminal.view?.agentId;
+  const shown = (s: AgentSession): boolean => !terminal.old && s.session === terminal.view?.session && s.agent === terminal.view?.agentId;
   /** What it is, in a word: at work, live, the agent's own (not seen here), or kept here. */
   const stateOf = (s: AgentSession): string => (s.busy ? "at work" : s.live ? "live" : s.kept ? (s.open ? "kept" : "kept · to read") : "the agent's own");
   /** The agent started for the pane (chosen in the base's settings), to stop from here. */
@@ -32,12 +32,12 @@
   async function detach(): Promise<void> { try { chosen = (await api?.choose(null)) ?? null; } catch (e) { terminal.problem = (e as Error).message; } }
   async function choose(s: AgentSession): Promise<void> {
     await terminal.follow(s.agent, s.session);
-    if (!terminal.problem) converse.view = "chat";
+    if (!terminal.problem) terminal.shown = "session";
   }
 </script>
 
 <div class="drawer" role="list" aria-label="The agents' sessions">
-  {#if !sessions.length}<p class="faint none">No sessions yet.</p>{/if}
+  {#if !sessions.length}<p class="faint none">No sessions yet{terminal.acp ? "" : ": attach an agent, and its sessions are kept here"}.</p>{/if}
   {#each sessions as s (`${s.agent}/${s.session}`)}
     <div role="listitem">
       <button type="button" class="spec frame" class:on={shown(s)} class:live={s.live} data-lustre aria-current={shown(s) ? "true" : undefined} disabled={!s.open && !s.kept} title={!s.open && !s.kept ? `${s.name} isn't attached to carry it on` : undefined} onclick={() => void choose(s)}>
@@ -48,6 +48,19 @@
       </button>
     </div>
   {/each}
+  {#if terminal.past.length}
+    <h2 class="label none">earlier, with Iso</h2>
+    {#each terminal.past as c (c.id)}
+      <div role="listitem">
+        <button type="button" class="spec frame" class:on={terminal.old?.session === c.id} data-lustre aria-current={terminal.old?.session === c.id ? "true" : undefined} onclick={() => void terminal.read(c.id)}>
+          <Crystal id={c.id} size={44} />
+          <span class="m">Iso · to read{when(c.last) ? ` · ${when(c.last)}` : ""}</span>
+          <span class="q">{c.asked}</span>
+          <span class="m">{many(c.notes, "note")} · {many(c.turns, "turn")}</span>
+        </button>
+      </div>
+    {/each}
+  {/if}
   {#if chosen?.running}<p class="faint none">Started for this pane: <code>{chosen.choice && "id" in chosen.choice ? chosen.choice.id : chosen.command}</code> · <button type="button" class="more" onclick={() => void detach()}>stop it</button></p>{/if}
   {#if terminal.problem}<p class="bad none" role="alert">{terminal.problem}</p>{/if}
 </div>
@@ -55,6 +68,7 @@
 <style>
   .drawer { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); align-content: start; gap: 11px; }
   .none { grid-column: 1 / -1; font-size: 12px; }
+  h2.none { margin: 8px 0 0; font-weight: 400; }
   .bad { color: var(--rose); }
   code { font: 11.5px var(--font-mono); overflow-wrap: anywhere; }
   .more { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }

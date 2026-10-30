@@ -11,6 +11,8 @@ Each section is labelled:
 
 `docs/format.md` says exactly what is on disk. `docs/decisions.md` says what was decided and by whom.
 
+**Since M25** (`docs/plan-m25.md`) isorite calls no model: Iso's loop, the provider and its gateway, `isorite term` and `packages/opencode` were retired, and the agent the person already uses is attached instead, over MCP (the agent reaches isorite, `mcp-http.ts`) and ACP (isorite reaches the agent, `acp-wrap.ts` and `acp.ts`). What follows about Iso's loop, its provider, OpenCode's plugin and the `Http` and `Secrets` ports is the design as it was, kept for its record; the notes, the journal, the Atlas, search by meaning and the core stand as described.
+
 ## 1. The shape
 
 ```

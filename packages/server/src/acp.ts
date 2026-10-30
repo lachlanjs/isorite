@@ -10,10 +10,33 @@
 
 import { existsSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import { givenKey, notesOfTurns, type AgentRecord, type AgentSession, type Api, type EngineEvent, type Given, type TerminalItem, type TerminalPermission, type TerminalTurn, type TerminalView } from "@isorite/engine";
+import { notesOfTurns, type AgentRecord, type AgentSession, type Api, type EngineEvent, type Given, type TerminalItem, type TerminalPermission, type TerminalTurn, type TerminalView } from "@isorite/engine";
 import { OWN_DIR } from "@isorite/core";
-import type { Terminal } from "./terminal.ts";
 import { INSTRUCTIONS, agentName } from "./mcp-http.ts";
+
+/** Long enough for the wrapper's next batch of what passed to have come (it sends one every 30 ms). */
+const AFTER_TAP = 200;
+
+/** What a part given from the pane is known by, so it is given a session once: `g:<kind>:<id>`, a passage by a
+ *  short hash of its text. */
+export function givenKey(g: Given): string {
+  if (g.kind !== "passage") return `g:${g.kind}:${g.id}`;
+  let h = 5381;
+  for (let i = 0; i < g.text.length; i++) h = ((h * 33) ^ g.text.charCodeAt(i)) >>> 0;
+  return `g:passage:${g.id}:${h.toString(36)}`;
+}
+
+/** What was given from the pane, as the agent is told it: notes and folders by name, for the agent to read with
+ *  isorite's tools, and passages as they are. */
+export function given(asked: string, parts: Given[], title: (id: string) => string): string {
+  const notes = parts.filter((p) => p.kind === "note").map((p) => `- ${title(p.id)} (${p.id})`);
+  const folders = parts.filter((p) => p.kind === "folder").map((p) => `- the folder ${p.id}`);
+  const passages = parts.flatMap((p) => (p.kind === "passage" ? [`From ${title(p.id)} (${p.id}):\n${p.text.split("\n").map((l) => "> " + l).join("\n")}`] : []));
+  const out = [asked.trim()];
+  if (notes.length || folders.length) out.push(`From my knowledge base (read them with read_note, or outline_note first):\n${[...notes, ...folders].join("\n")}`);
+  if (passages.length) out.push(passages.join("\n\n"));
+  return out.join("\n\n");
+}
 
 /** Which way a message went: from the front end to the agent, from the agent, or from isorite to the agent. */
 export type Way = "in" | "out" | "ours";
@@ -36,7 +59,7 @@ const NOTE_TOOLS = /(^|[_:./-])(read_note|outline_note|edit_note|write_note)$/;
 const CHANGES = new Set(["edit", "delete", "move"]);
 /** ACP's kinds of tool, as the pane's switches name what is asked. */
 const ACTIONS: Record<string, string> = { execute: "shell", edit: "edit", delete: "edit", move: "edit", read: "read", fetch: "webfetch" };
-const EMPTY: TerminalView = { connected: false, via: "acp", agent: "", session: null, title: "", busy: false, turns: [], asking: [], cost: 0, tokens: { input: 0, output: 0 }, model: "", sessions: [] };
+const EMPTY: TerminalView = { connected: false, agent: "", session: null, title: "", busy: false, turns: [], asking: [], cost: 0, tokens: { input: 0, output: 0 }, model: "", sessions: [] };
 
 type Asking = TerminalPermission & { options: { optionId: string; kind: string }[] };
 type Block = { type?: string; text?: string; name?: string; uri?: string };
@@ -126,12 +149,16 @@ export class AcpFollower {
     // What isorite's MCP puts in each session: its instructions and its tools, as their text, about four characters a token.
     void api?.agentTools?.().then((tools) => { this.#ours = Math.ceil((INSTRUCTIONS.length + JSON.stringify(tools).length) / 4); this.#tell(); }, () => undefined);
     // What the agent asks back or offers through isorite's MCP stands in its turn, until kept: the turn running
-    // for that agent, else the one shown.
+    // for that agent, else the one shown. The call reaches the server directly, and can come before the wrapper has
+    // told it of the prompt that led to it (it tells in batches, AFTER_TAP apart): it is placed once that has come.
     api?.events((e: EngineEvent) => {
-      if (e.type === "agent-item") {
+      if (e.type === "agent-item") setTimeout(() => {
         const live = [...this.#lives.values()].find((l) => l.link.agent === e.agent && l.busy) ?? this.#shownLive();
-        if (live && live.link.agent === e.agent && this.#edit(live, (items) => [...items, e.item])) this.#tell();
-      }
+        if (!live || live.link.agent !== e.agent || !this.#edit(live, (items) => [...items, e.item])) return;
+        // A turn already over was kept as it ended: kept again, with it.
+        if (live.turns.at(-1)?.state !== "running") this.#keep(live);
+        this.#tell();
+      }, AFTER_TAP);
       if (e.type === "agent-taken") {
         const mark = (t: TerminalTurn): TerminalTurn => ({ ...t, items: t.items.map((i) => (i.kind === "question" && i.id === e.id ? { ...i, made: e.note } : i.kind === "offer" && i.id === e.id ? { ...i, taken: true } : i)) });
         for (const l of this.#lives.values()) if (l.turns.some((t) => t.items.some((i) => (i.kind === "question" || i.kind === "offer") && i.id === e.id))) { l.turns = l.turns.map(mark); this.#keep(l); }
@@ -150,7 +177,7 @@ export class AcpFollower {
     const problem = this.#problem ? { problem: this.#problem } : {};
     if (live) {
       this.#view = {
-        connected, via: "acp", agent: live.link.name, agentId: live.link.agent, session: live.session, title: live.title, busy: live.busy, turns: live.turns,
+        connected, agent: live.link.name, agentId: live.link.agent, session: live.session, title: live.title, busy: live.busy, turns: live.turns,
         asking: [...live.asking.values()].map(({ options: _, ...p }) => p), cost: live.cost, tokens: { input: live.used, output: 0 }, model: "", size: live.size, ours: this.#ours, sessions: this.#sessions(), ...problem,
       };
     } else if (read) {
@@ -554,24 +581,4 @@ export class AcpFollower {
     live.seen.add(note);
     void api.agentLook({ agent, session: ACP_SESSION, tool: "read_note", args: { id: note } }).catch(() => undefined);
   }
-}
-
-/** The pane's one session: an ACP agent's while a wrapper is attached, else the terminal's (M11). */
-export class Following {
-  readonly terminal: Terminal;
-  readonly acp: AcpFollower;
-  constructor(terminal: Terminal, acp: AcpFollower) { this.terminal = terminal; this.acp = acp; }
-  /** Which is shown: an ACP agent's session while one is attached or a kept one is read, else the terminal's. */
-  following(): AcpFollower | Terminal { const v = this.acp.view(); return v.connected || v.reading ? this.acp : this.terminal; }
-  #which() { return this.following(); }
-  view(): TerminalView { return this.#which().view(); }
-  listen(fn: (view: TerminalView) => void): () => void {
-    const a = this.acp.listen(() => fn(this.view())), b = this.terminal.listen(() => fn(this.view()));
-    return () => { a(); b(); };
-  }
-  attach(...args: Parameters<Terminal["attach"]>) { return this.terminal.attach(...args); }
-  detach(): void { this.terminal.detach(); }
-  prompt(text: string) { return this.#which().prompt(text); }
-  interrupt() { return this.#which().interrupt(); }
-  reply(id: string, decision: "once" | "always" | "reject") { return this.#which().reply(id, decision); }
 }

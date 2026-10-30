@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 import { SITE_PORT } from "./tests/static.ts";
 
-// The guide's site (M16), as GitHub Pages serves it: the app with its engine in the page and the finder as Iso. On a
+// The guide's site (M16), as GitHub Pages serves it: the app with its engine in the page and the finder as its agent. On a
 // desktop and a phone, one ground each.
 export default defineConfig({
   testDir: "tests",

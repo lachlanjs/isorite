@@ -19,28 +19,28 @@ test("every source note reads, and comes out as written, bar the date you marked
   }
 });
 
-test("Iso made two questions, and left them open; the others are yours", () => {
+test("the agent asked two questions back, which you kept, and left open; the others are yours too", () => {
   const made = Object.keys(built.notes).filter((p) => !(p in sources));
   expect(made).toHaveLength(2);
   const titles = made.map((p) => splitFrontmatter(built.notes[p]!)[0]?.title).sort();
   expect(titles).toEqual([ISO_QUESTIONS.disc.title, ISO_QUESTIONS.triangulation.title].sort());
   for (const p of made) {
     expect(splitFrontmatter(built.notes[p]!)[0]).toMatchObject({ type: "Question" });
-    expect(readJournal(built.own[`journal/${p.replace(/\.md$/, "")}.jsonl`]!)[0]!).toMatchObject({ who: expect.stringContaining("iso") });
+    expect(readJournal(built.own[`journal/${p.replace(/\.md$/, "")}.jsonl`]!)[0]!).toMatchObject({ who: "you" });
   }
 });
 
-test("Gauss–Bonnet's proof sketch is Iso's, untouched, and the examples are yours; the question inside it is embedded and open", () => {
+test("Gauss–Bonnet's proof sketch is the agent's, untouched, and the examples are yours; the question inside it is embedded and open", () => {
   const head = replay(readJournal(built.own[`journal/${BONNET}.jsonl`]!))!;
   const who = authors(readJournal(built.own[`journal/${BONNET}.jsonl`]!))!, lines = head.text.split("\n");
   const sketch = lines.findIndex((l) => l === "## Proof sketch"), hypotheses = lines.findIndex((l) => l === "## Why each hypothesis");
-  for (const [k, l] of lines.entries()) if (l.trim() && k > 4) expect(who[k]!.startsWith("iso"), l.slice(0, 40)).toBe(k >= sketch && k < hypotheses);
+  for (const [k, l] of lines.entries()) if (l.trim() && k > 4) expect(who[k] === "agent:claude", l.slice(0, 40)).toBe(k >= sketch && k < hypotheses);
   expect(head.text).toContain("[[!where-is-compactness-used]]");
   expect(built.notes[`${COMPACT}.md`]).not.toMatch(/^resolved:/m);
 });
 
-test("Iso has said where you stand on Gauss–Bonnet, and has not marked the triangle", () => {
-  expect(Object.entries(built.own).some(([p, text]) => p.startsWith("conversations/") && text.includes("You can state it and use it"))).toBe(true);
+test("the agent has said where you stand on Gauss–Bonnet, in a session kept with the base, and has not marked the triangle", () => {
+  expect(built.own["conversations/agents/claude/where-i-stand.json"]).toContain("You can state it and use it");
   expect(Object.keys(built.own).some((p) => p.includes("understanding"))).toBe(false);
   expect(READING).toContain(TRIANGLE);
   expect(built.notes[`${TRIANGLE}.md`]).not.toMatch(/^solved:/m);

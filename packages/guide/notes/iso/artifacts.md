@@ -10,6 +10,6 @@ Shown in a note, with the picture's syntax, it works in place:
 
 ![The guide in numbers](/iso/artifacts/the-guide.html)
 
-Ask [Iso](/iso/iso.md "uses") for one, with [Edit the notes](/iso/let-iso-write.md "see also") on: "a dashboard of runs.csv", "a simulation of this note's model". Iso builds it on isorite's kit, which gives it its look, so it reads as the rest of isorite does, and the plain look is a press away. It reaches nothing outside itself: no network, only the data files it names. And "standalone" saves it as one file, with its data inside, that opens anywhere.
+Ask your agent in [Iso](/iso/iso.md "uses")'s pane for one: "a dashboard of runs.csv", "a simulation of this note's model". It builds it with isorite's tools, on isorite's kit, which gives it its look, so it reads as the rest of isorite does, and the plain look is a press away. It reaches nothing outside itself: no network, only the data files it names. And "standalone" saves it as one file, with its data inside, that opens anywhere.
 
-Iso's artifacts are marked and undone as its notes are: [every change is kept](/notes/every-change-is-kept.md "see also").
+Its artifacts are checked and run before they are written, and [marked](/iso/iso-writes-marked.md "see also") and put back as its notes are: [every change is kept](/notes/every-change-is-kept.md "see also").

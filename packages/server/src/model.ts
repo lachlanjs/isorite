@@ -13,7 +13,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFile
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { unreachable } from "@isorite/engine";
+import { unreachable } from "./network.ts";
 
 export const NAME = "granite-embedding-small-english-r2";
 /** What the search index calls granite's vectors: a base's vectors are made again when the model changes. */

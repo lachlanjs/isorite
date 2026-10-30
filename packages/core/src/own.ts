@@ -19,7 +19,7 @@ export const GITATTRIBUTES = "*.jsonl merge=union\n";
 export const SETTINGS_FILE = "settings.toml";
 
 /** The base's settings. `repository`: the folder code links resolve against, relative to the notes folder (or
- *  absolute); `isorite term` writes it the first time it is run beside the base. */
+ *  absolute); written by hand (until M25, `isorite term` wrote it the first time it was run beside the base). */
 export interface Settings { repository?: string }
 
 export function parseSettings(text: string | null): Settings {

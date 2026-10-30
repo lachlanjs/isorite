@@ -10,7 +10,9 @@ isorite attaches to the agent you already use. It reads your notes and cites the
 - **From an ACP front end** (Toad in the terminal, Zed, JetBrains): give it `isorite acp --agent "<the agent's command>"` as its agent. The conversation is live in the front end and in the pane at once, asked from either.
 - **In the agent's own terminal**: give it isorite's MCP in the project's config; the pane offers the lines and writes them when you say so. Only what it does through isorite's tools is seen.
 
-Notes in the tray go before the next prompt, from either place. Sessions isorite carried are kept with the base, and listed in the pane's drawer with the agent's own.
+Notes in the tray go before the next prompt, from either place. Sessions isorite carried are kept with the base, and listed in the pane's drawer with the agent's own, and with Iso's conversations from before isorite attached your agent, to read. It is given the base's [AGENTS.md](/iso/agents-md.md "uses"), and with [a memory](/terminal/memory.md "see also") lent to it, it remembers across projects.
+
+What it may do in the project around the base, edit its files and run commands, is set by the [switches](/atlas/the-switches.md "see also") in Iso's pane: what it asks to do that is switched off is refused.
 
 ## How each differs
 

@@ -5,8 +5,8 @@
 //   isorite serve <notes>                  open it in the browser
 //   isorite migrate <study base>           move a study base (format 1) into its notes' .isorite/
 //   isorite example <folder>               write the example base, partway built, into a folder
-//   isorite term [<notes>]                 OpenCode, with isorite's plugin, beside a knowledge base
-//   isorite mcp [<notes>]                    the knowledge base's tools over MCP, on stdio, for another harness
+//   isorite mcp [<notes>]                  the knowledge base's tools over MCP, on stdio, for your agent
+//   isorite acp --agent "<command>"        your ACP agent, behind your ACP front end or the Iso pane
 //   isorite guide [<folder>]               the guide: a knowledge base about isorite, to read in isorite
 //   isorite doctor [<notes>] [--report]    whether isorite can work here, a step at a time
 
@@ -23,7 +23,6 @@ import { newBase, serve } from "./serve.ts";
 import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
 import { acp } from "./acp-wrap.ts";
-import { installOpenCode, term } from "./term.ts";
 import { guide } from "./guide.ts";
 import { writeExample, writeGeometry } from "@isorite/example/node";
 import { modelCommand } from "./model.ts";
@@ -43,12 +42,9 @@ const USAGE = `isorite: an agentic harness for understanding
   isorite example <folder> [--geometry]  write the example base (notes on an N-body simulation, three weeks
                                          into being built), into an empty folder; --geometry: notes on the
                                          differential geometry of surfaces, with their questions and problems
-  isorite term [<notes>] [--port <n>]
-                                         OpenCode 2 here, with the knowledge base beside it: its server is
-                                         started if none is running on the port
   isorite mcp [<notes>] [--port <n>] [--agent <name>]
-                                         the knowledge base's tools over MCP, on stdio, for Claude Code or Pi:
-                                         claude mcp add isorite -- isorite mcp <base> --agent claude-code
+                                         the knowledge base's tools over MCP, on stdio, for your agent in its
+                                         own terminal: claude mcp add isorite -- isorite mcp <base>
   isorite acp --agent "<command>" [<notes>] [--port <n>] [--pane]
                                          an ACP agent (claude-agent-acp, codex-acp, opencode acp, hermes acp)
                                          behind your ACP front end (Toad, Zed), with the base's MCP, and its
@@ -58,23 +54,20 @@ const USAGE = `isorite: an agentic harness for understanding
                                          fetched (53 MB, once) from ISORITE_MODEL_BASE_URL, npm, GitHub or
                                          Hugging Face, or --url alone; or from the .tgz fetched by hand, or a
                                          folder: its files copied there, or any compatible model
-  isorite opencode                       OpenCode 2 for isorite term, installed in isorite's own folder
-                                         (~/.config/isorite/opencode-cli), the global one left as it is
   isorite doctor [<notes>] [--report] [--offline]
                                          whether isorite can work here: the configuration, the network, the
-                                         provider (asked a few words, a few hundred tokens), the terminal and
-                                         the notes; --report gives it as one block, secrets hidden, to paste
-                                         to someone (or an AI) helping
+                                         model for search by meaning, the server, the notes and the project's
+                                         MCP config; --report gives it as one block, to paste to someone (or
+                                         an AI) helping
   isorite memory [<folder>]              the agent's memory: a knowledge base (~/isorite-memory unless named),
-                                         a git repository of its own, lent to every session's agent and Iso
+                                         a git repository of its own, lent to every agent's session
   isorite bases [lend|keep <name>]       the bases this device knows, each listed as it is opened; lend one to
                                          every session, or keep it to itself
   isorite help setup                     how isorite is set up, every setting and failure: written for an AI
                                          helping you set it up (docs/setup.md is for people)
   isorite guide [<folder>] [--port <n>]  the guide: a knowledge base about isorite, with things to do in it,
                                          written into a folder (~/isorite-guide unless named) and opened in
-                                         the browser; run again, as you left it. Iso is your model, or with
-                                         none set up, the guide's finder (also: isorite --tutorial)
+                                         the browser; run again, as you left it (also: isorite --tutorial)
 `;
 
 export function check(notes: string, out: (line: string) => void = console.log, unused = false): number {
@@ -113,8 +106,8 @@ export function main(argv: string[]): number | Promise<number> {
     if (command === "check" && rest.find((r) => !r.startsWith("--"))) return check(rest.find((r) => !r.startsWith("--"))!, console.log, rest.includes("--unused"));
     if (command === "new" && rest[0]) {
       const made = newBase(rest[0]);
-      // The commands that come next, with the whole path: term is run from the code's folder.
-      console.log(`${made}: a knowledge base, empty. Open it in the browser, or beside your code in the terminal:\n  isorite serve ${made}\n  cd <your code> && isorite term ${made}`);
+      // The commands that come next, with the whole path.
+      console.log(`${made}: a knowledge base, empty. Open it in the browser, and attach your agent from Iso's pane:\n  isorite serve ${made}`);
       return 0;
     }
     if (command === "serve" && rest[0]) {
@@ -135,16 +128,16 @@ export function main(argv: string[]): number | Promise<number> {
       const folder = args.find((a, i, all) => !a.startsWith("--") && all[i - 1] !== "--port");
       return guide(folder, port === undefined ? {} : { port }).then(() => new Promise<number>(() => undefined), (e: Error) => { console.error(e.message); return 2; });
     }
-    if (command === "term" && rest.includes("--tutorial")) { console.error("The terminal's tour is retired: isorite guide opens the guide, whose note on isorite term says how to try it."); return 2; }
-    if (command === "term" || command === "mcp") {
+    // OpenCode behind isorite (M11) is retired (M25): it is an ACP agent as any other.
+    if (command === "term" || command === "opencode") { console.error('isorite term and isorite opencode are retired: attach OpenCode as any agent, from Iso\'s pane or with isorite acp --agent "opencode acp", or give it isorite\'s MCP (isorite doctor offers the project\'s config)'); return 2; }
+    if (command === "mcp") {
       const flag = (name: string) => { const at = rest.indexOf(name); return at < 0 ? undefined : rest[at + 1]; };
       const port = flag("--port") === undefined ? undefined : Number(flag("--port")), agent = flag("--agent");
       const session = flag("--session");
       if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
       if (agent !== undefined && !/^[a-z0-9][a-z0-9-]{0,39}$/.test(agent)) { console.error("--agent takes a name in small letters, digits and dashes"); return 2; }
       const path = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port" && rest[i - 1] !== "--agent" && rest[i - 1] !== "--session");
-      const run = command === "term" ? term(path, port === undefined ? {} : { port }) : mcp(path, { ...(port === undefined ? {} : { port }), ...(agent ? { agent } : {}), ...(session && /^[\w-]{1,200}$/.test(session) ? { session } : {}) });
-      return run.catch((e: Error) => { console.error(e.message); return 2; });
+      return mcp(path, { ...(port === undefined ? {} : { port }), ...(agent ? { agent } : {}), ...(session && /^[\w-]{1,200}$/.test(session) ? { session } : {}) }).catch((e: Error) => { console.error(e.message); return 2; });
     }
     if (command === "acp") {
       const flag = (name: string) => { const at = rest.indexOf(name); return at < 0 ? undefined : rest[at + 1]; };
@@ -163,7 +156,6 @@ export function main(argv: string[]): number | Promise<number> {
       if (rest.includes("--url") && !/^https?:\/\//.test(url ?? "")) { console.error("--url takes the address of the model's .tgz"); return 2; }
       return modelCommand(rest.includes("--from") ? from : undefined, console.log, process.env, {}, rest.includes("--url") ? url : undefined);
     }
-    if (command === "opencode") return installOpenCode();
     if (command === "memory") return memory(rest.find((a) => !a.startsWith("--")));
     if (command === "bases") return bases(rest);
     if (command === "--version" || command === "-v") { console.log(VERSION); return 0; }
@@ -214,7 +206,7 @@ export function main(argv: string[]): number | Promise<number> {
 /** The commands that start something, which say so at once (M21): a subprocess that stalls after this is then
  *  seen to stall. To stderr, as `mcp` speaks on stdout; once, not again when the command runs itself again with
  *  the proxy on (ISORITE_STARTING). */
-const STARTS = new Set(["serve", "term", "mcp", "acp", "guide", "tutorial", "--tutorial"]);
+const STARTS = new Set(["serve", "mcp", "acp", "guide", "tutorial", "--tutorial"]);
 export function starting(argv: string[], env: NodeJS.ProcessEnv = process.env, write = (s: string) => process.stderr.write(s)): boolean {
   if (!STARTS.has(argv[0] ?? "") || env.ISORITE_STARTING) return false;
   write("isorite: starting…\n");

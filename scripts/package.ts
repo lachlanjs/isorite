@@ -4,9 +4,8 @@
 // Node runs TypeScript only outside node_modules, so the command is bundled to JavaScript: the server's main and
 // its embedding worker, each one file, every @isorite/* package inlined and the npm dependencies left as
 // dependencies. Beside them go what they read at run time, where they look for it: the built app (web/), the
-// example base's notes (notes/), the OpenCode plugin (plugin/, run by OpenCode's Bun as TypeScript, its
-// @isorite/core turned into dist/core.js), the guide (guide/), and onnxruntime's one
-// WebAssembly file, in place of the whole of onnxruntime-web (139 MB).
+// example base's notes (notes/), the guide (guide/), and onnxruntime's one WebAssembly file, in place of the whole
+// of onnxruntime-web (139 MB).
 
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -37,7 +36,7 @@ const external = (id: string) => {
   if (!id.startsWith("node:")) used.add(id.startsWith("@") ? id.split("/").slice(0, 2).join("/") : id.split("/")[0]!);
   return true;
 };
-for (const [entry, name] of [["packages/server/src/main.ts", "main"], ["packages/server/src/embed-worker.ts", "embed-worker"], ["packages/core/src/index.ts", "core"]] as const) {
+for (const [entry, name] of [["packages/server/src/main.ts", "main"], ["packages/server/src/embed-worker.ts", "embed-worker"]] as const) {
   await build({
     input: at(entry),
     platform: "node",
@@ -54,22 +53,14 @@ cpSync(at("packages/example/notes"), join(OUT, "notes"), { recursive: true });
 cpSync(at("packages/guide/notes"), join(OUT, "guide"), { recursive: true, filter: (p) => !p.includes(".isorite") && !p.endsWith(".gitignore") });
 const ort = dirname(createRequire(at("packages/server/package.json")).resolve("onnxruntime-web"));
 cpSync(join(ort, "ort-wasm-simd-threaded.wasm"), join(OUT, "dist", "ort-wasm-simd-threaded.wasm"));
-cpSync(at("packages/opencode/plugin"), join(OUT, "plugin"), { recursive: true });
-for (const file of readdirSync(join(OUT, "plugin"))) {
-  if (!/\.tsx?$/.test(file)) continue;
-  const path = join(OUT, "plugin", file), text = readFileSync(path, "utf8");
-  writeFileSync(path, text.replaceAll(`from "@isorite/core"`, `from "../dist/core.js"`));
-}
 
-// The dependencies the bundles import, at the versions this repository asks for; and the plugin's, which its
-// host may provide but which it finds here as it does in a checkout.
+// The dependencies the bundles import, at the versions this repository asks for.
 const ranges: Record<string, string> = {};
-for (const pkg of ["packages/server", "packages/core", "packages/engine", "packages/example", "packages/guide", "packages/opencode"]) {
+for (const pkg of ["packages/server", "packages/core", "packages/engine", "packages/example", "packages/guide"]) {
   const p = json(at(pkg, "package.json"));
   Object.assign(ranges, p.devDependencies ?? {}, p.dependencies ?? {});
 }
-const PLUGIN = ["@opentui/core", "@opentui/solid", "solid-js"];
-const dependencies = Object.fromEntries([...used, ...PLUGIN].filter((d) => !d.startsWith("@isorite/")).sort().map((d) => {
+const dependencies = Object.fromEntries([...used].filter((d) => !d.startsWith("@isorite/")).sort().map((d) => {
   if (!ranges[d]) throw new Error(`${d} is imported but no package.json here asks for it`);
   return [d, ranges[d]!];
 }));
@@ -84,8 +75,8 @@ writeFileSync(join(OUT, "package.json"), JSON.stringify({
   engines: { node: ">=24" },
   repository: { type: "git", url: "git+https://github.com/lachlanjs/isorite.git" },
   homepage: "https://lachlanjs.github.io/isorite/",
-  keywords: ["notes", "knowledge-base", "markdown", "study", "agent", "opencode"],
-  files: ["dist", "web", "notes", "plugin", "docs", "README.md", "LICENSE"],
+  keywords: ["notes", "knowledge-base", "markdown", "study", "agent", "mcp", "acp"],
+  files: ["dist", "web", "notes", "guide", "docs", "README.md", "LICENSE"],
   dependencies,
 }, null, 2) + "\n");
 cpSync(at("LICENSE"), join(OUT, "LICENSE"));

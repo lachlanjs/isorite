@@ -1,6 +1,7 @@
 // The three panes (M10): Note, Atlas and Iso, "think, connect, build". On a desktop they stand side by side in one
 // of three layouts; on a phone one stands at a time and the others are a swipe away. Each pane has switches in its
-// header (M12, in place of M10's lenses and modes): what the Note pane and the Atlas show, and what Iso may do.
+// header (M12, in place of M10's lenses and modes): what the Note pane and the Atlas show, and what an agent attached
+// may do.
 // Remembered per browser: the layout, which panes show, their widths, the switches, and the note last open (what
 // the Note pane opens to when none is).
 
@@ -17,15 +18,13 @@ export const PANES = ["note", "atlas", "iso"] as const;
 export type Pane = (typeof PANES)[number];
 export const LAYOUTS = ["cols", "stack", "one"] as const;
 export type Layout = (typeof LAYOUTS)[number];
-/** What Iso may do, as the engine names it: worked out from Iso's switches. */
-export type Mode = "ask" | "write" | "build";
-
-/** Each pane's switches (M12). Note: whose words are whose, and the timeline. Atlas: what Iso is sent and did.
- *  Iso: may it edit the notes, and with a terminal attached, the project's files, and run commands. */
-export const SWITCHES = { note: ["provenance", "timeline"], atlas: ["questions", "problems", "web", "code", "pictures", "context"], iso: ["notes", "files", "run"] } as const;
+/** Each pane's switches (M12). Note: whose words are whose, and the timeline. Atlas: what the agent was given and
+ *  did. Iso: with an agent attached, may it edit the project's files, and run commands (its permissions, refused
+ *  here when off). */
+export const SWITCHES = { note: ["provenance", "timeline"], atlas: ["questions", "problems", "web", "code", "pictures", "context"], iso: ["files", "run"] } as const;
 export type Switch = (typeof SWITCHES)[keyof typeof SWITCHES][number];
 // The Atlas's kinds (M12): open questions and problems on the map from the first, links out of it when asked for.
-const OFF: Record<Switch, boolean> = { provenance: false, timeline: false, questions: true, problems: true, web: false, code: false, pictures: false, context: false, notes: false, files: false, run: false };
+const OFF: Record<Switch, boolean> = { provenance: false, timeline: false, questions: true, problems: true, web: false, code: false, pictures: false, context: false, files: false, run: false };
 
 /** The panes' relative widths when side by side. */
 const WIDTHS = { note: 1.25, atlas: 1, iso: 1.05 };
@@ -95,13 +94,9 @@ class Panes {
     return !!el && !!el.closest(`[data-pane="${p}"]`) && (el.matches("input, textarea, [contenteditable=true]") || !!el.closest(".cm-editor"));
   }
 
-  /** A terminal is attached (M11): Iso's files and run switches are offered, and with either on, what is asked
-   *  goes to the terminal's session (Q47). An agent attached over ACP (M25) is the pane's whatever the switches. */
-  terminal = $state(false);
-  agent = $state(false);
-  setTerminal(on: boolean, agent = false): void { this.terminal = on; this.agent = on && agent; }
-  /** What Iso may do now. */
-  get mode(): Mode { return this.terminal && (this.agent || this.on.files || this.on.run) ? "build" : this.on.notes ? "write" : "ask"; }
+  /** An agent is attached (M25), or a kept session of one shown: Iso's files and run switches are offered. */
+  attached = $state(false);
+  setAttached(on: boolean): void { this.attached = on; }
 
   setLast(id: string): void { if (id && !id.startsWith("@")) { this.last = id; keep(kept("isorite.last"), id); } }
 

@@ -65,9 +65,8 @@ test("code links point into the repository named in the settings: a missing file
   expect(await engine.nameRepository("../elsewhere")).toBe(false);
   expect((await engine.map()).notes["sim/step"]!.links![1]).toEqual({ kind: "code", href: "code:src/old.py", text: "gone", broken: true });
   expect((await engine.notes()).notes.find((n) => n.id === "sim/step")).toMatchObject({ broken: ["code:src/old.py"] });
-  expect(await engine.brokenNews("iso")).toEqual([{ id: "sim/step", title: "The step", href: "code:src/old.py" }]);
-  expect(await engine.brokenNews("iso")).toEqual([]);
-  expect(await engine.brokenNews("agent")).toHaveLength(1);
+  expect(await engine.brokenNews()).toEqual([{ id: "sim/step", title: "The step", href: "code:src/old.py" }]);
+  expect(await engine.brokenNews()).toEqual([]);
   // Put back, it mends at the next look (the repository changes outside isorite).
   await repo.write("src/old.py", "");
   clock.t += 11_000;

@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import { attach, box } from "./agent.ts";
 
 // The Atlas follows the note (M17): the note open is marked on the map, off screen a pip points to it, the note
-// chosen follows the links you take, a link under the mouse in the Note pane or Iso's is lit on the map, and the
+// chosen follows the links you take, a link under the mouse in the Note pane or in an agent's answer is lit on the map, and the
 // note under the mouse on the map marks its links in the note.
 
 const note = (page: Page, id: string) => page.locator(`[data-pane="atlas"] [data-note="${id}"]`);
@@ -83,23 +84,25 @@ test("a note under the mouse on the map marks its links in the note", async ({ p
   await expect(page.locator('[data-pane="note"] .cm-pointed')).toHaveCount(0);
 });
 
-test("a note named in Iso's answer, under the mouse, is outlined on the map", async ({ page }) => {
+test("a note named in the agent's answer, under the mouse, is outlined on the map", async ({ page }) => {
   test.skip(phone(page), "no mouse on a phone");
-  await open(page, "coding/huffman-codes");
-  const box = page.getByRole("textbox", { name: "Message Iso" });
-  await box.fill(`what is it measured in, ${test.info().project.name}`);
-  await box.press("Enter");
-  const said = page.locator('[data-pane="iso"] .said a', { hasText: "Surprise" }).last();
-  await expect(said).toBeVisible();
-  await said.hover();
-  await expect(note(page, "basics/surprise")).toHaveClass(/\bmo-you\b/);
-  // The phrase and the part it cites are lit together (M24, G), whichever is pointed at.
-  const part = page.locator('[data-pane="iso"] .turn').last().locator(".part", { hasText: "Surprise" });
-  await expect(part).toHaveClass(/\blit\b/);
-  await page.mouse.move(2, 2);
-  await expect(part).not.toHaveClass(/\blit\b/);
-  await part.hover();
-  await expect(said).toHaveClass(/\blit\b/);
-  await page.mouse.move(2, 2);
-  await expect(note(page, "basics/surprise")).not.toHaveClass(/\bmo-you\b/);
+  const agent = await attach();
+  try {
+    await open(page, "coding/huffman-codes");
+    await box(page).fill(`cite /basics/surprise.md\nwhat is it measured in, ${test.info().project.name}`);
+    await box(page).press("Enter");
+    const said = page.locator('[data-pane="iso"] .said a', { hasText: "cited" }).last();
+    await expect(said).toBeVisible();
+    await said.hover();
+    await expect(note(page, "basics/surprise")).toHaveClass(/\bmo-you\b/);
+    // The phrase and the part it cites are lit together (M24, G), whichever is pointed at.
+    const part = page.locator('[data-pane="iso"] .turn').last().locator(".part", { hasText: "Surprise" });
+    await expect(part).toHaveClass(/\blit\b/);
+    await page.mouse.move(2, 2);
+    await expect(part).not.toHaveClass(/\blit\b/);
+    await part.hover();
+    await expect(said).toHaveClass(/\blit\b/);
+    await page.mouse.move(2, 2);
+    await expect(note(page, "basics/surprise")).not.toHaveClass(/\bmo-you\b/);
+  } finally { agent.detach(); }
 });

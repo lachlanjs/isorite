@@ -10,7 +10,7 @@ import { afterAll, expect, test } from "vitest";
 import { writeExample } from "@isorite/example/node";
 import { acp, findBase } from "../src/acp-wrap.ts";
 import { commandOf, readRegistry, registryAgents } from "../src/agents.ts";
-import { ensureServer } from "../src/term.ts";
+import { ensureServer } from "../src/running.ts";
 
 const root = mkdtempSync(join(tmpdir(), "isorite-acp-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -76,6 +76,8 @@ test("isorite acp (M25): between a front end and its agent; the session in the p
   expect(reply).toContain("[as the note says](/integrators/leapfrog.md)");
 
   await expect.poll(async () => (await view()).turns[0]?.state).toBe("done");
+  // What it asked back is placed a moment after the call (AFTER_TAP), once the wrapper has told of the prompt.
+  await expect.poll(async () => (await view()).turns[0].items.some((i: any) => i.kind === "question")).toBe(true);
   const items = (await view()).turns[0].items;
   // The file read with the agent's own tools is the note; so is the one it changed; the question stands, to keep.
   expect(items.find((i: any) => i.kind === "tool" && i.title.startsWith("Read"))).toMatchObject({ note: "integrators/leapfrog", status: "done" });
@@ -182,7 +184,7 @@ test("several sessions (M25): one from the front end, one from the pane, one car
   await expect.poll(async () => (await view()).turns[1]?.state).toBe("done");
 
   // Each is kept here; the drawer says so. Shown again, the front end's is as it was.
-  await expect.poll(async () => ((await (await fetch(`${url}/api/agent/records`)).json()) as any[]).map((r) => r.session).sort()).toEqual([front, own, pane].sort());
+  await expect.poll(async () => ((await (await fetch(`${url}/api/agent/records`)).json()) as any[]).filter((r) => r.agent !== "claude").map((r) => r.session).sort()).toEqual([front, own, pane].sort());
   expect((await post("/api/acp/follow", { agent: "scripted", session: front })).status).toBe(200);
   await expect.poll(async () => (await view()).turns[0]?.asked).toBe("asked in the front end");
 

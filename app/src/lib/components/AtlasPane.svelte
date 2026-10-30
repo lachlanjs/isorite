@@ -1,6 +1,5 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { page } from "$app/state";
   import type { SessionMoment } from "@isorite/core";
   import Atlas from "$lib/components/Atlas.svelte";
   import Timeline from "$lib/components/Timeline.svelte";
@@ -10,10 +9,6 @@
 
   // The Atlas, with the session's timeline at its side. It stands in its own pane in the shell (M10).
 
-
-  // `?pick=<a note for Iso>`: the map is then for linking notes to it.
-  // With hash routing the question mark is inside the fragment.
-  const pick = $derived(page.url.searchParams.get("pick") ?? new URLSearchParams(page.url.hash.split("?")[1] ?? "").get("pick") ?? "");
 
   // The session's timeline on the map (Atlas-Timeline): open or not as the note's is, marks only. Pointing at one
   // outlines the note it touched and names it beside the mark; choosing one opens the note at that moment.
@@ -25,8 +20,8 @@
   const isos = (m: SessionMoment) => m.who.startsWith("iso:") || m.who.startsWith("agent:");
 
   async function read() {
-    // Notes for Iso not yet kept are not on the map.
-    try { moments = (await app.api.timeline()).filter((m) => !m.note.startsWith("@draft/")); } catch { /* the next entry asks again */ }
+    // Iso's drafts, from before M25, are not on the map.
+    try { moments = (await app.api.timeline()).filter((m) => !m.note.startsWith("@")); } catch { /* the next entry asks again */ }
   }
   $effect(() => {
     if (!timeline) return;
@@ -48,19 +43,17 @@
 </script>
 
 <div class="map">
-  <Atlas pick={pick ? `@draft/${pick}` : ""} />
-  {#if !pick}
-    <div class="side">
-      <button class="icon" type="button" aria-label="this session's timeline" title="this session's timeline" aria-pressed={timeline} onclick={toggle}>
-        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1v14" stroke="currentColor" stroke-width="1.2" fill="none" /><rect x="5.5" y="2" width="5" height="3.2" fill="currentColor" /><path d="M8 6.3l2.3 2.3L8 10.9 5.7 8.6z" fill="currentColor" /><rect x="5.5" y="12" width="5" height="3" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
-      </button>
-      {#if timeline}
-        <Timeline {moments} at={null} {pointed} leftward name="This session's timeline" label={(m) => titleOf((m as SessionMoment).note)}
-          point={(m) => (pointed = m as SessionMoment | null)}
-          pick={(m) => openAt(m as SessionMoment)} />
-      {/if}
-    </div>
-  {/if}
+  <Atlas />
+  <div class="side">
+    <button class="icon" type="button" aria-label="this session's timeline" title="this session's timeline" aria-pressed={timeline} onclick={toggle}>
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1v14" stroke="currentColor" stroke-width="1.2" fill="none" /><rect x="5.5" y="2" width="5" height="3.2" fill="currentColor" /><path d="M8 6.3l2.3 2.3L8 10.9 5.7 8.6z" fill="currentColor" /><rect x="5.5" y="12" width="5" height="3" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
+    </button>
+    {#if timeline}
+      <Timeline {moments} at={null} {pointed} leftward name="This session's timeline" label={(m) => titleOf((m as SessionMoment).note)}
+        point={(m) => (pointed = m as SessionMoment | null)}
+        pick={(m) => openAt(m as SessionMoment)} />
+    {/if}
+  </div>
 </div>
 
 <style>

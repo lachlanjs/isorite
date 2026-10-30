@@ -14,114 +14,6 @@ export const MEMORY = join(ROOT, "memory");
 /** isorite's own files for the base (format 2). */
 export const STUDY = join(NOTES, ".isorite");
 
-export const PROVIDER_PORT = 4798;
-/** What the scripted Iso answers when asked to draw (M19): a diagram and a code block. */
-export const DRAWN = "Here is how they stand:\n\n```mermaid\nflowchart LR\n  s[Surprise] --> e[Entropy]\n```\n\nAnd in code:\n\n```python\ndef surprise(p):\n    return -log2(p)  # in bits\n```";
-export const REPLY = "It is measured in **bits**, as [Surprise](/basics/surprise.md) is.\n\n$$\nH(X) \\le \\log_2 n\n$$";
-
-/** A provider that speaks the chat completions protocol (and makes keys by signing in) and says what the prompt's words call for:
- *  "look" looks a note up first, "slow" never finishes, "fail" refuses; "down until sent again" answers 503 to its
- *  first four requests (a turn and its three retries); anything else is answered with REPLY. */
-async function provider(): Promise<void> {
-  const { createServer } = await import("node:http");
-  const { createHash } = await import("node:crypto");
-  const codes = new Map<string, string>();
-  const downs = new Map<string, number>();
-  createServer(async (req, res) => {
-    let body = "";
-    for await (const chunk of req) body += chunk;
-    // Signing in for a key, as OpenRouter's OAuth with PKCE does: the sign-in page sends you straight back with a
-    // code, which is exchanged for a key only with the verifier its challenge was made from.
-    const at = new URL(req.url ?? "/", `http://127.0.0.1:${PROVIDER_PORT}`);
-    if (at.pathname === "/auth") {
-      const code = `code-${codes.size + 1}`, back = new URL(at.searchParams.get("callback_url")!);
-      codes.set(code, at.searchParams.get("code_challenge")!);
-      back.searchParams.set("code", code);
-      back.searchParams.set("state", at.searchParams.get("state")!);
-      res.writeHead(302, { location: back.href }).end();
-      return;
-    }
-    if (at.pathname === "/v1/auth/keys") {
-      const { code, code_verifier } = JSON.parse(body) as { code: string; code_verifier: string };
-      const ok = codes.get(code) === createHash("sha256").update(code_verifier).digest("base64url");
-      codes.delete(code);
-      res.writeHead(ok ? 200 : 403, { "content-type": "application/json" }).end(JSON.stringify(ok ? { key: `sk-scripted-made-${code}` } : { error: { message: "Invalid code or code_verifier" } }));
-      return;
-    }
-    // Its models, for the tiers to be chosen from (M18).
-    if (at.pathname === "/v1/models") {
-      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ data: ["scripted-low", "scripted-mid", "scripted-max", "scripted-other"].map((id) => ({ id })) }));
-      return;
-    }
-    const sent = JSON.parse(body) as { messages: { role: string; content: unknown }[]; tools?: { function: { name: string } }[] };
-    // The setup's check (M18), as isorite doctor asks: "ping, using the ping tool".
-    if (sent.tools?.some((t) => t.function.name === "ping")) {
-      res.writeHead(200, { "content-type": "text/event-stream" });
-      res.write(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "ping", arguments: "{}" } }] }, finish_reason: "tool_calls" }] })}\n\n`);
-      res.write(`data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 20, completion_tokens: 5, cost: 0.0001 } })}\n\n`);
-      res.end("data: [DONE]\n\n");
-      return;
-    }
-    // Summing up earlier turns (M15): what it picked, as the typed fields compaction asks for.
-    if (JSON.stringify(sent.messages[0]?.content ?? "").includes("You sum up the earlier turns")) {
-      res.writeHead(200, { "content-type": "text/event-stream" });
-      const picked = { settled: ["A bit is the unit of information."], open: ["How surprise relates to it."], preferences: [], notes: ["basics/bit"] };
-      res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: JSON.stringify(picked) } }] })}\n\n`);
-      res.write(`data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 600, completion_tokens: 40, cost: 0.0004 } })}\n\n`);
-      res.end("data: [DONE]\n\n");
-      return;
-    }
-    const user = String(sent.messages.find((m) => m.role === "user")?.content ?? "");
-    const asked = user.split("# What they ask now").at(-1) ?? "";
-    const looked = sent.messages.some((m) => m.role === "tool");
-    if (asked.includes("down until sent again")) {
-      const n = (downs.get(asked) ?? 0) + 1;
-      downs.set(asked, n);
-      if (n <= 4) { res.writeHead(503, { "content-type": "application/json" }).end(JSON.stringify({ error: { message: "the scripted provider is down" } })); return; }
-    }
-    if (asked.includes("fail")) { res.writeHead(500, { "content-type": "application/json" }).end(JSON.stringify({ error: { message: "the scripted provider was told to fail" } })); return; }
-    res.writeHead(200, { "content-type": "text/event-stream" });
-    const data = (o: unknown) => res.write(`data: ${JSON.stringify(o)}\n\n`);
-    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-    if (user.includes("⟦1⟧")) {
-      // A rewrite: each chosen passage comes back as "rewritten k" ("drop" takes the second out), with a remark
-      // outside the marks that must be dropped, and a word on the changes ("quiet" says nothing).
-      const count = new Set(user.match(/⟦\d+⟧/g)).size;
-      data({ choices: [{ delta: { content: "Here is the rewrite.\n" } }] });
-      for (let k = 1; k <= count; k++) data({ choices: [{ delta: { content: `⟦${k}⟧${asked.includes("drop") && k === 2 ? "" : ` rewritten ${k} `}⟦/${k}⟧\n` } }] });
-      if (!asked.includes("quiet")) data({ choices: [{ delta: { content: "⟦note⟧I rewrote what you chose, **plainly**.⟦/note⟧" } }] });
-    } else if (/\bquestion (\S+)/.test(asked) && !looked) {
-      // M12: "question <id>" asks one back about the note; "offer <id>" offers your words for it.
-      const id = /\bquestion (\S+)/.exec(asked)![1]!;
-      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "ask_question", arguments: JSON.stringify({ title: `Why does ${id.split("/").at(-1)} hold?`, text: "", about: [id] }) } }] } }] });
-    } else if (/\boffer (\S+)/.test(asked) && !looked) {
-      const id = /\boffer (\S+)/.exec(asked)![1]!;
-      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "offer_text", arguments: JSON.stringify({ id, text: "Because it is so, in my words." }) } }] } }] });
-    } else if (/\bedit (\S+)/.test(asked) && !looked) {
-      // Write mode (M10): "edit <id>" changes its "Plain text." into Iso's words; "move <id> to <id>" asks first.
-      const id = /\bedit (\S+)/.exec(asked)![1]!;
-      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "edit_note", arguments: JSON.stringify({ id, old: "Plain text.", new: "Plain text, and Iso's words." }) } }] } }] });
-    } else if (/\bmove (\S+) to (\S+)/.test(asked) && !looked) {
-      const [, id, to] = /\bmove (\S+) to (\S+)/.exec(asked)!;
-      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "move_note", arguments: JSON.stringify({ id, to }) } }] } }] });
-    } else if (asked.includes("recall") && !looked) {
-      // M20: "recall" looks in the memory lent to Iso.
-      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "read_note", arguments: JSON.stringify({ id: "tools/opencode", base: "memory" }) } }] } }] });
-    } else if (asked.includes("look") && !looked) {
-      data({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "read_note", arguments: JSON.stringify({ id: "/basics/surprise.md" }) } }] } }] });
-    } else {
-      const pieces = (asked.includes("draw") ? DRAWN : REPLY).match(/[\s\S]{1,12}/g)!;
-      for (const [k, piece] of pieces.entries()) {
-        data({ choices: [{ delta: { content: piece } }] });
-        await wait(asked.includes("slow") && k === 1 ? 60_000 : asked.includes("look") ? 60 : 15);
-        if (res.destroyed) return;
-      }
-    }
-    data({ choices: [], usage: { prompt_tokens: 2000, completion_tokens: 40, cost: 0.0123, prompt_tokens_details: { cached_tokens: 0 } } });
-    res.end("data: [DONE]\n\n");
-  }).listen(PROVIDER_PORT, "127.0.0.1");
-}
-
 if (process.argv[1] === import.meta.filename) {
   rmSync(ROOT, { recursive: true, force: true });
   mkdirSync(join(NOTES, "basics"), { recursive: true });
@@ -151,7 +43,7 @@ if (process.argv[1] === import.meta.filename) {
   ] }));
   process.env.ISORITE_ACP_REGISTRY = join(ROOT, "registry.json");
   mkdirSync(join(ROOT, "config", "isorite"), { recursive: true });
-  writeFileSync(join(ROOT, "config", "isorite", "config.toml"), `device = "browser01"\n\n[provider]\nname = "scripted"\nurl = "http://127.0.0.1:${PROVIDER_PORT}/v1"\nauth = "http://127.0.0.1:${PROVIDER_PORT}/auth"\n\n[tiers]\nlow = "scripted-low"\nmid = "scripted-mid"\nmax = "scripted-max"\n`);
+  writeFileSync(join(ROOT, "config", "isorite", "config.toml"), `device = "browser01"\n`);
   // The agent's memory, lent to every session, and a base known but not lent.
   mkdirSync(join(MEMORY, "tools"), { recursive: true });
   writeFileSync(join(MEMORY, "AGENTS.md"), "# What you keep across projects.\n");
@@ -159,10 +51,6 @@ if (process.argv[1] === import.meta.filename) {
   mkdirSync(join(ROOT, "elsewhere"));
   writeFileSync(join(ROOT, "elsewhere", "a.md"), "---\ntype: Concept\ntitle: A note elsewhere\n---\n\nElsewhere.\n");
   writeFileSync(join(ROOT, "config", "isorite", "bases.toml"), `[memory]\npath = "${MEMORY}"\nlend = true\n\n[elsewhere]\npath = "${join(ROOT, "elsewhere")}"\n`);
-  await provider();
-  // Retries come quickly here, but slowly enough to be seen.
-  const { RETRY } = await import("../../packages/engine/src/index.ts");
-  Object.assign(RETRY, { waits: [400, 400, 400], jitter: 0 });
   const { serve } = await import("../../packages/server/src/serve.ts");
   await serve(NOTES, { port: PORT });
 }

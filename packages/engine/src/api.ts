@@ -3,11 +3,9 @@
 // behind HTTP (the server) or in the same process (a webview, later).
 
 import type { Anchor, Cost, Entry, FileKind, MapModel, Passage, SessionMoment } from "@isorite/core";
-import type { Part } from "./iso.ts";
 import type { AgentEdit } from "./agent.ts";
-import type { Step } from "./lookup.ts";
-import type { Tier, ToolDef } from "./provider.ts";
-import type { Decision, Given, Mode, Turn, TurnItem } from "./turn.ts";
+import type { Step, ToolDef } from "./lookup.ts";
+import type { Given, Turn, TurnItem } from "./turn.ts";
 
 /** What is open. */
 export interface Session {
@@ -55,7 +53,7 @@ export interface MapReport {
   model: MapModel;
   notes: Record<string, {
     title: string;
-    /** The size of its text, as an estimate in tokens (what linking it to a note for Iso adds). */
+    /** The size of its text, as an estimate in tokens . */
     tokens: number;
     /** A question or a problem (M12). */
     kind?: "question" | "problem";
@@ -77,36 +75,16 @@ export interface SearchHit {
   snippet: string;
 }
 
-/** What you chose of Iso's context for a request in a note (I3): the parts switched off, by id ("x:<entry>" an
- *  earlier exchange of the session, "n:<note>" a note this note links to), and whether Iso may look up more notes
- *  with its tools while it works (on unless said). The note itself is always sent: it is where the answer goes. */
-export interface Choice { off?: string[]; lookup?: boolean }
-
-/** A request to Iso in a note. The form decides where its text may go, whatever it writes. */
-export type AskRequest =
-  /** New text at a point: between the block `after` and the block `before`. */
-  | { note: string; form: "insert"; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier; choice?: Choice }
-  /** These passages rewritten, and nothing else. What Iso says of the changes goes between `after` and `before`. */
-  | { note: string; form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null; asked: string; tier: Tier; choice?: Choice }
-  /** A note written for Iso (a draft, `@draft/…`): the draft is what is asked, and the reply is a note to keep in its place. */
-  | { note: string; form: "note"; tier: Tier };
-
-/** A turn of a conversation with Iso in its pane (M10): what is asked, in which mode, with what you gave it. Without
- *  `conversation` a new conversation begins. `lookup: false` keeps Iso to what you gave. */
-export interface TurnRequest { conversation?: string; mode: Mode; asked: string; given: Given[]; tier: Tier; lookup?: boolean; off?: string[] }
-
-/** A conversation, as the pane draws it. */
+/** A conversation with Iso from before M25, as the pane draws it, to read. */
 export interface Conversation { id: string; turns: Turn[] }
 /** A past conversation, as the drawer of them shows it (M24, K): when it began and was last added to, what was
  *  first asked, and how many turns and notes it has (the notes given, read, pointed to or changed). */
 export interface ConversationSummary { id: string; at: string; last: string; asked: string; turns: number; notes: number }
 
-/** The terminal's session (M11), as the Iso pane's Build mode draws it: read by the isorite server from OpenCode's
- *  own server, which `isorite term` starts and the terminal is attached to. `connected` is false when no terminal is. */
+/** An agent's session (M11, on ACP since M25), as the Iso pane draws it: followed by the isorite server through
+ *  `isorite acp`. `connected` is false when no agent is attached. */
 export interface TerminalView {
   connected: boolean; /** The agent, as it names itself: OpenCode, omp. */ agent: string; session: string | null; title: string; busy: boolean; turns: TerminalTurn[]; asking: TerminalPermission[]; cost: number; tokens: { input: number; output: number }; model: string;
-  /** How the session is followed: OpenCode's server (M11), or an ACP agent through `isorite acp` (M25). */
-  via?: "opencode" | "acp";
   /** The agent's own name for itself, as its changes are signed (`agent:<id>`). */
   agentId?: string;
   /** The agent's context window, in tokens, and how much of it the session fills (ACP's usage_update). */
@@ -138,141 +116,11 @@ export type TerminalItem =
 /** The agent asks before doing: `action` (as `shell`) on `resources` (as the command). */
 export interface TerminalPermission { id: string; action: string; resources: string[]; tool?: string }
 
-/** A note for Iso that is not in the base yet. */
-export interface DraftSummary { id: string; title: string }
-
-
-/** What a request to Iso would be sent now, part by part, and what the session has cost. Sizes are estimates
- *  (four characters a token) until a provider's own count replaces them. */
-export interface ContextReport {
-  tokens: number;
-  /** The most the mid tier's model takes. */
-  limit: number;
-  parts: Part[];
-  session: { usd: number; requests: number };
-  /** In a note of the base: each part you can switch on or off, as the choice asked about has it (I3). */
-  items: ContextItem[];
-  /** Whether Iso may look up more notes, as the choice has it. */
-  lookup: boolean;
-  /** Each part given, as much as it adds when sent (M10b: the Context view lists them). A note that is gone is not here. */
-  given?: { kind: Given["kind"]; id: string; text?: string; tokens: number }[];
-  /** The working set (M15), a row per part, as the Context view draws it. Sizes are as counted once the provider
-   *  has said (`counted`): isorite's estimate times what the provider counted for it in the last turn. */
-  rows?: HandRow[];
-  counted?: boolean;
-}
-
-/** One part of what the next turn is sent (M15). `key` is what switches it: `g:<kind>:<id>` (or
- *  `g:passage:<id>:<hash>`, givenKey), `q:<id>` and `agents` by the page's `off`; `r:<id>`, `t:<id>` and `b:<id>` by
- *  `setContext`, kept in the conversation. */
-export interface HandRow {
-  key: string;
-  group: "notes" | "conversation" | "fixed";
-  kind: "note" | "folder" | "passage" | "read" | "question" | "turn" | "briefing" | "instructions" | "agents" | "message";
-  title: string;
-  detail: string;
-  tokens: number;
-  on: boolean;
-  /** Who brought a note: you gave it, or Iso read it. */
-  by?: "you" | "iso";
-  /** Set aside because it was not used for AGE_OFF turns. */
-  aged?: boolean;
-  /** A turn a briefing stands for: the briefing's key. */
-  under?: string;
-  /** A part you gave: what it is, so the page can take it out of what it gives. */
-  given?: Given;
-}
-
-/** What Iso has cost against what may be spent (M12). `per` is the period the figure covers: a calendar month
- *  (UTC), or what the provider's key counts. `source` says where `cap` comes from: the key's own limit, the
- *  `spend_cap` setting, or, with no cap at all, the most spent in any month so far (`cap` is null while nothing
- *  has been spent). */
-export interface Spend { usd: number; cap: number | null; per: "day" | "week" | "month" | "total"; source: "key" | "setting" | "history" }
-
-/** One part of Iso's context that can be switched off: an earlier exchange, or a note this note links to. */
-export interface ContextItem { id: string; kind: "exchange" | "linked" | "question"; title: string; tokens: number; on: boolean }
-
-/** What can be set, as the app may know it. The key itself is never sent back. */
-export interface Settings {
-  provider: string;
-  /** Whether a key is held. */
-  key: boolean;
-  /** Whether the provider can make a key by signing in there (connect). */
-  connect: boolean;
-  tiers: Record<Tier, string>;
-  /** The monthly spend cap set for Iso, in dollars; null for none. */
-  spendCap: number | null;
-}
-
-/** A name and value the gateway is sent: a header, or a query value (M18). A value whose name looks secret is not
- *  sent back to the page: `held` says one is kept, and a pair sent back with `held` and no value keeps it. */
-export interface SetupPair { name: string; value: string; held?: boolean }
-
-/** The provider's setup, as Iso's settings show it: config.toml's [provider] and [tiers], its secrets held, not shown. */
-export interface ProviderSetup {
-  kind: "openrouter" | "gateway";
-  name: string;
-  url: string;
-  keyHeld: boolean;
-  /** The header the key goes in, when not Authorization. */
-  keyHeader: string;
-  /** What goes before the key in it, as `Bearer` (M21); empty for the default: Bearer in Authorization, and
-   *  nothing in another header. */
-  keyPrefix: string;
-  headers: SetupPair[];
-  query: SetupPair[];
-  /** The client certificate: a .pfx, or a certificate and its key; and an authority. Paths on the server's machine. */
-  pfx: string;
-  passphraseHeld: boolean;
-  cert: string;
-  certKey: string;
-  ca: string;
-  streamUsage: boolean;
-  maxTokens: number | null;
-  tiers: Record<Tier, string>;
-}
-
-/** A setup sent to be checked or kept: the key and the .pfx's password as given now (a value), forgotten (null),
- *  or as held (left out). */
-export interface SetupDraft extends ProviderSetup { key?: string | null; passphrase?: string | null }
-
-export interface SetupView {
-  setup: ProviderSetup;
-  /** Whether it may be changed from where the page is: only from this machine (M18). */
-  local: boolean;
-  /** Where it is kept. */
-  config: string;
-}
-
-/** One step of a check, as isorite doctor says it. */
-export interface SetupCheck { step: string; outcome: "ok" | "fail" | "warn" | "skip"; said: string }
-
 export type EngineEvent =
   /** A note's file was written, or found changed. `version` is null when the note is gone. */
   | { type: "note-changed"; id: string; version: string | null; who: string }
   /** An entry was added to a note's journal. */
   | { type: "journal"; id: string; entry: Entry }
-  /** An event was added to this device's record of usage (what was cleared from Iso's context, what turns cost). */
-  | { type: "record"; event: string }
-  /** Iso was asked. Every request ends in exactly one of iso-done, iso-stopped, iso-failed. */
-  | { type: "iso-start"; request: string; note: string; asked: string; tier: Tier; place: { form: "insert"; after: Anchor | null; before: Anchor | null } | { form: "rewrite"; regions: Passage[]; after: Anchor | null; before: Anchor | null } | { form: "note" } | { form: "turn"; conversation: string; mode: Mode; given: Given[] } }
-  /** In a turn (M10): something it did other than look up or write its reply, as kept in the conversation. */
-  | { type: "iso-item"; request: string; conversation: string; item: TurnItem }
-  /** Your answer to something it asked before doing. */
-  | { type: "iso-answer"; request: string; conversation: string; permission: string; decision: Decision }
-  | { type: "iso-taken"; request: string; conversation: string; item: string; note: string }
-  /** Iso looked something up. */
-  | { type: "iso-step"; request: string; note: string; step: Step }
-  /** A piece of its reply. `again`: what came before was not the reply; start over. */
-  | { type: "iso-text"; request: string; note: string; delta: string; again: boolean }
-  /** `proposal` is what it offers; for a rewrite that says something of its changes, `said` is that, a proposal of its own. */
-  | { type: "iso-done"; request: string; note: string; proposal: string; said?: string; cost: Cost }
-  | { type: "iso-stopped"; request: string; note: string }
-  | { type: "iso-failed"; request: string; note: string; message: string }
-  /** A conversation's working set changed: a part switched, a briefing made (M15). */
-  | { type: "context"; conversation: string }
-  /** The provider failed for a moment: it is asked again, the `retry`th time of `of`. */
-  | { type: "iso-retry"; request: string; note: string; retry: number; of: number }
   /** A terminal agent (`agent` is its name, as `opencode`) began a turn in one of its sessions. Each turn ends in agent-done. */
   | { type: "agent-start"; request: string; agent: string; session: string }
   /** It looked something up in the base, with Iso's own tools. */
@@ -352,72 +200,26 @@ export interface Api {
   search(query: string): Promise<SearchHit[]>;
   /** The Atlas's map of the base. */
   map(): Promise<MapReport>;
-  /** Ask Iso. Returns at once with the request's id; what follows comes as events, and ends as a proposal in the note's journal. */
-  ask(request: AskRequest): Promise<{ request: string }>;
-  /** Ask Iso in its pane (M10). Returns at once with the conversation and the turn; what follows comes as events
-   *  (iso-start, iso-step, iso-text, iso-item, then one of iso-done, iso-stopped, iso-failed, with the turn as the
-   *  request), and is kept in the conversation. */
-  converse(request: TurnRequest): Promise<{ conversation: string; turn: string }>;
-  /** A conversation, or the latest when none is named; null when there is none. */
+  /** A conversation with Iso from before M25, or the latest when none is named; null when there is none. */
   conversation(id?: string): Promise<Conversation | null>;
   /** Every conversation, the newest first (M24, K). */
   conversations(): Promise<ConversationSummary[]>;
-  /** What a turn would send now, part by part, with the session's cost. */
-  turnContext(request: Omit<TurnRequest, "asked">): Promise<ContextReport>;
-  /** Switch a part of a conversation's working set on or off: `r:<note>` (read by Iso), `t:<turn>`, `b:<briefing>`. */
-  setContext(conversation: string, part: string, on: boolean): Promise<void>;
-  /** Sum up a conversation's earlier turns, all but the last `keep`, into a briefing that stands for them. */
-  compact(conversation: string, keep?: number): Promise<{ briefing: string; usd: number }>;
-  /** A new conversation that starts from a briefing of this one ("a new conversation from here"). */
-  branch(conversation: string): Promise<{ conversation: string }>;
   /** The base's own instructions, AGENTS.md at the top of the notes (M15): null while there is none. */
   agents(): Promise<{ text: string | null }>;
   saveAgents(text: string): Promise<void>;
-  /** Put back every note a turn changed as it was before the turn. A note changed since is left as it is, and said. */
-  undoTurn(conversation: string, turn: string): Promise<{ notes: string[]; left: string[] }>;
   /** Name the repository the base's code links point into, unless one is named: true if it was (M12). */
   nameRepository(path: string): Promise<boolean>;
-  /** Code links broken since Iso, or the terminal's agent, was last told; each is told once (Q27). */
-  brokenNews(to: "iso" | "agent"): Promise<{ id: string; title: string; href: string }[]>;
-  /** Make a question Iso asked in a turn a question note, or insert what it offered: yours either way. */
-  takeItem(conversation: string, turn: string, item: string): Promise<{ note: string }>;
-  /** Your answer to what Iso asked before doing something in a turn. */
-  answer(turn: string, permission: string, decision: Decision): Promise<void>;
-  /** Stop a request. Nothing is entered. */
-  stop(request: string): Promise<void>;
-  /** Write a proposal into its note. The note's file changes here and nowhere else on Iso's account. For a
-   *  rewrite, `region` keeps that one passage; without it, every one still waiting. */
+  /** Code links broken since an agent was last told; each is told once (Q27). */
+  brokenNews(): Promise<{ id: string; title: string; href: string }[]>;
+  /** Write a proposal of Iso's still waiting in a note's journal (from before M25) into its note. For a rewrite,
+   *  `region` keeps that one passage; without it, every one still waiting. */
   keep(id: string, proposal: string, region?: number): Promise<Saved>;
   /** Your edit to a proposal before keeping it: its text, or for a rewrite the text of each of its regions. */
   revise(id: string, proposal: string, text: string | string[]): Promise<void>;
   /** Take a proposal away (for a rewrite, one region of it, or all that still wait). It stays in the journal. */
   discard(id: string, proposal: string, region?: number): Promise<void>;
-  /** The notes for Iso that are waiting outside the base, newest first. */
-  drafts(): Promise<DraftSummary[]>;
-  /** Start a note for Iso. It is one of isorite's own files, read and saved like any note, under the id it is given. */
-  createDraft(): Promise<NoteSource>;
-  /** Keep Iso's reply to a draft as a note of the knowledge base, in a folder, under the draft's title. The draft is then gone. */
-  keepDraft(draft: string, proposal: string, folder: string): Promise<Saved>;
-  /** Throw a draft away. Its journal stays. */
-  discardDraft(draft: string): Promise<void>;
-  /** What Iso would be sent if asked now, in this note (or in none). */
-  /** What asking Iso in a note would send, with `choice` as the request would carry it. */
-  context(note?: string, choice?: Choice): Promise<ContextReport>;
-  /** Leave the session's earlier exchanges out of what Iso is sent from now on. Nothing is deleted. */
-  clearConversation(): Promise<void>;
-  settings(): Promise<Settings>;
-  /** What Iso has cost, against the key's own limit where the provider gives one, else the `spend_cap` setting. */
-  spend(): Promise<Spend>;
-  /** Set the monthly spend cap in dollars (null: none). Where the key has a limit of its own, that is used instead. */
-  setSpendCap(usd: number | null): Promise<Settings>;
-  /** Hold a provider key (null forgets it). */
-  setKey(key: string | null): Promise<Settings>;
-  /** Begin making a key by signing in at the provider: the page to go to, which comes back to `callback` with a code. */
-  connect(callback: string): Promise<{ url: string }>;
-  /** Back from the provider with a code: exchange it for a key, and hold that key. */
-  connected(code: string, state: string): Promise<Settings>;
-  /** The tools a terminal agent is offered over the base: a brief of it, Iso's own look-ups, and changing a note,
-   *  which is written and marked as the agent's (M11). */
+  /** The tools an agent is offered over the base (isorite's MCP): a brief of it, the look-ups, changing a note,
+   *  which is written and marked as the agent's (M11), asking back and offering text, and artifacts (M25). */
   agentTools(): Promise<ToolDef[]>;
   /** Run one of them for an agent. What it looked up is published as an agent-step, for the Atlas; a proposal is
    *  written as agentWrite writes it, and refused as it refuses. */

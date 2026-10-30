@@ -8,19 +8,15 @@ import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
 import { serve as nodeServe } from "@hono/node-server";
 import { CONFIG_FILE, GITATTRIBUTES, OWN_DIR, StudyError } from "@isorite/core";
-import { Engine, KEY, OPENROUTER, systemClock, type ArtifactRun, type Elsewhere, type Embedder, type Http, type ProviderConfig, type Secrets } from "@isorite/engine";
-import { ConfigSecrets, configPath, deviceId, gatewayTls, hasModel, providerConfig, rememberBase } from "./config.ts";
+import { Engine, systemClock, type ArtifactRun, type Elsewhere, type Embedder } from "@isorite/engine";
+import { configPath, deviceId, rememberBase } from "./config.ts";
 import { Bases } from "./bases.ts";
-import { gatewayHttp, relay } from "./gateway.ts";
 import { cacheDir, modelDir, nodeEmbedder } from "./embedder.ts";
 import { LOOPBACK, createApp } from "./http.ts";
-import { Terminal } from "./terminal.ts";
-import { AcpFollower, Following } from "./acp.ts";
+import { AcpFollower } from "./acp.ts";
 import { AgentRunner } from "./agents.ts";
 import { projectOf } from "./connect.ts";
 import { NodeFiles } from "./nodefiles.ts";
-import { Setup } from "./setup.ts";
-import { VERSION } from "./version.ts";
 import { defaultStudyPath, openStudyBase } from "./studybase.ts";
 import { KIT_FILES, assemble, manifestOf, type KitFiles } from "@isorite/kit";
 import { findBrowser, renderArtifact, type Reader } from "./render.ts";
@@ -72,21 +68,18 @@ export interface EngineExtras {
   embedder?: Embedder | null;
 }
 
-export async function openEngine({ notes }: Opened, device = deviceId(), config = configPath(), http?: Http, model: string | null = modelDir(), secrets: Secrets = new ConfigSecrets(config), extras: EngineExtras = {}): Promise<Engine> {
-  const provider = providerConfig(config);
+export async function openEngine({ notes }: Opened, device = deviceId(), model: string | null = modelDir(), extras: EngineExtras = {}): Promise<Engine> {
   const own = makeOwn(notes);
   const embedder = extras.embedder !== undefined ? extras.embedder : model ? nodeEmbedder(model) : null;
-  // The provider is OpenRouter unless the configuration names another. The engine compares against OPENROUTER to know.
   return Engine.open({
     notes: new NodeFiles(notes), own: new NodeFiles(own), clock: systemClock, device, name: extras.name ?? basename(notes),
-    http: http ?? gatewayHttp(provider, gatewayTls(config)), secrets, provider,
     // The repository code links point into (M12): named in .isorite/settings.toml, from the notes folder.
     repository: (path) => { const dir = resolve(notes, path); return existsSync(dir) && statSync(dir).isDirectory() ? new NodeFiles(dir) : null; },
     // Search by meaning, where the model is installed (npm run model). Its vectors are a cache of this base's
     // notes, kept outside both repositories under a name made from where the notes are.
     ...(embedder ? { embedder, cache: { files: new NodeFiles(cacheDir()), name: `vectors-${createHash("sha256").update(notes).digest("hex").slice(0, 16)}.json` } } : {}),
     ...(extras.elsewhere ? { elsewhere: extras.elsewhere } : {}),
-    // An artifact Iso writes is run unseen (M23), in a browser found on this machine, with the kit the app is built with.
+    // An artifact an agent writes is run unseen (M23), in a browser found on this machine, with the kit the app is built with.
     renderArtifact: (path, html) => runArtifact(notes, path, html),
   });
 }
@@ -106,58 +99,39 @@ export async function runArtifact(notes: string, path: string, html: string): Pr
   return { rendered: got.rendered, errors: got.errors, drawn: got.drawn };
 }
 
-/** The guide's finder, as a provider: no key, no sign-in, and a name that says what it is. */
-const { auth: _auth, ...openrouter } = OPENROUTER;
-const FINDER: ProviderConfig = { ...openrouter, name: "finder", url: "http://finder.invalid/v1" };
-
-/** The provider as the configuration has it now: kept from the settings (M18), it is taken into use at once, by
- *  Iso and the relay. With `stand`, that is asked while there is no model here. */
-export async function liveProvider(config: string, stand?: Http): Promise<{ provider: ProviderConfig; http: Http }> {
-  if (stand && !(await hasModel(config))) return { provider: FINDER, http: stand };
-  const provider = providerConfig(config);
-  return { provider, http: gatewayHttp(provider, gatewayTls(config)) };
-}
-
 /** A link most terminals let you click (OSC 8), when the output is a terminal; the address as it is otherwise. */
 export const link = (url: string, tty = Boolean(process.stdout.isTTY)): string => (tty ? `\x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\` : url);
 
 /** The server's bases, opened: the one named (remembered in bases.toml, M20) and every lent one, each with its
- *  engine and app, and the server's answer to a request for any of them. `stand`: in place of the provider, an
- *  answerer of its own, as the guide's finder is when no model is set up (M16), asked while there is no model here.
- *  `idle`: what to do once the last of those holding the server lets it go. */
-export async function openServer(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], stand, idle, config = configPath(), model = modelDir() }: { host?: string; port?: number; allowHosts?: string[]; stand?: Http; idle?: () => void; config?: string; model?: string | null } = {}): Promise<{ notes: string; bases: Bases; embedder: boolean; fetch: (req: Request, env?: unknown) => Promise<Response> }> {
+ *  engine and app, and the server's answer to a request for any of them. `idle`: what to do once the last of those
+ *  holding the server lets it go. */
+export async function openServer(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], idle, config = configPath(), model = modelDir() }: { host?: string; port?: number; allowHosts?: string[]; idle?: () => void; config?: string; model?: string | null } = {}): Promise<{ notes: string; bases: Bases; embedder: boolean; fetch: (req: Request, env?: unknown) => Promise<Response> }> {
   const opened = locate(path);
-  const current = () => liveProvider(config, stand);
-  let live = await current();
-  const secrets = new ConfigSecrets(config), device = deviceId(config);
+  const device = deviceId(config);
   const first = rememberBase(opened.notes, { path: config });
   const embedder = model ? nodeEmbedder(model) : null;
   const token = randomBytes(24).toString("base64url"), loopback = LOOPBACK.has(host);
-  // The provider is relayed to OpenCode only on this machine: from a tailnet it would be anyone's to use.
-  const gateway = loopback ? relay(() => live, () => secrets.get(KEY)) : undefined;
   const web = existsSync(join(WEB_DIR, "index.html")) ? WEB_DIR : null;
   const bases: Bases = new Bases({
     config, first, ...(idle ? { idle } : {}),
     make: async (known) => {
-      const api = await openEngine({ notes: known.path }, device, config, live.http, model, secrets, { name: known.name, elsewhere: bases, embedder });
-      api.setProvider(live.provider, live.http);
+      const api = await openEngine({ notes: known.path }, device, model, { name: known.name, elsewhere: bases, embedder });
       const acp = new AcpFollower({ api, notes: known.path });
       // The agent chosen for this base's pane, started once the server is listening (the wrapper waits for it).
       const agents = new AgentRunner({ base: known.name, url: `http://127.0.0.1:${port}${known.name === first ? "" : `/b/${known.name}`}`, folder: projectOf(known.path).repo, config });
       if (loopback) void agents.start();
-      const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, terminal: new Following(new Terminal(), acp), acp, gateway, setup, bases, base: known.name, ...(loopback ? { agents } : {}) });
+      const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, acp, bases, base: known.name, ...(loopback ? { agents } : {}) });
       return { engine: api, fetch: app.fetch };
     },
   });
-  const setup = new Setup({ config, notes: opened.notes, version: VERSION, port, kept: async () => { live = await current(); bases.each((api) => api.setProvider(live.provider, live.http)); } });
   await bases.start();
   return { notes: opened.notes, bases, embedder: Boolean(embedder), fetch: (req, env) => bases.fetch(req, env) };
 }
 
-/** `held`: started by isorite term or mcp, it stops once the last of them lets it go. */
-export async function serve(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], stand, held = false }: { host?: string; port?: number; allowHosts?: string[]; stand?: Http; held?: boolean } = {}): Promise<void> {
+/** `held`: started by isorite acp or mcp, it stops once the last of them lets it go. */
+export async function serve(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], held = false }: { host?: string; port?: number; allowHosts?: string[]; held?: boolean } = {}): Promise<void> {
   let stop = () => undefined as void;
-  const { notes, bases, embedder, fetch } = await openServer(path, { host, port, allowHosts, ...(stand ? { stand } : {}), ...(held ? { idle: () => stop() } : {}) });
+  const { notes, bases, embedder, fetch } = await openServer(path, { host, port, allowHosts, ...(held ? { idle: () => stop() } : {}) });
   const server = nodeServe({ fetch, hostname: host, port });
   server.on("error", (e: NodeJS.ErrnoException) => {
     console.error(e.code === "EADDRINUSE" ? `port ${port} is in use (isorite serve --port <n>)` : e.message);

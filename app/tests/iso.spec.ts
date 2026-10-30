@@ -1,10 +1,10 @@
-// Iso's settings, and a terminal agent's edits waiting in a note. Asking Iso is in Iso's pane (pane.spec.ts):
-// asking in the text was taken out in M10.
+// Each pane's settings, and an agent's edits to a note, marked as its own. An agent's session in Iso's pane is in
+// acp.spec.ts.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { NOTES, REPLY, ROOT } from "./serve.ts";
+import { NOTES } from "./serve.ts";
 import { setSwitch } from "./switches.ts";
 
 const editor = (page: Page) => page.getByRole("textbox", { name: "The note", exact: true });
@@ -31,7 +31,7 @@ async function toIso(page: Page) {
 
 test.beforeAll(() => { mkdirSync(join(NOTES, "iso"), { recursive: true }); });
 
-test("settings are in each pane's header: the ground in the Note pane's, and in Iso's a key that goes in and is not shown again", async ({ page }) => {
+test("settings are in each pane's header: the ground in the Note pane's, and in Iso's the base's AGENTS.md", async ({ page }) => {
   await page.goto("#/notes");
   await page.getByRole("button", { name: "Note settings" }).click();
   const note = page.getByRole("dialog", { name: "Note settings" });
@@ -48,45 +48,21 @@ test("settings are in each pane's header: the ground in the Note pane's, and in 
   await toIso(page);
   await page.getByRole("button", { name: "Iso settings" }).click();
   const menu = page.getByRole("dialog", { name: "Iso settings" });
-  await expect(menu).toContainText("Asked through scripted.");
+  const agents = menu.getByLabel("AGENTS.md: your instructions for this base");
+  await expect(agents).toBeVisible();
   await look(page, "settings");
-
-  const secret = `sk-test-${test.info().project.name}`;
-  await menu.getByLabel("Provider key").fill(secret);
-  await menu.getByRole("button", { name: "hold it" }).click();
-  await expect(menu).toContainText("A key is held on this device.");
-  await expect(menu.getByLabel("Provider key")).toHaveValue("");
-  expect(await page.content()).not.toContain(secret);
-  expect(readFileSync(join(ROOT, "config", "isorite", "config.toml"), "utf8")).toContain(secret);
-  await menu.getByRole("button", { name: "forget it" }).click();
-  await expect(menu).toContainText("No key is held yet");
+  const said = `Answer briefly, ${test.info().project.name}.`;
+  await agents.fill(said);
+  await agents.blur();
+  await expect.poll(() => (existsSync(join(NOTES, "AGENTS.md")) ? readFileSync(join(NOTES, "AGENTS.md"), "utf8") : "")).toBe(`${said}\n`);
+  await agents.fill("");
+  await agents.blur();
+  await expect.poll(() => readFileSync(join(NOTES, "AGENTS.md"), "utf8")).toBe("");
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
 });
 
-test("a key is made by signing in at the provider, and comes back to where you were", async ({ page }) => {
-  await page.goto("#/notes");
-  await toIso(page);
-  await page.getByRole("button", { name: "Iso settings" }).click();
-  const menu = page.getByRole("dialog", { name: "Iso settings" });
-  await menu.getByRole("button", { name: "sign in for a key" }).click();
-  // The scripted sign-in sends you straight back with a code; the engine exchanges it for the key.
-  await expect(menu).toContainText("Signed in at scripted: a key was made for isorite");
-  await expect(menu).toContainText("A key is held on this device.");
-  await look(page, "settings-signed-in");
-  expect(page.url()).not.toContain("code=");
-  expect(new URL(page.url()).hash).toBe("#/notes");
-  expect(await page.content()).not.toContain("sk-scripted-made");
-  expect(readFileSync(join(ROOT, "config", "isorite", "config.toml"), "utf8")).toContain("sk-scripted-made");
-  // A code that is not ours, or used twice, is refused, and said so.
-  await page.goto("/?code=code-x&state=not-ours#/notes");
-  await expect(page.getByRole("dialog", { name: "Settings" })).toContainText("This sign-in was not begun here");
-  await page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "forget it" }).click();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog", { name: "Settings" })).toHaveCount(0);
-});
-
-test("a terminal agent's edit to a note is written at once, its words marked as its own with provenance on (M11)", async ({ page, baseURL }) => {
+test("an agent's edit to a note is written at once, its words marked as its own with provenance on (M11)", async ({ page, baseURL }) => {
   const { id, text } = await open(page, "agent");
   const { token } = await (await page.request.get("api/session")).json() as { token: string };
   const written = await page.request.post("api/agent/write", {
@@ -96,11 +72,11 @@ test("a terminal agent's edit to a note is written at once, its words marked as 
   expect(written.ok()).toBe(true);
   expect(onDisk(id)).toBe(text.replace("The average surprise", "How surprised you are, on average,"));
   await expect(editor(page)).toContainText("How surprised you are, on average, of a source.");
-  // Nothing waits; with provenance on the agent's words are marked, as Iso's are.
+  // Nothing waits; with provenance on the agent's words are marked.
   await expect(page.locator("[data-change]")).toHaveCount(0);
   if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Note/ }).click();
   await setSwitch(page, "provenance", true);
-  // Mostly the agent's words, so the sentence is marked whole, as one of Iso's would be.
+  // Mostly the agent's words, so the sentence is marked whole.
   await expect(page.locator(".cm-iso-by-iso")).toHaveText(["How surprised you are, on average, of a source."]);
   await look(page, "agent-change");
 });

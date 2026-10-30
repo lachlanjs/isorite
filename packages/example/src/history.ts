@@ -1,17 +1,16 @@
 // The example's history: three weeks of a developer writing an N-body simulation, and a base of notes beside it,
-// with Iso. It is made by driving the engine itself, over files in memory, with a clock set to each moment and a
-// scripted Iso, so every journal, hash and event is the engine's own. Times are counted back from `now`, so the
-// last session is always the one just ended.
+// with their own agent (M25: a scripted one, through isorite's MCP). It is made by driving the engine itself, over
+// files in memory, with a clock set to each moment, so every journal, hash, event and kept session is the engine's
+// own. Times are counted back from `now`, so the last session is always the one just ended.
 //
 // What it leaves: the physics understood or worked through, the integrators worked through or opened, the
 // algorithms begun (Barnes–Hut has a TODO, the quadtree is a stub with a question in it), the simulation's goal
-// written down. Today's session is five moments; Iso's answer on how big ε should be waits in the note on
-// softening; a note for Iso about close encounters is written and not sent; the problem on the cost of direct
-// summation has a solution with a slip in it.
+// written down. Today's session is four moments, and the agent's answer on how big ε should be, which is in its
+// session, not the note; the problem on the cost of direct summation has a solution with a slip in it.
 
-import { blocks, GITATTRIBUTES, type Anchor, type Passage } from "@isorite/core";
-import { Engine, MemoryFiles, MemorySecrets, KEY, type Clock, type EngineEvent, type Similar } from "@isorite/engine";
-import { scriptedHttp, type Reply } from "./scripted.ts";
+import { blocks, GITATTRIBUTES } from "@isorite/core";
+import { Engine, MemoryFiles, type Clock, type Similar } from "@isorite/engine";
+import { ScriptedAgent, insertAfter, type Call } from "./agent.ts";
 
 export const NAME = "nbody-notes", DEVICE = "laptop1";
 const DAY = 86_400_000, MIN = 60_000;
@@ -36,8 +35,6 @@ export function drop(text: string, prefix: string): string {
   const b = block(text, prefix);
   return text.replace(b + "\n\n", "").replace("\n\n" + b, "");
 }
-
-const anchor = (text: string): Anchor => ({ text, nth: 0 });
 
 // ------------------------------------------------------------ problems
 
@@ -128,7 +125,7 @@ export const PROBLEMS: Problem[] = [
 
 // ------------------------------------------------------------ the scripted search by meaning
 
-/** What search by meaning finds for the questions the example's Iso asks it. */
+/** What search by meaning finds for what the example's agent asks it. */
 const MEANING: Record<string, { note: string; heading: string; score: number }[]> = {
   "where the loop spends its time": [{ note: DIRECT, heading: "", score: 0.82 }, { note: COST, heading: "", score: 0.76 }],
 };
@@ -144,38 +141,20 @@ export async function buildExample(sources: Sources, now = Date.now()): Promise<
   const notes = new MemoryFiles(), own = new MemoryFiles({ ".gitattributes": GITATTRIBUTES });
   let t = 0;
   const clock: Clock = { now: () => t++ };
-  const replies: Reply[] = [];
-  const http = scriptedHttp(() => { const r = replies.shift(); if (!r) throw new Error("Iso was asked more than the script says"); return r; });
-  const engine = await Engine.open({ notes, own, clock, device: DEVICE, name: NAME, http, secrets: new MemorySecrets({ [KEY]: "example" }), similar });
+  const engine = await Engine.open({ notes, own, clock, device: DEVICE, name: NAME, similar });
+  const agent = new ScriptedAgent(engine, clock.now);
 
-  const done = new Map<string, Extract<EngineEvent, { type: "iso-done" | "iso-failed" }>>();
-  const waiting = new Map<string, () => void>();
-  engine.events((e) => {
-    if (e.type !== "iso-done" && e.type !== "iso-failed") return;
-    done.set(e.request, e);
-    waiting.get(e.request)?.();
-  });
-  /** Ask Iso, with the replies it is to give, and wait for what it offers. */
-  const iso = async (request: Parameters<Engine["ask"]>[0], ...said: Reply[]): Promise<Extract<EngineEvent, { type: "iso-done" }>> => {
-    replies.push(...said);
-    const { request: id } = await engine.ask(request);
-    if (!done.has(id)) await new Promise<void>((r) => waiting.set(id, r));
-    const e = done.get(id)!;
-    if (e.type === "iso-failed") throw new Error(`Iso failed: ${e.message}`);
-    return e;
-  };
   const write = async (id: string, text: string) => {
     let version: string | null = null;
     try { version = (await engine.readNote(id)).version; } catch { /* a new note */ }
     return version === null ? engine.createNote(id, text) : engine.saveNote(id, { base: version, text });
   };
-  /** Iso asked for new text after the block that begins `after` (or at the top), and its reply. */
-  const insert = async (id: string, after: string | null, asked: string, reply: string, calls: Reply["calls"], usage: Reply["usage"]) => {
-    const text = (await engine.readNote(id)).text, all = blocks(text);
-    const k = after === null ? -1 : all.findIndex((b) => b.text.startsWith(after));
-    if (after !== null && k < 0) throw new Error(`no block begins "${after}" in ${id}`);
-    const said: Reply[] = calls?.length ? [{ calls, usage: { in: Math.round(usage!.in * 0.6), out: 40, usd: usage!.usd * 0.4 } }, { text: reply, usage }] : [{ text: reply, usage }];
-    return iso({ note: id, form: "insert", after: k >= 0 ? anchor(all[k]!.text) : null, before: all[k + 1] ? anchor(all[k + 1]!.text) : null, asked, tier: "mid" }, ...said);
+  const read = (id: string): Call => ({ tool: "read_note", args: { id } });
+  /** The agent asked to add to a note: it reads what it rests on, writes `text` after the block beginning `after`
+   *  (or at the top), and says so. */
+  const add = async (id: string, after: string | null, asked: string, text: string, reads: Call[], reply: string) => {
+    const now = blocks((await engine.readNote(id)).text).map((b) => b.text);
+    await agent.turn(asked, [...reads, insertAfter(id, now, after, text)], reply);
   };
 
   // Every moment, as [days ago, minutes into that day's session, what happens], done in time order.
@@ -190,12 +169,17 @@ export async function buildExample(sources: Sources, now = Date.now()): Promise<
   on(21, 4, () => write(UNITS, final(UNITS)));
   on(19, 0, () => write(ENERGY, drop(final(ENERGY), "A numerical integration")));
   on(19, 6, async () => {
-    const p = await insert(ENERGY, "$E = K + U$ is constant", "why is energy a good check on a run?", block(final(ENERGY), "A numerical integration"), [{ name: "read_note", arguments: { id: LAW } }], { in: 4800, out: 120, usd: 0.0094 });
-    await engine.keep(ENERGY, p.proposal);
+    agent.begin("energy");
+    await add(ENERGY, "$E = K + U$ is constant", "why is energy a good check on a run?", block(final(ENERGY), "A numerical integration"), [read(LAW)], `I added why to [energy conservation](/${ENERGY}.md): a numerical run conserves it only as well as its integrator does.`);
   });
+  // The agent's SI conversions, undone: the note put back as it was.
   on(18, 10, async () => {
-    const p = await insert(UNITS, "Converting back", "add the SI conversions", "With $M = 10^{11} M_\\odot$ and $L = 10$ kpc, the unit of time is about 47 million years and of speed about 207 km/s.", [], { in: 3900, out: 90, usd: 0.0071 });
-    await engine.discard(UNITS, p.proposal);
+    agent.begin("units");
+    await add(UNITS, "Converting back", "add the SI conversions", "With $M = 10^{11} M_\\odot$ and $L = 10$ kpc, the unit of time is about 47 million years and of speed about 207 km/s.", [], `Added to [units](/${UNITS}.md).`);
+  });
+  on(18, 14, async () => {
+    const journal = await engine.journal(UNITS), before = journal.filter((e) => e.kind === "change").at(-2)!;
+    await engine.restore(UNITS, before.id, (await engine.readNote(UNITS)).version);
   });
 
   // ---- the first program: Euler, and a two-body orbit
@@ -213,24 +197,20 @@ export async function buildExample(sources: Sources, now = Date.now()): Promise<
 
   // ---- leapfrog, two weeks ago
   on(14, 0, () => write(LEAP, drop(drop(final(LEAP), "## Why it does not drift"), "It is second order")));
+  // The agent's answer, written into the note, then made yours: a heading of your own and its words reworked.
   on(14, 7, async () => {
-    const p = await insert(LEAP, "One force calculation", "why does its energy not drift, when Euler's does?", "It is second order, and time-reversible. Its energy error stays bounded.", [{ name: "read_note", arguments: { id: EULER } }, { name: "read_note", arguments: { id: ENERGY } }], { in: 6200, out: 160, usd: 0.0121 });
-    await engine.revise(LEAP, p.proposal, `${block(final(LEAP), "## Why it does not drift")}\n\n${block(final(LEAP), "It is second order")}`);
-    await engine.keep(LEAP, p.proposal);
+    agent.begin("leapfrog");
+    await add(LEAP, "One force calculation", "why does its energy not drift, when Euler's does?", "It is second order, and time-reversible. Its energy error stays bounded.", [read(EULER), read(ENERGY)], `In short: [leapfrog](/${LEAP}.md) is time-reversible, so its energy error stays bounded, where [Euler's](/${EULER}.md) grows every step.`);
   });
+  on(14, 12, () => write(LEAP, final(LEAP)));
   // The loop moved to leapfrog in another editor, and found the next time it was opened.
   on(13, 0, async () => { await notes.write(`${LOOP}.md`, drop(final(LOOP), "Rests on")); await engine.readNote(LOOP); });
-  // A note for Iso: asked from the Atlas, kept as a note.
+  // A note asked of the agent from the pane, with the notes it is to rest on given.
   on(12, 0, async () => {
-    const draft = await engine.createDraft();
-    await engine.saveNote(draft.id, { base: draft.version, text: "---\ntype: Concept\ntitle: Symplectic integrators\n---\n\nWhat makes leapfrog keep its energy over thousands of orbits, when RK4, which is more accurate per step, does not? Rest it on [leapfrog](/integrators/leapfrog.md) and [energy](/physics/energy-conservation.md).\n" });
-    const body = final(SYMP).replace(/^---\n[\s\S]*?\n---\n\n/, "").trimEnd();
-    const p = await iso({ note: draft.id, form: "note", tier: "mid" },
-      { calls: [{ name: "read_note", arguments: { id: LEAP } }, { name: "read_note", arguments: { id: ENERGY } }], usage: { in: 5400, out: 50, usd: 0.0060 } },
-      { text: body, usage: { in: 8800, out: 380, usd: 0.0198 } });
-    await engine.keepDraft(draft.id, p.proposal, I);
+    agent.begin("symplectic");
+    await agent.turn("What makes leapfrog keep its energy over thousands of orbits, when RK4, which is more accurate per step, does not? Write it as a note.", [read(LEAP), read(ENERGY), { tool: "write_note", args: { note: SYMP, content: final(SYMP) } }],
+      `I wrote [symplectic integrators](/${SYMP}.md), resting on [leapfrog](/${LEAP}.md) and [energy conservation](/${ENERGY}.md).`, [{ kind: "note", id: LEAP }, { kind: "note", id: ENERGY }]);
   });
-  on(12, 8, () => write(SYMP, final(SYMP)));
   on(12, 20, () => write(DT, final(DT)));
   on(10, 0, () => write(SOFT, final(SOFT)));
 
@@ -239,33 +219,27 @@ export async function buildExample(sources: Sources, now = Date.now()): Promise<
   const comPlain = "Far away, the group acts like one body.";
   on(7, 10, () => write(COM, final(COM).replace(block(final(COM), "Seen from a distance"), comPlain)));
   on(5, 20, async () => {
-    const p = await iso({ note: COM, form: "rewrite", regions: [{ text: comPlain, nth: 0 } as Passage], after: null, before: null, asked: "say how far is far enough", tier: "mid" },
-      { text: `⟦1⟧${block(final(COM), "Seen from a distance")}⟦/1⟧\n⟦note⟧I gave the condition and the size of the error.⟦/note⟧`, usage: { in: 6900, out: 210, usd: 0.0141 } });
-    await engine.keep(COM, p.proposal);
-    if (p.said) await engine.discard(COM, p.said);
+    agent.begin("centre-of-mass");
+    await agent.turn("say how far is far enough", [read(COM), { tool: "edit_note", args: { note: COM, oldString: comPlain, newString: block(final(COM), "Seen from a distance") } }], `I gave the condition and the size of the error in [the centre of mass](/${COM}.md).`, [{ kind: "passage", id: COM, text: comPlain }]);
   });
   on(5, 0, () => write(INIT, final(INIT)));
   on(4, 0, () => write(BH, drop(final(BH), "With $\\theta = 0$")));
   on(4, 15, () => write(COST, final(COST)));
   on(3, 0, () => write(GALAXY, drop(final(GALAXY), "At $N = 2000$")));
-  // A note for Iso, written and not yet sent.
-  on(1, 30, async () => {
-    const draft = await engine.createDraft();
-    await engine.saveNote(draft.id, { base: draft.version, text: "---\ntype: Concept\ntitle: Close encounters\n---\n\nIn the cluster run, two bodies pass very close and the energy jumps by a percent in one step. What is happening, and what can I do about it? Rest it on [softening](/physics/softening.md), [choosing the timestep](/integrators/choosing-the-timestep.md) and [energy](/physics/energy-conservation.md).\n" });
-  });
 
   // ---- today's session: five moments, the last a few minutes ago
   on(0, -28, () => write(QUAD, final(QUAD)));
   on(0, -22, () => write(BH, final(BH)));
   on(0, -16, async () => {
-    const p = await insert(LOOP, null, "link what this rests on", block(final(LOOP), "Rests on"),
-      [{ name: "search_notes", arguments: { query: "leapfrog" } }, { name: "read_note", arguments: { id: LEAP } }, { name: "find_similar", arguments: { text: "where the loop spends its time" } }, { name: "outline_note", arguments: { id: DT } }],
-      { in: 10400, out: 130, cached: 5800, usd: 0.0172 });
-    await engine.keep(LOOP, p.proposal);
+    agent.begin("today");
+    await add(LOOP, null, "link what this rests on", block(final(LOOP), "Rests on"),
+      [{ tool: "search_notes", args: { query: "leapfrog" } }, read(LEAP), { tool: "find_similar", args: { text: "where the loop spends its time" } }, { tool: "outline_note", args: { id: DT } }],
+      `[The main loop](/${LOOP}.md) now says what it rests on: [leapfrog](/${LEAP}.md) for the step, [direct summation](/${DIRECT}.md) for the forces, and [the timestep](/${DT}.md).`);
   });
   on(0, -10, () => write(GALAXY, final(GALAXY)));
-  on(0, -4, () => insert(SOFT, "Beyond a few", "how big should ε be?", "A common choice is a few hundredths of the mean distance between neighbouring bodies: for $N$ bodies in a sphere of size 1, $\\varepsilon \\approx 0.05\\, N^{-1/3}$. Smaller, and close passes still jump; larger, and the galaxy's core is blurred.",
-    [{ name: "read_note", arguments: { id: DT } }, { name: "read_note", arguments: { id: UNITS } }], { in: 8700, out: 150, cached: 6200, usd: 0.0139 }));
+  // Asked in the same session, and answered there: the note is left as it is.
+  on(0, -4, () => agent.turn("how big should ε be?", [read(SOFT), read(DT), read(UNITS)],
+    `A common choice is a few hundredths of the mean distance between neighbouring bodies: for $N$ bodies in a sphere of size 1, $\\varepsilon \\approx 0.05\\, N^{-1/3}$, as [softening](/${SOFT}.md) has it in other words. Smaller, and close passes still jump, as [choosing the timestep](/${DT}.md) warns; larger, and the galaxy's core is blurred.`));
 
   // ---- the problems: each made, then its solution worked on, day by day
   for (const x of PROBLEMS) {
@@ -285,6 +259,5 @@ export async function buildExample(sources: Sources, now = Date.now()): Promise<
     t = day === 0 ? now + minute * MIN : now - day * DAY - 2 * 60 * MIN + minute * MIN;
     await act();
   }
-  if (replies.length) throw new Error(`${replies.length} scripted replies were never asked for`);
   return { notes: Object.fromEntries(notes.files), own: Object.fromEntries(own.files) };
 }

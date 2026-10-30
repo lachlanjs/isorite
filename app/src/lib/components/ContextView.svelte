@@ -1,47 +1,21 @@
 <script lang="ts">
-  // What the next turn is sent (M15), after the Header-Context board: a row for each part, its size on the right
-  // and a bar of its share of the model's limit under it, in three groups. A click switches a row on or off; ✕ takes
-  // a part you gave out of what you give. What each does is in its tooltip, not beside it.
-  import type { HandRow } from "@isorite/engine";
+  // What the agent has in hand (M15; an agent's session since M25), as far as isorite can see into it: a layer for
+  // isorite's MCP (its instructions and tools, estimated), one for the notes given and read in the session, one for
+  // the rest (the harness's own and the conversation), sized from what the agent says it fills, and the room left;
+  // the notes listed; and the tray, what goes before the next prompt. What the agent dropped when it compacted can't
+  // be seen, and the view says so.
   import { app } from "$lib/app.svelte.ts";
-  import { converse } from "$lib/converse.svelte.ts";
-  import { panes } from "$lib/panes.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
 
   const short = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n));
-  const GROUPS = ["notes", "conversation", "fixed"] as const;
-  const MARK: Record<HandRow["kind"], string> = { note: "◆", folder: "▭", passage: "“", read: "◇", question: "?", turn: "›", briefing: "≡", instructions: "", agents: "", message: "" };
-
-  const report = $derived(converse.report);
-
-  // What is sent as a geologist's column on its side (M24, O): a layer for each kind of thing, as wide as its share.
-  // From a quarter of what the model takes, the column is drawn to that scale with the room left; below it, the room
-  // would be all there is to see, and the figure beside it says how full it is. Under the pointer, a layer's name
-  // and size stand in the figure.
-  const STRATA = [["instructions", "instructions"], ["notes", "notes"], ["conversation", "conversation"], ["summary", "summary"]] as const;
-  const stratum = (r: HandRow): (typeof STRATA)[number][0] => (r.group === "fixed" ? "instructions" : r.kind === "briefing" ? "summary" : r.group === "notes" ? "notes" : "conversation");
-  const strata = $derived.by(() => {
-    if (!report?.rows) return [];
-    const scaled = report.tokens >= report.limit / 4, by = new Map<string, number>();
-    for (const r of report.rows) if (r.on) by.set(stratum(r), (by.get(stratum(r)) ?? 0) + r.tokens);
-    const layers = STRATA.map(([k, name]) => ({ k, name, tokens: by.get(k) ?? 0 })).filter((l) => l.tokens > 0);
-    const all = scaled ? [...layers, { k: "room", name: "room", tokens: Math.max(0, report.limit - report.tokens) }] : layers;
-    const whole = all.reduce((n, l) => n + l.tokens, 0) || 1;
-    return all.map((l) => ({ ...l, w: (100 * l.tokens) / whole }));
-  });
   let layer = $state<string | null>(null);
-  const shown = $derived(strata.find((l) => l.k === layer));
-  const build = $derived(panes.mode === "build");
 
-  // An agent's session over ACP (M25), as far as isorite can see into it: a layer for isorite's instructions and
-  // tools, one for the notes given and read in the session, one for the rest (the harness's own and the conversation),
-  // sized from what the agent says it fills, and the room left. What it dropped when it compacted can't be seen.
   let sizes = $state.raw<Record<string, number>>({});
-  $effect(() => { if (terminal.acp) void app.api.map().then((m) => (sizes = Object.fromEntries(Object.entries(m.notes).map(([id, n]) => [id, n.tokens]))), () => undefined); });
+  $effect(() => { if (terminal.session) void app.api.map().then((m) => (sizes = Object.fromEntries(Object.entries(m.notes).map(([id, n]) => [id, n.tokens]))), () => undefined); });
   const agentNotes = $derived.by(() => {
     const given = new Set<string>(), read = new Set<string>();
-    for (const t of terminal.view?.turns ?? []) {
+    for (const t of terminal.session?.turns ?? []) {
       for (const g of t.given ?? []) if (g.kind === "note") given.add(g.id);
       for (const i of t.items) if (i.kind === "tool" && i.note && !i.base && i.status === "done") read.add(i.note);
     }
@@ -49,29 +23,18 @@
     return [...[...given].map((id) => ({ id, how: "given" as const })), ...[...read].filter((id) => !given.has(id)).map((id) => ({ id, how: "read" as const }))].map((n) => ({ ...n, title: title(n.id), tokens: sizes[n.id] ?? 0 }));
   });
   const agentStrata = $derived.by(() => {
-    const v = terminal.view;
+    const v = terminal.session;
     if (!v?.size || !v.tokens.input) return [];
     const ours = Math.min(v.ours ?? 0, v.tokens.input), notes = Math.min(agentNotes.reduce((n, x) => n + x.tokens, 0), v.tokens.input - ours);
     const layers = [{ k: "instructions", name: "isorite's", tokens: ours }, { k: "notes", name: "notes", tokens: notes }, { k: "conversation", name: "the rest", tokens: v.tokens.input - ours - notes }, { k: "room", name: "room", tokens: Math.max(0, v.size - v.tokens.input) }].filter((l) => l.tokens > 0);
     return layers.map((l) => ({ ...l, w: (100 * l.tokens) / v.size! }));
   });
   const agentShown = $derived(agentStrata.find((l) => l.k === layer));
-  /** The turns a briefing stands for, shown under it when it is opened. */
-  let unfolded = $state<string[]>([]);
-  const fixed = (r: HandRow): boolean => r.kind === "instructions" || r.kind === "message";
-  const tip = (r: HandRow): string =>
-    r.kind === "read" ? (r.aged ? "Read by Iso, and set aside: not used for 3 turns. Iso is told it can read it again. Click to send it again." : r.on ? "Read by Iso, and kept in hand so it is not read again. Click to set it aside." : "Read by Iso, and set aside. Click to send it again.")
-    : r.kind === "turn" ? (r.on ? "An earlier turn, sent whole. Click to leave it out." : r.under ? "Summed up in the briefing above. Click to send it whole as well." : "Left out. Click to send it again.")
-    : r.kind === "briefing" ? (r.on ? "Earlier turns, summed up: sent instead of them. Click to send the turns instead." : "Not sent: the turns it sums up are sent instead. Click to send it again.")
-    : r.kind === "agents" ? "AGENTS.md: your instructions for this base, sent with every turn. Click to leave it out."
-    : r.kind === "question" ? "An open question about a note you gave. Click to leave it out."
-    : fixed(r) ? (r.kind === "instructions" ? "What Iso is told, and its tools" : "What you are writing")
-    : r.on ? "You gave it. Click to leave it out for now; ✕ takes it out." : "Left out for now. Click to send it again.";
 </script>
 
-<div class="context" role="region" aria-label="What Iso is sent">
-  {#if build && terminal.acp}
-    {@const v = terminal.view!}
+<div class="context" role="region" aria-label="What the agent has in hand">
+  {#if terminal.session}
+    {@const v = terminal.session}
     <div class="column">
       {#if agentStrata.length}
         <div class="strata" role="img" aria-label={agentStrata.map((l) => `${l.name} ${short(l.tokens)}`).join(", ")} onpointerover={(e) => (layer = (e.target as HTMLElement).dataset.k ?? null)} onpointerleave={() => (layer = null)}>
@@ -89,85 +52,21 @@
         <li class="row"><span class="r" title={n.how === "given" ? "Given from here" : `Read by ${v.agent}`}><span class="mk" class:iso={n.how === "read"} aria-hidden="true">{n.how === "given" ? "◆" : "◇"}</span><span class="t">{n.title}</span><span class="d">{n.how}</span>{#if n.tokens}<span class="num">{short(n.tokens)}</span>{/if}</span></li>
       {/each}
     </ul>
-    <h2 class="label">in the tray</h2>
-    <ul class="rows" aria-label="What you gave Iso" title="Given to the session before its next prompt, asked here or in the terminal, unless given already">
-      {#each tray.sent as p (tray.keyOf(p))}
-        <li class="row"><span class="r"><span class="mk" aria-hidden="true">◆</span><span class="t">{p.kind === "passage" ? `“${p.text}”` : p.title}</span></span>
-          <button type="button" class="x" aria-label="Take {p.title} out of Iso's context" onclick={() => tray.remove(p)}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 8M12 4l-8 8" /></svg></button></li>
-      {/each}
-    </ul>
-  {:else if build}
-    <!-- In Build the parts go to the terminal's agent by name; the rest is OpenCode's. -->
-    <h2 class="label">notes</h2>
-    <ul class="rows" aria-label="What you gave Iso" title="Sent with your next message to the terminal's agent: notes and folders by name, passages as they are">
-      {#each tray.sent as p (tray.keyOf(p))}
-        <li class="row"><span class="r"><span class="mk" aria-hidden="true">◆</span><span class="t">{p.kind === "passage" ? `“${p.text}”` : p.title}</span></span>
-          <button type="button" class="x" aria-label="Take {p.title} out of Iso's context" onclick={() => tray.remove(p)}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 8M12 4l-8 8" /></svg></button></li>
-      {/each}
-    </ul>
-  {:else if report?.rows}
-    <div class="column">
-      <div class="strata" role="img" aria-label={strata.map((l) => `${l.name} ${short(l.tokens)}`).join(", ")} onpointerover={(e) => (layer = (e.target as HTMLElement).dataset.k ?? null)} onpointerleave={() => (layer = null)}>
-        {#each strata as l (l.k)}<i class="s {l.k}" data-k={l.k} style:width="{l.w.toFixed(2)}%"></i>{/each}
-      </div>
-      <p class="total" title={report.counted ? "As the provider counted the last turn" : "Estimated: counted after the first turn"}>{#if shown}<span>{shown.name} · {short(shown.tokens)}</span>{:else}<span>{short(report.tokens)}</span><span class="faint">of {short(report.limit)}{report.counted ? "" : " ~"}</span>{/if}</p>
-    </div>
-    {#each GROUPS as g (g)}
-      {@const rows = report.rows.filter((r) => r.group === g && !r.under)}
-      {#if rows.length || g === "notes"}
-        <h2 class="label">
-          <span>{g}</span>
-          {#if g === "conversation"}
-            <span class="acts">
-              <button class="icon" type="button" aria-label="Sum up the earlier turns" title="Sum up the earlier turns, all but the last, into a briefing sent instead of them" disabled={converse.summing || !!converse.running || report.rows.filter((r) => r.kind === "turn" && r.on).length < 2} onclick={() => void converse.compact()}>
-                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3.5h10M3 6.5h10M5 10l3 3 3-3" /></svg>
-              </button>
-              <button class="icon" type="button" aria-label="A new conversation from here" title="A new conversation that starts from a briefing of this one" disabled={converse.summing || !!converse.running || !converse.turns.length} onclick={() => void converse.branch()}>
-                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 2.5v6a3 3 0 0 0 3 3h5" /><path d="M9.5 9l2.5 2.5L9.5 14" /></svg>
-              </button>
-            </span>
-          {/if}
-        </h2>
-        <ul class="rows" aria-label={g === "notes" ? "The notes Iso has" : g === "conversation" ? "The conversation" : "Always sent"}>
-          {#each rows as r (r.key)}
-            {@render row(r)}
-            {#if r.kind === "briefing" && unfolded.includes(r.key)}
-              {#each report.rows.filter((x) => x.under === r.key) as u (u.key)}{@render row(u, true)}{/each}
-            {/if}
-          {/each}
-        </ul>
-      {/if}
-    {/each}
+  {:else}
+    <p class="faint">With an agent attached, what it has in hand shows here: isorite's part, the notes it was given and read, and the room left.</p>
   {/if}
-  {#if converse.problem}<p class="bad" role="alert">{converse.problem}</p>{/if}
+  <h2 class="label">in the tray</h2>
+  <ul class="rows" aria-label="What you gave Iso" title="Given to the session before its next prompt, asked here or in its front end, unless given already">
+    {#each tray.sent as p (tray.keyOf(p))}
+      <li class="row"><span class="r"><span class="mk" aria-hidden="true">◆</span><span class="t">{p.kind === "passage" ? `“${p.text}”` : p.title}</span></span>
+        <button type="button" class="x" aria-label="Take {p.title} out of Iso's context" onclick={() => tray.remove(p)}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 8M12 4l-8 8" /></svg></button></li>
+    {/each}
+  </ul>
 </div>
-
-{#snippet row(r: HandRow, under = false)}
-  {@const share = report ? Math.min(1, r.tokens / report.limit) : 0}
-  <li class="row" class:off={!r.on} class:under data-key={r.key}>
-    <button type="button" class="r" role="switch" aria-checked={r.on} aria-label="Send: {r.title}" title={tip(r)} disabled={fixed(r)} onclick={() => void converse.toggle(r)}>
-      <span class="mk" class:iso={r.by === "iso"} class:q={r.kind === "question"} aria-hidden="true">{MARK[r.kind]}</span>
-      <span class="t">{r.kind === "passage" ? `“${r.given?.kind === "passage" ? r.given.text : r.title}”` : r.title}</span>
-      {#if r.detail}<span class="d">{r.detail}</span>{/if}
-      <span class="num">{short(r.tokens)}</span>
-      <i class="bar" style:--w="{(share * 100).toFixed(2)}%"></i>
-    </button>
-    {#if r.kind === "briefing"}
-      <button type="button" class="x" aria-label="The turns it sums up" aria-expanded={unfolded.includes(r.key)} title="The turns it sums up" onclick={() => (unfolded = unfolded.includes(r.key) ? unfolded.filter((k) => k !== r.key) : [...unfolded, r.key])}>
-        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d={unfolded.includes(r.key) ? "M4 10l4-4 4 4" : "M4 6l4 4 4-4"} /></svg>
-      </button>
-    {:else if r.given}
-      <button type="button" class="x" aria-label="Take {r.title} out of Iso's context" title="Take it out" onclick={() => converse.takeOut(r)}>
-        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 8M12 4l-8 8" /></svg>
-      </button>
-    {/if}
-  </li>
-{/snippet}
 
 <style>
   .context { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
-  /* The column (O): hatched, what Iso is told; blue, the notes; ruled, the conversation; malachite, its summary;
-     empty, the room left. */
+  /* The column (O): hatched, isorite's instructions and tools; blue, the notes; ruled, the rest; empty, the room left. */
   /* The figure under the column, so that a layer's name standing in it never moves the layers. */
   .column { display: flex; flex-direction: column; gap: 6px; }
   .strata { min-width: 0; height: 14px; display: flex; border: 1px solid var(--line-strong); background: var(--ground-0); }
@@ -177,30 +76,19 @@
   .instructions { background: repeating-linear-gradient(135deg, var(--text-faint) 0 1px, transparent 1px 4px); }
   .notes { background: var(--lattice); }
   .conversation { background: repeating-linear-gradient(90deg, var(--text-soft) 0 1px, transparent 1px 3px); }
-  .summary { background: var(--malachite); }
   .room { flex: 1 1 auto; background: none; }
   .total { display: flex; gap: 6px; align-items: baseline; font-variant-numeric: tabular-nums; color: var(--text); }
   .label { display: flex; align-items: center; gap: 6px; font-weight: 400; margin-top: 8px; min-height: 22px; }
-  .acts { margin-left: auto; display: inline-flex; gap: 2px; }
-  .acts .icon { width: 24px; height: 22px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
-  .acts .icon:hover:not(:disabled) { color: var(--text); }
-  .acts .icon:disabled { opacity: 0.4; cursor: default; }
   .rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   .row { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
-  .row.under { padding-left: 16px; }
   /* As the board: the name, a faint detail, the size on the right, and a thin bar of its share under it. */
   .r { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: 14px minmax(0, auto) minmax(0, 1fr) auto; column-gap: 8px; row-gap: 3px; align-items: baseline; background: none; border: 0; padding: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
   .r:disabled { cursor: default; }
   .mk { color: var(--growth); text-align: center; }
   .mk.iso { color: var(--lattice); }
-  .mk.q { color: var(--rose); }
   .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .d { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); }
   .num { grid-column: 4; color: var(--text-faint); font-variant-numeric: tabular-nums; }
-  .bar { grid-column: 1 / -1; height: 3px; background: linear-gradient(to right, var(--lattice) var(--w), var(--line) var(--w)); }
-  .off .t, .off .mk { color: var(--text-faint); }
-  .off .bar { background: var(--line); }
-  .r:not(:disabled):hover .t { color: var(--text); text-decoration: underline; text-decoration-color: var(--line-strong); }
   .x { width: 22px; height: 18px; flex: none; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .x:hover { color: var(--rose); }
   .bad { color: var(--rose); }

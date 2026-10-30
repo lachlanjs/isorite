@@ -22,7 +22,7 @@ export interface Overlay {
   line: number;
 }
 /** A stretch of the text, by character, marked for what Iso is doing with it, or in the note's Iso lens for whose it is. */
-export interface Mark { from: number; to: number; kind: "picked" | "old" | "by-iso" | "given" }
+export interface Mark { from: number; to: number; kind: "old" | "by-iso" | "given" }
 /** A piece set in the line at a character. */
 export interface Inline { key: string; at: number }
 
@@ -121,7 +121,6 @@ export function overlays(mount: Mount): Extension {
     // not the note's text: left to inherit that, the line break after each paragraph of Iso's showed as an empty line.
     ".cm-overlay": { cursor: "default", userSelect: "text", padding: "10px 0", display: "flow-root", whiteSpace: "normal" },
     // Chosen for Iso to rewrite: yours, so lattice. To be replaced if the change is kept: struck, as on the boards.
-    ".cm-iso-picked": { background: "var(--lattice-soft)", boxShadow: "inset 0 -2px 0 var(--lattice)", cursor: "pointer" },
     ".cm-iso-old": { textDecoration: "line-through", textDecorationColor: "var(--text-faint)", color: "var(--text-faint)" },
     ".cm-iso-old *": { color: "var(--text-faint) !important" },
     ".cm-iso-change": { cursor: "default" },

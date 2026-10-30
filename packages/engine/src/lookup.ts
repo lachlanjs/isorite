@@ -1,10 +1,12 @@
-// What Iso can look up while it works: the notes of the base, by their words,
-// by their meaning (where a search by meaning is given), by their outline, a
-// section at a time, and along their links. Read only: there is no tool here
-// that writes. Carried over from rdstudio's lookup.ts, without the code tools.
+// What an agent can look up in a base, through isorite's MCP (Iso's, until M25): the notes, by their words, by
+// their meaning (where a search by meaning is given), by their outline, a section at a time, and along their
+// links. Read only: there is no tool here that writes. Carried over from rdstudio's lookup.ts, without the code
+// tools.
 
 import { SearchIndex, headings, section, type Bundle } from "@isorite/core";
-import type { ToolDef } from "./provider.ts";
+
+/** A tool as an agent is offered it: its name, what it does, and its arguments' JSON Schema. */
+export interface ToolDef { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } }
 
 /** How a note came to be looked at. The Atlas draws each differently. */
 export type How = "keyword" | "meaning" | "link" | "read";

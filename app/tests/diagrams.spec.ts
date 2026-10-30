@@ -1,11 +1,12 @@
 // Diagrams and code, drawn (M19): a Mermaid block drawn by Pele in the note, kept beneath its source while it is
-// edited and saying why it can't be drawn; code coloured by its language, in colour or in ink; and Iso's answer with
-// a diagram and code, drawn in its pane with a copy icon on the code.
+// edited and saying why it can't be drawn; code coloured by its language, in colour or in ink; and an agent's answer
+// with a diagram and code, drawn in Iso's pane with a copy icon on the code.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { NOTES } from "./serve.ts";
+import { attach, box } from "./agent.ts";
 
 const editor = (page: Page) => page.getByRole("textbox", { name: "The note", exact: true });
 const phone = () => test.info().project.name.startsWith("phone");
@@ -75,23 +76,25 @@ test("code is in colour, or in ink by the Note pane's setting", async ({ page })
   await expect(page.locator("html")).not.toHaveAttribute("data-code", "ink");
 });
 
-test("Iso's answer with a diagram and code is drawn in its pane, and the code can be copied", async ({ page, context }) => {
+test("an agent's answer with a diagram and code is drawn in Iso's pane, and the code can be copied", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await open(page, "iso");
-  if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
-  const box = page.getByRole("textbox", { name: "Message Iso" });
-  await box.fill(`draw how surprise and entropy stand, ${test.info().project.name}`);
-  await box.press("Enter");
-  const said = page.locator('[data-pane="iso"] .said').last();
-  await expect(said.locator(".diagram svg").first()).toBeVisible();
-  await expect(said.locator(".diagram")).toContainText("Entropy");
-  await expect(said.locator(".code-lang")).toHaveText("python");
-  await expect(said.locator(".tok-k").first()).toHaveText("def");
-  await said.locator(".code-block").hover();
-  await said.getByRole("button", { name: "Copy the code" }).click();
-  await expect(said.locator(".code-copy.done")).toHaveCount(1);
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("return -log2(p)");
-  await look(page, "iso-drawn");
+  const agent = await attach();
+  try {
+    await open(page, "iso");
+    if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
+    await box(page).fill(`draw\nhow surprise and entropy stand, ${test.info().project.name}`);
+    await box(page).press("Enter");
+    const said = page.locator('[data-pane="iso"] .said').last();
+    await expect(said.locator(".diagram svg").first()).toBeVisible();
+    await expect(said.locator(".diagram")).toContainText("Entropy");
+    await expect(said.locator(".code-lang")).toHaveText("python");
+    await expect(said.locator(".tok-k").first()).toHaveText("def");
+    await said.locator(".code-block").hover();
+    await said.getByRole("button", { name: "Copy the code" }).click();
+    await expect(said.locator(".code-copy.done")).toHaveCount(1);
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("return -log2(p)");
+    await look(page, "iso-drawn");
+  } finally { agent.detach(); }
 });
 
 test("a diagram's text is only text: no script, handler or link from a note gets through; Markdown's own marks keep theirs", async ({ page }) => {

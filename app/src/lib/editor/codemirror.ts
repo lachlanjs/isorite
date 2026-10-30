@@ -40,12 +40,6 @@ export interface EditorOptions {
   onAsk?: (where: Where) => void;
   /** The cursor or the selection moved. */
   onCursor?: (where: Where) => void;
-  /** Whether passages are being chosen for a rewrite: a selection made then is handed over, not kept as a selection. */
-  picking?: () => boolean;
-  /** Passages chosen while picking, by character. */
-  onPick?: (ranges: { from: number; to: number }[]) => void;
-  /** A click with nothing selected while picking: the character it was on (to drop a passage chosen there). */
-  onUnpick?: (at: number) => void;
   /** Draws what is laid over the text (overlays.ts). */
   mountOverlay?: Mount;
   /** Shown, not written in: a version of the note from its timeline. */
@@ -165,24 +159,6 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
         ...defaultKeymap,
         ...historyKeymap,
       ]),
-      // Choosing passages for a rewrite: when a selection is finished (the button or the finger lifted, Shift let
-      // go) it is handed over and marked, and the selection itself is let go, so the next can be made anywhere.
-      EditorView.domEventHandlers((() => {
-        // The selection is read as the event arrives: a double click's two releases come together, and each must
-        // see the selection as it was at its own moment. Only the letting go of it waits, until the editor's own
-        // handling of the click is over.
-        const finished = (view: EditorView, clicked: boolean) => {
-          if (!opts.picking?.()) return;
-          const sel = view.state.selection, chosen = sel.ranges.filter((r) => !r.empty).map((r) => ({ from: r.from, to: r.to }));
-          if (chosen.length) { opts.onPick?.(chosen); setTimeout(() => view.dispatch({ selection: { anchor: Math.min(sel.main.head, view.state.doc.length) } }), 0); }
-          else if (clicked) opts.onUnpick?.(sel.main.head);
-        };
-        return {
-          mouseup: (e, view) => { finished(view, e.detail === 1); return false; },
-          touchend: (_e, view) => { finished(view, false); return false; },
-          keyup: (e, view) => { if (e.key === "Shift") finished(view, false); return false; },
-        };
-      })()),
       EditorView.domEventHandlers({
         mousedown(event, view) {
           if (!opts.onFollow || !(event.ctrlKey || event.metaKey) || event.button !== 0) return false;

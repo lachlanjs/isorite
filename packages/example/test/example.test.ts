@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
-import { hashText, readJournal, replay, moments, pending, splitFrontmatter } from "@isorite/core";
+import { hashText, readJournal, replay, moments, splitFrontmatter } from "@isorite/core";
+import type { AgentRecord } from "@isorite/engine";
 import { buildExample, COST_WORKING, PROBLEMS } from "../src/index.ts";
 import { loadSources } from "../src/node.ts";
 
@@ -38,24 +39,26 @@ test("each problem is a note of the base, beside the notes it uses, its statemen
   expect(Object.keys(built.own).filter((p) => p.startsWith("study/") || p.startsWith("record/") && built.own[p]!.includes('"attempt"'))).toEqual([]);
 });
 
-test("today's session is five moments, and Iso's answer on softening waits", () => {
-  const journals = Object.entries(built.own).filter(([p]) => p.startsWith("journal/") && !p.includes("@"));
-  const today = journals.flatMap(([p, text]) => moments(readJournal(text)).filter((m) => Date.parse(m.at) > NOW - 3600_000).map((m) => ({ note: p, what: m.what, asked: m.asked })));
-  expect(today.map((m) => m.what)).toEqual(expect.arrayContaining(["wrote", "edited", "kept", "edited", "offered"]));
-  expect(today).toHaveLength(5);
-  const soft = readJournal(built.own["journal/physics/softening.jsonl"]!);
-  expect(pending(soft).map((p) => p.asked)).toEqual(["how big should ε be?"]);
+test("today's session is four moments, one the agent's, and its answer on softening is in its session, not the note", () => {
+  const journals = Object.entries(built.own).filter(([p]) => p.startsWith("journal/"));
+  const today = journals.flatMap(([p, text]) => moments(readJournal(text)).filter((m) => Date.parse(m.at) > NOW - 3600_000).map((m) => ({ note: p, what: m.what, who: m.who, asked: m.asked })));
+  expect(today.map((m) => m.what).sort()).toEqual(["edited", "edited", "edited", "wrote"]);
+  expect(today.filter((m) => m.who === "agent:claude")).toEqual([{ note: "journal/simulation/the-main-loop.jsonl", what: "edited", who: "agent:claude", asked: "link what this rests on" }]);
+  const session = JSON.parse(built.own["conversations/agents/claude/today.json"]!) as AgentRecord;
+  expect(session.turns.map((t) => t.asked)).toEqual(["link what this rests on", "how big should ε be?"]);
+  expect(session.turns[1]!.items.flatMap((i) => (i.kind === "tool" ? [i.note] : []))).toEqual(["physics/softening", "integrators/choosing-the-timestep", "physics/units"]);
+  expect(built.notes["physics/softening.md"]).not.toContain("0.05");
 });
 
-test("the history has every kind of moment the timeline shows", () => {
-  const all = Object.entries(built.own).filter(([p]) => p.startsWith("journal/")).flatMap(([, text]) => moments(readJournal(text)).map((m) => m.what));
-  for (const what of ["wrote", "edited", "kept", "offered", "discarded", "restored", "changed elsewhere"]) expect(all, what).toContain(what);
+test("the history has every kind of moment the timeline shows of a base kept since M25", () => {
+  const all = Object.entries(built.own).filter(([p]) => p.startsWith("journal/")).flatMap(([, text]) => moments(readJournal(text)));
+  for (const what of ["wrote", "edited", "restored", "changed elsewhere"]) expect(all.map((m) => m.what), what).toContain(what);
+  // The agent's changes, each with what was asked, and one of them undone.
+  expect(all.filter((m) => m.who === "agent:claude").map((m) => m.asked).sort()).toEqual(["add the SI conversions", "link what this rests on", "say how far is far enough", "What makes leapfrog keep its energy over thousands of orbits, when RK4, which is more accurate per step, does not? Write it as a note.", "why does its energy not drift, when Euler's does?", "why is energy a good check on a run?"].sort());
+  expect(Object.keys(built.own).filter((p) => p.startsWith("conversations/agents/claude/")).sort()).toEqual(["centre-of-mass", "energy", "leapfrog", "symplectic", "today", "units"].map((s) => `conversations/agents/claude/${s}.json`));
 });
 
-test("a note for Iso waits unsent, and the cost of direct summation has a solution with a slip in it", () => {
-  const drafts = Object.keys(built.own).filter((p) => p.startsWith("drafts/"));
-  expect(drafts).toHaveLength(1);
-  expect(built.own[drafts[0]!]).toContain("Close encounters");
+test("the cost of direct summation has a solution with a slip in it, and Barnes–Hut a TODO", () => {
   expect(built.notes["algorithms/the-cost-of-direct-summation.md"]).toContain(COST_WORKING);
   expect(built.notes["algorithms/barnes-hut.md"]).toContain("TODO:");
 });

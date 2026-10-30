@@ -1,7 +1,7 @@
 ---
 type: Concept
 title: The switches
-description: Each pane's header switches choose what it shows, and what Iso may do.
+description: Each pane's header switches choose what it shows, and what an attached agent may do.
 ---
 
 Each pane's header has a row of small icons. Each is a switch: it says what it is when you hover on it, and when on it takes its colour, with a bar under it. Each has a key.
@@ -14,11 +14,10 @@ Each pane's header has a row of small icons. Each is a switch: it says what it i
 - Open questions (Alt+Q) and problems (Alt+B), on the map.
 - Links to the web (Alt+W) and to code (Alt+K): see [links out of the base](/out-of-the-base/web-and-code-links.md "see also").
 - Files beside the notes (Alt+I): pictures, [artifacts](/iso/artifacts.md "see also"), data and documents, each in its folder with its kind's mark, joined to the notes that cite them. A note's pasted pictures are one item.
-- Iso's context (Alt+C): what Iso is sent, what it read and what it changed, marked on the map.
+- Iso's context (Alt+C): what the agent's session was given, what it read and what it changed, marked on the map.
 
 **Iso:**
-- May it edit the notes (Alt+N). Off, Iso only reads and answers.
-- With a terminal attached, may it edit the project's files (Alt+F) and run commands (Alt+R). See [isorite term](/terminal/isorite-term.md "see also").
+- With an agent attached, may it edit the project's files (Alt+F) and run commands (Alt+R): what it asks to do that is switched off is refused. See [your own agent](/terminal/your-own-agent.md "see also").
 
 ![A note on the Atlas with a link to the web, one to code and two pictures beside it](the-switches/satellites.svg)
 

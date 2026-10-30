@@ -9,7 +9,7 @@
 
   onMount(() => {
     const last = app.listing.notes.some((n) => n.id === panes.last) ? panes.last : "";
-    // What the link asks of the Atlas (?pick=…), without the base the page is for (M20), which stays in the address.
+    // What the link asks of the Atlas, without the base the page is for (M20), which stays in the address.
     const asked = new URLSearchParams(page.url.search);
     asked.delete("base");
     const search = asked.size ? `?${asked}` : "";

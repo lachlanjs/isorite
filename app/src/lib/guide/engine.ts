@@ -1,9 +1,10 @@
 // The guide on the public site (M16): the real engine, in the page, over the guide's notes as this browser keeps
-// them (kept.ts), with the finder answering in place of a model. Nothing is sent anywhere.
+// them (kept.ts), with the finder standing in for an agent (finder.ts). Nothing is sent anywhere.
 
-import { Engine, KEY, MemorySecrets, OPENROUTER, systemClock, type Api } from "@isorite/engine";
-import { finderHttp, GUIDE_NAME } from "@isorite/guide";
+import { Engine, systemClock, type Api } from "@isorite/engine";
+import { GUIDE_NAME } from "@isorite/guide";
 import { KeptFiles } from "./kept.ts";
+import { withFinder } from "./finder.ts";
 
 // The guide's files, as they stand in the repository, by their path within the base.
 const raw = import.meta.glob("../../../../packages/guide/notes/**/*.md", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
@@ -26,10 +27,5 @@ async function open(): Promise<Api> {
     const res = await fetch(url).catch(() => null);
     if (res?.ok) await notes.writeBytes(path.split("/guide/notes/").at(-1)!, new Uint8Array(await res.arrayBuffer()));
   }));
-  return Engine.open({
-    notes, own, clock: systemClock, device: "browser", name: GUIDE_NAME,
-    http: finderHttp(16), secrets: new MemorySecrets({ [KEY]: "none" }),
-    // No signing in for a key: there is no provider here.
-    provider: { ...OPENROUTER, auth: undefined },
-  });
+  return withFinder(await Engine.open({ notes, own, clock: systemClock, device: "browser", name: GUIDE_NAME }));
 }

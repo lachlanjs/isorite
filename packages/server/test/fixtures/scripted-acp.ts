@@ -3,7 +3,10 @@
 //   glance <path>       the same, never said to be finished (as Hermes does)
 //   cite <link>         cite it, as written, in the reply
 //   edit <path> <text>  append a line to a file with its own tools (a tool call with its diff)
-//   ask <note id>       ask a question back about a note, through isorite's MCP over HTTP, as a real agent would
+//   ask <note id> [<title>]  ask a question back about a note, through isorite's MCP over HTTP, as a real agent
+//                       would (titled "Why does it drift?" unless given)
+//   offer <note id> <text>   offer words for a note, the same way
+//   draw                answer with a diagram and a code block
 //   permit              ask before running a command
 // and it then replies, citing the first note it read in isorite's link form. Everything it was given (each prompt's
 // blocks, the MCP servers) it says back, so a test can see it. Its sessions can be listed and loaded (their history
@@ -23,6 +26,8 @@ const stored = (): Record<string, Kept> => (STORE && existsSync(STORE) ? JSON.pa
 const store = (id: string, k: Kept) => { if (STORE) writeFileSync(STORE, JSON.stringify({ ...stored(), [id]: k })); };
 const sessions = new Map<string, { cwd: string; mcp: { name: string; type?: string; url?: string }[]; kept: Kept }>();
 const waiting = new Map<string, (r: any) => void>();
+/** What "draw" adds to a reply: a diagram and a code block. */
+const DRAWN = "Here is how they stand:\n\n```mermaid\nflowchart LR\n  s[Surprise] --> e[Entropy]\n```\n\nAnd in code:\n\n```python\ndef surprise(p):\n    return -log2(p)  # in bits\n```";
 let n = 0;
 const AUTH = Boolean(process.env.SCRIPTED_AUTH);
 let signedIn = !AUTH;
@@ -52,10 +57,13 @@ async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; 
       appendFileSync(at, `\n${added}\n`);
       update(sessionId, { sessionUpdate: "tool_call", toolCallId: call, title: `Edit ${path}`, kind: "edit", status: "completed", locations: [{ path: at }], content: [{ type: "diff", path: at, oldText: before, newText: `${before}\n${added}\n` }] });
     }
-    if (verb === "ask" && path) {
+    // Through isorite's MCP: a question back about a note (its title as given, or "Why does it drift?"), or words
+    // offered for one.
+    if ((verb === "ask" || verb === "offer") && path) {
       const isorite = s.mcp.find((m) => m.name === "isorite" && m.url);
-      update(sessionId, { sessionUpdate: "tool_call", toolCallId: call, title: "isorite: ask_question", name: "mcp__isorite__ask_question", kind: "other", status: "in_progress", rawInput: { title: "Why does it drift?", about: [path] } });
-      const said = isorite ? await mcpCall(isorite.url!, "ask_question", { title: "Why does it drift?", text: "", about: [path] }) : "no isorite MCP over HTTP";
+      const [tool, args] = verb === "ask" ? ["ask_question", { title: rest.join(" ") || "Why does it drift?", text: "", about: [path] }] : ["offer_text", { id: path, text: rest.join(" ") }];
+      update(sessionId, { sessionUpdate: "tool_call", toolCallId: call, title: `isorite: ${tool}`, name: `mcp__isorite__${tool}`, kind: "other", status: "in_progress", rawInput: args });
+      const said = isorite ? await mcpCall(isorite.url!, tool, args) : "no isorite MCP over HTTP";
       update(sessionId, { sessionUpdate: "tool_call_update", toolCallId: call, status: "completed", content: [{ type: "content", content: { type: "text", text: said } }] });
     }
     if (verb === "permit") {
@@ -70,7 +78,9 @@ async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; 
     }
   }
   const cite = read[0] ? `[as the note says](/${read[0]}.md)` : "with no note";
-  const said = `Done, ${cite}${cited.map((c) => `, ${c}`).join("")}. Blocks: ${blocks.length}. MCP: ${s.mcp.map((m) => `${m.name}/${m.type ?? "stdio"}`).join(",")}.`;
+  // "draw": a diagram and code in the reply, as Markdown.
+  const drawn = /^draw\b/m.test(text) ? `\n\n${DRAWN}` : "";
+  const said = `Done, ${cite}${cited.map((c) => `, ${c}`).join("")}. Blocks: ${blocks.length}. MCP: ${s.mcp.map((m) => `${m.name}/${m.type ?? "stdio"}`).join(",")}.${drawn}`;
   update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: said } });
   s.kept.history.push({ user: text, agent: said });
   s.kept.updatedAt = new Date().toISOString();
