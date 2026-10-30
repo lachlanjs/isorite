@@ -12,6 +12,7 @@ import { Conflict, EngineError, MAX_FILE_BYTES, MAX_NOTE_BYTES, type Api, type C
 import type { BasesPort } from "./bases.ts";
 import type { Setup } from "./setup.ts";
 import { given as withGiven, type Terminal } from "./terminal.ts";
+import type { AcpFollower, Following, Rpc } from "./acp.ts";
 
 export const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
 export const TOKEN_HEADER = "x-isorite-token";
@@ -27,8 +28,10 @@ export interface ServerOptions {
   allowHosts?: Iterable<string>;
   /** Where the knowledge base is on disk, for a terminal agent's harness to tell its notes from code. */
   notes?: string;
-  /** The terminal's session, when `isorite term` attaches one (M11). */
-  terminal?: Terminal;
+  /** The terminal's session, when `isorite term` attaches one (M11), or an ACP agent's through `isorite acp` (M25). */
+  terminal?: Terminal | Following;
+  /** Where `isorite acp` tells what passed between a front end and its agent (M25). */
+  acp?: AcpFollower;
   /** The provider, relayed at /api/gateway for OpenCode: it asks with the token as its key (M13). */
   gateway?: (path: string, req: Request) => Promise<Response>;
   /** The provider's setup, from Iso's settings (M18). */
@@ -86,7 +89,7 @@ const AgentEdit = z.union([
 const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal, gateway, setup, bases, base }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal, acp, gateway, setup, bases, base }: ServerOptions): Hono {
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -321,6 +324,23 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     });
     post("/api/terminal/stop", z.object({}).strict(), async () => { await terminal.interrupt().catch(failed); });
     post("/api/terminal/permission", z.object({ id: z.string().max(200), decision: z.enum(["once", "always", "reject"]) }).strict(), async (_c, b) => { await terminal.reply(b.id, b.decision).catch(failed); });
+  }
+
+  // An ACP agent's session (M25, the spike): `isorite acp`, on this machine, tells what passed between its front end
+  // and the agent, and listens for what the pane asks. Asked as the page asks: the Origin and the token.
+  if (acp) {
+    post("/api/acp/tap", z.object({ messages: z.array(z.object({ way: z.enum(["in", "out", "ours"]), message: z.record(z.string(), z.unknown()) }).strict()).max(1000) }).strict(), async (_c, b) => { acp.tap(b.messages as { way: "in" | "out" | "ours"; message: Rpc }[]); });
+    app.get("/api/acp/commands", (c) => {
+      if (!local(c) || c.req.header(TOKEN_HEADER) !== token) return refuse(c, 403, "bad token");
+      return streamSSE(c, async (stream) => {
+        const hangUp = acp.connect((command) => { void stream.writeSSE({ event: "command", data: JSON.stringify(command) }).catch(() => undefined); });
+        const beat = setInterval(() => { void stream.write(": still here\n\n"); }, 25_000);
+        await stream.writeSSE({ event: "open", data: "{}" });
+        await new Promise<void>((done) => stream.onAbort(done));
+        clearInterval(beat);
+        hangUp();
+      });
+    });
   }
 
   // Everything the engine does, as it happens. A comment every 25 seconds keeps the connection open.

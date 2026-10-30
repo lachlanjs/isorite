@@ -22,7 +22,7 @@ import { self } from "./self.ts";
 import { link, locate } from "./serve.ts";
 
 // The command itself, to start a server with: main.ts in a checkout, or the one file it is built into for npm.
-const MAIN = import.meta.url.endsWith(".ts") ? fileURLToPath(new URL("./main.ts", import.meta.url)) : fileURLToPath(import.meta.url);
+export const MAIN = import.meta.url.endsWith(".ts") ? fileURLToPath(new URL("./main.ts", import.meta.url)) : fileURLToPath(import.meta.url);
 
 export interface TermOptions {
   port?: number;
@@ -202,7 +202,7 @@ export function where(port: number, models: Awaited<ReturnType<typeof modelsFor>
 }
 
 /** The token the isorite server hands its page, which its relay takes as OpenCode's key. */
-async function tokenOf(url: string): Promise<string> {
+export async function tokenOf(url: string): Promise<string> {
   return ((await (await fetch(`${url}/api/session`)).json()) as { token: string }).token;
 }
 

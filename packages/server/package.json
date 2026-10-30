@@ -12,6 +12,7 @@
     "check": "tsc -p ."
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^2.1.0",
     "@hono/node-server": "^2.1.4",
     "@huggingface/tokenizers": "^0.2.0",
     "@isorite/core": "*",

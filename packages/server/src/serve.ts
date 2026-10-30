@@ -15,6 +15,7 @@ import { gatewayHttp, relay } from "./gateway.ts";
 import { cacheDir, modelDir, nodeEmbedder } from "./embedder.ts";
 import { LOOPBACK, createApp } from "./http.ts";
 import { Terminal } from "./terminal.ts";
+import { AcpFollower, Following } from "./acp.ts";
 import { NodeFiles } from "./nodefiles.ts";
 import { Setup } from "./setup.ts";
 import { VERSION } from "./version.ts";
@@ -138,7 +139,8 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
     make: async (known) => {
       const api = await openEngine({ notes: known.path }, device, config, live.http, model, secrets, { name: known.name, elsewhere: bases, embedder });
       api.setProvider(live.provider, live.http);
-      const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, terminal: new Terminal(), gateway, setup, bases, base: known.name });
+      const acp = new AcpFollower();
+      const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, terminal: new Following(new Terminal(), acp), acp, gateway, setup, bases, base: known.name });
       return { engine: api, fetch: app.fetch };
     },
   });

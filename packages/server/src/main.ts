@@ -22,6 +22,7 @@ import { single } from "./self.ts";
 import { newBase, serve } from "./serve.ts";
 import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
+import { acp } from "./acp-wrap.ts";
 import { installOpenCode, term } from "./term.ts";
 import { guide } from "./guide.ts";
 import { writeExample, writeGeometry } from "@isorite/example/node";
@@ -140,6 +141,15 @@ export function main(argv: string[]): number | Promise<number> {
       const run = command === "term" ? term(path, port === undefined ? {} : { port }) : mcp(path, { ...(port === undefined ? {} : { port }), ...(agent ? { agent } : {}) });
       return run.catch((e: Error) => { console.error(e.message); return 2; });
     }
+    // The spike of M25: not listed yet.
+    if (command === "acp") {
+      const flag = (name: string) => { const at = rest.indexOf(name); return at < 0 ? undefined : rest[at + 1]; };
+      const agent = flag("--agent"), port = flag("--port") === undefined ? undefined : Number(flag("--port"));
+      if (!agent) { console.error('isorite acp --agent "<the agent\'s ACP command>" [<notes>] [--port <n>]'); return 2; }
+      if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
+      const path = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port" && rest[i - 1] !== "--agent");
+      return acp(path, { agent, ...(port === undefined ? {} : { port }) }).catch((e: Error) => { console.error(e.message); return 2; });
+    }
     if (command === "model") {
       const from = rest[rest.indexOf("--from") + 1], url = rest[rest.indexOf("--url") + 1];
       if (rest.includes("--from") && !from) { console.error("--from takes a folder, or the model's .tgz"); return 2; }
@@ -191,7 +201,7 @@ export function main(argv: string[]): number | Promise<number> {
 /** The commands that start something, which say so at once (M21): a subprocess that stalls after this is then
  *  seen to stall. To stderr, as `mcp` speaks on stdout; once, not again when the command runs itself again with
  *  the proxy on (ISORITE_STARTING). */
-const STARTS = new Set(["serve", "term", "mcp", "guide", "tutorial", "--tutorial"]);
+const STARTS = new Set(["serve", "term", "mcp", "acp", "guide", "tutorial", "--tutorial"]);
 export function starting(argv: string[], env: NodeJS.ProcessEnv = process.env, write = (s: string) => process.stderr.write(s)): boolean {
   if (!STARTS.has(argv[0] ?? "") || env.ISORITE_STARTING) return false;
   write("isorite: starting…\n");
