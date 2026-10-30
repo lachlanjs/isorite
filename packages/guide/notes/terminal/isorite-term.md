@@ -10,4 +10,6 @@ The browser follows it. In Iso's pane, with the project's files or commands swit
 
 It is given the base's [AGENTS.md](/iso/agents-md.md "uses") too, and what isorite tells Iso about a base. With [a memory](/terminal/memory.md "see also") lent to it, it remembers across projects.
 
+Any agent that speaks ACP can be attached the same way, or chosen in Iso's pane: see [your own agent](/terminal/your-own-agent.md "see also").
+
 Setting it up, with a provider or a gateway of your own, is in the guide on GitHub: [the terminal](https://github.com/lachlanjs/isorite/blob/main/docs/terminal.md).

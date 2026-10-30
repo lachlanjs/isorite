@@ -1,11 +1,14 @@
 // A scripted ACP agent (M25), for the tests: no model. Each prompt is a list of things to do, a line each:
 //   read <path>         read a file with its own tools (a tool call with the file's location)
+//   glance <path>       the same, never said to be finished (as Hermes does)
+//   cite <link>         cite it, as written, in the reply
 //   edit <path> <text>  append a line to a file with its own tools (a tool call with its diff)
 //   ask <note id>       ask a question back about a note, through isorite's MCP over HTTP, as a real agent would
 //   permit              ask before running a command
 // and it then replies, citing the first note it read in isorite's link form. Everything it was given (each prompt's
 // blocks, the MCP servers) it says back, so a test can see it. Its sessions can be listed and loaded (their history
 // replayed), and are kept in SCRIPTED_STORE when that is set, so another run of it (its "own terminal") has them.
+// With SCRIPTED_AUTH set it asks to be signed in first, as Codex does, with its API key's method.
 
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
@@ -21,6 +24,8 @@ const store = (id: string, k: Kept) => { if (STORE) writeFileSync(STORE, JSON.st
 const sessions = new Map<string, { cwd: string; mcp: { name: string; type?: string; url?: string }[]; kept: Kept }>();
 const waiting = new Map<string, (r: any) => void>();
 let n = 0;
+const AUTH = Boolean(process.env.SCRIPTED_AUTH);
+let signedIn = !AUTH;
 
 async function mcpCall(url: string, name: string, args: object): Promise<string> {
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) });
@@ -30,7 +35,7 @@ async function mcpCall(url: string, name: string, args: object): Promise<string>
 async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; text?: string }[]) {
   const s = sessions.get(sessionId)!;
   const text = blocks.map((b) => b.text ?? "").join("\n");
-  const read: string[] = [];
+  const read: string[] = [], cited: string[] = [];
   for (const line of text.split("\n").map((l) => l.trim())) {
     const [verb, path, ...rest] = line.split(/\s+/);
     const call = `call-${++n}`;
@@ -40,6 +45,8 @@ async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; 
       update(sessionId, { sessionUpdate: "tool_call_update", toolCallId: call, status: "completed", content: [{ type: "content", content: { type: "text", text: readFileSync(at, "utf8").slice(0, 200) } }] });
       read.push(path.replace(/^.*?([^/]+\/[^/]+)\.md$/, "$1"));
     }
+    if (verb === "cite" && path) cited.push(`[cited](${path})`);
+    if (verb === "glance" && path) update(sessionId, { sessionUpdate: "tool_call", toolCallId: call, title: `read: ${path}`, kind: "read", locations: [{ path }] });
     if (verb === "edit" && path) {
       const at = isAbsolute(path) ? path : join(s.cwd, path), before = readFileSync(at, "utf8"), added = rest.join(" ");
       appendFileSync(at, `\n${added}\n`);
@@ -63,7 +70,7 @@ async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; 
     }
   }
   const cite = read[0] ? `[as the note says](/${read[0]}.md)` : "with no note";
-  const said = `Done, ${cite}. Blocks: ${blocks.length}. MCP: ${s.mcp.map((m) => `${m.name}/${m.type ?? "stdio"}`).join(",")}.`;
+  const said = `Done, ${cite}${cited.map((c) => `, ${c}`).join("")}. Blocks: ${blocks.length}. MCP: ${s.mcp.map((m) => `${m.name}/${m.type ?? "stdio"}`).join(",")}.`;
   update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: said } });
   s.kept.history.push({ user: text, agent: said });
   s.kept.updatedAt = new Date().toISOString();
@@ -78,8 +85,10 @@ for await (const line of createInterface({ input: process.stdin })) {
   const m = JSON.parse(line) as Rpc;
   if (!m.method && m.id !== undefined && waiting.has(String(m.id))) { waiting.get(String(m.id))!(m.result); waiting.delete(String(m.id)); continue; }
   const p = m.params ?? {};
+  if (!signedIn && (m.method === "session/new" || m.method === "session/list" || m.method === "session/load")) { send({ id: m.id, error: { code: -32000, message: "Authentication required" } }); continue; }
   switch (m.method) {
-    case "initialize": send({ id: m.id, result: { protocolVersion: 1, agentInfo: { name: "scripted", title: "Scripted", version: "0" }, agentCapabilities: { loadSession: true, sessionCapabilities: { list: {} }, mcpCapabilities: { http: process.env.SCRIPTED_HTTP !== "0", sse: false } } } }); break;
+    case "authenticate": signedIn = p.methodId === "api-key"; send(signedIn ? { id: m.id, result: {} } : { id: m.id, error: { code: -32603, message: "no such method" } }); break;
+    case "initialize": send({ id: m.id, result: { protocolVersion: 1, agentInfo: { name: "scripted", title: "Scripted", version: "0" }, agentCapabilities: { loadSession: true, sessionCapabilities: { list: {} }, mcpCapabilities: { http: process.env.SCRIPTED_HTTP !== "0", sse: false } }, authMethods: AUTH ? [{ id: "api-key", name: "API Key" }, { id: "browser", name: "Sign in" }] : [] } }); break;
     case "session/new": {
       const sessionId = `s-${process.pid}-${++n}`;
       sessions.set(sessionId, { cwd: p.cwd ?? process.cwd(), mcp: p.mcpServers ?? [], kept: { cwd: p.cwd ?? process.cwd(), title: "", updatedAt: new Date().toISOString(), history: [] } });

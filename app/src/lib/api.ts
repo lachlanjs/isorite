@@ -36,8 +36,16 @@ export interface TerminalApi {
   /** The project's MCP config as isorite would write it (M25), and written, from this machine only. */
   project(): Promise<ProjectConfig>;
   writeProject(): Promise<string[]>;
+  /** The agent chosen for the pane, with no front end of its own (M25); the ACP registry's; and choosing one, or
+   *  none, from this machine only. */
+  chosen(): Promise<ChosenAgent>;
+  registry(): Promise<RegistryAgent[]>;
+  choose(choice: AgentChoice | null): Promise<ChosenAgent>;
 }
 export interface ProjectConfig { repo: string; files: { file: string; harness: string; current: boolean; before: string | null; after: string }[] }
+export type AgentChoice = { id: string } | { command: string };
+export interface ChosenAgent { choice: AgentChoice | null; running: boolean; command: string; problem: string; said: string }
+export interface RegistryAgent { id: string; name: string; version: string; description: string; site: string; how: "npx" | "uvx" | "binary" | null }
 
 /** The provider's setup (M18), through the isorite server: there is none for the engine in the page (the guide's site). */
 export interface SetupApi {
@@ -177,6 +185,9 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       list: async () => { await write("POST", "acp/list", {}); },
       project: () => ask<ProjectConfig>("connect"),
       writeProject: async () => (await write<{ written: string[] }>("POST", "connect", {})).written,
+      chosen: () => ask<ChosenAgent>("acp/agent"),
+      registry: () => ask<RegistryAgent[]>("acp/registry"),
+      choose: (choice) => write<ChosenAgent>("POST", "acp/choose", { choice }),
     },
     events(listener) {
       const source = new EventSource(root + "events");

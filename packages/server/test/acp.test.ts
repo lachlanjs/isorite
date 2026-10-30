@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 import { afterAll, expect, test } from "vitest";
 import { writeExample } from "@isorite/example/node";
 import { acp, findBase } from "../src/acp-wrap.ts";
+import { commandOf, readRegistry, registryAgents } from "../src/agents.ts";
+import { ensureServer } from "../src/term.ts";
 
 const root = mkdtempSync(join(tmpdir(), "isorite-acp-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -193,4 +195,60 @@ test("the base for a session: the folder or one above it with .isorite/, else th
   expect(findBase(join(root, "repo"))).toBe(base.notes);
   expect(findBase(join(base.notes, "integrators"))).toBe(base.notes);
   expect(findBase(tmpdir() === root ? "/" : join(root, "config"))).toBeNull();
+});
+
+test("the agent chosen in the base's settings (M25): started for the pane, with no front end; signed in with its API key when it asks; stopped when none is chosen", async () => {
+  const base = await writeExample(join(root, "chosen"));
+  const port = await freePort();
+  const env = { ...process.env, XDG_CONFIG_HOME: join(root, "config-chosen"), XDG_CACHE_HOME: join(root, "cache"), ISORITE_EMBED: "off", SCRIPTED_AUTH: "1" };
+  const server = await ensureServer(base.notes, { port, env });
+  const url = server.url;
+  const view = async () => (await (await fetch(`${url}/api/terminal`)).json()) as any;
+  const token = ((await (await fetch(`${url}/api/session`)).json()) as { token: string }).token;
+  const post = (path: string, body: object) => fetch(url + path, { method: "POST", headers: { "Content-Type": "application/json", "x-isorite-token": token, Origin: url }, body: JSON.stringify(body) });
+  try {
+    expect(await (await fetch(`${url}/api/acp/agent`)).json()).toMatchObject({ choice: null, running: false });
+
+    const command = `"${process.execPath}" "${SCRIPTED}"`;
+    expect(await (await post("/api/acp/choose", { choice: { command } })).json()).toMatchObject({ choice: { command }, running: true });
+    await expect.poll(async () => (await view()).agent, { timeout: 30_000 }).toBe("Scripted");
+    expect(readFileSync(join(env.XDG_CONFIG_HOME, "isorite", "bases.toml"), "utf8")).toContain("agent_command");
+
+    // Asked in the pane: a session opened for it (the agent signed in first), and the answer drawn there.
+    expect((await post("/api/terminal/prompt", { asked: "read integrators/leapfrog.md\nglance integrators/eulers-method.md\ncite integrators/eulers-method.md#the-step\ncite sandbox:/integrators/leapfrog.md\ncite nowhere/at-all.md", given: [] })).status).toBe(200);
+    await expect.poll(async () => (await view()).turns[0]?.state, { timeout: 30_000 }).toBe("done");
+    const v = await view();
+    expect(v.problem).toBeUndefined();
+    // Its links to notes in isorite's form, however it wrote them; one to no note as it was.
+    expect(v.turns[0].items.find((i: any) => i.kind === "text").text).toContain("Done, [as the note says](/integrators/leapfrog.md), [cited](/integrators/eulers-method.md#the-step), [cited](/integrators/leapfrog.md), [cited](nowhere/at-all.md).");
+    expect(v.turns[0].from).toBe("here");
+    // A read the agent never said was finished is, with the turn; its file (relative to where it works) is the note.
+    expect(v.turns[0].items.find((i: any) => i.kind === "tool" && i.title.startsWith("read:"))).toMatchObject({ note: "integrators/eulers-method", status: "done" });
+
+    expect(await (await post("/api/acp/choose", { choice: null })).json()).toMatchObject({ choice: null, running: false });
+    await expect.poll(async () => (await view()).connected, { timeout: 15_000 }).toBe(false);
+  } finally {
+    await post("/api/acp/choose", { choice: null }).catch(() => undefined);
+    server.release();
+  }
+});
+
+test("the ACP registry: its agents as the settings list them, and how each is run here", async () => {
+  const file = join(root, "registry.json");
+  writeFileSync(file, JSON.stringify({ version: "1", agents: [
+    { id: "claude-acp", name: "Claude Agent", version: "0.99.1", description: "ACP wrapper for Anthropic's Claude", distribution: { npx: { package: "@agentclientprotocol/claude-agent-acp@0.99.1" } } },
+    { id: "fast-agent", name: "fast-agent", version: "0.10.1", distribution: { uvx: { package: "fast-agent-acp==0.10.1", args: ["-x"], env: { FAST_AGENT_MODEL: "codex plan" } } } },
+    { id: "elsewhere", name: "Elsewhere", version: "1", distribution: { binary: { "plan9-mips": { archive: "https://example.invalid/a.zip", cmd: "./a" } } } },
+    { id: "Not An Id", name: "Bad", version: "1", distribution: {} },
+  ] }));
+  const env = { ...process.env, ISORITE_ACP_REGISTRY: file };
+  expect(await registryAgents(env)).toEqual([
+    { id: "claude-acp", name: "Claude Agent", version: "0.99.1", description: "ACP wrapper for Anthropic's Claude", site: "", how: "npx" },
+    { id: "elsewhere", name: "Elsewhere", version: "1", description: "", site: "", how: null },
+    { id: "fast-agent", name: "fast-agent", version: "0.10.1", description: "", site: "", how: "uvx" },
+  ]);
+  const entries = await readRegistry(env);
+  expect(await commandOf(entries.find((e) => e.id === "claude-acp")!, env)).toBe("npx -y @agentclientprotocol/claude-agent-acp@0.99.1");
+  expect(await commandOf(entries.find((e) => e.id === "fast-agent")!, env)).toBe(process.platform === "win32" ? `FAST_AGENT_MODEL="codex plan" uvx fast-agent-acp==0.10.1 -x` : `FAST_AGENT_MODEL='codex plan' uvx fast-agent-acp==0.10.1 -x`);
+  await expect(commandOf(entries.find((e) => e.id === "elsewhere")!, env)).rejects.toThrow(/not offered for/);
 });

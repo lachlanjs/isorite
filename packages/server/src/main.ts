@@ -49,6 +49,10 @@ const USAGE = `isorite: an agentic harness for understanding
   isorite mcp [<notes>] [--port <n>] [--agent <name>]
                                          the knowledge base's tools over MCP, on stdio, for Claude Code or Pi:
                                          claude mcp add isorite -- isorite mcp <base> --agent claude-code
+  isorite acp --agent "<command>" [<notes>] [--port <n>] [--pane]
+                                         an ACP agent (claude-agent-acp, codex-acp, opencode acp, hermes acp)
+                                         behind your ACP front end (Toad, Zed), with the base's MCP, and its
+                                         sessions in Iso's pane; --pane: no front end, the pane alone
   isorite model [--from <folder|.tgz>] [--url <url>]
                                          the model for search by meaning: which is installed, and where; else
                                          fetched (53 MB, once) from ISORITE_MODEL_BASE_URL, npm, GitHub or
@@ -142,14 +146,16 @@ export function main(argv: string[]): number | Promise<number> {
       const run = command === "term" ? term(path, port === undefined ? {} : { port }) : mcp(path, { ...(port === undefined ? {} : { port }), ...(agent ? { agent } : {}), ...(session && /^[\w-]{1,200}$/.test(session) ? { session } : {}) });
       return run.catch((e: Error) => { console.error(e.message); return 2; });
     }
-    // The spike of M25: not listed yet.
     if (command === "acp") {
       const flag = (name: string) => { const at = rest.indexOf(name); return at < 0 ? undefined : rest[at + 1]; };
       const agent = flag("--agent"), port = flag("--port") === undefined ? undefined : Number(flag("--port"));
-      if (!agent) { console.error('isorite acp --agent "<the agent\'s ACP command>" [<notes>] [--port <n>]'); return 2; }
+      if (!agent) { console.error('isorite acp --agent "<the agent\'s ACP command>" [<notes>] [--port <n>] [--pane]'); return 2; }
       if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
-      const path = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port" && rest[i - 1] !== "--agent");
-      return acp(path, { agent, ...(port === undefined ? {} : { port }) }).catch((e: Error) => { console.error(e.message); return 2; });
+      // --pane: no front end, the Iso pane alone; --url: the base on the server that started this for it.
+      const url = flag("--url"), pane = rest.includes("--pane");
+      if (url !== undefined && !/^http:\/\/(127\.0\.0\.1|localhost|\[::1\]):\d+(\/b\/[a-z0-9-]+)?$/.test(url)) { console.error("--url takes a base's address on this machine"); return 2; }
+      const path = rest.find((a, i) => !a.startsWith("--") && !["--port", "--agent", "--url"].includes(rest[i - 1] ?? ""));
+      return acp(path, { agent, pane, ...(port === undefined ? {} : { port }), ...(url ? { url } : {}) }).catch((e: Error) => { console.error(e.message); return 2; });
     }
     if (command === "model") {
       const from = rest[rest.indexOf("--from") + 1], url = rest[rest.indexOf("--url") + 1];

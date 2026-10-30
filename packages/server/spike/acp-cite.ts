@@ -33,6 +33,9 @@ void (async () => {
   }
 })();
 const init = await ask("initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "spike", version: "0" } });
+// An agent that asks to be signed in first (Codex) is, with its API key's method.
+const key = (init.result?.authMethods ?? []).find((a: any) => /api.?key/i.test(a.id));
+if (key) console.error("authenticate:", JSON.stringify(await ask("authenticate", { methodId: key.id })).slice(0, 200));
 const results: any[] = [];
 for (const q of QUESTIONS) {
   const made = await ask("session/new", { cwd: base, mcpServers: [] });

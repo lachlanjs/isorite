@@ -16,6 +16,7 @@ import type { AcpFollower, Following, Rpc } from "./acp.ts";
 import { McpEndpoint, agentName, clientName, type Rpc as McpRpc } from "./mcp-http.ts";
 import { VERSION } from "./version.ts";
 import { proposal, writeProposal } from "./connect.ts";
+import { registryAgents, type AgentRunner } from "./agents.ts";
 
 export const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
 export const TOKEN_HEADER = "x-isorite-token";
@@ -39,6 +40,8 @@ export interface ServerOptions {
   gateway?: (path: string, req: Request) => Promise<Response>;
   /** The provider's setup, from Iso's settings (M18). */
   setup?: Setup;
+  /** The agent chosen in the base's settings, started for the pane (M25). */
+  agents?: AgentRunner;
   /** The other bases the server holds (M20), and this one's name among them. */
   bases?: BasesPort;
   base?: string;
@@ -92,7 +95,7 @@ const AgentEdit = z.union([
 const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal, acp, gateway, setup, bases, base }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal, acp, gateway, setup, bases, base, agents }: ServerOptions): Hono {
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -316,6 +319,18 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     });
   }
 
+  // The agent chosen for the pane (M25): from the ACP registry, or a command of your own. Choosing one runs a
+  // program, so it is done from this machine only.
+  if (agents) {
+    app.get("/api/acp/agent", (c) => answer(c, async () => agents.state()));
+    app.get("/api/acp/registry", (c) => answer(c, async () => registryAgents().catch((e: Error) => { throw new EngineError(e.message, 502); })));
+    const Choice = z.union([z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/) }).strict(), z.object({ command: z.string().min(1).max(1000) }).strict(), z.null()]);
+    post("/api/acp/choose", z.object({ choice: Choice }).strict(), async (c, b) => {
+      if (!local(c)) throw new EngineError("an agent is chosen only from this machine", 403);
+      return agents.choose(b.choice);
+    });
+  }
+
   // The terminal's session (M11). `isorite term` attaches OpenCode's server, on this machine only; pages read the
   // session, ask in it, stop it and answer what it asks, and never reach OpenCode themselves.
   if (terminal) {
@@ -385,7 +400,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
       const link = c.req.query("link") ?? "";
       if (!/^[\w-]{1,100}$/.test(link)) return refuse(c, 400, "a wrapper names itself");
       return streamSSE(c, async (stream) => {
-        const hangUp = acp.connect(link, (command) => { void stream.writeSSE({ event: "command", data: JSON.stringify(command) }).catch(() => undefined); });
+        const hangUp = acp.connect(link, (command) => { void stream.writeSSE({ event: "command", data: JSON.stringify(command) }).catch(() => undefined); }, { pane: c.req.query("pane") === "1" });
         const beat = setInterval(() => { void stream.write(": still here\n\n"); }, 25_000);
         await stream.writeSSE({ event: "open", data: "{}" });
         await new Promise<void>((done) => stream.onAbort(done));

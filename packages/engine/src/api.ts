@@ -117,6 +117,8 @@ export interface TerminalView {
   reading?: boolean;
   /** What isorite's MCP puts in each session, in tokens (its instructions and tools), as estimated. */
   ours?: number;
+  /** Why what the pane last asked of the agent was refused. */
+  problem?: string;
 }
 /** A prompt and what the agent did with it. `from` says where it was asked: in the terminal, or from a page. `given`:
  *  the notes and passages put before it from the pane (M25). */

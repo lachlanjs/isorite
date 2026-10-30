@@ -144,6 +144,12 @@ if (process.argv[1] === import.meta.filename) {
   process.env.XDG_CONFIG_HOME = join(ROOT, "config");
   process.env.XDG_CACHE_HOME = join(ROOT, "cache");
   process.env.ISORITE_EMBED = "off"; // the browser tests are about the pages; the model has its own tests
+  // The ACP registry, as a file: two agents to list (attached, in the tests, by a command of their own).
+  writeFileSync(join(ROOT, "registry.json"), JSON.stringify({ version: "1", agents: [
+    { id: "claude-acp", name: "Claude Agent", version: "0.99.1", description: "ACP wrapper for Anthropic's Claude", distribution: { npx: { package: "@agentclientprotocol/claude-agent-acp@0.99.1" } } },
+    { id: "codex-acp", name: "Codex", version: "2.5.0", description: "ACP adapter for OpenAI's coding assistant", distribution: { npx: { package: "@agentclientprotocol/codex-acp@2.5.0" } } },
+  ] }));
+  process.env.ISORITE_ACP_REGISTRY = join(ROOT, "registry.json");
   mkdirSync(join(ROOT, "config", "isorite"), { recursive: true });
   writeFileSync(join(ROOT, "config", "isorite", "config.toml"), `device = "browser01"\n\n[provider]\nname = "scripted"\nurl = "http://127.0.0.1:${PROVIDER_PORT}/v1"\nauth = "http://127.0.0.1:${PROVIDER_PORT}/auth"\n\n[tiers]\nlow = "scripted-low"\nmid = "scripted-mid"\nmax = "scripted-max"\n`);
   // The agent's memory, lent to every session, and a base known but not lent.

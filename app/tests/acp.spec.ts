@@ -118,7 +118,7 @@ test("the agent's sessions in the drawer: a new one from here, the Context view 
   await expect(drawer.getByRole("listitem").filter({ hasText: `fresh ${name}` })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: `test-results/screens/${name}-acp-drawer.png`, fullPage: true });
-  await drawer.getByRole("listitem").filter({ hasText: name }).filter({ hasNotText: "fresh" }).getByRole("button").click();
+  await drawer.getByRole("listitem").filter({ hasText: name }).filter({ hasText: "· live" }).filter({ hasNotText: "fresh" }).getByRole("button").click();
   await expect(log.locator(".turn").filter({ hasText: `fresh ${name}` })).toHaveCount(0);
   await expect(log.locator(".turn").first()).toBeVisible();
 });

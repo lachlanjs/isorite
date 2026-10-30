@@ -5,9 +5,14 @@
 // agent's sessions, or start one, on the same connection: the front end is shown nothing of those. What passed is
 // told to the isorite server, which draws the sessions in the Iso pane.
 //
+// With `pane`, there is no front end: the Iso pane is the only one (the agent chosen in the base's settings, which
+// the server starts this for, with `url`). Then the wrapper starts the agent itself, and signs in with the agent's
+// API key method when it asks to be (Codex), the key being in the agent's own environment.
+//
 // Messages are JSON-RPC 2.0, a line each, as ACP's stdio transport has them. Only stdout carries the protocol.
 
 import { spawn } from "node:child_process";
+import { PassThrough } from "node:stream";
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import { basename } from "node:path";
@@ -19,6 +24,7 @@ import { agentName } from "./mcp-http.ts";
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { OWN_DIR } from "@isorite/core";
+import { VERSION } from "./version.ts";
 
 export interface AcpOptions {
   /** The agent's own ACP command, as a shell runs it: `opencode acp`, `omp acp`. */
@@ -27,6 +33,10 @@ export interface AcpOptions {
   input?: NodeJS.ReadableStream;
   output?: NodeJS.WritableStream;
   env?: NodeJS.ProcessEnv;
+  /** No front end: the pane is the only one. */
+  pane?: boolean;
+  /** The base's address on a server already running, which is not held open for this (it started this). */
+  url?: string;
 }
 
 const OPENS = new Set(["session/new", "session/load", "session/resume", "session/fork"]);
@@ -52,13 +62,26 @@ export function findBase(cwd: string): string | null {
   return null;
 }
 
-export async function acp(path: string | undefined, { agent, port = 4767, input = process.stdin, output = process.stdout, env = process.env }: AcpOptions): Promise<number> {
+/** The server's token, asked again until it answers: one that started this may not be listening yet. */
+async function tokenWhenUp(url: string, wait = 60_000): Promise<string> {
+  for (const began = Date.now(); ; await new Promise((r) => setTimeout(r, 250))) {
+    try { return await tokenOf(url); } catch (e) { if (Date.now() - began > wait) throw e; }
+  }
+}
+
+export async function acp(path: string | undefined, { agent, port = 4767, input, output, env = process.env, pane = false, url: at }: AcpOptions): Promise<number> {
   // Without a base named, the one in the folder the front end started this in (the repository's notes).
-  path ??= findBase(process.cwd()) ?? undefined;
-  const server = await ensureServer(path, { port, env, say: (line) => process.stderr.write(line + "\n") });
+  if (!at) path ??= findBase(process.cwd()) ?? undefined;
+  const server = at ? { url: at, release: () => undefined } : await ensureServer(path, { port, env, say: (line) => process.stderr.write(line + "\n") });
   const { url } = server;
-  const token = await tokenOf(url);
+  const token = await tokenWhenUp(url);
+  // With the pane alone in front, nothing comes in, and what would go out to a front end goes nowhere.
+  input ??= pane ? new PassThrough() : process.stdin;
+  output ??= pane ? new PassThrough().resume() : process.stdout;
   const child = spawn(agent, { shell: true, stdio: ["pipe", "pipe", "inherit"], env });
+  const stop = () => { child.stdin.end(); child.kill(); };
+  process.once("SIGTERM", stop);
+  process.once("SIGINT", stop);
   let name = agentName(basename(agent.trim().split(/\s+/)[0] ?? "agent"));
   /** This wrapper, to the server: several may be attached to one base, each with its agent. */
   const link = randomUUID();
@@ -95,7 +118,8 @@ export async function acp(path: string | undefined, { agent, port = 4767, input 
   /** Sessions the pane opened: the front end knows nothing of them, so nothing of theirs goes to it. */
   const paneOnly = new Set<string>();
   /** Requests to the agent not yet answered, by id: the front end's and isorite's own, with their sessions. */
-  const asked = new Map<string, { method: string; session: string; then?: string; give?: string }>();
+  type Asked = { method: string; session: string; then?: string; give?: string; params?: Record<string, unknown>; retry?: Asked };
+  const asked = new Map<string, Asked>();
   const busy = (session: string) => [...asked.values()].some((a) => a.method === "session/prompt" && a.session === session);
   /** The agent's requests, by id as a string, with the id as it was sent. */
   const agentAsked = new Map<string, string | number>();
@@ -107,6 +131,9 @@ export async function acp(path: string | undefined, { agent, port = 4767, input 
   /** What the agent can do with a session it already has: replay it, or only carry it on; and list them. */
   let can = { load: false, resume: false, list: false };
   let ours = 0;
+  /** The agent's method of signing in with an API key, if it has one; tried once, when it first asks. */
+  let keyMethod = "";
+  let signedIn = false;
 
   const isoriteMcp = () => {
     if (httpMcp) return { type: "http", name: "isorite", url: `${url}/mcp?${new URLSearchParams({ agent: name, session: ACP_SESSION })}`, headers: [] };
@@ -114,10 +141,10 @@ export async function acp(path: string | undefined, { agent, port = 4767, input 
     return { name: "isorite", command: again.command, args: again.args, env: [] };
   };
   /** A request of isorite's own to the agent; its answer goes no further. */
-  const ask = (method: string, params: Record<string, unknown>, then?: string, give?: string) => {
+  const ask = (method: string, params: Record<string, unknown>, then?: string, give?: string, retry?: Asked) => {
     const id = `isorite-${++ours}`;
     const request = { id, method, params };
-    asked.set(id, { method, session: typeof params.sessionId === "string" ? params.sessionId : "", ...(then ? { then } : {}), ...(give ? { give } : {}) });
+    asked.set(id, { method, session: typeof params.sessionId === "string" ? params.sessionId : "", params, ...(then ? { then } : {}), ...(give ? { give } : {}), ...(retry ? { retry } : {}) });
     tap("ours", request);
     toAgent(request);
   };
@@ -176,9 +203,19 @@ export async function acp(path: string | undefined, { agent, port = 4767, input 
           const caps = (m.result?.agentCapabilities ?? {}) as { mcpCapabilities?: { http?: boolean }; loadSession?: boolean; sessionCapabilities?: { resume?: unknown; list?: unknown } };
           httpMcp = Boolean(caps.mcpCapabilities?.http);
           can = { load: !!caps.loadSession, resume: !!caps.sessionCapabilities?.resume, list: !!caps.sessionCapabilities?.list };
+          const methods = Array.isArray(m.result?.authMethods) ? (m.result.authMethods as { id?: string }[]) : [];
+          keyMethod = methods.map((a) => a.id ?? "").find((id) => /api.?key/i.test(id)) ?? "";
         }
         tap("out", m);
         if (key.startsWith("isorite-")) {
+          // Asked to sign in first, with no front end to: with the agent's API key, once, and then asked again.
+          const code = (m.error as { code?: number } | undefined)?.code;
+          if (code === -32000 && keyMethod && !signedIn && was.method !== "authenticate") {
+            signedIn = true;
+            ask("authenticate", { methodId: keyMethod }, undefined, undefined, was);
+            continue;
+          }
+          if (was.method === "authenticate" && !m.error && was.retry) { const r = was.retry; ask(r.method, r.params ?? {}, r.then, r.give); continue; }
           // A session the pane opened: its own, and what was to be asked in it.
           const opened = was.method === "session/new" ? (typeof m.result?.sessionId === "string" ? m.result.sessionId : "") : was.session;
           if (!m.error && opened && (was.method === "session/new" || was.method === "session/load" || was.method === "session/resume")) {
@@ -204,10 +241,12 @@ export async function acp(path: string | undefined, { agent, port = 4767, input 
 
   // What the pane asks.
   const commands = new AbortController();
+  let heard = () => undefined as void;
+  const listening = new Promise<void>((done) => { heard = done; });
   const listen = (async () => {
     while (!commands.signal.aborted) {
       try {
-        const response = await fetch(`${url}/api/acp/commands?link=${link}`, { headers: { [TOKEN_HEADER]: token }, signal: commands.signal });
+        const response = await fetch(`${url}/api/acp/commands?link=${link}${pane ? "&pane=1" : ""}`, { headers: { [TOKEN_HEADER]: token }, signal: commands.signal });
         if (!response.ok || !response.body) throw new Error(String(response.status));
         let buffer = "";
         for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
@@ -216,6 +255,7 @@ export async function acp(path: string | undefined, { agent, port = 4767, input 
           while ((at = buffer.indexOf("\n\n")) >= 0) {
             const event = buffer.slice(0, at);
             buffer = buffer.slice(at + 2);
+            if (/^event: open$/m.test(event)) { heard(); continue; }
             if (!/^event: command$/m.test(event)) continue;
             const data = event.split("\n").filter((l) => l.startsWith("data: ")).map((l) => l.slice(6)).join("\n");
             command(JSON.parse(data) as Command);
@@ -247,6 +287,9 @@ export async function acp(path: string | undefined, { agent, port = 4767, input 
       else toFront({ method: "$/cancel_request", params: { requestId: id } });
     }
   }
+
+  // With no front end, the wrapper is the agent's client: it says hello once the server hears what passes.
+  if (pane) void listening.then(() => ask("initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: "isorite", title: "isorite", version: VERSION } }));
 
   const code = await new Promise<number>((done) => child.once("exit", (c) => done(c ?? 0)));
   commands.abort();

@@ -8,7 +8,8 @@
 // one it changes is entered in the note's journal under its name, with what was asked, not as a change from elsewhere.
 // What it asks back or offers through isorite's MCP (ask_question, offer_text) stands in the turn, to keep or not.
 
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { existsSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { givenKey, notesOfTurns, type AgentRecord, type AgentSession, type Api, type EngineEvent, type Given, type TerminalItem, type TerminalPermission, type TerminalTurn, type TerminalView } from "@isorite/engine";
 import { OWN_DIR } from "@isorite/core";
 import type { Terminal } from "./terminal.ts";
@@ -71,6 +72,8 @@ interface Link {
   listed: { session: string; title: string; last: string }[];
   /** A session asked for from the pane, to be shown once it opens. */
   opening: string | null;
+  /** Started for the pane, with no front end of its own (the agent chosen in the base's settings). */
+  pane: boolean;
 }
 
 /** A session being carried, live. */
@@ -108,6 +111,8 @@ export class AcpFollower {
   #reading: AgentRecord | null = null;
   #view: TerminalView = EMPTY;
   #ours = 0;
+  /** Why what the pane last asked of an agent was refused (signing in, a session it does not have). */
+  #problem = "";
   #listeners = new Set<(view: TerminalView) => void>();
   readonly #api: FollowerOptions["api"];
   readonly #notes: string | undefined;
@@ -142,16 +147,17 @@ export class AcpFollower {
   #tell(): void {
     const live = this.#shownLive(), read = !live ? this.#reading : null;
     const connected = this.#links.size > 0;
+    const problem = this.#problem ? { problem: this.#problem } : {};
     if (live) {
       this.#view = {
         connected, via: "acp", agent: live.link.name, agentId: live.link.agent, session: live.session, title: live.title, busy: live.busy, turns: live.turns,
-        asking: [...live.asking.values()].map(({ options: _, ...p }) => p), cost: live.cost, tokens: { input: live.used, output: 0 }, model: "", size: live.size, ours: this.#ours, sessions: this.#sessions(),
+        asking: [...live.asking.values()].map(({ options: _, ...p }) => p), cost: live.cost, tokens: { input: live.used, output: 0 }, model: "", size: live.size, ours: this.#ours, sessions: this.#sessions(), ...problem,
       };
     } else if (read) {
-      this.#view = { ...EMPTY, connected, reading: true, agent: read.name, agentId: read.agent, session: read.session, title: read.title, turns: read.turns, sessions: this.#sessions() };
+      this.#view = { ...EMPTY, connected, reading: true, agent: read.name, agentId: read.agent, session: read.session, title: read.title, turns: read.turns, sessions: this.#sessions(), ...problem };
     } else {
       const link = [...this.#links.values()].at(-1);
-      this.#view = { ...EMPTY, connected, agent: link?.name ?? "", agentId: link?.agent ?? "", sessions: this.#sessions() };
+      this.#view = { ...EMPTY, connected, agent: link?.name ?? "", agentId: link?.agent ?? "", sessions: this.#sessions(), ...problem };
     }
     for (const fn of this.#listeners) fn(this.#view);
   }
@@ -180,9 +186,9 @@ export class AcpFollower {
   }
 
   /** A wrapper's channel: what the pane asks of its sessions goes down it. Returns the hang-up. */
-  connect(id: string, send: (c: Command) => void): () => void {
+  connect(id: string, send: (c: Command) => void, { pane = false }: { pane?: boolean } = {}): () => void {
     this.#hangUp(id);
-    this.#links.set(id, { id, send, agent: "", name: "", can: { load: false, resume: false, list: false }, toAgent: new Map(), fromAgent: new Map(), listed: [], opening: null });
+    this.#links.set(id, { id, send, agent: "", name: "", can: { load: false, resume: false, list: false }, toAgent: new Map(), fromAgent: new Map(), listed: [], opening: null, pane });
     this.#tell();
     return () => { if (this.#links.get(id)?.send === send) { this.#hangUp(id); this.#tell(); } };
   }
@@ -208,10 +214,11 @@ export class AcpFollower {
 
   /** Ask in the session shown; with none yet, in a new one with the agent last attached. */
   async prompt(text: string): Promise<void> {
+    this.#problem = "";
     const live = this.#shownLive();
     if (live) { live.link.send({ type: "prompt", session: live.session, text }); return; }
     const link = this.#reading ? [...this.#links.values()].find((k) => k.agent === this.#reading!.agent) : [...this.#links.values()].at(-1);
-    if (!link) throw new Error("no agent is attached: start one with isorite acp");
+    if (!link) throw new Error("no agent is attached: choose one, or start one with isorite acp");
     link.opening = this.#reading?.session ?? "";
     link.send({ type: "open", ...(this.#reading ? { session: this.#reading.session } : {}), then: text, ...(this.#unopened ? { give: this.#unopened.text } : {}) });
   }
@@ -315,6 +322,13 @@ export class AcpFollower {
       const asked = link.toAgent.get(key);
       link.toAgent.delete(key);
       const params = asked?.params ?? {};
+      // What the pane asked, refused: said in the pane. (Asked to sign in, the wrapper does, and asks again.)
+      if (key.startsWith("isorite-") && asked?.method && asked.method !== "authenticate") {
+        const code = (m.error as { code?: number } | undefined)?.code;
+        if (m.error && code !== -32000) this.#problem = `${link.name || "The agent"}: ${m.error.message ?? "refused"}`;
+        else if (m.error) this.#problem = `${link.name || "The agent"} asks to be signed in: sign in in its own terminal, or give it its API key, and ask again`;
+        else if (asked.method !== "session/list") this.#problem = "";
+      }
       const live = this.#lives.get(keyOf(link.agent, typeof params.sessionId === "string" ? params.sessionId : ""));
       switch (asked?.method) {
         case "initialize": {
@@ -340,6 +354,14 @@ export class AcpFollower {
         case "session/prompt":
           if (live) {
             const stop = m.error ? "failed" : m.result?.stopReason === "cancelled" ? "stopped" : m.result?.stopReason === "end_turn" ? "done" : "failed";
+            // A tool the agent never said was finished (Hermes says only that it began) is, once the turn is over;
+            // a note it read or changed so is told to the base as any other.
+            if (stop === "done") {
+              this.#edit(live, (items) => items.map((i) => (i.kind === "text" ? { ...i, text: this.#cited(live, i.text) } : i)));
+              const open: Tool[] = [];
+              this.#edit(live, (items) => items.map((i) => (i.kind === "tool" && i.status === "running" ? (open.push({ ...i, status: "done" }), open.at(-1)!) : i)));
+              for (const t of open) if (t.note && !NOTE_TOOLS.test(t.name)) this.#told(live, t, t.name);
+            }
             live.busy = false;
             live.turns = live.turns.map((t) => (t.id === key ? { ...t, state: stop } : t));
             if (link.agent) void this.#api?.agentStatus(link.agent, ACP_SESSION, false).catch(() => undefined);
@@ -457,7 +479,12 @@ export class AcpFollower {
           const input = (u.rawInput ?? {}) as Record<string, unknown>;
           kind = typeof u.kind === "string" ? u.kind : diff ? "edit" : "";
           const name = typeof u.name === "string" ? u.name : kind && at < 0 ? kind : was.name;
-          const named = NOTE_TOOLS.test(name) ? (typeof input.id === "string" ? input.id : typeof input.note === "string" ? input.note : undefined) : undefined;
+          // isorite's own tools, by whatever the agent calls them: its name for the tool (Claude's in _meta), or the
+          // title (Codex's `mcp.isorite.read_note`); their arguments as given, or under `arguments`.
+          const meta = (u._meta ?? {}) as { claudeCode?: { toolName?: unknown } };
+          const own = [name, meta.claudeCode?.toolName, u.title].some((n) => typeof n === "string" && NOTE_TOOLS.test(n));
+          const args = { ...((typeof input.arguments === "object" && input.arguments) || {}), ...input } as Record<string, unknown>;
+          const named = own ? (typeof args.id === "string" ? args.id : typeof args.note === "string" ? args.note : undefined) : undefined;
           // A file of the base, read or changed with the agent's own tools, is that note.
           const file = this.#noteIn(live, [...((u.locations as { path?: string }[] | undefined) ?? []).map((l) => l.path), input.path, input.filePath, input.file_path, input.filename, diff?.path, ...(typeof input.command === "string" ? input.command.match(/[^\s'"]+\.md\b/g) ?? [] : [])]);
           const note = named?.replace(/^\/+/, "").replace(/\.md$/, "") ?? file ?? was.note;
@@ -498,6 +525,23 @@ export class AcpFollower {
       return rel.split(sep).join("/").replace(/\.md$/, "");
     }
     return undefined;
+  }
+
+  /** A reply's links to the base's notes in isorite's form (`/folder/note.md`), however the agent wrote them:
+   *  relative to the base or to where it works (`physics/units.md`, `/notes/physics/units.md`), as a path on disk,
+   *  or behind `file://` or `sandbox:`. Only a link to a note that is there is changed. */
+  #cited(live: Live, text: string): string {
+    if (!this.#notes) return text;
+    const notes = this.#notes;
+    return text.replace(/\]\(\s*(<?)((?:file:\/\/|sandbox:)?[^)\s>]+?\.md)(#[^)\s>]*)?(>?)/g, (all, open: string, target: string, fragment = "", close: string) => {
+      if (/^https?:/i.test(target)) return all;
+      let path: string;
+      try { path = decodeURI(target.replace(/^(file:\/\/|sandbox:)/, "")); } catch { return all; }
+      const tries = path.startsWith("/") ? [join(notes, path), resolve(live.cwd || notes, "." + path), path] : [resolve(notes, path), resolve(live.cwd || notes, path)];
+      const at = tries.find((t) => existsSync(t));
+      const note = at ? this.#noteIn(live, [at]) : undefined;
+      return note ? `](${open}/${note}.md${fragment}${close}` : all;
+    });
   }
 
   /** A note the agent read or changed with its own tools, told to the base once a turn: a step, or a change. */

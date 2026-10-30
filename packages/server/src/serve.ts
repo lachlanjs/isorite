@@ -16,6 +16,8 @@ import { cacheDir, modelDir, nodeEmbedder } from "./embedder.ts";
 import { LOOPBACK, createApp } from "./http.ts";
 import { Terminal } from "./terminal.ts";
 import { AcpFollower, Following } from "./acp.ts";
+import { AgentRunner } from "./agents.ts";
+import { projectOf } from "./connect.ts";
 import { NodeFiles } from "./nodefiles.ts";
 import { Setup } from "./setup.ts";
 import { VERSION } from "./version.ts";
@@ -140,7 +142,10 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
       const api = await openEngine({ notes: known.path }, device, config, live.http, model, secrets, { name: known.name, elsewhere: bases, embedder });
       api.setProvider(live.provider, live.http);
       const acp = new AcpFollower({ api, notes: known.path });
-      const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, terminal: new Following(new Terminal(), acp), acp, gateway, setup, bases, base: known.name });
+      // The agent chosen for this base's pane, started once the server is listening (the wrapper waits for it).
+      const agents = new AgentRunner({ base: known.name, url: `http://127.0.0.1:${port}${known.name === first ? "" : `/b/${known.name}`}`, folder: projectOf(known.path).repo, config });
+      if (loopback) void agents.start();
+      const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, terminal: new Following(new Terminal(), acp), acp, gateway, setup, bases, base: known.name, ...(loopback ? { agents } : {}) });
       return { engine: api, fetch: app.fetch };
     },
   });
