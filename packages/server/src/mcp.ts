@@ -65,7 +65,7 @@ export async function mcp(path: string | undefined, { port = 4767, agent = "mcp"
         protocolVersion: asked,
         capabilities: { tools: {} },
         serverInfo: { name: "isorite", version: "0.1.0" },
-        instructions: "A knowledge base of notes. Call brief_base first, then look things up with search_notes, outline_note and read_note, following a note's links before searching again. Cite a note by its title and section. Other knowledge bases lent to you (the agent's memory among them) are named by brief_base: pass base to the same tools to look or write there, and follow the practice each one's brief gives.",
+        instructions: "A knowledge base of notes. Call brief_base first, then look things up with search_notes, outline_note and read_note, following a note's links before searching again. Where your answer rests on a note, cite it in the sentence: the phrase that rests on it is a Markdown link to the note by its path, as [the phrase](/folder/note.md) or [the phrase](/folder/note.md#Section), the path as the tools give it (/id.md). No numbered references and no list of sources at the end. Never invent a note or a link. Other knowledge bases lent to you (the agent's memory among them) are named by brief_base: pass base to the same tools to look or write there, and follow the practice each one's brief gives.",
       };
     }
     if (rpc.method === "ping") return {};

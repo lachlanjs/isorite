@@ -55,6 +55,22 @@ Built on the TypeScript ACP SDK (`@agentclientprotocol/sdk`). To the front end i
 5. **The other agents.** Claude through Zed's adapter, Codex through its adapter, Hermes; the agent chosen from the ACP registry in the base's settings; a note per agent in the guide where it differs.
 6. **Retiring.** Iso's loop and what only it used: the turn and its modes (`turn.ts`, `loop.ts`, `iso.ts`, `hand.ts`), the provider and gateway (`provider.ts`, `gateway.ts`, `setup.ts`, config.toml's `[provider]` and `[tiers]`), Iso's writing into a note from the model, and the Context view's switches and summaries. Then `isorite term`, `isorite opencode`, the follower and `packages/opencode`. Search by meaning (`meaning.ts`, `model.ts`) stays: its model runs on the device. The guide, `docs/terminal.md` and `docs/setup.md` are rewritten for the three ways in.
 
+## The spike (2026-10-30): go
+
+`isorite acp` (`packages/server/src/acp-wrap.ts`), the pane's follower (`acp.ts`), and the checks in `packages/server/spike/`. Agents: OpenCode 2.2.2 and omp 18.14, on DeepSeek V4 Flash through OpenRouter (the whole run cost about $0.04); front ends: Toad 0.6.20 and scripted ones.
+
+- **Live in both places: yes.** A prompt typed in Toad is drawn in the pane as it streams (the turn, tool calls with their notes, the cited reply, tokens and cost); a prompt sent from the pane shows in Toad as yours, with the agent's work streaming there too; a permission is asked in both, and answering in either lets the agent go on and clears the other. One rough edge: Toad ignores `$/cancel_request`, so a permission answered in the pane stays on Toad's screen until a key is pressed there (the wrapper drops that late answer).
+- **Carried on elsewhere: yes, both ways, for both agents.** A session asked in OpenCode's own CLI (`opencode run`) or omp's (`omp -p`) is in the agent's `session/list`, loads into the pane with its history replayed, and goes on there; sessions made through ACP are in the agents' own lists (`opencode session list`), the same store their terminals resume from. Toad's own "Sessions" screen lists Toad's tabs, not the agent's sessions: moving a conversation goes through isorite's drawer.
+- **Citations: yes, when they look.** Six questions each on the example base, the link form asked for in isorite's MCP instructions. OpenCode looked in the notes for 6 of 6 and cited 30 links, all real, all in isorite's form, none in a list at the end. omp looked for 4 of 6 (the other two answered from what it knew, with no links) and cited 19, all real, all in isorite's form.
+- **Both agents accept isorite's MCP from `session/new` and start it**; both can also take MCP over HTTP. OpenCode can list, load, resume, fork, close and delete sessions; omp can list, load, resume, fork and close.
+
+### What the spike changes
+
+- **Agents read the notes with their own tools.** With the base inside the repo, OpenCode read and grepped the Markdown files directly in every answer, never through isorite's tools; omp used isorite's twice in six. So "the Atlas lights as the agent reads" can't rest on MCP. The wrapper sees every tool call (its path, command, `locations`), so in step 3 **a read of a file inside the base counts as reading that note**, for the Atlas and the parts under a reply, whichever tool did it. In MCP-only use (the agent's own terminal, no wrapper) this is lost: only what goes through isorite's tools is seen.
+- **The citation instructions work** and stay as the spike has them (`mcp.ts`); "look before answering" is weaker, and depends on the agent.
+- **Titles:** OpenCode sends no `session_info_update`; the pane takes a session's title from `session/list`.
+- **Permissions in two places** need each front end checked for `$/cancel_request`; where it's ignored, the pane says the question was answered here.
+
 ## After M25
 
 - **M26, install, setup and startup** (`docs/plan-m26.md`), revised for what this milestone leaves: no model or gateway in isorite's setup; "`isorite` always opens the terminal" to be decided again, since the terminal is now your harness's.
