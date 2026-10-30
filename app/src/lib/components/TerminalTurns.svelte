@@ -1,15 +1,20 @@
 <script lang="ts">
   // The terminal's session in Iso's pane, Build mode (M11): each prompt (from the terminal or from here), what the
   // agent said, a line for each tool call (a command with its output, a file with its diff, a look-up in the base
-  // with its note), and what it asks before doing, answered here or in the terminal, whichever is first.
+  // with its note), and what it asks before doing, answered here or in the terminal, whichever is first. An agent's
+  // session over ACP (M25) is drawn as Iso's were (M24): what was given before a prompt, the crystal growing while it
+  // works, and once a turn is over the notes it drew on as parts under the reply, lit with the phrases citing them
+  // and with the note on the Atlas when pointed at.
+  import Crystal from "./Crystal.svelte";
   import Drawing from "./Drawing.svelte";
-  import type { TerminalItem, TerminalPermission, TerminalTurn } from "@isorite/engine";
+  import type { Given, TerminalItem, TerminalPermission, TerminalTurn } from "@isorite/engine";
   import { tick } from "svelte";
   import { app } from "$lib/app.svelte.ts";
   import { basePage } from "$lib/here.ts";
   import { render } from "$lib/markdown.ts";
   import { drawn } from "$lib/drawn.ts";
   import { panes } from "$lib/panes.svelte.ts";
+  import { pointedBy, pointing } from "$lib/pointing.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
 
   let list = $state<HTMLElement>();
@@ -34,6 +39,35 @@
 
   // Kept at the newest as the session grows.
   $effect(() => { void view; void tick().then(() => { if (list) list.scrollTop = list.scrollHeight; }); });
+
+  /** A note named in the session, under the mouse, is lit on the Atlas (M17): a link in what the agent said, or a
+   *  note it read, changed or asked about. */
+  function pointAt(e: PointerEvent): void {
+    if (e.pointerType !== "mouse" || !(e.target instanceof Element)) return;
+    const el = e.target.closest<HTMLElement>("[data-to], a[href]");
+    const to = el?.dataset.to ? { id: el.dataset.to, folder: false } : el instanceof HTMLAnchorElement ? pointedBy(el.getAttribute("href") ?? "") : null;
+    pointing.set("iso", to ? { ...to, who: "you" } : null);
+  }
+  /** What a reply drew on (M24, G): the notes it cites, in the order cited, then the others it read or changed. */
+  const CITED = /\]\(\/([^)\s]+?)\.md(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/g;
+  const known = (id: string): boolean => app.listing.notes.some((n) => n.id === id);
+  function drew(t: TerminalTurn): string[] {
+    const ids = new Set<string>();
+    for (const i of t.items) if (i.kind === "text") for (const m of i.text.matchAll(CITED)) ids.add(decodeURI(m[1]!));
+    for (const i of t.items) if (i.kind === "tool" && i.note && !i.base && i.status !== "failed") ids.add(i.note);
+    return [...ids].filter(known);
+  }
+  const folderOf = (id: string): string => app.listing.notes.find((n) => n.id === id)?.dir.split("/").at(-1) || "notes";
+  /** A read folded into the parts once its turn is over; a change, a command and anything outside the base stay. */
+  const folded = (t: TerminalTurn, i: TerminalItem): boolean => t.state !== "running" && i.kind === "tool" && !!i.note && !i.base && !i.diff && i.status === "done" && !CHANGES.has(bare(i.name)) && known(i.note);
+  const lit = $derived(pointing.elsewhere?.from === "iso" && !pointing.elsewhere.folder ? pointing.elsewhere.id : pointing.onAtlas);
+  $effect(() => {
+    const id = lit;
+    void view;
+    if (!list) return;
+    for (const a of list.querySelectorAll<HTMLAnchorElement>(".said a.vein")) a.classList.toggle("lit", !!id && pointedBy(a.getAttribute("href") ?? "")?.id === id);
+  });
+  const SYM: Record<Given["kind"], string> = { note: "▣", folder: "▭", passage: "“" };
 </script>
 
 {#snippet permit(p: TerminalPermission)}
@@ -68,36 +102,49 @@
       {#if i.output || i.diff}
         <details>
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- another base's page, not in this app -->
-          <summary><span class="v">{verb(i.name)}</span>{#if i.note && i.base}<a class="note-link" href={basePage(i.base, `#/n/${i.note}`)} data-sveltekit-reload target="_blank" rel="noopener" title="In {i.base}, in a tab of its own"><span class="in">{i.base}:</span> {i.note}</a>{:else if i.note}<button type="button" class="note-link" onclick={(e) => { e.preventDefault(); open(i.name, i.note!); }}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}{#if i.diff}<span class="n"><span class="add">+{i.diff.filter((l) => l.startsWith("+")).length}</span> <span class="del">−{i.diff.filter((l) => l.startsWith("-")).length}</span></span>{/if}</summary>
+          <summary><span class="v">{verb(i.name)}</span>{#if i.note && i.base}<a class="note-link" href={basePage(i.base, `#/n/${i.note}`)} data-sveltekit-reload target="_blank" rel="noopener" title="In {i.base}, in a tab of its own"><span class="in">{i.base}:</span> {i.note}</a>{:else if i.note}<button type="button" class="note-link" data-to={i.note} onclick={(e) => { e.preventDefault(); open(i.name, i.note!); }}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}{#if i.diff}<span class="n"><span class="add">+{i.diff.filter((l) => l.startsWith("+")).length}</span> <span class="del">−{i.diff.filter((l) => l.startsWith("-")).length}</span></span>{/if}</summary>
           {#if i.diff}<pre class="diff">{#each i.diff as l, k (k)}<span class:add={l.startsWith("+")} class:del={l.startsWith("-")}>{l}</span>{/each}</pre>
           {:else}<pre class="out">{i.output}</pre>{/if}
         </details>
       {:else}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- another base's page, not in this app -->
-        <p class="line"><span class="v">{verb(i.name)}</span>{#if i.note && i.base}<a class="note-link" href={basePage(i.base, `#/n/${i.note}`)} data-sveltekit-reload target="_blank" rel="noopener" title="In {i.base}, in a tab of its own"><span class="in">{i.base}:</span> {i.note}</a>{:else if i.note}<button type="button" class="note-link" onclick={() => open(i.name, i.note!)}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}</p>
+        <p class="line"><span class="v">{verb(i.name)}</span>{#if i.note && i.base}<a class="note-link" href={basePage(i.base, `#/n/${i.note}`)} data-sveltekit-reload target="_blank" rel="noopener" title="In {i.base}, in a tab of its own"><span class="in">{i.base}:</span> {i.note}</a>{:else if i.note}<button type="button" class="note-link" data-to={i.note} onclick={() => open(i.name, i.note!)}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}</p>
       {/if}
       {#each askingFor(i.id) as p (p.id)}{@render permit(p)}{/each}
     </div>
   {/if}
 {/snippet}
 
-<div class="chat" bind:this={list} role="log" aria-label="The terminal's session" aria-live="polite">
+<div class="chat" bind:this={list} role="log" aria-label="The terminal's session" aria-live="polite" onpointerover={pointAt} onpointerleave={() => pointing.set("iso", null)}>
   {#if view?.title}<p class="title faint">{view.title}</p>{/if}
   {#each view?.turns ?? [] as t (t.id)}
     {@render turn(t)}
   {/each}
   {#each loose as p (p.id)}{@render permit(p)}{/each}
   {#if !view?.turns.length}
-    <p class="faint">The terminal's session shows here: what is asked there or here, what {view?.agent || "the agent"} does, and what it asks before doing.</p>
+    <p class="faint">{view?.via === "acp" ? `${view.agent || "The agent"}'s session shows here: what is asked in its terminal or here, what it does, and what it asks before doing. Notes put in the tray go before the next prompt.` : `The terminal's session shows here: what is asked there or here, what ${view?.agent || "the agent"} does, and what it asks before doing.`}</p>
   {/if}
+  {#if view?.reading}<p class="faint">Kept here; {view.agent} isn't attached to carry it on.</p>{/if}
 </div>
 
 {#snippet turn(t: TerminalTurn)}
   <article class="turn" data-state={t.state}>
-    <div class="you"><p class="asked">{t.asked}</p><span class="from">{t.from === "here" ? "from here" : "in the terminal"}</span></div>
-    {#each t.items as i, k (k)}{#if !itself(i)}{@render item(i)}{/if}{/each}
+    <div class="you"><p class="asked">{t.asked}</p>
+      {#if t.given?.length}
+        <span class="gave">{#each t.given as g, k (k)}<span class="chip" data-to={g.kind === "note" ? g.id : undefined}><span class="k" aria-hidden="true">{SYM[g.kind]}</span><span class="t">{g.kind === "passage" ? g.text : g.kind === "folder" ? g.id || "the base" : titleOf(g.id)}</span></span>{/each}</span>
+      {/if}
+      <span class="from">{t.from === "here" ? "from here" : "in the terminal"}</span></div>
+    {#each t.items as i, k (k)}{#if !itself(i) && !(view?.via === "acp" && folded(t, i))}{@render item(i)}{/if}{/each}
+    {#if view?.via === "acp" && t.state !== "running" && drew(t).length}
+      <div class="parts" role="group" aria-label="What {view.agent || 'the agent'} drew on">
+        {#each drew(t) as id (id)}
+          <button type="button" class="part" class:lit={lit === id} data-to={id} data-lustre onclick={() => void panes.open(id, true)}><s aria-hidden="true"></s><b>{titleOf(id)}</b>{folderOf(id)}</button>
+        {/each}
+      </div>
+    {/if}
     {#if t.state === "running"}
-      <p class="doing" role="status"><Drawing />{view?.agent || "The agent"} is at work</p>
+      <!-- At work (M24, I): over ACP, the session's crystal grows. -->
+      <p class="doing" role="status">{#if view?.via === "acp" && view.session}<Crystal id={view.session} size={28} growing />{:else}<Drawing />{/if}{view?.agent || "The agent"} is at work</p>
     {:else if t.state === "stopped"}
       <p class="faint end">stopped</p>
     {:else if t.state === "failed"}
@@ -158,6 +205,21 @@
   .offer .in { color: var(--malachite); }
   .offer .insert { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
   .doing { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-faint); }
+  .gave { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px; border: 1px solid var(--line); font-size: 11px; color: var(--text-soft); max-width: 100%; }
+  .chip .k { color: var(--growth); }
+  .chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
+  /* What the agent drew on (M24, G): parts with bracketed corners, lit blue with the phrases that cite them. */
+  .parts { display: flex; flex-wrap: wrap; gap: 8px; margin-left: 16px; }
+  .part { position: relative; display: grid; gap: 1px; justify-items: start; min-width: 0; max-width: 100%; padding: 6px 10px 5px; background: none; border: 0; text-align: left; font: 10px/14px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); cursor: pointer; --glint: .3; transition: background-color var(--t-ack) var(--ease-out); }
+  .part > s { position: absolute; inset: 0; pointer-events: none; --b: var(--line-strong); --l: 6px; background:
+    linear-gradient(var(--b), var(--b)) top left / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) top left / 1px var(--l) no-repeat,
+    linear-gradient(var(--b), var(--b)) top right / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) top right / 1px var(--l) no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom left / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom left / 1px var(--l) no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom right / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom right / 1px var(--l) no-repeat; }
+  .part b { font: 13px/18px var(--font-text); text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--text); overflow-wrap: anywhere; }
+  .part:hover > s, .part.lit > s { --b: var(--lattice); }
+  .part:hover, .part.lit { background: var(--lattice-soft); }
   .bad { color: var(--rose); font-size: 12px; padding-left: 16px; }
   .end { font-size: 12px; padding-left: 16px; }
 </style>

@@ -100,7 +100,7 @@ export function given(asked: string, parts: Given[], title: (id: string) => stri
 /** Where OpenCode's server is, and how to sign in to it. */
 export interface Attachment { url: string; password: string; directory: string }
 
-const EMPTY: TerminalView = { connected: false, agent: "OpenCode", session: null, title: "", busy: false, turns: [], asking: [], cost: 0, tokens: { input: 0, output: 0 }, model: "" };
+const EMPTY: TerminalView = { connected: false, via: "opencode", agent: "OpenCode", session: null, title: "", busy: false, turns: [], asking: [], cost: 0, tokens: { input: 0, output: 0 }, model: "" };
 /** Events after which the session is read again; text arrives as deltas in between. */
 const REREAD = /^session\.(step\.ended|tool\.|inbox\.delivered|execution\.|created|renamed)|^permission\./;
 

@@ -15,6 +15,7 @@
   import NoteList from "$lib/components/NoteList.svelte";
   import PaneHead from "$lib/components/PaneHead.svelte";
   import { converse } from "$lib/converse.svelte.ts";
+  import { terminal } from "$lib/terminal.svelte.ts";
   import { PANES, panes, type Pane, type Switch } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import IsoGauge from "$lib/components/IsoGauge.svelte";
@@ -174,15 +175,18 @@
           {:else}
             <PaneHead pane="iso" first={panes.narrow || standing[0] === "iso"} name="Iso" settings={isoSettings}>
               {#snippet tools()}
-                {#if run?.agent}
+                <!-- An agent's turn told in Iso's header, unless its session is the pane's (M25), where it shows itself. -->
+                {#if run?.agent && !terminal.acp}
                   <span class="says" title={running ? "" : "click open ground on the Atlas to let its path go"}>{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in the terminal` : `${agentNamed}'s turn is done`}</span>
                 {/if}
                 {#if panes.mode !== "build"}<TierSwitch />{/if}
                 <IsoGauge />
-                <!-- The drawer of past conversations (M24, K), under this one's crystal. -->
-                {#if panes.mode !== "build"}
-                  <button class="icon past" type="button" aria-label="Past conversations" aria-pressed={converse.view === "past"} title="Past conversations" onclick={() => void converse.drawer()}>
-                    {#if converse.id}<Crystal id={converse.id} size={20} />{:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 4.5h11v8h-11zM2.5 7.5h11M6.5 10h3" /></svg>{/if}
+                <!-- The drawer of past conversations (M24, K), under this one's crystal; with an agent attached (M25), its
+                     sessions, live and kept. -->
+                {#if panes.mode !== "build" || terminal.acp}
+                  {@const shownId = terminal.acp ? terminal.view?.session : converse.id}
+                  <button class="icon past" type="button" aria-label={terminal.acp ? "Sessions" : "Past conversations"} aria-pressed={converse.view === "past"} title={terminal.acp ? "The agents' sessions" : "Past conversations"} onclick={() => { if (terminal.acp) { converse.view = converse.view === "past" ? "chat" : "past"; terminal.refresh(); } else void converse.drawer(); }}>
+                    {#if shownId}<Crystal id={shownId} size={20} />{:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 4.5h11v8h-11zM2.5 7.5h11M6.5 10h3" /></svg>{/if}
                   </button>
                 {/if}
                 <!-- What the next turn is sent (I8), with how many parts you gave; a new conversation. -->
@@ -190,9 +194,15 @@
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h6" /></svg>
                   {#if tray.sent.length}{#key tray.fresh}<span class="n" class:pulse={converse.view === "chat" && tray.fresh !== ""}>{tray.sent.length}</span>{/key}{/if}
                 </button>
+                {#if terminal.acp && terminal.view?.connected}
+                  <button class="icon" type="button" aria-label="A new session" title="A new session with {terminal.view.agent}, from here" onclick={() => { void terminal.fresh(terminal.view?.agentId ?? ""); converse.view = "chat"; }}>
+                    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.5v9M3.5 8h9" /></svg>
+                  </button>
+                {:else}
                 <button class="icon" type="button" aria-label="A new conversation" title="A new conversation: nothing earlier is sent" disabled={panes.mode === "build" || !!converse.running || !converse.turns.length} onclick={() => { converse.fresh(); converse.view = "chat"; }}>
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.5v9M3.5 8h9" /></svg>
                 </button>
+                {/if}
               {/snippet}
             </PaneHead>
             <div class="pbody iso-body"><IsoPane /></div>

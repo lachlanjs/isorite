@@ -18,6 +18,7 @@
   import { tray, type Part } from "$lib/tray.svelte.ts";
   import { converse } from "$lib/converse.svelte.ts";
   import { pointing } from "$lib/pointing.svelte.ts";
+  import { terminal } from "$lib/terminal.svelte.ts";
   import { CELL, MAX_ZOOM, MIN_ZOOM, TITLE_UNITS, TITLE_PX, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { satellites, withoutNotes, withProspects, type Prospect } from "$lib/atlas/kinds.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
@@ -96,11 +97,13 @@
     leaves = on;
     try { localStorage.setItem("isorite.atlas.leaves", on ? "on" : "off"); } catch { /* storage unavailable: not remembered */ }
   }
-  /** The questions Iso asked in the conversation shown and you have not kept (M24, R), while questions are on the map. */
+  /** The questions Iso asked in the conversation shown, or an agent in its session shown (M25), and you have not kept
+   *  (M24, R), while questions are on the map. */
   const prospects = $derived.by((): Prospect[] => {
     if (!panes.on.questions) return [];
     const out: Prospect[] = [];
     for (const t of converse.turns) for (const i of t.items) if (i.kind === "question" && !i.made) out.push({ ref: `?${i.id}`, title: i.title, about: i.about });
+    if (panes.mode === "build") for (const t of terminal.view?.turns ?? []) for (const i of t.items) if (i.kind === "question" && !i.made) out.push({ ref: `?${i.id}`, title: i.title, about: i.about });
     return out;
   });
   async function load(): Promise<void> {

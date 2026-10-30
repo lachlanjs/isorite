@@ -17,6 +17,8 @@
   import { spend } from "$lib/spend.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
+  import AgentSessions from "./AgentSessions.svelte";
+  import AttachAgent from "./AttachAgent.svelte";
   import ContextView from "./ContextView.svelte";
   import Conversations from "./Conversations.svelte";
   import Crystal from "./Crystal.svelte";
@@ -53,6 +55,8 @@
   onMount(() => { converse.start(); terminal.start(); spend.start(); });
   // What is sent is measured again when what you give, what Iso may do, or the tier changes.
   $effect(() => { void tray.sent; void panes.mode; void context.tier; converse.measure(); });
+  // With an agent attached (M25), what is in the tray is told to its session shown, to go before its next prompt.
+  $effect(() => { void tray.sent; void terminal.view?.session; if (terminal.acp) void terminal.give(); });
   // Kept at the newest as the conversation grows.
   $effect(() => { void converse.turns; void converse.streaming; void tick().then(() => { if (list) list.scrollTop = list.scrollHeight; }); });
 
@@ -162,6 +166,8 @@
 <div class="iso" class:drop={tray.carrying?.over}>
   {#if converse.view === "context"}
     <ContextView />
+  {:else if converse.view === "past" && build && terminal.acp}
+    <AgentSessions />
   {:else if converse.view === "past" && !build}
     <Conversations />
   {:else if build}

@@ -3,8 +3,10 @@
   // and a bar of its share of the model's limit under it, in three groups. A click switches a row on or off; ✕ takes
   // a part you gave out of what you give. What each does is in its tooltip, not beside it.
   import type { HandRow } from "@isorite/engine";
+  import { app } from "$lib/app.svelte.ts";
   import { converse } from "$lib/converse.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
+  import { terminal } from "$lib/terminal.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
 
   const short = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n));
@@ -31,6 +33,29 @@
   let layer = $state<string | null>(null);
   const shown = $derived(strata.find((l) => l.k === layer));
   const build = $derived(panes.mode === "build");
+
+  // An agent's session over ACP (M25), as far as isorite can see into it: a layer for isorite's instructions and
+  // tools, one for the notes given and read in the session, one for the rest (the harness's own and the conversation),
+  // sized from what the agent says it fills, and the room left. What it dropped when it compacted can't be seen.
+  let sizes = $state.raw<Record<string, number>>({});
+  $effect(() => { if (terminal.acp) void app.api.map().then((m) => (sizes = Object.fromEntries(Object.entries(m.notes).map(([id, n]) => [id, n.tokens]))), () => undefined); });
+  const agentNotes = $derived.by(() => {
+    const given = new Set<string>(), read = new Set<string>();
+    for (const t of terminal.view?.turns ?? []) {
+      for (const g of t.given ?? []) if (g.kind === "note") given.add(g.id);
+      for (const i of t.items) if (i.kind === "tool" && i.note && !i.base && i.status === "done") read.add(i.note);
+    }
+    const title = (id: string) => app.listing.notes.find((n) => n.id === id)?.title ?? id;
+    return [...[...given].map((id) => ({ id, how: "given" as const })), ...[...read].filter((id) => !given.has(id)).map((id) => ({ id, how: "read" as const }))].map((n) => ({ ...n, title: title(n.id), tokens: sizes[n.id] ?? 0 }));
+  });
+  const agentStrata = $derived.by(() => {
+    const v = terminal.view;
+    if (!v?.size || !v.tokens.input) return [];
+    const ours = Math.min(v.ours ?? 0, v.tokens.input), notes = Math.min(agentNotes.reduce((n, x) => n + x.tokens, 0), v.tokens.input - ours);
+    const layers = [{ k: "instructions", name: "isorite's", tokens: ours }, { k: "notes", name: "notes", tokens: notes }, { k: "conversation", name: "the rest", tokens: v.tokens.input - ours - notes }, { k: "room", name: "room", tokens: Math.max(0, v.size - v.tokens.input) }].filter((l) => l.tokens > 0);
+    return layers.map((l) => ({ ...l, w: (100 * l.tokens) / v.size! }));
+  });
+  const agentShown = $derived(agentStrata.find((l) => l.k === layer));
   /** The turns a briefing stands for, shown under it when it is opened. */
   let unfolded = $state<string[]>([]);
   const fixed = (r: HandRow): boolean => r.kind === "instructions" || r.kind === "message";
@@ -45,7 +70,33 @@
 </script>
 
 <div class="context" role="region" aria-label="What Iso is sent">
-  {#if build}
+  {#if build && terminal.acp}
+    {@const v = terminal.view!}
+    <div class="column">
+      {#if agentStrata.length}
+        <div class="strata" role="img" aria-label={agentStrata.map((l) => `${l.name} ${short(l.tokens)}`).join(", ")} onpointerover={(e) => (layer = (e.target as HTMLElement).dataset.k ?? null)} onpointerleave={() => (layer = null)}>
+          {#each agentStrata as l (l.k)}<i class="s {l.k}" data-k={l.k} style:width="{l.w.toFixed(2)}%"></i>{/each}
+        </div>
+        <p class="total" title="As {v.agent} counts it">{#if agentShown}<span>{agentShown.name} · {short(agentShown.tokens)}</span>{:else}<span>{short(v.tokens.input)}</span><span class="faint">of {short(v.size ?? 0)}</span>{/if}{#if v.cost}<span class="faint">· ${v.cost.toFixed(2)}</span>{/if}</p>
+      {:else}
+        <p class="faint">{v.agent || "The agent"} hasn't said how full its context is{v.turns.length ? "" : " yet"}.</p>
+      {/if}
+      <p class="faint">What {v.agent || "the agent"} dropped when it compacted can't be seen from here.</p>
+    </div>
+    <h2 class="label">notes</h2>
+    <ul class="rows" aria-label="The notes in the session">
+      {#each agentNotes as n (n.id)}
+        <li class="row"><span class="r" title={n.how === "given" ? "Given from here" : `Read by ${v.agent}`}><span class="mk" class:iso={n.how === "read"} aria-hidden="true">{n.how === "given" ? "◆" : "◇"}</span><span class="t">{n.title}</span><span class="d">{n.how}</span>{#if n.tokens}<span class="num">{short(n.tokens)}</span>{/if}</span></li>
+      {/each}
+    </ul>
+    <h2 class="label">in the tray</h2>
+    <ul class="rows" aria-label="What you gave Iso" title="Given to the session before its next prompt, asked here or in the terminal, unless given already">
+      {#each tray.sent as p (tray.keyOf(p))}
+        <li class="row"><span class="r"><span class="mk" aria-hidden="true">◆</span><span class="t">{p.kind === "passage" ? `“${p.text}”` : p.title}</span></span>
+          <button type="button" class="x" aria-label="Take {p.title} out of Iso's context" onclick={() => tray.remove(p)}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 8M12 4l-8 8" /></svg></button></li>
+      {/each}
+    </ul>
+  {:else if build}
     <!-- In Build the parts go to the terminal's agent by name; the rest is OpenCode's. -->
     <h2 class="label">notes</h2>
     <ul class="rows" aria-label="What you gave Iso" title="Sent with your next message to the terminal's agent: notes and folders by name, passages as they are">

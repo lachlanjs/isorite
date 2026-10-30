@@ -103,9 +103,30 @@ export interface ConversationSummary { id: string; at: string; last: string; ask
 
 /** The terminal's session (M11), as the Iso pane's Build mode draws it: read by the isorite server from OpenCode's
  *  own server, which `isorite term` starts and the terminal is attached to. `connected` is false when no terminal is. */
-export interface TerminalView { connected: boolean; /** The agent, as it names itself: OpenCode, omp. */ agent: string; session: string | null; title: string; busy: boolean; turns: TerminalTurn[]; asking: TerminalPermission[]; cost: number; tokens: { input: number; output: number }; model: string }
-/** A prompt and what the agent did with it. `from` says where it was asked: in the terminal, or from a page. */
-export interface TerminalTurn { id: string; asked: string; from: "terminal" | "here"; items: TerminalItem[]; state: "running" | "done" | "stopped" | "failed" }
+export interface TerminalView {
+  connected: boolean; /** The agent, as it names itself: OpenCode, omp. */ agent: string; session: string | null; title: string; busy: boolean; turns: TerminalTurn[]; asking: TerminalPermission[]; cost: number; tokens: { input: number; output: number }; model: string;
+  /** How the session is followed: OpenCode's server (M11), or an ACP agent through `isorite acp` (M25). */
+  via?: "opencode" | "acp";
+  /** The agent's own name for itself, as its changes are signed (`agent:<id>`). */
+  agentId?: string;
+  /** The agent's context window, in tokens, and how much of it the session fills (ACP's usage_update). */
+  size?: number;
+  /** The agents' sessions on the base (M25): live ones, the agents' own, and those isorite carried and kept. */
+  sessions?: AgentSession[];
+  /** A kept session shown to read, with no agent attached that can carry it on. */
+  reading?: boolean;
+  /** What isorite's MCP puts in each session, in tokens (its instructions and tools), as estimated. */
+  ours?: number;
+}
+/** A prompt and what the agent did with it. `from` says where it was asked: in the terminal, or from a page. `given`:
+ *  the notes and passages put before it from the pane (M25). */
+export interface TerminalTurn { id: string; asked: string; from: "terminal" | "here"; items: TerminalItem[]; state: "running" | "done" | "stopped" | "failed"; given?: Given[]; at?: string }
+/** An agent's session as isorite kept it (M25), in its own files beside Iso's conversations: what was asked, from
+ *  where, what the agent read, changed, asked back and offered. */
+export interface AgentRecord { agent: string; name: string; session: string; title: string; at: string; last: string; turns: TerminalTurn[] }
+/** A session in the drawer (M25): live (a wrapper carries it now), the agent's own (in its `session/list`), kept (a
+ *  record here), or several of these. `open`: an agent that can carry it on is attached. */
+export interface AgentSession { agent: string; name: string; session: string; title: string; asked: string; last: string; turns: number; notes: number; live: boolean; busy: boolean; kept: boolean; open: boolean }
 export type TerminalItem =
   | { kind: "text"; text: string }
   /** A tool call. `title` is what it acted on (a command, a file, a note); `diff` an edit's lines, `-` and `+`. */
@@ -414,6 +435,11 @@ export interface Api {
   /** An agent changed a note's file with its own tools, in a turn isorite saw (M25): entered in its journal under the
    *  agent's name, with what was asked, not as a change made elsewhere. */
   agentChanged(change: { agent: string; note: string; asked: string }): Promise<void>;
+  /** Keep an agent's session as isorite carried it (M25), replacing what was kept of it. */
+  keepAgentRecord(record: AgentRecord): Promise<void>;
+  /** The sessions kept, newest first, each as the drawer shows it; or one, whole. */
+  agentRecords(): Promise<AgentSession[]>;
+  agentRecord(agent: string, session: string): Promise<AgentRecord | null>;
   /** Listen to everything the engine does, until the returned function is called. */
   events(listener: (event: EngineEvent) => void): () => void;
 }

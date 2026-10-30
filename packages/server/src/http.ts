@@ -8,7 +8,7 @@ import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { Conflict, EngineError, MAX_FILE_BYTES, MAX_NOTE_BYTES, type Api, type Choice } from "@isorite/engine";
+import { Conflict, EngineError, MAX_FILE_BYTES, MAX_NOTE_BYTES, type Api, type Choice, type Given as GivenPart } from "@isorite/engine";
 import type { BasesPort } from "./bases.ts";
 import type { Setup } from "./setup.ts";
 import { given as withGiven, type Terminal } from "./terminal.ts";
@@ -331,8 +331,13 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     post("/api/terminal/prompt", z.object({ asked: z.string().min(1).max(8000), given: z.array(Given).max(40) }).strict(), async (_c, b) => {
       const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
       const broken = await api.brokenNews("agent");
-      const text = withGiven(b.asked, b.given, (id) => titles.get(id) ?? id) + (broken.length ? `\n\n(isorite: code links in the notes that no longer resolve: ${broken.map((x) => `${x.href} in /${x.id}.md`).join("; ")}.)` : "");
-      await terminal.prompt(text).catch(failed);
+      const news = broken.length ? `\n\n(isorite: code links in the notes that no longer resolve: ${broken.map((x) => `${x.href} in /${x.id}.md`).join("; ")}.)` : "";
+      const title = (id: string) => titles.get(id) ?? id;
+      // An agent's session over ACP is given what was given apart, once a session (M25); OpenCode's, in the prompt.
+      if (acp && "acp" in terminal && terminal.following() === acp) {
+        await acp.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim()).catch(failed);
+        await acp.prompt(b.asked.trim() + news).catch(failed);
+      } else await terminal.prompt(withGiven(b.asked, b.given, title) + news).catch(failed);
     });
     post("/api/terminal/stop", z.object({}).strict(), async () => { await terminal.interrupt().catch(failed); });
     post("/api/terminal/permission", z.object({ id: z.string().max(200), decision: z.enum(["once", "always", "reject"]) }).strict(), async (_c, b) => { await terminal.reply(b.id, b.decision).catch(failed); });
@@ -361,19 +366,26 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   });
   app.on(["GET", "DELETE"], "/mcp", (c) => c.body(null, 405, { Allow: "POST" }));
 
-  // An ACP agent's session (M25, the spike): `isorite acp`, on this machine, tells what passed between its front end
-  // and the agent, and listens for what the pane asks. Asked as the page asks: the Origin and the token.
+  // Agents' sessions (M25): `isorite acp`, on this machine, tells what passed between its front end and the agent,
+  // and listens for what the pane asks. Asked as the page asks: the Origin and the token.
   if (acp) {
-    // Notes and passages given in the pane, put before the next prompt, asked there or in the front end.
-    post("/api/acp/give", z.object({ given: z.array(Given).max(40) }).strict(), async (_c, b) => {
+    const render = async () => {
       const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
-      await acp.give(withGiven("", b.given, (id) => titles.get(id) ?? id).trim()).catch((e: Error) => { throw new EngineError(e.message, 409); });
-    });
-    post("/api/acp/tap", z.object({ messages: z.array(z.object({ way: z.enum(["in", "out", "ours"]), message: z.record(z.string(), z.unknown()) }).strict()).max(1000) }).strict(), async (_c, b) => { acp.tap(b.messages as { way: "in" | "out" | "ours"; message: Rpc }[]); });
+      return (parts: GivenPart[]) => withGiven("", parts, (id) => titles.get(id) ?? id).trim();
+    };
+    const refused = (e: Error) => { throw new EngineError(e.message, 409); };
+    // What is in the pane's tray: what the session shown has not been given yet goes before its next prompt.
+    post("/api/acp/give", z.object({ given: z.array(Given).max(40) }).strict(), async (_c, b) => { await acp.give(b.given as GivenPart[], await render()).catch(refused); });
+    post("/api/acp/follow", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await acp.follow(b.agent, b.session).catch(refused); });
+    post("/api/acp/new", z.object({ agent: z.string().max(40) }).strict(), async (_c, b) => { await acp.fresh(b.agent).catch(refused); });
+    post("/api/acp/list", z.object({}).strict(), async () => { acp.refresh(); });
+    post("/api/acp/tap", z.object({ link: z.string().min(1).max(100), messages: z.array(z.object({ way: z.enum(["in", "out", "ours"]), message: z.record(z.string(), z.unknown()) }).strict()).max(1000) }).strict(), async (_c, b) => { acp.tap(b.link, b.messages as { way: "in" | "out" | "ours"; message: Rpc }[]); });
     app.get("/api/acp/commands", (c) => {
       if (!local(c) || c.req.header(TOKEN_HEADER) !== token) return refuse(c, 403, "bad token");
+      const link = c.req.query("link") ?? "";
+      if (!/^[\w-]{1,100}$/.test(link)) return refuse(c, 400, "a wrapper names itself");
       return streamSSE(c, async (stream) => {
-        const hangUp = acp.connect((command) => { void stream.writeSSE({ event: "command", data: JSON.stringify(command) }).catch(() => undefined); });
+        const hangUp = acp.connect(link, (command) => { void stream.writeSSE({ event: "command", data: JSON.stringify(command) }).catch(() => undefined); });
         const beat = setInterval(() => { void stream.write(": still here\n\n"); }, 25_000);
         await stream.writeSSE({ event: "open", data: "{}" });
         await new Promise<void>((done) => stream.onAbort(done));
@@ -382,6 +394,12 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
       });
     });
   }
+  app.get("/api/agent/records", (c) => answer(c, () => api.agentRecords()));
+  app.get("/api/agent/record", (c) => answer(c, async () => {
+    const r = await api.agentRecord(c.req.query("agent") ?? "", c.req.query("session") ?? "");
+    if (!r) throw new EngineError("no such session is kept", 404);
+    return r;
+  }));
 
   // Everything the engine does, as it happens. A comment every 25 seconds keeps the connection open.
   // Every stream is told how many browser pages are listening (a harness's plugin listens with ?agent=<name>, and

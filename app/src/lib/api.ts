@@ -25,7 +25,19 @@ export interface TerminalApi {
   reply(id: string, decision: Decision): Promise<void>;
   /** Keep what the agent asked back or offered (M25). */
   take(id: string): Promise<{ note: string }>;
+  /** What is in the tray, for the next prompt in the session shown, asked here or in the terminal (M25). */
+  give(given: Given[]): Promise<void>;
+  /** Show an agent's session (M25): a live one, one the agent carries on, or one kept, to read. */
+  follow(agent: string, session: string): Promise<void>;
+  /** A new session with an attached agent, from here. */
+  fresh(agent: string): Promise<void>;
+  /** Ask the attached agents for their sessions again. */
+  list(): Promise<void>;
+  /** The project's MCP config as isorite would write it (M25), and written, from this machine only. */
+  project(): Promise<ProjectConfig>;
+  writeProject(): Promise<string[]>;
 }
+export interface ProjectConfig { repo: string; files: { file: string; harness: string; current: boolean; before: string | null; after: string }[] }
 
 /** The provider's setup (M18), through the isorite server: there is none for the engine in the page (the guide's site). */
 export interface SetupApi {
@@ -139,6 +151,9 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     agentTake: (id) => write("POST", "agent/take", { id }),
     // Told by isorite acp to the server, never by a page.
     agentChanged: async () => { throw new Error("only isorite acp tells the server of an agent's change"); },
+    keepAgentRecord: async () => { throw new Error("only the server keeps an agent's session"); },
+    agentRecords: () => ask("agent/records"),
+    agentRecord: (agent, session) => ask(`agent/record?agent=${encodeURIComponent(agent)}&session=${encodeURIComponent(session)}`),
     setup: {
       view: () => ask<SetupView>("settings/provider"),
       keep: (draft) => write("PUT", "settings/provider", draft),
@@ -156,6 +171,12 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       stop: async () => { await write("POST", "terminal/stop", {}); },
       reply: async (id, decision) => { await write("POST", "terminal/permission", { id, decision }); },
       take: (id) => write("POST", "agent/take", { id }),
+      give: async (given) => { await write("POST", "acp/give", { given }); },
+      follow: async (agent, session) => { await write("POST", "acp/follow", { agent, session }); },
+      fresh: async (agent) => { await write("POST", "acp/new", { agent }); },
+      list: async () => { await write("POST", "acp/list", {}); },
+      project: () => ask<ProjectConfig>("connect"),
+      writeProject: async () => (await write<{ written: string[] }>("POST", "connect", {})).written,
     },
     events(listener) {
       const source = new EventSource(root + "events");

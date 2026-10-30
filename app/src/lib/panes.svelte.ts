@@ -96,11 +96,12 @@ class Panes {
   }
 
   /** A terminal is attached (M11): Iso's files and run switches are offered, and with either on, what is asked
-   *  goes to the terminal's session (Q47). */
+   *  goes to the terminal's session (Q47). An agent attached over ACP (M25) is the pane's whatever the switches. */
   terminal = $state(false);
-  setTerminal(on: boolean): void { this.terminal = on; }
+  agent = $state(false);
+  setTerminal(on: boolean, agent = false): void { this.terminal = on; this.agent = on && agent; }
   /** What Iso may do now. */
-  get mode(): Mode { return this.terminal && (this.on.files || this.on.run) ? "build" : this.on.notes ? "write" : "ask"; }
+  get mode(): Mode { return this.terminal && (this.agent || this.on.files || this.on.run) ? "build" : this.on.notes ? "write" : "ask"; }
 
   setLast(id: string): void { if (id && !id.startsWith("@")) { this.last = id; keep(kept("isorite.last"), id); } }
 

@@ -15,14 +15,16 @@
   const report = $derived(converse.report);
   const build = $derived(panes.mode === "build");
   const view = $derived(terminal.view);
-  const fill = $derived(!build && report ? Math.min(1, report.tokens / report.limit) : 0);
-  const long = $derived(!build && !!report && report.tokens >= Math.min(100_000, report.limit / 2));
-  const full = $derived(!build && !!report && report.tokens > report.limit);
+  // An agent over ACP says how full its context is (M25); OpenCode's session is not measured here.
+  const used = $derived(build ? (view?.size ? { tokens: view.tokens.input, limit: view.size } : null) : report ? { tokens: report.tokens, limit: report.limit } : null);
+  const fill = $derived(used ? Math.min(1, used.tokens / used.limit) : 0);
+  const long = $derived(!!used && used.tokens >= Math.min(100_000, used.limit / 2));
+  const full = $derived(!!used && used.tokens > used.limit);
   const s = $derived(spend.value);
   const spent = $derived(s && s.cap ? Math.min(1, s.usd / s.cap) : 0);
   const over = $derived(spent > 0.8);
   // In Build the session is the terminal's: its model, its tokens and what OpenCode says they cost (0 for a gateway's model it has no price for).
-  const context = $derived(build ? `${view?.model || "OpenCode"}${view ? `, ${short(view.tokens.input + view.tokens.output)} tokens` : ""}${view?.cost ? `, ${money(view.cost)}` : ""}` : report ? `Context: ${short(report.tokens)} of ${short(report.limit)} tokens${full ? ": more than the model takes; switch parts off in the Context view" : long ? ": long enough to drift; summing up the earlier turns may help" : ""}` : "Context: not measured yet");
+  const context = $derived(build && view?.size ? `${view.agent}: ${short(view.tokens.input)} of ${short(view.size)} tokens${view.cost ? `, ${money(view.cost)}` : ""}` : build ? `${view?.model || view?.agent || "OpenCode"}${view ? `, ${short(view.tokens.input + view.tokens.output)} tokens` : ""}${view?.cost ? `, ${money(view.cost)}` : ""}` : report ? `Context: ${short(report.tokens)} of ${short(report.limit)} tokens${full ? ": more than the model takes; switch parts off in the Context view" : long ? ": long enough to drift; summing up the earlier turns may help" : ""}` : "Context: not measured yet");
   const money_ = $derived(!s ? "Spend: not known yet"
     : s.source === "key" ? `Spend: ${money(s.usd)} of the key's ${money(s.cap!)} limit, ${PER[s.per]}`
     : s.source === "setting" ? `Spend: ${money(s.usd)} of ${money(s.cap!)} this month (the cap set in settings)`

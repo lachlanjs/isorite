@@ -3,6 +3,8 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { afterAll, expect, test } from "vitest";
 import { writeExample } from "@isorite/example/node";
@@ -102,6 +104,88 @@ test("isorite acp (M25): between a front end and its agent; the session in the p
   input.end();
   expect(await done).toBe(0);
   await expect.poll(async () => (await view().catch(() => ({ connected: false }))).connected, { timeout: 5000 }).toBe(false);
+}, 120_000);
+
+test("several sessions (M25): one from the front end, one from the pane, one carried on from the agent's own terminal; kept here, listed in the drawer", async () => {
+  const base = await writeExample(join(root, "sessions"));
+  const port = await freePort(), input = new PassThrough(), output = new PassThrough();
+  const store = join(root, "scripted-store.json");
+  const env = { ...process.env, XDG_CONFIG_HOME: join(root, "config2"), XDG_CACHE_HOME: join(root, "cache2"), ISORITE_EMBED: "off", SCRIPTED_STORE: store };
+  const scripted = `"${process.execPath}" "${SCRIPTED}"`;
+  // A session asked in the agent's own terminal, before isorite was there.
+  const own = await new Promise<string>((done) => {
+    const child = spawn(process.execPath, [SCRIPTED], { env, stdio: ["pipe", "pipe", "inherit"] });
+    const rl = createInterface({ input: child.stdout! });
+    let session = "";
+    rl.on("line", (line) => {
+      const m = JSON.parse(line) as { id?: number; result?: { sessionId?: string; stopReason?: string } };
+      if (m.id === 2) { session = m.result!.sessionId!; child.stdin!.write(JSON.stringify({ jsonrpc: "2.0", id: 3, method: "session/prompt", params: { sessionId: session, prompt: [{ type: "text", text: "read integrators/leapfrog.md\nasked in its own terminal" }] } }) + "\n"); }
+      if (m.id === 3) { child.stdin!.end(); child.kill(); done(session); }
+    });
+    child.stdin!.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: 1 } }) + "\n");
+    child.stdin!.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "session/new", params: { cwd: base.notes, mcpServers: [] } }) + "\n");
+  });
+
+  const done = acp(base.notes, { agent: scripted, port, input, output, env });
+  const url = `http://127.0.0.1:${port}`;
+  type Msg = { id?: number | string; method?: string; params?: any; result?: any };
+  const answers = new Map<number | string, Msg>(), told: Msg[] = [];
+  let buffer = "";
+  output.on("data", (chunk: Buffer) => {
+    buffer += chunk.toString();
+    for (let end; (end = buffer.indexOf("\n")) >= 0; buffer = buffer.slice(end + 1)) {
+      const m = JSON.parse(buffer.slice(0, end)) as Msg;
+      if (m.id !== undefined && !m.method) answers.set(m.id, m); else told.push(m);
+    }
+  });
+  let id = 0;
+  const ask = async (method: string, params: object) => {
+    const mine = ++id;
+    input.write(JSON.stringify({ jsonrpc: "2.0", id: mine, method, params }) + "\n");
+    await expect.poll(() => answers.has(mine), { timeout: 60_000, interval: 20 }).toBe(true);
+    return answers.get(mine)!;
+  };
+  const view = async () => (await (await fetch(`${url}/api/terminal`)).json()) as any;
+  await ask("initialize", { protocolVersion: 1, clientCapabilities: {} });
+  const token = ((await (await fetch(`${url}/api/session`)).json()) as { token: string }).token;
+  const post = (path: string, body: object) => fetch(url + path, { method: "POST", headers: { "Content-Type": "application/json", "x-isorite-token": token, Origin: url }, body: JSON.stringify(body) });
+  const front = (await ask("session/new", { cwd: base.notes, mcpServers: [] })).result.sessionId as string;
+  await ask("session/prompt", { sessionId: front, prompt: [{ type: "text", text: "asked in the front end" }] });
+  await expect.poll(async () => (await view()).turns[0]?.state).toBe("done");
+  // The agent's own session is in the drawer, beside the live one.
+  await expect.poll(async () => (await view()).sessions.map((x: any) => [x.session, x.live])).toEqual(expect.arrayContaining([[front, true], [own, false]]));
+  expect((await view()).size).toBe(200_000);
+
+  // A new session from the pane, with a note given before it opens: the front end sees none of it.
+  const toldBefore = told.length;
+  expect((await post("/api/acp/new", { agent: "scripted" })).status).toBe(200);
+  await expect.poll(async () => (await view()).session).not.toBe(front);
+  const pane = (await view()).session as string;
+  expect((await post("/api/acp/give", { given: [{ kind: "note", id: "integrators/leapfrog" }] })).status).toBe(200);
+  expect((await post("/api/terminal/prompt", { asked: "read integrators/leapfrog.md\nasked from the pane", given: [{ kind: "note", id: "integrators/leapfrog" }] })).status).toBe(200);
+  await expect.poll(async () => (await view()).turns[0]?.state).toBe("done");
+  const t = (await view()).turns[0];
+  expect(t).toMatchObject({ from: "here", asked: "read integrators/leapfrog.md\nasked from the pane", given: [{ kind: "note", id: "integrators/leapfrog" }] });
+  expect(t.items.find((i: any) => i.kind === "text").text).toContain("Blocks: 2");
+  expect(told.slice(toldBefore).some((m) => JSON.stringify(m).includes(pane))).toBe(false);
+  // Given once in a session: asked again, the note is not put before it again.
+  expect((await post("/api/terminal/prompt", { asked: "again", given: [{ kind: "note", id: "integrators/leapfrog" }] })).status).toBe(200);
+  await expect.poll(async () => (await view()).turns[1]?.state).toBe("done");
+  expect((await view()).turns[1].items.find((i: any) => i.kind === "text").text).toContain("Blocks: 1");
+
+  // The agent's own session, carried on here: its history replayed into the pane, then asked in.
+  expect((await post("/api/acp/follow", { agent: "scripted", session: own })).status).toBe(200);
+  await expect.poll(async () => (await view()).turns.map((x: any) => x.asked)).toEqual(["read integrators/leapfrog.md\nasked in its own terminal"]);
+  expect((await post("/api/terminal/prompt", { asked: "carried on here", given: [] })).status).toBe(200);
+  await expect.poll(async () => (await view()).turns[1]?.state).toBe("done");
+
+  // Each is kept here; the drawer says so. Shown again, the front end's is as it was.
+  await expect.poll(async () => ((await (await fetch(`${url}/api/agent/records`)).json()) as any[]).map((r) => r.session).sort()).toEqual([front, own, pane].sort());
+  expect((await post("/api/acp/follow", { agent: "scripted", session: front })).status).toBe(200);
+  await expect.poll(async () => (await view()).turns[0]?.asked).toBe("asked in the front end");
+
+  input.end();
+  expect(await done).toBe(0);
 }, 120_000);
 
 test("the base for a session: the folder or one above it with .isorite/, else the first below it", async () => {

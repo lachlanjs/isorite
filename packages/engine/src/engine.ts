@@ -5,7 +5,7 @@
 import {
   AGENTS_FILE, STRENGTH, unwrap, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, section, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, diffLines, change, findPassage, hashText, cleanEvent, journalLine, journalPath, locate, replay, sessionMoments, mapModel, newId, pending, readJournal, readRecord, recordPath, reconcile, splitFrontmatter, stamp, written, type Cost, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type Conversation, type ConversationSummary, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest } from "./api.ts";
+import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AskRequest, type Choice, type ContextItem, type ContextReport, type HandRow, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type DraftSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type Settings, type Spend, type TurnRequest } from "./api.ts";
 import { CLOSE, HERE, LINKED_BUDGET, OPEN, conversation, estimate, exchanges, fitted, insertMessages, parseRewrite, replyText, noteMessages, rewriteMessages, windowed, type Exchange, type Part } from "./iso.ts";
 import { ROUNDS, rounds, type Tools } from "./loop.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Away, type Similar } from "./lookup.ts";
@@ -106,6 +106,21 @@ function filePathOf(raw: unknown): string | null {
 
 /** A conversation's or turn's id: a ULID. */
 const TURN_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+/** An agent as its changes are signed (`agent:<id>`), and where its sessions are kept (M25). */
+const AGENT_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const AGENTS_DIR = `${CONVERSATIONS_DIR}/agents`;
+/** A session's file: its id as it is where that is safe as a file's name, else in base64url after a "~". */
+const agentRecordPath = (agent: string, session: string): string =>
+  `${AGENTS_DIR}/${agent}/${/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,119}$/.test(session) ? session : "~" + btoa(String.fromCharCode(...new TextEncoder().encode(session))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}.json`;
+/** The notes a session drew on: given, read or changed, and questions made of what it asked. */
+export function notesOfTurns(turns: readonly TerminalTurn[]): number {
+  const notes = new Set<string>();
+  for (const t of turns) {
+    for (const g of t.given ?? []) if (g.kind !== "folder") notes.add(g.id);
+    for (const i of t.items) if (i.kind === "tool" && i.note && !i.base) notes.add(i.note); else if (i.kind === "question" && i.made) notes.add(i.made);
+  }
+  return notes.size;
+}
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -523,6 +538,34 @@ export class Engine implements Api {
       this.embedSoon();
       this.publish({ type: "note-changed", id, version: hashText(now), who });
     });
+  }
+
+  // ------------------------------------------------------------ agents' sessions, as isorite carried them (M25)
+
+  async keepAgentRecord(record: AgentRecord): Promise<void> {
+    if (!AGENT_ID.test(record.agent) || !record.session || record.session.length > 200) throw new EngineError("an agent's session is named by the agent and its session's id");
+    await this.opts.own.write(agentRecordPath(record.agent, record.session), JSON.stringify(record) + "\n");
+  }
+
+  async agentRecord(agent: string, session: string): Promise<AgentRecord | null> {
+    if (!AGENT_ID.test(agent) || !session || session.length > 200) return null;
+    const text = await this.opts.own.read(agentRecordPath(agent, session));
+    try { return text ? (JSON.parse(text) as AgentRecord) : null; } catch { return null; }
+  }
+
+  async agentRecords(): Promise<AgentSession[]> {
+    const own = this.opts.own, all: AgentSession[] = [];
+    for (const a of await own.list(AGENTS_DIR).catch(() => [])) {
+      if (!a.dir || !AGENT_ID.test(a.name)) continue;
+      for (const f of await own.list(`${AGENTS_DIR}/${a.name}`).catch(() => [])) {
+        if (f.dir || !f.name.endsWith(".json")) continue;
+        let r: AgentRecord;
+        try { r = JSON.parse((await own.read(`${AGENTS_DIR}/${a.name}/${f.name}`)) ?? "") as AgentRecord; } catch { continue; }
+        if (!r?.turns?.length || r.agent !== a.name) continue;
+        all.push({ agent: r.agent, name: r.name, session: r.session, title: r.title, asked: r.turns[0]!.asked, last: r.last, turns: r.turns.length, notes: notesOfTurns(r.turns), live: false, busy: false, kept: true, open: false });
+      }
+    }
+    return all.sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : 0));
   }
 
   /** A turn is looked up in the base as it is when the turn begins, as Iso's requests are. */
