@@ -108,6 +108,8 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     saveAgents: (text) => write("POST", "agents", { text }),
     // The server's own: it tells the agent of broken code links with its next prompt.
     nameRepository: async () => false,
+    agentNotes: () => ask("agents/notes"),
+    setAgentNotes: (may) => write("POST", "agents/notes", { may }),
     brokenNews: async () => [],
     conversations: () => ask("conversations"),
     conversation: async (id) => { const c = await ask<{ id: string; turns: [] }>("conversation" + (id ? q(id) : "")); return c.id ? c : null; },

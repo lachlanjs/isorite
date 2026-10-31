@@ -50,6 +50,23 @@ test("a note moved: the questions and problems that name it, and the embeds of i
   expect(engine.bundle.concepts.get("global/compactness")!.attached).toEqual(["topology/euler", "global/gauss-bonnet"]);
 });
 
+test("code links point into the repository the notes are in, unless the settings name another; the name kept beside what else the settings hold", async () => {
+  const clock = { t: Date.parse("2026-10-25T09:00:00Z"), now() { return this.t; } };
+  const repo = new MemoryFiles({ "src/sim.py": "def step(): pass\n" });
+  const notes = new MemoryFiles({ "sim/step.md": "---\ntype: Concept\ntitle: The step\n---\n\nIn [gone](code:src/old.py).\n" });
+  const found = await Engine.open({ notes, own: new MemoryFiles(), clock, device: "laptop1", name: "nbody", foundRepository: "..", repository: (p) => (p === ".." ? repo : null) });
+  expect((await found.notes()).notes.find((n) => n.id === "sim/step")).toMatchObject({ broken: ["code:src/old.py"] });
+  expect(await found.nameRepository("../elsewhere")).toBe(false);
+
+  const own = new MemoryFiles();
+  const outside = await Engine.open({ notes, own, clock, device: "laptop1", name: "nbody" });
+  await outside.setAgentNotes(false);
+  expect(await outside.nameRepository("../code")).toBe(true);
+  expect((await outside.settingsOfBase())).toEqual({ agents_write_notes: false, repository: "../code" });
+  await outside.setAgentNotes(true);
+  expect((await outside.settingsOfBase())).toEqual({ repository: "../code" });
+});
+
 test("code links point into the repository named in the settings: a missing file is broken, and Iso is told once", async () => {
   const clock = { t: Date.parse("2026-10-25T09:00:00Z"), now() { return this.t; } };
   const repo = new MemoryFiles({ "src/sim.py": "def step(): pass\n" });

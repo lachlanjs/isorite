@@ -17,6 +17,7 @@ Each pane's header has a row of small icons. Each is a switch: it says what it i
 - Iso's context (Alt+C): what the agent's session was given, what it read and what it changed, marked on the map.
 
 **Iso:**
+- May agents edit the notes (Alt+N). On unless you switch it off, and kept with the base rather than in the browser, so it holds for an agent in its own terminal too: its tools for writing notes and artifacts are refused, and so is asking to edit a note's file. An agent whose own tools change a file without asking can't be stopped; the change is still kept, under its name, to put back.
 - With an agent attached, may it edit the project's files (Alt+F) and run commands (Alt+R): what it asks to do that is switched off is refused. See [your own agent](/terminal/your-own-agent.md "see also").
 
 ![A note on the Atlas with a link to the web, one to code and two pictures beside it](the-switches/satellites.svg)

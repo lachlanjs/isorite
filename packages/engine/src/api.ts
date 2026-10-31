@@ -209,6 +209,9 @@ export interface Api {
   saveAgents(text: string): Promise<void>;
   /** Name the repository the base's code links point into, unless one is named: true if it was (M12). */
   nameRepository(path: string): Promise<boolean>;
+  /** Whether agents may change this base's notes, through isorite's tools or by asking to edit its files. */
+  agentNotes(): Promise<{ may: boolean }>;
+  setAgentNotes(may: boolean): Promise<void>;
   /** Code links broken since an agent was last told; each is told once (Q27). */
   brokenNews(): Promise<{ id: string; title: string; href: string }[]>;
   /** Write a proposal of Iso's still waiting in a note's journal (from before M25) into its note. For a rewrite,

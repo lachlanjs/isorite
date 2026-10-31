@@ -48,6 +48,8 @@ class TerminalState {
   start(): void {
     if (this.started || !app.api) return;
     this.started = true;
+    void app.api.agentNotes().then(({ may }) => { panes.on.notes = may; }, () => undefined);
+    panes.notesFlipped = (may) => { void app.api.setAgentNotes(may).catch((e: Error) => { panes.on.notes = !may; this.problem = e.message; }); };
     if (!this.api) { panes.setAttached(false); return; }
     void this.api.view().then((v) => this.show(v), () => panes.setAttached(false));
     app.on((e: EngineEvent) => { if (e.type === "terminal") this.show(e.terminal); });

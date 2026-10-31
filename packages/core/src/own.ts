@@ -19,14 +19,18 @@ export const GITATTRIBUTES = "*.jsonl merge=union\n";
 export const SETTINGS_FILE = "settings.toml";
 
 /** The base's settings. `repository`: the folder code links resolve against, relative to the notes folder (or
- *  absolute); written by hand (until M25, `isorite term` wrote it the first time it was run beside the base). */
-export interface Settings { repository?: string }
+ *  absolute), when it isn't the git repository the notes are in. `agents_write_notes = false`: agents may not change
+ *  the notes (they may unless it says so). */
+export interface Settings { repository?: string; agents_write_notes?: boolean }
 
 export function parseSettings(text: string | null): Settings {
   if (!text) return {};
   let raw: Record<string, unknown>;
   try { raw = parse(text); } catch { return {}; }
-  return typeof raw.repository === "string" && raw.repository.trim() ? { repository: raw.repository.trim() } : {};
+  return {
+    ...(typeof raw.repository === "string" && raw.repository.trim() ? { repository: raw.repository.trim() } : {}),
+    ...(typeof raw.agents_write_notes === "boolean" ? { agents_write_notes: raw.agents_write_notes } : {}),
+  };
 }
 
 export function settingsText(s: Settings): string {

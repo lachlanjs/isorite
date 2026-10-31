@@ -55,7 +55,35 @@ The first run of the installed executable takes a few seconds longer, while it u
 
 ### 2. Your agent
 
-With no agent attached, Iso's pane offers one: an agent of the [ACP registry](https://agentclientprotocol.com/get-started/registry) (Claude, Codex and others), or the command of one it doesn't list. isorite starts it for the base, with your environment, so its key and model are as you set them for its own terminal. Or run your agent from an ACP front end (Toad, Zed) through `isorite acp`, or give it isorite's MCP in its own terminal. [docs/terminal.md](docs/terminal.md) has each.
+isorite calls no model itself, so it needs an agent. Have one working in its own terminal first (Claude Code, Codex, OpenCode, omp, Hermes, or any that speaks ACP): its key and model stay as you set them there. Then choose one of three ways in.
+
+**In Iso's pane, the simplest.** Set your agent's key in the terminal you start isorite from, because the agent gets that environment and no other:
+
+```sh
+export ANTHROPIC_API_KEY=...          # or CODEX_API_KEY for Codex, or whatever your agent reads
+isorite serve ~/code/my-project/notes
+```
+
+Open the link it prints. With no agent attached, Iso's pane offers the [ACP registry](https://agentclientprotocol.com/get-started/registry)'s agents, or the command of one it doesn't list (`hermes acp`). Choose one and ask it something. isorite remembers the choice for this base. The first start can take a while, with nothing shown, while the agent's program is fetched; an agent run through `npx` or `uvx` needs that tool installed, even with the one-file install of isorite.
+
+**From an ACP front end** (Toad, Zed, JetBrains). Give it this as its agent, and the session shows in the front end and in the pane at once:
+
+```sh
+isorite acp --agent "npx -y @agentclientprotocol/claude-agent-acp" ~/code/my-project/notes
+```
+
+**In the agent's own terminal.** Run `isorite doctor ~/code/my-project/notes` and answer yes to write the project's MCP config (`.mcp.json`, `opencode.json`), commit it, and run the agent as you always do. isorite sees only what the agent does through isorite's tools this way.
+
+Each way in full, and how each agent differs: [docs/terminal.md](docs/terminal.md).
+
+**What the agent may do**, set by the switches in Iso's header:
+
+- **Edit the notes** (Alt+N): on unless you switch it off, and kept with the base. While it's off, isorite refuses the agent's writes to notes and artifacts, and its requests to edit a note's file. An agent whose own tools change a file without asking can't be stopped; through `isorite acp` the change is still kept under its name, to put back.
+- **Edit the project's files** (Alt+F) and **run commands** (Alt+R): off by default. What the agent asks to do while one is off is refused, as long as the page is open.
+
+**If it doesn't start:** "Authentication required" or "the agent stopped" usually means the key isn't set where `isorite serve` runs. Run the agent's command in that same terminal and fix what it says. Claude asks before each of isorite's tools until you answer *always*.
+
+Upgrading from before 0.13: Iso's own model is gone, along with `isorite term` and `isorite opencode`. A `[provider]` or `[tiers]` in `config.toml` is left alone and no longer read. Attach OpenCode with `opencode acp`. Your notes and history are unchanged, and Iso's old conversations can still be read from the pane's drawer.
 
 ### 3. Optional
 

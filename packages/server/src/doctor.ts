@@ -10,6 +10,7 @@ import { getCACertificates } from "node:tls";
 import { join, resolve } from "node:path";
 import { OWN_DIR, SETTINGS_FILE, parseSettings } from "@isorite/core";
 import { configPath, readConfig } from "./config.ts";
+import { repoOf } from "./git.ts";
 import { cacheDir } from "./embedder.ts";
 import { mirrorOf, modelDir, modelInfo, modelPlaces, RELEASE, RELEASE_SHA256, type ModelInfo } from "./model.ts";
 import { unreachable } from "./network.ts";
@@ -117,6 +118,9 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
       const own = join(notes, OWN_DIR), settings = join(own, SETTINGS_FILE);
       say("notes", "ok", existsSync(own) ? `${notes}, with its ${OWN_DIR}/` : `${notes}: its ${OWN_DIR}/ is made the first time it is opened`);
       const repository = existsSync(settings) ? parseSettings(readFileSync(settings, "utf8")).repository : undefined;
+      const found = repoOf(notes);
+      if (!repository && found) say("repository", "ok", `${found}: code links point here`);
+      if (!repository && !found) say("repository", "skip", `the notes are in no git repository: code links point where an agent is first attached in one, or set repository in ${OWN_DIR}/${SETTINGS_FILE}`);
       if (repository) {
         const at = resolve(notes, repository);
         say("repository", existsSync(at) && statSync(at).isDirectory() ? "ok" : "fail", existsSync(at) ? at : `${OWN_DIR}/${SETTINGS_FILE} names ${repository}, and there is no folder at ${at}`);

@@ -3,13 +3,14 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
 import { serve as nodeServe } from "@hono/node-server";
 import { CONFIG_FILE, GITATTRIBUTES, OWN_DIR, StudyError } from "@isorite/core";
 import { Engine, systemClock, type ArtifactRun, type Elsewhere, type Embedder } from "@isorite/engine";
 import { configPath, deviceId, rememberBase } from "./config.ts";
+import { repoOf } from "./git.ts";
 import { Bases } from "./bases.ts";
 import { cacheDir, modelDir, nodeEmbedder } from "./embedder.ts";
 import { LOOPBACK, createApp } from "./http.ts";
@@ -69,11 +70,13 @@ export interface EngineExtras {
 }
 
 export async function openEngine({ notes }: Opened, device = deviceId(), model: string | null = modelDir(), extras: EngineExtras = {}): Promise<Engine> {
-  const own = makeOwn(notes);
+  const own = makeOwn(notes), found = repoOf(notes);
   const embedder = extras.embedder !== undefined ? extras.embedder : model ? nodeEmbedder(model) : null;
   return Engine.open({
     notes: new NodeFiles(notes), own: new NodeFiles(own), clock: systemClock, device, name: extras.name ?? basename(notes),
-    // The repository code links point into (M12): named in .isorite/settings.toml, from the notes folder.
+    // The repository code links point into (M12): named in .isorite/settings.toml, from the notes folder, else the
+    // one the notes are in.
+    ...(found !== null ? { foundRepository: relative(notes, found) || "." } : {}),
     repository: (path) => { const dir = resolve(notes, path); return existsSync(dir) && statSync(dir).isDirectory() ? new NodeFiles(dir) : null; },
     // Search by meaning, where the model is installed (npm run model). Its vectors are a cache of this base's
     // notes, kept outside both repositories under a name made from where the notes are.

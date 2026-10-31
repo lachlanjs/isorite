@@ -2,7 +2,7 @@
 //   npm run package:sea
 //
 // It's Node itself, as a single executable application, with isorite inside as one asset: the package
-// `npm run package` builds, its npm dependencies installed beside it (the plugin's @opentui with its native library
+// `npm run package` builds, its npm dependencies installed beside it (with any native library
 // for this platform), packed and gzipped. scripts/sea-boot.cjs unpacks it into ~/.cache/isorite/<version>/ the
 // first time that version runs. Each platform's executable is built on that platform, by the release workflow.
 

@@ -48,7 +48,7 @@ try {
     $env:PATH = "$env:PATH;$Dir"
     Write-Host "  $Dir is added to your PATH: open a new terminal for isorite to be found there"
   }
-  Write-Host "  next: isorite doctor, then isorite model (search by meaning) and isorite opencode (the terminal)"
+  Write-Host "  next: isorite doctor, then isorite guide, and attach your agent from Iso's pane"
 } finally {
   Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }

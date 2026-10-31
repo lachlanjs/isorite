@@ -39,11 +39,11 @@ jobs:
           npm run package
           mkdir npm-dist
           (cd .npm/isorite && npm pack --pack-destination ../../npm-dist)
-      - name: Check the package carries the app, the notes and the plugin, and runs
+      - name: Check the package carries the app, the notes and the guide, and runs
         run: |
           tar -tzf npm-dist/isorite-*.tgz | grep -q "package/web/index.html"
           tar -tzf npm-dist/isorite-*.tgz | grep -q "package/notes/physics/softening.md"
-          tar -tzf npm-dist/isorite-*.tgz | grep -q "package/plugin/tui.tsx"
+          tar -tzf npm-dist/isorite-*.tgz | grep -q "package/guide/start-here.md"
           npm install -g ./npm-dist/isorite-*.tgz
           test "$(isorite --version)" = "${GITHUB_REF_NAME#v}"
           isorite example "$RUNNER_TEMP/example" && isorite check "$RUNNER_TEMP/example/nbody-notes"

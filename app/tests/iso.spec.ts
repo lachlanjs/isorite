@@ -80,3 +80,18 @@ test("an agent's edit to a note is written at once, its words marked as its own 
   await expect(page.locator(".cm-iso-by-iso")).toHaveText(["How surprised you are, on average, of a source."]);
   await look(page, "agent-change");
 });
+
+test("agents may edit the notes unless switched off: kept by the server, over a reload", async ({ page, request }) => {
+  await page.goto("./");
+  await toIso(page);
+  const sw = page.locator('[data-pane="iso"] .sw[data-switch="notes"]');
+  await expect(sw).toHaveAttribute("aria-pressed", "true");
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-pressed", "false");
+  await expect.poll(async () => (await (await request.get("api/agents/notes")).json()).may).toBe(false);
+  await page.reload();
+  await toIso(page);
+  await expect(sw).toHaveAttribute("aria-pressed", "false");
+  await sw.click();
+  await expect.poll(async () => (await (await request.get("api/agents/notes")).json()).may).toBe(true);
+});

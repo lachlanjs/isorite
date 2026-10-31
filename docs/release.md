@@ -7,7 +7,7 @@ Releases go through GitHub Actions (`.github/workflows/release.yml`), as rdstudi
 3. **executables** (M21), alongside: on each of five runners (Linux x64 and arm64, macOS arm64 and Intel, Windows x64), `npm run package:sea` builds isorite as one executable there, and runs it from an empty home: its version, `doctor`, and `serve` answering on the example base.
 4. **github** makes the GitHub Release for the tag, with the package, the five executables, their `SHA256SUMS`, and `install.sh` and `install.ps1` attached, and notes from the commits.
 
-Every push also runs the `windows` workflow: the tests on Windows, `install.ps1` in both PowerShells, and the Windows executable from an empty home through `isorite model` and `isorite opencode`.
+Every push also runs the `windows` workflow: the tests on Windows, `install.ps1` in both PowerShells, and the Windows executable from an empty home through `isorite model`.
 
 ## Once: the first version, by hand
 

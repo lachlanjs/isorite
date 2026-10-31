@@ -27,6 +27,20 @@ test("an agent is offered a brief of the base, the look-ups, and artifacts; find
   expect(await names(true)).toEqual(["brief_base", "search_notes", "find_similar", ...rest]);
 });
 
+test("with agents' changes to the notes switched off, an agent's writes are refused, in the brief too; what it offers still stands", async () => {
+  const { engine } = await open();
+  expect(await engine.agentNotes()).toEqual({ may: true });
+  await engine.setAgentNotes(false);
+  const write = { agent: "opencode", session: "s1", asked: "" };
+  await expect(engine.agentLook({ ...write, tool: "edit_note", args: { note: "basics/surprise", oldString: "Minus", newString: "Less" } })).rejects.toThrow(/switched off/);
+  await expect(engine.agentLook({ ...write, tool: "write_note", args: { note: "basics/new", content: "x" } })).rejects.toThrow(/switched off/);
+  await expect(engine.agentLook({ ...write, tool: "write_artifact", args: { path: "basics/a.html", html: "<p>x</p>" } })).rejects.toThrow(/switched off/);
+  expect((await engine.readNote("basics/surprise")).text).toContain("Minus the logarithm");
+  expect((await engine.agentLook({ ...write, tool: "brief_base", args: {} })).text).toContain("switched off");
+  await engine.setAgentNotes(true);
+  expect((await engine.agentLook({ ...write, tool: "edit_note", args: { note: "basics/surprise", oldString: "Minus", newString: "Less" } })).text).toContain("Changed");
+});
+
 test("an agent builds an artifact (M23, an agent's since M25): a recipe, the data's shape, a file refused while a rule is broken, then written with its manifest under its name, and run", async () => {
   const { engine } = await open();
   const notes = (engine as unknown as { opts: { notes: MemoryFiles } }).opts.notes;

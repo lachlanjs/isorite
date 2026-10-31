@@ -66,6 +66,14 @@ async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; 
       const said = isorite ? await mcpCall(isorite.url!, tool, args) : "no isorite MCP over HTTP";
       update(sessionId, { sessionUpdate: "tool_call_update", toolCallId: call, status: "completed", content: [{ type: "content", content: { type: "text", text: said } }] });
     }
+    if (verb === "permit-edit" && path) {
+      const answer = await new Promise<any>((done) => {
+        const ask = `perm-${n}`;
+        waiting.set(ask, done);
+        send({ id: ask, method: "session/request_permission", params: { sessionId, toolCall: { toolCallId: call, title: `Edit ${path}`, kind: "edit", locations: [{ path }] }, options: [{ optionId: "yes", name: "Allow", kind: "allow_once" }, { optionId: "no", name: "Reject", kind: "reject_once" }] } });
+      });
+      cited.push(answer?.outcome?.optionId === "yes" ? "edit allowed" : "edit refused");
+    }
     if (verb === "permit") {
       update(sessionId, { sessionUpdate: "tool_call", toolCallId: call, title: "ls", kind: "execute", status: "pending", rawInput: { command: "ls" } });
       const answer = await new Promise<any>((done) => {

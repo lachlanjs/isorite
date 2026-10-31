@@ -1,7 +1,7 @@
 // The single executable's start (M21): Node, with isorite inside as one asset. The first time a version runs, the
 // asset is unpacked into ~/.cache/isorite/<version>/ (a node_modules: isorite, as `npm i isorite` installs it, and
-// its dependencies, the plugin's among them), and from then on isorite runs from there, as it runs from npm: the
-// browser's pages, the plugin OpenCode reads, the embedding worker and the guide are files where it looks for them.
+// its dependencies), and from then on isorite runs from there, as it runs from npm: the
+// browser's pages, the embedding worker and the guide are files where it looks for them.
 
 const { getAsset } = require("node:sea");
 const { existsSync, mkdirSync, renameSync, rmSync, writeFileSync, chmodSync } = require("node:fs");

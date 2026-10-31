@@ -1,6 +1,5 @@
 # Windows: the tests, then isorite as a Windows person gets it (M21), from an empty home: the executable,
-# install.ps1 in Windows PowerShell and in pwsh, doctor, the example served, the model, and isorite opencode with
-# OpenCode 2 found after it. The release builds the same executable; this checks it on every push.
+# install.ps1 in Windows PowerShell and in pwsh, doctor, the example served, and the model. The release builds the same executable; this checks it on every push.
 name: windows
 on:
   push:
@@ -61,7 +60,5 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:4790/api/file?path=algorithms/the-quadtree.md')" = 404
           kill %1 || true
           "$exe" model
-          "$exe" opencode
           "$exe" doctor --offline | tee doctor.txt || true
-          grep -q "✓ opencode: .*opencode.exe 2\." doctor.txt
           grep -q "✓ search by meaning" doctor.txt

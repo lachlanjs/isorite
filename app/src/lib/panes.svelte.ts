@@ -21,10 +21,10 @@ export type Layout = (typeof LAYOUTS)[number];
 /** Each pane's switches (M12). Note: whose words are whose, and the timeline. Atlas: what the agent was given and
  *  did. Iso: with an agent attached, may it edit the project's files, and run commands (its permissions, refused
  *  here when off). */
-export const SWITCHES = { note: ["provenance", "timeline"], atlas: ["questions", "problems", "web", "code", "pictures", "context"], iso: ["files", "run"] } as const;
+export const SWITCHES = { note: ["provenance", "timeline"], atlas: ["questions", "problems", "web", "code", "pictures", "context"], iso: ["notes", "files", "run"] } as const;
 export type Switch = (typeof SWITCHES)[keyof typeof SWITCHES][number];
 // The Atlas's kinds (M12): open questions and problems on the map from the first, links out of it when asked for.
-const OFF: Record<Switch, boolean> = { provenance: false, timeline: false, questions: true, problems: true, web: false, code: false, pictures: false, context: false, files: false, run: false };
+const OFF: Record<Switch, boolean> = { provenance: false, timeline: false, questions: true, problems: true, web: false, code: false, pictures: false, context: false, notes: true, files: false, run: false };
 
 /** The panes' relative widths when side by side. */
 const WIDTHS = { note: 1.25, atlas: 1, iso: 1.05 };
@@ -86,7 +86,11 @@ class Panes {
   flip(k: Switch, to = !this.on[k]): void {
     this.on[k] = to;
     keep("isorite.switches", JSON.stringify(this.on));
+    if (k === "notes") this.notesFlipped?.(to);
   }
+
+  /** Agents' changes to the notes are the base's to allow, kept by the server (terminal.svelte.ts). */
+  notesFlipped: ((may: boolean) => void) | null = null;
 
   /** Whether you are working in a pane: typing in it. */
   busy(p: Pane): boolean {

@@ -36,6 +36,8 @@ export interface EngineOptions {
   /** The files of a repository named in the base's settings (M12): where its code links point. Null where there
    *  is no such folder. */
   repository?: (path: string) => Files | null;
+  /** The repository the notes are in, as `repository` takes it: where code links point unless the settings say. */
+  foundRepository?: string;
   /** The other bases lent to this one's sessions (M20), where a server holds several. */
   elsewhere?: Elsewhere;
   /** An artifact run unseen (M23, Q117), where a browser can be had: what it reported. Without it, or when it
@@ -136,6 +138,7 @@ const BRIEF: ToolDef = { type: "function", function: { name: "brief_base", descr
 
 const NOTE_ARG = { type: "string", description: "The note's id or path in the knowledge base: physics/softening or /physics/softening.md." };
 const MARKED = "The change is written at once, under your name: the person sees your words marked in the note, and can undo it from the browser. Use this, never edit or write, for any note of the knowledge base.";
+const REFUSED_NOTES = "The person has switched off agents' changes to these notes. Don't try another way: offer the words with offer_text, or say what you would change.";
 const EDIT_NOTE: ToolDef = { type: "function", function: { name: "edit_note", description: `Change a note of the knowledge base: oldString replaced by newString, as the edit tool does. ${MARKED}`, parameters: { type: "object", properties: { note: NOTE_ARG, oldString: { type: "string", description: "The text to replace, exactly as it is in the note." }, newString: { type: "string" }, replaceAll: { type: "boolean", description: "Replace every place oldString is." } }, required: ["note", "oldString", "newString"], additionalProperties: false } } };
 const WRITE_NOTE: ToolDef = { type: "function", function: { name: "write_note", description: `Write a whole note: a new note of the knowledge base, at folder/name (lower case, hyphens), with its frontmatter (type, title), or one written anew. ${MARKED}`, parameters: { type: "object", properties: { note: NOTE_ARG, content: { type: "string", description: "The whole note, frontmatter included." } }, required: ["note", "content"], additionalProperties: false } } };
 
@@ -263,13 +266,33 @@ export class Engine implements Api {
   /** The base's settings, from `.isorite/settings.toml`. */
   async settingsOfBase(): Promise<BaseSettings> { return parseSettings(await this.opts.own.read(SETTINGS_FILE)); }
 
-  /** Name the repository code links point into, unless one is named already (`isorite term` did, the first time it
-   *  was run beside the base, until M25). `path` is relative to the notes folder, or absolute. */
+  /** Where code links point: the repository named in the settings, else the one the notes are in. */
+  private async repositoryOfBase(): Promise<string | undefined> {
+    return (await this.settingsOfBase()).repository ?? this.opts.foundRepository;
+  }
+
+  /** Name the repository code links point into, unless the base has one: for notes kept outside the project, the one
+   *  an agent is first attached in. `path` is relative to the notes folder, or absolute. */
   async nameRepository(path: string): Promise<boolean> {
-    if (!path || (await this.settingsOfBase()).repository) return false;
-    await this.one(() => this.opts.own.write(SETTINGS_FILE, settingsText({ repository: path })));
+    if (!path || (await this.repositoryOfBase())) return false;
+    await this.one(async () => this.opts.own.write(SETTINGS_FILE, settingsText({ ...(await this.settingsOfBase()), repository: path })));
     this.codeCheck = null;
     return true;
+  }
+
+  /** Whether agents may change this base's notes: yes, unless switched off. Held here, not in a browser, so that it
+   *  holds for an agent in its own terminal with no page open. */
+  async agentNotes(): Promise<{ may: boolean }> {
+    return { may: (await this.settingsOfBase()).agents_write_notes !== false };
+  }
+  async setAgentNotes(may: boolean): Promise<void> {
+    await this.one(async () => {
+      const { agents_write_notes: _, ...rest } = await this.settingsOfBase();
+      await this.opts.own.write(SETTINGS_FILE, settingsText(may ? rest : { ...rest, agents_write_notes: false }));
+    });
+  }
+  private async agentMayWrite(): Promise<void> {
+    if (!(await this.agentNotes()).may) throw new EngineError(REFUSED_NOTES, 403);
   }
 
   /** What was last found of the code links, and when: looked at again when the notes change, or after a while,
@@ -279,7 +302,7 @@ export class Engine implements Api {
   private async brokenCode(): Promise<Map<string, string[]>> {
     const now = this.opts.clock.now(), b = this.bundle;
     if (this.codeCheck && this.codeCheck.of === b && now - this.codeCheck.at < 10_000) return this.codeCheck.broken;
-    const broken = new Map<string, string[]>(), where = (await this.settingsOfBase()).repository;
+    const broken = new Map<string, string[]>(), where = await this.repositoryOfBase();
     const repo = where ? this.opts.repository?.(where) ?? null : null;
     if (repo) {
       const listed = new Map<string, Promise<Set<string>>>();
@@ -355,7 +378,7 @@ export class Engine implements Api {
     if (tool === BRIEF.function.name) {
       const lent = this.lent();
       const agents = (await this.agentsFile())?.trim();
-      return { text: this.brief() + (agents ? `\n\n# Their instructions for this knowledge base (AGENTS.md)\n\n${agents}` : "") + (lent.length ? `\n\nOther knowledge bases lent to you, each with its own practice (brief_base with its base, before you use it):\n${lent.map((l) => `- ${l.name}: ${l.about}`).join("\n")}\nPass base to any tool to look or write there.` : "") };
+      return { text: this.brief() + (!(await this.agentNotes()).may ? `\n\n${REFUSED_NOTES}` : "") + (agents ? `\n\n# Their instructions for this knowledge base (AGENTS.md)\n\n${agents}` : "") + (lent.length ? `\n\nOther knowledge bases lent to you, each with its own practice (brief_base with its base, before you use it):\n${lent.map((l) => `- ${l.name}: ${l.about}`).join("\n")}\nPass base to any tool to look or write there.` : "") };
     }
     if (tool === EDIT_NOTE.function.name || tool === WRITE_NOTE.function.name) {
       const str = (v: unknown, name: string) => { if (typeof v !== "string") throw new EngineError(`${tool} needs ${name}, as text`, 400); return v; };
@@ -382,6 +405,7 @@ export class Engine implements Api {
   async agentWrite({ agent, session, note, asked, edit }: AgentChange): Promise<{ text: string }> {
     // As Iso's Write mode writes (M10): at once, entered in the note's journal under the agent's name, its words
     // marked in the note's Iso lens, and undone from the browser (agreed for M11, Q20).
+    await this.agentMayWrite();
     const who = `agent:${agent}`;
     void session;
     const raw = note.replace(/^\/+/, "").replace(/\.md$/i, "");
@@ -663,7 +687,7 @@ export class Engine implements Api {
     if (!type) return null;
     let files: Files | null, at: string;
     if (from === "code") {
-      const target = codeTarget(`code:${path}`), where = (await this.settingsOfBase()).repository;
+      const target = codeTarget(`code:${path}`), where = await this.repositoryOfBase();
       files = target && where ? this.opts.repository?.(where) ?? null : null;
       at = target?.path ?? "";
     } else {
@@ -908,6 +932,7 @@ export class Engine implements Api {
   /** write_artifact (M23, plan-m23 §3.5, §3.7): the manifest written as given, the rules checked before anything is
    *  written, then written and journalled as a note is, and run where it can be, with all it reports said back. */
   private async writeArtifact(args: Record<string, unknown>, who: string, asked: string): Promise<string> {
+    await this.agentMayWrite();
     const path = filePathOf(args.path);
     if (!path || citeKind(path) !== "artifact" || !inBase(path)) return `${String(args.path ?? "")} is not an artifact's path: give folder/name.html.`;
     const raw = String(args.html ?? "");

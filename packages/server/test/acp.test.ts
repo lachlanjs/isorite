@@ -1,7 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -104,6 +104,18 @@ test("isorite acp (M25): between a front end and its agent; the session in the p
   expect(told.some((m) => m.params?.update?.sessionUpdate === "user_message_chunk" && m.params.update.content.text === "permit")).toBe(true);
   expect(told.some((m) => m.method === "$/cancel_request")).toBe(true);
   abort.abort();
+
+  // Agents' changes to the notes switched off: asking to edit a note is refused with no page open.
+  expect((await post("/api/agents/notes", { may: false })).status).toBe(200);
+  expect((await post("/api/terminal/prompt", { asked: "permit-edit physics/units.md", given: [] })).status).toBe(200);
+  await expect.poll(async () => JSON.stringify((await view()).turns[2] ?? ""), { timeout: 10_000 }).toContain("edit refused");
+  expect((await post("/api/agents/notes", { may: true })).status).toBe(200);
+
+  // A base in no repository takes the one an agent is first attached in, relative to the notes.
+  mkdirSync(join(root, "project", ".git"), { recursive: true });
+  await ask("session/new", { cwd: join(root, "project"), mcpServers: [] });
+  const settings = join(base.notes, ".isorite", "settings.toml");
+  await expect.poll(() => existsSync(settings) && readFileSync(settings, "utf8")).toContain(`repository = "${relative(base.notes, join(root, "project"))}"`);
 
   input.end();
   expect(await done).toBe(0);

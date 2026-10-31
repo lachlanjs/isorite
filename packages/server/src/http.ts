@@ -183,6 +183,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
     });
   app.get("/api/agents", (c) => answer(c, () => api.agents()));
   post("/api/agents", z.object({ text: z.string().max(50_000) }).strict(), (_c, b) => api.saveAgents(b.text));
+  app.get("/api/agents/notes", (c) => answer(c, () => api.agentNotes()));
+  post("/api/agents/notes", z.object({ may: z.boolean() }).strict(), (_c, b) => api.setAgentNotes(b.may));
   app.get("/api/conversations", (c) => answer(c, () => api.conversations()));
   app.get("/api/conversation", (c) => answer(c, async () => (await api.conversation(c.req.query("id") || undefined)) ?? { id: "", turns: [] }));
   post("/api/note/restore", z.object({ entry: z.string().max(64), base: z.string().max(64) }).strict(), (c, b) => api.restore(id(c), b.entry, b.base));

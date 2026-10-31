@@ -105,7 +105,7 @@
   }
   const NAME: Record<Pane, string> = { note: "Note", atlas: "Atlas", iso: "Iso" };
   // The panes' switches (M12), each its letter with Alt.
-  const SWITCH_KEYS: Record<string, Switch> = { p: "provenance", t: "timeline", q: "questions", b: "problems", w: "web", k: "code", i: "pictures", c: "context", f: "files", r: "run" };
+  const SWITCH_KEYS: Record<string, Switch> = { p: "provenance", t: "timeline", q: "questions", b: "problems", w: "web", k: "code", i: "pictures", c: "context", n: "notes", f: "files", r: "run" };
   const inNote = $derived(page.route.id === "/n/[...id]");
   // An agent's turn as the map shows it: running, or how it ended until the map lets it go. A session the pane
   // carries tells itself there; Iso's header tells of an agent's turn through MCP alone, in its own terminal.

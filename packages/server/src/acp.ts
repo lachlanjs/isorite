@@ -12,6 +12,7 @@ import { existsSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { notesOfTurns, type AgentRecord, type AgentSession, type Api, type EngineEvent, type Given, type TerminalItem, type TerminalPermission, type TerminalTurn, type TerminalView } from "@isorite/engine";
 import { OWN_DIR } from "@isorite/core";
+import { repoOf } from "./git.ts";
 import { INSTRUCTIONS, agentName } from "./mcp-http.ts";
 
 /** Long enough for the wrapper's next batch of what passed to have come (it sends one every 30 ms). */
@@ -73,7 +74,7 @@ const keyOf = (agent: string, session: string): string => `${agent}\u0000${sessi
 
 export interface FollowerOptions {
   /** The base's engine, told of the agent's turns, reads and changes, and keeping its sessions. */
-  api?: Pick<Api, "agentStatus" | "agentLook" | "agentChanged" | "events"> & Partial<Pick<Api, "keepAgentRecord" | "agentRecords" | "agentRecord" | "agentTools">>;
+  api?: Pick<Api, "agentStatus" | "agentLook" | "agentChanged" | "events"> & Partial<Pick<Api, "keepAgentRecord" | "agentRecords" | "agentRecord" | "agentTools" | "nameRepository" | "agentNotes">>;
   /** The base's folder: a file in it (outside its .isorite/) is a note. */
   notes?: string;
   clock?: () => number;
@@ -336,6 +337,8 @@ export class AcpFollower {
         const action = ACTIONS[kind] ?? call.title ?? "act";
         const paths = (call.locations ?? []).map((l) => l.path).filter((p): p is string => typeof p === "string");
         live.asking.set(key, { id: key, action, resources: command ? [command] : paths.length ? paths : ACTIONS[kind] && call.title ? [call.title] : [], ...(call.toolCallId ? { tool: call.toolCallId } : {}), options: (m.params?.options as Asking["options"]) ?? [] });
+        // A change to the notes, while agents may not make one: refused here, whether or not a page is open.
+        if (action === "edit" && this.#noteIn(live, paths)) void this.#api?.agentNotes?.().then(({ may }) => (may ? undefined : this.reply(key, "reject"))).catch(() => undefined);
       }
       return;
     }
@@ -418,6 +421,9 @@ export class AcpFollower {
     live.link = link;
     if (cwd) live.cwd = cwd;
     this.#lives.set(key, live);
+    // Notes kept outside the project: where code links point is where the agent works, unless the base has somewhere.
+    const repo = cwd && this.#notes ? repoOf(cwd) : null;
+    if (repo) void this.#api?.nameRepository?.(relative(this.#notes!, repo) || ".").catch(() => undefined);
     const asked = link.opening !== null && (link.opening === "" || link.opening === session);
     if (asked) { link.opening = null; if (this.#unopened) { live.pending = this.#unopened; this.#unopened = null; } }
     if (asked || !this.#chosen || this.#shown === key) { this.#shown = key; this.#chosen ||= asked; this.#reading = null; }
