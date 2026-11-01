@@ -3,7 +3,7 @@
   // of the ACP registry, or a command of your own, started by the server for the pane alone (chosen from this
   // machine only, since it runs a program). The project's MCP config is shown as isorite would write it, and written
   // only when asked, from this machine.
-  import type { AgentChoice, ChosenAgent, ProjectConfig, RegistryAgent, TerminalApi } from "$lib/api.ts";
+  import type { AgentChoice, ChosenAgent, DetectedAgent, ProjectConfig, RegistryAgent, TerminalApi } from "$lib/api.ts";
   import { app } from "$lib/app.svelte.ts";
   import { baseHere } from "$lib/here.ts";
 
@@ -22,7 +22,10 @@
   let pick = $state("");
   let command = $state("");
   let starting = $state(false);
+  /** The known agents installed on this machine, with what was found of their keys (M26). */
+  let found = $state.raw<DetectedAgent[]>([]);
   $effect(() => { if (api && local) void api.chosen().then((c) => (chosen = c), () => undefined); });
+  $effect(() => { if (api && local) void api.detected().then((d) => (found = d), () => undefined); });
   const nameOf = (c: AgentChoice | null | undefined): string => (!c ? "" : "command" in c ? c.command : agents?.find((a) => a.id === c.id)?.name ?? c.id);
 
   async function lookAt(): Promise<void> {
@@ -66,7 +69,14 @@
       {#if local}
         <li><b>Here, in this pane</b>: {#if chosen?.choice}<span class="chosen">{nameOf(chosen.choice)}</span>, {chosen.running ? "started for this base" : "not running"}. <button type="button" class="more" disabled={starting} onclick={() => void choose(chosen?.choice ?? null)}>start it again</button> · <button type="button" class="more" disabled={starting} onclick={() => void choose(null)}>none</button>{:else}an agent isorite starts for this base, asked only from here.{/if}
           <button type="button" class="more" aria-expanded={picking} onclick={() => void lookAt()}>{chosen?.choice ? "another" : "choose one"}</button>
-          {#if chosen?.problem}<span class="bad" role="alert">{chosen.problem}{chosen.said ? `: ${chosen.said.trim().split("\n").at(-1)}` : ""}</span>{/if}</li>
+          {#if chosen?.problem}<span class="bad" role="alert">{chosen.problem}{chosen.hint ? `: ${chosen.hint}` : chosen.said ? `: ${chosen.said.trim().split("\n").at(-1)}` : ""}</span>{/if}
+          {#if !chosen?.choice && found.length}
+            <ul class="found" aria-label="Agents found on this machine">
+              {#each found as d (d.id)}
+                <li><span class="faint">{d.note}</span> <button type="button" class="more" disabled={starting || !d.ready} onclick={() => void choose({ command: d.command })}>use it</button></li>
+              {/each}
+            </ul>
+          {/if}</li>
       {/if}
       <li><b>From an ACP front end</b> (Toad, Zed): run it with <code>isorite acp --agent "opencode acp"</code> as its agent (or <code>omp acp</code>, or any ACP agent's command). Asked there or here.</li>
       <li><b>In its own terminal</b>: give it isorite's MCP, <code>{mcpUrl}</code>, or <code>isorite mcp</code> in the project's config.
@@ -113,5 +123,6 @@
   .pick .field { width: 100%; min-width: 0; }
   .more { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
   .more:disabled { opacity: .5; cursor: default; }
+  .found { padding-left: 0; list-style: none; margin-top: 4px; }
   .bad { display: block; color: var(--rose); overflow-wrap: anywhere; }
 </style>

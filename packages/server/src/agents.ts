@@ -18,6 +18,8 @@ import { cacheDir } from "./embedder.ts";
 import { MAIN } from "./running.ts";
 import { self } from "./self.ts";
 
+import { missingKey } from "./detect.ts";
+
 export const REGISTRY = "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json";
 const FRESH = 60 * 60 * 1000;
 
@@ -30,7 +32,7 @@ export interface RegistryAgent { id: string; name: string; version: string; desc
 /** What a base has chosen: an agent of the registry by its id, or a command of your own. */
 export type AgentChoice = { id: string } | { command: string };
 /** The base's agent, as the settings show it. */
-export interface AgentState { choice: AgentChoice | null; running: boolean; command: string; problem: string; said: string }
+export interface AgentState { choice: AgentChoice | null; running: boolean; command: string; problem: string; said: string; hint: string }
 
 const ID = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const dataDir = (env: NodeJS.ProcessEnv) => join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "isorite", "agents");
@@ -160,7 +162,9 @@ export class AgentRunner {
   }
 
   state(): AgentState {
-    return { choice: chosenAgent(this.#base, this.#config), running: this.#child !== null, command: this.#command, problem: this.#problem, said: this.#said };
+    // A stop, or a refusal to sign in, with the key not set where isorite was started, is told as that (M26).
+    const hint = this.#problem && this.#command ? missingKey(this.#command, this.#env) : "";
+    return { choice: chosenAgent(this.#base, this.#config), running: this.#child !== null, command: this.#command, problem: this.#problem, said: this.#said, hint };
   }
   /** Kept, and started in place of the one running; with none, the one running is stopped. */
   async choose(choice: AgentChoice | null): Promise<AgentState> {

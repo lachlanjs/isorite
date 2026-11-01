@@ -40,7 +40,7 @@ export function deviceId(path = configPath()): string {
 /** A knowledge base this device knows, by name (M20): `[<name>]` in bases.toml, beside config.toml, with its `path`,
  *  and `lend` when it is lent to every agent's session as well as the base the session is for (the agent's
  *  memory is). A file of its own, so that config.toml, written by hand, is left as it is. */
-export interface KnownBase { name: string; path: string; lend: boolean }
+export interface KnownBase { name: string; path: string; lend: boolean; used?: string }
 
 const BASE_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const expand = (p: string): string => (p === "~" ? homedir() : p.startsWith("~/") ? join(homedir(), p.slice(2)) : resolve(p));
@@ -55,7 +55,7 @@ export const basesPath = (config = configPath()): string => join(dirname(config)
 export function knownBases(config = configPath()): KnownBase[] {
   return Object.entries(readConfig(basesPath(config))).flatMap(([name, v]) => {
     const row = table(v);
-    return BASE_NAME.test(name) && typeof row.path === "string" && row.path ? [{ name, path: expand(row.path), lend: row.lend === true }] : [];
+    return BASE_NAME.test(name) && typeof row.path === "string" && row.path ? [{ name, path: expand(row.path), lend: row.lend === true, ...(typeof row.used === "string" ? { used: row.used } : {}) }] : [];
   });
 }
 
@@ -67,6 +67,14 @@ export function baseName(folder: string): string {
 
 /** The base at `folder` by its name in the configuration, listed first if it is not: under its folder's name, or
  *  that name with -2, -3… where another folder has it. `as` names it, and `lend` lends it. */
+/** A base opened now: when it was last used is kept (`used`), for `isorite` to list the bases last used first. */
+export function touchBase(folder: string, { path = configPath(), now = new Date() }: { path?: string; now?: Date } = {}): void {
+  const at = resolve(folder), bases = readConfig(basesPath(path)), name = knownBases(path).find((b) => b.path === at)?.name;
+  if (!name) return;
+  bases[name] = { ...table(bases[name]), used: now.toISOString() };
+  writeConfig(bases, basesPath(path));
+}
+
 export function rememberBase(folder: string, { path = configPath(), as, lend }: { path?: string; as?: string; lend?: boolean } = {}): string {
   const at = resolve(folder), known = knownBases(path), had = known.find((b) => b.path === at);
   if (had && lend === undefined) return had.name;

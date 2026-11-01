@@ -40,11 +40,14 @@ export interface TerminalApi {
    *  none, from this machine only. */
   chosen(): Promise<ChosenAgent>;
   registry(): Promise<RegistryAgent[]>;
+  /** The known agents installed on this machine, and whether their keys are set where the server started (M26). */
+  detected(): Promise<DetectedAgent[]>;
   choose(choice: AgentChoice | null): Promise<ChosenAgent>;
 }
 export interface ProjectConfig { repo: string; files: { file: string; harness: string; current: boolean; before: string | null; after: string }[] }
 export type AgentChoice = { id: string } | { command: string };
-export interface ChosenAgent { choice: AgentChoice | null; running: boolean; command: string; problem: string; said: string }
+export interface ChosenAgent { choice: AgentChoice | null; running: boolean; command: string; problem: string; said: string; hint: string }
+export interface DetectedAgent { id: string; name: string; command: string; path: string; keys: string[]; keySet: boolean; ready: boolean; note: string }
 export interface RegistryAgent { id: string; name: string; version: string; description: string; site: string; how: "npx" | "uvx" | "binary" | null }
 
 /** The bases the server holds (M20), as the switcher lists them. */
@@ -147,6 +150,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       writeProject: async () => (await write<{ written: string[] }>("POST", "connect", {})).written,
       chosen: () => ask<ChosenAgent>("acp/agent"),
       registry: () => ask<RegistryAgent[]>("acp/registry"),
+      detected: () => ask<DetectedAgent[]>("acp/detected"),
       choose: (choice) => write<ChosenAgent>("POST", "acp/choose", { choice }),
     },
     events(listener) {

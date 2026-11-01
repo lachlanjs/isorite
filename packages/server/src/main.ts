@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // isorite's command line.
 //
+//   isorite [--no-open] [--port <n>]       at a terminal: open the base here, or choose one; else this help
 //   isorite check <notes> [--unused]       lint a folder of notes; --unused lists pictures no note shows
 //   isorite serve <notes>                  open it in the browser
 //   isorite migrate <study base>           move a study base (format 1) into its notes' .isorite/
@@ -10,7 +11,7 @@
 //   isorite guide [<folder>]               the guide: a knowledge base about isorite, to read in isorite
 //   isorite doctor [<notes>] [--report]    whether isorite can work here, a step at a time
 
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { checkArtifact, columnsOf, manifestOf, parseData } from "@isorite/kit";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -25,10 +26,25 @@ import { mcp } from "./mcp.ts";
 import { acp } from "./acp-wrap.ts";
 import { guide } from "./guide.ts";
 import { writeExample, writeGeometry } from "@isorite/example/node";
-import { modelCommand } from "./model.ts";
 import { bases, memory } from "./memory.ts";
 import { VERSION } from "./version.ts";
+import { findBase, freePort, offerModel, start } from "./start.ts";
+import { cacheDir } from "./embedder.ts";
+import { modelCommand, modelDir } from "./model.ts";
+import { openBrowser } from "./running.ts";
+import { configPath } from "./config.ts";
 
+
+const SHORT = `isorite: an agentic harness for understanding
+
+  isorite                 open the base here, or choose one (a terminal; --no-open, --port <n>)
+  isorite doctor          whether isorite can work here, and what to change if not (--report to paste to
+                          someone helping; run in a project it checks that project's base)
+  isorite help            this; isorite help all lists every command
+  isorite --version
+
+Notes are plain Markdown in a folder of your project; your own agent reads and writes them with you.
+`;
 
 const USAGE = `isorite: an agentic harness for understanding
 
@@ -100,9 +116,45 @@ export function check(notes: string, out: (line: string) => void = console.log, 
   return errors ? 1 : 0;
 }
 
+/** `isorite` at a terminal: asks on stdin, starts a server on the first free port (4767 up) and opens the page. */
+async function terminalStart({ port, noOpen }: { port: number | undefined; noOpen: boolean }): Promise<number> {
+  const { createInterface } = await import("node:readline/promises");
+  const ask = async (question: string) => { const rl = createInterface({ input: process.stdin, output: process.stdout }); try { return (await rl.question(question)).trim(); } finally { rl.close(); } };
+  const browser = !noOpen && !process.env.SSH_CONNECTION && process.env.ISORITE_NO_BROWSER !== "1";
+  const confirm = async (q: string) => /^y(es)?$/i.test(await ask(`${q} [y/N] `));
+  // Asked on the first start without the model; a no is kept in the cache folder.
+  const declined = join(cacheDir(), "model-declined");
+  const model = () => offerModel({
+    installed: modelDir() !== null, off: process.env.ISORITE_EMBED === "off", declined: existsSync(declined), confirm,
+    fetch: () => modelCommand(undefined, console.log), out: console.log,
+    decline: () => { try { mkdirSync(dirname(declined), { recursive: true }); writeFileSync(declined, ""); } catch { /* asked again next time */ } },
+  });
+  const serving = async (notes: string, at = "") => {
+    await model();
+    const use = port ?? await freePort();
+    await serve(notes, { port: use });
+    if (browser) openBrowser(`http://localhost:${use}/${at}`);
+    return new Promise<number>(() => undefined);
+  };
+  return start({
+    cwd: process.cwd(), config: configPath(), out: console.log,
+    confirm,
+    choose: async (q, count) => { const n = Number(await ask(`${q} [1-${count}] `)); return Number.isInteger(n) && n >= 1 && n <= count ? n - 1 : null; },
+    open: (notes) => serving(notes),
+    make: (folder) => { const made = newBase(folder); console.log(`  made ${made}`); return made; },
+    guide: async () => { await model(); const use = port ?? await freePort(); await guide(undefined, { port: use }); return new Promise<number>(() => undefined); },
+  });
+}
+
 export function main(argv: string[]): number | Promise<number> {
   const [command, ...rest] = argv;
   try {
+    // M26: at a terminal, no command finds the base to open; piped, the help as always.
+    if ((!command || command === "--no-open" || command === "--port") && process.stdin.isTTY && process.stdout.isTTY) {
+      const args = command ? [command, ...rest] : rest, at = args.indexOf("--port"), asked = at < 0 ? undefined : Number(args[at + 1]);
+      if (asked !== undefined && !(Number.isInteger(asked) && asked > 0 && asked < 65536)) { console.error("--port takes a number"); return 2; }
+      return terminalStart({ port: asked, noOpen: args.includes("--no-open") });
+    }
     if (command === "check" && rest.find((r) => !r.startsWith("--"))) return check(rest.find((r) => !r.startsWith("--"))!, console.log, rest.includes("--unused"));
     if (command === "new" && rest[0]) {
       const made = newBase(rest[0]);
@@ -169,7 +221,10 @@ export function main(argv: string[]): number | Promise<number> {
     if (command === "doctor") {
       const at = rest.indexOf("--port"), port = at < 0 ? undefined : Number(rest[at + 1]);
       if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
-      const folder = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port");
+      const named = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port");
+      // Run in a project with no folder named, it checks that project's base (M26).
+      const here = named ? undefined : findBase(process.cwd());
+      const folder = named ?? (here?.kind === "base" ? here.notes : undefined);
       // Asked only at a terminal: piped or in a script, doctor only says.
       const ask = process.stdin.isTTY && process.stdout.isTTY ? async (question: string) => {
         const { createInterface } = await import("node:readline/promises");
@@ -199,7 +254,8 @@ export function main(argv: string[]): number | Promise<number> {
     if (e instanceof StudyError) { console.error(e.message); return 2; }
     throw e;
   }
-  process.stdout.write(USAGE);
+  // The four a person needs; the rest are in `isorite help all` and still work (M26).
+  process.stdout.write(command === "help" && rest[0] === "all" ? USAGE : command && command !== "help" && command !== "--help" ? USAGE : SHORT);
   return command && command !== "help" && command !== "--help" ? 2 : 0;
 }
 

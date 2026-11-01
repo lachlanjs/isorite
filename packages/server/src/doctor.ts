@@ -9,6 +9,7 @@ import { arch, platform, release } from "node:os";
 import { getCACertificates } from "node:tls";
 import { join, resolve } from "node:path";
 import { OWN_DIR, SETTINGS_FILE, parseSettings } from "@isorite/core";
+import { loadBundle } from "@isorite/core/node";
 import { configPath, readConfig } from "./config.ts";
 import { repoOf } from "./git.ts";
 import { cacheDir } from "./embedder.ts";
@@ -117,6 +118,13 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
       const { notes } = locate(folder);
       const own = join(notes, OWN_DIR), settings = join(own, SETTINGS_FILE);
       say("notes", "ok", existsSync(own) ? `${notes}, with its ${OWN_DIR}/` : `${notes}: its ${OWN_DIR}/ is made the first time it is opened`);
+      // What `isorite check` said (M26): the notes' frontmatter, links and cycles, in a line, the first few named.
+      if (existsSync(notes) && statSync(notes).isDirectory()) {
+        const bundle = loadBundle(notes), issues = bundle.lint(), cycles = bundle.requiresCycles();
+        const errors = issues.filter((i) => i.level === "error");
+        say("links", errors.length ? "fail" : issues.length || cycles.length ? "warn" : "ok",
+          `${bundle.concepts.size} notes; ${errors.length} errors, ${issues.length - errors.length} warnings, ${cycles.length} requires cycles${issues.length ? `: ${issues.slice(0, 3).map((i) => `${i.path}: ${i.message}`).join("; ")}${issues.length > 3 ? `; and ${issues.length - 3} more (isorite check ${notes})` : ""}` : ""}`);
+      }
       const repository = existsSync(settings) ? parseSettings(readFileSync(settings, "utf8")).repository : undefined;
       const found = repoOf(notes);
       if (!repository && found) say("repository", "ok", `${found}: code links point here`);
