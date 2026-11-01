@@ -2,7 +2,7 @@
 
 Begun 2026-10-30 from Lachlan's notes after using isorite at work ("the multiple base functionality is a bit unintuitive and the setup process is quite complex"). Revised 2026-11-01, after M25 (isorite 0.13.0): isorite calls no model and builds no terminal, so what was decided on 2026-10-30 about the gateway, the terminal's install and "`isorite` always opens the terminal" is dropped. What is left is the three phases below, and the aim that each takes the fewest steps a person can be asked for.
 
-Awaits approval (questions at the end).
+Approved 2026-11-01 (Q1–Q7 as recommended). Built on `m26-install`, version 0.14.0; write-up in §Built.
 
 ## Where a new person is lost now
 
@@ -93,3 +93,18 @@ Version 0.14.0.
 - **Q5.** Fold `memory` and `bases` into the page and the `isorite` list, keeping the commands unlisted. (Recommended: yes.)
 - **Q6.** Steps 6 and 7 (stale leftovers; a clean-machine walk-through) are part of this milestone. (Recommended: yes.)
 - **Q7.** Tern: only the recipe in `docs/terminal.md` after it is tried in a running Tern, no plugin yet. (Recommended: yes.)
+
+## Built (2026-11-01)
+
+Steps 1–6 are done; step 7 was done in part.
+
+- **Step 1–2, `isorite` alone** (`start.ts`, `main.ts`): `findBase` looks for `.isorite/` from the folder up to the repository's top (or the folder alone outside one), then in the folders just inside that top; one found is opened, several are asked about. In a repository with none, `notes/` is offered; elsewhere the known bases are listed last used first (`used` in `bases.toml`, set whenever a base is opened) with a new base here and the guide; with nothing known, the guide is offered. The server starts on the first free port from 4767 and the browser is opened, unless over SSH, `--no-open` or `ISORITE_NO_BROWSER=1`. Piped or in a script it prints the help as before. Two bases of one name are told apart by their project in the list.
+- **Step 3, agents found** (`detect.ts`, `/api/acp/detected`, `AttachAgent.svelte`): Claude Code, Codex, OpenCode, omp and Hermes are looked for on PATH, with whether the key each reads is set where isorite started (names only, from this machine only); the empty pane lists them with *use it*. Claude's key missing is said to be fine if signed in. An agent that stops with its key unset is told as that (`hint`).
+- **Step 4, the commands:** `isorite help` shows four; `isorite help all` and any unknown command show the full list; every command still works. `doctor` has a `links` line (what `check` said) and, run in a project with no folder named, checks that project's base. **Deviation:** `migrate` is not folded into opening an old base; opening one still refuses and names `isorite migrate <folder>` as before. Asking inline and migrating is left for a later change.
+- **Step 5, install:** both installers end with `now run: isorite`; the model is offered once on the first start without it (a no is kept in the cache folder as `model-declined`); the README, `docs/setup.md`, `docs/terminal.md` and the guide's Starting a base begin with `isorite` alone.
+- **Step 6, leftovers:** architecture.md's retired M6 terminal bullets, format.md's `isorite term`, and `eval/iso/` (the retired Iso's cases; their runner was deleted in M25) are gone or corrected.
+- **Step 7, the walk-through, in part:** the real `isorite` was driven through a pseudo-terminal in a scratch home and a repository with no base: it offered `notes/`, made it, registered it with a `used` time and printed the link. **Not done:** a clean machine or container with the installers and a real agent (nothing here has Docker or a second user set up), the model offer through a pseudo-terminal (a model was found in this checkout, so it was not asked; `offerModel` is tested alone), the browser actually opening, and the pane's list of found agents in a real browser (the existing attach spec passes; no new browser test, since the test server's PATH is not under the test's control).
+
+Tests: 88 server unit tests (7 for startup, 3 for detection, 1 for the model offer, 1 for doctor's links), 317 core, the rest unchanged and green; `npm run check` clean; the attach browser spec green. The full browser suite and the site tests were not run.
+
+Tern: nothing built, as agreed (Q7). The recipe for `docs/terminal.md` waits for you to try isorite as an agent in a running Tern.
