@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -115,7 +115,7 @@ test("isorite acp (M25): between a front end and its agent; the session in the p
   mkdirSync(join(root, "project", ".git"), { recursive: true });
   await ask("session/new", { cwd: join(root, "project"), mcpServers: [] });
   const settings = join(base.notes, ".isorite", "settings.toml");
-  await expect.poll(() => existsSync(settings) && readFileSync(settings, "utf8")).toContain(`repository = "${relative(base.notes, join(root, "project"))}"`);
+  await expect.poll(() => existsSync(settings) && readFileSync(settings, "utf8")).toContain(`repository = "${relative(base.notes, join(root, "project")).split(sep).join("/")}"`);
 
   input.end();
   expect(await done).toBe(0);

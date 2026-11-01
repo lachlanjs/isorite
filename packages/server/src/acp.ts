@@ -422,8 +422,9 @@ export class AcpFollower {
     if (cwd) live.cwd = cwd;
     this.#lives.set(key, live);
     // Notes kept outside the project: where code links point is where the agent works, unless the base has somewhere.
+    // With forward slashes: the settings are committed with the notes, and read on every platform.
     const repo = cwd && this.#notes ? repoOf(cwd) : null;
-    if (repo) void this.#api?.nameRepository?.(relative(this.#notes!, repo) || ".").catch(() => undefined);
+    if (repo) void this.#api?.nameRepository?.(relative(this.#notes!, repo).split(sep).join("/") || ".").catch(() => undefined);
     const asked = link.opening !== null && (link.opening === "" || link.opening === session);
     if (asked) { link.opening = null; if (this.#unopened) { live.pending = this.#unopened; this.#unopened = null; } }
     if (asked || !this.#chosen || this.#shown === key) { this.#shown = key; this.#chosen ||= asked; this.#reading = null; }
