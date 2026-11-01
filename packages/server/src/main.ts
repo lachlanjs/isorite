@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // isorite's command line.
 //
+//   isorite [--no-open] [--port <n>]       at a terminal: open the base here, or choose one; else this help
 //   isorite check <notes> [--unused]       lint a folder of notes; --unused lists pictures no note shows
 //   isorite serve <notes>                  open it in the browser
 //   isorite migrate <study base>           move a study base (format 1) into its notes' .isorite/
@@ -28,6 +29,9 @@ import { writeExample, writeGeometry } from "@isorite/example/node";
 import { modelCommand } from "./model.ts";
 import { bases, memory } from "./memory.ts";
 import { VERSION } from "./version.ts";
+import { freePort, start } from "./start.ts";
+import { openBrowser } from "./running.ts";
+import { configPath } from "./config.ts";
 
 
 const USAGE = `isorite: an agentic harness for understanding
@@ -100,9 +104,36 @@ export function check(notes: string, out: (line: string) => void = console.log, 
   return errors ? 1 : 0;
 }
 
+/** `isorite` at a terminal: asks on stdin, starts a server on the first free port (4767 up) and opens the page. */
+async function terminalStart({ port, noOpen }: { port: number | undefined; noOpen: boolean }): Promise<number> {
+  const { createInterface } = await import("node:readline/promises");
+  const ask = async (question: string) => { const rl = createInterface({ input: process.stdin, output: process.stdout }); try { return (await rl.question(question)).trim(); } finally { rl.close(); } };
+  const browser = !noOpen && !process.env.SSH_CONNECTION && process.env.ISORITE_NO_BROWSER !== "1";
+  const serving = async (notes: string, at = "") => {
+    const use = port ?? await freePort();
+    await serve(notes, { port: use });
+    if (browser) openBrowser(`http://localhost:${use}/${at}`);
+    return new Promise<number>(() => undefined);
+  };
+  return start({
+    cwd: process.cwd(), config: configPath(), out: console.log,
+    confirm: async (q) => /^y(es)?$/i.test(await ask(`${q} [y/N] `)),
+    choose: async (q, count) => { const n = Number(await ask(`${q} [1-${count}] `)); return Number.isInteger(n) && n >= 1 && n <= count ? n - 1 : null; },
+    open: (notes) => serving(notes),
+    make: (folder) => { const made = newBase(folder); console.log(`  made ${made}`); return made; },
+    guide: async () => { const use = port ?? await freePort(); await guide(undefined, { port: use }); return new Promise<number>(() => undefined); },
+  });
+}
+
 export function main(argv: string[]): number | Promise<number> {
   const [command, ...rest] = argv;
   try {
+    // M26: at a terminal, no command finds the base to open; piped, the help as always.
+    if ((!command || command === "--no-open" || command === "--port") && process.stdin.isTTY && process.stdout.isTTY) {
+      const args = command ? [command, ...rest] : rest, at = args.indexOf("--port"), asked = at < 0 ? undefined : Number(args[at + 1]);
+      if (asked !== undefined && !(Number.isInteger(asked) && asked > 0 && asked < 65536)) { console.error("--port takes a number"); return 2; }
+      return terminalStart({ port: asked, noOpen: args.includes("--no-open") });
+    }
     if (command === "check" && rest.find((r) => !r.startsWith("--"))) return check(rest.find((r) => !r.startsWith("--"))!, console.log, rest.includes("--unused"));
     if (command === "new" && rest[0]) {
       const made = newBase(rest[0]);

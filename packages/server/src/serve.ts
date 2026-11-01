@@ -9,7 +9,7 @@ import { hostname } from "node:os";
 import { serve as nodeServe } from "@hono/node-server";
 import { CONFIG_FILE, GITATTRIBUTES, OWN_DIR, StudyError } from "@isorite/core";
 import { Engine, systemClock, type ArtifactRun, type Elsewhere, type Embedder } from "@isorite/engine";
-import { configPath, deviceId, rememberBase } from "./config.ts";
+import { configPath, deviceId, rememberBase, touchBase } from "./config.ts";
 import { repoOf } from "./git.ts";
 import { Bases } from "./bases.ts";
 import { cacheDir, modelDir, nodeEmbedder } from "./embedder.ts";
@@ -112,6 +112,7 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
   const opened = locate(path);
   const device = deviceId(config);
   const first = rememberBase(opened.notes, { path: config });
+  touchBase(opened.notes, { path: config });
   const embedder = model ? nodeEmbedder(model) : null;
   const token = randomBytes(24).toString("base64url"), loopback = LOOPBACK.has(host);
   const web = existsSync(join(WEB_DIR, "index.html")) ? WEB_DIR : null;
