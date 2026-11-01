@@ -29,10 +29,21 @@ import { writeExample, writeGeometry } from "@isorite/example/node";
 import { modelCommand } from "./model.ts";
 import { bases, memory } from "./memory.ts";
 import { VERSION } from "./version.ts";
-import { freePort, start } from "./start.ts";
+import { findBase, freePort, start } from "./start.ts";
 import { openBrowser } from "./running.ts";
 import { configPath } from "./config.ts";
 
+
+const SHORT = `isorite: an agentic harness for understanding
+
+  isorite                 open the base here, or choose one (a terminal; --no-open, --port <n>)
+  isorite doctor          whether isorite can work here, and what to change if not (--report to paste to
+                          someone helping; run in a project it checks that project's base)
+  isorite help            this; isorite help all lists every command
+  isorite --version
+
+Notes are plain Markdown in a folder of your project; your own agent reads and writes them with you.
+`;
 
 const USAGE = `isorite: an agentic harness for understanding
 
@@ -200,7 +211,10 @@ export function main(argv: string[]): number | Promise<number> {
     if (command === "doctor") {
       const at = rest.indexOf("--port"), port = at < 0 ? undefined : Number(rest[at + 1]);
       if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
-      const folder = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port");
+      const named = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port");
+      // Run in a project with no folder named, it checks that project's base (M26).
+      const here = named ? undefined : findBase(process.cwd());
+      const folder = named ?? (here?.kind === "base" ? here.notes : undefined);
       // Asked only at a terminal: piped or in a script, doctor only says.
       const ask = process.stdin.isTTY && process.stdout.isTTY ? async (question: string) => {
         const { createInterface } = await import("node:readline/promises");
@@ -230,7 +244,8 @@ export function main(argv: string[]): number | Promise<number> {
     if (e instanceof StudyError) { console.error(e.message); return 2; }
     throw e;
   }
-  process.stdout.write(USAGE);
+  // The four a person needs; the rest are in `isorite help all` and still work (M26).
+  process.stdout.write(command === "help" && rest[0] === "all" ? USAGE : command && command !== "help" && command !== "--help" ? USAGE : SHORT);
   return command && command !== "help" && command !== "--help" ? 2 : 0;
 }
 
