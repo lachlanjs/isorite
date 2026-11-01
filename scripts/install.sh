@@ -68,4 +68,4 @@ chmod +x "$tmp/isorite"
 mv "$tmp/isorite" "$dir/isorite"
 echo "isorite: $("$dir/isorite" --version) is ${dir}/isorite (SHA-256 ${got})"
 case ":${PATH}:" in *":${dir}:"*) ;; *) echo "  ${dir} is not on your PATH: add it, as export PATH=\"${dir}:\$PATH\"" ;; esac
-echo "  next: isorite doctor, then isorite guide, and attach your agent from Iso's pane"
+echo "  now run: isorite"

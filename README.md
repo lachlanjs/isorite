@@ -43,13 +43,13 @@ Either installer checks the download against the release's `SHA256SUMS`, and pri
 
 **With npm instead**, on any of the three: install [Node 24](https://nodejs.org) or later, then `npm install -g isorite`. Run the same command to update.
 
-Then check:
+Then, in your project's folder:
 
 ```sh
-isorite --version
-isorite doctor        # each thing isorite needs, and what to do about any that's missing
-isorite guide         # the guide, a small knowledge base about isorite, in ~/isorite-guide, opened in your browser
+isorite
 ```
+
+It opens the project's notes in your browser. With no notes yet it offers to make a `notes/` folder; from any other folder it lists the bases on this machine, last used first, with the guide. If something doesn't work, `isorite doctor` says what to change.
 
 The first run of the installed executable takes a few seconds longer, while it unpacks itself. The same guide is also on the [public site](https://lachlanjs.github.io/isorite/), kept in your browser, with nothing to install; there the guide's finder stands in for an agent.
 
@@ -57,14 +57,14 @@ The first run of the installed executable takes a few seconds longer, while it u
 
 isorite calls no model itself, so it needs an agent. Have one working in its own terminal first (Claude Code, Codex, OpenCode, omp, Hermes, or any that speaks ACP): its key and model stay as you set them there. Then choose one of three ways in.
 
-**In Iso's pane, the simplest.** Set your agent's key in the terminal you start isorite from, because the agent gets that environment and no other:
+**In Iso's pane, the simplest.** Start `isorite` from the terminal where your agent's key is set, because the agent gets that environment and no other:
 
 ```sh
-export ANTHROPIC_API_KEY=...          # or CODEX_API_KEY for Codex, or whatever your agent reads
-isorite serve ~/code/my-project/notes
+export ANTHROPIC_API_KEY=...          # or CODEX_API_KEY for Codex, or whatever your agent reads; not needed if you've signed in
+isorite
 ```
 
-Open the link it prints. With no agent attached, Iso's pane offers the [ACP registry](https://agentclientprotocol.com/get-started/registry)'s agents, or the command of one it doesn't list (`hermes acp`). Choose one and ask it something. isorite remembers the choice for this base. The first start can take a while, with nothing shown, while the agent's program is fetched; an agent run through `npx` or `uvx` needs that tool installed, even with the one-file install of isorite.
+With no agent attached, Iso's pane lists the agents it finds on this machine (Claude Code, Codex, OpenCode, omp, Hermes) and says whether the key each reads is set where isorite started; *use it* attaches one. Nothing found, or one it doesn't know: it offers the [ACP registry](https://agentclientprotocol.com/get-started/registry)'s agents, or the command of one (`hermes acp`). Ask it something. isorite remembers the choice for this base. The first start can take a while, with nothing shown, while the agent's program is fetched; an agent run through `npx` or `uvx` needs that tool installed, even with the one-file install of isorite.
 
 **From an ACP front end** (Toad, Zed, JetBrains). Give it this as its agent, and the session shows in the front end and in the pane at once:
 
@@ -81,15 +81,16 @@ Each way in full, and how each agent differs: [docs/terminal.md](docs/terminal.m
 - **Edit the notes** (Alt+N): on unless you switch it off, and kept with the base. While it's off, isorite refuses the agent's writes to notes and artifacts, and its requests to edit a note's file. An agent whose own tools change a file without asking can't be stopped; through `isorite acp` the change is still kept under its name, to put back.
 - **Edit the project's files** (Alt+F) and **run commands** (Alt+R): off by default. What the agent asks to do while one is off is refused, as long as the page is open.
 
-**If it doesn't start:** "Authentication required" or "the agent stopped" usually means the key isn't set where `isorite serve` runs. Run the agent's command in that same terminal and fix what it says. Claude asks before each of isorite's tools until you answer *always*.
+**If it doesn't start:** "Authentication required" or "the agent stopped" usually means the key isn't set in the terminal `isorite` was started from (the pane now says so). Run the agent's command in that same terminal and fix what it says. Claude asks before each of isorite's tools until you answer *always*.
 
 Upgrading from before 0.13: Iso's own model is gone, along with `isorite term` and `isorite opencode`. A `[provider]` or `[tiers]` in `config.toml` is left alone and no longer read. Attach OpenCode with `opencode acp`. Your notes and history are unchanged, and Iso's old conversations can still be read from the pane's drawer.
 
 ### 3. Optional
 
 ```sh
-isorite model         # search by meaning, not just by words: a 53 MB model, fetched once, run on your machine
+isorite model         # search by meaning, not just by words: a 53 MB model run on your machine. The first start offers it, once; this fetches it later or by hand
 isorite memory        # the agent's memory: a base of its own, lent to every session
+isorite help all      # every command; the few above are all most people need
 ```
 
 If something doesn't work, `isorite doctor` says what to change. `isorite doctor --report` gives it all as one block to paste to whoever (or whichever AI) is helping, with your secrets hidden.

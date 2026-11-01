@@ -11,7 +11,7 @@
 //   isorite guide [<folder>]               the guide: a knowledge base about isorite, to read in isorite
 //   isorite doctor [<notes>] [--report]    whether isorite can work here, a step at a time
 
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { checkArtifact, columnsOf, manifestOf, parseData } from "@isorite/kit";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -26,10 +26,11 @@ import { mcp } from "./mcp.ts";
 import { acp } from "./acp-wrap.ts";
 import { guide } from "./guide.ts";
 import { writeExample, writeGeometry } from "@isorite/example/node";
-import { modelCommand } from "./model.ts";
 import { bases, memory } from "./memory.ts";
 import { VERSION } from "./version.ts";
-import { findBase, freePort, start } from "./start.ts";
+import { findBase, freePort, offerModel, start } from "./start.ts";
+import { cacheDir } from "./embedder.ts";
+import { modelCommand, modelDir } from "./model.ts";
 import { openBrowser } from "./running.ts";
 import { configPath } from "./config.ts";
 
@@ -120,7 +121,16 @@ async function terminalStart({ port, noOpen }: { port: number | undefined; noOpe
   const { createInterface } = await import("node:readline/promises");
   const ask = async (question: string) => { const rl = createInterface({ input: process.stdin, output: process.stdout }); try { return (await rl.question(question)).trim(); } finally { rl.close(); } };
   const browser = !noOpen && !process.env.SSH_CONNECTION && process.env.ISORITE_NO_BROWSER !== "1";
+  const confirm = async (q: string) => /^y(es)?$/i.test(await ask(`${q} [y/N] `));
+  // Asked on the first start without the model; a no is kept in the cache folder.
+  const declined = join(cacheDir(), "model-declined");
+  const model = () => offerModel({
+    installed: modelDir() !== null, off: process.env.ISORITE_EMBED === "off", declined: existsSync(declined), confirm,
+    fetch: () => modelCommand(undefined, console.log), out: console.log,
+    decline: () => { try { mkdirSync(dirname(declined), { recursive: true }); writeFileSync(declined, ""); } catch { /* asked again next time */ } },
+  });
   const serving = async (notes: string, at = "") => {
+    await model();
     const use = port ?? await freePort();
     await serve(notes, { port: use });
     if (browser) openBrowser(`http://localhost:${use}/${at}`);
@@ -128,11 +138,11 @@ async function terminalStart({ port, noOpen }: { port: number | undefined; noOpe
   };
   return start({
     cwd: process.cwd(), config: configPath(), out: console.log,
-    confirm: async (q) => /^y(es)?$/i.test(await ask(`${q} [y/N] `)),
+    confirm,
     choose: async (q, count) => { const n = Number(await ask(`${q} [1-${count}] `)); return Number.isInteger(n) && n >= 1 && n <= count ? n - 1 : null; },
     open: (notes) => serving(notes),
     make: (folder) => { const made = newBase(folder); console.log(`  made ${made}`); return made; },
-    guide: async () => { const use = port ?? await freePort(); await guide(undefined, { port: use }); return new Promise<number>(() => undefined); },
+    guide: async () => { await model(); const use = port ?? await freePort(); await guide(undefined, { port: use }); return new Promise<number>(() => undefined); },
   });
 }
 

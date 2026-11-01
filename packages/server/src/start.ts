@@ -107,3 +107,15 @@ export async function start(io: StartIo): Promise<number> {
   if (pick === known.length) return io.open(io.make(join(io.cwd, "notes")));
   return io.guide();
 }
+
+/** The model for search by meaning, offered on the first start without one (M26): asked once, fetched on a yes,
+ *  and a no remembered so it isn't asked again (`isorite model` fetches it whenever wanted). A failed fetch is said
+ *  and the start goes on: search by words works without it. */
+export async function offerModel(o: {
+  installed: boolean; off: boolean; declined: boolean;
+  confirm: (question: string) => Promise<boolean>; fetch: () => Promise<number>; decline: () => void; out: (line: string) => void;
+}): Promise<void> {
+  if (o.installed || o.off || o.declined) return;
+  if (!(await o.confirm("Fetch the 53 MB model for search by meaning, once? Without it search is by words."))) { o.decline(); o.out("  not fetched; isorite model fetches it whenever you want it"); return; }
+  if (await o.fetch()) o.out("  search by words, for now: isorite doctor says what stopped the fetch");
+}

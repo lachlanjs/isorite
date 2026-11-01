@@ -9,7 +9,7 @@ Setting isorite up the first time is in [setup.md](setup.md).
 Keep the project's notes in a folder of their own, often inside the project's repository (`notes/`), or beside it (`~/notes/<project>`). It can start empty: `isorite new <folder>` makes it. isorite keeps what it needs in the folder's `.isorite/` (the journals of every change, the sessions it carried, and its settings), made the first time the folder is opened. Commit `.isorite/` with the notes, if they're in git.
 
 ```sh
-isorite serve ~/code/my-project/notes
+isorite          # in the project: finds its base, opens the browser (isorite serve <notes> names one yourself)
 ```
 
 ## Three ways in

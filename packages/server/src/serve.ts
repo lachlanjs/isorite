@@ -142,7 +142,7 @@ export async function serve(path: string, { host = "127.0.0.1", port = 4767, all
     process.exit(1);
   });
   console.log(`isorite: ${notes}`);
-  console.log(embedder ? "  search by meaning: on" : "  search by meaning: off (isorite model fetches its model)");
+  console.log(embedder ? "  search by meaning: on" : "  search by meaning: off (isorite model fetches its model, 53 MB)");
   const lent = bases.lent().filter((l) => l.name !== bases.first).map((l) => l.name);
   if (lent.length) console.log(`  lent to every session: ${lent.join(", ")} (isorite bases)`);
   console.log(existsSync(join(WEB_DIR, "index.html")) ? `  ${link(`http://localhost:${port}/`)}` : `  the app is not built (npm run build); the engine alone is at http://localhost:${port}/api/`);

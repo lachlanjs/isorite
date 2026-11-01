@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { rememberBase, touchBase } from "../src/config.ts";
-import { findBase, freePort, label, recent, start, type StartIo } from "../src/start.ts";
+import { findBase, freePort, label, offerModel, recent, start, type StartIo } from "../src/start.ts";
 
 const temp = () => mkdtempSync(join(tmpdir(), "isorite-start-"));
 const base = (dir: string) => { mkdirSync(join(dir, ".isorite"), { recursive: true }); return dir; };
@@ -99,4 +99,20 @@ test("a taken port is passed over", async () => {
   expect(await freePort(port)).toBeGreaterThan(port);
   taken.close();
   writeFileSync(join(temp(), "x"), "");
+});
+
+test("the model is offered once: fetched on a yes, a no remembered, a failure said and the start goes on", async () => {
+  const run = async (o: { installed?: boolean; off?: boolean; declined?: boolean; yes?: boolean; fetched?: number }) => {
+    const did: string[] = [];
+    await offerModel({
+      installed: o.installed ?? false, off: o.off ?? false, declined: o.declined ?? false,
+      confirm: async () => { did.push("asked"); return o.yes ?? false; },
+      fetch: async () => { did.push("fetch"); return o.fetched ?? 0; }, decline: () => did.push("declined"), out: (l) => did.push(`said ${l.trim().split(";")[0]}`),
+    });
+    return did;
+  };
+  expect(await run({ yes: true })).toEqual(["asked", "fetch"]);
+  expect(await run({ yes: false })).toEqual(["asked", "declined", "said not fetched"]);
+  expect(await run({ yes: true, fetched: 1 })).toEqual(["asked", "fetch", "said search by words, for now: isorite doctor says what stopped the fetch"]);
+  for (const skip of [{ installed: true }, { off: true }, { declined: true }]) expect(await run(skip)).toEqual([]);
 });
