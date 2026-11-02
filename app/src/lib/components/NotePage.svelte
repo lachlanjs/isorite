@@ -196,6 +196,13 @@
   });
   // Sent as the button is pressed, not when the press ends: on a touch screen the selection is let go by then (W1).
   // A click with no press (Enter on the button) sends too.
+  let copied = $state(false);
+  /** The passage with where it is from, as an agent in a terminal can be given it (M29): the note's path, so it can read the rest. */
+  function copyPassage(): void {
+    if (!chosen) return;
+    const quoted = chosen.split("\n").map((l) => `> ${l}`).join("\n");
+    void navigator.clipboard?.writeText(`From /${id}.md in the notes:\n\n${quoted}\n`).then(() => { copied = true; setTimeout(() => { copied = false; toIsoAt = null; }, 900); }, () => undefined);
+  }
   function sendToIso(): void {
     if (!chosen) return;
     tray.add({ kind: "passage", id, title: note.fields.title || id, text: chosen });
@@ -274,7 +281,10 @@
     {/if}
 
     {#if toIsoAt}
-      <button class="toiso" type="button" style:top="{toIsoAt.top}px" style:left="{toIsoAt.left}px" onpointerdown={(e) => { e.preventDefault(); sendToIso(); }} onclick={(e) => { if (e.detail === 0) sendToIso(); }}><i class="dia" aria-hidden="true">◆</i>send to Iso</button>
+      <span class="toiso" role="group" aria-label="The selected passage" style:top="{toIsoAt.top}px" style:left="{toIsoAt.left}px">
+        <button type="button" title="Put it above Iso's box, to go with your next message from the pane" onpointerdown={(e) => { e.preventDefault(); sendToIso(); }} onclick={(e) => { if (e.detail === 0) sendToIso(); }}><i class="dia" aria-hidden="true">◆</i>add to Iso's message</button>
+        <button type="button" title="Copy it with the note it is from, to paste into an agent in your terminal" onpointerdown={(e) => { e.preventDefault(); copyPassage(); }} onclick={(e) => { if (e.detail === 0) copyPassage(); }}>{copied ? "copied" : "copy for a terminal"}</button>
+      </span>
     {/if}
     <div class="live" hidden={Boolean(at && version)}>
       {#key asSource}<NoteEditor {note} {iso} source={asSource} touched={live} lens={lensMarks} />{/key}
@@ -305,7 +315,9 @@
 </article>
 
 <style>
-  .toiso { position: absolute; z-index: 6; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; background: var(--ground-2); border: 1px solid var(--growth); color: var(--text); font-size: 12px; cursor: pointer; }
+  .toiso { position: absolute; z-index: 6; display: inline-flex; background: var(--ground-2); border: 1px solid var(--growth); }
+  .toiso button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; background: none; border: 0; color: var(--text); font-size: 12px; cursor: pointer; }
+  .toiso button + button { border-left: 1px solid var(--line); color: var(--text-soft); }
   .toiso .dia { font-style: normal; font-size: 10px; color: var(--growth); }
   .note { position: relative; max-width: calc(var(--measure) + 2 * var(--space-4)); margin: 0 auto; padding: 40px var(--space-4) 0; display: flex; flex-direction: column; gap: var(--space-2); }
   .head { display: flex; align-items: flex-start; gap: var(--space-3); }

@@ -17,13 +17,16 @@ Begun 2026-11-02, from Lachlan's notes taken using isorite at work beside omp (`
 
 - `repairFrontmatter` (`packages/core/src/frontmatter.ts`), applied by the engine's `put` for every writer that is not you; `core/test/repair.test.ts`, and an agent test that a colon is quoted and the title read.
 
-## To build
+## Built: handling notes
 
-- Delete and move where the notes are: a menu on each note in the list and on its page, with Delete (confirmed, names who links to it, moved to a trash folder that can be restored) and "Move to…".
-- Folders: a new folder from a folder's row, inline; moving a note by drag in the list.
-- "Send to Iso" says what it sends and where it arrives, in the terminal and in the pane.
-- Code links by symbol, shown as an embed.
-- A "fix this note" for notes already broken by a colon.
+- **A menu on each note in the list** (`NoteMenu.svelte`, the ⋯ on its row): *Move to a folder…* (the folder field suggests the folders and says *new folder* for a name not there; the folder is made as the note goes in) and *Delete…* (asks first, naming the notes that link to it; its history stays, as before). Test: `note-menu.spec.ts`. Trash was dropped: the journal already keeps every version of a deleted note.
+- **"Send to Iso"** is two buttons now: *add to Iso's message* (what it did: the passage goes above the pane's box, with the next message from the pane) and *copy for a terminal* (the passage quoted, with the note's path, to paste into an agent in a terminal, where the pane's tray is not used).
+- **`isorite check --fix`** quotes the colon in notes already broken by one; `isorite check` says when a note can be mended so.
+
+## Left in M29
+
+- Dragging a note to a folder in the list; making an empty folder (today a folder is made by moving or making a note into it).
+- The same menu on the Note pane's own header (the Delete there is in the settings menu still).
 
 ## Built: code links by symbol (shown in place)
 

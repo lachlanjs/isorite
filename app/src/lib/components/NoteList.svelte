@@ -5,6 +5,7 @@
   import type { NoteSummary, SearchHit } from "@isorite/engine";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import FolderField from "$lib/components/FolderField.svelte";
+  import NoteMenu from "$lib/components/NoteMenu.svelte";
   import { panes } from "$lib/panes.svelte.ts";
 
   let query = $state("");
@@ -88,7 +89,7 @@
       <h2><span class="label">{dir || "the top of the base"}</span><button class="btn quiet add" type="button" onclick={() => start(dir)} aria-label={`New note in ${dir || "the top of the base"}`}>+</button></h2>
       <ul>
         {#each notes as n (n.id)}
-          <li><a class="vein-row" class:on={n.id === panes.last} data-lustre href={noteHref(n.id)}><span class="serif title">{n.title}</span>{#if n.description}<span class="soft desc">{n.description}</span>{/if}</a></li>
+          <li><a class="vein-row" class:on={n.id === panes.last} data-lustre href={noteHref(n.id)}><span class="serif title">{n.title}</span>{#if n.description}<span class="soft desc">{n.description}</span>{/if}</a><NoteMenu id={n.id} title={n.title} /></li>
         {/each}
       </ul>
     </section>
@@ -123,7 +124,9 @@
   .add { height: 24px; }
   ul { list-style: none; margin: 0; padding: 0; }
   /* Rows with a vein (M24, D): the note last open is chosen. */
-  li a { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); color: var(--text); }
+  li { position: relative; }
+  li :global(.menu) { position: absolute; right: 0; top: 6px; }
+  li a { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) 44px var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); color: var(--text); }
   li a:hover { text-decoration: none; }
   .title { font-size: 18px; line-height: 1.3; }
   .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
