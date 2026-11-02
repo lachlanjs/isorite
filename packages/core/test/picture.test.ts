@@ -32,6 +32,8 @@ test("a picture from the repository is a code link of the note (M22)", async () 
   expect(outwardLinks("A ![the player](code:assets/player.png), [step](code:src/a.py#L3), ![p](code:src/a.py) and ![w](https://x.org/p.png)")).toEqual([
     { kind: "code", href: "code:src/a.py#L3", text: "step", path: "src/a.py", line: 3 },
     { kind: "code", href: "code:assets/player.png", text: "the player", path: "assets/player.png", picture: true },
+    // Code embedded from the repository is a link too (M29).
+    { kind: "code", href: "code:src/a.py", text: "p", path: "src/a.py" },
   ]);
   expect(["a.PNG", "b.jpeg", "c.svg", "d.png.md", "e", "f.d/g", "h.tiff"].map(pictureType)).toEqual(["image/png", "image/jpeg", "image/svg+xml", null, null, null, null]);
 });

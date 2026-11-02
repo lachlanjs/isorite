@@ -301,3 +301,18 @@ test("MCP over HTTP at /mcp (M25): stateless, a JSON answer to each request, the
   // No page from elsewhere.
   expect((await mcp({ jsonrpc: "2.0", id: 1, method: "ping" }, "", { Origin: "https://evil.example" })).status).toBe(403);
 });
+
+test("isorite check says a colon in a field can be mended, and --fix quotes it (M29)", async () => {
+  const { check } = await import("../src/main.ts");
+  const dir = join(root, "check-colon");
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, "a.md");
+  writeFileSync(path, "---\ntype: Concept\ntitle: Codes: a survey\n---\n\nText: kept.\n");
+  const first: string[] = [];
+  expect(check(dir, (l) => first.push(l))).toBe(1);
+  expect(first.join("\n")).toContain("(isorite check --fix quotes it)");
+  const second: string[] = [];
+  expect(check(dir, (l) => second.push(l), false, true)).toBe(0);
+  expect(second[0]).toBe("fixed   a.md: quoted title");
+  expect(readFileSync(path, "utf8")).toBe('---\ntype: Concept\ntitle: "Codes: a survey"\n---\n\nText: kept.\n');
+});

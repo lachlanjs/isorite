@@ -92,6 +92,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     readNote: (id) => ask("note" + q(id)),
     fileUrl,
     pictures: () => ask("pictures"),
+    code: (href) => ask(`code?href=${encodeURIComponent(href)}`),
     savePicture: async (path, bytes) => {
       token ??= session().then((s) => s.token);
       const type = pictureType(path) ?? "application/octet-stream";

@@ -63,15 +63,17 @@ export function embedFor(id: string, ids: Iterable<string>): string {
  *  (`#L40-L52` for lines), resolved against `repository` in `.isorite/settings.toml`. */
 export type Outward =
   | { kind: "web"; href: string; text: string }
-  | { kind: "code"; href: string; text: string; path: string; line?: number; end?: number; picture?: true };
+  | { kind: "code"; href: string; text: string; path: string; line?: number; end?: number; symbol?: string; picture?: true };
 
-/** A code link's file and lines, or null when it is not one, or names a path outside the repository. */
-export function codeTarget(href: string): { path: string; line?: number; end?: number } | null {
-  const m = /^code:([^#?]+)(?:#L(\d+)(?:-L?(\d+))?)?$/.exec(href.trim());
+/** A code link's file and, after `#`, its lines (`L40-L52`) or the symbol it names (`leapfrog`, `Body.step`: a
+ *  function, method or class, found by its name wherever it has moved to, M29). Null when it is not one, or names a
+ *  path outside the repository. */
+export function codeTarget(href: string): { path: string; line?: number; end?: number; symbol?: string } | null {
+  const m = /^code:([^#?]+)(?:#(?:L(\d+)(?:-L?(\d+))?|([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)))?$/.exec(href.trim());
   if (!m) return null;
   const path = decodeURIComponent(m[1]!).replace(/^\.?\/+/, "");
   if (!path || path.split("/").some((p) => p === ".." || !p)) return null;
-  return { path, ...(m[2] ? { line: Number(m[2]) } : {}), ...(m[3] ? { end: Number(m[3]) } : {}) };
+  return { path, ...(m[2] ? { line: Number(m[2]) } : {}), ...(m[3] ? { end: Number(m[3]) } : {}), ...(m[4] ? { symbol: m[4] } : {}) };
 }
 
 /** A note's links out of the base, in order, each once. */
@@ -83,12 +85,14 @@ export function outwardLinks(body: string): Outward[] {
     else { const c = codeTarget(href); if (!c) continue; out.push({ kind: "code", href, text: words || c.path.split("/").at(-1)!, ...c }); }
     seen.add(href);
   }
-  // A picture from the repository (M22), shown with `![…](code:…)`: a code link like any other, checked as they are.
+  // What from the repository is shown with `![…](code:…)`: a picture (M22), or code, in place (M29). A code link
+  // like any other, checked as they are.
   for (const { href, embed, alt } of citeRefs(body)) {
     if (!embed || seen.has(href)) continue;
     const c = codeTarget(href);
-    if (!c || !pictureType(c.path)) continue;
-    out.push({ kind: "code", href, text: alt || c.path.split("/").at(-1)!, path: c.path, picture: true });
+    if (!c) continue;
+    if (pictureType(c.path)) out.push({ kind: "code", href, text: alt || c.path.split("/").at(-1)!, path: c.path, picture: true });
+    else out.push({ kind: "code", href, text: alt || c.symbol || c.path.split("/").at(-1)!, ...c });
     seen.add(href);
   }
   return out;

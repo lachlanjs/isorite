@@ -48,6 +48,31 @@ export function splitFrontmatter(source: string): [Meta | null, string] {
   return [meta as Meta, body.replace(/^\n+/, "")];
 }
 
+/** A frontmatter line `key: value` at the top level whose value the YAML parser refused, such as an unquoted
+ *  colon (`title: Foo: bar`) or a value starting with a backtick, `%` or `@`: agents write these often. The value
+ *  is put in double quotes, for those lines alone, and the text kept as it was otherwise. Null when the
+ *  frontmatter reads already, or the quotes would not make it read (an unclosed list, say): the note is left as written. */
+export function repairFrontmatter(source: string): { text: string; fixed: string[] } | null {
+  try { if (frontmatterText(source)[0] === null) return null; } catch { return null; }
+  const bom = source.startsWith(BOM) ? BOM : "", lines = source.slice(bom.length).split("\n");
+  let close = 1;
+  while (rstrip(lines[close]!) !== "---") close++;
+  const raw = lines.slice(1, close).join("\n") + "\n";
+  const bad = new Set<number>();
+  for (const e of parseYaml(raw).errors) { const at = e.linePos?.[0]?.line; if (at) bad.add(at); }
+  const fixed: string[] = [];
+  for (const n of bad) {
+    // Only a plain scalar after a top-level key; a quoted, flow or block value is the author's own.
+    const m = /^([A-Za-z_][\w .-]*):[ \t]+(\S.*?)[ \t]*(\r?)$/.exec(lines[n] ?? "");
+    if (!m || /^["'\[{|>&*!#]/.test(m[2]!)) continue;
+    lines[n] = `${m[1]}: ${JSON.stringify(m[2])}${m[3]}`;
+    fixed.push(m[1]!);
+  }
+  if (!fixed.length) return null;
+  if (parseYaml(lines.slice(1, close).join("\n") + "\n").errors.length) return null;
+  return { text: bom + lines.join("\n"), fixed };
+}
+
 /** Serialise frontmatter, keeping key order. */
 export function dumpFrontmatter(meta: Meta): string {
   return stringify(meta, { version: "1.2", lineWidth: 100 });

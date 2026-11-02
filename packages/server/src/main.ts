@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileS
 import { dirname, join, resolve } from "node:path";
 import { checkArtifact, columnsOf, manifestOf, parseData } from "@isorite/kit";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { StudyError, citeKind } from "@isorite/core";
+import { StudyError, citeKind, repairFrontmatter } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { doctor } from "./doctor.ts";
 import { knownCommand } from "./detect.ts";
@@ -89,11 +89,19 @@ const USAGE = `isorite: an agentic harness for understanding
                                          the browser; run again, as you left it (also: isorite --tutorial)
 `;
 
-export function check(notes: string, out: (line: string) => void = console.log, unused = false): number {
+export function check(notes: string, out: (line: string) => void = console.log, unused = false, fix = false): number {
   const root = resolve(notes);
   if (!existsSync(root) || !statSync(root).isDirectory()) { out(`no folder at ${root}`); return 2; }
-  const bundle = loadBundle(root), issues = bundle.lint(), cycles = bundle.requiresCycles();
-  for (const i of issues) out(`${i.level.padEnd(7)} ${i.path}: ${i.message}`);
+  let bundle = loadBundle(root), issues = bundle.lint();
+  // An unquoted colon in a field (`title: Foo: bar`, as agents often write it) is mended on request (M29): only the lines
+  // the parser refused are put in quotes.
+  const mendable = issues.filter((i) => i.code === "frontmatter-invalid").flatMap((i) => { const m = repairFrontmatter(readFileSync(join(root, i.path), "utf8")); return m ? [{ path: i.path, ...m }] : []; });
+  if (fix && mendable.length) {
+    for (const m of mendable) { writeFileSync(join(root, m.path), m.text); out(`fixed   ${m.path}: quoted ${m.fixed.join(", ")}`); }
+    bundle = loadBundle(root); issues = bundle.lint();
+  }
+  const cycles = bundle.requiresCycles();
+  for (const i of issues) out(`${i.level.padEnd(7)} ${i.path}: ${i.message}${i.code === "frontmatter-invalid" && !fix && mendable.some((m) => m.path === i.path) ? " (isorite check --fix quotes it)" : ""}`);
   for (const c of cycles) out(`warning requires cycle: ${c.join(" -> ")}`);
   // Artifacts on the kit (M23): the rules write_artifact keeps, checked of each, with the files beside it.
   let artifactErrors = 0, artifactWarnings = 0;
@@ -159,7 +167,7 @@ export function main(argv: string[]): number | Promise<number> {
       if (asked !== undefined && !(Number.isInteger(asked) && asked > 0 && asked < 65536)) { console.error("--port takes a number"); return 2; }
       return terminalStart({ port: asked, noOpen: args.includes("--no-open") });
     }
-    if (command === "check" && rest.find((r) => !r.startsWith("--"))) return check(rest.find((r) => !r.startsWith("--"))!, console.log, rest.includes("--unused"));
+    if (command === "check" && rest.find((r) => !r.startsWith("--"))) return check(rest.find((r) => !r.startsWith("--"))!, console.log, rest.includes("--unused"), rest.includes("--fix"));
     if (command === "new" && rest[0]) {
       const made = newBase(rest[0]);
       // The commands that come next, with the whole path.

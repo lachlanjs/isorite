@@ -167,8 +167,8 @@ test("a passage chosen in a note is sent to Iso; the notes open over the note an
   await editor(page).click();
   await page.keyboard.press("Control+Home");
   await page.keyboard.press("Shift+End");
-  await page.getByRole("button", { name: "send to Iso" }).click();
-  await expect(page.getByRole("button", { name: "send to Iso" })).toHaveCount(0);
+  await page.getByRole("button", { name: "add to Iso's message" }).click();
+  await expect(page.getByRole("button", { name: "add to Iso's message" })).toHaveCount(0);
   await expect(await showContext(page, "Note")).toContainText("“An outcome of probability");
 
   await page.getByRole("button", { name: "All notes" }).click();

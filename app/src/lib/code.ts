@@ -52,6 +52,21 @@ export async function highlight(code: string, info: string): Promise<string | nu
   return highlighted(code, info);
 }
 
+/** The code of a file, coloured by the language its name says (a code link shown in place, M29); null where none is known. */
+export async function highlightFile(code: string, path: string): Promise<string | null> {
+  const lang = LanguageDescription.matchFilename(languages, path);
+  if (!lang) return null;
+  try { await lang.load(); } catch { return null; }
+  const support = lang.support;
+  if (!support) return null;
+  let out = "";
+  const tree = ensureSyntaxTree(EditorState.create({ doc: code, extensions: [support] }), code.length, 500) ?? support.language.parser.parse(code);
+  highlightCode(code, tree, codeHighlighter,
+    (text, classes) => { out += classes ? `<span class="${classes}">${escape(text)}</span>` : escape(text); },
+    () => { out += "\n"; });
+  return out;
+}
+
 /** Colour the fenced code inside an element rendered by render(): each `pre > code.language-x`, in place, once its
  *  language has loaded. A Svelte action; again whenever what it was given changes. */
 export function colourCode(node: HTMLElement, _given?: unknown) {

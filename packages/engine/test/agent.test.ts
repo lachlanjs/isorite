@@ -143,6 +143,13 @@ test("a whole note written anew is written; a new note is made where it was mean
   expect((await engine.journal("codes/arithmetic")).at(-1)).toMatchObject({ who: "agent:opencode", asked: "add a note on arithmetic coding" });
 });
 
+test("an agent's unquoted colon in a field is quoted for it, so the note reads", async () => {
+  const { engine } = await open();
+  await engine.agentWrite({ agent: "opencode", session: "s1", note: "codes/colon.md", asked: "", edit: { content: "---\ntype: Concept\ntitle: Codes: a survey\n---\n\nText.\n" } });
+  expect((await engine.readNote("codes/colon")).text).toContain('title: "Codes: a survey"');
+  expect((await engine.notes()).notes.find((n) => n.id === "codes/colon")?.title).toBe("Codes: a survey");
+});
+
 test("an edit to no note, and an edit of a passage not there or there twice, are refused, saying why", async () => {
   const { engine } = await open();
   await expect(engine.agentWrite({ agent: "opencode", session: "s1", note: "no/such", asked: "", edit: { oldString: "a", newString: "b" } })).rejects.toThrow(/no note no\/such.*write the whole/);

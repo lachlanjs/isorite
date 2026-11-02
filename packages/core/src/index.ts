@@ -5,7 +5,7 @@
 export { AGENTS_FILE, Bundle, Concept, Directory, OKF_VERSION, citeKind, type FileKind } from "./bundle.ts";
 export { fileType, pictureSize, pictureType } from "./picture.ts";
 export type { Cite, FileEntry, Issue, IssueCode, Link, Trust } from "./bundle.ts";
-export { FrontmatterError, dumpFrontmatter, frontmatterText, parseYaml, splitFrontmatter } from "./frontmatter.ts";
+export { FrontmatterError, dumpFrontmatter, frontmatterText, parseYaml, repairFrontmatter, splitFrontmatter } from "./frontmatter.ts";
 export type { Meta } from "./frontmatter.ts";
 export { editFrontmatter, spliceText, splitSource } from "./source.ts";
 export { RATINGS, headings, linkRefs, linkTexts, rating, section, slugify } from "./markdown.ts";
@@ -30,6 +30,8 @@ export { CONFIG_FILE, STUDY_DIR, STUDY_FORMAT, StudyError, parseStudyConfig } fr
 export { isFileRef, mapModel, reach } from "./map.ts";
 export { ABOUT, DONE, codeTarget, doneOf, embedFor, embedRefs, idsOf, kindOf, outwardLinks } from "./kinds.ts";
 export type { Kind, Outward } from "./kinds.ts";
+export { findSymbol, hasSymbols } from "./symbol.ts";
+export type { SymbolSpan } from "./symbol.ts";
 export type { MapDir, MapModel, MapNote, Reach, ReachLink } from "./map.ts";
 export type { StudyConfig } from "./study.ts";
 export { agentName } from "./agents.ts";

@@ -3,9 +3,9 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  AGENTS_FILE, STRENGTH, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, pending, readJournal, reconcile, splitFrontmatter, stamp, written, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
+  AGENTS_FILE, STRENGTH, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, pending, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, written, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session } from "./api.ts";
+import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session } from "./api.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Similar, type ToolDef } from "./lookup.ts";
 import { ARTIFACTS, ARTIFACT_RECIPE, ASK_QUESTION, OFFER_TEXT, CONVERSATIONS_DIR, ISORITE, PRACTICE, READ_ARTIFACT, READ_DATA, WRITE_ARTIFACT, conversationPath, readTurns, type TurnItem } from "./turn.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
@@ -310,7 +310,10 @@ export class Engine implements Api {
       for (const c of b.concepts.values()) for (const o of c.outward) {
         if (o.kind !== "code") continue;
         const k = o.path.lastIndexOf("/"), dir = k < 0 ? "" : o.path.slice(0, k);
-        if (!(await names(dir)).has(o.path.slice(k + 1))) broken.set(c.id, [...(broken.get(c.id) ?? []), o.href]);
+        let gone = !(await names(dir)).has(o.path.slice(k + 1));
+        // A symbol that is no longer in its file is as broken as a file that is gone (M29).
+        if (!gone && o.symbol) gone = (await this.code(o.href)).state === "no-symbol";
+        if (gone) broken.set(c.id, [...(broken.get(c.id) ?? []), o.href]);
       }
     }
     this.codeCheck = { at: now, of: b, broken };
@@ -706,6 +709,32 @@ export class Engine implements Api {
     return { bytes, type, version: sha256(bytes).slice(0, 16) };
   }
 
+  /** The code a code link names (M29): its symbol's lines, or the lines it gives, or the file's start. A symbol is
+   *  found by its name in the file as it is now, so the link holds where the code has moved. */
+  async code(href: string): Promise<CodeSlice> {
+    const target = codeTarget(href);
+    if (!target) throw new EngineError("not a code link", 400);
+    const { path, symbol } = target, where = await this.repositoryOfBase();
+    const files = where ? this.opts.repository?.(where) ?? null : null;
+    if (!files) return { state: "no-repository", path, ...(symbol ? { symbol } : {}) };
+    const bytes = await files.readBytes(path);
+    if (!bytes) return { state: "no-file", path, ...(symbol ? { symbol } : {}) };
+    if (bytes.length > 2_000_000) return { state: "too-large", path };
+    const lines = new TextDecoder().decode(bytes).split(/\r?\n/);
+    if (lines.at(-1) === "") lines.pop();
+    let start = target.line ?? 1, end = target.end ?? target.line ?? lines.length, count: number | undefined;
+    if (symbol) {
+      if (!hasSymbols(path)) return { state: "unsupported", path, symbol };
+      const found = findSymbol(lines.join("\n"), path, symbol);
+      if (!found) return { state: "no-symbol", path, symbol };
+      ({ start, end, count } = found);
+    }
+    end = Math.min(Math.max(end, start), lines.length);
+    if (start > lines.length) return { state: "no-symbol", path };
+    const shown = Math.min(end, start + MAX_CODE_LINES - 1);
+    return { state: "ok", path, ...(symbol ? { symbol } : {}), start, end, total: lines.length, text: lines.slice(start - 1, shown).join("\n"), ...(shown < end ? { more: true as const } : {}), ...(count && count > 1 ? { count } : {}) };
+  }
+
   /** What was read of each picture, kept while its size and time are the same. */
   private pictureCache = new Map<string, { size?: number; mtime?: number; info: PictureInfo }>();
 
@@ -785,6 +814,8 @@ export class Engine implements Api {
   private async put(id: string, text: string, base: string | null, why: "edit" | "restore" = "edit", extra: { to?: string; asked?: string } = {}, who = "you"): Promise<Saved & { entry?: string }> {
     const { files, path } = this.where(id);
     if (text.length > MAX_NOTE_BYTES) throw new EngineError("note too large", 413);
+    // An agent's unquoted colon in a field (`title: Foo: bar`) is quoted for it; what you type is never rewritten under you.
+    if (who !== "you" && path.endsWith(".md")) text = repairFrontmatter(text)?.text ?? text;
     const now = await files.read(path);
     if (base === null && now !== null) throw new EngineError(`there is already a note at ${id}`, 409);
     if (base !== null && now === null) throw new Conflict(`${id} is gone`, null);
