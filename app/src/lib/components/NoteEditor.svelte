@@ -25,7 +25,7 @@
   // Without `iso` nothing is laid over the text.
   // `touched` is what a moment of the timeline changed, by line of the whole file, while it is pointed at.
   // `lens` is what the note's Iso lens marks (M10), by character of the whole file: Iso's words, and what was given to Iso.
-  let { note, iso, source, placeholder, touched = null, lens = [] }: { note: NoteSession; iso?: NoteIso; source: boolean; placeholder?: string; touched?: Touched | null; lens?: Mark[] } = $props();
+  let { note, iso, source, reading = false, placeholder, touched = null, lens = [] }: { note: NoteSession; iso?: NoteIso; source: boolean; /** Read mode (M30): the note as it is read, not edited. */ reading?: boolean; placeholder?: string; touched?: Touched | null; lens?: Mark[] } = $props();
 
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
@@ -101,6 +101,7 @@
     const made = createEditor(host, {
       doc: source ? note.text : note.body,
       source,
+      readOnly: reading,
       label: source ? "The note's file" : "The note",
       notes: () => app.listing.notes.filter((n) => n.id !== note.id).map((n) => ({ id: n.id, title: n.title, folder: n.dir, ...(n.kind ? { kind: n.kind } : {}) })),
       onPictures: (files, at, pasted) => { void addPictures(files, at, pasted); },

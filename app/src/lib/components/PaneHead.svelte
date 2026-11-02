@@ -5,6 +5,12 @@
   import type { Snippet } from "svelte";
   import { SWITCHES, panes, type Pane, type Switch } from "$lib/panes.svelte.ts";
   import BaseSwitch from "./BaseSwitch.svelte";
+  import Glyph from "./Glyph.svelte";
+  import type { Glyph as GlyphKind } from "$lib/glyphs.ts";
+
+  // The switches that stand for a kind of thing on the Atlas wear that kind's glyph (M30), the one the Atlas draws for it;
+  // the rest (provenance, the timeline, what an agent may do) are drawn here, on the same grid and stroke.
+  const KIND: Partial<Record<Switch, GlyphKind>> = { questions: "question", problems: "problem", web: "web", code: "code", pictures: "image" };
 
   // `first`: the pane that stands first, whose name follows the base's (M20).
   let { pane, name, tools, settings, first = false }: { pane: Pane; name: string; tools?: Snippet; settings?: Snippet; first?: boolean } = $props();
@@ -36,19 +42,15 @@
   <span class="switches" role="group" aria-label="{name}'s switches">
     {#each shown as k (k)}
       <button type="button" class="sw" data-switch={k} aria-pressed={panes.on[k]} aria-label={SAYS[k].replace(/ \(Alt\+.\)$/, "")} title={SAYS[k]} style:--c="var(--{COLOUR[k]})" onclick={() => panes.flip(k)}>
-        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        {#if KIND[k]}<Glyph kind={KIND[k]!} size={16} />{:else}
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter">
           {#if k === "provenance"}<rect x="2.5" y="2.5" width="11" height="11" /><path d="M8 2.5v11" /><rect x="8.6" y="3.1" width="4.3" height="9.8" fill="currentColor" stroke="none" />
           {:else if k === "timeline"}<path d="M8 1v14" stroke-width="1.2" /><rect x="5.5" y="2" width="5" height="3.2" fill="currentColor" stroke="none" /><path d="M8 6.3l2.3 2.3L8 10.9 5.7 8.6z" fill="currentColor" stroke="none" /><rect x="5.5" y="12" width="5" height="3" stroke-width="1.2" />
-          {:else if k === "questions"}<path d="M8 2.5L13.5 8L8 13.5L2.5 8Z" />
-          {:else if k === "problems"}<path d="M8 2.5l5.8 10.5H2.2z" />
-          {:else if k === "web"}<circle cx="8" cy="8" r="5.5" /><path d="M2.5 8h11M8 2.5c-2 2.8-2 8.2 0 11M8 2.5c2 2.8 2 8.2 0 11" />
-          {:else if k === "code"}<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5M9 3l-2 10" />
-          {:else if k === "pictures"}<rect x="2.5" y="3" width="11" height="10" /><path d="M2.5 11l3.5-3.5 3 3 1.5-1.5 3 3" /><circle cx="10.5" cy="6" r="1" fill="currentColor" stroke="none" />
-          {:else if k === "context"}<path d="M8 2.5l5.5 5.5L8 13.5 2.5 8z" /><path d="M8 5.5l2.5 2.5L8 10.5 5.5 8z" fill="currentColor" stroke="none" />
+          {:else if k === "context"}<rect x="2.5" y="2.5" width="11" height="2.5" fill="currentColor" stroke="none" /><rect x="2.5" y="6.75" width="7" height="2.5" fill="currentColor" stroke="none" /><rect x="2.5" y="11" width="9" height="2.5" fill="currentColor" stroke="none" />
           {:else if k === "notes"}<path d="M2.5 13.5l2.5-2.5M5 11c.6-4.2 3.6-7.4 8.5-8.5C12.6 7.2 9.4 10.4 5 11zM7.2 8.8l2.6-.3M8.8 6.6l2.4-.4" />
           {:else if k === "files"}<path d="M3.5 2.5h5.5l3.5 3.5v7.5h-9z" /><path d="M9 2.5V6h3.5" />
           {:else}<path d="M3 4.5l3 3.5-3 3.5M7.5 12h5.5" />{/if}
-        </svg>
+        </svg>{/if}
       </button>
     {/each}
   </span>

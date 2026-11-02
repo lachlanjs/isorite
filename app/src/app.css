@@ -108,7 +108,7 @@ button { cursor: pointer; }
 }
 /* Chosen (P): solid, in its own colour (--c) or the lattice, cut at two corners as a chip is. Open: a bar. */
 :root { --chosen-cut: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); }
-canvas.lustre { position: fixed; z-index: 999; pointer-events: none; image-rendering: pixelated; }
+canvas.lustre { position: fixed; z-index: 999; pointer-events: none; }
 /* A row with a vein (M24, D): touched or chosen, a blue marker grows down its left edge and a vein runs along its
    foot; the lustre crosses it (lustre.ts, data-lustre). Chosen keeps both, on the raised ground. */
 .vein-row { position: relative; --glint: .18; }

@@ -1,25 +1,16 @@
-// The states every control shares (M24, P): touched is a band of light across its face, dithered in whole cells (C′
-// 1 · Ordered); where the keyboard is, corner brackets round it. Both are drawn over the page, at the screen's own
-// pixels, so no control has to make room for them: a canvas for the lustre, four corners for the brackets.
+// The states every control shares (M24, P; the pulse, M30): touched is a pulse of light that runs round the outside of
+// its face, from the top left both ways to the bottom right, with a fading tail; where the keyboard is, corner brackets
+// round it. Both are drawn over the page, at the screen's own pixels, so no control has to make room for them: a canvas
+// for the pulse, four corners for the brackets. (Until M30 touched was a dithered band across the face; Lachlan,
+// 2026-11-02: "a bit less overt, maybe an electrical pulse around the outside instead of the dithered flash".)
 
-/** What takes the lustre when touched. A control with its own reason not to (a field, a disabled button) is left out. */
+/** What takes the pulse when touched. A control with its own reason not to (a field, a disabled button) is left out. */
 const TOUCHED = ".btn:not(:disabled), .chip, [data-lustre]";
 /** What takes text: the keyboard is plainly there already, and a bracket round an editor is noise. */
 const TYPING = "input:not([type=button],[type=checkbox],[type=radio],[type=range],[type=submit]), textarea, select, [contenteditable], [contenteditable] *";
 
-/** A Bayer matrix n by n (n a power of two), each value the threshold of its cell, in (0, 1). */
-function bayer(n: number): number[][] {
-  let m = [[0]];
-  while (m.length < n) {
-    const s = m.length, k: number[][] = [];
-    for (let y = 0; y < 2 * s; y++) { k.push([]); for (let x = 0; x < 2 * s; x++) k[y]!.push(4 * m[y % s]![x % s]! + [[0, 2], [3, 1]][Math.floor(y / s)]![Math.floor(x / s)]!); }
-    m = k;
-  }
-  return m.map((r) => r.map((v) => (v + 0.5) / (n * n)));
-}
-const B4 = bayer(4);
-/** Cells of 2 px, and how long the band takes to cross: quick, as an acknowledgement is (Lachlan, 2026-10-29: twice as fast as 640 ms). */
-const CELL = 2, DUR = 320, FPS = 24;
+/** How long the pulse takes to run round, how far its glow reaches beyond the edge, and how much of the way its tail is. */
+const DUR = 420, PAD = 3, TAIL = 0.28;
 
 const still = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const runs = new WeakMap<Element, HTMLCanvasElement>();
@@ -36,41 +27,66 @@ function clipped(el: Element, box: DOMRect): [number, number, number, number] | 
   return t < b && l < r ? [t - box.top, box.right - r, box.bottom - b, l - box.left] : null;
 }
 
-/** One band of light across el, in whole cells and whole frames, leaning as the chamfer does (u = x + y/2). A touch
- *  while one crosses lets it finish; a choice (again) starts it over, on the face it chose. */
+/** The outline of a face as points, the chamfer's cut corners (top left and bottom right) cut as the face is. */
+function outline(w: number, h: number, cut: number): [number, number][] {
+  const c = Math.min(cut, w / 2, h / 2);
+  return c > 0 ? [[c, 0], [w, 0], [w, h - c], [w - c, h], [0, h], [0, c]] : [[0, 0], [w, 0], [w, h], [0, h]];
+}
+
+/** One pulse of light round el, from where its outline starts both ways to the other side (u = distance along it). A touch
+ *  while one runs lets it finish; a choice (again) starts it over, on the face it chose. */
 export function lustre(el: HTMLElement, again = false): void {
   if (still() || (runs.has(el) && !again)) return;
   runs.get(el)?.remove();
   const box = el.getBoundingClientRect(), keep = clipped(el, box);
   if (!keep || box.width < 8) return;
-  const W = Math.ceil(box.width / CELL), H = Math.ceil(box.height / CELL);
   const cs = getComputedStyle(el), [R, G, B] = cs.getPropertyValue("--sheen").trim().split(/\s+/).map(Number);
-  // A quarter fainter than first built (Lachlan, 2026-10-29: "very strong").
-  const peak = Math.min(1, (parseFloat(cs.getPropertyValue("--glint")) || 0.4) * 1.05 * (parseFloat(cs.getPropertyValue("--sheen-k")) || 1));
-  // A chamfered part (--cut) loses the cells in its cut corners: top left and bottom right.
-  const cut = (parseFloat(cs.getPropertyValue("--cut")) || 0) / CELL;
+  const peak = Math.min(1, (parseFloat(cs.getPropertyValue("--glint")) || 0.4) * 1.6 * (parseFloat(cs.getPropertyValue("--sheen-k")) || 1));
+  const cut = parseFloat(cs.getPropertyValue("--cut")) || 0;
+  const w = box.width, h = box.height, pts = outline(w, h, cut), n = pts.length;
+  // The outline as segments, and a point at a distance along it (the line closed).
+  const seg = pts.map((p, i) => { const q = pts[(i + 1) % n]!; return Math.hypot(q[0] - p[0], q[1] - p[1]); });
+  const total = seg.reduce((a, b) => a + b, 0);
+  const at = (u: number): [number, number] => {
+    u = ((u % total) + total) % total;
+    for (let i = 0; i < n; i++) {
+      if (u <= seg[i]!) { const p = pts[i]!, q = pts[(i + 1) % n]!, f = seg[i]! ? u / seg[i]! : 0; return [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f]; }
+      u -= seg[i]!;
+    }
+    return pts[0]!;
+  };
+  const dpr = window.devicePixelRatio || 1;
   const c = document.createElement("canvas");
   c.className = "lustre";
-  c.width = W; c.height = H;
-  Object.assign(c.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${W * CELL}px`, height: `${H * CELL}px`, clipPath: `inset(${keep.map((v) => `${v}px`).join(" ")})` });
+  c.width = Math.ceil((w + 2 * PAD) * dpr); c.height = Math.ceil((h + 2 * PAD) * dpr);
+  // Not drawn beyond what the face is cut off by (a scrolled list), but free outside it.
+  const [kt, kr, kb, kl] = keep.map((v) => (v > 0 ? v + PAD : 0));
+  Object.assign(c.style, { left: `${box.left - PAD}px`, top: `${box.top - PAD}px`, width: `${w + 2 * PAD}px`, height: `${h + 2 * PAD}px`, clipPath: `inset(${kt}px ${kr}px ${kb}px ${kl}px)` });
   document.body.append(c);
-  const ctx = c.getContext("2d")!, img = ctx.createImageData(W, H), d = img.data;
-  const bw = Math.max(4, Math.round(W * 0.1)), t0 = performance.now();
+  const ctx = c.getContext("2d")!;
+  ctx.scale(dpr, dpr);
+  const t0 = performance.now(), tail = total * TAIL, travel = total / 2 + tail;
   runs.set(el, c);
-  let last = -1;
   const step = (now: number): void => {
-    const f = Math.floor(((now - t0) / 1000) * FPS), t = (f * 1000) / FPS / DUR;
+    const t = (now - t0) / DUR;
     if (runs.get(el) !== c) return;
     if (t >= 1 || !el.isConnected) { c.remove(); runs.delete(el); return; }
-    if (f !== last) {
-      last = f;
-      const p = Math.round(-bw + t * (W + H / 2 + 2 * bw));
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        const i = (y * W + x) * 4, a = Math.max(0, 1 - Math.abs(x + y / 2 - p) / bw);
-        const out = cut > 0 && (x + y < cut || (W - 1 - x) + (H - 1 - y) < cut);
-        d[i] = R!; d[i + 1] = G!; d[i + 2] = B!; d[i + 3] = !out && a > B4[y % 4]![x % 4]! ? peak * 255 : 0;
+    ctx.clearRect(0, 0, w + 2 * PAD, h + 2 * PAD);
+    // Quick off the mark, easing out; the whole fades over its last third.
+    const head = travel * (1 - (1 - t) ** 2), fade = Math.min(1, (1 - t) * 3);
+    // Two sparks, one each way; each a bright head with a tail that fades as the square of its length.
+    for (const dir of [1, -1]) {
+      for (let k = 0; k <= tail; k += 1) {
+        const u = head - k;
+        if (u < 0 || u > total / 2) continue;
+        const [x, y] = at(dir * u);
+        const a = peak * fade * (1 - k / tail) ** 2;
+        ctx.fillStyle = `rgb(${R} ${G} ${B} / ${a})`;
+        // The core one pixel wide, a fainter one either side: a line with a little glow, not a bar.
+        ctx.fillRect(x + PAD - 0.5, y + PAD - 0.5, 1, 1);
+        ctx.fillStyle = `rgb(${R} ${G} ${B} / ${a * 0.35})`;
+        ctx.fillRect(x + PAD - 1.5, y + PAD - 1.5, 3, 3);
       }
-      ctx.putImageData(img, 0, 0);
     }
     requestAnimationFrame(step);
   };

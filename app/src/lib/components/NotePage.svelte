@@ -32,6 +32,10 @@
   let source = $state(false);
   // Frontmatter that cannot be read is mended in the source, where all of the file shows.
   const asSource = $derived(source || note.meta === null);
+  // Read mode (M30): the note as it is read: its title as a heading, the text a little larger and not to be edited, and none
+  // of what edits it or hangs from it (the label, the attached questions, the timeline).
+  let reading = $state(false);
+  const read = $derived(reading && !asSource);
 
   // The timeline (Desktop-Editor): its switch is in the pane's header (M12). A moment pointed at marks what it
   // changed; one chosen shows the note as it was just after it, to step from or restore.
@@ -212,7 +216,7 @@
 {/snippet}
 
 
-<article class="note" bind:this={noteEl} class:timed={timeline && note.loaded === "ready" && !asSource}>
+<article class="note" bind:this={noteEl} class:reading={read} class:timed={timeline && note.loaded === "ready" && !asSource && !read}>
   {#if note.loaded === "loading"}
     <p class="faint"><Drawing label="opening" /></p>
   {:else if note.loaded === "missing"}
@@ -234,7 +238,12 @@
     {/if}
 
     <div class="head">
-      {#if !asSource}
+      {#if read}
+        <div class="titlerow">
+        {#if kind !== "note"}{@render glyph(kind, !!done)}{/if}
+        <h1 class="serif title read">{note.fields.title || id.split("/").at(-1)}</h1>
+        </div>
+      {:else if !asSource}
         <div class="titlerow">
         {#if kind !== "note"}{@render glyph(kind, !!done)}{/if}
         <label class="hidden-label" for="title">Title</label>
@@ -248,13 +257,14 @@
       {/if}
       <div class="side">
       <div class="tools">
-        <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => (source = !source)}>source</button>
+        <button class="btn quiet" type="button" aria-pressed={read} disabled={asSource} title="The note as it is read, to be read and not edited" onclick={() => (reading = !reading)}>read</button>
+        <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => { reading = false; source = !source; }}>source</button>
       </div>
       </div>
     </div>
-    {#if !asSource}<NoteLabel {note} {kind} {done} {marking} onmark={() => void toggleDone()} />{/if}
+    {#if !asSource && !read}<NoteLabel {note} {kind} {done} {marking} onmark={() => void toggleDone()} />{/if}
 
-    {#if timeline && !asSource}
+    {#if timeline && !asSource && !read}
       <div class="tl-col"><Timeline moments={all} strata at={at ? momentKey(at) : null} {pointed} point={(m) => (pointed = m)} {pick} /></div>
     {/if}
 
@@ -277,10 +287,10 @@
       <button class="toiso" type="button" style:top="{toIsoAt.top}px" style:left="{toIsoAt.left}px" onpointerdown={(e) => { e.preventDefault(); sendToIso(); }} onclick={(e) => { if (e.detail === 0) sendToIso(); }}><i class="dia" aria-hidden="true">◆</i>send to Iso</button>
     {/if}
     <div class="live" hidden={Boolean(at && version)}>
-      {#key asSource}<NoteEditor {note} {iso} source={asSource} touched={live} lens={lensMarks} />{/key}
+      {#key `${asSource}${read}`}<NoteEditor {note} {iso} source={asSource} reading={read} touched={live} lens={lensMarks} />{/key}
     </div>
 
-    {#if attached.length && !asSource && !at}
+    {#if attached.length && !asSource && !at && !read}
       <!-- What is attached to it, by kind (M12): its questions, then its problems. -->
       <ul class="attached">
         {#each attached as a (a.id)}
@@ -309,6 +319,11 @@
   .toiso .dia { font-style: normal; font-size: 10px; color: var(--growth); }
   .note { position: relative; max-width: calc(var(--measure) + 2 * var(--space-4)); margin: 0 auto; padding: 40px var(--space-4) 0; display: flex; flex-direction: column; gap: var(--space-2); }
   .head { display: flex; align-items: flex-start; gap: var(--space-3); }
+  /* Read mode (M30): a heading, set larger, with room round it; the tools stay at the corner to leave it. */
+  .reading { --text-size: 20px; padding-top: 64px; }
+  .reading .title.read { margin: 0; font-size: 34px; line-height: 1.2; }
+  .reading .tools { opacity: .5; }
+  .reading .tools:hover, .reading .tools:focus-within { opacity: 1; }
   .title { flex: 1 1 auto; min-width: 0; font-size: 34px; line-height: 1.2; font-weight: 700; background: none; border: 0; padding: 0 2px; color: var(--text); resize: none; field-sizing: content; overflow: hidden; }
   .title::placeholder { color: var(--text-faint); }
   .title:focus-visible { outline: none; }
