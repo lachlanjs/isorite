@@ -38,3 +38,4 @@ Tern is Stencil's "neoterminal" (closed beta; Stencil's account to sign in). Rea
 - Per-agent one-liners for adding isorite's MCP (`claude mcp add …`), once checked against each agent.
 - A hint in the pane when an agent's model fails (a free model that cannot call tools was the first case seen).
 - isorite's own agent, as an ACP agent; and per-agent plugins for a live native terminal.
+Version 0.15.0.
