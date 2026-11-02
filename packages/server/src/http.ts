@@ -17,6 +17,9 @@ import { proposal, writeProposal } from "./connect.ts";
 import { registryAgents, type AgentRunner } from "./agents.ts";
 import { configPath } from "./config.ts";
 import { listAgents } from "./detect.ts";
+import { Chat } from "./chat/chat.ts";
+import { HostError } from "./chat/host.ts";
+import { chatPath } from "./chat/store.ts";
 import { historyChoice, ownRepoInfo, setHistoryChoice } from "./own-repo.ts";
 
 export const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -43,6 +46,8 @@ export interface ServerOptions {
   base?: string;
   /** The configuration's file, where what this machine chose for a base is kept. */
   config?: string;
+  /** The chat over GitHub and GitLab threads (M28); made from the notes' project when not given. */
+  chat?: Chat;
 }
 
 const TYPES: Record<string, string> = {
@@ -72,7 +77,7 @@ const AgentEdit = z.union([
 const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [], notes, acp, bases, base, agents, config }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes, acp, bases, base, agents, config, chat: given }: ServerOptions): Hono {
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -250,6 +255,39 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
       setHistoryChoice(base, b.choice, configFile);
       return ownRepoInfo(join(notes, ".isorite"), b.choice);
     });
+  }
+  // Chat over the project's issues and discussions (M28): signed in on GitHub or GitLab by the device flow, read, and
+  // replied to when the person presses send. Tokens stay here; the page is told who is signed in. From this machine only.
+  if (notes) {
+    const chat = given ?? new Chat({ file: chatPath(config ?? configPath()), project: notes });
+    const Host = z.enum(["github", "gitlab"]), Server = z.string().max(260), Kind = z.enum(["issue", "discussion"]);
+    const mine = async <T>(c: Context, run: () => Promise<T> | T): Promise<Response> => {
+      if (!local(c)) return refuse(c, 403, "the chat is used only from this machine");
+      try { return c.json((await run()) ?? {}); } catch (e) {
+        if (e instanceof HostError) return refuse(c, e.status, e.message);
+        throw e;
+      }
+    };
+    const query = (c: Context) => z.object({ host: Host, server: Server, repo: z.string().max(300) }).safeParse(c.req.query());
+    app.get("/api/chat", (c) => mine(c, () => chat.state()));
+    app.get("/api/chat/threads", (c) => { const q = query(c); return q.success ? mine(c, () => chat.threads(q.data.host, q.data.server, q.data.repo)) : refuse(c, 400, "which repository?"); });
+    app.get("/api/chat/thread", (c) => {
+      const q = query(c), n = z.object({ kind: Kind, number: z.coerce.number().int().min(1) }).safeParse(c.req.query());
+      return q.success && n.success ? mine(c, () => chat.thread(q.data.host, q.data.server, q.data.repo, n.data.kind, n.data.number)) : refuse(c, 400, "which thread?");
+    });
+    const chatPost = <T>(path: string, shape: z.ZodType<T>, act: (b: T) => Promise<unknown> | unknown) =>
+      app.post(path, async (c) => {
+        if (!local(c)) return refuse(c, 403, "the chat is used only from this machine");
+        const refused = writeRefused(c);
+        if (refused) return refused;
+        const sent = await body(c, shape);
+        return sent instanceof Response ? sent : mine(c, () => act(sent));
+      });
+    const Where = { host: Host, server: Server };
+    chatPost("/api/chat/signin", z.object({ ...Where, via: z.enum(["device", "cli"]) }).strict(), (b) => (b.via === "cli" ? chat.useCli(b.host, b.server).then((me) => ({ me })) : chat.signIn(b.host, b.server)));
+    chatPost("/api/chat/signin/poll", z.object(Where).strict(), (b) => chat.poll(b.host, b.server));
+    chatPost("/api/chat/signout", z.object(Where).strict(), (b) => chat.signOut(b.host, b.server));
+    chatPost("/api/chat/reply", z.object({ ...Where, repo: z.string().max(300), kind: Kind, number: z.number().int().min(1), text: z.string().min(1).max(20_000) }).strict(), (b) => chat.reply(b.host, b.server, b.repo, b.kind, b.number, b.text));
   }
   // The project's MCP config (M25): shown, then written on a yes, from this machine only.
   if (notes) {

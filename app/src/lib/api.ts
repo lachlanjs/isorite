@@ -4,7 +4,7 @@
 
 import { pictureType } from "@isorite/core";
 import { baseHere } from "./here.ts";
-import type { Api, Decision, EngineEvent, Given, NoteSource, Session, TerminalView } from "@isorite/engine";
+import type { Api, ChatHostId, ChatKind, ChatMessage, ChatRepo, ChatSignIn, ChatSignInState, ChatState, ChatThread, ChatThreadFull, Decision, EngineEvent, Given, NoteSource, Session, TerminalView } from "@isorite/engine";
 
 /** A request the server refused. For a save that lost a race, `current` is the note as it is now (null: gone). */
 export class ApiError extends Error {
@@ -58,6 +58,17 @@ export interface OwnRepoInfo { state: "own" | "tracked" | "shared" | "none" | "u
 export interface RegistryAgent { id: string; name: string; version: string; description: string; site: string; how: "npx" | "uvx" | "binary" | null }
 
 /** The bases the server holds (M20), as the switcher lists them. */
+/** Chat over the project's threads on GitHub and GitLab (M28). Signing in and replying go through the server, which holds the tokens. */
+export interface ChatApi {
+  state(): Promise<ChatState>;
+  threads(repo: ChatRepo): Promise<{ threads: ChatThread[]; note: string }>;
+  thread(repo: ChatRepo, kind: ChatKind, number: number): Promise<ChatThreadFull>;
+  signIn(host: ChatHostId, server: string): Promise<ChatSignIn>;
+  poll(host: ChatHostId, server: string): Promise<ChatSignInState>;
+  useCli(host: ChatHostId, server: string): Promise<void>;
+  signOut(host: ChatHostId, server: string): Promise<void>;
+  reply(repo: ChatRepo, kind: ChatKind, number: number, text: string): Promise<ChatMessage>;
+}
 export interface BaseRow { name: string; path: string; lend: boolean; open: boolean }
 export interface BasesApi {
   list(): Promise<{ here: string; local: boolean; bases: BaseRow[] }>;
@@ -68,7 +79,7 @@ export interface BasesApi {
 /** Where the browser fetches a picture from (M22), so an `<img>` asks for it itself, cached and lazily. */
 export interface FileUrls { fileUrl(path: string, from?: "notes" | "code"): string }
 
-export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURIComponent(baseHere())}/api/` : "api/", document.baseURI).href): Api & FileUrls & { terminal: TerminalApi; bases: BasesApi; own: { repo(): Promise<OwnRepoInfo | null>; choose(choice: "project" | "separate"): Promise<OwnRepoInfo> } } {
+export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURIComponent(baseHere())}/api/` : "api/", document.baseURI).href): Api & FileUrls & { terminal: TerminalApi; chat: ChatApi; bases: BasesApi; own: { repo(): Promise<OwnRepoInfo | null>; choose(choice: "project" | "separate"): Promise<OwnRepoInfo> } } {
   let token: Promise<string> | null = null;
   const ask = async <T>(path: string, init?: RequestInit): Promise<T> => {
     let res: Response;
@@ -83,6 +94,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     const headers = { "Content-Type": "application/json", "x-isorite-token": await token };
     return ask<T>(path, { method, headers, body: JSON.stringify(body) });
   };
+  const where = (r: ChatRepo) => `host=${r.host}&server=${encodeURIComponent(r.server)}&repo=${encodeURIComponent(r.path)}`;
   const q = (id: string) => `?id=${encodeURIComponent(id)}`;
   const fileUrl = (path: string, from: "notes" | "code" = "notes") => `${root}file?${from === "code" ? "code" : "path"}=${encodeURIComponent(path)}`;
 
@@ -146,6 +158,16 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       lend: async (name, lend) => (await write<{ bases: BaseRow[] }>("POST", "bases/lend", { name, lend })).bases,
     },
     own: { repo: () => ask<OwnRepoInfo | null>("own/repo"), choose: (choice) => write<OwnRepoInfo>("POST", "own/choose", { choice }) },
+    chat: {
+      state: () => ask<ChatState>("chat"),
+      threads: (r) => ask(`chat/threads?${where(r)}`),
+      thread: (r, kind, number) => ask(`chat/thread?${where(r)}&kind=${kind}&number=${number}`),
+      signIn: (host, server) => write<ChatSignIn>("POST", "chat/signin", { host, server, via: "device" }),
+      poll: (host, server) => write<ChatSignInState>("POST", "chat/signin/poll", { host, server }),
+      useCli: async (host, server) => { await write("POST", "chat/signin", { host, server, via: "cli" }); },
+      signOut: async (host, server) => { await write("POST", "chat/signout", { host, server }); },
+      reply: (r, kind, number, text) => write<ChatMessage>("POST", "chat/reply", { host: r.host, server: r.server, repo: r.path, kind, number, text }),
+    },
     terminal: {
       view: () => ask<TerminalView>("terminal"),
       prompt: async (asked, given) => { await write("POST", "terminal/prompt", { asked, given }); },

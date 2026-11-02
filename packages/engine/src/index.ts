@@ -14,3 +14,4 @@ export { editRegions, regionsOf, writeRegions } from "./agent.ts";
 export { ARTIFACTS, CONVERSATIONS_DIR, ISORITE, LEARNING, MODES, PRACTICE, conversationPath, readTurns } from "./turn.ts";
 export type { Decision, Given, Mode, Tier, Turn, TurnItem, TurnLine } from "./turn.ts";
 export type { AgentEdit, Region } from "./agent.ts";
+export type { ChatHostId, ChatHostState, ChatKind, ChatMessage, ChatPerson, ChatRepo, ChatSignIn, ChatSignInState, ChatState, ChatThread, ChatThreadFull } from "./chat.ts";

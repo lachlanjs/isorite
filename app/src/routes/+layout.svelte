@@ -23,6 +23,8 @@
   import NoteSettings from "$lib/components/NoteSettings.svelte";
 
   let { children }: { children: Snippet } = $props();
+  /** Chat is where the server answers it (M28); the guide's site has none. */
+  const chatApi = $derived(!!(app.api as { chat?: unknown } | undefined)?.chat);
 
   // The three panes (M10). The Note pane shows the route's page; the Atlas and Iso stand in the shell, so they keep
   // their state while notes open and close.
@@ -171,6 +173,9 @@
                 <button class="icon past" type="button" aria-label="Sessions" aria-pressed={terminal.shown === "past"} title="The agents' sessions, and Iso's earlier conversations" onclick={() => void terminal.drawer()}>
                   {#if shownId}<Crystal id={shownId} size={20} />{:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 4.5h11v8h-11zM2.5 7.5h11M6.5 10h3" /></svg>{/if}
                 </button>
+                {#if chatApi}<button class="icon" type="button" aria-label="Chat" aria-pressed={terminal.shown === "chat"} title="Chat: the project's issues and discussions on GitHub or GitLab" onclick={() => (terminal.shown = terminal.shown === "chat" ? "session" : "chat")}>
+                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" /></svg>
+                </button>{/if}
                 <!-- What the agent has in hand (I8, M25), with how many parts are in the tray; a new session. -->
                 <button class="icon ctx" type="button" aria-label="Context" aria-pressed={terminal.shown === "context"} title="What the agent has in hand, and what the tray gives it" onclick={() => (terminal.shown = terminal.shown === "context" ? "session" : "context")}>
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h6" /></svg>

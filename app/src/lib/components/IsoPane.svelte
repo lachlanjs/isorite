@@ -8,6 +8,7 @@
   import { tray } from "$lib/tray.svelte.ts";
   import AgentSessions from "./AgentSessions.svelte";
   import AttachAgent from "./AttachAgent.svelte";
+  import ChatPane from "./ChatPane.svelte";
   import ContextView from "./ContextView.svelte";
   import TerminalTurns from "./TerminalTurns.svelte";
 
@@ -46,7 +47,9 @@
 </script>
 
 <div class="iso" class:drop={tray.carrying?.over}>
-  {#if terminal.shown === "context"}
+  {#if terminal.shown === "chat"}
+    <ChatPane />
+  {:else if terminal.shown === "context"}
     <ContextView />
   {:else if terminal.shown === "past"}
     <AgentSessions />
@@ -55,7 +58,7 @@
   {:else}
     <div class="chat"><AttachAgent /></div>
   {/if}
-  <div class="composer">
+  {#if terminal.shown !== "chat"}<div class="composer">
     {#if settings.length && terminal.connected && !terminal.old}
       <div class="settings">
         {#each settings as s (`${s.kind}:${s.id}`)}
@@ -85,7 +88,7 @@
       {/if}
     </div>
     {#if terminal.problem || terminal.view?.problem}<p class="bad" role="alert">{terminal.problem || terminal.view?.problem}</p>{/if}
-  </div>
+  </div>{/if}
 </div>
 
 <style>

@@ -30,8 +30,8 @@ class TerminalState {
   view = $state.raw<TerminalView | null>(null);
   /** An earlier conversation with Iso being read, in place of the agent's session. */
   old = $state.raw<TerminalView | null>(null);
-  /** What the pane shows: the session, what the agent has in hand (the Context view), or the drawer. */
-  shown = $state<"session" | "context" | "past">("session");
+  /** What the pane shows: the session, what the agent has in hand (the Context view), the drawer, or the chat (M28). */
+  shown = $state<"session" | "context" | "past" | "chat">("session");
   /** Iso's own conversations, from before M25, as the drawer lists them: fetched when it opens. */
   past = $state.raw<ConversationSummary[]>([]);
   /** The drawer's "change agent" is open: asked for from the header's chip. */
