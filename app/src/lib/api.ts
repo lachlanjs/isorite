@@ -33,6 +33,10 @@ export interface TerminalApi {
   fresh(agent: string): Promise<void>;
   /** Ask the attached agents for their sessions again. */
   list(): Promise<void>;
+  /** Set a mode or option of the session shown: the agent's own (its model, its plan mode). */
+  set(kind: "mode" | "config", id: string, value: string): Promise<void>;
+  /** Remove isorite's kept copy of a session that is not live; the agent's own history stays. */
+  forget(agent: string, session: string): Promise<void>;
   /** The project's MCP config as isorite would write it (M25), and written, from this machine only. */
   project(): Promise<ProjectConfig>;
   writeProject(): Promise<string[]>;
@@ -40,14 +44,17 @@ export interface TerminalApi {
    *  none, from this machine only. */
   chosen(): Promise<ChosenAgent>;
   registry(): Promise<RegistryAgent[]>;
-  /** The known agents installed on this machine, and whether their keys are set where the server started (M26). */
+  /** The known agents on this machine, found or not, found ones first, and whether their keys are set where the server started (M26, M27). */
   detected(): Promise<DetectedAgent[]>;
   choose(choice: AgentChoice | null): Promise<ChosenAgent>;
 }
 export interface ProjectConfig { repo: string; files: { file: string; harness: string; current: boolean; before: string | null; after: string }[] }
 export type AgentChoice = { id: string } | { command: string };
 export interface ChosenAgent { choice: AgentChoice | null; running: boolean; command: string; problem: string; said: string; hint: string }
-export interface DetectedAgent { id: string; name: string; command: string; path: string; keys: string[]; keySet: boolean; ready: boolean; note: string }
+export interface DetectedAgent { found: boolean; id: string; name: string; command: string; path: string; keys: string[]; keySet: boolean; ready: boolean; note: string }
+/** Where isorite's own files are kept (M27): in a repository of their own, or with the project's, what this machine chose,
+ *  and the commands to copy. isorite runs none of them. */
+export interface OwnRepoInfo { state: "own" | "tracked" | "shared" | "none" | "unavailable"; path: string; project: string | null; remotes: string[]; choice: "project" | "separate" | null; ask: boolean; commands: string[]; problem: string }
 export interface RegistryAgent { id: string; name: string; version: string; description: string; site: string; how: "npx" | "uvx" | "binary" | null }
 
 /** The bases the server holds (M20), as the switcher lists them. */
@@ -61,7 +68,7 @@ export interface BasesApi {
 /** Where the browser fetches a picture from (M22), so an `<img>` asks for it itself, cached and lazily. */
 export interface FileUrls { fileUrl(path: string, from?: "notes" | "code"): string }
 
-export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURIComponent(baseHere())}/api/` : "api/", document.baseURI).href): Api & FileUrls & { terminal: TerminalApi; bases: BasesApi } {
+export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURIComponent(baseHere())}/api/` : "api/", document.baseURI).href): Api & FileUrls & { terminal: TerminalApi; bases: BasesApi; own: { repo(): Promise<OwnRepoInfo | null>; choose(choice: "project" | "separate"): Promise<OwnRepoInfo> } } {
   let token: Promise<string> | null = null;
   const ask = async <T>(path: string, init?: RequestInit): Promise<T> => {
     let res: Response;
@@ -115,6 +122,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     setAgentNotes: (may) => write("POST", "agents/notes", { may }),
     brokenNews: async () => [],
     conversations: () => ask("conversations"),
+    deleteConversation: async (id) => { await write("POST", "conversation/delete", { id }); },
     conversation: async (id) => { const c = await ask<{ id: string; turns: [] }>("conversation" + (id ? q(id) : "")); return c.id ? c : null; },
     keep: (id, proposal, region) => write("POST", "proposal/keep" + q(id), { proposal, ...(region === undefined ? {} : { region }) }),
     revise: async (id, proposal, text) => { await write("POST", "proposal/revise" + q(id), { proposal, text }); },
@@ -132,10 +140,12 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     keepAgentRecord: async () => { throw new Error("only the server keeps an agent's session"); },
     agentRecords: () => ask("agent/records"),
     agentRecord: (agent, session) => ask(`agent/record?agent=${encodeURIComponent(agent)}&session=${encodeURIComponent(session)}`),
+    deleteAgentRecord: async () => { throw new Error("a kept session is removed through the pane's drawer"); },
     bases: {
       list: () => ask("bases"),
       lend: async (name, lend) => (await write<{ bases: BaseRow[] }>("POST", "bases/lend", { name, lend })).bases,
     },
+    own: { repo: () => ask<OwnRepoInfo | null>("own/repo"), choose: (choice) => write<OwnRepoInfo>("POST", "own/choose", { choice }) },
     terminal: {
       view: () => ask<TerminalView>("terminal"),
       prompt: async (asked, given) => { await write("POST", "terminal/prompt", { asked, given }); },
@@ -146,6 +156,8 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       follow: async (agent, session) => { await write("POST", "acp/follow", { agent, session }); },
       fresh: async (agent) => { await write("POST", "acp/new", { agent }); },
       list: async () => { await write("POST", "acp/list", {}); },
+      set: async (kind, id, value) => { await write("POST", "acp/set", { kind, id, value }); },
+      forget: async (agent, session) => { await write("POST", "acp/forget", { agent, session }); },
       project: () => ask<ProjectConfig>("connect"),
       writeProject: async () => (await write<{ written: string[] }>("POST", "connect", {})).written,
       chosen: () => ask<ChosenAgent>("acp/agent"),

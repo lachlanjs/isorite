@@ -24,15 +24,15 @@ test("an agent chosen for the pane: the registry's listed, a command attached, a
   await toIso(page);
   const pane = page.locator('[data-pane="iso"]');
   // No agent attached: how to attach one.
-  const attach = pane.getByRole("region", { name: "Attach your agent" });
-  await expect(attach).toContainText("Here, in this pane", { timeout: 15_000 });
+  const attach = pane.getByRole("region", { name: "Choose your agent" });
+  await expect(attach).toContainText("choose your agent", { timeout: 15_000 });
 
   // The registry's agents, to choose from; or a command of your own.
-  await attach.getByRole("button", { name: "choose one" }).click();
+  await attach.getByRole("button", { name: "another agent" }).click();
   const pick = attach.getByRole("combobox", { name: "An agent of the ACP registry" });
   await expect(pick.locator("option")).toHaveText(["An agent of the ACP registry…", "Claude Agent 0.99.1", "Codex 2.5.0"]);
   await attach.getByRole("textbox", { name: "Or the command of an ACP agent" }).fill(`"${process.execPath}" "${SCRIPTED}"`);
-  await attach.getByRole("button", { name: "attach it" }).click();
+  await attach.locator("form").getByRole("button", { name: "use in this pane" }).click();
 
   // Started for this base: the pane is its session, asked here.
   const log = page.getByRole("log", { name: "The agent's session" });

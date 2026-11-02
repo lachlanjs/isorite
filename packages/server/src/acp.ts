@@ -10,7 +10,7 @@
 
 import { existsSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import { notesOfTurns, type AgentRecord, type AgentSession, type Api, type EngineEvent, type Given, type TerminalItem, type TerminalPermission, type TerminalTurn, type TerminalView } from "@isorite/engine";
+import { notesOfTurns, type AgentCommand, type AgentRecord, type AgentSetting, type AgentSession, type Api, type EngineEvent, type Given, type TerminalItem, type TerminalPermission, type TerminalTurn, type TerminalView } from "@isorite/engine";
 import { OWN_DIR } from "@isorite/core";
 import { repoOf } from "./git.ts";
 import { INSTRUCTIONS, agentName } from "./mcp-http.ts";
@@ -51,7 +51,8 @@ export type Command =
   | { type: "permission"; id: string; optionId: string }
   | { type: "give"; session: string; text: string }
   | { type: "open"; session?: string; then?: string; give?: string }
-  | { type: "list" };
+  | { type: "list" }
+  | { type: "set"; session: string; kind: "mode" | "config"; id: string; value: string };
 /** The session the Atlas's turns and isorite's MCP calls are kept under, for the agent the wrapper carries. */
 export const ACP_SESSION = "acp";
 
@@ -72,9 +73,31 @@ const textOf = (blocks: unknown): string =>
 const lines = (v: string | null | undefined) => (v ? v.replace(/\n$/, "").split("\n") : []);
 const keyOf = (agent: string, session: string): string => `${agent}\u0000${session}`;
 
+type Raw = Record<string, unknown>;
+const str = (v: unknown): string => (typeof v === "string" ? v : "");
+/** The agent's slash commands, from available_commands_update. */
+const commandsOf = (v: unknown): AgentCommand[] =>
+  (Array.isArray(v) ? (v as Raw[]) : []).filter((c) => str(c.name)).map((c) => {
+    const hint = str((c.input as Raw | null | undefined)?.hint);
+    return { name: str(c.name).replace(/^\//, ""), description: str(c.description), ...(hint ? { hint } : {}) };
+  });
+/** The agent's modes, from a session's answer or a current_mode_update. */
+const modesOf = (v: unknown): AgentSetting | null => {
+  const m = v as { currentModeId?: unknown; availableModes?: Raw[] } | null | undefined;
+  const options = (m?.availableModes ?? []).filter((o) => str(o.id)).map((o) => ({ value: str(o.id), name: str(o.name) || str(o.id), ...(str(o.description) ? { description: str(o.description) } : {}) }));
+  return options.length ? { kind: "mode", id: "mode", name: "Mode", current: str(m?.currentModeId), options } : null;
+};
+/** The agent's options (the model, say), whose choices may be grouped. */
+const configsOf = (v: unknown): AgentSetting[] =>
+  (Array.isArray(v) ? (v as Raw[]) : []).filter((o) => str(o.id) && Array.isArray(o.options)).flatMap((o) => {
+    const flat = (o.options as Raw[]).flatMap((x) => (Array.isArray(x.options) ? (x.options as Raw[]) : [x]));
+    const options = flat.filter((x) => str(x.value)).map((x) => ({ value: str(x.value), name: str(x.name) || str(x.value), ...(str(x.description) ? { description: str(x.description) } : {}) }));
+    return options.length ? [{ kind: "config" as const, id: str(o.id), name: str(o.name) || str(o.id), current: str(o.currentValue), options }] : [];
+  });
+
 export interface FollowerOptions {
   /** The base's engine, told of the agent's turns, reads and changes, and keeping its sessions. */
-  api?: Pick<Api, "agentStatus" | "agentLook" | "agentChanged" | "events"> & Partial<Pick<Api, "keepAgentRecord" | "agentRecords" | "agentRecord" | "agentTools" | "nameRepository" | "agentNotes">>;
+  api?: Pick<Api, "agentStatus" | "agentLook" | "agentChanged" | "events"> & Partial<Pick<Api, "keepAgentRecord" | "agentRecords" | "agentRecord" | "deleteAgentRecord" | "agentTools" | "nameRepository" | "agentNotes">>;
   /** The base's folder: a file in it (outside its .isorite/) is a note. */
   notes?: string;
   clock?: () => number;
@@ -122,6 +145,10 @@ interface Live {
   /** What was given from the pane for the next prompt, and everything given in the session so far. */
   pending: { parts: Given[]; text: string } | null;
   given: Set<string>;
+  /** What the agent offers in this session: slash commands, modes and options. */
+  commands: AgentCommand[];
+  modes: AgentSetting | null;
+  configs: AgentSetting[];
 }
 
 /** The sessions the wrappers carry, as the pane draws them. One is shown: the one you chose, else the last to start. */
@@ -179,7 +206,7 @@ export class AcpFollower {
     if (live) {
       this.#view = {
         connected, agent: live.link.name, agentId: live.link.agent, session: live.session, title: live.title, busy: live.busy, turns: live.turns,
-        asking: [...live.asking.values()].map(({ options: _, ...p }) => p), cost: live.cost, tokens: { input: live.used, output: 0 }, model: "", size: live.size, ours: this.#ours, sessions: this.#sessions(), ...problem,
+        asking: [...live.asking.values()].map(({ options: _, ...p }) => p), cost: live.cost, tokens: { input: live.used, output: 0 }, model: "", size: live.size, ours: this.#ours, sessions: this.#sessions(), commands: live.commands, settings: [...(live.modes ? [live.modes] : []), ...live.configs], ...problem,
       };
     } else if (read) {
       this.#view = { ...EMPTY, connected, reading: true, agent: read.name, agentId: read.agent, session: read.session, title: read.title, turns: read.turns, sessions: this.#sessions(), ...problem };
@@ -295,6 +322,26 @@ export class AcpFollower {
     link.opening = "";
     link.send({ type: "open" });
   }
+  /** Set a mode or option of the session shown (the agent's own: its model, its plan mode). Optimistic: the agent's
+   *  answer or update settles it. */
+  set(kind: "mode" | "config", id: string, value: string): void {
+    const live = this.#need();
+    const setting = kind === "mode" ? live.modes : live.configs.find((c) => c.id === id);
+    if (!setting || !setting.options.some((o) => o.value === value)) throw new Error(`${live.link.name || "The agent"} offers no such choice`);
+    if (kind === "mode") live.modes = { ...setting, current: value };
+    else live.configs = live.configs.map((c) => (c.id === id ? { ...c, current: value } : c));
+    live.link.send({ type: "set", session: live.session, kind, id, value });
+    this.#tell();
+  }
+  /** Remove what isorite kept of a session that is not live. What the agent keeps of its own is not touched. */
+  async forget(agent: string, session: string): Promise<void> {
+    const key = keyOf(agent, session);
+    if (this.#lives.has(key)) throw new Error("that session is live: stop it before removing what is kept of it");
+    if (!this.#api?.deleteAgentRecord) throw new Error("nothing is kept here");
+    await this.#api.deleteAgentRecord(agent, session);
+    if (this.#shown === key) { this.#shown = null; this.#chosen = false; this.#reading = null; }
+    await this.#readKept();
+  }
   /** Ask the attached agents for their sessions again: the drawer is being looked at. */
   refresh(): void {
     for (const link of this.#links.values()) if (link.can.list) link.send({ type: "list" });
@@ -372,14 +419,26 @@ export class AcpFollower {
           break;
         }
         case "session/new":
-          if (typeof m.result?.sessionId === "string") this.#open(link, m.result.sessionId, key.startsWith("isorite-") ? "ours" : "in", typeof params.cwd === "string" ? params.cwd : "");
+          if (typeof m.result?.sessionId === "string") {
+            const opened = this.#open(link, m.result.sessionId, key.startsWith("isorite-") ? "ours" : "in", typeof params.cwd === "string" ? params.cwd : "");
+            opened.modes = modesOf(m.result.modes);
+            opened.configs = configsOf(m.result.configOptions);
+          }
           break;
         case "session/load":
         case "session/resume":
           if (live) {
             if (m.error) { this.#lives.delete(keyOf(link.agent, live.session)); break; }
+            if (m.result?.modes) live.modes = modesOf(m.result.modes);
+            if (m.result?.configOptions) live.configs = configsOf(m.result.configOptions);
             void this.#loaded(live);
           }
+          break;
+        case "session/set_mode":
+          if (live && !m.error && live.modes) live.modes = { ...live.modes, current: str(params.modeId) };
+          break;
+        case "session/set_config_option":
+          if (live && !m.error && m.result?.configOptions) live.configs = configsOf(m.result.configOptions);
           break;
         case "session/prompt":
           if (live) {
@@ -417,7 +476,7 @@ export class AcpFollower {
   #open(link: Link, session: string, way: Way, cwd: string): Live {
     const key = keyOf(link.agent, session);
     const was = this.#lives.get(key);
-    const live: Live = was ?? { link, session, from: way === "ours" ? "here" : "terminal", at: new Date(this.#now()).toISOString(), cwd, title: link.listed.find((x) => x.session === session)?.title ?? "", turns: [], busy: false, cost: 0, used: 0, size: 0, asking: new Map(), seen: new Set(), loading: false, replaying: false, pending: null, given: new Set() };
+    const live: Live = was ?? { link, session, from: way === "ours" ? "here" : "terminal", at: new Date(this.#now()).toISOString(), cwd, title: link.listed.find((x) => x.session === session)?.title ?? "", turns: [], busy: false, cost: 0, used: 0, size: 0, asking: new Map(), seen: new Set(), loading: false, replaying: false, pending: null, given: new Set(), commands: [], modes: null, configs: [] };
     live.link = link;
     if (cwd) live.cwd = cwd;
     this.#lives.set(key, live);
@@ -545,6 +604,15 @@ export class AcpFollower {
       }
       case "session_info_update":
         if (typeof u.title === "string") live.title = u.title;
+        break;
+      case "available_commands_update":
+        live.commands = commandsOf(u.availableCommands);
+        break;
+      case "current_mode_update":
+        if (live.modes && typeof u.currentModeId === "string") live.modes = { ...live.modes, current: u.currentModeId };
+        break;
+      case "config_option_update":
+        live.configs = configsOf(u.configOptions);
         break;
     }
   }

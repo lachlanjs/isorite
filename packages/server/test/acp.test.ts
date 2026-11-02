@@ -199,6 +199,8 @@ test("several sessions (M25): one from the front end, one from the pane, one car
   await expect.poll(async () => ((await (await fetch(`${url}/api/agent/records`)).json()) as any[]).filter((r) => r.agent !== "claude").map((r) => r.session).sort()).toEqual([front, own, pane].sort());
   expect((await post("/api/acp/follow", { agent: "scripted", session: front })).status).toBe(200);
   await expect.poll(async () => (await view()).turns[0]?.asked).toBe("asked in the front end");
+  // A live session is not removed from under its agent; what is kept of it is removed once it is not.
+  expect((await post("/api/acp/forget", { agent: "scripted", session: front })).status).toBe(409);
 
   input.end();
   expect(await done).toBe(0);
@@ -266,3 +268,47 @@ test("the ACP registry: its agents as the settings list them, and how each is ru
   expect(await commandOf(entries.find((e) => e.id === "fast-agent")!, env)).toBe(process.platform === "win32" ? `FAST_AGENT_MODEL="codex plan" uvx fast-agent-acp==0.10.1 -x` : `FAST_AGENT_MODEL='codex plan' uvx fast-agent-acp==0.10.1 -x`);
   await expect(commandOf(entries.find((e) => e.id === "elsewhere")!, env)).rejects.toThrow(/not offered for/);
 });
+
+test("the agent's slash commands, modes and options (M27): offered in the pane, set from it, and the agent's answer settles them", async () => {
+  const base = await writeExample(join(root, "settings"));
+  const port = await freePort(), input = new PassThrough(), output = new PassThrough();
+  const env = { ...process.env, XDG_CONFIG_HOME: join(root, "config-settings"), XDG_CACHE_HOME: join(root, "cache"), ISORITE_EMBED: "off" };
+  const done = acp(base.notes, { agent: `"${process.execPath}" "${SCRIPTED}"`, port, input, output, env });
+  const url = `http://127.0.0.1:${port}`;
+  const answers = new Map<number | string, any>();
+  let buffer = "";
+  output.on("data", (chunk: Buffer) => {
+    buffer += chunk.toString();
+    for (let end; (end = buffer.indexOf("\n")) >= 0; buffer = buffer.slice(end + 1)) { const m = JSON.parse(buffer.slice(0, end)); if (m.id !== undefined && !m.method) answers.set(m.id, m); }
+  });
+  let id = 0;
+  const ask = async (method: string, params: object) => {
+    const mine = ++id;
+    input.write(JSON.stringify({ jsonrpc: "2.0", id: mine, method, params }) + "\n");
+    await expect.poll(() => answers.has(mine), { timeout: 60_000, interval: 20 }).toBe(true);
+    return answers.get(mine);
+  };
+  const view = async () => (await (await fetch(`${url}/api/terminal`)).json()) as any;
+  const token = async () => ((await (await fetch(`${url}/api/session`)).json()) as { token: string }).token;
+  const post = async (path: string, body: object) => fetch(url + path, { method: "POST", headers: { "Content-Type": "application/json", "x-isorite-token": await token(), Origin: url }, body: JSON.stringify(body) });
+  await ask("initialize", { protocolVersion: 1, clientCapabilities: {} });
+  const { sessionId } = (await ask("session/new", { cwd: base.notes, mcpServers: [] })).result;
+  await expect.poll(async () => (await view()).session).toBe(sessionId);
+
+  // What the agent offers.
+  await expect.poll(async () => (await view()).commands?.map((c: any) => c.name)).toEqual(["compact", "plan"]);
+  expect((await view()).commands[0]).toMatchObject({ description: "Summarise the session", hint: "what to keep" });
+  const settings = (await view()).settings as any[];
+  expect(settings.map((s) => `${s.kind}:${s.id}=${s.current}`)).toEqual(["mode:mode=ask", "config:model=fast"]);
+
+  // Set from the pane: the agent is asked, and its answer is what stands.
+  expect((await post("/api/acp/set", { kind: "mode", id: "mode", value: "plan" })).status).toBe(200);
+  expect((await post("/api/acp/set", { kind: "config", id: "model", value: "deep" })).status).toBe(200);
+  await expect.poll(async () => ((await view()).settings as any[]).map((s) => `${s.id}=${s.current}`)).toEqual(["mode=plan", "model=deep"]);
+  // What it doesn't offer is refused here.
+  expect((await post("/api/acp/set", { kind: "config", id: "model", value: "nope" })).status).toBe(409);
+  expect((await post("/api/acp/set", { kind: "config", id: "ghost", value: "x" })).status).toBe(409);
+
+  input.end();
+  expect(await done).toBe(0);
+}, 120_000);

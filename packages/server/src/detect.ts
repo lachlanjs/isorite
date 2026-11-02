@@ -58,6 +58,18 @@ export function detectAgents(env: NodeJS.ProcessEnv = process.env): Detected[] {
   });
 }
 
+/** Every agent isorite knows, found on this machine or not, the found ones first (the pane's cards). */
+export interface Listed extends Detected { found: boolean }
+export function listAgents(env: NodeJS.ProcessEnv = process.env): Listed[] {
+  const found = detectAgents(env).map((d): Listed => ({ ...d, found: true }));
+  const have = new Set(found.map((d) => d.id));
+  const rest = KNOWN.filter((k) => !have.has(k.id)).map((k): Listed => ({ id: k.id, name: k.name, command: k.command, path: "", keys: k.keys, keySet: false, ready: false, found: false, note: `${k.name} isn't on this machine's PATH.` }));
+  return [...found, ...rest];
+}
+
+/** The ACP command of an agent known by name (`isorite acp omp`), or null. */
+export const knownCommand = (id: string): string | null => KNOWN.find((k) => k.id === id)?.command ?? null;
+
 /** Why an agent that stopped may have: the key it reads isn't set where isorite was started, for the command run. */
 export function missingKey(command: string, env: NodeJS.ProcessEnv = process.env): string {
   const k = KNOWN.find((x) => x.command === command);

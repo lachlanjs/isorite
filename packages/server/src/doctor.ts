@@ -19,6 +19,7 @@ import { locate } from "./serve.ts";
 import { serving } from "./running.ts";
 import { findBrowser } from "./render.ts";
 import { proposal, writeProposal } from "./connect.ts";
+import { ownRepoInfo } from "./own-repo.ts";
 
 export type Outcome = "ok" | "fail" | "warn" | "skip";
 export interface Check { step: string; outcome: Outcome; said: string }
@@ -125,6 +126,12 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
         say("links", errors.length ? "fail" : issues.length || cycles.length ? "warn" : "ok",
           `${bundle.concepts.size} notes; ${errors.length} errors, ${issues.length - errors.length} warnings, ${cycles.length} requires cycles${issues.length ? `: ${issues.slice(0, 3).map((i) => `${i.path}: ${i.message}`).join("; ")}${issues.length > 3 ? `; and ${issues.length - 3} more (isorite check ${notes})` : ""}` : ""}`);
       }
+      const kept = ownRepoInfo(own, null, env);
+      if (existsSync(own)) say("history", kept.state === "own" ? "ok" : kept.state === "unavailable" ? "skip" : kept.state === "none" ? "skip" : "ok",
+        kept.state === "own" ? `${OWN_DIR}/ is a repository of its own${kept.remotes.length ? `, remote ${kept.remotes.join(", ")}` : `; to keep it elsewhere: git -C ${own} remote add origin <address>`}`
+        : kept.state === "tracked" ? `${OWN_DIR}/ is tracked by the project's repository, so everyone sharing it has isorite's files; to keep them apart, run:\n    ${kept.commands.join("\n    ")}`
+        : kept.state === "shared" ? `${OWN_DIR}/ is in the project's folder, to be committed with it; to keep it apart, run:\n    ${kept.commands.join("\n    ")}`
+        : kept.state === "unavailable" ? `${OWN_DIR}/: git did not answer (${kept.problem})` : `${OWN_DIR}/ is in no git repository`);
       const repository = existsSync(settings) ? parseSettings(readFileSync(settings, "utf8")).repository : undefined;
       const found = repoOf(notes);
       if (!repository && found) say("repository", "ok", `${found}: code links point here`);

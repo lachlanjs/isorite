@@ -98,6 +98,11 @@ async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; 
   send({ id, result: { stopReason: "end_turn" } });
 }
 
+// What the agent offers to set: a mode, the model, and slash commands.
+let mode = "ask", model = "fast";
+const COMMANDS = [{ name: "compact", description: "Summarise the session", input: { hint: "what to keep" } }, { name: "plan", description: "Plan before acting" }];
+const modes = () => ({ currentModeId: mode, availableModes: [{ id: "ask", name: "Ask", description: "Ask before acting" }, { id: "plan", name: "Plan" }] });
+const configs = () => [{ id: "model", name: "Model", type: "select", currentValue: model, options: [{ value: "fast", name: "Fast" }, { value: "deep", name: "Deep", description: "Slower, more careful" }] }];
 for await (const line of createInterface({ input: process.stdin })) {
   if (!line.trim()) continue;
   const m = JSON.parse(line) as Rpc;
@@ -110,7 +115,8 @@ for await (const line of createInterface({ input: process.stdin })) {
     case "session/new": {
       const sessionId = `s-${process.pid}-${++n}`;
       sessions.set(sessionId, { cwd: p.cwd ?? process.cwd(), mcp: p.mcpServers ?? [], kept: { cwd: p.cwd ?? process.cwd(), title: "", updatedAt: new Date().toISOString(), history: [] } });
-      send({ id: m.id, result: { sessionId } });
+      send({ id: m.id, result: { sessionId, modes: modes(), configOptions: configs() } });
+      update(sessionId, { sessionUpdate: "available_commands_update", availableCommands: COMMANDS });
       break;
     }
     case "session/load": {
@@ -129,6 +135,8 @@ for await (const line of createInterface({ input: process.stdin })) {
       send({ id: m.id, result: { sessions: Object.entries(all).filter(([, k]) => k.history.length).map(([sessionId, k]) => ({ sessionId, cwd: k.cwd, title: k.title, updatedAt: k.updatedAt })) } });
       break;
     }
+    case "session/set_mode": mode = String(p.modeId); send({ id: m.id, result: {} }); update(p.sessionId, { sessionUpdate: "current_mode_update", currentModeId: mode }); break;
+    case "session/set_config_option": model = String(p.value); send({ id: m.id, result: { configOptions: configs() } }); break;
     case "session/prompt": void prompt(m.id, p.sessionId, p.prompt ?? []); break;
     case "session/cancel": break;
     default: if (m.id !== undefined && m.method) send({ id: m.id, error: { code: -32601, message: `no method ${m.method}` } });

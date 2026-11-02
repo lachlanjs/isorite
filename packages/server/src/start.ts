@@ -74,11 +74,14 @@ export interface StartIo {
   /** Start the server on a base and open the page at `start`. */
   open: (notes: string, start?: string) => Promise<number>;
   make: (folder: string) => string;
+  /** After a base is made here (M27): asked where isorite's own files live, in a git project. */
+  made?: (notes: string) => Promise<void>;
   guide: () => Promise<number>;
 }
 
 /** The choice `isorite` makes, and what it says. */
 export async function start(io: StartIo): Promise<number> {
+  const make = async (folder: string): Promise<string> => { const notes = io.make(folder); await io.made?.(notes); return notes; };
   const found = findBase(io.cwd);
   if (found.kind === "base") return io.open(found.notes);
   if (found.kind === "several") {
@@ -90,7 +93,7 @@ export async function start(io: StartIo): Promise<number> {
   if (found.kind === "repo") {
     const notes = join(found.repo, "notes");
     io.out(`isorite: no base in ${found.repo} yet.`);
-    if (!existsSync(notes) && (await io.confirm(`Make one at ${notes}?`))) return io.open(io.make(notes));
+    if (!existsSync(notes) && (await io.confirm(`Make one at ${notes}?`))) return io.open(await make(notes));
     if (existsSync(notes)) io.out(`  ${notes} is there already: open it as it is with  isorite serve ${notes}`);
   }
   const known = recent(io.config);
@@ -104,7 +107,7 @@ export async function start(io: StartIo): Promise<number> {
   const pick = await io.choose("Open which?", rows.length);
   if (pick === null) return 2;
   if (pick < known.length) return io.open(known[pick]!.path);
-  if (pick === known.length) return io.open(io.make(join(io.cwd, "notes")));
+  if (pick === known.length) return io.open(await make(join(io.cwd, "notes")));
   return io.guide();
 }
 

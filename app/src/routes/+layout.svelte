@@ -163,6 +163,7 @@
                 {#if run?.agent && !terminal.acp}
                   <span class="says" title={running ? "" : "click open ground on the Atlas to let its path go"}>{running ? `${agentNamed} is ${agentReading ? `reading ${agentReading}` : "at work"} in its own terminal` : `${agentNamed}'s turn is done`}</span>
                 {/if}
+                {#if terminal.view?.connected && terminal.view.agent}<button class="chip" type="button" aria-label="Change agent" title="{terminal.view.agent} is attached: change agent" onclick={() => terminal.change()}>{terminal.view.agent} <span aria-hidden="true">▾</span></button>{/if}
                 <IsoGauge />
                 <!-- The drawer (M24, K): the agents' sessions, live and kept (M25), and Iso's own conversations from
                      before, under the crystal of the one shown. -->
@@ -258,6 +259,8 @@
     .tabs button[aria-current="true"]::before { content: ""; position: absolute; top: -1px; left: 20%; right: 20%; height: 2px; background: var(--text); }
     .tabs .badge { position: absolute; top: 8px; right: calc(50% - 30px); font: 10px var(--font-ui); color: var(--ground-0); background: var(--growth); min-width: 16px; height: 16px; display: grid; place-items: center; padding: 0 3px; }
   }
+  button.chip { background: none; border: 0; padding: 0 4px; font: 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); cursor: pointer; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button.chip:hover, button.chip:focus-visible { color: var(--text); }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; }
   .icon:hover, .icon:focus-visible { color: var(--text); text-decoration: none; }
   .icon:disabled { opacity: 0.35; cursor: default; }

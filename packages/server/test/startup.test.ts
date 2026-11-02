@@ -116,3 +116,19 @@ test("the model is offered once: fetched on a yes, a no remembered, a failure sa
   expect(await run({ yes: true, fetched: 1 })).toEqual(["asked", "fetch", "said search by words, for now: isorite doctor says what stopped the fetch"]);
   for (const skip of [{ installed: true }, { off: true }, { declined: true }]) expect(await run(skip)).toEqual([]);
 });
+
+test("a base made by isorite in a repository is followed by the question of where its own files live (M27); one opened is not", async () => {
+  const repo = temp(), config = join(temp(), "config.toml");
+  mkdirSync(join(repo, ".git"));
+  const r = io(repo, config, { yes: true });
+  const asked: string[] = [];
+  r.o.made = async (n) => { asked.push(n); };
+  expect(await start(r.o)).toBe(0);
+  expect(r.did).toEqual([`make ${join(repo, "notes")}`, `open ${join(repo, "notes")}`]);
+  expect(asked).toEqual([join(repo, "notes")]);
+  // A base already there is opened, not asked about.
+  const again = io(repo, config);
+  again.o.made = async (n) => { asked.push(n); };
+  await start(again.o);
+  expect(asked).toHaveLength(1);
+});
