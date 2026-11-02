@@ -3,6 +3,7 @@
 // repository with none: offer to make notes/ there. Elsewhere: the bases this machine knows, last used first, a new
 // one here, and the guide. Asked only at a terminal; piped, `isorite` prints its help as it always did.
 
+import { dim } from "./term.ts";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { createServer } from "node:net";
 import { basename, dirname, join, resolve } from "node:path";
@@ -86,7 +87,7 @@ export async function start(io: StartIo): Promise<number> {
   if (found.kind === "base") return io.open(found.notes);
   if (found.kind === "several") {
     io.out(`isorite: more than one base here:`);
-    found.notes.forEach((n, i) => io.out(`  ${i + 1}  ${n}`));
+    found.notes.forEach((n, i) => io.out(`  ${dim(String(i + 1))}  ${n}`));
     const pick = await io.choose("Open which?", found.notes.length);
     return pick === null ? 2 : io.open(found.notes[pick]!);
   }
@@ -103,7 +104,7 @@ export async function start(io: StartIo): Promise<number> {
   }
   const rows = [...known.map((b) => label(b, known)), `a new base here (${join(io.cwd, "notes")})`, "the guide"];
   io.out(known.length ? "isorite: the bases on this machine, last used first:" : "isorite:");
-  rows.forEach((r, i) => io.out(`  ${i + 1}  ${r}`));
+  rows.forEach((r, i) => io.out(`  ${dim(String(i + 1))}  ${r}`));
   const pick = await io.choose("Open which?", rows.length);
   if (pick === null) return 2;
   if (pick < known.length) return io.open(known[pick]!.path);

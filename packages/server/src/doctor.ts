@@ -3,6 +3,7 @@
 // issue: versions, the platform, the configuration with its secrets replaced by their lengths, the environment
 // isorite reads, and the checks.
 
+import { bold, dim, green, red, yellow } from "./term.ts";
 import { createHash } from "node:crypto";
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { arch, platform, release } from "node:os";
@@ -41,6 +42,7 @@ export interface DoctorOptions {
 }
 
 const MARK: Record<Outcome, string> = { ok: "✓", fail: "✗", warn: "!", skip: "–" };
+const PAINT: Record<Outcome, (s: string) => string> = { ok: green, fail: red, warn: yellow, skip: dim };
 
 /** The environment variables isorite and Node read for it; the secret ones are shown only by length. */
 const READ = ["XDG_CONFIG_HOME", "ISORITE_ACP_REGISTRY", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "NODE_TLS_REJECT_UNAUTHORIZED", "ISORITE_NODE_DEFAULTS", "SSH_CONNECTION", "ISORITE_EMBED", "ISORITE_EMBED_DIR", "ISORITE_MODEL_BASE_URL", "XDG_DATA_HOME", "XDG_CACHE_HOME"];
@@ -61,7 +63,7 @@ function redacted(value: unknown, field = ""): unknown {
 /** Run the checks; 0 when none failed. */
 export async function doctor(folder: string | undefined, o: DoctorOptions = {}): Promise<number> {
   const env = o.env ?? process.env, out = o.out ?? console.log, checks: Check[] = [];
-  const say = (step: string, outcome: Outcome, said: string) => { checks.push({ step, outcome, said }); if (!o.report) out(`${MARK[outcome]} ${step}: ${said}`); };
+  const say = (step: string, outcome: Outcome, said: string) => { checks.push({ step, outcome, said }); if (!o.report) out(`${PAINT[outcome](MARK[outcome])} ${bold(step)}: ${outcome === "skip" ? dim(said) : said}`); };
   const path = configPath(env), execArgv = o.execArgv ?? process.execArgv;
 
   // The configuration: the device's id, and (until M25) Iso's provider, now left as written and not read.
@@ -173,6 +175,6 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
       "", "environment:", ...(vars.length ? vars : ["(none of those isorite reads)"]),
       "", ...checks.map((c) => `${MARK[c.outcome]} ${c.step}: ${c.said}`),
       "```"].join("\n"));
-  } else out(failed ? `${failed} failed. isorite doctor --report gives all this as one block, its secrets hidden, to paste to someone helping.` : "nothing failed");
+  } else out(failed ? `${red(`${failed} failed.`)} isorite doctor --report gives all this as one block, its secrets hidden, to paste to someone helping.` : green("nothing failed"));
   return failed ? 1 : 0;
 }

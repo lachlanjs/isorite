@@ -21,5 +21,15 @@ Read from its page (stencil.so/tern; no CSS was available to the reading, so val
 
 ## Left
 
-- The remaining notes: the terminal's feel (a minimal TUI?), and the "performative learning" idea, both waiting for a talk.
-- 1 to 2 and 6 above, if wanted; rewriting taste.md's lustre line; a photosensitivity look at the pulse (it runs once, 420 ms, on touch, never loops).
+- The "performative learning" idea, waiting for a talk. (The terminal's feel is built: see below.)
+- 1 to 2 and 6 above, if wanted; a photosensitivity look at the pulse (it runs once, 420 ms, on touch, never loops).
+
+## Built: the terminal's feel
+
+Asked of the commands' output (all of them), the faults named were too much text, no structure and no colour; the answers were plain output rather than a live screen, and a dry tone. So:
+
+- `packages/server/src/term.ts`: bold, dim, red, green, yellow, only at a terminal (not piped, not with `NO_COLOR` or `TERM=dumb`; `FORCE_COLOR` turns it on). Plain, the text is byte for byte what it was, so scripts and tests are unchanged. Gold is Iso's alone, so it is not used; a warning is yellow.
+- `check`: the level coloured, the path bold, the summary dim with errors red or green. `doctor`: each mark coloured, the step bold, a skipped step dim, the last line red or green. `bases`: names bold, paths dim, a missing one red. The choice menu's numbers are dim. Help: commands bold, what they say dim.
+- The server's banner is a word to a line (`search`, `lent`, `open`, `ssh`) under `isorite  <notes>`, the labels dim.
+- Help is shorter: each command a line or two (`isorite help all`), and `--fix` is listed.
+- Not done: a live screen for `isorite start` (a TUI), which would be its own milestone, and a `--json` form of `check`.

@@ -36,57 +36,45 @@ import { findBase, freePort, offerModel, start } from "./start.ts";
 import { cacheDir } from "./embedder.ts";
 import { modelCommand, modelDir } from "./model.ts";
 import { openBrowser } from "./running.ts";
+import { bold, dim, green, helpText, red, yellow } from "./term.ts";
 
 
 const SHORT = `isorite: an agentic harness for understanding
 
-  isorite                 open the base here, or choose one (a terminal; --no-open, --port <n>)
-  isorite doctor          whether isorite can work here, and what to change if not (--report to paste to
-                          someone helping; run in a project it checks that project's base)
-  isorite help            this; isorite help all lists every command
+  isorite                 open the base here, or choose one
+  isorite doctor          can isorite work here, and what to change if not
+  isorite help            this; help all lists every command
   isorite --version
 
-Notes are plain Markdown in a folder of your project; your own agent reads and writes them with you.
+Notes are plain Markdown in a folder of your project. Your agent reads and writes them with you.
 `;
 
 const USAGE = `isorite: an agentic harness for understanding
 
-  isorite new <folder>                   start a knowledge base: the folder, empty, with isorite's .isorite/
-  isorite check <notes> [--unused]       check a folder of notes: frontmatter, links, cycles; --unused lists
-                                         the pictures no note shows
+  isorite new <folder>                   a new base: an empty folder with .isorite/
+  isorite check <notes> [--unused] [--fix]
+                                         lint: frontmatter, links, cycles; --unused: pictures no note
+                                         shows; --fix: quote a colon in frontmatter
   isorite serve <notes> [--port <n>] [--allow-host <name>]
                                          open it in the browser, on this machine only
-  isorite migrate <study base> [--merge] move a study base (format 1) into its notes' .isorite/; exercises
-                                         become problem notes; the study base is left as it was
-  isorite example <folder> [--geometry]  write the example base (notes on an N-body simulation, three weeks
-                                         into being built), into an empty folder; --geometry: notes on the
-                                         differential geometry of surfaces, with their questions and problems
+  isorite migrate <study base> [--merge] a study base (format 1) into its notes' .isorite/
+  isorite example <folder> [--geometry]  an example base, partway built, in an empty folder
   isorite mcp [<notes>] [--port <n>] [--agent <name>]
-                                         the knowledge base's tools over MCP, on stdio, for your agent in its
-                                         own terminal: claude mcp add isorite -- isorite mcp <base>
+                                         the base's tools over MCP, on stdio:
+                                         claude mcp add isorite -- isorite mcp <base>
   isorite acp --agent "<command>" [<notes>] [--port <n>] [--pane]
-                                         an ACP agent (claude-agent-acp, codex-acp, opencode acp, hermes acp)
-                                         behind your ACP front end (Toad, Zed), with the base's MCP, and its
-                                         sessions in Iso's pane; --pane: no front end, the pane alone
+                                         an ACP agent behind your ACP front end, its sessions in Iso's
+                                         pane; --pane: the pane alone
   isorite model [--from <folder|.tgz>] [--url <url>]
-                                         the model for search by meaning: which is installed, and where; else
-                                         fetched (53 MB, once) from ISORITE_MODEL_BASE_URL, npm, GitHub or
-                                         Hugging Face, or --url alone; or from the .tgz fetched by hand, or a
-                                         folder: its files copied there, or any compatible model
+                                         the model for search by meaning: which, and where; else fetch it
+                                         (53 MB, once)
   isorite doctor [<notes>] [--report] [--offline]
-                                         whether isorite can work here: the configuration, the network, the
-                                         model for search by meaning, the server, the notes and the project's
-                                         MCP config; --report gives it as one block, to paste to someone (or
-                                         an AI) helping
-  isorite memory [<folder>]              the agent's memory: a knowledge base (~/isorite-memory unless named),
-                                         a git repository of its own, lent to every agent's session
-  isorite bases [lend|keep <name>]       the bases this device knows, each listed as it is opened; lend one to
-                                         every session, or keep it to itself
-  isorite help setup                     how isorite is set up, every setting and failure: written for an AI
-                                         helping you set it up (docs/setup.md is for people)
-  isorite guide [<folder>] [--port <n>]  the guide: a knowledge base about isorite, with things to do in it,
-                                         written into a folder (~/isorite-guide unless named) and opened in
-                                         the browser; run again, as you left it (also: isorite --tutorial)
+                                         can isorite work here, a step at a time; --report: one block to
+                                         paste to someone helping
+  isorite memory [<folder>]              the agent's memory: a base of its own, lent to every session
+  isorite bases [lend|keep <name>]       the bases this device knows; lend one to every session, or keep it
+  isorite help setup                     every setting and failure, written for an AI helping you set up
+  isorite guide [<folder>] [--port <n>]  the guide: a base about isorite, to do things in (--tutorial)
 `;
 
 export function check(notes: string, out: (line: string) => void = console.log, unused = false, fix = false): number {
@@ -101,8 +89,9 @@ export function check(notes: string, out: (line: string) => void = console.log, 
     bundle = loadBundle(root); issues = bundle.lint();
   }
   const cycles = bundle.requiresCycles();
-  for (const i of issues) out(`${i.level.padEnd(7)} ${i.path}: ${i.message}${i.code === "frontmatter-invalid" && !fix && mendable.some((m) => m.path === i.path) ? " (isorite check --fix quotes it)" : ""}`);
-  for (const c of cycles) out(`warning requires cycle: ${c.join(" -> ")}`);
+  const level = (l: string) => (l === "error" ? red(l) : yellow(l)) + " ".repeat(Math.max(0, 7 - l.length));
+  for (const i of issues) out(`${level(i.level)} ${bold(i.path)}: ${i.message}${i.code === "frontmatter-invalid" && !fix && mendable.some((m) => m.path === i.path) ? " (isorite check --fix quotes it)" : ""}`);
+  for (const c of cycles) out(`${level("warning")} requires cycle: ${c.join(" -> ")}`);
   // Artifacts on the kit (M23): the rules write_artifact keeps, checked of each, with the files beside it.
   let artifactErrors = 0, artifactWarnings = 0;
   for (const f of [...bundle.files].filter((x) => citeKind(x) === "artifact").sort()) {
@@ -111,12 +100,13 @@ export function check(notes: string, out: (line: string) => void = console.log, 
     const dir = dirname(join(root, f)), uses = manifestOf(html).uses, files = uses.filter((u) => existsSync(join(dir, u)));
     const columns = Object.fromEntries(files.filter((u) => citeKind(u) === "data").flatMap((u) => { try { return [[u, columnsOf(parseData(u, readFileSync(join(dir, u), "utf8")))]]; } catch { return []; } }));
     for (const b of checkArtifact(html, { files, columns })) {
-      out(`${b.level.padEnd(7)} ${f}: ${b.message}`);
+      out(`${level(b.level)} ${bold(f)}: ${b.message}`);
       if (b.level === "error") artifactErrors++; else artifactWarnings++;
     }
   }
   const errors = issues.filter((i) => i.level === "error").length + artifactErrors;
-  out(`${bundle.concepts.size} notes in ${bundle.directories.size} folders; ${errors} errors, ${issues.length - issues.filter((i) => i.level === "error").length + artifactWarnings} warnings, ${cycles.length} requires cycles`);
+  const warnings = issues.length - issues.filter((i) => i.level === "error").length + artifactWarnings;
+  out(`${dim(`${bundle.concepts.size} notes in ${bundle.directories.size} folders;`)} ${(errors ? red : green)(`${errors} errors`)}, ${(warnings ? yellow : green)(`${warnings} warnings`)}, ${cycles.length} requires cycles`);
   // The pictures no note shows or links to (M22): yours to keep or delete, so information, never a warning.
   if (unused) {
     const cited = new Set([...bundle.concepts.values()].flatMap((c) => c.cites.map((x) => x.target)));
@@ -281,7 +271,7 @@ export function main(argv: string[]): number | Promise<number> {
     throw e;
   }
   // The four a person needs; the rest are in `isorite help all` and still work (M26).
-  process.stdout.write(command === "help" && rest[0] === "all" ? USAGE : command && command !== "help" && command !== "--help" ? USAGE : SHORT);
+  process.stdout.write(helpText(command === "help" && rest[0] === "all" ? USAGE : command && command !== "help" && command !== "--help" ? USAGE : SHORT));
   return command && command !== "help" && command !== "--help" ? 2 : 0;
 }
 

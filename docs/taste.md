@@ -17,7 +17,7 @@ isorite is a mapping that keeps structure (Iso is for isomorphism, not isometric
 
 ## Settled (from the inspiration rounds)
 
-- No flash. A touched thing acknowledges with one band of light across its face (lustre), not an inversion or blink. The band is dithered (4×4 Bayer, 2 px cells, 24 frames a second, 320 ms across, at three quarters of the strength first built): a mineral's lustre drawn by a machine. On quartz it is dark pixels. `app/src/lib/lustre.ts`.
+- No flash. A touched thing acknowledges with a pulse round its edge (lustre): two sparks run from the top-left both ways round the outline, with a fading tail, 420 ms, once, never looped; a 1 px core and a faint 3 px glow, following the chamfered corners. Reduced motion turns it off. `app/src/lib/lustre.ts`.
 - One grammar of states on every control: rest; touched (the lustre); where the keyboard is (corner brackets, not an outline); chosen (solid, in its colour or the lattice); open (a bar); Iso's (a gold ◆); unavailable (faint).
 - The three themes blend: the machine is how isorite answers you, the mineral is what notes are made of, growth is how they change. A heuristic, not a separation.
 - No directive text: no key legends, no captions explaining what a control does. If it needs one, redesign it. As little guiding text as possible, ideally none.

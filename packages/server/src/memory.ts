@@ -2,6 +2,7 @@
 // as rdstudio's ~/knowledge was. Its practice is its AGENTS.md, yours to change. And isorite bases: the bases this
 // device knows.
 
+import { bold, dim, red } from "./term.ts";
 import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -81,6 +82,6 @@ export function bases(args: string[], { config = configPath(), out = console.log
   const known = knownBases(config);
   if (!known.length) { out("no bases yet: each one you open is listed here (isorite serve, term, mcp); isorite memory makes the agent's memory"); return 0; }
   const width = Math.max(...known.map((b) => b.name.length));
-  for (const b of known) out(`${b.name.padEnd(width)}  ${b.lend ? "lent " : "     "}  ${b.path}${existsSync(b.path) ? "" : "  (not there)"}`);
+  for (const b of known) out(`${bold(b.name.padEnd(width))}  ${b.lend ? "lent " : "     "}  ${dim(b.path)}${existsSync(b.path) ? "" : `  ${red("(not there)")}`}`);
   return 0;
 }

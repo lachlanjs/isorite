@@ -1,6 +1,7 @@
 // isorite serve: open a folder of notes, with isorite's own files in its .isorite/, and serve the app and the
 // engine on this machine.
 
+import { bold, dim } from "./term.ts";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -141,12 +142,15 @@ export async function serve(path: string, { host = "127.0.0.1", port = 4767, all
     console.error(e.code === "EADDRINUSE" ? `port ${port} is in use (isorite serve --port <n>)` : e.message);
     process.exit(1);
   });
-  console.log(`isorite: ${notes}`);
-  console.log(embedder ? "  search by meaning: on" : "  search by meaning: off (isorite model fetches its model, 53 MB)");
+  // What is up, a word to a line (M32): the label dimmed, the thing as it is.
+  const row = (label: string, text: string) => console.log(`  ${dim(label.padEnd(8))}${text}`);
+  console.log(`${bold("isorite")}  ${notes}`);
+  row("search", embedder ? "by meaning" : `by words ${dim("(isorite model fetches the model, 53 MB)")}`);
   const lent = bases.lent().filter((l) => l.name !== bases.first).map((l) => l.name);
-  if (lent.length) console.log(`  lent to every session: ${lent.join(", ")} (isorite bases)`);
-  console.log(existsSync(join(WEB_DIR, "index.html")) ? `  ${link(`http://localhost:${port}/`)}` : `  the app is not built (npm run build); the engine alone is at http://localhost:${port}/api/`);
-  if (process.env.SSH_CONNECTION && LOOPBACK.has(host)) console.log(`  over SSH, the link opens on this machine; from your own, first run: ssh -L ${port}:localhost:${port} ${hostname()}`);
+  if (lent.length) row("lent", `${lent.join(", ")} ${dim("(isorite bases)")}`);
+  if (existsSync(join(WEB_DIR, "index.html"))) row("open", link(`http://localhost:${port}/`));
+  else row("open", `the app is not built (npm run build); the engine alone is at http://localhost:${port}/api/`);
+  if (process.env.SSH_CONNECTION && LOOPBACK.has(host)) row("ssh", `opens on this machine; from your own, first: ssh -L ${port}:localhost:${port} ${hostname()}`);
   stop = () => { server.close(); process.exit(0); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
