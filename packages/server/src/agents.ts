@@ -29,6 +29,8 @@ export interface Entry { id: string; name: string; version: string; description?
 export interface RegistryAgent { id: string; name: string; version: string; description: string; site: string; how: "npx" | "uvx" | "binary" | null }
 /** What a base has chosen: an agent of the registry by its id, or a command of your own. */
 export type AgentChoice = { id: string } | { command: string };
+/** An agent isorite knows by name, found on this machine or not. */
+export interface KnownAgent { key: string; name: string; found: boolean; /** What choosing it for the pane keeps. */ choice: AgentChoice; /** Its ACP command, as an ACP front end is given it behind `isorite acp --agent`. */ command: string; /** The agent's own terminal program, and how isorite is added to it. */ bin: string }
 /** The base's agent, as the settings show it. */
 export interface AgentState { choice: AgentChoice | null; running: boolean; command: string; problem: string; said: string }
 
@@ -119,6 +121,40 @@ async function fetchProgram(bin: Binary, dir: string): Promise<void> {
   try { chmodSync(join(making, bin.cmd), 0o755); } catch { /* where it is, as it came */ }
   rmSync(dir, { recursive: true, force: true });
   renameSync(making, dir);
+}
+
+/** The agents isorite knows by name: the program each runs as in a terminal, and how it speaks ACP. Those that
+ *  speak it themselves have a command; the others go through an adapter, the registry's entry when it lists one. */
+const KNOWN: { key: string; name: string; bin: string; command: string; registry?: RegExp }[] = [
+  { key: "claude", name: "Claude Code", bin: "claude", command: "npx -y @agentclientprotocol/claude-agent-acp", registry: /claude/ },
+  { key: "opencode", name: "OpenCode", bin: "opencode", command: "opencode acp" },
+  { key: "omp", name: "omp", bin: "omp", command: "omp acp" },
+  { key: "codex", name: "Codex", bin: "codex", command: "npx -y @agentclientprotocol/codex-acp", registry: /codex/ },
+  { key: "hermes", name: "Hermes", bin: "hermes", command: "hermes acp" },
+];
+
+/** The ACP command of an agent isorite knows by name (`isorite acp omp`), or null. */
+export const knownCommand = (key: string): string | null => KNOWN.find((k) => k.key === key)?.command ?? null;
+
+/** Whether a program is on the PATH, found by looking, not by running it. */
+export function onPath(bin: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  const exts = process.platform === "win32" ? ["", ...(env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";")] : [""];
+  for (const dir of (env.PATH ?? "").split(process.platform === "win32" ? ";" : ":")) {
+    if (!dir) continue;
+    for (const ext of exts) if (existsSync(join(dir, bin + ext))) return true;
+  }
+  return false;
+}
+
+/** The agents isorite knows by name, each found on this machine or not, found ones first. The registry is looked at
+ *  for the adapters (Claude Code, Codex), and when it cannot be read their command stands. */
+export async function knownAgents(env: NodeJS.ProcessEnv = process.env): Promise<KnownAgent[]> {
+  const registry = await readRegistry(env).catch(() => [] as Entry[]);
+  const all = KNOWN.map((k): KnownAgent => {
+    const entry = k.registry ? registry.find((e) => k.registry!.test(e.id) && howOf(e)) : undefined;
+    return { key: k.key, name: k.name, found: onPath(k.bin, env), bin: k.bin, command: k.command, choice: entry ? { id: entry.id } : { command: k.command } };
+  });
+  return [...all.filter((a) => a.found), ...all.filter((a) => !a.found)];
 }
 
 /** What bases.toml says this base has chosen. */

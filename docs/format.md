@@ -17,7 +17,9 @@ isorite's own files are in the notes' hidden `.isorite/` folder (section 2) and 
 
 ## 2. isorite's own files (`own.ts`)
 
-A hidden folder in the notes, committed with them. Made, with its `.gitattributes`, the first time the base is opened.
+A hidden folder in the notes. Made, with its `.gitattributes`, the first time the base is opened.
+
+In a project shared with people who may not use isorite, it can be kept apart from the project's repository (M27). isorite runs no git to do it: it asks once, per machine (`history` in `bases.toml`: `project` or `separate`), when a base is initialised (`isorite new` at a terminal) or first opened in the app (the drawer's *where isorite's files are kept*), and gives the commands to copy: `git init` in `.isorite/`, its line in the project's `.git/info/exclude`, a first commit, and later a remote. Where the project already tracks `.isorite/`, the commands also untrack it. `isorite doctor` shows the same. The default is as before: with the project.
 
 ```
 .isorite/

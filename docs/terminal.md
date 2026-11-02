@@ -16,7 +16,7 @@ isorite serve ~/code/my-project/notes
 
 ### In Iso's pane
 
-With no agent attached, Iso's pane says how to attach one. *Here, in this pane*: choose an agent of the [ACP registry](https://agentclientprotocol.com/get-started/registry), or give the command of one it doesn't list (`hermes acp`). isorite starts it for the base, behind `isorite acp --pane`, in the repository the base is in, with the server's environment, and starts it again when the base is next opened. It runs a program, so it is chosen from this machine only; the choice is kept in `~/.config/isorite/bases.toml` (`agent`, or `agent_command`). The drawer's *stop it* stops it.
+With no agent attached, Iso's pane offers a card for each agent isorite knows (Claude Code, OpenCode, omp, Codex, Hermes), saying whether it is found on this machine. *Use in this pane* starts it for the base; *in my terminal* gives isorite's MCP address and, to share the session live with the pane, the `isorite acp --agent "…"` line to run in an ACP front end such as Toad. *Another agent* takes one of the [ACP registry](https://agentclientprotocol.com/get-started/registry), or the command of one it doesn't list (`hermes acp`). The drawer's *change agent* is the same choice later. isorite starts it for the base, behind `isorite acp --pane`, in the repository the base is in, with the server's environment, and starts it again when the base is next opened. It runs a program, so it is chosen from this machine only; the choice is kept in `~/.config/isorite/bases.toml` (`agent`, or `agent_command`). The drawer's *stop it* stops it. A session isorite kept can be removed from the drawer (*remove*): that deletes isorite's copy only, never the agent's own history, and a live session is not removed.
 
 A registry agent is run as the registry says: its program for this platform, fetched once into `~/.local/share/isorite/agents/<id>/<version>/` and checked against its SHA-256; else with `npx -y` or `uvx`. `ISORITE_ACP_REGISTRY` names another registry, an address or a file.
 
@@ -27,6 +27,8 @@ Toad in the terminal, Zed, or JetBrains: give it isorite as its agent, with the 
 ```sh
 isorite acp --agent "npx -y @agentclientprotocol/claude-agent-acp" ~/code/my-project/notes
 ```
+
+For an agent isorite knows by name there is a shorter form: `isorite acp omp`, `opencode`, `claude`, `codex` or `hermes` (the pane's cards show the line for each). A folder of that name here is taken as the notes instead.
 
 Run in a folder with a base in it or under it, the notes can be left out. This starts the isorite server for the notes, unless one is running on port 4767 (`--port <n>` for another), and the agent behind it. Every message passes through: the session is live in the front end and in the pane at once, asked from either. isorite's MCP is added to each session the agent opens, so the agent needs no config of its own for it.
 

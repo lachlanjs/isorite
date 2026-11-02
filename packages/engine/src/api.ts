@@ -97,7 +97,15 @@ export interface TerminalView {
   ours?: number;
   /** Why what the pane last asked of the agent was refused. */
   problem?: string;
+  /** The slash commands the agent offers in this session (ACP's available_commands_update). */
+  commands?: AgentCommand[];
+  /** What the agent lets you set in this session: its modes, and its options such as the model. */
+  settings?: AgentSetting[];
 }
+/** A slash command an agent offers: typed in the box as `/name`, it goes to the agent as the prompt. */
+export interface AgentCommand { name: string; description: string; hint?: string }
+/** One thing to set in an agent's session: a mode, or a config option (the model, say), with what it may be. */
+export interface AgentSetting { kind: "mode" | "config"; id: string; name: string; current: string; options: { value: string; name: string; description?: string }[] }
 /** A prompt and what the agent did with it. `from` says where it was asked: in the terminal, or from a page. `given`:
  *  the notes and passages put before it from the pane (M25). */
 export interface TerminalTurn { id: string; asked: string; from: "terminal" | "here"; items: TerminalItem[]; state: "running" | "done" | "stopped" | "failed"; given?: Given[]; at?: string }
@@ -204,6 +212,8 @@ export interface Api {
   conversation(id?: string): Promise<Conversation | null>;
   /** Every conversation, the newest first (M24, K). */
   conversations(): Promise<ConversationSummary[]>;
+  /** Remove one of Iso's conversations from before M25 (M27). */
+  deleteConversation(id: string): Promise<void>;
   /** The base's own instructions, AGENTS.md at the top of the notes (M15): null while there is none. */
   agents(): Promise<{ text: string | null }>;
   saveAgents(text: string): Promise<void>;
@@ -247,6 +257,8 @@ export interface Api {
   /** The sessions kept, newest first, each as the drawer shows it; or one, whole. */
   agentRecords(): Promise<AgentSession[]>;
   agentRecord(agent: string, session: string): Promise<AgentRecord | null>;
+  /** Remove isorite's kept copy of an agent's session. The agent's own history is not touched. */
+  deleteAgentRecord(agent: string, session: string): Promise<void>;
   /** Listen to everything the engine does, until the returned function is called. */
   events(listener: (event: EngineEvent) => void): () => void;
 }

@@ -540,6 +540,11 @@ export class Engine implements Api {
     try { return text ? (JSON.parse(text) as AgentRecord) : null; } catch { return null; }
   }
 
+  async deleteAgentRecord(agent: string, session: string): Promise<void> {
+    if (!AGENT_ID.test(agent) || !session || session.length > 200) throw new EngineError("an agent's session is named by the agent and its session's id");
+    await this.opts.own.remove(agentRecordPath(agent, session));
+  }
+
   async agentRecords(): Promise<AgentSession[]> {
     const own = this.opts.own, all: AgentSession[] = [];
     for (const a of await own.list(AGENTS_DIR).catch(() => [])) {
@@ -856,6 +861,11 @@ export class Engine implements Api {
     const text = await study.read(conversationPath(id));
     // A turn with no ending in the file was stopped.
     return text === null ? null : { id, turns: readTurns(text) };
+  }
+
+  async deleteConversation(id: string): Promise<void> {
+    if (!TURN_ID.test(id)) throw new EngineError("not a conversation's id");
+    await this.opts.own.remove(conversationPath(id));
   }
 
   async conversations(): Promise<ConversationSummary[]> {

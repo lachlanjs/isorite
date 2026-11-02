@@ -18,6 +18,7 @@ import { locate } from "./serve.ts";
 import { serving } from "./running.ts";
 import { findBrowser } from "./render.ts";
 import { proposal, writeProposal } from "./connect.ts";
+import { ownRepoInfo } from "./own-repo.ts";
 
 export type Outcome = "ok" | "fail" | "warn" | "skip";
 export interface Check { step: string; outcome: Outcome; said: string }
@@ -117,6 +118,12 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
       const { notes } = locate(folder);
       const own = join(notes, OWN_DIR), settings = join(own, SETTINGS_FILE);
       say("notes", "ok", existsSync(own) ? `${notes}, with its ${OWN_DIR}/` : `${notes}: its ${OWN_DIR}/ is made the first time it is opened`);
+      const kept = ownRepoInfo(own, null, env);
+      if (existsSync(own)) say("history", kept.state === "own" ? "ok" : kept.state === "unavailable" ? "skip" : kept.state === "none" ? "skip" : "ok",
+        kept.state === "own" ? `${OWN_DIR}/ is a repository of its own${kept.remotes.length ? `, remote ${kept.remotes.join(", ")}` : `; to keep it elsewhere: git -C ${own} remote add origin <address>`}`
+        : kept.state === "tracked" ? `${OWN_DIR}/ is tracked by the project's repository, so everyone sharing it has isorite's files; to keep them apart, run:\n    ${kept.commands.join("\n    ")}`
+        : kept.state === "shared" ? `${OWN_DIR}/ is in the project's folder, to be committed with it; to keep it apart, run:\n    ${kept.commands.join("\n    ")}`
+        : kept.state === "unavailable" ? `${OWN_DIR}/: git did not answer (${kept.problem})` : `${OWN_DIR}/ is in no git repository`);
       const repository = existsSync(settings) ? parseSettings(readFileSync(settings, "utf8")).repository : undefined;
       const found = repoOf(notes);
       if (!repository && found) say("repository", "ok", `${found}: code links point here`);

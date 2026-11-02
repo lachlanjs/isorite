@@ -34,6 +34,8 @@ class TerminalState {
   shown = $state<"session" | "context" | "past">("session");
   /** Iso's own conversations, from before M25, as the drawer lists them: fetched when it opens. */
   past = $state.raw<ConversationSummary[]>([]);
+  /** The drawer's "change agent" is open: asked for from the header's chip. */
+  changing = $state(false);
   /** Why the last message could not be sent, or an answer not given. */
   problem = $state("");
   private started = false;
@@ -94,6 +96,33 @@ class TerminalState {
     try { await this.api.give(givenOf()); } catch (e) { this.problem = (e as Error).message; }
   }
   async follow(agent: string, session: string): Promise<void> { this.problem = ""; this.old = null; try { await this.api?.follow(agent, session); } catch (e) { this.problem = (e as Error).message; } }
+  /** Set a mode or option of the session shown; the server's view settles it. */
+  async set(kind: "mode" | "config", id: string, value: string): Promise<void> {
+    this.problem = "";
+    try { await this.api?.set(kind, id, value); } catch (e) { this.problem = (e as Error).message; }
+  }
+  /** Remove one of Iso's old conversations (before M25); the drawer lists the rest again. */
+  async forgetPast(id: string): Promise<void> {
+    this.problem = "";
+    try {
+      await app.api.deleteConversation(id);
+      if (this.old?.session === id) this.old = null;
+      this.past = await app.api.conversations();
+    } catch (e) { this.problem = (e as Error).message; }
+  }
+  /** The header's agent chip: the drawer, with the choice of agent open. */
+  change(): void {
+    this.changing = true;
+    if (this.shown !== "past") void this.drawer();
+  }
+  /** Remove isorite's kept copy of a session that is not live (the agent's own history stays). */
+  async forget(agent: string, session: string): Promise<void> {
+    this.problem = "";
+    try {
+      await this.api?.forget(agent, session);
+      if (this.view?.agentId === agent && this.view.session === session) this.old = null;
+    } catch (e) { this.problem = (e as Error).message; }
+  }
   async fresh(agent: string): Promise<void> { this.problem = ""; this.old = null; try { await this.api?.fresh(agent); } catch (e) { this.problem = (e as Error).message; } }
 
   /** The drawer, opened or closed: the agents asked for their sessions again, and Iso's conversations listed. */

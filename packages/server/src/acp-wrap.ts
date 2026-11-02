@@ -270,6 +270,7 @@ export async function acp(path: string | undefined, { agent, port = 4767, input,
     if (c.type === "give") { if (c.text) given.set(c.session, c.text); else given.delete(c.session); }
     if (c.type === "cancel") { const m = { method: "session/cancel", params: { sessionId: c.session } }; tap("ours", m); toAgent(m); }
     if (c.type === "list" && can.list) ask("session/list", { cwd });
+    if (c.type === "set") ask(c.kind === "mode" ? "session/set_mode" : "session/set_config_option", c.kind === "mode" ? { sessionId: c.session, modeId: c.value } : { sessionId: c.session, configId: c.id, value: c.value });
     if (c.type === "open") {
       const params = { cwd, mcpServers: mcp ? [isoriteMcp()] : [] };
       if (!c.session) ask("session/new", params, c.then, c.give);

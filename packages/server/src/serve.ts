@@ -123,7 +123,7 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
       // The agent chosen for this base's pane, started once the server is listening (the wrapper waits for it).
       const agents = new AgentRunner({ base: known.name, url: `http://127.0.0.1:${port}${known.name === first ? "" : `/b/${known.name}`}`, folder: projectOf(known.path).repo, config });
       if (loopback) void agents.start();
-      const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, acp, bases, base: known.name, ...(loopback ? { agents } : {}) });
+      const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, acp, bases, base: known.name, ...(loopback ? { agents } : {}), config });
       return { engine: api, fetch: app.fetch };
     },
   });

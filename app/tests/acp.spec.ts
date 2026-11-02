@@ -29,8 +29,11 @@ test("an ACP agent's session in the pane: asked in the front end, the notes it r
   const part = turn.getByRole("group", { name: "What Scripted drew on" }).getByRole("button", { name: /The bit/ });
   await expect(part).toBeVisible();
   if (!page.viewportSize() || page.viewportSize()!.width > 760) {
-    await part.hover();
-    await expect(turn.locator(".said a.vein.lit")).toHaveCount(1);
+    // Hovered again until it takes: the box's settings arrive as the session opens, and may move the part under the pointer.
+    await expect(async () => {
+      await part.hover();
+      await expect(turn.locator(".said a.vein.lit")).toHaveCount(1, { timeout: 1000 });
+    }).toPass({ timeout: 10_000 });
   }
   const question = turn.locator(".asks");
   await expect(question).toContainText("Why does it drift?");
@@ -86,4 +89,39 @@ test("the agent's sessions in the drawer: a new one from here, the Context view 
   await drawer.getByRole("listitem").filter({ hasText: name }).filter({ hasText: "· live" }).filter({ hasNotText: "fresh" }).getByRole("button").click();
   await expect(log.locator(".turn").filter({ hasText: `fresh ${name}` })).toHaveCount(0);
   await expect(log.locator(".turn").first()).toBeVisible();
+});
+
+test("the agent's slash commands, mode and model in the pane (M27): offered while typing, set from the box's settings, the header says which agent", async ({ page }) => {
+  await page.goto("#/n/basics/bit");
+  await toIso(page);
+  await expect(logOf(page)).toBeVisible();
+
+  // Slash commands: typed, offered; arrows and Tab complete one; it goes to the agent as the prompt.
+  await box(page).fill("/");
+  const menu = page.getByRole("listbox", { name: "Slash commands" });
+  await expect(menu.getByRole("option")).toHaveText([/compact/, /plan/]);
+  await box(page).fill("/pl");
+  await expect(menu.getByRole("option")).toHaveCount(1);
+  await box(page).press("Tab");
+  await expect(box(page)).toHaveValue("/plan ");
+  await expect(menu).toHaveCount(0);
+  await box(page).fill("");
+
+  // What the agent lets you set: its mode and its model, from the box's settings; the agent's answer stands.
+  const mode = page.getByRole("combobox", { name: "Mode", exact: true }), model = page.getByRole("combobox", { name: "Model", exact: true });
+  await expect(mode).toHaveValue("ask");
+  await expect(model).toHaveValue("fast");
+  await mode.selectOption("plan");
+  await model.selectOption("deep");
+  await expect(mode).toHaveValue("plan");
+  await expect(model).toHaveValue("deep");
+  await mode.selectOption("ask");
+  await model.selectOption("fast");
+  await expect(model).toHaveValue("fast");
+
+  // The header names the agent, and its chip opens the choice of another.
+  await page.getByRole("button", { name: "Change agent" }).click();
+  await expect(page.getByRole("region", { name: "Choose your agent" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Sessions" }).click();
 });

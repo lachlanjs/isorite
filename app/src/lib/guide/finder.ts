@@ -51,10 +51,13 @@ export class FinderTerminal implements TerminalApi {
   async follow(): Promise<void> { /* its one session */ }
   async fresh(): Promise<void> { this.#turns = []; this.#given = []; this.#changed(); }
   async list(): Promise<void> { /* its one session */ }
+  async forget(): Promise<void> { /* nothing is kept */ }
+  async set(): Promise<void> { /* the finder has nothing to set */ }
   async project(): Promise<never> { throw new Error("there is no project here"); }
   async writeProject(): Promise<never> { throw new Error("there is no project here"); }
   async chosen(): Promise<never> { throw new Error("no agent is started here"); }
   async registry(): Promise<never> { throw new Error("no agent is started here"); }
+  async known(): Promise<never> { throw new Error("no agent is started here"); }
   async choose(): Promise<never> { throw new Error("no agent is started here"); }
 }
 

@@ -8,7 +8,9 @@
   import type { ChosenAgent, TerminalApi } from "$lib/api.ts";
   import { app } from "$lib/app.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
+  import AttachAgent from "./AttachAgent.svelte";
   import Crystal from "./Crystal.svelte";
+  import OwnFiles from "./OwnFiles.svelte";
 
   const DAY = 86_400_000;
   /** When, as a person says it: today with the time, yesterday, the weekday within a week, else the date. */
@@ -23,13 +25,18 @@
   const many = (n: number, one: string): string => `${n} ${one}${n === 1 ? "" : "s"}`;
   const sessions = $derived(terminal.view?.sessions ?? []);
   const shown = (s: AgentSession): boolean => !terminal.old && s.session === terminal.view?.session && s.agent === terminal.view?.agentId;
-  /** What it is, in a word: at work, live, the agent's own (not seen here), or kept here. */
-  const stateOf = (s: AgentSession): string => (s.busy ? "at work" : s.live ? "live" : s.kept ? (s.open ? "kept" : "kept · to read") : "the agent's own");
+  /** What it is, in a word: at work, live, from the agent's own terminal (it can be carried on here), or kept here. */
+  const stateOf = (s: AgentSession): string => (s.busy ? "at work" : s.live ? "live" : s.kept ? (s.open ? "kept" : "kept · to read") : s.open ? "from its terminal" : "the agent's own");
   /** The agent started for the pane (chosen in the base's settings), to stop from here. */
   const api = (app.api as { terminal?: TerminalApi } | undefined)?.terminal ?? null;
   let chosen = $state.raw<ChosenAgent | null>(null);
   $effect(() => { if (api && ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) void api.chosen().then((c) => (chosen = c), () => undefined); });
   async function detach(): Promise<void> { try { chosen = (await api?.choose(null)) ?? null; } catch (e) { terminal.problem = (e as Error).message; } }
+  /** The session being asked about removing: its kept copy goes, the agent's own history does not. */
+  let removing = $state("");
+  const idOf = (s: AgentSession): string => `${s.agent}/${s.session}`;
+  async function removePast(id: string): Promise<void> { removing = ""; await terminal.forgetPast(id); }
+  async function remove(s: AgentSession): Promise<void> { removing = ""; await terminal.forget(s.agent, s.session); }
   async function choose(s: AgentSession): Promise<void> {
     await terminal.follow(s.agent, s.session);
     if (!terminal.problem) terminal.shown = "session";
@@ -37,15 +44,23 @@
 </script>
 
 <div class="drawer" role="list" aria-label="The agents' sessions">
-  {#if !sessions.length}<p class="faint none">No sessions yet{terminal.acp ? "" : ": attach an agent, and its sessions are kept here"}.</p>{/if}
+  {#if !sessions.length}<p class="faint none">No sessions yet{terminal.acp ? ": those you start in the agent's own terminal show here too, to carry on" : ": attach an agent, and its sessions are kept here"}.</p>{/if}
   {#each sessions as s (`${s.agent}/${s.session}`)}
     <div role="listitem">
-      <button type="button" class="spec frame" class:on={shown(s)} class:live={s.live} data-lustre aria-current={shown(s) ? "true" : undefined} disabled={!s.open && !s.kept} title={!s.open && !s.kept ? `${s.name} isn't attached to carry it on` : undefined} onclick={() => void choose(s)}>
+      <button type="button" class="spec frame" class:on={shown(s)} class:live={s.live} data-lustre aria-current={shown(s) ? "true" : undefined} disabled={!s.open && !s.kept} title={!s.open && !s.kept ? `${s.name} isn't attached to carry it on` : !s.live && !s.kept ? `Carry on here what you did in ${s.name}'s own terminal` : undefined} onclick={() => void choose(s)}>
         <Crystal id={s.session} size={44} growing={s.busy} />
         <span class="m">{s.name} · {stateOf(s)}{when(s.last) ? ` · ${when(s.last)}` : ""}</span>
         <span class="q">{s.title || s.asked || "A session"}</span>
         <span class="m">{s.turns ? `${many(s.notes, "note")} · ${many(s.turns, "turn")}` : "not carried here yet"}</span>
       </button>
+      {#if s.kept && !s.live}
+        {#if removing === idOf(s)}
+          <p class="sure" role="group" aria-label="Remove the kept copy">Remove what isorite kept of this?<span class="faint">The agent's own history stays.</span>
+            <button type="button" class="more bad" onclick={() => void remove(s)}>remove</button> · <button type="button" class="more" onclick={() => (removing = "")}>keep</button></p>
+        {:else}
+          <button type="button" class="more drop" aria-label="Remove the kept copy of {s.title || s.asked || 'this session'}" onclick={() => (removing = idOf(s))}>remove</button>
+        {/if}
+      {/if}
     </div>
   {/each}
   {#if terminal.past.length}
@@ -58,19 +73,35 @@
           <span class="q">{c.asked}</span>
           <span class="m">{many(c.notes, "note")} · {many(c.turns, "turn")}</span>
         </button>
+        {#if removing === `iso/${c.id}`}
+          <p class="sure" role="group" aria-label="Remove this conversation">Remove this conversation with Iso? <button type="button" class="more bad" onclick={() => void removePast(c.id)}>remove</button> · <button type="button" class="more" onclick={() => (removing = "")}>keep</button></p>
+        {:else}
+          <button type="button" class="more drop" aria-label="Remove the conversation {c.asked}" onclick={() => (removing = `iso/${c.id}`)}>remove</button>
+        {/if}
       </div>
     {/each}
   {/if}
   {#if chosen?.running}<p class="faint none">Started for this pane: <code>{chosen.choice && "id" in chosen.choice ? chosen.choice.id : chosen.command}</code> · <button type="button" class="more" onclick={() => void detach()}>stop it</button></p>{/if}
   {#if terminal.problem}<p class="bad none" role="alert">{terminal.problem}</p>{/if}
+  <details class="change none" bind:open={terminal.changing}><summary class="label">change agent</summary><AttachAgent compact /></details>
+  <OwnFiles />
 </div>
 
 <style>
   .drawer { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); align-content: start; gap: 11px; }
   .none { grid-column: 1 / -1; font-size: 12px; }
+  .change { margin-top: 8px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .change summary { cursor: pointer; margin-bottom: 8px; }
   h2.none { margin: 8px 0 0; font-weight: 400; }
   .bad { color: var(--rose); }
   code { font: 11.5px var(--font-mono); overflow-wrap: anywhere; }
+  [role="listitem"] { position: relative; }
+  .drop { position: absolute; top: 8px; right: 12px; font: 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); opacity: 0; transition: opacity var(--t-ack) var(--ease-out); }
+  [role="listitem"]:hover .drop, [role="listitem"]:focus-within .drop, .drop:focus-visible { opacity: 1; }
+  .drop:hover { color: var(--rose); }
+  @media (hover: none) { .drop { opacity: 1; } }
+  .sure { margin: 6px 0 0; font-size: 12px; color: var(--text-soft); }
+  .more.bad { color: var(--rose); }
   .more { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
   .spec { --cut: 8px; --inside: var(--ground-1); --edge: var(--line); width: 100%; padding: 14px; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 4px 14px; align-content: start; text-align: left; color: var(--text-faint); cursor: pointer; --glint: .25; transition: color var(--t-ack) var(--ease-out); }
   .spec :global(.crystal) { grid-row: span 3; }

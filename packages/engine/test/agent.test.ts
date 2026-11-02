@@ -175,3 +175,29 @@ test("a note or a passage sent from the browser is published with what the agent
   expect(events.at(-1)).toEqual({ type: "agent-received", id, agent: "opencode" });
   await expect(engine.agentSend({ note: "no/such", said: "" })).rejects.toThrow(/no such note/);
 });
+
+test("what isorite kept of an agent's session is removed alone: the others stay, and removing it again is not an error", async () => {
+  const { engine } = await open();
+  const record = (session: string) => ({ agent: "omp", name: "omp", session, title: session, at: "2026-10-18T09:00:00Z", last: "2026-10-18T09:05:00Z", turns: [{ id: `t-${session}`, asked: `asked in ${session}`, from: "here" as const, items: [], state: "done" as const, at: "2026-10-18T09:00:00Z" }] });
+  await engine.keepAgentRecord(record("one"));
+  await engine.keepAgentRecord(record("two"));
+  expect((await engine.agentRecords()).map((r) => r.session).sort()).toEqual(["one", "two"]);
+  await engine.deleteAgentRecord("omp", "one");
+  expect((await engine.agentRecords()).map((r) => r.session)).toEqual(["two"]);
+  expect(await engine.agentRecord("omp", "one")).toBeNull();
+  await engine.deleteAgentRecord("omp", "one");
+  await expect(engine.deleteAgentRecord("../x", "one")).rejects.toThrow();
+});
+
+test("one of Iso's old conversations is removed alone; a name that is not a conversation's id is refused", async () => {
+  const clock = { t: Date.parse("2026-10-18T09:00:00Z"), now() { return this.t; } };
+  const own = new MemoryFiles();
+  const engine = await Engine.open({ notes: new MemoryFiles(NOTES), own, clock, device: "laptop1", name: "information-theory" });
+  const one = "01HZZZZZZZZZZZZZZZZZZZZZZA", two = "01HZZZZZZZZZZZZZZZZZZZZZZB";
+  await own.write(`conversations/${one}.jsonl`, "");
+  await own.write(`conversations/${two}.jsonl`, "");
+  await engine.deleteConversation(one);
+  expect(await own.read(`conversations/${one}.jsonl`)).toBeNull();
+  expect(await own.read(`conversations/${two}.jsonl`)).toBe("");
+  await expect(engine.deleteConversation("../etc")).rejects.toThrow();
+});

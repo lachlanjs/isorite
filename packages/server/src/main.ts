@@ -17,6 +17,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { StudyError, citeKind } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { doctor } from "./doctor.ts";
+import { knownCommand } from "./agents.ts";
+import { configPath, rememberBase } from "./config.ts";
+import { repoOf } from "./git.ts";
+import { ownRepoInfo, setHistoryChoice } from "./own-repo.ts";
 import { proxied, rerun, trustSystem } from "./network.ts";
 import { single } from "./self.ts";
 import { newBase, serve } from "./serve.ts";
@@ -107,7 +111,25 @@ export function main(argv: string[]): number | Promise<number> {
     if (command === "new" && rest[0]) {
       const made = newBase(rest[0]);
       // The commands that come next, with the whole path.
-      console.log(`${made}: a knowledge base, empty. Open it in the browser, and attach your agent from Iso's pane:\n  isorite serve ${made}`);
+      const next = `${made}: a knowledge base, empty. Open it in the browser, and attach your agent from Iso's pane:\n  isorite serve ${made}`;
+      // In a git project, asked at a terminal: keep isorite's own files with the project, or apart from it (M27). Nothing is run.
+      if (process.stdin.isTTY && process.stdout.isTTY && repoOf(made)) {
+        return (async () => {
+          const { createInterface } = await import("node:readline/promises");
+          const rl = createInterface({ input: process.stdin, output: process.stdout });
+          let said = "";
+          try { said = (await rl.question(`${made} is in a git project. isorite's own files (.isorite/: journals, kept sessions, settings) can be committed with the project, or kept apart from it, so the people sharing it don't have them.\nKeep them [p]roject / [a]part? (p) `)).trim().toLowerCase(); } finally { rl.close(); }
+          const choice = said.startsWith("a") ? "separate" : "project";
+          setHistoryChoice(rememberBase(made), choice, configPath());
+          if (choice === "separate") {
+            const info = ownRepoInfo(join(made, ".isorite"), "separate");
+            console.log(`\nTo keep them apart, run these (isorite runs no git itself):\n${info.commands.map((c) => `  ${c}`).join("\n")}\n`);
+          }
+          console.log(next);
+          return 0;
+        })();
+      }
+      console.log(next);
       return 0;
     }
     if (command === "serve" && rest[0]) {
@@ -141,13 +163,16 @@ export function main(argv: string[]): number | Promise<number> {
     }
     if (command === "acp") {
       const flag = (name: string) => { const at = rest.indexOf(name); return at < 0 ? undefined : rest[at + 1]; };
-      const agent = flag("--agent"), port = flag("--port") === undefined ? undefined : Number(flag("--port"));
-      if (!agent) { console.error('isorite acp --agent "<the agent\'s ACP command>" [<notes>] [--port <n>] [--pane]'); return 2; }
+      const positional = rest.filter((a, i) => !a.startsWith("--") && !["--port", "--agent", "--url"].includes(rest[i - 1] ?? ""));
+      // An agent by name (`isorite acp omp`), unless that is a folder here; else its command, `--agent "omp acp"`.
+      const named = !flag("--agent") && positional[0] && !existsSync(positional[0]) ? knownCommand(positional[0]) : null;
+      const agent = flag("--agent") ?? named ?? undefined, port = flag("--port") === undefined ? undefined : Number(flag("--port"));
+      if (!agent) { console.error('isorite acp <omp|opencode|claude|codex|hermes> [<notes>] [--port <n>]\nisorite acp --agent "<the agent\'s ACP command>" [<notes>] [--port <n>] [--pane]'); return 2; }
       if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
       // --pane: no front end, the Iso pane alone; --url: the base on the server that started this for it.
       const url = flag("--url"), pane = rest.includes("--pane");
       if (url !== undefined && !/^http:\/\/(127\.0\.0\.1|localhost|\[::1\]):\d+(\/b\/[a-z0-9-]+)?$/.test(url)) { console.error("--url takes a base's address on this machine"); return 2; }
-      const path = rest.find((a, i) => !a.startsWith("--") && !["--port", "--agent", "--url"].includes(rest[i - 1] ?? ""));
+      const path = named ? positional[1] : positional[0];
       return acp(path, { agent, pane, ...(port === undefined ? {} : { port }), ...(url ? { url } : {}) }).catch((e: Error) => { console.error(e.message); return 2; });
     }
     if (command === "model") {

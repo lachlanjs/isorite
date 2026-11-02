@@ -14,7 +14,9 @@ import { given as withGiven, type AcpFollower, type Rpc } from "./acp.ts";
 import { McpEndpoint, agentName, clientName, type Rpc as McpRpc } from "./mcp-http.ts";
 import { VERSION } from "./version.ts";
 import { proposal, writeProposal } from "./connect.ts";
-import { registryAgents, type AgentRunner } from "./agents.ts";
+import { knownAgents, registryAgents, type AgentRunner } from "./agents.ts";
+import { configPath } from "./config.ts";
+import { historyChoice, ownRepoInfo, setHistoryChoice } from "./own-repo.ts";
 
 export const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
 export const TOKEN_HEADER = "x-isorite-token";
@@ -38,6 +40,8 @@ export interface ServerOptions {
   /** The other bases the server holds (M20), and this one's name among them. */
   bases?: BasesPort;
   base?: string;
+  /** The configuration's file, where what this machine chose for a base is kept. */
+  config?: string;
 }
 
 const TYPES: Record<string, string> = {
@@ -67,7 +71,7 @@ const AgentEdit = z.union([
 const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [], notes, acp, bases, base, agents }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes, acp, bases, base, agents, config }: ServerOptions): Hono {
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -186,6 +190,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   app.get("/api/agents/notes", (c) => answer(c, () => api.agentNotes()));
   post("/api/agents/notes", z.object({ may: z.boolean() }).strict(), (_c, b) => api.setAgentNotes(b.may));
   app.get("/api/conversations", (c) => answer(c, () => api.conversations()));
+  post("/api/conversation/delete", z.object({ id: z.string().max(64) }).strict(), (_c, b) => api.deleteConversation(b.id));
   app.get("/api/conversation", (c) => answer(c, async () => (await api.conversation(c.req.query("id") || undefined)) ?? { id: "", turns: [] }));
   post("/api/note/restore", z.object({ entry: z.string().max(64), base: z.string().max(64) }).strict(), (c, b) => api.restore(id(c), b.entry, b.base));
   post("/api/note/move", z.object({ to: z.string().max(400), base: z.string().max(64) }).strict(), (c, b) => api.moveNote(id(c), b.to, b.base));
@@ -233,6 +238,18 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   post("/api/agent/received", z.object({ id: z.string().max(64), agent: AgentName }).strict(), (_c, b) => api.agentReceived(b.id, b.agent));
   post("/api/agent/status", AgentStatus, (_c, b) => api.agentStatus(b.agent, b.session, b.busy));
   post("/api/agent/take", z.object({ id: z.string().max(64) }).strict(), (_c, b) => api.agentTake(b.id));
+  // Where isorite's own files are kept (M27): in a repository of their own, or the project's; with the commands to
+  // copy. From this machine only: it names folders.
+  if (notes) {
+    const configFile = config ?? configPath();
+    app.get("/api/own/repo", (c) => answer(c, async () => (local(c) ? ownRepoInfo(join(notes, ".isorite"), base ? historyChoice(base, configFile) : null) : null)));
+    post("/api/own/choose", z.object({ choice: z.enum(["project", "separate"]) }).strict(), async (c, b) => {
+      if (!local(c)) throw new EngineError("this is chosen only from this machine", 403);
+      if (!base) throw new EngineError("this base has no name here", 409);
+      setHistoryChoice(base, b.choice, configFile);
+      return ownRepoInfo(join(notes, ".isorite"), b.choice);
+    });
+  }
   // The project's MCP config (M25): shown, then written on a yes, from this machine only.
   if (notes) {
     app.get("/api/connect", (c) => answer(c, async () => proposal(notes)));
@@ -246,6 +263,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   // program, so it is done from this machine only.
   if (agents) {
     app.get("/api/acp/agent", (c) => answer(c, async () => agents.state()));
+    app.get("/api/acp/known", (c) => answer(c, async () => (local(c) ? knownAgents() : [])));
     app.get("/api/acp/registry", (c) => answer(c, async () => registryAgents().catch((e: Error) => { throw new EngineError(e.message, 502); })));
     const Choice = z.union([z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/) }).strict(), z.object({ command: z.string().min(1).max(1000) }).strict(), z.null()]);
     post("/api/acp/choose", z.object({ choice: Choice }).strict(), async (c, b) => {
@@ -306,6 +324,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
     // What is in the pane's tray: what the session shown has not been given yet goes before its next prompt.
     post("/api/acp/give", z.object({ given: z.array(Given).max(40) }).strict(), async (_c, b) => { await acp.give(b.given as GivenPart[], await render()).catch(refused); });
     post("/api/acp/follow", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await acp.follow(b.agent, b.session).catch(refused); });
+    post("/api/acp/forget", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await acp.forget(b.agent, b.session).catch(refused); });
+    post("/api/acp/set", z.object({ kind: z.enum(["mode", "config"]), id: z.string().max(100), value: z.string().max(200) }).strict(), async (_c, b) => { try { acp.set(b.kind, b.id, b.value); } catch (e) { throw new EngineError((e as Error).message, 409); } });
     post("/api/acp/new", z.object({ agent: z.string().max(40) }).strict(), async (_c, b) => { await acp.fresh(b.agent).catch(refused); });
     post("/api/acp/list", z.object({}).strict(), async () => { acp.refresh(); });
     post("/api/acp/tap", z.object({ link: z.string().min(1).max(100), messages: z.array(z.object({ way: z.enum(["in", "out", "ours"]), message: z.record(z.string(), z.unknown()) }).strict()).max(1000) }).strict(), async (_c, b) => { acp.tap(b.link, b.messages as { way: "in" | "out" | "ours"; message: Rpc }[]); });
