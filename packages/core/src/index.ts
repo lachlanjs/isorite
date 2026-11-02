@@ -5,7 +5,7 @@
 export { AGENTS_FILE, Bundle, Concept, Directory, OKF_VERSION, citeKind, type FileKind } from "./bundle.ts";
 export { fileType, pictureSize, pictureType } from "./picture.ts";
 export type { Cite, FileEntry, Issue, IssueCode, Link, Trust } from "./bundle.ts";
-export { FrontmatterError, dumpFrontmatter, frontmatterText, parseYaml, splitFrontmatter } from "./frontmatter.ts";
+export { FrontmatterError, dumpFrontmatter, frontmatterText, parseYaml, repairFrontmatter, splitFrontmatter } from "./frontmatter.ts";
 export type { Meta } from "./frontmatter.ts";
 export { editFrontmatter, spliceText, splitSource } from "./source.ts";
 export { RATINGS, headings, linkRefs, linkTexts, rating, section, slugify } from "./markdown.ts";

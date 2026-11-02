@@ -3,7 +3,7 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  AGENTS_FILE, STRENGTH, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, pending, readJournal, reconcile, splitFrontmatter, stamp, written, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
+  AGENTS_FILE, STRENGTH, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, pending, readJournal, reconcile, repairFrontmatter, splitFrontmatter, stamp, written, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
 import { Conflict, EngineError, MAX_FILE_BYTES, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session } from "./api.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Similar, type ToolDef } from "./lookup.ts";
@@ -785,6 +785,8 @@ export class Engine implements Api {
   private async put(id: string, text: string, base: string | null, why: "edit" | "restore" = "edit", extra: { to?: string; asked?: string } = {}, who = "you"): Promise<Saved & { entry?: string }> {
     const { files, path } = this.where(id);
     if (text.length > MAX_NOTE_BYTES) throw new EngineError("note too large", 413);
+    // An agent's unquoted colon in a field (`title: Foo: bar`) is quoted for it; what you type is never rewritten under you.
+    if (who !== "you" && path.endsWith(".md")) text = repairFrontmatter(text)?.text ?? text;
     const now = await files.read(path);
     if (base === null && now !== null) throw new EngineError(`there is already a note at ${id}`, 409);
     if (base !== null && now === null) throw new Conflict(`${id} is gone`, null);
