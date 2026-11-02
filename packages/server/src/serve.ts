@@ -9,7 +9,7 @@ import { hostname } from "node:os";
 import { serve as nodeServe } from "@hono/node-server";
 import { CONFIG_FILE, GITATTRIBUTES, OWN_DIR, StudyError } from "@isorite/core";
 import { Engine, systemClock, type ArtifactRun, type Elsewhere, type Embedder } from "@isorite/engine";
-import { configPath, deviceId, rememberBase } from "./config.ts";
+import { configPath, deviceId, rememberBase, touchBase } from "./config.ts";
 import { repoOf } from "./git.ts";
 import { Bases } from "./bases.ts";
 import { cacheDir, modelDir, nodeEmbedder } from "./embedder.ts";
@@ -112,6 +112,7 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
   const opened = locate(path);
   const device = deviceId(config);
   const first = rememberBase(opened.notes, { path: config });
+  touchBase(opened.notes, { path: config });
   const embedder = model ? nodeEmbedder(model) : null;
   const token = randomBytes(24).toString("base64url"), loopback = LOOPBACK.has(host);
   const web = existsSync(join(WEB_DIR, "index.html")) ? WEB_DIR : null;
@@ -141,7 +142,7 @@ export async function serve(path: string, { host = "127.0.0.1", port = 4767, all
     process.exit(1);
   });
   console.log(`isorite: ${notes}`);
-  console.log(embedder ? "  search by meaning: on" : "  search by meaning: off (isorite model fetches its model)");
+  console.log(embedder ? "  search by meaning: on" : "  search by meaning: off (isorite model fetches its model, 53 MB)");
   const lent = bases.lent().filter((l) => l.name !== bases.first).map((l) => l.name);
   if (lent.length) console.log(`  lent to every session: ${lent.join(", ")} (isorite bases)`);
   console.log(existsSync(join(WEB_DIR, "index.html")) ? `  ${link(`http://localhost:${port}/`)}` : `  the app is not built (npm run build); the engine alone is at http://localhost:${port}/api/`);

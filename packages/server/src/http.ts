@@ -14,8 +14,9 @@ import { given as withGiven, type AcpFollower, type Rpc } from "./acp.ts";
 import { McpEndpoint, agentName, clientName, type Rpc as McpRpc } from "./mcp-http.ts";
 import { VERSION } from "./version.ts";
 import { proposal, writeProposal } from "./connect.ts";
-import { knownAgents, registryAgents, type AgentRunner } from "./agents.ts";
+import { registryAgents, type AgentRunner } from "./agents.ts";
 import { configPath } from "./config.ts";
+import { listAgents } from "./detect.ts";
 import { historyChoice, ownRepoInfo, setHistoryChoice } from "./own-repo.ts";
 
 export const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -263,7 +264,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   // program, so it is done from this machine only.
   if (agents) {
     app.get("/api/acp/agent", (c) => answer(c, async () => agents.state()));
-    app.get("/api/acp/known", (c) => answer(c, async () => (local(c) ? knownAgents() : [])));
+    // Which known agents are installed here, and whether their keys are set, by name only; from this machine only.
+    app.get("/api/acp/detected", (c) => answer(c, async () => { if (!local(c)) throw new EngineError("agents are looked for only from this machine", 403); return listAgents(); }));
     app.get("/api/acp/registry", (c) => answer(c, async () => registryAgents().catch((e: Error) => { throw new EngineError(e.message, 502); })));
     const Choice = z.union([z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/) }).strict(), z.object({ command: z.string().min(1).max(1000) }).strict(), z.null()]);
     post("/api/acp/choose", z.object({ choice: Choice }).strict(), async (c, b) => {

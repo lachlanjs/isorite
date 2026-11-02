@@ -57,7 +57,7 @@ export class FinderTerminal implements TerminalApi {
   async writeProject(): Promise<never> { throw new Error("there is no project here"); }
   async chosen(): Promise<never> { throw new Error("no agent is started here"); }
   async registry(): Promise<never> { throw new Error("no agent is started here"); }
-  async known(): Promise<never> { throw new Error("no agent is started here"); }
+  async detected(): Promise<never> { throw new Error("no agent is started here"); }
   async choose(): Promise<never> { throw new Error("no agent is started here"); }
 }
 

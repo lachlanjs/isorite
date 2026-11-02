@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, expect, test } from "vitest";
 import { rememberBase } from "../src/config.ts";
-import { historyChoice, ownRepoInfo, setHistoryChoice } from "../src/own-repo.ts";
+import { askWhereFilesLive, historyChoice, ownRepoInfo, setHistoryChoice } from "../src/own-repo.ts";
 
 const root = mkdtempSync(join(tmpdir(), "isorite-own-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -66,16 +66,35 @@ test("notes in no repository have nothing to ask; the answer is kept in bases.to
   expect(() => setHistoryChoice("nope", "project", config)).toThrow();
 });
 
-test("an agent known by name has its ACP command, for isorite acp <name>", async () => {
-  const { knownCommand, knownAgents } = await import("../src/agents.ts");
+test("an agent known by name has its ACP command, for isorite acp <name>; every known agent is listed, found ones first", async () => {
+  const { knownCommand, listAgents } = await import("../src/detect.ts");
   expect(knownCommand("omp")).toBe("omp acp");
   expect(knownCommand("claude")).toBe("npx -y @agentclientprotocol/claude-agent-acp");
   expect(knownCommand("nope")).toBeNull();
-  // Found ones first: a PATH holding one program of that name finds it.
   const bin = join(root, "bin");
   mkdirSync(bin, { recursive: true });
   writeFileSync(join(bin, "hermes"), "#!/bin/sh\n");
-  const all = await knownAgents({ ...env, PATH: bin, ISORITE_ACP_REGISTRY: join(root, "none.json") });
-  expect(all.map((a) => `${a.key}:${a.found}`)).toEqual(["hermes:true", "claude:false", "opencode:false", "omp:false", "codex:false"]);
-  expect(all[0]!.choice).toEqual({ command: "hermes acp" });
+  execFileSync("chmod", ["755", join(bin, "hermes")]);
+  const all = listAgents({ PATH: bin });
+  expect(all.map((a) => `${a.id}:${a.found}`)).toEqual(["hermes:true", "claude:false", "codex:false", "opencode:false", "omp:false"]);
+  expect(all[1]!.note).toContain("isn't on this machine's PATH");
+});
+
+test("the question for a new base: nothing outside a project; apart says the commands and keeps the answer; the default is with the project", async () => {
+  const config = join(root, "ask", "config.toml");
+  const said: string[] = [];
+  // No project: not asked.
+  const loose = join(root, "ask-loose", "notes");
+  mkdirSync(join(loose, ".isorite"), { recursive: true });
+  expect(await askWhereFilesLive(loose, async () => { throw new Error("asked"); }, (l) => said.push(l), config, env)).toBeNull();
+  // In a project: apart.
+  const p = project("ask-apart");
+  const notes = join(p.repo, "docs");
+  expect(await askWhereFilesLive(notes, async () => "a", (l) => said.push(l), config, env)).toBe("separate");
+  expect(said.join("\n")).toContain("isorite runs no git itself");
+  expect(said.join("\n")).toContain("init");
+  expect(existsSync(join(p.own, ".git"))).toBe(false);
+  // Anything else, or nothing: with the project.
+  const q = project("ask-with");
+  expect(await askWhereFilesLive(join(q.repo, "docs"), async () => "", () => undefined, config, env)).toBe("project");
 });

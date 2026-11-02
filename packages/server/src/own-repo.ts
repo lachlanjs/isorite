@@ -7,7 +7,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { basesPath, readConfig, table, writeConfig } from "./config.ts";
+import { basesPath, readConfig, rememberBase, table, writeConfig } from "./config.ts";
 import { plainGitEnv, repoOf } from "./git.ts";
 
 /** What was chosen: keep them with the project (as before), or apart. */
@@ -72,4 +72,18 @@ export function ownRepoInfo(own: string, choice: HistoryChoice | null = null, en
   } catch (e) {
     return { ...base, state: "unavailable", problem: (e as Error).message.split("\n")[0] ?? "git did not answer" };
   }
+}
+
+/** For a base just made in a git project: ask whether its own files stay with the project or apart, keep the answer
+ *  for this machine, and say the commands for apart. Asks nothing outside a project. isorite runs none of it. */
+export async function askWhereFilesLive(notes: string, ask: (question: string) => Promise<string>, out: (line: string) => void, config: string, env: NodeJS.ProcessEnv = process.env): Promise<HistoryChoice | null> {
+  if (!repoOf(notes)) return null;
+  const said = (await ask(`${notes} is in a git project. isorite's own files (.isorite/: journals, kept sessions, settings) can be committed with the project, or kept apart from it, so the people sharing it don't have them.\nKeep them [p]roject / [a]part? (p) `)).trim().toLowerCase();
+  const choice: HistoryChoice = said.startsWith("a") ? "separate" : "project";
+  setHistoryChoice(rememberBase(notes, { path: config }), choice, config);
+  if (choice === "separate") {
+    const info = ownRepoInfo(join(notes, ".isorite"), "separate", env);
+    out(`\nTo keep them apart, run these (isorite runs no git itself):\n${info.commands.map((c) => `  ${c}`).join("\n")}\n`);
+  }
+  return choice;
 }

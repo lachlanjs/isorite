@@ -35,14 +35,13 @@ If the company's authority isn't installed on the machine, name its certificate 
 
 ## 2. Your notes
 
-A folder of Markdown files. To start from nothing:
+A folder of Markdown files. In your project's folder:
 
 ```sh
-isorite new ~/notes/my-project
-isorite serve ~/notes/my-project
+isorite
 ```
 
-`isorite new` makes the folder, empty but for isorite's own `.isorite/`. A folder of notes you have already is opened as it is, with `isorite serve`. It prints a link to click: `http://localhost:4767/`. isorite keeps what it needs in the folder's `.isorite/`.
+It opens the base it finds there (a folder with `.isorite/` in it, the project's top folder or its `notes/`); with none it offers to make `notes/`; from any other folder it lists the bases this machine knows, last used first, with a new base here and the guide. It opens your browser, and prints the link too: `http://localhost:4767/` (the next free port if that one is taken; `--port <n>` to choose, `--no-open` to leave the browser alone). To name a folder yourself: `isorite new ~/notes/my-project`, then `isorite serve ~/notes/my-project`. A folder of notes you have already is opened as it is. isorite keeps what it needs in the folder's `.isorite/`.
 
 How you want the base kept (your notation, the level, the language, how notes are named) goes in `AGENTS.md` at the top of the notes, which every agent you attach is given. Edit it in Iso's settings, the icon at the right of its pane's header, or in any editor. An agent may offer a line for it when you say how you want things done.
 
@@ -71,6 +70,8 @@ lend = true
 ```
 
 ## Search by meaning (optional)
+
+The first start without the model offers it, once; a no is remembered. Later, or by hand:
 
 ```sh
 isorite model

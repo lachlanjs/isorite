@@ -44,18 +44,17 @@ export interface TerminalApi {
    *  none, from this machine only. */
   chosen(): Promise<ChosenAgent>;
   registry(): Promise<RegistryAgent[]>;
-  /** The agents isorite knows by name, found on this machine or not, found ones first. */
-  known(): Promise<KnownAgent[]>;
+  /** The known agents on this machine, found or not, found ones first, and whether their keys are set where the server started (M26, M27). */
+  detected(): Promise<DetectedAgent[]>;
   choose(choice: AgentChoice | null): Promise<ChosenAgent>;
 }
 export interface ProjectConfig { repo: string; files: { file: string; harness: string; current: boolean; before: string | null; after: string }[] }
 export type AgentChoice = { id: string } | { command: string };
-export interface ChosenAgent { choice: AgentChoice | null; running: boolean; command: string; problem: string; said: string }
+export interface ChosenAgent { choice: AgentChoice | null; running: boolean; command: string; problem: string; said: string; hint: string }
+export interface DetectedAgent { found: boolean; id: string; name: string; command: string; path: string; keys: string[]; keySet: boolean; ready: boolean; note: string }
 /** Where isorite's own files are kept (M27): in a repository of their own, or with the project's, what this machine chose,
  *  and the commands to copy. isorite runs none of them. */
 export interface OwnRepoInfo { state: "own" | "tracked" | "shared" | "none" | "unavailable"; path: string; project: string | null; remotes: string[]; choice: "project" | "separate" | null; ask: boolean; commands: string[]; problem: string }
-/** An agent isorite knows by name, found on this machine or not (M27). */
-export interface KnownAgent { key: string; name: string; found: boolean; choice: AgentChoice; command: string; bin: string }
 export interface RegistryAgent { id: string; name: string; version: string; description: string; site: string; how: "npx" | "uvx" | "binary" | null }
 
 /** The bases the server holds (M20), as the switcher lists them. */
@@ -163,7 +162,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       writeProject: async () => (await write<{ written: string[] }>("POST", "connect", {})).written,
       chosen: () => ask<ChosenAgent>("acp/agent"),
       registry: () => ask<RegistryAgent[]>("acp/registry"),
-      known: () => ask<KnownAgent[]>("acp/known"),
+      detected: () => ask<DetectedAgent[]>("acp/detected"),
       choose: (choice) => write<ChosenAgent>("POST", "acp/choose", { choice }),
     },
     events(listener) {

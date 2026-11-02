@@ -37,6 +37,16 @@ describe("isorite doctor", () => {
     expect(text).not.toContain("sk-or-old");
   });
 
+  it("takes over isorite check: the notes' links in a line, a broken one named", async () => {
+    const notes = mkdtempSync(join(tmpdir(), "isorite-doctor-notes-"));
+    made.push(notes);
+    mkdirSync(join(notes, ".isorite"));
+    writeFileSync(join(notes, "a.md"), "---\ntitle: A\n---\n\nSee [[nowhere]].\n");
+    const { text } = await run(DEVICE, { offline: true, folder: notes, env: { ISORITE_EMBED: "off" } });
+    expect(text).toMatch(/[✓!✗] links: 1 notes; \d+ errors, \d+ warnings, 0 requires cycles/);
+    expect(text).toContain("a.md");
+  });
+
   it("fails a configuration that can't be read", async () => {
     const { code, text } = await run("device = \n", { offline: true });
     expect(text).toMatch(/✗ config: .*config\.toml/);

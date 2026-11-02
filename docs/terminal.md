@@ -9,14 +9,14 @@ Setting isorite up the first time is in [setup.md](setup.md).
 Keep the project's notes in a folder of their own, often inside the project's repository (`notes/`), or beside it (`~/notes/<project>`). It can start empty: `isorite new <folder>` makes it. isorite keeps what it needs in the folder's `.isorite/` (the journals of every change, the sessions it carried, and its settings), made the first time the folder is opened. Commit `.isorite/` with the notes, if they're in git.
 
 ```sh
-isorite serve ~/code/my-project/notes
+isorite          # in the project: finds its base, opens the browser (isorite serve <notes> names one yourself)
 ```
 
 ## Three ways in
 
 ### In Iso's pane
 
-With no agent attached, Iso's pane offers a card for each agent isorite knows (Claude Code, OpenCode, omp, Codex, Hermes), saying whether it is found on this machine. *Use in this pane* starts it for the base; *in my terminal* gives isorite's MCP address and, to share the session live with the pane, the `isorite acp --agent "…"` line to run in an ACP front end such as Toad. *Another agent* takes one of the [ACP registry](https://agentclientprotocol.com/get-started/registry), or the command of one it doesn't list (`hermes acp`). The drawer's *change agent* is the same choice later. isorite starts it for the base, behind `isorite acp --pane`, in the repository the base is in, with the server's environment, and starts it again when the base is next opened. It runs a program, so it is chosen from this machine only; the choice is kept in `~/.config/isorite/bases.toml` (`agent`, or `agent_command`). The drawer's *stop it* stops it. A session isorite kept can be removed from the drawer (*remove*): that deletes isorite's copy only, never the agent's own history, and a live session is not removed.
+With no agent attached, Iso's pane offers a card for each agent isorite knows (Claude Code, OpenCode, omp, Codex, Hermes), saying whether it is found on this machine's PATH and, for those that read a key, whether it is set where isorite was started (by name; no key is read or kept). *Use in this pane* starts it for the base; *in my terminal* gives isorite's MCP address and, to share the session live with the pane, the `isorite acp <agent>` line to run in an ACP front end such as Toad. *Another agent* takes one of the [ACP registry](https://agentclientprotocol.com/get-started/registry), or the command of one it doesn't list (`hermes acp`). The drawer's *change agent* is the same choice later. isorite starts it for the base, behind `isorite acp --pane`, in the repository the base is in, with the server's environment, and starts it again when the base is next opened. It runs a program, so it is chosen from this machine only; the choice is kept in `~/.config/isorite/bases.toml` (`agent`, or `agent_command`). The drawer's *stop it* stops it. A session isorite kept can be removed from the drawer (*remove*): that deletes isorite's copy only, never the agent's own history, and a live session is not removed.
 
 A registry agent is run as the registry says: its program for this platform, fetched once into `~/.local/share/isorite/agents/<id>/<version>/` and checked against its SHA-256; else with `npx -y` or `uvx`. `ISORITE_ACP_REGISTRY` names another registry, an address or a file.
 

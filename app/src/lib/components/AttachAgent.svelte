@@ -4,7 +4,7 @@
   // terminal (isorite's MCP in its config; and, to share the session live with the pane, run behind `isorite acp` in
   // an ACP front end). An agent of the ACP registry, or a command of your own, is under "another agent". Choosing is
   // from this machine only, since it runs a program. With `compact` it is the drawer's "change agent": no heading.
-  import type { AgentChoice, ChosenAgent, KnownAgent, ProjectConfig, RegistryAgent, TerminalApi } from "$lib/api.ts";
+  import type { AgentChoice, ChosenAgent, DetectedAgent, ProjectConfig, RegistryAgent, TerminalApi } from "$lib/api.ts";
   import { app } from "$lib/app.svelte.ts";
   import { baseHere } from "$lib/here.ts";
   import OwnFiles from "./OwnFiles.svelte";
@@ -16,7 +16,7 @@
 
   let problem = $state("");
   let chosen = $state.raw<ChosenAgent | null>(null);
-  let known = $state.raw<KnownAgent[] | null>(null);
+  let known = $state.raw<DetectedAgent[] | null>(null);
   let starting = $state("");
   /** The card whose terminal steps are open, and whether another agent's form is. */
   let terminalOf = $state("");
@@ -26,12 +26,12 @@
   $effect(() => {
     if (!api || !local) return;
     void api.chosen().then((c) => (chosen = c), () => undefined);
-    void api.known().then((k) => (known = k), () => (known = []));
+    void api.detected().then((k) => (known = k), () => (known = []));
   });
   const same = (a: AgentChoice | null | undefined, b: AgentChoice): boolean => !!a && ("id" in a ? "id" in b && a.id === b.id : "command" in b && a.command === b.command);
-  const on = (a: KnownAgent): boolean => same(chosen?.choice, a.choice) || same(chosen?.choice, { command: a.command });
-  const nameOf = (c: AgentChoice | null | undefined): string => (!c ? "" : known?.find((a) => same(c, a.choice) || ("command" in c && c.command === a.command))?.name ?? ("command" in c ? c.command : c.id));
-  const line = (a: KnownAgent): string => `isorite acp ${a.key}`;
+  const on = (a: DetectedAgent): boolean => same(chosen?.choice, { command: a.command });
+  const nameOf = (c: AgentChoice | null | undefined): string => (!c ? "" : known?.find((a) => "command" in c && c.command === a.command)?.name ?? ("command" in c ? c.command : c.id));
+  const line = (a: DetectedAgent): string => `isorite acp ${a.id}`;
 
   async function choose(choice: AgentChoice | null, key = ""): Promise<void> {
     problem = "";
@@ -87,24 +87,25 @@
     {#if local}
       {#if known === null}<p class="faint">Looking for agents on this machine…</p>{/if}
       <ul class="cards">
-        {#each known ?? [] as a (a.key)}
+        {#each known ?? [] as a (a.id)}
           <li class="card frame" class:on={on(a)} class:absent={!a.found} data-lustre>
             <div class="head"><b>{a.name}</b><span class="state">{on(a) ? (chosen?.running ? "in this pane · running" : "in this pane") : a.found ? "found" : "not found"}</span></div>
+            {#if a.found}<p class="faint note">{a.note}</p>{/if}
             <div class="acts">
               {#if on(a)}
-                <button type="button" class="more" disabled={!!starting} onclick={() => void choose(a.choice, a.key)}>start it again</button> · <button type="button" class="more" disabled={!!starting} onclick={() => void choose(null)}>stop</button>
+                <button type="button" class="more" disabled={!!starting} onclick={() => void choose({ command: a.command }, a.id)}>start it again</button> · <button type="button" class="more" disabled={!!starting} onclick={() => void choose(null)}>stop</button>
               {:else}
-                <button type="button" class="btn" disabled={!!starting || !a.found} title={a.found ? undefined : `${a.bin} isn't on this machine's PATH`} onclick={() => void choose(a.choice, a.key)}>{starting === a.key ? "starting…" : "use in this pane"}</button>
+                <button type="button" class="btn" disabled={!!starting || !a.found || !a.ready} title={!a.found ? `${a.name} isn't on this machine's PATH` : !a.ready ? a.note : undefined} onclick={() => void choose({ command: a.command }, a.id)}>{starting === a.id ? "starting…" : "use in this pane"}</button>
               {/if}
-              <button type="button" class="more" aria-expanded={terminalOf === a.key} onclick={() => (terminalOf = terminalOf === a.key ? "" : a.key)}>in my terminal</button>
+              <button type="button" class="more" aria-expanded={terminalOf === a.id} onclick={() => (terminalOf = terminalOf === a.id ? "" : a.id)}>in my terminal</button>
             </div>
-            {#if terminalOf === a.key}
+            {#if terminalOf === a.id}
               <div class="steps">
                 <p><b>1.</b> Give {a.name} isorite's tools. Add this MCP address to its config, or write the project's config:</p>
-                <p class="line"><code>{mcpUrl}</code> <button type="button" class="more" onclick={() => void copy(mcpUrl, `${a.key}-mcp`)}>{copied === `${a.key}-mcp` ? "copied" : "copy"}</button></p>
+                <p class="line"><code>{mcpUrl}</code> <button type="button" class="more" onclick={() => void copy(mcpUrl, `${a.id}-mcp`)}>{copied === `${a.id}-mcp` ? "copied" : "copy"}</button></p>
                 <p><b>2.</b> Then run {a.name} as you do. It reads and cites the notes, and the Atlas shows what it read. <span class="faint">The pane won't show that conversation.</span></p>
                 <p><b>Live in both places?</b> Run it from an ACP front end such as Toad or Zed with this as its agent, and the same session shows here as it happens:</p>
-                <p class="line"><code>{line(a)}</code> <button type="button" class="more" onclick={() => void copy(line(a), `${a.key}-acp`)}>{copied === `${a.key}-acp` ? "copied" : "copy"}</button></p>
+                <p class="line"><code>{line(a)}</code> <button type="button" class="more" onclick={() => void copy(line(a), `${a.id}-acp`)}>{copied === `${a.id}-acp` ? "copied" : "copy"}</button></p>
               </div>
             {/if}
           </li>
@@ -115,7 +116,7 @@
         <button type="button" class="more" aria-expanded={showConfig} onclick={() => void look()}>the project's config</button>
         {#if chosen?.choice && !known?.some(on)} · <span class="faint">in this pane: <span class="chosen">{nameOf(chosen.choice)}</span> <button type="button" class="more" onclick={() => void choose(null)}>stop</button></span>{/if}
       </p>
-      {#if chosen?.problem}<p class="bad" role="alert">{chosen.problem}{chosen.said ? `: ${chosen.said.trim().split("\n").at(-1)}` : ""}</p>{/if}
+      {#if chosen?.problem}<p class="bad" role="alert">{chosen.problem}{chosen.hint ? `: ${chosen.hint}` : chosen.said ? `: ${chosen.said.trim().split("\n").at(-1)}` : ""}</p>{/if}
       {#if other}
         <form class="pick" onsubmit={attach}>
           {#if agents === null}<p class="faint">Reading the ACP registry…</p>
@@ -161,6 +162,7 @@
   .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .state { font: 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); text-align: right; }
   .card.on .state { color: var(--growth); }
+  .note { margin: 0; font-size: 11.5px; }
   .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
   .steps { display: grid; gap: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
   .line { display: flex; gap: 8px; align-items: baseline; }

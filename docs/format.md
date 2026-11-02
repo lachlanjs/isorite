@@ -32,7 +32,7 @@ In a project shared with people who may not use isorite, it can be kept apart fr
   settings.toml                   the base's settings: its repository
 ```
 
-- **`settings.toml`** has one setting so far: `repository = "../code"`, the folder code links point into, relative to the notes folder (or absolute). `isorite term` writes it, from the folder it runs in, the first time it is run beside the base; after that it is yours to change.
+- **`settings.toml`** has one setting so far: `repository = "../code"`, the folder code links point into, relative to the notes folder (or absolute). isorite writes it, from the folder an agent is first attached in beside the base; after that it is yours to change.
 
 - **A note for Iso** is a draft: `drafts/<id>.md`, an OKF note like any other, whose id is a lower-case ULID. Wherever notes are named it is `@draft/<id>`, and its journal is at `journal/@draft/<id>.jsonl`. When Iso's reply is kept as a note the draft's file is removed and its journal stays.
 - **Format 1** kept these in a study base, a separate repository beside the notes with an `isorite.toml`. isorite no longer opens one. `isorite migrate <study base>` copies its journals, conversations, Understanding notes and drafts into `.isorite/`, writes each exercise as a problem note among the notes (its journal following it), and leaves the study record behind. The study base itself is only read. With journals already in `.isorite/` it stops, unless given `--merge`: then journals are united by entry id, as two devices' are.
