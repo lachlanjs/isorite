@@ -109,6 +109,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     createNote: (id, text) => write("POST", "note" + q(id), { text }),
     journal: (id) => ask("journal" + q(id)),
     version: async (id, entry) => (await ask<{ text: string }>("version" + q(id) + "&entry=" + encodeURIComponent(entry))).text,
+    makeFolder: (path) => write("POST", "folder", { path }),
     moveNote: (id, to, base) => write("POST", "note/move" + q(id), { to, base }),
     deleteNote: async (id, base) => { await write("POST", "note/delete" + q(id), { base }); },
     restore: (id, entry, base) => write("POST", "note/restore" + q(id), { entry, base }),

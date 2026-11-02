@@ -203,6 +203,8 @@ export interface Api {
   /** Move a note of the base to another id: a new name, or another folder (made if need be). Its journal goes with
    *  it; links to it are changed to match, as your own edits. `base` as for saveNote. */
   moveNote(id: string, to: string, base: string): Promise<Saved>;
+  /** Make an empty folder (M31), so a note can be moved or made into it. */
+  makeFolder(path: string): Promise<void>;
   /** Resolve a question or say a problem is solved, today, or open it again (M12). `base` as for saveNote. */
   setDone(id: string, done: boolean, base: string): Promise<Saved>;
   /** Delete a note of the base. Its journal stays, and links to it are left, broken. `base` as for saveNote. */

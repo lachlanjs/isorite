@@ -14,6 +14,13 @@
   let title = $state("");
   let folder = $state("");
   let problem = $state("");
+  // A note being dragged (M31) and the folder it is over; the menu on each row does the same by keyboard and touch.
+  let dragged = $state<string | null>(null);
+  let carrying: string | null = null; // set at once; `dragged` a moment later, since changing the page in dragstart cancels the drag
+  let over = $state<string | null>(null);
+  let folding = $state(false);
+  let path = $state("");
+  let said = $state("");
 
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
   const matches = (n: NoteSummary) => words.every((w) => `${n.title}\n${n.id}\n${n.description}`.toLowerCase().includes(w));
@@ -23,7 +30,10 @@
     // Empty folders are listed too, so a note can be made in one; not while narrowing.
     if (!words.length) for (const dir of app.listing.dirs) by.set(dir, []);
     for (const n of shown) by.set(n.dir, [...(by.get(n.dir) ?? []), n]);
-    return [...by].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const sorted = [...by].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    // The top of the base is somewhere to drop a note too, though nothing be there: at the end, so nothing moves under the pointer.
+    if (dragged !== null && !by.has("")) sorted.push(["", []]);
+    return sorted;
   });
   // Notes that match in their text and were not already listed by title.
   const inText = $derived(words.length ? hits.filter((h) => !shown.some((n) => n.id === h.id)) : []);
@@ -42,6 +52,46 @@
     folder = dir;
     title = "";
     problem = "";
+  }
+
+  function drag(event: DragEvent, noteId: string) {
+    carrying = noteId;
+    setTimeout(() => { if (carrying === noteId) dragged = noteId; });
+    event.dataTransfer?.setData("text/plain", noteId);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  }
+  function enter(event: DragEvent, dir: string) {
+    if (carrying === null) return;
+    event.preventDefault();
+    over = dir;
+  }
+  async function drop(event: DragEvent, dir: string) {
+    event.preventDefault();
+    const noteId = carrying;
+    carrying = dragged = over = null;
+    if (noteId === null) return;
+    const name = noteId.split("/").at(-1)!, to = dir ? `${dir}/${name}` : name;
+    if (to === noteId) return;
+    said = "";
+    try {
+      await app.api.moveNote(noteId, to, (await app.api.readNote(noteId)).version);
+      await app.refresh();
+    } catch (e) {
+      said = (e as Error).message;
+    }
+  }
+
+  async function makeFolder(event: SubmitEvent) {
+    event.preventDefault();
+    try {
+      await app.api.makeFolder(path.trim().replace(/^\/+|\/+$/g, ""));
+      folding = false;
+      path = "";
+      said = "";
+      await app.refresh();
+    } catch (e) {
+      said = (e as Error).message;
+    }
   }
 
   async function make(event: SubmitEvent) {
@@ -63,8 +113,20 @@
     <label class="hidden-label" for="filter">Find a note</label>
     <!-- svelte-ignore a11y_autofocus -->
     <input id="filter" class="field grow" type="search" placeholder="find a note" bind:value={query} autocomplete="off" autofocus />
+    <button class="btn quiet" type="button" onclick={() => (folding = !folding)} aria-expanded={folding}>new folder</button>
     <button class="btn primary" type="button" data-tour="new-note" onclick={() => start()}>new note</button>
   </div>
+
+  {#if folding}
+    <form class="frame new" onsubmit={makeFolder}>
+      <span class="frame-title">a new folder</span>
+      <label for="new-folder-path"><span class="label">name, with / for one inside another</span></label>
+      <!-- svelte-ignore a11y_autofocus -->
+      <input id="new-folder-path" class="field" bind:value={path} placeholder="geometry/surfaces" autocomplete="off" autofocus />
+      <div class="row"><button class="btn primary" type="submit" disabled={!path.trim()}>make it</button><button class="btn quiet" type="button" onclick={() => (folding = false)}>cancel</button></div>
+    </form>
+  {/if}
+  {#if said}<p class="problem" role="alert">{said}</p>{/if}
 
   {#if making}
     <form class="frame new" onsubmit={make}>
@@ -85,11 +147,12 @@
   {/if}
 
   {#each folders as [dir, notes] (dir)}
-    <section>
+    <!-- svelte-ignore a11y_no_static_element_interactions -- a drop target only; the row's menu moves a note by keyboard -->
+    <section class:over={over === dir && dragged !== null} ondragenter={(e) => enter(e, dir)} ondragover={(e) => enter(e, dir)} ondragleave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) over = null; }} ondrop={(e) => void drop(e, dir)}>
       <h2><span class="label">{dir || "the top of the base"}</span><button class="btn quiet add" type="button" onclick={() => start(dir)} aria-label={`New note in ${dir || "the top of the base"}`}>+</button></h2>
       <ul>
         {#each notes as n (n.id)}
-          <li><a class="vein-row" class:on={n.id === panes.last} data-lustre href={noteHref(n.id)}><span class="serif title">{n.title}</span>{#if n.description}<span class="soft desc">{n.description}</span>{/if}</a><NoteMenu id={n.id} title={n.title} /></li>
+          <li draggable="true" ondragstart={(e) => drag(e, n.id)} ondragend={() => (carrying = dragged = over = null)} class:lifted={dragged === n.id}><a class="vein-row" class:on={n.id === panes.last} data-lustre href={noteHref(n.id)}><span class="serif title">{n.title}</span>{#if n.description}<span class="soft desc">{n.description}</span>{/if}</a><NoteMenu id={n.id} title={n.title} /></li>
         {/each}
       </ul>
     </section>
@@ -122,6 +185,10 @@
   .empty { padding: var(--space-8) 0; text-align: center; }
   h2 { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); font-weight: 400; min-height: 28px; }
   .add { height: 24px; }
+  /* A folder a note is over (M31): it is outlined, with no motion (gold is Iso's alone). */
+  section.over { outline: 1px dashed var(--text-soft); outline-offset: 4px; }
+  section.over h2 { border-bottom-color: var(--text-soft); }
+  li.lifted { opacity: 0.45; }
   ul { list-style: none; margin: 0; padding: 0; }
   /* Rows with a vein (M24, D): the note last open is chosen. */
   li { position: relative; }

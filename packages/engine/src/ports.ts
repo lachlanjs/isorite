@@ -25,6 +25,8 @@ export interface Files {
   /** What is in a folder ("" is the root), or nothing when there is no such folder. */
   list(dir: string): Promise<FileInfo[]>;
   remove(path: string): Promise<void>;
+  /** Make an empty folder and the ones above it (M31). Optional: a place that can't hold one empty says so by not having it. */
+  mkdir?(dir: string): Promise<void>;
 }
 
 export interface Clock {
@@ -38,6 +40,8 @@ export class MemoryFiles implements Files {
   readonly files = new Map<string, string>();
   /** Files held as bytes (pictures), apart from text. */
   readonly bytes = new Map<string, Uint8Array>();
+  /** Folders made empty (M31). */
+  readonly folders = new Set<string>();
 
   constructor(files: Record<string, string> = {}) {
     for (const [path, text] of Object.entries(files)) this.files.set(path, text);
@@ -52,11 +56,12 @@ export class MemoryFiles implements Files {
   }
   async writeBytes(path: string, bytes: Uint8Array): Promise<void> { this.files.delete(path); this.bytes.set(path, bytes); }
   async remove(path: string): Promise<void> { this.files.delete(path); this.bytes.delete(path); }
+  async mkdir(dir: string): Promise<void> { this.folders.add(dir); }
 
   async list(dir: string): Promise<FileInfo[]> {
     const prefix = dir ? dir + "/" : "";
     const found = new Map<string, FileInfo>();
-    for (const path of [...this.files.keys(), ...this.bytes.keys()]) {
+    for (const path of [...this.files.keys(), ...this.bytes.keys(), ...[...this.folders].map((f) => f + "/")]) {
       if (!path.startsWith(prefix)) continue;
       const rest = path.slice(prefix.length), cut = rest.indexOf("/");
       if (cut >= 0) { found.set(rest.slice(0, cut), { name: rest.slice(0, cut), dir: true }); continue; }

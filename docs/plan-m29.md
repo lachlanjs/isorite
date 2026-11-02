@@ -25,7 +25,7 @@ Begun 2026-11-02, from Lachlan's notes taken using isorite at work beside omp (`
 
 ## Left in M29
 
-- Dragging a note to a folder in the list; making an empty folder (today a folder is made by moving or making a note into it).
+- (Done after: dragging a note to a folder, and making an empty folder; see "Built: later".)
 - The same menu on the Note pane's own header (the Delete there is in the settings menu still).
 
 ## Built: code links by symbol (shown in place)
@@ -35,3 +35,9 @@ Begun 2026-11-02, from Lachlan's notes taken using isorite at work beside omp (`
 - `![the step](code:sim/step.py#leapfrog)` shows the code in the note (`CodeEmbed.svelte`), coloured by the file's language, with the file, symbol and lines it covers today, read again when the window is come back to. An embed of code is a link out of the note on the Atlas.
 - Tests: `core/test/symbol.test.ts`, `engine/test/code-symbols.test.ts` (including that the same link finds the code after it moved), `app/tests/code-embed.spec.ts`.
 - Left: a symbol's *copy* in a note that goes stale on purpose (a pinned version); Ruby and Lua; a picker for symbols when writing the link (`code:` completes the path and then the symbols in it).
+
+## Built: later
+
+- **A note dragged to a folder** in the list: a row is lifted, the folder under it is outlined (no motion), and dropping it moves the note by the same `moveNote` the ⋯ menu uses, so links to it follow. While one is carried, "the top of the base" is a place to drop at the end of the list, so nothing above moves under the pointer. The browser cancels a drag if the page changes in `dragstart`, so the lifted look is set a tick later. On a phone the ⋯ menu is still the way.
+- **A new folder** button beside "new note": a name, with `/` for one inside another. `engine.makeFolder(path)` and `POST /api/folder` make it on disk (`Files.mkdir`, optional: the in-memory files hold it too), refused where a note has the name. Tests: `engine/test/kinds.test.ts`, `app/tests/note-drag.spec.ts` (which sends the drag events itself: the browser's own drag is unsteady to drive in a list that scrolls).
+- **What agents are told** (`ISORITE` in `engine/src/turn.ts`, in `brief_base`): how code is linked (by name, or by lines; prefer a name; look the name up before writing it; `![..](code:..#name)` shows it in the note) and that a colon in frontmatter wants quotes. Test: `engine/test/agent.test.ts`.

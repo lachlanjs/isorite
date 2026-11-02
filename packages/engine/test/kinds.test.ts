@@ -89,3 +89,15 @@ test("code links point into the repository named in the settings: a missing file
   clock.t += 11_000;
   expect((await engine.map()).notes["sim/step"]!.links![1]).not.toHaveProperty("broken");
 });
+
+test("an empty folder is made, listed, and refused where a note is or the path is bad (M31)", async () => {
+  const { engine, notes } = await open();
+  await engine.makeFolder("/topology/surfaces/");
+  expect((await engine.notes()).dirs).toEqual(expect.arrayContaining(["topology", "topology/surfaces"]));
+  expect(await notes.list("topology")).toEqual([{ name: "surfaces", dir: true }]);
+  // A note moved into it lands there, links followed.
+  await engine.moveNote("global/euler", "topology/surfaces/euler", (await engine.readNote("global/euler")).version);
+  expect((await engine.notes()).notes.find((n) => n.id === "topology/surfaces/euler")).toMatchObject({ dir: "topology/surfaces" });
+  await expect(engine.makeFolder("topology/surfaces/euler")).rejects.toMatchObject({ status: 409 });
+  for (const bad of ["", "../x", "a//b", ".hidden", "@understanding"]) await expect(engine.makeFolder(bad)).rejects.toBeInstanceOf(EngineError);
+});

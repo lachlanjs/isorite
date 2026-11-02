@@ -43,6 +43,8 @@ export class NodeFiles implements Files {
     }
   }
 
+  async mkdir(dir: string): Promise<void> { await mkdir(this.at(dir), { recursive: true }); }
+
   async append(path: string, text: string): Promise<void> {
     const full = this.at(path);
     await mkdir(dirname(full), { recursive: true });

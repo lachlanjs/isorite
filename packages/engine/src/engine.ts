@@ -601,6 +601,20 @@ export class Engine implements Api {
     return this.one(() => this.put(id, text, null));
   }
 
+  async makeFolder(path: string): Promise<void> {
+    path = path.trim().replace(/^\/+|\/+$/g, "");
+    if (!inBase(path)) throw new EngineError("only a folder of the base is made here");
+    checkNoteId(path);
+    if (!this.opts.notes.mkdir) throw new EngineError("an empty folder can't be made here");
+    if (this.files.has(`${path}.md`)) throw new EngineError(`there is a note at ${path} already`, 409);
+    await this.one(async () => {
+      await this.opts.notes.mkdir!(path);
+      const parts = path.split("/");
+      for (let i = 1; i <= parts.length; i++) { const p = parts.slice(0, i).join("/"); if (!this.files.has(p)) this.files.set(p, { path: p, dir: true }); }
+      this.built = this.index = null;
+    });
+  }
+
   /** `who` is you unless Iso moves it, in Write mode. */
   async moveNote(id: string, to: string, base: string, who = "you"): Promise<Saved> {
     to = to.trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/, "");

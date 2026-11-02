@@ -123,6 +123,14 @@ export const ISORITE = `# Their knowledge base
   together. A problem has no steps inside it.
 - Files beside the notes that are not notes (data, documents, pictures,
   artifacts) are linked as any note is: [runs](/simulation/runs.csv).
+- Code in their repository is linked as [the step](code:sim/step.py#leapfrog):
+  the path from the repository's root, then a name (\`#leapfrog\`, or
+  \`#Class.method\`) or lines (\`#L40-L52\`). Prefer a name: it still finds the
+  code when it moves. Look in the file for the name before you write it; a name
+  that is not there marks the link broken. \`![the step](code:sim/step.py#leapfrog)\`
+  shows that code in the note, where it is read.
+- Frontmatter is YAML: put a value in quotes when it holds a colon, as
+  \`title: "Gauss: Bonnet"\` and \`description: "Why: the proof"\`.
 - Every change you make is marked as yours, in the note's history, and they
   can undo it.
 

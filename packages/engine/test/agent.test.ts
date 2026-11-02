@@ -208,3 +208,12 @@ test("one of Iso's old conversations is removed alone; a name that is not a conv
   expect(await own.read(`conversations/${two}.jsonl`)).toBe("");
   await expect(engine.deleteConversation("../etc")).rejects.toThrow();
 });
+
+test("the brief tells an agent how code is linked, by name or by lines, and to quote a colon in frontmatter (M29)", async () => {
+  const { engine } = await open();
+  const brief = (await engine.agentLook({ agent: "opencode", session: "s1", tool: "brief_base", args: {} })).text;
+  expect(brief).toContain("code:sim/step.py#leapfrog");
+  expect(brief).toContain("#L40-L52");
+  expect(brief).toContain("when it moves");
+  expect(brief).toContain('title: "Gauss: Bonnet"');
+});
