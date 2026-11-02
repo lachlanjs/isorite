@@ -2,7 +2,9 @@
   // The text of a note, in CodeMirror: the body as a live preview, or the whole file as source. Iso's blocks
   // are laid over it (overlays.ts) at the places the note's journal gives them.
   import { mount, onMount, unmount, untrack } from "svelte";
+  import { citeKind, codeTarget } from "@isorite/core";
   import { artifactOf } from "$lib/artifact.ts";
+  import CodeEmbed from "$lib/components/CodeEmbed.svelte";
   import ArtifactEmbed from "./ArtifactEmbed.svelte";
   import { goto } from "$app/navigation";
   import type { EditorView } from "@codemirror/view";
@@ -121,6 +123,9 @@
       pictures: (href) => { const p = pictureOf(href, note.id); return p ? { key: `${p.from}:${p.path}`, src: pictureSrc(app.api, p) } : null; },
       // An artifact shown in the note (M23) works in place, in its sandboxed frame.
       artifacts: (href) => {
+        // Code of the repository, in place (M29): `![…](code:path#symbol)`, but not a picture, which is drawn as one.
+        const c = href.trim().startsWith("code:") ? codeTarget(href.trim()) : null;
+        if (c && citeKind(c.path) !== "image") return { path: href, mount: (el) => { const e = mount(CodeEmbed, { target: el, props: { href: href.trim() } }); return () => { void unmount(e); }; } };
         const path = artifactOf(href, note.id);
         return path ? { path, mount: (el) => { const c = mount(ArtifactEmbed, { target: el, props: { path } }); return () => { void unmount(c); }; } } : null;
       },

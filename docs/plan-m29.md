@@ -24,3 +24,11 @@ Begun 2026-11-02, from Lachlan's notes taken using isorite at work beside omp (`
 - "Send to Iso" says what it sends and where it arrives, in the terminal and in the pane.
 - Code links by symbol, shown as an embed.
 - A "fix this note" for notes already broken by a colon.
+
+## Built: code links by symbol (shown in place)
+
+- `code:path#name` and `code:path#Class.method` as well as `#L40-L52` (`codeTarget`, `symbol`). The symbol is found by its name in the file as it is now (`packages/core/src/symbol.ts`: Python by indentation, brace languages by matching braces, with doc comments, decorators and attributes above taken in), so the link need not change when the code moves. No parser; where the finder is not enough a link names lines. Found in py, js/ts, go, rs, java, kt, cs, c/cpp, swift, php, scala, dart, zig, svelte and vue; not yet Ruby or Lua (`unsupported`, said so in the note).
+- `engine.code(href)` and `GET /api/code?href=` give the lines (at most 120 shown), or why not: no repository, no file, no symbol, unsupported, too large. A symbol no longer in its file is a **broken link** as a missing file is (struck through; the agent is told once).
+- `![the step](code:sim/step.py#leapfrog)` shows the code in the note (`CodeEmbed.svelte`), coloured by the file's language, with the file, symbol and lines it covers today, read again when the window is come back to. An embed of code is a link out of the note on the Atlas.
+- Tests: `core/test/symbol.test.ts`, `engine/test/code-symbols.test.ts` (including that the same link finds the code after it moved), `app/tests/code-embed.spec.ts`.
+- Left: a symbol's *copy* in a note that goes stale on purpose (a pinned version); Ruby and Lua; a picker for symbols when writing the link (`code:` completes the path and then the symbols in it).

@@ -30,6 +30,8 @@ export { CONFIG_FILE, STUDY_DIR, STUDY_FORMAT, StudyError, parseStudyConfig } fr
 export { isFileRef, mapModel, reach } from "./map.ts";
 export { ABOUT, DONE, codeTarget, doneOf, embedFor, embedRefs, idsOf, kindOf, outwardLinks } from "./kinds.ts";
 export type { Kind, Outward } from "./kinds.ts";
+export { findSymbol, hasSymbols } from "./symbol.ts";
+export type { SymbolSpan } from "./symbol.ts";
 export type { MapDir, MapModel, MapNote, Reach, ReachLink } from "./map.ts";
 export type { StudyConfig } from "./study.ts";
 export { agentName } from "./agents.ts";

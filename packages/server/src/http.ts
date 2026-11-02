@@ -165,6 +165,12 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
     return c.body(found.bytes as Uint8Array<ArrayBuffer>, 200, headers);
   });
 
+  // The code a code link names, for showing in a note (M29); served as the repository's pictures are (`/api/file?code=`).
+  app.get("/api/code", async (c) => {
+    const href = c.req.query("href") ?? "";
+    return answer(c, () => api.code(href));
+  });
+
   app.put("/api/note", async (c) => {
     const refused = writeRefused(c);
     if (refused) return refused;
