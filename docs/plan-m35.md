@@ -18,12 +18,21 @@ Why: a highlight in a note cannot reach an agent running in the user's own termi
 - Isorite's note tools are written once and back both the MCP server and the in-process pi tools.
 - Context is assembled in `transformContext`. The first version only adds the sent chips and the open note; the point is that the seam exists.
 
+## Found in step 1 (what is already there)
+
+- `m28-chat` is one commit, chat in the Iso pane over GitHub and GitLab threads (`ChatPane.svelte`, `packages/server/src/chat/`). It is not an agent chat and does not cover this. It also edits `IsoPane.svelte`, so expect a merge to touch the same file; it stays unmerged.
+- A session model exists, in `packages/engine/src/api.ts`: `TerminalView` (agent, session, busy, turns, asking, cost, tokens, model, context size, commands, settings, sessions), `TerminalTurn`, `TerminalItem` (text, tool with status and diff, question, offer) and `TerminalPermission`. It is ACP-shaped. It has no steering or follow-up queue, no compaction event, no branches.
+- The model is built in `packages/server/src/acp.ts` by `AcpFollower` (659 lines), which folds raw ACP messages that pass through `isorite acp` (`acp-wrap.ts`, 303 lines) into `TerminalView`. With `--pane` the server starts the agent itself from the base's settings (`agents.ts`, with the ACP registry); without it, a front end such as Toad or Zed runs the wrapper and isorite taps it. The pane's commands (prompt, cancel, permission, give, open, list, set) go back through the wrapper.
+- A passage already goes to the agent: `Given` has a `passage` kind, the tray (`tray.svelte.ts`) holds what is sent, and `given()` renders it as quoted text before the next prompt. What is missing is the chip in the composer and a driver that is not ACP.
+- Sessions are kept as `AgentRecord` files (`AgentSession`: live, the agent's own, kept). Iso's old loop (retired in 0.13) left `engine/turn.ts`: modes `ask`, `write` and `build`, and permission items, which map onto the enforcement switches.
+- So the model is not new work. The new work is a `Driver` interface taken out of `AcpFollower`, a pi driver that fills the same `TerminalView`, and the extensions the model lacks.
+
 ## Steps
 
-1. Read `m28-chat` and the current Iso pane, and write down what already covers the session model, the composer and the event stream. Nothing is built in this step. If a lot is there, the plan shrinks.
-2. Define the session model and the `Driver` interface; map today's ACP session onto it without changing what the user sees. This proves the model carries what the UI needs before pi is involved.
+1. Done: see the findings above.
+2. Take a `Driver` interface out of `AcpFollower` (connect, prompt, give, reply, cancel, set, follow, fresh) and extend `TerminalView` with what pi has and ACP lacks (queues, compaction, branches); keep what the user sees unchanged, and run the existing ACP tests (`acp.test.ts`, `acp.spec`) to prove it.
 3. Add the `pi` driver: an `Agent` with a slim isorite tool set (read, write and search notes, follow links) and pi's read, edit and bash tools behind switches. Stream events into the model. Persist the session as a JSONL tree in the base's own folder.
-4. The composer: chips for a selection (note, range, text), shown and removable, sent as a block in the prompt. Both drivers receive them: pi as part of the user message, ACP as an embedded resource, with a text fallback.
+4. The composer: show the tray's items as chips in the composer (note, folder, passage), removable, and sent as a block in the prompt. Both drivers receive them: pi as part of the user message, ACP as an embedded resource with today's quoted text as the fallback.
 5. Enforcement check: with the edit switch off and bash left out, confirm that a prompt asking the agent to change a file cannot change it, by any tool. With bash left in, show that it can, and write that down; this decides what "read-only" is allowed to promise.
 6. Loss check: run a long turn with a steer, a compaction and a tool cancel through the model, and compare what pi emitted with what the UI could show. List what is lost.
 7. Research step: whether the providers allow third-party harnesses to use subscription logins, and what pi supports. Write the answer in this file.
