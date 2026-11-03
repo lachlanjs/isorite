@@ -118,6 +118,9 @@
       // A new layout in three beats (V7): the lines drawn now retract, then notes and folders move, then the new
       // lines draw out. Nothing is drawn while anything moves.
       const run = ++beats, quiet = matchMedia("(prefers-reduced-motion: reduce)").matches, staged = !!was && changed && !quiet;
+      // A load that is not staged (the layout already changed under it by an earlier one, still mid-beat) ends that one's
+      // beats, which would have put the lines back: it must, or the lines stay hidden until a reload.
+      if (!staged) { beat = ""; retracting = []; }
       if (staged) {
         retracting = rest;
         beat = "retract";
@@ -139,6 +142,8 @@
     } catch (e) { failed = (e as Error).message; }
   }
 
+  // A note moved or deleted never sees the pointer leave it: what was pointed at goes with it.
+  $effect(() => { if (pointed && L && !L.items.some((x) => x.ref === pointed)) pointed = ""; });
   // A question Iso asks, or one kept or gone, lays the map out again: the dotted node comes, or the note takes its place.
   let askedWere = "";
   $effect(() => {
