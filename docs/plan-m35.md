@@ -44,6 +44,17 @@ Why: a highlight in a note cannot reach an agent running in the user's own termi
 - The base's own tools follow the base's notes switch (what `agentTools` offers), not these.
 - Cost: `pi-coding-agent` (pinned 1.5.0) adds about 57 MB to node_modules, over the 6.7 MB of pi-ai. `npm audit`'s one high advisory is `markdown-it`, already there before pi.
 
+- Step 6: the loss check, as `pi-loss.test.ts` (scripted, no network): the same loop run on pi's faux provider, pi's events compared with the pane's view.
+
+### What step 6 found
+
+- Thinking is lost. Pi streams the model's reasoning (`thinking_delta` in `message_update`); the host folds only text, so none reaches the view. `TerminalItem` has no kind for it. Showing it needs a new item kind and a place in the pane that does not crowd the answer.
+- A cancel while a tool runs works. The tool is handed pi's abort signal, hears it, and the turn ends `stopped` with the tool item `failed`, well inside two seconds. This holds for a tool that honours the signal; one that ignores it (a blocking call) would hold the stop until it returns, which is the weakness the omp write-up names.
+- A steer reaches the model. `agent.steer(...)` queued during a tool run arrived in the model's next request, and pi emits it as a user message. The host has no `steer` method, refuses a prompt while busy, and has no branch for a user message, so a steer cannot be sent from the pane and would not be shown. `PaneSessions` has no queue to put it in. Follow-up (run after it would otherwise stop) is the same.
+- Compaction is not an event. Nothing in `pi-agent-core` says a context was shortened. `pi-coding-agent` offers `shouldCompact` and `compact` (a model call that writes the summary), which the host would have to call between turns and then tell the view about; the view has no item for "context was summarised here", and the model's context is not kept between runs anyway (still open from step 3).
+- Not tested here, and so unknown: a real model's thinking from a provider (faux only), compaction through a real model, and branches (pi's session tree is unused).
+- What the view would need, in order of value: a steer/queue entry in `PaneSessions` with an item for it, a thinking item, a compaction marker. All three are additions to `TerminalView` that the ACP path would simply never fill.
+
 ## Steps
 
 1. Done: see the findings above.
@@ -51,7 +62,7 @@ Why: a highlight in a note cannot reach an agent running in the user's own termi
 3. Add the `pi` driver: an `Agent` with a slim isorite tool set (read, write and search notes, follow links) and pi's read, edit and bash tools behind switches. Stream events into the model. Persist the session as a JSONL tree in the base's own folder.
 4. The composer: show the tray's items as chips in the composer (note, folder, passage), removable, and sent as a block in the prompt. Both drivers receive them: pi as part of the user message, ACP as an embedded resource with today's quoted text as the fallback.
 5. Enforcement check: with the edit switch off and bash left out, confirm that a prompt asking the agent to change a file cannot change it, by any tool. With bash left in, show that it can, and write that down; this decides what "read-only" is allowed to promise.
-6. Loss check: run a long turn with a steer, a compaction and a tool cancel through the model, and compare what pi emitted with what the UI could show. List what is lost.
+6. Done (see above). Loss check: run a long turn with a steer, a compaction and a tool cancel through the model, and compare what pi emitted with what the UI could show. List what is lost.
 7. Research step: whether the providers allow third-party harnesses to use subscription logins, and what pi supports. Write the answer in this file.
 8. Write the result: what worked, what did not, what it would cost to keep, and a recommendation (build on pi, borrow ideas, or stop).
 
