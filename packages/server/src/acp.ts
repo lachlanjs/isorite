@@ -14,6 +14,7 @@ import { notesOfTurns, type AgentCommand, type AgentRecord, type AgentSetting, t
 import { OWN_DIR } from "@isorite/core";
 import { repoOf } from "./git.ts";
 import { INSTRUCTIONS, agentName } from "./mcp-http.ts";
+import type { PaneSessions } from "./sessions.ts";
 
 /** Long enough for the wrapper's next batch of what passed to have come (it sends one every 30 ms). */
 const AFTER_TAP = 200;
@@ -152,7 +153,7 @@ interface Live {
 }
 
 /** The sessions the wrappers carry, as the pane draws them. One is shown: the one you chose, else the last to start. */
-export class AcpFollower {
+export class AcpFollower implements PaneSessions {
   #links = new Map<string, Link>();
   #lives = new Map<string, Live>();
   #kept: AgentSession[] = [];

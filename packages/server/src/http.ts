@@ -11,6 +11,7 @@ import { z } from "zod";
 import { Conflict, EngineError, MAX_FILE_BYTES, MAX_NOTE_BYTES, type Api, type Given as GivenPart } from "@isorite/engine";
 import type { BasesPort } from "./bases.ts";
 import { given as withGiven, type AcpFollower, type Rpc } from "./acp.ts";
+import type { PaneSessions } from "./sessions.ts";
 import { McpEndpoint, agentName, clientName, type Rpc as McpRpc } from "./mcp-http.ts";
 import { VERSION } from "./version.ts";
 import { proposal, writeProposal } from "./connect.ts";
@@ -36,6 +37,8 @@ export interface ServerOptions {
   /** The agents' sessions, through `isorite acp` (M25): what passed between a front end and its agent, and the pane's
    *  view of one. */
   acp?: AcpFollower;
+  /** What serves the pane's sessions (M35), where it is not the ACP follower's: the pages read and ask through this. */
+  terminal?: PaneSessions;
   /** The agent chosen in the base's settings, started for the pane (M25). */
   agents?: AgentRunner;
   /** The other bases the server holds (M20), and this one's name among them. */
@@ -72,7 +75,8 @@ const AgentEdit = z.union([
 const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [], notes, acp, bases, base, agents, config }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes, acp, terminal, bases, base, agents, config }: ServerOptions): Hono {
+  const pane: PaneSessions | undefined = terminal ?? acp;
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -285,8 +289,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
 
   // The pane's agent session (M11, on ACP since M25): pages read it, ask in it, stop it and answer what it asks,
   // and never reach the agent themselves.
-  if (acp) {
-    app.get("/api/terminal", (c) => answer(c, async () => acp.view()));
+  if (pane) {
+    app.get("/api/terminal", (c) => answer(c, async () => pane.view()));
     const failed = (e: Error) => { throw new EngineError(e.message, 409); };
     post("/api/terminal/prompt", z.object({ asked: z.string().min(1).max(8000), given: z.array(Given).max(40) }).strict(), async (_c, b) => {
       const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
@@ -294,11 +298,11 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
       const news = broken.length ? `\n\n(isorite: code links in the notes that no longer resolve: ${broken.map((x) => `${x.href} in /${x.id}.md`).join("; ")}.)` : "";
       const title = (id: string) => titles.get(id) ?? id;
       // What was given goes apart, once a session (M25).
-      await acp.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim()).catch(failed);
-      await acp.prompt(b.asked.trim() + news).catch(failed);
+      await pane.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim()).catch(failed);
+      await pane.prompt(b.asked.trim() + news).catch(failed);
     });
-    post("/api/terminal/stop", z.object({}).strict(), async () => { await acp.interrupt().catch(failed); });
-    post("/api/terminal/permission", z.object({ id: z.string().max(200), decision: z.enum(["once", "always", "reject"]) }).strict(), async (_c, b) => { await acp.reply(b.id, b.decision).catch(failed); });
+    post("/api/terminal/stop", z.object({}).strict(), async () => { await pane.interrupt().catch(failed); });
+    post("/api/terminal/permission", z.object({ id: z.string().max(200), decision: z.enum(["once", "always", "reject"]) }).strict(), async (_c, b) => { await pane.reply(b.id, b.decision).catch(failed); });
   }
 
   // The base's tools over MCP (M25), for an agent on this machine: Streamable HTTP, a JSON answer to each request.
@@ -315,7 +319,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
     const quiet = Number(c.req.query("quiet"));
     const who = (rpc: McpRpc) => {
       const agent = named && /^[a-z0-9][a-z0-9-]{0,39}$/.test(named) ? named : agentName(clientName(rpc) ?? "mcp");
-      const asked = acp?.asked(agent) ?? "";
+      const asked = pane?.asked(agent) ?? "";
       return { agent, session: (c.req.query("session") ?? "http").slice(0, 200), ...(asked ? { asked } : {}), ...(quiet >= 100 && quiet <= 600_000 ? { quiet } : {}) };
     };
     const answers = (await Promise.all((Array.isArray(raw) ? raw : [raw]).map((r) => endpoint.answer(r as McpRpc, who(r as McpRpc))))).filter((a) => a !== null);
@@ -331,14 +335,15 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
       const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
       return (parts: GivenPart[]) => withGiven("", parts, (id) => titles.get(id) ?? id).trim();
     };
+    const host: PaneSessions = pane ?? acp;
     const refused = (e: Error) => { throw new EngineError(e.message, 409); };
     // What is in the pane's tray: what the session shown has not been given yet goes before its next prompt.
-    post("/api/acp/give", z.object({ given: z.array(Given).max(40) }).strict(), async (_c, b) => { await acp.give(b.given as GivenPart[], await render()).catch(refused); });
-    post("/api/acp/follow", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await acp.follow(b.agent, b.session).catch(refused); });
-    post("/api/acp/forget", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await acp.forget(b.agent, b.session).catch(refused); });
-    post("/api/acp/set", z.object({ kind: z.enum(["mode", "config"]), id: z.string().max(100), value: z.string().max(200) }).strict(), async (_c, b) => { try { acp.set(b.kind, b.id, b.value); } catch (e) { throw new EngineError((e as Error).message, 409); } });
-    post("/api/acp/new", z.object({ agent: z.string().max(40) }).strict(), async (_c, b) => { await acp.fresh(b.agent).catch(refused); });
-    post("/api/acp/list", z.object({}).strict(), async () => { acp.refresh(); });
+    post("/api/acp/give", z.object({ given: z.array(Given).max(40) }).strict(), async (_c, b) => { await host.give(b.given as GivenPart[], await render()).catch(refused); });
+    post("/api/acp/follow", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await host.follow(b.agent, b.session).catch(refused); });
+    post("/api/acp/forget", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await host.forget(b.agent, b.session).catch(refused); });
+    post("/api/acp/set", z.object({ kind: z.enum(["mode", "config"]), id: z.string().max(100), value: z.string().max(200) }).strict(), async (_c, b) => { try { host.set(b.kind, b.id, b.value); } catch (e) { throw new EngineError((e as Error).message, 409); } });
+    post("/api/acp/new", z.object({ agent: z.string().max(40) }).strict(), async (_c, b) => { await host.fresh(b.agent).catch(refused); });
+    post("/api/acp/list", z.object({}).strict(), async () => { host.refresh(); });
     post("/api/acp/tap", z.object({ link: z.string().min(1).max(100), messages: z.array(z.object({ way: z.enum(["in", "out", "ours"]), message: z.record(z.string(), z.unknown()) }).strict()).max(1000) }).strict(), async (_c, b) => { acp.tap(b.link, b.messages as { way: "in" | "out" | "ours"; message: Rpc }[]); });
     app.get("/api/acp/commands", (c) => {
       if (!local(c) || c.req.header(TOKEN_HEADER) !== token) return refuse(c, 403, "bad token");
@@ -371,11 +376,11 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   };
   app.get("/api/events", (c) => streamSSE(c, async (stream) => {
     const stop = api.events((event) => { void stream.writeSSE({ event: event.type, data: JSON.stringify(event) }); });
-    const send = (view: ReturnType<AcpFollower["view"]>) => { void stream.writeSSE({ event: "terminal", data: JSON.stringify({ type: "terminal", terminal: view }) }).catch(() => undefined); };
-    const unfollow = acp?.listen(send);
+    const send = (view: ReturnType<PaneSessions["view"]>) => { void stream.writeSSE({ event: "terminal", data: JSON.stringify({ type: "terminal", terminal: view }) }).catch(() => undefined); };
+    const unfollow = pane?.listen(send);
     const beat = setInterval(() => { void stream.write(": still here\n\n"); }, 25_000);
     await stream.writeSSE({ event: "open", data: "{}" });
-    if (acp?.view().connected) send(acp.view());
+    if (pane?.view().connected) send(pane.view());
     streams.set(stream, c.req.query("agent") === undefined);
     watchers();
     await new Promise<void>((done) => stream.onAbort(done));
