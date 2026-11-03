@@ -124,7 +124,7 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
       const api = await openEngine({ notes: known.path }, device, model, { name: known.name, elsewhere: bases, embedder });
       const acp = new AcpFollower({ api, notes: known.path });
       // The pi agent in the pane instead of an ACP one, where ISORITE_PI chooses it (M35, a prototype).
-      const terminal = await piHostFor(api);
+      const terminal = await piHostFor(api, process.env, projectOf(known.path).repo);
       // The agent chosen for this base's pane, started once the server is listening (the wrapper waits for it).
       const agents = new AgentRunner({ base: known.name, url: `http://127.0.0.1:${port}${known.name === first ? "" : `/b/${known.name}`}`, folder: projectOf(known.path).repo, config });
       if (loopback) void agents.start();

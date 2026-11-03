@@ -33,6 +33,17 @@ Why: a highlight in a note cannot reach an agent running in the user's own termi
 - Step 3: `packages/server/src/pi/` (`host.ts`, `tools.ts`, `index.ts`): a pi agent (`pi-ai` and `pi-agent-core`, pinned 1.5.0) serving the pane, chosen with `ISORITE_PI=<provider>/<model>`, with the base's tools shared through `agentTools` and `agentLook`, permission asking through `beforeToolCall`, and stop. Test: `pi-host.test.ts` (pi's faux provider, no network). Not yet tried with a real model. Gaps: the model's context is not kept between server runs (only the pane's view is); no steering, follow-up queue, compaction or branches in the view; a prompt while it works is refused; the provider SDKs make the install heavy.
 - Step 4 (in part): chips in Iso's box for what is in the tray (note, folder, passage), removable, faint once given to the session (`IsoPane.svelte`). Test: `composer-chips.spec.ts`. Not done: the ACP embedded resource (the quoted-text fallback stays for ACP until the adapters' support for it is checked; pi gets it as part of the message).
 
+- Step 5: pi's own file and shell tools behind switches (`ISORITE_PI_FILES=read|write`, `ISORITE_PI_SHELL=1`; `packages/server/src/pi/files.ts`), with a guard the host runs before every call and refuses on when it cannot decide. Tests: `pi-reach.test.ts` (scripted, real tools in a temporary project), and by hand against a real model (`anthropic/claude-haiku-5.5` through OpenRouter, a few tenths of a cent a run).
+
+### What step 5 found
+
+- By default the agent has the base's tools alone. What is left out is not there: a call to it fails with "Tool write not found", and a real model, asked to make a file with only read access, said it could not and why. No file was made.
+- `read` holds the agent to the project folder: a path outside it (relative or absolute) is refused by the guard before it runs. `write` adds edit and write, still inside the project, and never into `.git`.
+- With `shell` on, nothing confines it. Scripted and with a real model: `bash` wrote inside the project, wrote outside it, and read a file outside it, with files set to `read`. The real model reached for bash at once when asked to create a file. So "read-only" can be promised only without the shell tool, or with the process itself confined (a container or a dedicated user), which is pi's own advice too.
+- Asking before bash (`ISORITE_PI_ASK=bash`) works as a gate: a refusal through the pane runs nothing. It is a prompt, not a boundary: an answer of "always" lets every later call through.
+- The base's own tools follow the base's notes switch (what `agentTools` offers), not these.
+- Cost: `pi-coding-agent` (pinned 1.5.0) adds about 57 MB to node_modules, over the 6.7 MB of pi-ai. `npm audit`'s one high advisory is `markdown-it`, already there before pi.
+
 ## Steps
 
 1. Done: see the findings above.

@@ -8,6 +8,7 @@
 
 import { randomUUID } from "node:crypto";
 import { Agent, type AgentEvent } from "@earendil-works/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import type { AgentSession, Api, Given, TerminalItem, TerminalPermission, TerminalTurn, TerminalView } from "@isorite/engine";
 import { givenKey } from "../acp.ts";
@@ -27,6 +28,10 @@ export interface PiHostOptions {
   name?: string;
   /** Tools to ask about before they run. */
   ask?: (tool: string) => boolean;
+  /** Tools besides the base's (pi's own for files and shell), made for each prompt. */
+  more?: () => AgentTool[];
+  /** A reason to refuse a call before it runs, or undefined. Checked first; if it throws, the call is refused. */
+  guard?: (call: { tool: string; args: unknown }) => string | undefined;
   clock?: () => number;
 }
 
@@ -43,6 +48,8 @@ export class PiHost implements PaneSessions {
   readonly #id: string;
   readonly #name: string;
   readonly #ask: (tool: string) => boolean;
+  readonly #more: () => AgentTool[];
+  readonly #guard: NonNullable<PiHostOptions["guard"]>;
   readonly #now: () => number;
   #agent: Agent | null = null;
   #session = "";
@@ -63,13 +70,15 @@ export class PiHost implements PaneSessions {
   #view: TerminalView = EMPTY;
   #listeners = new Set<(v: TerminalView) => void>();
 
-  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, clock = Date.now }: PiHostOptions) {
+  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now }: PiHostOptions) {
     this.#api = api;
     this.#model = model;
     this.#streamFn = streamFn;
     this.#id = id;
     this.#name = name;
     this.#ask = ask;
+    this.#more = more;
+    this.#guard = guard;
     this.#now = clock;
     // What the agent asks back or offers (ask_question, offer_text) stands in its turn, until kept or not.
     api.events?.((e) => {
@@ -99,7 +108,7 @@ export class PiHost implements PaneSessions {
     const pending = this.#pending;
     this.#pending = null;
     if (pending) for (const g of pending.parts) this.#given.add(givenKey(g));
-    agent.state.tools = await isoriteTools(this.#api, { agent: this.#id, session: this.#session }, () => this.asked(this.#id));
+    agent.state.tools = [...(await isoriteTools(this.#api, { agent: this.#id, session: this.#session }, () => this.asked(this.#id))), ...this.#more()];
     const turn: TerminalTurn = { id: randomUUID(), asked: text, from: "here", items: [], state: "running", ...(pending ? { given: pending.parts } : {}), at: new Date(this.#now()).toISOString() };
     this.#turns = [...this.#turns, turn];
     if (!this.#title) this.#title = text.slice(0, 80);
@@ -143,6 +152,10 @@ export class PiHost implements PaneSessions {
       streamFn: this.#streamFn,
       sessionId: this.#session,
       beforeToolCall: async ({ toolCall, args }) => {
+        // The guard first, and shut if it cannot say.
+        let refused: string | undefined;
+        try { refused = this.#guard({ tool: toolCall.name, args }); } catch { refused = "that could not be checked"; }
+        if (refused) return { block: true, reason: refused };
         if (!this.#ask(toolCall.name) || this.#allowed.has(toolCall.name)) return undefined;
         const id = randomUUID();
         const decision = await new Promise<Decision>((wait) => {
