@@ -55,6 +55,18 @@ Why: a highlight in a note cannot reach an agent running in the user's own termi
 - Not tested here, and so unknown: a real model's thinking from a provider (faux only), compaction through a real model, and branches (pi's session tree is unused).
 - What the view would need, in order of value: a steer/queue entry in `PaneSessions` with an item for it, a thinking item, a compaction marker. All three are additions to `TerminalView` that the ACP path would simply never fill.
 
+- Step 7: the subscription-login research, written below.
+
+### What step 7 found
+
+Read on 2026-11-03. The Anthropic page is the primary source (Claude Code's "Legal and compliance"); the OpenAI answer is from reporting and pi's own docs, because openai.com refused the fetch (403), so it is not confirmed at the source.
+
+- **Anthropic: not for a product like this.** The page says OAuth "is intended exclusively for purchasers of Claude Free, Pro, Max, Ultra, Team, and Enterprise subscription plans and is designed to support ordinary use of Claude Code and other native Anthropic applications". Developers building products, "including those using the Agent SDK, should use API key authentication", and Anthropic "does not permit third-party developers to offer Claude.ai login into their own applications, or to route requests through Free, Pro, Max, or Ultra plan credentials on behalf of their users", nor to "collect, store, or intermediate Claude.ai credentials or session tokens". It reserves the right to enforce this without notice, and reporting says server-side blocks on third-party tools began in January 2026. The one clear allowance is the unmodified Claude Code binary, signed in by the end user.
+- **What that means for isorite.** An isorite harness on pi would have to use API keys (Claude Console, Bedrock, Vertex, or OpenRouter) for Claude models. Pi ships an Anthropic subscription login (`anthropicProvider` with OAuth); isorite should not enable it or document it, since that is the use the page refuses. The existing ACP route, where the user's own Claude Code runs unmodified, stays within the terms and keeps subscription users. That is a real reason to keep ACP/MCP and not replace it.
+- **OpenAI: allowed, as reported.** OpenAI's "Sign in with ChatGPT" is reported to let Plus and Pro subscribers use their plan in third-party tools, with per-app weekly caps the user sets, and a launch list of partners that includes OpenCode. Pi's README lists it as a provider login (with an older Codex login marked legacy). Whether an app unlisted as a partner may use it, and on what terms, is not confirmed; check OpenAI's developer docs before relying on it.
+- **Others in pi:** GitHub Copilot login, and OpenRouter's OAuth, which mints a user-controlled API key (so it is a key, not a subscription).
+- **Consequence for the choice in step 8.** Cost to the user would be API pricing for Claude models, with ChatGPT-plan use possible for OpenAI models. People who want their Claude subscription to pay for the work can only do it through Claude Code itself, i.e. the ACP route.
+
 ## Steps
 
 1. Done: see the findings above.
@@ -63,7 +75,7 @@ Why: a highlight in a note cannot reach an agent running in the user's own termi
 4. The composer: show the tray's items as chips in the composer (note, folder, passage), removable, and sent as a block in the prompt. Both drivers receive them: pi as part of the user message, ACP as an embedded resource with today's quoted text as the fallback.
 5. Enforcement check: with the edit switch off and bash left out, confirm that a prompt asking the agent to change a file cannot change it, by any tool. With bash left in, show that it can, and write that down; this decides what "read-only" is allowed to promise.
 6. Done (see above). Loss check: run a long turn with a steer, a compaction and a tool cancel through the model, and compare what pi emitted with what the UI could show. List what is lost.
-7. Research step: whether the providers allow third-party harnesses to use subscription logins, and what pi supports. Write the answer in this file.
+7. Done (see above). Research step: whether the providers allow third-party harnesses to use subscription logins, and what pi supports. Write the answer in this file.
 8. Write the result: what worked, what did not, what it would cost to keep, and a recommendation (build on pi, borrow ideas, or stop).
 
 ## Acceptance for the spike
