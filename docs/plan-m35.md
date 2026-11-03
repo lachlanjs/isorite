@@ -27,6 +27,12 @@ Why: a highlight in a note cannot reach an agent running in the user's own termi
 - Sessions are kept as `AgentRecord` files (`AgentSession`: live, the agent's own, kept). Iso's old loop (retired in 0.13) left `engine/turn.ts`: modes `ask`, `write` and `build`, and permission items, which map onto the enforcement switches.
 - So the model is not new work. The new work is a `Driver` interface taken out of `AcpFollower`, a pi driver that fills the same `TerminalView`, and the extensions the model lacks.
 
+## Built so far
+
+- Step 2: `PaneSessions` (`packages/server/src/sessions.ts`), implemented by `AcpFollower`; the pane's routes and event stream serve any host (`createApp({ terminal })`). Test: `pane-sessions.test.ts`.
+- Step 3: `packages/server/src/pi/` (`host.ts`, `tools.ts`, `index.ts`): a pi agent (`pi-ai` and `pi-agent-core`, pinned 1.5.0) serving the pane, chosen with `ISORITE_PI=<provider>/<model>`, with the base's tools shared through `agentTools` and `agentLook`, permission asking through `beforeToolCall`, and stop. Test: `pi-host.test.ts` (pi's faux provider, no network). Not yet tried with a real model. Gaps: the model's context is not kept between server runs (only the pane's view is); no steering, follow-up queue, compaction or branches in the view; a prompt while it works is refused; the provider SDKs make the install heavy.
+- Step 4 (in part): chips in Iso's box for what is in the tray (note, folder, passage), removable, faint once given to the session (`IsoPane.svelte`). Test: `composer-chips.spec.ts`. Not done: the ACP embedded resource (the quoted-text fallback stays for ACP until the adapters' support for it is checked; pi gets it as part of the message).
+
 ## Steps
 
 1. Done: see the findings above.

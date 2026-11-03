@@ -12,6 +12,12 @@
   import TerminalTurns from "./TerminalTurns.svelte";
 
   let text = $state("");
+  /** The tray's parts already given to the session shown: faint, as they go before a message once. */
+  let given = $state<Set<string>>(new Set());
+  const sessionId = $derived(terminal.view?.session ?? null);
+  $effect(() => { void sessionId; given = new Set(); });
+  const chips = $derived(terminal.connected && !terminal.old ? tray.sent : []);
+  const words = (t: string, n = 44): string => (t.length > n ? `${t.slice(0, n).trimEnd()}…` : t);
   const busy = $derived(terminal.running);
   /** A session to show: the agent's, or one kept, or Iso's from before, being read. */
   const shown = $derived(!!terminal.old || terminal.acp);
@@ -32,7 +38,8 @@
     if (c) text = `/${c.name} `;
   }
   async function send(): Promise<void> {
-    if (await terminal.send(text)) text = "";
+    const keys = tray.sent.map(tray.keyOf);
+    if (await terminal.send(text)) { text = ""; given = new Set([...given, ...keys]); }
   }
   function keys(e: KeyboardEvent): void {
     if (matches.length && !e.isComposing) {
@@ -74,6 +81,17 @@
         {/each}
       </ul>
     {/if}
+    {#if chips.length}
+      <ul class="chips" aria-label="Going with your message">
+        {#each chips as p (tray.keyOf(p))}
+          <li class="chip" class:given={given.has(tray.keyOf(p))} data-kind={p.kind} title={given.has(tray.keyOf(p)) ? "Already given to this session" : "Goes before your next message"}>
+            <span class="g" aria-hidden="true">{p.kind === "passage" ? "❝" : p.kind === "folder" ? "▤" : "◆"}</span>
+            <span class="t">{p.kind === "passage" ? `${p.title}: “${words(p.text)}”` : p.title}</span>
+            <button type="button" class="x" aria-label="Remove {p.kind === 'passage' ? `the passage from ${p.title}` : p.title} from the message" onclick={() => tray.remove(p)}><svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8" /></svg></button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
     <div class="box">
       <label class="hidden-label" for="iso-box">Message the agent</label>
       <textarea id="iso-box" bind:value={text} rows="2" placeholder={terminal.connected ? `Ask ${terminal.view?.agent || "the agent"}` : "Attach an agent to ask it here"} onkeydown={keys}></textarea>
@@ -100,6 +118,14 @@
   .corner.stop { color: var(--rose); }
   /* On a desktop Enter sends, so the arrow is for a touch screen only; stop is for both. */
   @media (pointer: fine) { .corner.send { display: none; } }
+  .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; max-height: 84px; overflow: auto; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 2px 4px 2px 8px; border: 1px solid var(--line-strong); background: var(--ground-1); font: 12px/1.4 var(--font-ui); color: var(--text); }
+  .chip .g { color: var(--growth); flex: none; }
+  .chip .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip.given { border-color: var(--line); color: var(--text-faint); }
+  .chip.given .g { color: var(--text-faint); }
+  .chip .x { flex: none; width: 18px; height: 18px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; }
+  .chip .x:hover { color: var(--rose); }
   .settings { display: flex; flex-wrap: wrap; gap: 6px; }
   .set .field { font: 11.5px var(--font-ui); padding: 2px 6px; max-width: 14em; }
   .slash { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); background: var(--ground-1); max-height: 160px; overflow: auto; }
