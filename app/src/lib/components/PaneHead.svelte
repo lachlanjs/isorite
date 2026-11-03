@@ -20,6 +20,9 @@
     questions: "Open questions (Alt+Q)", problems: "Problems (Alt+B)", web: "Links to the web (Alt+W)", code: "Links to code (Alt+K)", pictures: "Files beside the notes: pictures, artifacts, data (Alt+I)",
     notes: "Agents may edit the notes (Alt+N)", files: "The agent may edit the project's files (Alt+F)", run: "The agent may run commands (Alt+R)",
   };
+  // On the Atlas, each switch also says its name when the pane is wide enough (the pane is resized, so it is the pane's
+  // width that decides, not the screen's: see the container queries below).
+  const NAMES: Partial<Record<Switch, string>> = { questions: "questions", problems: "problems", web: "web", code: "code", pictures: "files", context: "context" };
   const COLOUR: Record<Switch, string> = { provenance: "growth", timeline: "lattice", questions: "rose", problems: "text", web: "lattice", code: "lattice", pictures: "lattice", context: "growth", notes: "growth", files: "growth", run: "growth" };
   // The project's files and commands are the terminal's: offered only while one is attached (M11).
   const shown = $derived((SWITCHES[pane] as readonly Switch[]).filter((k) => (k !== "files" && k !== "run") || panes.attached));
@@ -36,7 +39,7 @@
 
 <svelte:window onpointerdown={outside} onkeydown={(e) => { if (open && e.key === "Escape") panes.settings = null; }} />
 
-<header class="phead">
+<header class="phead" class:named={pane === "atlas"}>
   {#if first}<BaseSwitch />{/if}
   <span class="pname">{name}</span>
   <span class="switches" role="group" aria-label="{name}'s switches">
@@ -51,6 +54,7 @@
           {:else if k === "files"}<path d="M3.5 2.5h5.5l3.5 3.5v7.5h-9z" /><path d="M9 2.5V6h3.5" />
           {:else}<path d="M3 4.5l3 3.5-3 3.5M7.5 12h5.5" />{/if}
         </svg>{/if}
+        {#if NAMES[k]}<span class="lbl" aria-hidden="true">{NAMES[k]}</span>{/if}
       </button>
     {/each}
   </span>
@@ -71,7 +75,7 @@
 {/if}
 
 <style>
-  .phead { height: 40px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 10px 0 16px; border-bottom: 1px solid var(--line); white-space: nowrap; user-select: none; position: relative; min-width: 0; overflow: hidden; }
+  .phead { container: phead / inline-size; height: 40px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 10px 0 16px; border-bottom: 1px solid var(--line); white-space: nowrap; user-select: none; position: relative; min-width: 0; overflow: hidden; }
   .pname { font-family: var(--font-pixel); font-size: 15px; color: var(--text-soft); display: flex; align-items: center; gap: 8px; }
   .pname::before { content: ""; width: 6px; height: 6px; background: var(--line-strong); }
   :global(.pane.focus) .pname { color: var(--text); }
@@ -80,6 +84,21 @@
   .sw { position: relative; width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .sw:hover, .sw:focus-visible { color: var(--text); }
   .sw[aria-pressed="true"] { background: var(--c, var(--lattice)); color: var(--ground-0); --cut: 4px; clip-path: var(--chosen-cut); }
+  .lbl { display: none; font: 12px/1 var(--font-ui); letter-spacing: .02em; }
+  /* The Atlas's switches, the kinds it shows: each is tinted its own colour while off, so what it would bring back is
+     seen, and they take the width the pane has: wider buttons first, then each with its name. */
+  .named .sw:not([aria-pressed="true"]) { color: color-mix(in srgb, var(--c) 55%, var(--text-faint)); }
+  .named .sw:not([aria-pressed="true"]):hover, .named .sw:not([aria-pressed="true"]):focus-visible { color: var(--c); }
+  @container phead (min-width: 520px) {
+    .named .switches { gap: 3px; }
+    .named .sw { width: 38px; }
+    .named .sw :global(svg) { width: 18px; height: 18px; }
+  }
+  @container phead (min-width: 760px) {
+    .named .switches { gap: 4px; }
+    .named .sw { width: auto; padding: 0 12px 0 10px; display: inline-flex; align-items: center; gap: 7px; }
+    .named .lbl { display: inline; }
+  }
   .grow { flex: 1 1 auto; }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; background: none; border: 0; padding: 0; cursor: pointer; }
   .icon:hover, .icon:focus-visible { color: var(--text); }

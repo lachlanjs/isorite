@@ -2,11 +2,10 @@
    structure and for you, growth gold for Iso, malachite for what is done, rose for what is open or failed. Nothing
    else has a hue. Nothing is rounded and nothing casts a shadow. */
 
-@font-face { font-family: "Ioskeley Mono"; font-style: normal; font-weight: 100 550; font-display: swap; src: url(/fonts/ioskeley-mono-latin-regular.woff2) format("woff2"); }
-@font-face { font-family: "Ioskeley Mono"; font-style: italic; font-weight: 100 550; font-display: swap; src: url(/fonts/ioskeley-mono-latin-italic.woff2) format("woff2"); }
-@font-face { font-family: "Ioskeley Mono"; font-style: normal; font-weight: 551 900; font-display: swap; src: url(/fonts/ioskeley-mono-latin-bold.woff2) format("woff2"); }
-@font-face { font-family: "Ioskeley Mono"; font-style: italic; font-weight: 551 900; font-display: swap; src: url(/fonts/ioskeley-mono-latin-bolditalic.woff2) format("woff2"); }
-@font-face { font-family: "Departure Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/departure-mono-latin-regular.woff2) format("woff2"); }
+@font-face { font-family: "Lyth Mono"; font-style: normal; font-weight: 100 550; font-display: swap; src: url(/fonts/lyth-mono-latin-regular.woff2) format("woff2"); }
+@font-face { font-family: "Lyth Mono"; font-style: italic; font-weight: 100 550; font-display: swap; src: url(/fonts/lyth-mono-latin-italic.woff2) format("woff2"); }
+@font-face { font-family: "Lyth Mono"; font-style: normal; font-weight: 551 900; font-display: swap; src: url(/fonts/lyth-mono-latin-bold.woff2) format("woff2"); }
+@font-face { font-family: "Lyth Mono"; font-style: italic; font-weight: 551 900; font-display: swap; src: url(/fonts/lyth-mono-latin-bolditalic.woff2) format("woff2"); }
 @font-face { font-family: "Charter"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/charter-regular.woff2) format("woff2"); }
 @font-face { font-family: "Charter"; font-style: italic; font-weight: 400; font-display: swap; src: url(/fonts/charter-italic.woff2) format("woff2"); }
 @font-face { font-family: "Charter"; font-style: normal; font-weight: 700; font-display: swap; src: url(/fonts/charter-bold.woff2) format("woff2"); }
@@ -36,11 +35,11 @@
   --malachite-soft: color-mix(in srgb, var(--malachite) var(--soft), var(--ground-1));
   --rose-soft: color-mix(in srgb, var(--rose) var(--soft), var(--ground-1));
 
-  /* Ioskeley Mono for the interface, Departure Mono for display, Charter for prose. */
+  /* Lyth Mono (hinted, OFL) for the interface and display, Charter for prose. */
   --font-text: "Charter", "Bitstream Charter", Georgia, serif;
-  --font-ui: "Ioskeley Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-ui: "Lyth Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-mono: var(--font-ui);
-  --font-pixel: "Departure Mono", "Ioskeley Mono", ui-monospace, monospace;
+  --font-pixel: "Lyth Mono", ui-monospace, monospace;
   --text-size: 18px;
   --measure: 680px;
 

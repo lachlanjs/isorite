@@ -317,11 +317,15 @@ test("a drag from a note never moves the map; a drag from open ground does", asy
 test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given to Iso; a drag inside moves the map", async ({ page }) => {
   await atlas(page);
   const tray = await showContext(page, "Atlas");
-  // Held still on a note: it goes into Iso's context, listed in Iso's Context view, and the map says so.
+  // Held still on a note, three tags appear (M33); let go on the gold one and it goes into Iso's context, listed in Iso's
+  // Context view, and the map says so.
   const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
   await page.mouse.move(huffman.x + 10, huffman.y + 6);
   await page.mouse.down();
-  await page.waitForTimeout(800);
+  const send = page.locator('[data-tag="send"]');
+  await expect(send).toBeVisible();
+  const tag = (await send.boundingBox())!;
+  await page.mouse.move(tag.x + tag.width / 2, tag.y + tag.height / 2, { steps: 4 });
   await page.mouse.up();
   await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
   await expect(tray.locator("li")).toHaveText([/^◆\s*Huffman codes\s*$/]);

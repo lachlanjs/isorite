@@ -37,11 +37,13 @@
       {#each rest as r (r.key)}<path class={r.strong ? "base" : "base weak"} class:trunk={r.trunk} d={r.d} />{/each}
       {#each hot as r (r.key)}
         {#if pointed && r.kind !== "iso"}<path class="along touch" pathLength="1" d={r.d} style:stroke-width="{2 / k}px" />
-        {:else}<path class="lit {r.kind}" class:still={r.still} d={r.d} />{/if}
+          <path class="pulse glow blue" pathLength="1" d={r.d} style:stroke-width="{4 / k}px" /><path class="pulse core" pathLength="1" d={r.d} style:stroke-width="{1.3 / k}px" />
+        {:else}<path class="lit {r.kind}" class:still={r.still} d={r.d} />
+          {#if !r.still && r.kind !== "uses"}<path class="pulse glow loop pk-{r.kind}" pathLength="1" d={r.d} style:stroke-width="{4 / k}px" /><path class="pulse core loop" pathLength="1" d={r.d} style:stroke-width="{1.3 / k}px" />{/if}{/if}
       {/each}
     {/if}
     <!-- Measured along its own length (pathLength), so drawn in the map's units: its width is set by the zoom. -->
-    {#each grown as r (r.key)}<path class="grown" pathLength="1" d={r.d} style:stroke-width="{3 / k}px" />{/each}
+    {#each grown as r (r.key)}<path class="pulse glow slow" pathLength="1" d={r.d} style:stroke-width="{5 / k}px" /><path class="pulse core slow" pathLength="1" d={r.d} style:stroke-width="{1.6 / k}px" />{/each}
   </g>
 </svg>
 
@@ -52,23 +54,32 @@
   .base.trunk { stroke-width: 3px; opacity: .8; }
   .weak { stroke-width: 1px; opacity: .3; }
   .weak.trunk { stroke-width: 2px; opacity: .45; }
-  .lit { stroke-width: 3px; stroke-dasharray: 7 5; animation: run .7s linear infinite; }
+  /* A lit link is a plain line with pulses of light running along it, from what is required to what requires it, again and
+     again; one whose links run both ways, and a weaker "uses", stand still. */
+  .lit { stroke-width: 2px; opacity: .55; }
   .requires { stroke: var(--requires); }
   .builds { stroke: var(--builds); }
   .iso { stroke: var(--growth); stroke-width: 2.5px; } /* as the boards' .au */
-  .uses { stroke: var(--text-soft); stroke-width: 1.5px; stroke-dasharray: none; animation: none; }
-  @keyframes run { to { stroke-dashoffset: -12; } }
-  /* Slow enough to follow (Lachlan, 2026-10-20): a moment's wait, 1.8 s to grow, 2 s to stand, then it fades. */
-  .grown { vector-effect: none; stroke: var(--growth); stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: grow 5.5s ease-in-out forwards; }
-  @keyframes grow { 0% { stroke-dashoffset: 1; opacity: 1; } 9% { stroke-dashoffset: 1; } 42% { stroke-dashoffset: 0; opacity: 1; } 78% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
-  .still { animation: none; }
+  .uses { stroke: var(--text-soft); stroke-width: 1.5px; opacity: 1; }
+  /* A pulse of light along a line, as the one round a touched control (lustre.ts): a bright head with a tail that fades,
+     run once from the start of the line past its end. A new link is gold, a pointed note's links blue; the core is the
+     sheen the controls' pulse has. The dash is measured along the line (pathLength 1), so it runs the same on any line. */
+  .pulse { vector-effect: none; stroke-linecap: round; stroke-dasharray: var(--len) 3; stroke-dashoffset: var(--len); animation: pulse var(--dur, .6s) cubic-bezier(.3, .5, .4, 1) forwards; }
+  .pulse.glow { --len: .3; stroke: var(--growth); opacity: .22; }
+  .pulse.glow.blue { stroke: var(--lattice); }
+  .pulse.glow.pk-requires { stroke: var(--requires); } .pulse.glow.pk-builds { stroke: var(--builds); } .pulse.glow.pk-iso { stroke: var(--growth); }
+  .pulse.loop { animation: pulse-loop 2.2s cubic-bezier(.3, .5, .4, 1) infinite; }
+  @keyframes pulse-loop { 0% { stroke-dashoffset: var(--len); } 55%, 100% { stroke-dashoffset: -1; } }
+  .pulse.core { --len: .09; stroke: rgb(var(--sheen)); opacity: .7; }
+  .pulse.slow { --dur: .9s; }
+  @keyframes pulse { to { stroke-dashoffset: -1; } }
   /* The beats of a new layout (V7): along each line from its start, back to it, then out again. */
   .along { vector-effect: none; stroke-dasharray: 1; stroke-linecap: butt; }
   .retract { stroke-dashoffset: 0; animation: retract 0.22s ease-in forwards; }
   .draw { stroke-dashoffset: 1; animation: draw 0.34s ease-out forwards; }
   /* 1.5 times a change (Lachlan, 2026-10-29), slow enough to follow where it goes. */
-  .touch { stroke: var(--lattice); stroke-dashoffset: 1; animation: draw calc(var(--t-change) * 1.5) var(--ease-out) forwards; }
+  .touch { stroke: var(--lattice); stroke-dashoffset: 1; opacity: .85; animation: draw calc(var(--t-change) * 1.2) var(--ease-out) forwards; }
   @keyframes retract { to { stroke-dashoffset: 1; } }
   @keyframes draw { to { stroke-dashoffset: 0; } }
-  @media (prefers-reduced-motion: reduce) { .lit { animation: none; } .touch { animation: none; stroke-dashoffset: 0; } .grown { animation: none; stroke-dashoffset: 0; opacity: .6; } }
+  @media (prefers-reduced-motion: reduce) { .touch { animation: none; stroke-dashoffset: 0; } .pulse { display: none; } }
 </style>

@@ -14,10 +14,12 @@
   import { tray, type Part } from "$lib/tray.svelte.ts";
   import { pointing } from "$lib/pointing.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
-  import { CELL, MAX_ZOOM, MIN_ZOOM, TITLE_UNITS, TITLE_PX, directLine, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
+  import { CELL, MAX_ZOOM, MIN_ZOOM, TITLE_UNITS, TITLE_PX, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { satellites, withoutNotes, withProspects, type Prospect } from "$lib/atlas/kinds.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
+  import { Gesture, type Item } from "$lib/gesture.svelte.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
+  import HoldTags from "./HoldTags.svelte";
   import AtlasFolder from "./AtlasFolder.svelte";
   import AtlasRoutes from "./AtlasRoutes.svelte";
 
@@ -194,21 +196,12 @@
       el?.animate([{ opacity: 0 }, { opacity: 0, offset: quiet ? 0 : 0.45 }, { opacity: 1 }], { duration: quiet ? 200 : 1000, easing: "ease-out" });
     }
     const fresh = report.model.edges.filter(([a, b]) => !was.edges.has(`${a}>${b}`) && !a.startsWith("@") && !b.startsWith("@") && was.refs.has(a) && was.refs.has(b));
-    grown = fresh.flatMap(([a, b]) => {
-      const i = idx!.at.get(a), j = idx!.at.get(b);
-      if (i === undefined || j === undefined) return [];
-      return [{ key: `${a}>${b}`, d: between(L!.items[shownAs(idx!, open, i)]!, L!.items[shownAs(idx!, open, j)]!) }];
-    });
-    if (grown.length) setTimeout(() => (grown = []), 5600);
+    // A pulse runs along the way the link is drawn at rest (the same route the lit links take), not a line of its own.
+    stopGrown?.();
+    stopGrown = light(fresh.map(([a, b]) => ({ from: a, to: b, kind: "uses" as const })), (h) => { grown = h.map((r) => ({ key: r.key, d: r.d })); });
+    if (fresh.length) { clearTimeout(grownTimer); grownTimer = setTimeout(() => { grown = []; stopGrown?.(); stopGrown = undefined; }, 1600); }
   }
-  /** A straight way from one block's side to another's, as a note for Iso's lines are drawn. */
-  function between(o: { gx: number; gy: number; w: number; h: number }, n: { gx: number; gy: number; w: number; h: number }): string {
-    const dx = n.gx + n.w / 2 - (o.gx + o.w / 2), dy = n.gy + n.h / 2 - (o.gy + o.h / 2), across = Math.abs(dx) * (11 / 18) >= Math.abs(dy);
-    const p: [number, number] = across ? [dx < 0 ? o.gx : o.gx + o.w, o.gy + o.h / 2] : [o.gx + o.w / 2, dy < 0 ? o.gy : o.gy + o.h];
-    const q: [number, number] = across ? [dx < 0 ? n.gx + n.w : n.gx, n.gy + n.h / 2] : [n.gx + n.w / 2, dy < 0 ? n.gy + n.h : n.gy];
-    return linePath(directLine(p, q, across), 0, L!.cell);
-  }
-
+  let stopGrown: (() => void) | undefined, grownTimer: ReturnType<typeof setTimeout> | undefined;
   // The viewport's size; the first time it is known, the whole map is framed. After that, as a note opens beside the
   // Atlas or the divider moves (V1), what was in the middle stays in the middle.
   $effect(() => {
@@ -223,6 +216,9 @@
     return () => ro.disconnect();
   });
 
+  // The background's dots are the map's own lattice, one a cell (or every second, fourth… cell, or half, where that keeps them
+  // between 14 and 28 px apart), so they zoom with the folders and stay where the cells are.
+  const dot = $derived.by(() => { let s = (L?.cell ?? CELL) * view.k; if (!(s > 0)) return 24; while (s < 14) s *= 2; while (s >= 28) s /= 2; return s; });
   const folders = $derived(L ? L.items.flatMap((item, i) => (item.kind === "folder" && open[i] !== "-" ? [{ item, i, open: open[i] === "o" }] : [])) : []);
   const notes = $derived(L ? L.items.flatMap((item, i) => (item.kind === "note" && open[i] === "s" ? [{ item, i }] : [])) : []);
   // The routes at rest, merged where they overlap. A line between folders is labelled with its count, as on the boards,
@@ -431,7 +427,74 @@
   /** Let go: the note being made. */
   let making = false;
   let holdShow: ReturnType<typeof setTimeout> | undefined, holdDone: ReturnType<typeof setTimeout> | undefined;
-  function unhold(): void { clearTimeout(holdShow); clearTimeout(holdDone); holdShow = holdDone = undefined; gripped = null; if (!making) grasp = null; }
+  // Press and hold on a note or a folder (M33), as in the list: tags to move it (carried to a folder of the map), delete it
+  // (asked first) or send it to Iso. A mouse only: a finger on the map pans it, and holds to be offered a choice (below).
+  const g = new Gesture({
+    move: (item, dir) => void moveHeld(item, dir),
+    remove: (item) => void askRemove(item),
+    send: (item) => give(item.id, item.kind),
+  }, { drift: "cancel", scroll: false, dropAt: (x, y) => folderUnder(x, y) });
+  let asking = $state.raw<{ item: Item; text: string } | null>(null);
+  /** The folder of the map under a point of the screen: the deepest one shown, not the one carried nor inside it. */
+  function folderUnder(x: number, y: number): string | null {
+    if (!L || !viewport) return null;
+    const r = viewport.getBoundingClientRect(), u = L.cell * view.k, gx = (x - r.left - view.x) / u, gy = (y - r.top - view.y) / u;
+    const carried = g.item?.kind === "folder" ? g.item.id : null;
+    let best: { ref: string; depth: number } | null = null;
+    L.items.forEach((n, i) => {
+      if (n.kind !== "folder" || open[i] === "-" || !n.ref || n.ref.startsWith("@") || gx < n.gx || gx >= n.gx + n.w || gy < n.gy || gy >= n.gy + n.h) return;
+      const ref = n.ref.replace(/\/$/, "");
+      if (carried !== null && (ref === carried || ref.startsWith(`${carried}/`))) return;
+      if (!best || n.depth > best.depth) best = { ref, depth: n.depth };
+    });
+    return (best as { ref: string } | null)?.ref ?? null;
+  }
+  async function moveHeld(item: Item, dir: string): Promise<void> {
+    const from = item.id.replace(/\/$/, ""), name = from.split("/").at(-1)!, to = dir ? `${dir}/${name}` : name;
+    if (to === from) return;
+    try {
+      if (item.kind === "folder") await app.api.moveFolder(from, to);
+      else await app.api.moveNote(from, to, (await app.api.readNote(from)).version);
+      await app.refresh();
+      void load();
+    } catch (e) { notice = (e as Error).message; }
+  }
+  async function askRemove(item: Item): Promise<void> {
+    try {
+      if (item.kind === "folder") {
+        const n = app.listing.notes.filter((x) => x.dir === item.id || x.dir.startsWith(`${item.id}/`)).length;
+        if (n) { notice = `${item.id} holds ${n} ${n === 1 ? "note" : "notes"}: move or delete ${n === 1 ? "it" : "them"} first.`; return; }
+        asking = { item, text: `Delete the empty folder ${item.id}?` };
+        return;
+      }
+      const map = await app.api.map();
+      const linked = [...new Set(map.model.edges.filter(([from, to]) => to === item.id && from !== item.id && !from.startsWith("@")).map(([from]) => map.notes[from]?.title || from))];
+      asking = { item, text: `Delete “${item.title}”? ${linked.length ? `${linked.length === 1 ? "One note links" : `${linked.length} notes link`} to it (${linked.join(", ")}); ${linked.length === 1 ? "its link is" : "their links are"} left broken.` : "No note links to it."} Its history stays.` };
+    } catch (e) { notice = (e as Error).message; }
+  }
+  async function confirmRemove(): Promise<void> {
+    const a = asking;
+    asking = null;
+    if (!a) return;
+    try {
+      if (a.item.kind === "folder") await app.api.deleteFolder(a.item.id);
+      else await app.api.deleteNote(a.item.id, (await app.api.readNote(a.item.id)).version);
+      await app.refresh();
+      void load();
+    } catch (e) { notice = (e as Error).message; }
+  }
+  // The held item and the folder it is over wear what letting go would do, on the map's own elements.
+  $effect(() => {
+    const phase = g.phase, tag = g.tag, item = g.item, over = g.over;
+    if (!viewport || !item || phase === "idle") return;
+    const held = viewport.querySelector<HTMLElement>(item.kind === "folder" ? `[data-folder="${CSS.escape(item.id)}"]` : `[data-note="${CSS.escape(item.id)}"]`);
+    const target = phase === "moving" && over ? viewport.querySelector<HTMLElement>(`[data-folder="${CSS.escape(over)}"]`) : null;
+    const cls = phase === "moving" ? "g-lifted" : tag === "delete" ? "g-doomed" : tag === "send" ? "g-sending" : "";
+    if (cls) held?.classList.add(cls);
+    target?.classList.add("g-over");
+    return () => { held?.classList.remove("g-lifted", "g-doomed", "g-sending"); target?.classList.remove("g-over"); };
+  });
+  function unhold(): void { g.stop(); clearTimeout(holdShow); clearTimeout(holdDone); holdShow = holdDone = undefined; gripped = null; if (!making) grasp = null; }
   /** The deepest folder of the base holding a place on the map (in cells): "" for the top. */
   function folderAt(gx: number, gy: number): string {
     let best: { ref: string; depth: number } | null = null;
@@ -441,7 +504,14 @@
   function holding(e: PointerEvent, at: { x: number; y: number }): void {
     unhold();
     if (offered && !(e.target instanceof Element && e.target.closest(".offer"))) offered = null;
-    if (making || !L || !idx || !(e.target instanceof Element) || e.target.closest("button, .dock")) return;
+    if (making || !L || !idx || !(e.target instanceof Element)) return;
+    // A note or a folder held with a mouse: the tags. (A folder's rename field takes the press itself.)
+    if (e.pointerType === "mouse" && !e.target.closest("input, .dock, .offer")) {
+      const part = pressed(e);
+      const face = e.target.closest<HTMLElement>(part?.kind === "folder" ? "[data-folder]" : "[data-note]");
+      if (part && face && !part.id.startsWith("?") && !report?.files?.[part.id]) { g.begin({ kind: part.kind as "note" | "folder", id: part.id.replace(/\/$/, ""), title: part.title }, e, face); return; }
+    }
+    if (e.target.closest("button, .dock")) return;
     const on = e.target.closest<HTMLElement>("[data-note]")?.dataset.note ?? "";
     if (on.startsWith("@")) return; // a note for Iso is not a place in the base
     if (on) {
@@ -515,6 +585,12 @@
   /** What an item opens: a note, a file, or for a folder of pictures, the note they were pasted into (M22). */
   const opens = (ref: string): string => (ref.endsWith("/") ? ref.slice(0, -1) : ref);
   const title = (ref: string): string => report?.notes[ref]?.title ?? report?.files?.[ref]?.title ?? ref.split("/").at(-1) ?? ref;
+  /** A folder renamed where it is: its place in the one it is in, under the new name. */
+  async function rename(ref: string, name: string): Promise<void> {
+    const from = ref.replace(/\/$/, ""), parent = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "";
+    const to = [parent, name.replace(/^\/+|\/+$/g, "")].filter(Boolean).join("/");
+    try { await app.api.moveFolder(from, to); await app.refresh(); void load(); } catch (e) { given = (e as Error).message; }
+  }
   const folderName = (ref: string): string => ref.split("/").at(-1) || app.session?.name || "the base";
 
   // ------------------------------------------------------------ moving about
@@ -578,7 +654,7 @@
     if (pointers.size === 1) holding(e, local(e)); else unhold();
   }
   function move(e: PointerEvent): void {
-    if (!pointers.has(e.pointerId) || !grip) return;
+    if (!pointers.has(e.pointerId) || !grip || g.phase !== "idle" && g.item) return;
     pointers.set(e.pointerId, local(e));
     if (gripped) { drawHeld(local(e)); return; }
     const ps = [...pointers.values()];
@@ -732,7 +808,7 @@
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onclick={ground} onkeydown={key}
   ondragstart={(e) => e.preventDefault()}
   oncontextmenu={(e) => { if (grasp || holdShow !== undefined || holdDone !== undefined || offered) e.preventDefault(); }}>
-  <div class="ground dots" aria-hidden="true" style="transform: translate({((view.x % 24) + 24) % 24}px, {((view.y % 24) + 24) % 24}px)"></div>
+  <div class="ground dots" aria-hidden="true" style="background-size: {dot}px {dot}px; transform: translate({(((view.x + 56 + dot / 2) % dot) + dot) % dot}px, {(((view.y + 56 + dot / 2) % dot) + dot) % dot}px)"></div>
   {#if failed}
     <p class="said">The map could not be drawn: {failed}</p>
   {:else if L && report}
@@ -742,7 +818,7 @@
     <div class="atlas-world" class:labels class:shifting class:moving data-open={open} style="transform: translate({moving ? view.x : Math.round(view.x)}px, {moving ? view.y : Math.round(view.y)}px) scale({view.k / drawnK}); --u: {(L?.cell ?? 7) * drawnK}px; --k: {drawnK}">
       <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each folders as f (f.item.id)}
-          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} />
+          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} bare={f.open && !L.items.some((x) => x.parent === f.i)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} onrename={f.item.ref.startsWith("@") || !f.item.ref ? undefined : (name) => void rename(f.item.ref, name)} />
       {/each}
       </div>
       <AtlasRoutes k={drawnK} {rest} pointed={!chosen && !!pointed} hot={[...(isoLens ? isoHot : []), ...hot, ...thereHot]} counts={litCount} {grown} {beat} {retracting} />
@@ -791,6 +867,14 @@
       <p class="notice" role="alert">{notice}</p>
     {/if}
     {#if given}<p class="given" role="status">◆ {given}</p>{/if}
+    <HoldTags {g} mode="point" bounds={viewport?.getBoundingClientRect() ?? null} />
+    <HoldTags {g} mode="ghost" />
+    {#if asking}
+      <div class="frame asking" role="alertdialog" aria-label="Delete">
+        <span>{asking.text}</span>
+        <span class="row"><button class="btn danger" type="button" onclick={() => void confirmRemove()}>{asking.item.kind === "folder" ? `delete ${asking.item.id}` : "delete"}</button><button class="btn quiet" type="button" onclick={() => (asking = null)}>keep it</button></span>
+      </div>
+    {/if}
     {#if panes.on.context && !given && panes.settings === "atlas"}
       <p class="legend" aria-hidden="true"><span><i class="k g"></i>you gave it</span><span><i class="k h"></i>the agent read it</span><span><i class="k d"></i>the agent changed it</span><span><i class="k n">1</i>read, in order</span></p>
     {/if}
@@ -820,7 +904,14 @@
   .atlas-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
   .atlas-world.moving { will-change: transform; }
   /* The dot grid, moved with the map by a transform a cell at most, so that a pan paints nothing. */
-  .ground { position: absolute; inset: -24px; z-index: -1; pointer-events: none; will-change: transform; }
+  .asking { position: absolute; z-index: 30; left: 50%; top: 24px; transform: translateX(-50%); width: min(380px, calc(100% - 24px)); display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); font-size: 13px; line-height: 1.45; user-select: text; }
+  .asking .row { display: flex; gap: var(--space-2); }
+  /* What a held item shows (M33), on the map's own elements. */
+  :global(.g-lifted) { opacity: .45; }
+  :global(.g-doomed) { outline: calc(2.5 * var(--px, 1px)) solid var(--rose); outline-offset: calc(2 * var(--px, 1px)); background: var(--rose-soft); }
+  :global(.g-sending) { outline: calc(2.5 * var(--px, 1px)) solid var(--growth); outline-offset: calc(2 * var(--px, 1px)); }
+  :global(.g-over) { outline: calc(2 * var(--px, 1px)) dashed var(--lattice); outline-offset: calc(3 * var(--px, 1px)); }
+  .ground { position: absolute; inset: -56px; opacity: .5; z-index: -1; pointer-events: none; will-change: transform; }
   .scaled { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
   /* A link out of the base (M12): a small block beside its note, in the map's units. */
   .sat { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(3 * var(--u)); height: calc(3 * var(--u)); display: grid; place-items: center; background: var(--ground-1); border: var(--px) solid var(--line-strong); color: var(--lattice); }

@@ -43,8 +43,8 @@
 
   <section>
     <h2 class="label">type</h2>
-    <p class="pixel" style:font-size="22px">Departure Mono, for display</p>
-    <p>Ioskeley Mono, for the interface. <b>Bold.</b> <i>Italic.</i> 0123456789</p>
+    <p class="pixel" style:font-size="22px">Lyth Mono, for display</p>
+    <p>Lyth Mono, for the interface. <b>Bold.</b> <i>Italic.</i> 0123456789</p>
     <p class="serif" style:font-size="18px">Charter, for what is read: the entropy of a source is the average surprise of its symbols. <b>Bold</b>, <i>italic</i>.</p>
   </section>
 

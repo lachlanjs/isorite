@@ -35,14 +35,24 @@ function outline(w: number, h: number, cut: number): [number, number][] {
 
 /** One pulse of light round el, from where its outline starts both ways to the other side (u = distance along it). A touch
  *  while one runs lets it finish; a choice (again) starts it over, on the face it chose. */
-export function lustre(el: HTMLElement, again = false): void {
+export function lustre(el: HTMLElement, again = false, colour?: string): void {
   if (still() || (runs.has(el) && !again)) return;
   runs.get(el)?.remove();
   const box = el.getBoundingClientRect(), keep = clipped(el, box);
   if (!keep || box.width < 8) return;
-  const cs = getComputedStyle(el), [R, G, B] = cs.getPropertyValue("--sheen").trim().split(/\s+/).map(Number);
-  const peak = Math.min(1, (parseFloat(cs.getPropertyValue("--glint")) || 0.4) * 1.6 * (parseFloat(cs.getPropertyValue("--sheen-k")) || 1));
-  const cut = parseFloat(cs.getPropertyValue("--cut")) || 0;
+  const cs = getComputedStyle(el);
+  let [R, G, B] = cs.getPropertyValue("--sheen").trim().split(/\s+/).map(Number);
+  let peak = Math.min(1, (parseFloat(cs.getPropertyValue("--glint")) || 0.4) * 1.6 * (parseFloat(cs.getPropertyValue("--sheen-k")) || 1));
+  // In a colour of the page's (a custom property, such as --requires), as a folder on the Atlas takes its tone.
+  if (colour) {
+    const probe = document.createElement("canvas").getContext("2d")!;
+    probe.fillStyle = "#000"; probe.fillStyle = cs.getPropertyValue(colour).trim() || "#000";
+    const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(probe.fillStyle));
+    if (hex) { [R, G, B] = [parseInt(hex[1]!, 16), parseInt(hex[2]!, 16), parseInt(hex[3]!, 16)]; peak = 0.6; }
+  }
+  // A face drawn in a scaled layer (the Atlas) is cut as much smaller or larger as it is.
+  const cut = (parseFloat(cs.getPropertyValue("--cut")) || 0) * (el.offsetWidth ? box.width / el.offsetWidth : 1);
+  if ((box.width + 2 * PAD) * (box.height + 2 * PAD) * (window.devicePixelRatio || 1) ** 2 > 2.5e7) return;
   const w = box.width, h = box.height, pts = outline(w, h, cut), n = pts.length;
   // The outline as segments, and a point at a distance along it (the line closed).
   const seg = pts.map((p, i) => { const q = pts[(i + 1) % n]!; return Math.hypot(q[0] - p[0], q[1] - p[1]); });

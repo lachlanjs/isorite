@@ -12,6 +12,7 @@ isorite is a mapping that keeps structure (Iso is for isomorphism, not isometric
 - Where there is a direction it follows the structure it belongs to (a line down a folder's edge, across a link), not a decorative one. (?)
 - Three durations: 120 ms (acknowledge: press, hover, focus), 260 ms (change: open, close, swap), 600 ms+ (a result worth noticing: Iso wrote into a note, a check resolved). Nothing else. In CSS: `--t-ack`, `--t-change`, `--t-result`.
 - One curve for arrivals (ease-out), one for departures (ease-in). No springs, no bounce. In CSS: `--ease-out`, `--ease-in`.
+- Held on a note or a folder (M33), three tags: move is blue, delete is rose, send is gold, the one place gold stands for something you do: the thing is being handed to Iso.
 - Gold moves, and so may blue. Iso's work and growth animate in gold; your own actions may animate too, in blue, but less than Iso's (a pointed-at note's routes draw out in 390 ms; nothing of yours loops).
 - Every animation has a `prefers-reduced-motion` form that keeps the information and drops the movement.
 
@@ -24,7 +25,7 @@ isorite is a mapping that keeps structure (Iso is for isomorphism, not isometric
 - Voice: short, concrete, a little dry. No exclamation marks, no "Oops".
 - Gold is Iso's alone.
 - The Atlas's layout and routing do not change for style. Colour, weight, fill and motion only.
-- Ioskeley Mono is the display face. (Departure Mono, if kept anywhere, only at 11, 22, 33 or 44 px with no letter-spacing, or it blurs.) Map labels drawn at the screen's own pixels, not scaled with the map: 11 px, and larger in steps (13, 15, 18, 22) as a box grows on the screen.
+- Lyth Mono (hinted, OFL; from 0.17.0, in place of Ioskeley Mono and Departure Mono) is the interface, display and code face. It is not a pixel font, so any size will do; its advance is 0.604 em, about what Ioskeley had. Only the app loads it: the kit's artifact theme still inlines Ioskeley, whose files stay in `app/static/fonts`, since inlining Lyth would cost each artifact ~440 KB. Map labels drawn at the screen's own pixels, not scaled with the map: 11 px, and larger in steps (13, 15, 18, 22) as a box grows on the screen.
 - A row in a list (the notes) has a vein: touched or chosen, a blue marker grows down its left edge and a vein runs along its foot, and the lustre crosses it. `.vein-row` in `app/src/app.css`.
 - A link's kind is the weight of its vein, in the text's own colour: requires solid and blue (2 px), uses thin, see also dotted, the web dashed. Light runs along it when pointed at. The same in the note and in what Iso says. `.vein`.
 - Iso cites in the sentence: the phrase that rests on a note is the link to it. What it drew on stands under the reply as parts in corner brackets, and a phrase and its part are lit together. No numbered tail.
