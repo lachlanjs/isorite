@@ -76,7 +76,42 @@ Read on 2026-11-03. The Anthropic page is the primary source (Claude Code's "Leg
 5. Enforcement check: with the edit switch off and bash left out, confirm that a prompt asking the agent to change a file cannot change it, by any tool. With bash left in, show that it can, and write that down; this decides what "read-only" is allowed to promise.
 6. Done (see above). Loss check: run a long turn with a steer, a compaction and a tool cancel through the model, and compare what pi emitted with what the UI could show. List what is lost.
 7. Done (see above). Research step: whether the providers allow third-party harnesses to use subscription logins, and what pi supports. Write the answer in this file.
-8. Write the result: what worked, what did not, what it would cost to keep, and a recommendation (build on pi, borrow ideas, or stop).
+8. Done (see "Result"). Write the result: what worked, what did not, what it would cost to keep, and a recommendation (build on pi, borrow ideas, or stop).
+
+## Result (step 8)
+
+### Against the acceptance list
+
+- Highlight, chip, ask: met with pi. A passage added from a note shows as a chip in Iso's box, can be removed, goes with the message, and shows faint once given (`composer-chips.spec.ts`, desktop and phone). The pi agent receives it before the question and answers from it (`pi-host.test.ts`). With ACP the chip and the send are the same code and the passage arrives as today's quoted text; I did not run that against a real ACP agent in this spike, and the embedded-resource form is not built.
+- One UI for both: met. The pane reads one `TerminalView` through `PaneSessions`, and `pane-sessions.test.ts` serves it from a host that is not ACP. Nothing in the pages names a driver.
+- Read-only: met only in part, and the limit is written down. Without the shell tool, files are held to the project and `.git` is never written (`pi-reach.test.ts`). With it, nothing confines the agent.
+- Losses: not short. Thinking, steer and follow-up, and a compaction marker are lost, and the model's context is not kept between runs. Cancel works for a tool that honours the signal.
+- Atlas unchanged: met.
+
+### What worked
+
+- The loop itself. `pi-agent-core` with the base's own tools (`agentTools`, the same as over MCP) gave a working agent in a few hundred lines, tested without a network and with a real model for a fraction of a cent. Tool omission, a guard before every call and asking through the pane all behaved as designed.
+- The seam. `PaneSessions` and the chip are worth having whichever agent is behind the pane.
+
+### What did not, or is not done
+
+- Highlight-and-ask was possible before this spike through the ACP pane; the new thing the spike adds is that the pane can be served by an agent isorite controls, so the selection is visible to it and to the person in one place. That is a real gain for people with no terminal agent open, and none for people already living in Claude Code.
+- Claude subscriptions cannot be used (step 7). A pi-based harness means API billing for Claude models; ChatGPT plans are reported to work. For the people most likely to try isorite this is the largest cost.
+- No approval model or isolation in pi. We built the asking and the guard; confinement of a shell is a container or user's job, and that is ours to document and test.
+- Unbuilt and needed for daily use: persisted model context, steer and follow-up, thinking, compaction, a way to choose a model in the pane, and a terminal interface. Each is small alone; together they are the long-term cost of owning an agent that version 0.13 chose to remove.
+- Dependency weight (about 64 MB with `pi-coding-agent`; `pi-ai` and `pi-agent-core` alone are far lighter), and pi's own churn (a scope rename, a breaking 1.5.0).
+
+### Recommendation
+
+Borrow, and keep pi as an opt-in. Concretely:
+
+1. Merge the seam and the chips. They are driver-agnostic, tested, and fix a real gap in the pane whatever agent is behind it.
+2. Keep the pi host behind `ISORITE_PI`, labelled experimental, API-key only, tools off by default. Do not enable pi's Anthropic subscription login. Its cost is small and it gives a way to try the live loop without a terminal agent.
+3. Do not build the terminal interface, persistence, steer or compaction yet. Take them on only if people use the pi pane in practice for a few weeks, since those are the costs that make owning an agent expensive.
+4. Keep ACP and MCP as the main route. It is the only one that lets a Claude subscription pay for the work, and it is the route the terms allow.
+5. Before relying on the ACP side of the chip, run the "to verify" list against the real adapters and build the embedded resource where one is declared.
+
+Stopping is the cheaper alternative if the chip alone is enough: items 1 and 4 deliver most of the day-to-day value, and 2 can be dropped by deleting `src/pi/` and the three pi packages. Building on pi in earnest is justified only if API-key use is acceptable to the people you want to reach, which this spike cannot tell.
 
 ## Acceptance for the spike
 
