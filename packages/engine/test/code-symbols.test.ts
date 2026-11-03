@@ -41,3 +41,14 @@ test("a symbol no longer in its file is a broken link, as a missing file is; an 
   expect(note?.broken).toEqual(["code:sim.py#vanished"]);
   expect((await engine.map()).notes["sim/step"]!.links?.map((l) => l.href)).toEqual(["code:sim.py#Body.step", "code:sim.py#vanished", "code:sim.py#L1-L2", "code:sim.py#leapfrog"]);
 });
+
+test("the whole file is given to the reader, the lines a link names marked, past the lines shown in place", async () => {
+  const repo = new MemoryFiles(), engine = await open(repo);
+  const long = Array.from({ length: 200 }, (_, i) => `# ${i + 1}`).join("\n");
+  await repo.write("sim/long.py", `${long}\ndef tail(x):\n    return x\n`);
+  const whole = await engine.code("code:sim/long.py#tail", true);
+  expect(whole).toMatchObject({ state: "ok", start: 1, end: 202, total: 202, mark: { start: 201, end: 202 } });
+  expect(whole.state === "ok" && whole.text.split("\n")).toHaveLength(202);
+  expect(await engine.code("code:sim/long.py#gone", true)).toMatchObject({ state: "ok", total: 202 });
+  expect((await engine.code("code:sim/long.py#L5-L6", true) as { mark?: unknown }).mark).toEqual({ start: 5, end: 6 });
+});

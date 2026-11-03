@@ -92,7 +92,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     readNote: (id) => ask("note" + q(id)),
     fileUrl,
     pictures: () => ask("pictures"),
-    code: (href) => ask(`code?href=${encodeURIComponent(href)}`),
+    code: (href, full) => ask(`code?href=${encodeURIComponent(href)}${full ? "&full=1" : ""}`),
     savePicture: async (path, bytes) => {
       token ??= session().then((s) => s.token);
       const type = pictureType(path) ?? "application/octet-stream";
@@ -110,6 +110,8 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     journal: (id) => ask("journal" + q(id)),
     version: async (id, entry) => (await ask<{ text: string }>("version" + q(id) + "&entry=" + encodeURIComponent(entry))).text,
     makeFolder: (path) => write("POST", "folder", { path }),
+    moveFolder: async (from, to) => { await write("POST", "folder/move", { from, to }); },
+    deleteFolder: async (path) => { await write("POST", "folder/delete", { path }); },
     moveNote: (id, to, base) => write("POST", "note/move" + q(id), { to, base }),
     deleteNote: async (id, base) => { await write("POST", "note/delete" + q(id), { base }); },
     restore: (id, entry, base) => write("POST", "note/restore" + q(id), { entry, base }),

@@ -5,7 +5,7 @@
 import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { EditorView, drawSelection, keymap, placeholder } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
@@ -13,7 +13,7 @@ import { codeHighlighter, languages } from "$lib/code.ts";
 import { blocksTheme, embeds, renderedBlocks, type Embeds } from "./blocks.ts";
 import { format, formatKeymap, type Format } from "./commands.ts";
 import { linkAt, linkControl } from "./linkControl.ts";
-import { linkCompletion, type LinkTarget, type PictureSource } from "./links.ts";
+import { linkCompletion, type LinkTarget, type NoteMaker, type PictureSource } from "./links.ts";
 import { artifacts, livePreview, livePreviewTheme, codeBroken, pictures, type ArtifactAt, type PictureAt } from "./livePreview.ts";
 import { mathsSyntax } from "./maths.ts";
 import { fileOf, noteOf } from "./noteOf.ts";
@@ -31,11 +31,15 @@ export interface EditorOptions {
   onSave: () => void;
   label: string;
   notes: () => LinkTarget[];
+  /** Offers to make a note from a `[[` name that is no note's yet (M34), beside the note being written. */
+  noteMaker?: NoteMaker;
   /** Plain Markdown, the whole file, instead of the live preview. */
   source?: boolean;
   placeholder?: string;
   /** A link to a note or a file was followed (Ctrl or Cmd and a click): the note's id, or the file's path. */
   onFollow?: (id: string) => void;
+  /** A link to code was followed (Ctrl or Cmd and a click): the link, `code:path#anchor`, to be read in full (M34). */
+  onCode?: (href: string) => void;
   /** Iso was asked for (Ctrl or Cmd and Enter): where the cursor or the selection is. */
   onAsk?: (where: Where) => void;
   /** The cursor or the selection moved. */
@@ -145,7 +149,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       touchedLines,
       pointingLinks(opts.onPoint),
       ...(opts.readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []),
-      linkCompletion(opts.notes, opts.pictureSource ?? null),
+      linkCompletion(opts.notes, opts.pictureSource ?? null, opts.noteMaker ?? null),
       ...(opts.onPictures && !opts.readOnly ? [pictureDrops(opts.onPictures)] : []),
       placeholder(opts.placeholder ?? "Write the note here. # for a heading, [[ to link to another note, [[! to show a picture, $x$ for maths."),
       EditorView.contentAttributes.of({ "aria-label": opts.label, spellcheck: "true", autocapitalize: "sentences", autocorrect: "on" }),
@@ -164,9 +168,17 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
           if (!opts.onFollow || !(event.ctrlKey || event.metaKey) || event.button !== 0) return false;
           const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
           const link = pos === null ? null : linkAt(view.state, pos);
+          // A link to code (`code:path#anchor`) is not one the link control knows (it has no kind), so it is looked for here.
+          const code = pos === null || link ? null : codeLinkAt(view.state, pos);
+          if (code && opts.onCode) { event.preventDefault(); opts.onCode(code); return true; }
           // A note, or since M23 a file of the notes (an artifact, data, …), shown in place or linked.
           const id = !link ? null : link.embed ? fileOf(link.url) : noteOf(link.url) ?? fileOf(link.url);
-          if (id === null) return false;
+          if (id === null) {
+            if (!link || !opts.onCode || !link.url.trim().startsWith("code:")) return false;
+            event.preventDefault();
+            opts.onCode(link.url.trim());
+            return true;
+          }
           event.preventDefault();
           opts.onFollow(id);
           return true;
@@ -179,6 +191,19 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
     ],
   });
   return new EditorView({ state, parent });
+}
+
+/** The address of the link to code (`code:…`), plain or an embed, that a position is in or at the end of. */
+function codeLinkAt(state: EditorState, pos: number): string | null {
+  const tree = syntaxTree(state);
+  for (const side of [-1, 1] as const) {
+    for (let n: ReturnType<typeof tree.resolveInner> | null = tree.resolveInner(pos, side); n; n = n.parent) {
+      if (n.name !== "Link" && n.name !== "Image") continue;
+      const u = n.getChild("URL"), url = u ? state.sliceDoc(u.from, u.to).trim() : "";
+      return url.startsWith("code:") ? url : null;
+    }
+  }
+  return null;
 }
 
 /** Bold, a heading, a link…; the editor keeps the focus. */

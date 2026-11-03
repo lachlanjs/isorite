@@ -124,7 +124,8 @@ export function nestedLayout(model, { flow = "up", grain = "fine", plan = false,
     const inner = kids.length ? place(folder, kids, way) : { w: 0, h: 0 };
     box.set(folder, folder === model.root ? inner
       : kids.length ? { w: Math.max(MIN_FOLDER, inner.w + 2 * ROOM_PAD), h: inner.h + ROOM_PAD + HEAD + ROOM_PAD }
-      : { w: MIN_FOLDER, h: HEAD + 2 * ROOM_PAD });
+      // An empty folder (one whose notes are switched off, say) keeps the room of a note, so it does not collapse to a strip.
+      : { w: Math.max(MIN_FOLDER, NOTE[0] + 2 * ROOM_PAD), h: NOTE[1] + HEAD + 2 * ROOM_PAD });
   };
 
   // Lay out one folder's items along `way`. Items joined to each other, directly or through others, are a

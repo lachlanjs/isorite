@@ -168,7 +168,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   // The code a code link names, for showing in a note (M29); served as the repository's pictures are (`/api/file?code=`).
   app.get("/api/code", async (c) => {
     const href = c.req.query("href") ?? "";
-    return answer(c, () => api.code(href));
+    return answer(c, () => api.code(href, c.req.query("full") === "1"));
   });
 
   app.put("/api/note", async (c) => {
@@ -202,6 +202,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   post("/api/note/restore", z.object({ entry: z.string().max(64), base: z.string().max(64) }).strict(), (c, b) => api.restore(id(c), b.entry, b.base));
   post("/api/note/move", z.object({ to: z.string().max(400), base: z.string().max(64) }).strict(), (c, b) => api.moveNote(id(c), b.to, b.base));
   post("/api/folder", z.object({ path: z.string().max(400) }).strict(), (_c, b) => api.makeFolder(b.path));
+  post("/api/folder/delete", z.object({ path: z.string().max(400) }).strict(), (_c, b) => api.deleteFolder(b.path));
+  post("/api/folder/move", z.object({ from: z.string().max(400), to: z.string().max(400) }).strict(), (_c, b) => api.moveFolder(b.from, b.to));
   post("/api/note/delete", z.object({ base: z.string().max(64) }).strict(), (c, b) => api.deleteNote(id(c), b.base));
   post("/api/note/done", z.object({ done: z.boolean(), base: z.string().max(64) }).strict(), (c, b) => api.setDone(id(c), b.done, b.base));
   post("/api/proposal/keep", Named, (c, b) => api.keep(id(c), b.proposal, b.region));

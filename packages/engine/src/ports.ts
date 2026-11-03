@@ -27,6 +27,8 @@ export interface Files {
   remove(path: string): Promise<void>;
   /** Make an empty folder and the ones above it (M31). Optional: a place that can't hold one empty says so by not having it. */
   mkdir?(dir: string): Promise<void>;
+  /** Remove an empty folder; refuses a folder that holds anything. */
+  rmdir?(dir: string): Promise<void>;
 }
 
 export interface Clock {
@@ -57,6 +59,7 @@ export class MemoryFiles implements Files {
   async writeBytes(path: string, bytes: Uint8Array): Promise<void> { this.files.delete(path); this.bytes.set(path, bytes); }
   async remove(path: string): Promise<void> { this.files.delete(path); this.bytes.delete(path); }
   async mkdir(dir: string): Promise<void> { this.folders.add(dir); }
+  async rmdir(dir: string): Promise<void> { this.folders.delete(dir); }
 
   async list(dir: string): Promise<FileInfo[]> {
     const prefix = dir ? dir + "/" : "";

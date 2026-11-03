@@ -1,6 +1,6 @@
 // The engine's Files port over a folder on disk.
 
-import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, readdir, rename, rmdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import type { FileInfo, Files } from "@isorite/engine";
 
@@ -44,6 +44,7 @@ export class NodeFiles implements Files {
   }
 
   async mkdir(dir: string): Promise<void> { await mkdir(this.at(dir), { recursive: true }); }
+  async rmdir(dir: string): Promise<void> { try { await rmdir(this.at(dir)); } catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e; } }
 
   async append(path: string, text: string): Promise<void> {
     const full = this.at(path);

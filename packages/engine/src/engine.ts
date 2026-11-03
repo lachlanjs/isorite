@@ -615,6 +615,51 @@ export class Engine implements Api {
     });
   }
 
+  async deleteFolder(path: string): Promise<void> {
+    path = path.trim().replace(/^\/+|\/+$/g, "");
+    if (!path || !inBase(path)) throw new EngineError("only a folder of the base is deleted here");
+    checkNoteId(path);
+    await this.dropFolder(path, true);
+  }
+
+  /** Take away an empty folder, and the empty ones inside it. A folder made by putting a note in it is not among the
+   *  listing's entries, so `strict` (a folder asked for by name) is what says it was not there. */
+  private async dropFolder(path: string, strict: boolean): Promise<void> {
+    if (!this.opts.notes.rmdir) throw new EngineError("a folder can't be deleted here");
+    await this.one(async () => {
+      const inside = [...this.files.values()].filter((f) => f.path.startsWith(`${path}/`));
+      const held = inside.filter((f) => !("dir" in f && f.dir)).length;
+      if (strict && !this.files.has(path) && !inside.length) throw new EngineError(`there is no folder ${path}`, 404);
+      if (held) throw new EngineError(`${path} still holds ${held} ${held === 1 ? "file" : "files"}; move or delete them first`, 409);
+      for (const d of [...inside.map((f) => f.path), path].sort((a, b) => b.length - a.length)) {
+        await this.opts.notes.rmdir!(d);
+        this.files.delete(d);
+      }
+      this.built = this.index = null;
+    });
+  }
+
+  async moveFolder(from: string, to: string): Promise<void> {
+    const clean = (p: string) => p.trim().replace(/^\/+|\/+$/g, "");
+    from = clean(from); to = clean(to);
+    if (!from || !to || !inBase(from) || !inBase(to)) throw new EngineError("only a folder of the base is moved, and only within it");
+    checkNoteId(from); checkNoteId(to);
+    if (to === from) throw new EngineError("the folder is there already");
+    if (to.startsWith(`${from}/`)) throw new EngineError("a folder can't be moved into itself");
+    const inside = [...this.files.values()].filter((f) => f.path.startsWith(`${from}/`));
+    const dirs = inside.filter((f) => "dir" in f && f.dir).map((f) => f.path);
+    const notes = inside.filter((f) => !("dir" in f && f.dir) && f.path.endsWith(".md")).map((f) => f.path.slice(0, -3));
+    const others = inside.filter((f) => !("dir" in f && f.dir) && !f.path.endsWith(".md")).length;
+    if (!this.files.has(from) && !inside.length) throw new EngineError(`there is no folder ${from}`, 404);
+    if (others) throw new EngineError(`${from} holds ${others} ${others === 1 ? "file" : "files"} that ${others === 1 ? "isn't a note" : "aren't notes"} (pictures, say); move those by hand first`, 409);
+    const at = (p: string) => `${to}${p.slice(from.length)}`;
+    if (this.files.has(`${to}.md`)) throw new EngineError(`there is a note at ${to} already`, 409);
+    for (const id of notes) if (this.files.has(`${at(id)}.md`)) throw new EngineError(`there is already a note at ${at(id)}`, 409);
+    for (const d of [from, ...dirs].sort()) await this.makeFolder(at(d));
+    for (const id of notes) await this.moveNote(id, at(id), (await this.readNote(id)).version);
+    await this.dropFolder(from, false);
+  }
+
   /** `who` is you unless Iso moves it, in Write mode. */
   async moveNote(id: string, to: string, base: string, who = "you"): Promise<Saved> {
     to = to.trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/, "");
@@ -725,7 +770,7 @@ export class Engine implements Api {
 
   /** The code a code link names (M29): its symbol's lines, or the lines it gives, or the file's start. A symbol is
    *  found by its name in the file as it is now, so the link holds where the code has moved. */
-  async code(href: string): Promise<CodeSlice> {
+  async code(href: string, full = false): Promise<CodeSlice> {
     const target = codeTarget(href);
     if (!target) throw new EngineError("not a code link", 400);
     const { path, symbol } = target, where = await this.repositoryOfBase();
@@ -737,6 +782,11 @@ export class Engine implements Api {
     const lines = new TextDecoder().decode(bytes).split(/\r?\n/);
     if (lines.at(-1) === "") lines.pop();
     let start = target.line ?? 1, end = target.end ?? target.line ?? lines.length, count: number | undefined;
+    if (full && symbol) {
+      // The reader shows the file whatever the symbol: marked where it is found, and said where it is not.
+      const found = hasSymbols(path) ? findSymbol(lines.join("\n"), path, symbol) : null;
+      return { state: "ok", path, symbol, start: 1, end: lines.length, total: lines.length, text: lines.join("\n"), ...(found ? { mark: { start: found.start, end: found.end } } : {}), ...(found?.count && found.count > 1 ? { count: found.count } : {}) };
+    }
     if (symbol) {
       if (!hasSymbols(path)) return { state: "unsupported", path, symbol };
       const found = findSymbol(lines.join("\n"), path, symbol);
@@ -745,6 +795,7 @@ export class Engine implements Api {
     }
     end = Math.min(Math.max(end, start), lines.length);
     if (start > lines.length) return { state: "no-symbol", path };
+    if (full) return { state: "ok", path, ...(symbol ? { symbol } : {}), start: 1, end: lines.length, total: lines.length, text: lines.join("\n"), ...(symbol || target.line ? { mark: { start, end } } : {}), ...(count && count > 1 ? { count } : {}) };
     const shown = Math.min(end, start + MAX_CODE_LINES - 1);
     return { state: "ok", path, ...(symbol ? { symbol } : {}), start, end, total: lines.length, text: lines.slice(start - 1, shown).join("\n"), ...(shown < end ? { more: true as const } : {}), ...(count && count > 1 ? { count } : {}) };
   }

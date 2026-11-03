@@ -101,3 +101,29 @@ test("an empty folder is made, listed, and refused where a note is or the path i
   await expect(engine.makeFolder("topology/surfaces/euler")).rejects.toMatchObject({ status: 409 });
   for (const bad of ["", "../x", "a//b", ".hidden", "@understanding"]) await expect(engine.makeFolder(bad)).rejects.toBeInstanceOf(EngineError);
 });
+
+test("an empty folder is deleted, and one that holds a note is refused", async () => {
+  const { engine } = await open();
+  await engine.makeFolder("scratch/inner");
+  await engine.makeFolder("held");
+  await engine.moveNote("global/euler", "held/euler", (await engine.readNote("global/euler")).version);
+  await expect(engine.deleteFolder("held")).rejects.toMatchObject({ status: 409 });
+  await engine.deleteFolder("scratch");
+  expect((await engine.notes()).dirs).not.toContain("scratch");
+  expect((await engine.notes()).dirs).not.toContain("scratch/inner");
+  await expect(engine.deleteFolder("scratch")).rejects.toMatchObject({ status: 404 });
+  for (const bad of ["", "../x", "@understanding"]) await expect(engine.deleteFolder(bad)).rejects.toBeInstanceOf(EngineError);
+});
+
+test("a folder is moved with its notes, and refused into itself or onto a note", async () => {
+  const { engine } = await open();
+  await engine.makeFolder("a/empty");
+  await engine.moveNote("global/euler", "a/euler", (await engine.readNote("global/euler")).version);
+  await expect(engine.moveFolder("a", "a/b")).rejects.toBeInstanceOf(EngineError);
+  await engine.moveFolder("a", "z/a");
+  const listed = await engine.notes();
+  expect(listed.notes.find((n) => n.id === "z/a/euler")).toBeTruthy();
+  expect(listed.dirs).toEqual(expect.arrayContaining(["z/a", "z/a/empty"]));
+  expect(listed.dirs).not.toContain("a");
+  await expect(engine.moveFolder("a", "q")).rejects.toMatchObject({ status: 404 });
+});

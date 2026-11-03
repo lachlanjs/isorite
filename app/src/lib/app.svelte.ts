@@ -75,6 +75,12 @@ export const app = new AppState();
 /** The address of a note's page. */
 export const noteHref = (id: string): string => resolve("/n/[...id]", { id });
 
+/** Where a code link (`code:path#anchor`) is read in full (M34): the code reader, the anchor kept to mark its lines. */
+export const codeHref = (href: string): string => {
+  const [path = "", anchor = ""] = href.trim().replace(/^code:/, "").split("#");
+  return `${resolve("/code/[...path]", { path })}${anchor ? `?at=${encodeURIComponent(anchor)}` : ""}`;
+};
+
 /** A file name for a title: lower case, hyphens, nothing a path cannot hold. */
 export function slug(title: string): string {
   return title.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "");

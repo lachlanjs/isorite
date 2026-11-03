@@ -8,13 +8,13 @@
   import ArtifactEmbed from "./ArtifactEmbed.svelte";
   import { goto } from "$app/navigation";
   import type { EditorView } from "@codemirror/view";
-  import { app, findEmbed, noteHref } from "$lib/app.svelte.ts";
+  import { app, codeHref, findEmbed, noteHref, slug } from "$lib/app.svelte.ts";
   import { createEditor, setText, type Where } from "$lib/editor/codemirror.ts";
   import { setMarks, setOverlays, setTouched, type Inline, type Mark, type Overlay, type Touched } from "$lib/editor/overlays.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { pointing } from "$lib/pointing.svelte.ts";
   import { digest, pastedName, pictureOf, pictureSrc, safeName } from "$lib/pictures.ts";
-  import { address } from "$lib/editor/links.ts";
+  import { address, titled } from "$lib/editor/links.ts";
   import { MAX_FILE_BYTES, type PictureInfo } from "@isorite/engine";
   import PictureName from "./PictureName.svelte";
   import { setPointedNote } from "$lib/editor/pointing.ts";
@@ -106,6 +106,18 @@
       readOnly: reading,
       label: source ? "The note's file" : "The note",
       notes: () => app.listing.notes.filter((n) => n.id !== note.id).map((n) => ({ id: n.id, title: n.title, folder: n.dir, ...(n.kind ? { kind: n.kind } : {}) })),
+      noteMaker: {
+        plan: (typed) => {
+          const title = titled(typed), name = slug(title);
+          if (!name) return null;
+          // Beside this note: in its folder, or at the top for a draft or a note at the top.
+          const folder = note.id.startsWith("@") || !note.id.includes("/") ? "" : note.id.slice(0, note.id.lastIndexOf("/"));
+          return { title, id: [folder, name].filter(Boolean).join("/"), folder };
+        },
+        make: (n) => {
+          void app.api.createNote(n.id, `---\ntype: Concept\ntitle: ${JSON.stringify(n.title)}\n---\n\n`).then(() => app.refresh(), (e: Error) => say(`${n.title} wasn't made: ${e.message}`));
+        },
+      },
       onPictures: (files, at, pasted) => { void addPictures(files, at, pasted); },
       pictureSource: {
         pictures: async () => (await app.api.pictures()).map((p) => ({ path: p.path, width: p.width, height: p.height, src: pictureSrc(app.api, { path: p.path, from: "notes" }) })),
@@ -114,6 +126,7 @@
       onChange: (text) => (source ? note.setText(text) : note.setBody(text)),
       onSave: () => { void note.save(); },
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
+      onCode: (href) => { void goto(codeHref(href)); },
       onFollow: (id) => { void goto(noteHref(id)); },
       // An embedded question or problem (M12) opens in the Note pane.
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves

@@ -3,7 +3,7 @@
   // shown, so it is the code as it is now; a symbol is found by its name, so it holds where the code has moved. The
   // header names the file, the symbol and the lines it covers now.
   import type { CodeSlice } from "@isorite/engine";
-  import { app } from "$lib/app.svelte.ts";
+  import { app, codeHref } from "$lib/app.svelte.ts";
   import { highlightFile } from "$lib/code.ts";
 
   let { href }: { href: string } = $props();
@@ -32,7 +32,7 @@
 
 <span class="code" class:broken={got && got.state !== "ok"} data-code-embed>
   <span class="head">
-    <span class="file">{got?.path ?? href.slice(5).split("#")[0]}</span>
+    <a class="file" href={codeHref(href)} title="Read the whole file">{got?.path ?? href.slice(5).split("#")[0]}</a>
     {#if got?.symbol}<span class="sym">{got.symbol}</span>{/if}
     {#if where}<span class="lines">{where}</span>{/if}
   </span>
@@ -48,7 +48,8 @@
 <style>
   .code { display: block; white-space: normal; margin: 6px 0; border: 1px solid var(--line); background: var(--ground-1); font: 13px/1.5 var(--font-mono); overflow: hidden; }
   .head { display: flex; gap: 10px; align-items: baseline; padding: 3px 10px; border-bottom: 1px solid var(--line); color: var(--text-faint); font: 11px var(--font-ui); letter-spacing: .04em; }
-  .file { color: var(--text-soft); font-family: var(--font-mono); }
+  .file { color: var(--text-soft); font-family: var(--font-mono); text-decoration: none; }
+  a.file:hover { color: var(--text); text-decoration: underline; }
   .sym { color: var(--lattice); font-family: var(--font-mono); }
   .lines { margin-left: auto; }
   .pre { display: block; overflow-x: auto; padding: 6px 0; }

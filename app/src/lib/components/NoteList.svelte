@@ -5,6 +5,10 @@
   import type { NoteSummary, SearchHit } from "@isorite/engine";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import FolderField from "$lib/components/FolderField.svelte";
+  import { resolve } from "$app/paths";
+  import { Gesture, type Item } from "$lib/gesture.svelte.ts";
+  import { tray } from "$lib/tray.svelte.ts";
+  import HoldTags from "$lib/components/HoldTags.svelte";
   import NoteMenu from "$lib/components/NoteMenu.svelte";
   import { panes } from "$lib/panes.svelte.ts";
 
@@ -14,11 +18,28 @@
   let title = $state("");
   let folder = $state("");
   let problem = $state("");
-  // A note being dragged (M31) and the folder it is over; the menu on each row does the same by keyboard and touch.
-  let dragged = $state<string | null>(null);
-  let carrying: string | null = null; // set at once; `dragged` a moment later, since changing the page in dragstart cancels the drag
-  let over = $state<string | null>(null);
+  // Press and hold on a note or a folder's heading (M33): tags to move, delete or send it. The menu on each row does
+  // the same by keyboard.
+  const g = new Gesture({
+    move: (item, dir) => void moveItem(item, dir),
+    remove: (item) => void askRemove(item),
+    send: (item) => send(item),
+  });
+  let asking = $state.raw<{ item: Item; text: string; empty: boolean } | null>(null);
+  const dragged = $derived(g.phase === "moving" ? g.item?.id ?? null : null);
+  const over = $derived(g.phase === "moving" ? g.over : null);
   let folding = $state(false);
+  let renaming = $state<string | null>(null), draft = $state("");
+  const focus = (el: HTMLInputElement) => { el.focus(); el.select(); };
+  async function rename(dir: string) {
+    const name = draft.trim().replace(/^\/+|\/+$/g, ""), parent = dir.includes("/") ? dir.slice(0, dir.lastIndexOf("/")) : "";
+    renaming = null;
+    if (!name || name === last(dir)) return;
+    said = "";
+    try { await app.api.moveFolder(dir, [parent, name].filter(Boolean).join("/")); await app.refresh(); } catch (e) { said = (e as Error).message; }
+  }
+  let sent = $state("");
+  let sentTimer: ReturnType<typeof setTimeout> | undefined;
   let path = $state("");
   let said = $state("");
 
@@ -54,31 +75,60 @@
     problem = "";
   }
 
-  function drag(event: DragEvent, noteId: string) {
-    carrying = noteId;
-    setTimeout(() => { if (carrying === noteId) dragged = noteId; });
-    event.dataTransfer?.setData("text/plain", noteId);
-    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-  }
-  function enter(event: DragEvent, dir: string) {
-    if (carrying === null) return;
-    event.preventDefault();
-    over = dir;
-  }
-  async function drop(event: DragEvent, dir: string) {
-    event.preventDefault();
-    const noteId = carrying;
-    carrying = dragged = over = null;
-    if (noteId === null) return;
-    const name = noteId.split("/").at(-1)!, to = dir ? `${dir}/${name}` : name;
-    if (to === noteId) return;
+  const tagged = (tag: "delete" | "send", id: string) => g.phase === "held" && g.tag === tag && g.item?.id === id;
+  const last = (id: string) => id.split("/").at(-1)!;
+  async function moveItem(item: Item, dir: string) {
     said = "";
     try {
-      await app.api.moveNote(noteId, to, (await app.api.readNote(noteId)).version);
+      if (item.kind === "folder") {
+        const to = dir ? `${dir}/${last(item.id)}` : last(item.id);
+        if (to !== item.id) await app.api.moveFolder(item.id, to);
+      } else {
+        const to = dir ? `${dir}/${last(item.id)}` : last(item.id);
+        if (to !== item.id) await app.api.moveNote(item.id, to, (await app.api.readNote(item.id)).version);
+      }
       await app.refresh();
     } catch (e) {
       said = (e as Error).message;
     }
+  }
+  async function askRemove(item: Item) {
+    said = "";
+    try {
+      if (item.kind === "folder") {
+        const n = app.listing.notes.filter((x) => x.dir === item.id || x.dir.startsWith(`${item.id}/`)).length;
+        if (n) { said = `${item.id} holds ${n} ${n === 1 ? "note" : "notes"}: move or delete ${n === 1 ? "it" : "them"} first.`; return; }
+        asking = { item, empty: true, text: `Delete the empty folder ${item.id}?` };
+        return;
+      }
+      const map = await app.api.map();
+      const linked = [...new Set(map.model.edges.filter(([from, to]) => to === item.id && from !== item.id && !from.startsWith("@")).map(([from]) => map.notes[from]?.title || from))];
+      asking = { item, empty: false, text: `Delete “${item.title}”? ${linked.length ? `${linked.length === 1 ? "One note links" : `${linked.length} notes link`} to it (${linked.join(", ")}); ${linked.length === 1 ? "its link is" : "their links are"} left broken.` : "No note links to it."} Its history stays.` };
+    } catch (e) {
+      said = (e as Error).message;
+    }
+  }
+  async function confirmRemove() {
+    const a = asking;
+    asking = null;
+    if (!a) return;
+    try {
+      if (a.item.kind === "folder") await app.api.deleteFolder(a.item.id);
+      else {
+        await app.api.deleteNote(a.item.id, (await app.api.readNote(a.item.id)).version);
+        if (app.open === a.item.id) await goto(resolve("/notes"), { replaceState: true });
+      }
+      await app.refresh();
+    } catch (e) {
+      said = (e as Error).message;
+    }
+  }
+  function send(item: Item) {
+    const put = tray.add({ kind: item.kind, id: item.id, title: item.title });
+    said = "";
+    sent = put ? `${item.title} is with Iso.` : `${item.title} was with Iso already.`;
+    clearTimeout(sentTimer);
+    sentTimer = setTimeout(() => (sent = ""), 4000);
   }
 
   async function makeFolder(event: SubmitEvent) {
@@ -146,13 +196,25 @@
     <p class="soft empty">This base has no notes yet. Make the first one.</p>
   {/if}
 
+  {#snippet tags(kind: "note" | "folder", id: string)}
+    {#if g.item?.kind === kind && g.item.id === id}<HoldTags {g} mode="row" />{/if}
+  {/snippet}
+
+  {#if sent}<p class="soft" role="status">{sent}</p>{/if}
+  {#if asking}
+    <div class="frame ask" role="alertdialog" aria-label="Delete">
+      <span>{asking.text}</span>
+      <div class="row"><button class="btn danger" type="button" onclick={() => void confirmRemove()}>{asking.item.kind === "folder" ? `delete ${asking.item.id}` : "delete"}</button><button class="btn quiet" type="button" onclick={() => (asking = null)}>keep it</button></div>
+    </div>
+  {/if}
+  <HoldTags {g} mode="ghost" />
+
   {#each folders as [dir, notes] (dir)}
-    <!-- svelte-ignore a11y_no_static_element_interactions -- a drop target only; the row's menu moves a note by keyboard -->
-    <section class:over={over === dir && dragged !== null} ondragenter={(e) => enter(e, dir)} ondragover={(e) => enter(e, dir)} ondragleave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) over = null; }} ondrop={(e) => void drop(e, dir)}>
-      <h2><span class="label">{dir || "the top of the base"}</span><button class="btn quiet add" type="button" onclick={() => start(dir)} aria-label={`New note in ${dir || "the top of the base"}`}>+</button></h2>
+    <section data-dir={dir} class:over={over === dir && dragged !== null}>
+      <h2 class="head" class:lifted={dragged === dir && dir !== ""} class:doomed={tagged("delete", dir)} class:sending={tagged("send", dir)} use:g.press={() => ({ kind: "folder", id: dir, title: dir })}>{#if renaming === dir && dir}<input class="field rename" aria-label="Rename the folder {dir}" bind:value={draft} use:focus onkeydown={(e) => { if (e.key === "Enter") void rename(dir); else if (e.key === "Escape") renaming = null; }} onblur={() => (renaming = null)} />{:else}<span class="label" ondblclick={() => { if (dir) { draft = last(dir); renaming = dir; } }} role="presentation">{dir || "the top of the base"}</span>{/if}<span class="acts"><button class="btn quiet add" type="button" onclick={() => start(dir)} aria-label={`New note in ${dir || "the top of the base"}`}>+</button>{#if dir}<button class="btn quiet" type="button" onclick={() => { draft = last(dir); renaming = dir; }} aria-label={`Rename the folder ${dir}`}>rename</button>{/if}{#if dir && !notes.length}<button class="btn quiet" type="button" onclick={() => void askRemove({ kind: "folder", id: dir, title: dir })} aria-label={`Delete the empty folder ${dir}`}>delete</button>{/if}</span>{@render tags("folder", dir)}</h2>
       <ul>
         {#each notes as n (n.id)}
-          <li draggable="true" ondragstart={(e) => drag(e, n.id)} ondragend={() => (carrying = dragged = over = null)} class:lifted={dragged === n.id}><a class="vein-row" class:on={n.id === panes.last} data-lustre href={noteHref(n.id)}><span class="serif title">{n.title}</span>{#if n.description}<span class="soft desc">{n.description}</span>{/if}</a><NoteMenu id={n.id} title={n.title} /></li>
+          <li class:lifted={dragged === n.id} class:doomed={tagged("delete", n.id)} class:sending={tagged("send", n.id)} use:g.press={() => ({ kind: "note", id: n.id, title: n.title })}><a class="vein-row" class:on={n.id === panes.last} data-lustre draggable="false" href={noteHref(n.id)}><span class="serif title">{n.title}</span>{#if n.description}<span class="soft desc">{n.description}</span>{/if}</a><NoteMenu id={n.id} title={n.title} />{@render tags("note", n.id)}</li>
         {/each}
       </ul>
     </section>
@@ -185,10 +247,19 @@
   .empty { padding: var(--space-8) 0; text-align: center; }
   h2 { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); font-weight: 400; min-height: 28px; }
   .add { height: 24px; }
+  .rename { height: 24px; padding: 0 6px; width: min(260px, 60%); }
   /* A folder a note is over (M31): it is outlined, with no motion (gold is Iso's alone). */
   section.over { outline: 1px dashed var(--text-soft); outline-offset: 4px; }
   section.over h2 { border-bottom-color: var(--text-soft); }
-  li.lifted { opacity: 0.45; }
+  li.lifted, h2.lifted { opacity: 0.45; }
+  /* Held (M33): the tags, and the item tinted for what letting go would do. Blue moves, red deletes, gold is Iso's. */
+  li.doomed, h2.doomed { background: var(--rose-soft); }
+  li.sending, h2.sending { background: var(--growth-soft); }
+  .head { position: relative; }
+  .acts { display: flex; gap: var(--space-2); }
+  .ask { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); }
+  .notes:has(:global(.tags)), .notes:has(:global(.ghost)) { user-select: none; -webkit-user-select: none; }
+  li, .head { touch-action: pan-y; -webkit-touch-callout: none; }
   ul { list-style: none; margin: 0; padding: 0; }
   /* Rows with a vein (M24, D): the note last open is chosen. */
   li { position: relative; }

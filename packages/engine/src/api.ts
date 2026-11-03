@@ -171,7 +171,7 @@ export interface FileBytes { bytes: Uint8Array; type: string; version: string }
 /** Code of the base's repository, as a code link names it (M29): a symbol's lines or a range, shown in place. `text` is
  *  at most MAX_CODE_LINES lines of it, from line `start`; `end` is where it really ends. Where it can't be shown, why. */
 export type CodeSlice =
-  | { state: "ok"; path: string; symbol?: string; start: number; end: number; total: number; text: string; more?: true; /** Declared more than once; the first is shown. */ count?: number }
+  | { state: "ok"; path: string; symbol?: string; start: number; end: number; total: number; text: string; more?: true; /** Of the whole file (`full`): the lines the link names. */ mark?: { start: number; end: number }; /** Declared more than once; the first is shown. */ count?: number }
   | { state: "no-repository" | "no-file" | "no-symbol" | "unsupported" | "too-large"; path: string; symbol?: string };
 /** The most lines of code shown in place. */
 export const MAX_CODE_LINES = 120;
@@ -191,7 +191,8 @@ export interface Api {
    *  the base's repository. Null when there's no such file, or the path is a note's. */
   file(path: string, from?: "notes" | "code"): Promise<FileBytes | null>;
   /** The code a code link names (M29): `code:sim/step.py#leapfrog`, `#L40-L52`, or the whole file. */
-  code(href: string): Promise<CodeSlice>;
+  /** With `full`, the whole file (the code reader), the lines the link names marked. */
+  code(href: string, full?: boolean): Promise<CodeSlice>;
   /** Every picture in the notes, by path (M22). */
   pictures(): Promise<PictureInfo[]>;
   /** Put a picture in the notes at `path` (M22), pasted or dropped: never over a file that's there (a Conflict). */
@@ -205,6 +206,10 @@ export interface Api {
   moveNote(id: string, to: string, base: string): Promise<Saved>;
   /** Make an empty folder (M31), so a note can be moved or made into it. */
   makeFolder(path: string): Promise<void>;
+  /** Remove a folder with nothing in it (its empty folders inside go too). */
+  deleteFolder(path: string): Promise<void>;
+  /** Move a folder, with the notes in it, under another (or to the top, `to` being the new path). Links to them follow. */
+  moveFolder(from: string, to: string): Promise<void>;
   /** Resolve a question or say a problem is solved, today, or open it again (M12). `base` as for saveNote. */
   setDone(id: string, done: boolean, base: string): Promise<Saved>;
   /** Delete a note of the base. Its journal stays, and links to it are left, broken. `base` as for saveNote. */
