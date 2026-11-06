@@ -8,7 +8,7 @@
   import type { Snippet } from "svelte";
   import { page } from "$app/state";
   import { app } from "$lib/app.svelte.ts";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { install as states } from "$lib/lustre.ts";
   import AtlasPane from "$lib/components/AtlasPane.svelte";
   import IsoPane from "$lib/components/IsoPane.svelte";
@@ -27,7 +27,7 @@
   // The three panes (M10). The Note pane shows the route's page; the Atlas and Iso stand in the shell, so they keep
   // their state while notes open and close.
   const standing = $derived(panes.standing);
-  $effect(() => { if (page.route.id === "/n/[...id]" && page.params.id) panes.setLast(page.params.id); });
+  $effect(() => { if (page.route.id === "/n/[...id]" && page.params.id) { const id = page.params.id; panes.setLast(id); untrack(() => panes.visit(id)); } });
   // The notes open over a note close when a note is chosen from them.
   $effect(() => { void page.url.href; panes.tree = false; });
   onMount(states);
@@ -137,6 +137,8 @@
           {#if p === "note"}
             <PaneHead pane="note" first={panes.narrow || standing[0] === "note"} name="Note" settings={noteSettings}>
               {#snippet tools()}
+                <button class="icon" type="button" aria-label="Back to the note before" title="Back to the note before" disabled={!panes.canBack} onclick={() => void panes.walk(-1)}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M10 3L5 8l5 5" /></svg></button>
+                <button class="icon" type="button" aria-label="Forward to the note after" title="Forward to the note after" disabled={!panes.canForward} onclick={() => void panes.walk(1)}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 3l5 5-5 5" /></svg></button>
                 {#if inNote && app.saving}<span class="saved" class:bad={app.saving.bad} class:busy={!app.saving.text.startsWith("saved")} title={app.saving.text} role="status"><i aria-hidden="true"></i><span class="hidden-label">{app.saving.text}</span></span>{/if}
                 <button class="icon" type="button" aria-label="All notes" title="All notes, and search" aria-pressed={page.route.id === "/notes" || panes.tree} onclick={() => { if (page.route.id !== "/notes") panes.tree = !panes.tree; }}>
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 3h4M4.5 3v9.5h3M4.5 7.5h3" /><rect x="8" y="5.5" width="5.5" height="3.5" /><rect x="8" y="10.5" width="5.5" height="3.5" /></svg>

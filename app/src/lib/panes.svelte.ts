@@ -104,6 +104,26 @@ class Panes {
 
   setLast(id: string): void { if (id && !id.startsWith("@")) { this.last = id; keep(kept("isorite.last"), id); } }
 
+  /** The notes opened one after another (M37), for Back and Forward in the Note pane: the browser's own Back stays as it is. */
+  trail = $state<string[]>([]);
+  at = $state(-1);
+  #walking: string | null = null;
+  visit(id: string): void {
+    if (this.#walking === id) { this.#walking = null; return; }
+    if (this.trail[this.at] === id) return;
+    this.trail = [...this.trail.slice(0, this.at + 1), id].slice(-50);
+    this.at = this.trail.length - 1;
+  }
+  get canBack(): boolean { return this.at > 0; }
+  get canForward(): boolean { return this.at >= 0 && this.at < this.trail.length - 1; }
+  async walk(by: -1 | 1): Promise<void> {
+    const to = this.trail[this.at + by];
+    if (to === undefined) return;
+    this.at += by;
+    this.#walking = to;
+    await this.open(to, false);
+  }
+
   /** Open a note in the Note pane; on a phone the Note pane comes into view. */
   async open(id: string, focus = this.narrow): Promise<void> {
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves

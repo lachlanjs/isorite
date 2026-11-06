@@ -190,3 +190,27 @@ test("the parts, the atlas pane, and a note that is not there", async ({ page })
   await page.goto("#/n/no/such-note");
   await expect(page.getByText("There is no note at")).toBeVisible();
 });
+
+test("Back and Forward in the Note pane follow the notes opened, one after another (M37)", async ({ page }) => {
+  const p = test.info().project.name;
+  await page.goto("#/notes");
+  const token = ((await (await page.request.get("api/session")).json()) as { token: string }).token;
+  const headers = { "x-isorite-token": token, origin: new URL(page.url()).origin };
+  for (const n of ["one", "two"]) {
+    expect((await page.request.post(`api/note?id=trail/${n}-${p}`, { headers, data: { text: `---\ntype: Concept\ntitle: Trail ${n} ${p}\n---\n\nText.\n` } })).ok()).toBe(true);
+  }
+  await page.reload();
+  const back = page.getByRole("button", { name: "Back to the note before" }), forward = page.getByRole("button", { name: "Forward to the note after" });
+  await page.getByRole("link", { name: new RegExp(`Trail one ${p}`) }).first().click();
+  await expect(page).toHaveURL(new RegExp(`trail/one-${p}`));
+  await page.getByRole("button", { name: "All notes" }).click();
+  await page.getByRole("link", { name: new RegExp(`Trail two ${p}`) }).first().click();
+  await expect(page).toHaveURL(new RegExp(`trail/two-${p}`));
+  await expect(back).toBeEnabled();
+  await expect(forward).toBeDisabled();
+  await back.click();
+  await expect(page).toHaveURL(new RegExp(`trail/one-${p}`));
+  await expect(forward).toBeEnabled();
+  await forward.click();
+  await expect(page).toHaveURL(new RegExp(`trail/two-${p}`));
+});
