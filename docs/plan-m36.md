@@ -48,7 +48,14 @@ Over ACP:
 
 Over MCP:
 - The endpoint keeps no session: a caller is `?agent=` on the address, else the client name a request carries in `_meta`, else `"mcp"` (`mcp-identity.test.ts`). A harness and its subagents given one address are therefore one agent, and a client that sends `clientInfo` only in `initialize` is `"mcp"` on its later calls, since the endpoint does not remember it.
-- So over MCP alone a swarm is told apart only if each caller has an address of its own or names itself on every request. Whether Claude Code's subagents do either is not known; it is the check to make with a real client, below.
+- So over MCP alone a swarm is told apart only if each caller has an address of its own or names itself on every request. Claude Code's subagents do neither (the real-client run below).
+
+A real client, run 2026-11-06: Claude Code 2.1.318 (signed in on this machine, model haiku, one short run, tools limited to the Agent tool and isorite's `search_notes`) was asked to start two subagents, each to make one `search_notes` call, against a local isorite server through a logging proxy. What it sent:
+- Every request, including `tools/call`, carries `_meta` with `io.modelcontextprotocol/clientInfo` (name `claude-code`, title `Claude Code`, version 2.1.318), the protocol version and the client's capabilities; a `tools/call` also carries `claudecode/toolUseId` and a `progressToken`. The user agent is `claude-code/2.1.318 (sdk-cli)`. No session header; it opened with `server/discover`, then `resources/list` and `tools/list`.
+- Both calls (`euler`, `leapfrog`) reached the base as one agent, `claude-code`, in one session, `http`. So over MCP Claude Code's subagents are not told apart: they share the client name, and nothing in the request names the subagent. I did not capture the transcript, so that the two calls were made by subagents and not by the main agent rests on the instructions given and the model's reply ("done"), not on proof.
+- `claudecode/toolUseId` is a per-call handle. In an ACP session the adapter reports the same tool call to isorite, and the ids probably match, which would let isorite give an MCP call to the subagent session whose tool call it is. That is a guess to test, not a finding; it would only help for a session isorite hosts.
+
+Conclusion for step 4: over MCP alone a swarm shows as one agent (as Claude Code is used in its own terminal, which is most people); over ACP, with the capability declared, each subagent can be its own agent on the Atlas, once the real adapters are seen to send what their source says. The swarm display stays a later step, built on the ACP route.
 
 ### Step 3b: chips as embedded resources for ACP agents
 
