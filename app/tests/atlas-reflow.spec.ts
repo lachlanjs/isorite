@@ -35,3 +35,12 @@ test("after a note is deleted from the Atlas the routes are drawn again without 
   const cv = (await (await page.request.get(`api/note?id=${c}`)).json()) as { version: string };
   expect((await page.request.post(`api/note/delete?id=${c}`, { headers, data: { base: cv.version } })).ok()).toBe(true);
 });
+
+test("the map can be laid out again from its button, without a reload (M37)", async ({ page }) => {
+  await page.goto("/");
+  const routes = page.locator(".routes path.base");
+  await expect.poll(() => routes.count(), { timeout: 5000 }).toBeGreaterThan(0);
+  const shown = await routes.count();
+  await page.getByRole("button", { name: "Lay the map out again" }).click();
+  await expect.poll(() => routes.count(), { timeout: 5000 }).toBe(shown);
+});

@@ -94,6 +94,7 @@
     for (const t of terminal.session?.turns ?? []) for (const i of t.items) if (i.kind === "question" && !i.made) out.push({ ref: `?${i.id}`, title: i.title, about: i.about });
     return out;
   });
+  let fresh = false; // the next layout is worked out from nothing, not from where things stood (M37)
   async function load(): Promise<void> {
     try {
       const got = await app.api.map(), asked = untrack(() => prospects);
@@ -109,7 +110,8 @@
         return n?.kind === "question" ? !panes.on.questions || !!n.done : n?.kind === "problem" ? !panes.on.problems : false;
       }) };
       // A changed base is laid out from where things stood (V5), on the same grid and the same way.
-      const on = `${flow}|${grain}`, from = laid && laidOn === on ? laid.layout.orders ?? null : null;
+      const on = `${flow}|${grain}`, from = laid && laidOn === on && !fresh ? laid.layout.orders ?? null : null;
+      fresh = false;
       const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from });
       laidOn = on;
       const changed = !!laid && laid.key !== next_laid.key;
@@ -803,7 +805,7 @@
   /** What a note's block stands on: its folder's inside, which a kind's glyph in its top edge cuts the edge with. */
   const behind = (parent: number): string => (parent >= 0 && L!.items[parent]!.depth % 2 ? "var(--ground-1)" : "var(--ground-0)");
   $effect(() => {
-    app.atlas = { chosen: chosen ? title(chosen) : "", chosenId: chosen, steps: walk.length - 1, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out, fit: () => { moved = false; fly(whole()); } };
+    app.atlas = { chosen: chosen ? title(chosen) : "", chosenId: chosen, steps: walk.length - 1, here: inside < 0 ? "" : folderName(L!.items[inside]!.ref), out, fit: () => { moved = false; fly(whole()); }, relayout: () => { fresh = true; moved = false; void load(); } };
     return () => { app.atlas = null; };
   });
 </script>

@@ -19,7 +19,7 @@ class AppState {
   /** How the open note's saving stands, for the Note pane's header. */
   saving = $state<{ text: string; bad: boolean } | null>(null);
   /** The Atlas: what is chosen on it, and where it is, for its header and settings. */
-  atlas = $state.raw<{ chosen: string; chosenId: string; steps: number; here: string; out: () => void; fit: () => void } | null>(null);
+  atlas = $state.raw<{ chosen: string; chosenId: string; steps: number; here: string; out: () => void; fit: () => void; relayout: () => void } | null>(null);
   /** An agent's latest turn, from any page or tab, as the Atlas draws its path: each step, and how it ended. It
    *  stays until the next turn, or until the Atlas lets it go. */
   iso = $state.raw<IsoRun | null>(null);

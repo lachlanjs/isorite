@@ -152,7 +152,7 @@
                   <span class="says">{app.atlas.steps} {app.atlas.steps === 1 ? "step" : "steps"} back</span>
                 {/if}
                 {#if app.atlas?.here}<span class="where soft">{app.atlas.here}</span><button class="btn out" type="button" onclick={app.atlas.out}>↑ out</button>{/if}
-                {#if app.atlas}<button class="icon" type="button" aria-label="The whole map" title="The whole map  (0)" onclick={app.atlas.fit}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" /></svg></button>{/if}
+                {#if app.atlas}<button class="icon" type="button" aria-label="The whole map" title="The whole map  (0)" onclick={app.atlas.fit}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" /></svg></button><button class="icon" type="button" aria-label="Lay the map out again" title="Lay the map out again" onclick={app.atlas.relayout}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3" /></svg></button>{/if}
               {/snippet}
             </PaneHead>
             <div class="pbody atlas-body"><AtlasPane /></div>
@@ -213,7 +213,7 @@
 {/snippet}
 
 <style>
-  .says { overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 12px; color: var(--text-soft); flex: 0 1 auto; }
+  .says { overflow: hidden; text-overflow: ellipsis; min-width: 5.5em; font-size: 12px; color: var(--text-soft); flex: 0 1 auto; }
   @media (max-width: 760px) { .says { flex: none; } }
   .out { height: 28px; padding: 0 10px; font-size: 12px; flex: none; }
   .where { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 12px; }
