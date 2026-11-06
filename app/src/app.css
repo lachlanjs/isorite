@@ -41,7 +41,7 @@
   --font-mono: var(--font-ui);
   --font-pixel: "Lyth Mono", ui-monospace, monospace;
   --text-size: 18px;
-  --measure: 680px;
+  --measure: 820px;
 
   /* Light on a face (the lustre, M24): its colour, and how strong it is on this ground. */
   --sheen: 255 248 225; --sheen-k: 1;
@@ -221,7 +221,8 @@ a.btn:hover { text-decoration: none; color: var(--text); }
 .prose > :first-child { margin-top: 0; }
 .prose p, .prose table { margin: 0 0 1em; }
 .prose .table-wrap { overflow-x: auto; margin: 0 0 1em; }
-.prose table { border-collapse: collapse; font: 14px/1.45 var(--font-ui); min-width: 60%; margin: 0; }
+.prose table { border-collapse: collapse; font: 14px/1.45 var(--font-ui); width: max-content; min-width: 60%; margin: 0; }
+.prose th, .prose td { min-width: 7em; max-width: 28em; }
 .prose th, .prose td { border-bottom: 1px solid var(--line); padding: 8px 12px 8px 0; text-align: left; vertical-align: top; }
 .prose th { font-weight: 700; border-bottom: 2px solid var(--text-faint); }
 .prose .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
