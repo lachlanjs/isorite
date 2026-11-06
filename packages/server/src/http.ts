@@ -10,7 +10,7 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { Conflict, EngineError, MAX_FILE_BYTES, MAX_NOTE_BYTES, type Api, type Given as GivenPart } from "@isorite/engine";
 import type { BasesPort } from "./bases.ts";
-import { given as withGiven, type AcpFollower, type Rpc } from "./acp.ts";
+import { given as withGiven, givenEmbedded, type AcpFollower, type Rpc } from "./acp.ts";
 import type { PaneSessions } from "./sessions.ts";
 import { McpEndpoint, agentName, clientName, type Rpc as McpRpc } from "./mcp-http.ts";
 import { VERSION } from "./version.ts";
@@ -298,7 +298,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
       const news = broken.length ? `\n\n(isorite: code links in the notes that no longer resolve: ${broken.map((x) => `${x.href} in /${x.id}.md`).join("; ")}.)` : "";
       const title = (id: string) => titles.get(id) ?? id;
       // What was given goes apart, once a session (M25).
-      await pane.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim()).catch(failed);
+      await pane.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim(), (parts) => givenEmbedded(parts, title, base ?? "notes")).catch(failed);
       await pane.prompt(b.asked.trim() + news).catch(failed);
     });
     post("/api/terminal/stop", z.object({}).strict(), async () => { await pane.interrupt().catch(failed); });
@@ -333,12 +333,13 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   if (acp) {
     const render = async () => {
       const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
-      return (parts: GivenPart[]) => withGiven("", parts, (id) => titles.get(id) ?? id).trim();
+      const title = (id: string) => titles.get(id) ?? id;
+      return { text: (parts: GivenPart[]) => withGiven("", parts, title).trim(), embed: (parts: GivenPart[]) => givenEmbedded(parts, title, base ?? "notes") };
     };
     const host: PaneSessions = pane ?? acp;
     const refused = (e: Error) => { throw new EngineError(e.message, 409); };
     // What is in the pane's tray: what the session shown has not been given yet goes before its next prompt.
-    post("/api/acp/give", z.object({ given: z.array(Given).max(40) }).strict(), async (_c, b) => { await host.give(b.given as GivenPart[], await render()).catch(refused); });
+    post("/api/acp/give", z.object({ given: z.array(Given).max(40) }).strict(), async (_c, b) => { const r = await render(); await host.give(b.given as GivenPart[], r.text, r.embed).catch(refused); });
     post("/api/acp/follow", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await host.follow(b.agent, b.session).catch(refused); });
     post("/api/acp/forget", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await host.forget(b.agent, b.session).catch(refused); });
     post("/api/acp/set", z.object({ kind: z.enum(["mode", "config"]), id: z.string().max(100), value: z.string().max(200) }).strict(), async (_c, b) => { try { host.set(b.kind, b.id, b.value); } catch (e) { throw new EngineError((e as Error).message, 409); } });

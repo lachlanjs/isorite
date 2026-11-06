@@ -5,6 +5,7 @@
 // (`connect`, `tap`) is the wrapper's, not the pane's, and stays out of this.
 
 import type { AgentSession, Given, TerminalView } from "@isorite/engine";
+import type { Embed } from "./acp.ts";
 
 export interface PaneSessions {
   /** The session shown, with every session on the base. */
@@ -18,7 +19,7 @@ export interface PaneSessions {
   /** Stop what the session shown is doing. */
   interrupt(): Promise<void>;
   /** Notes and passages given from the pane: those not given in the session yet go before its next prompt. */
-  give(parts: Given[], render: (parts: Given[]) => string): Promise<void>;
+  give(parts: Given[], render: (parts: Given[]) => string, embed?: Embed): Promise<void>;
   /** Answer what the agent asked before doing something. */
   reply(id: string, decision: "once" | "always" | "reject"): Promise<void>;
   /** Show a session: a live one, one that can be carried on, or one kept to read. */

@@ -19,7 +19,7 @@ import { basename } from "node:path";
 import { ensureServer, MAIN, tokenOf } from "./running.ts";
 import { TOKEN_HEADER } from "./http.ts";
 import { self } from "./self.ts";
-import { ACP_SESSION, type Command, type Rpc, type Way } from "./acp.ts";
+import { ACP_SESSION, type Command, type Give, type Rpc, type Way } from "./acp.ts";
 import { agentName } from "./mcp-http.ts";
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -88,13 +88,13 @@ export async function acp(path: string | undefined, { agent, port = 4767, input,
   /** Whether the agent takes MCP over HTTP: then isorite's is given as the base's address, not a command. */
   let httpMcp = false;
   /** Notes and passages given in the pane, by session, put before its next prompt from either place. */
-  const given = new Map<string, string>();
+  const given = new Map<string, Give>();
   const withGiven = (session: string, prompt: unknown): unknown[] => {
     const blocks = Array.isArray(prompt) ? prompt : [];
-    const text = given.get(session);
-    if (!text) return blocks;
+    const g = given.get(session);
+    if (!g) return blocks;
     given.delete(session);
-    return [{ type: "text", text }, ...blocks];
+    return [{ type: "text", text: g.text }, ...(g.blocks ?? []), ...blocks];
   };
 
   // What passed, told to the server in batches.
@@ -118,7 +118,7 @@ export async function acp(path: string | undefined, { agent, port = 4767, input,
   /** Sessions the pane opened: the front end knows nothing of them, so nothing of theirs goes to it. */
   const paneOnly = new Set<string>();
   /** Requests to the agent not yet answered, by id: the front end's and isorite's own, with their sessions. */
-  type Asked = { method: string; session: string; then?: string; give?: string; params?: Record<string, unknown>; retry?: Asked };
+  type Asked = { method: string; session: string; then?: string; give?: Give; params?: Record<string, unknown>; retry?: Asked };
   const asked = new Map<string, Asked>();
   const busy = (session: string) => [...asked.values()].some((a) => a.method === "session/prompt" && a.session === session);
   /** The agent's requests, by id as a string, with the id as it was sent. */
@@ -141,7 +141,7 @@ export async function acp(path: string | undefined, { agent, port = 4767, input,
     return { name: "isorite", command: again.command, args: again.args, env: [] };
   };
   /** A request of isorite's own to the agent; its answer goes no further. */
-  const ask = (method: string, params: Record<string, unknown>, then?: string, give?: string, retry?: Asked) => {
+  const ask = (method: string, params: Record<string, unknown>, then?: string, give?: Give, retry?: Asked) => {
     const id = `isorite-${++ours}`;
     const request = { id, method, params };
     asked.set(id, { method, session: typeof params.sessionId === "string" ? params.sessionId : "", params, ...(then ? { then } : {}), ...(give ? { give } : {}), ...(retry ? { retry } : {}) });
@@ -267,14 +267,15 @@ export async function acp(path: string | undefined, { agent, port = 4767, input,
   })();
   function command(c: Command): void {
     if (c.type === "prompt") { waiting.push({ session: c.session, text: c.text }); sendWaiting(); }
-    if (c.type === "give") { if (c.text) given.set(c.session, c.text); else given.delete(c.session); }
+    if (c.type === "give") { if (c.text) given.set(c.session, { text: c.text, ...(c.blocks?.length ? { blocks: c.blocks } : {}) }); else given.delete(c.session); }
     if (c.type === "cancel") { const m = { method: "session/cancel", params: { sessionId: c.session } }; tap("ours", m); toAgent(m); }
     if (c.type === "list" && can.list) ask("session/list", { cwd });
     if (c.type === "set") ask(c.kind === "mode" ? "session/set_mode" : "session/set_config_option", c.kind === "mode" ? { sessionId: c.session, modeId: c.value } : { sessionId: c.session, configId: c.id, value: c.value });
     if (c.type === "open") {
       const params = { cwd, mcpServers: mcp ? [isoriteMcp()] : [] };
-      if (!c.session) ask("session/new", params, c.then, c.give);
-      else ask(can.load ? "session/load" : "session/resume", { ...params, sessionId: c.session }, c.then, c.give);
+      const give: Give | undefined = c.give ? { text: c.give, ...(c.giveBlocks?.length ? { blocks: c.giveBlocks } : {}) } : undefined;
+      if (!c.session) ask("session/new", params, c.then, give);
+      else ask(can.load ? "session/load" : "session/resume", { ...params, sessionId: c.session }, c.then, give);
     }
     if (c.type === "permission" && agentAsked.has(c.id)) {
       const id = agentAsked.get(c.id)!;

@@ -40,6 +40,27 @@ export function given(asked: string, parts: Given[], title: (id: string) => stri
   return out.join("\n\n");
 }
 
+/** What the pane gives before a session's next prompt: the text, and for an agent that takes embedded context the
+ *  passages as resource blocks after it. */
+export interface Give { text: string; blocks?: unknown[] }
+
+/** The given parts for an agent that takes embedded context: the text (without the passages, which are attached) and the resource blocks. */
+export type Embed = (parts: Given[]) => { text: string; blocks: unknown[] };
+
+/** The same for an agent that takes embedded context: notes and folders as text for the agent to read with isorite's
+ *  tools, and each passage as a resource block (the note's address, the passage as its text) that the text points to. */
+export function givenEmbedded(parts: Given[], title: (id: string) => string, base: string): { text: string; blocks: unknown[] } {
+  const passages = parts.flatMap((p) => (p.kind === "passage" ? [p] : []));
+  const rest = given("", parts.filter((p) => p.kind !== "passage"), title).trim();
+  const attached = passages.length
+    ? `${passages.length === 1 ? "A passage I selected is" : `${passages.length} passages I selected are`} attached as ${passages.length === 1 ? "a resource" : "resources"}, named for the note ${passages.length === 1 ? "it is" : "each is"} from (the note may have changed since: read it for the current text):\n${passages.map((p) => `- from ${title(p.id)} (${p.id})`).join("\n")}`
+    : "";
+  return {
+    text: [rest, attached].filter(Boolean).join("\n\n"),
+    blocks: passages.map((p) => ({ type: "resource", resource: { uri: `isorite://${base}/${p.id}`, mimeType: "text/markdown", text: p.text } })),
+  };
+}
+
 /** Which way a message went: from the front end to the agent, from the agent, or from isorite to the agent. */
 export type Way = "in" | "out" | "ours";
 export interface Rpc { jsonrpc?: "2.0"; id?: string | number | null; method?: string; params?: Record<string, unknown>; result?: Record<string, unknown> | null; error?: { message?: string } }
@@ -50,8 +71,8 @@ export type Command =
   | { type: "prompt"; session: string; text: string }
   | { type: "cancel"; session: string }
   | { type: "permission"; id: string; optionId: string }
-  | { type: "give"; session: string; text: string }
-  | { type: "open"; session?: string; then?: string; give?: string }
+  | { type: "give"; session: string; text: string; blocks?: unknown[] }
+  | { type: "open"; session?: string; then?: string; give?: string; giveBlocks?: unknown[] }
   | { type: "list" }
   | { type: "set"; session: string; kind: "mode" | "config"; id: string; value: string };
 /** The session the Atlas's turns and isorite's MCP calls are kept under, for the agent the wrapper carries. */
@@ -113,6 +134,8 @@ interface Link {
   name: string;
   /** What it can do with sessions it did not start here. */
   can: { load: boolean; resume: boolean; list: boolean };
+  /** Whether it takes embedded resources in a prompt (promptCapabilities.embeddedContext). */
+  embedded: boolean;
   /** Requests toward the agent, by id, until answered; and the agent's own. */
   toAgent: Map<string, Rpc>;
   fromAgent: Map<string, Rpc>;
@@ -144,7 +167,7 @@ interface Live {
   loading: boolean;
   replaying: boolean;
   /** What was given from the pane for the next prompt, and everything given in the session so far. */
-  pending: { parts: Given[]; text: string } | null;
+  pending: { parts: Given[]; text: string; blocks?: unknown[] } | null;
   given: Set<string>;
   /** What the agent offers in this session: slash commands, modes and options. */
   commands: AgentCommand[];
@@ -244,7 +267,7 @@ export class AcpFollower implements PaneSessions {
   /** A wrapper's channel: what the pane asks of its sessions goes down it. Returns the hang-up. */
   connect(id: string, send: (c: Command) => void, { pane = false }: { pane?: boolean } = {}): () => void {
     this.#hangUp(id);
-    this.#links.set(id, { id, send, agent: "", name: "", can: { load: false, resume: false, list: false }, toAgent: new Map(), fromAgent: new Map(), listed: [], opening: null, pane });
+    this.#links.set(id, { id, send, agent: "", name: "", can: { load: false, resume: false, list: false }, embedded: false, toAgent: new Map(), fromAgent: new Map(), listed: [], opening: null, pane });
     this.#tell();
     return () => { if (this.#links.get(id)?.send === send) { this.#hangUp(id); this.#tell(); } };
   }
@@ -276,18 +299,27 @@ export class AcpFollower implements PaneSessions {
     const link = this.#reading ? [...this.#links.values()].find((k) => k.agent === this.#reading!.agent) : [...this.#links.values()].at(-1);
     if (!link) throw new Error("no agent is attached: choose one, or start one with isorite acp");
     link.opening = this.#reading?.session ?? "";
-    link.send({ type: "open", ...(this.#reading ? { session: this.#reading.session } : {}), then: text, ...(this.#unopened ? { give: this.#unopened.text } : {}) });
+    link.send({ type: "open", ...(this.#reading ? { session: this.#reading.session } : {}), then: text, ...(this.#unopened ? { give: this.#unopened.text, ...(this.#unopened.blocks?.length ? { giveBlocks: this.#unopened.blocks } : {}) } : {}) });
   }
   /** Given before a session was open: for the one the next prompt opens. */
-  #unopened: { parts: Given[]; text: string } | null = null;
+  #unopened: { parts: Given[]; text: string; blocks?: unknown[] } | null = null;
   async interrupt(): Promise<void> { const live = this.#need(); live.link.send({ type: "cancel", session: live.session }); }
   /** Notes and passages given from the pane: those not given in the session yet go before its next prompt. */
-  async give(parts: Given[], render: (parts: Given[]) => string): Promise<void> {
+  async give(parts: Given[], render: (parts: Given[]) => string, embed?: Embed): Promise<void> {
     const live = this.#shownLive();
-    if (!live) { this.#unopened = parts.length ? { parts, text: render(parts) } : null; return; }
+    // Passages go as resources where the agent takes them; else, and for the notes, as text it can read.
+    const made = (p: Given[], embedded: boolean): { parts: Given[]; text: string; blocks?: unknown[] } => {
+      const e = embedded && embed ? embed(p) : null;
+      return e ? { parts: p, text: e.text, ...(e.blocks.length ? { blocks: e.blocks } : {}) } : { parts: p, text: render(p) };
+    };
+    if (!live) {
+      const link = [...this.#links.values()].at(-1);
+      this.#unopened = parts.length ? made(parts, link?.embedded === true) : null;
+      return;
+    }
     const fresh = parts.filter((g) => !live.given.has(givenKey(g)));
-    live.pending = fresh.length ? { parts: fresh, text: render(fresh) } : null;
-    live.link.send({ type: "give", session: live.session, text: live.pending?.text ?? "" });
+    live.pending = fresh.length ? made(fresh, live.link.embedded) : null;
+    live.link.send({ type: "give", session: live.session, text: live.pending?.text ?? "", ...(live.pending?.blocks ? { blocks: live.pending.blocks } : {}) });
   }
   async reply(id: string, decision: "once" | "always" | "reject"): Promise<void> {
     const live = [...this.#lives.values()].find((l) => l.asking.has(id));
@@ -411,7 +443,8 @@ export class AcpFollower implements PaneSessions {
       switch (asked?.method) {
         case "initialize": {
           const info = m.result?.agentInfo as { name?: string; title?: string } | undefined;
-          const caps = (m.result?.agentCapabilities ?? {}) as { loadSession?: boolean; sessionCapabilities?: { resume?: unknown; list?: unknown } };
+          const caps = (m.result?.agentCapabilities ?? {}) as { loadSession?: boolean; promptCapabilities?: { embeddedContext?: boolean }; sessionCapabilities?: { resume?: unknown; list?: unknown } };
+          link.embedded = caps.promptCapabilities?.embeddedContext === true;
           link.agent = agentName(info?.name ?? "agent");
           link.name = info?.title ?? info?.name ?? "The agent";
           link.can = { load: !!caps.loadSession, resume: !!caps.sessionCapabilities?.resume, list: !!caps.sessionCapabilities?.list };

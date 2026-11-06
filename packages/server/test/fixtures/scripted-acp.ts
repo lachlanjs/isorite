@@ -11,6 +11,7 @@
 // and it then replies, citing the first note it read in isorite's link form. Everything it was given (each prompt's
 // blocks, the MCP servers) it says back, so a test can see it. Its sessions can be listed and loaded (their history
 // replayed), and are kept in SCRIPTED_STORE when that is set, so another run of it (its "own terminal") has them.
+// With SCRIPTED_EMBEDDED=1 it says it takes embedded resources, and says back each one it is given.
 // With SCRIPTED_AUTH set it asks to be signed in first, as Codex does, with its API key's method.
 
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -37,7 +38,7 @@ async function mcpCall(url: string, name: string, args: object): Promise<string>
   return ((await r.json()) as { result?: { content?: { text: string }[] } }).result?.content?.[0]?.text ?? "";
 }
 
-async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; text?: string }[]) {
+async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; text?: string; resource?: { uri?: string; text?: string } }[]) {
   const s = sessions.get(sessionId)!;
   const text = blocks.map((b) => b.text ?? "").join("\n");
   const read: string[] = [], cited: string[] = [];
@@ -88,7 +89,7 @@ async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; 
   const cite = read[0] ? `[as the note says](/${read[0]}.md)` : "with no note";
   // "draw": a diagram and code in the reply, as Markdown.
   const drawn = /^draw\b/m.test(text) ? `\n\n${DRAWN}` : "";
-  const said = `Done, ${cite}${cited.map((c) => `, ${c}`).join("")}. Blocks: ${blocks.length}. MCP: ${s.mcp.map((m) => `${m.name}/${m.type ?? "stdio"}`).join(",")}.${drawn}`;
+  const said = `Done, ${cite}${cited.map((c) => `, ${c}`).join("")}. Blocks: ${blocks.length}.${blocks.filter((b) => b.type === "resource").map((b) => ` Resource ${b.resource?.uri}=${JSON.stringify(b.resource?.text)}.`).join("")} MCP: ${s.mcp.map((m) => `${m.name}/${m.type ?? "stdio"}`).join(",")}.${drawn}`;
   update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: said } });
   s.kept.history.push({ user: text, agent: said });
   s.kept.updatedAt = new Date().toISOString();
@@ -111,7 +112,7 @@ for await (const line of createInterface({ input: process.stdin })) {
   if (!signedIn && (m.method === "session/new" || m.method === "session/list" || m.method === "session/load")) { send({ id: m.id, error: { code: -32000, message: "Authentication required" } }); continue; }
   switch (m.method) {
     case "authenticate": signedIn = p.methodId === "api-key"; send(signedIn ? { id: m.id, result: {} } : { id: m.id, error: { code: -32603, message: "no such method" } }); break;
-    case "initialize": send({ id: m.id, result: { protocolVersion: 1, agentInfo: { name: "scripted", title: "Scripted", version: "0" }, agentCapabilities: { loadSession: true, sessionCapabilities: { list: {} }, mcpCapabilities: { http: process.env.SCRIPTED_HTTP !== "0", sse: false } }, authMethods: AUTH ? [{ id: "api-key", name: "API Key" }, { id: "browser", name: "Sign in" }] : [] } }); break;
+    case "initialize": send({ id: m.id, result: { protocolVersion: 1, agentInfo: { name: "scripted", title: "Scripted", version: "0" }, agentCapabilities: { ...(process.env.SCRIPTED_EMBEDDED === "1" ? { promptCapabilities: { embeddedContext: true } } : {}), loadSession: true, sessionCapabilities: { list: {} }, mcpCapabilities: { http: process.env.SCRIPTED_HTTP !== "0", sse: false } }, authMethods: AUTH ? [{ id: "api-key", name: "API Key" }, { id: "browser", name: "Sign in" }] : [] } }); break;
     case "session/new": {
       const sessionId = `s-${process.pid}-${++n}`;
       sessions.set(sessionId, { cwd: p.cwd ?? process.cwd(), mcp: p.mcpServers ?? [], kept: { cwd: p.cwd ?? process.cwd(), title: "", updatedAt: new Date().toISOString(), history: [] } });
