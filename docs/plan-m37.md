@@ -20,6 +20,24 @@ The owner's notes from using isorite (6 November 2026, after 0.18.0). Two lists:
 14. Rename the "Iso" pane to "Agent" pane.
 15. Where the project is `project/notes/.isorite/...`: running `isorite` in `project/` creates `notes/.isorite` with `notes/opencode.json` inside, which suggests agents should be started in `notes/`, not the project. It may be better to have `project/.isorite` and `project/opencode.json`, without a separate `notes/` directory.
 
+## Done, on branch m37-testing-fixes
+
+Items 1 to 14 are done, one commit each. How, where it is not plain:
+
+- 1: a link, maths, code, emphasis or picture shows its source only while the cursor is in it, not along the whole line. Headings, lists and rules still show theirs by the line.
+- 2: in the list of notes a note could already be pulled to the top of the base. On the Atlas a note let go outside any folder now goes there (it was dropped nowhere). Not covered by a browser test.
+- 4: resolved questions stay on the Atlas, in green like solved problems (problems already did).
+- 7: artifacts have their own Atlas switch (Alt+A); the pictures switch (Alt+I) now covers the other files.
+- 8: Back and Forward buttons in the Note pane follow the notes opened in this page. The browser's own Back is as it was; I did not find or change anything in it.
+- 9: a base is shown by a title of its own (kept in the bases file beside its name). The name stays as the address and what agent sessions know it by; renaming that live would touch every open session.
+- 12: a bar above a table's source (insert or delete a row or column). No WYSIWYG editing of the cells.
+- 3: at most two columns of satellites (six places at the fewest), the last saying how many more; pressed, all of them.
+- 14: the pane is called Agent in the app, its menus and the README; internal names (`iso`) and history notes are unchanged.
+
+### Item 15, found
+
+Config files (`.mcp.json`, `opencode.json`) go to the repository's top, found by `.git`. When `project/` is not a git repository, the base's own folder (`notes/`) is taken as the project, so they land in `notes/` and the command written is `isorite mcp .`, which is why agents seem to need starting in `notes/`. In a git repository they go to `project/` with `isorite mcp notes`. Offered separately by `isorite` in a folder with no base: `notes/` is made inside it. Options: (a) when run with no repository, treat the folder `isorite` was run in as the project, writing `project/opencode.json` and `isorite mcp notes`; (b) make the base `project/` itself (`project/.isorite`), which mixes notes with code. Not changed yet.
+
 ## Bigger directions (not in this milestone)
 
 - A promo web page for isorite.
