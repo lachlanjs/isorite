@@ -827,11 +827,7 @@
       {/each}
       </div>
       <AtlasRoutes k={drawnK} {rest} pointed={!chosen && !!pointed} hot={[...(isoLens ? isoHot : []), ...hot, ...thereHot]} counts={litCount} {grown} {beat} {retracting} />
-      {#if labels && !beat}
-        {#each rest as r (r.key)}
-          {#if r.label}<span class="count {r.side}" style="--x:{r.mid[0]};--y:{r.mid[1]}">{r.count}</span>{/if}
-        {/each}
-      {/if}
+      <!-- The count of a merged route is not drawn (M37): the width of the line says enough. -->
       <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each notes as n (n.item.id)}
         {@const m = marks.get(n.item.ref)}
