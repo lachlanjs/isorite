@@ -6,6 +6,7 @@
   import { onMount } from "svelte";
   import { terminal } from "$lib/terminal.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
+  import { handoffText } from "$lib/handoff.ts";
   import AgentSessions from "./AgentSessions.svelte";
   import AttachAgent from "./AttachAgent.svelte";
   import ContextView from "./ContextView.svelte";
@@ -16,7 +17,18 @@
   let given = $state<Set<string>>(new Set());
   const sessionId = $derived(terminal.view?.session ?? null);
   $effect(() => { void sessionId; given = new Set(); });
-  const chips = $derived(terminal.connected && !terminal.old ? tray.sent : []);
+  // With no agent attached the tray is still shown, so what was chosen can be copied for an agent isorite does not run.
+  const chips = $derived(!terminal.old ? tray.sent : []);
+  let copied = $state(false);
+  let copyProblem = $state("");
+  async function copyForAgent(): Promise<void> {
+    copyProblem = "";
+    try {
+      await navigator.clipboard.writeText(handoffText(tray.sent, text));
+      copied = true;
+      setTimeout(() => { copied = false; }, 1500);
+    } catch { copyProblem = "The browser would not copy."; }
+  }
   const words = (t: string, n = 44): string => (t.length > n ? `${t.slice(0, n).trimEnd()}…` : t);
   const busy = $derived(terminal.running);
   /** A session to show: the agent's, or one kept, or Iso's from before, being read. */
@@ -91,6 +103,10 @@
           </li>
         {/each}
       </ul>
+      <p class="handoff">
+        <button type="button" class="more" onclick={() => void copyForAgent()} title="Text that names these for an agent running in your own terminal, to paste there. It reads them through isorite's tools.">{copied ? "Copied" : "Copy for your agent"}</button>
+        {#if copyProblem}<span class="bad" role="alert">{copyProblem}</span>{/if}
+      </p>
     {/if}
     <div class="box">
       <label class="hidden-label" for="iso-box">Message the agent</label>
@@ -122,6 +138,8 @@
   .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 2px 4px 2px 8px; border: 1px solid var(--line-strong); background: var(--ground-1); font: 12px/1.4 var(--font-ui); color: var(--text); }
   .chip .g { color: var(--growth); flex: none; }
   .chip .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .handoff { margin: 0; display: flex; align-items: center; gap: 8px; }
+  .handoff .more { background: none; border: 0; padding: 0; color: var(--growth); font: 12px/1.4 var(--font-ui); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .chip.given { border-color: var(--line); color: var(--text-faint); }
   .chip.given .g { color: var(--text-faint); }
   .chip .x { flex: none; width: 18px; height: 18px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; }
