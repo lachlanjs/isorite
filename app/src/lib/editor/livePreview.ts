@@ -123,6 +123,10 @@ function build(view: EditorView): DecorationSet {
   const { state } = view;
   const active = activeLines(state, view.hasFocus);
   const isActive = (pos: number) => active.has(state.doc.lineAt(pos).number);
+  // Inline things (emphasis, code, maths, links, pictures) show their source only where the cursor or selection is in
+  // them, not along the whole line: opening one reflowed every line round it, hard to follow by eye (M37).
+  const focused = view.hasFocus;
+  const touched = (from: number, to: number) => focused && state.selection.ranges.some((r) => r.from <= to && r.to >= from);
   const decos: Range<Decoration>[] = [];
   const lineClass = (from: number, to: number, cls: string) => {
     for (let n = state.doc.lineAt(from).number, last = state.doc.lineAt(to).number; n <= last; n++) {
@@ -170,21 +174,21 @@ function build(view: EditorView): DecorationSet {
           }
           case "EmphasisMark":
           case "StrikethroughMark":
-            if (!isActive(node.from)) decos.push(hide.range(node.from, node.to));
+            { const par = node.node.parent; if (!(par ? touched(par.from, par.to) : isActive(node.from))) decos.push(hide.range(node.from, node.to)); }
             break;
           case "Emphasis": decos.push(mark("cm-lp-em").range(node.from, node.to)); break;
           case "StrongEmphasis": decos.push(mark("cm-lp-strong").range(node.from, node.to)); break;
           case "Strikethrough": decos.push(mark("cm-lp-strike").range(node.from, node.to)); break;
           case "InlineCode": {
             decos.push(mark("cm-lp-code").range(node.from, node.to));
-            if (!isActive(node.from)) {
+            if (!touched(node.from, node.to)) {
               const n = node.node;
               for (let c = n.firstChild; c; c = c.nextSibling) if (c.name === "CodeMark") decos.push(hide.range(c.from, c.to));
             }
             return false;
           }
           case "InlineMath":
-            if (isActive(node.from)) decos.push(mark("cm-lp-mathsrc").range(node.from, node.to));
+            if (touched(node.from, node.to)) decos.push(mark("cm-lp-mathsrc").range(node.from, node.to));
             else decos.push(Decoration.replace({ widget: new MathsWidget(state.sliceDoc(node.from, node.to)) }).range(node.from, node.to));
             return false;
           case "BlockMath":
@@ -209,7 +213,7 @@ function build(view: EditorView): DecorationSet {
             const t = n.getChild("LinkTitle"), kind = rating(t ? state.sliceDoc(t.from + 1, t.to - 1) : null);
             const cls = code ? (state.facet(codeBroken)(href) ? "cm-lp-link cm-lp-codelink cm-lp-broken" : "cm-lp-link cm-lp-codelink") : web ? "cm-lp-link cm-lp-weblink vein web" : `cm-lp-link vein ${kind === "requires" ? "requires" : kind === "see also" ? "also" : "uses"}`;
             if (open && close && close.from > open.to) decos.push((code ? Decoration.mark({ class: cls, attributes: { title: state.facet(codeBroken)(href) ? `${href.slice(5)}: not in the repository` : href.slice(5) } }) : mark(cls)).range(open.to, close.from));
-            if (!isActive(node.from) && url && open && close) {
+            if (!touched(node.from, node.to) && url && open && close) {
               decos.push(hide.range(open.from, open.to));
               decos.push(hide.range(close.from, node.to));
             }
@@ -221,7 +225,7 @@ function build(view: EditorView): DecorationSet {
             const shown = u ? state.facet(artifacts)(state.sliceDoc(u.from, u.to)) : null;
             if (shown && marks.length >= 2) {
               const widget = new ArtifactWidget(shown.path, shown.mount);
-              if (!isActive(node.from)) decos.push(Decoration.replace({ widget }).range(node.from, node.to));
+              if (!touched(node.from, node.to)) decos.push(Decoration.replace({ widget }).range(node.from, node.to));
               else decos.push(Decoration.widget({ widget, side: 1 }).range(node.to));
               return false;
             }
@@ -229,7 +233,7 @@ function build(view: EditorView): DecorationSet {
             if (!picture || marks.length < 2) break;
             const t = n.getChild("LinkTitle"), title = t ? state.sliceDoc(t.from + 1, t.to - 1).trim().toLowerCase() : "";
             const widget = new PictureWidget(picture.key, picture.src, state.sliceDoc(marks[0]!.to, marks[1]!.from), title === "left");
-            if (!isActive(node.from)) decos.push(Decoration.replace({ widget }).range(node.from, node.to));
+            if (!touched(node.from, node.to)) decos.push(Decoration.replace({ widget }).range(node.from, node.to));
             else decos.push(Decoration.widget({ widget, side: 1 }).range(node.to));
             return false;
           }
