@@ -1,4 +1,4 @@
-// What goes with a message is shown in Iso's box (M35): a chip for each note, folder or passage in the tray, to be
+// What goes with a message is shown in the agent's box (M35): a chip for each note, folder or passage in the tray, to be
 // taken out before the message is sent, and faint once the session has been given it.
 
 import { expect, test } from "@playwright/test";
@@ -14,7 +14,7 @@ test("a passage chosen in a note is a chip in the box: taken out, put back, and 
   await editor.click();
   await page.keyboard.press("Control+Home");
   await page.keyboard.press("Shift+End");
-  await page.getByRole("button", { name: "add to Iso's message" }).click();
+  await page.getByRole("button", { name: "add to the agent's message" }).click();
   await toIso(page);
 
   const chips = page.getByRole("list", { name: "Going with your message" });
@@ -37,7 +37,7 @@ test("a passage chosen in a note is a chip in the box: taken out, put back, and 
   await editor.click();
   await page.keyboard.press("Control+Home");
   await page.keyboard.press("Shift+End");
-  await page.getByRole("button", { name: "add to Iso's message" }).click();
+  await page.getByRole("button", { name: "add to the agent's message" }).click();
   await toIso(page);
   await expect(chip).toHaveCount(1);
   await box(page).fill("say more");

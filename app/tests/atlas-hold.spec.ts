@@ -29,7 +29,7 @@ test("held on the Atlas, a note shows the tags: gold sends it, rose asks before 
   // Gold: sent.
   await go("send");
   await page.mouse.up();
-  await expect(page.getByRole("status").filter({ hasText: `Held ${p} is in Iso's context` })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: `Held ${p} is in the agent's context` })).toBeVisible();
   // Rose: asked first.
   await go("delete");
   await page.screenshot({ path: `test-results/screens/${p}-atlas-held-delete.png` });

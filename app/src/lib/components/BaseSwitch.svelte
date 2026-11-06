@@ -55,7 +55,7 @@
             <a href={basePage(row.name)} data-sveltekit-reload title={row.path} aria-current={isHere ? "page" : undefined}>{row.name}</a>
             <button class="lend" type="button" aria-pressed={row.lend} disabled={!local}
               aria-label="Lent to every session"
-              title={local ? (row.lend ? "Lent to every session's agent and Iso: press to keep it to itself" : "Lend it to every session's agent and Iso, as the agent's memory is") : "Lent or not is changed only from this machine"}
+              title={local ? (row.lend ? "Lent to every session's agent: press to keep it to itself" : "Lend it to every session's agent, as the agent's memory is") : "Lent or not is changed only from this machine"}
               onclick={() => lend(row)}>
               <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><rect x="2.5" y="5.5" width="7" height="8" /><path d="M6.5 5.5V2.5h7v8h-4" /></svg>
             </button>

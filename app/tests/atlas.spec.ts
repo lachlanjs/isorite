@@ -20,7 +20,7 @@ async function atlas(page: Page) {
 /** Iso's pane in its Context view: what you gave Iso, listed. On a phone, back to where you were after. */
 async function showContext(page: Page, back?: "Note" | "Atlas") {
   const phone = (page.viewportSize()?.width ?? 1280) <= 760, nav = page.getByRole("navigation", { name: "Panes" });
-  if (phone) await nav.getByRole("button", { name: /^Iso/ }).click();
+  if (phone) await nav.getByRole("button", { name: /^Agent/ }).click();
   const ctx = page.locator('[data-pane="iso"]').getByRole("button", { name: "Context", exact: true });
   if ((await ctx.getAttribute("aria-pressed")) !== "true") await ctx.click();
   if (phone && back) {
@@ -28,7 +28,7 @@ async function showContext(page: Page, back?: "Note" | "Atlas") {
     // The row has scrolled back to the pane before anything is pressed in it.
     await expect.poll(async () => (await page.locator(`[data-pane="${back.toLowerCase()}"]`).boundingBox())?.x).toBe(0);
   }
-  return page.getByRole("list", { name: "What you gave Iso" });
+  return page.getByRole("list", { name: "What you gave the agent" });
 }
 
 test("the map draws the base: its folders, its notes, and the routes between them", async ({ page }) => {
@@ -244,28 +244,28 @@ test("held with a finger, a note offers to go to Iso, to open, or a question or 
   await page.waitForTimeout(800);
   await page.locator(".atlas").dispatchEvent("pointerup", at);
   const offer = page.getByRole("menu", { name: "Huffman codes" });
-  await expect(offer.getByRole("menuitem")).toHaveText(["◆Give to Iso", "▣Open", "?A question about it", "△A problem using it"]);
+  await expect(offer.getByRole("menuitem")).toHaveText(["◆Give to the agent", "▣Open", "?A question about it", "△A problem using it"]);
   await look(page, "atlas-offer");
-  await offer.getByRole("menuitem", { name: "Give to Iso" }).click();
+  await offer.getByRole("menuitem", { name: "Give to the agent" }).click();
   await expect(offer).toHaveCount(0);
-  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in the agent's context" })).toBeVisible();
 });
 
-test("with Iso's context shown, a click still opens a note; shift+click gives it to Iso and takes it back (M14)", async ({ page }) => {
+test("with the agent's context shown, a click still opens a note; shift+click gives it to Iso and takes it back (M14)", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) <= 760, "a phone has no shift: its hold menu gives and takes back");
   await atlas(page);
   await setSwitch(page, "context", true);
   await note(page, "coding/huffman-codes").click({ modifiers: ["Shift"] });
-  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in the agent's context" })).toBeVisible();
   await expect(note(page, "coding/huffman-codes")).toHaveClass(/\bgiven\b/);
   await expect(note(page, "coding/huffman-codes")).toHaveAttribute("title", /shift\+click takes it back/);
   await expect(page.getByText("tap to give or take back")).toHaveCount(0);
   await note(page, "coding/huffman-codes").click({ modifiers: ["Shift"] });
-  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is out of Iso's context" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is out of the agent's context" })).toBeVisible();
   await expect(note(page, "coding/huffman-codes")).not.toHaveClass(/\bgiven\b/);
   const basics = folder(page, "basics"), closed = (await basics.evaluate((el) => el.tagName)) === "BUTTON";
   await (closed ? basics : basics.locator("button.frame-title")).click({ modifiers: ["Shift"] });
-  await expect(page.getByRole("status").filter({ hasText: /basics is in Iso's context/i })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: /basics is in the agent's context/i })).toBeVisible();
   await note(page, "coding/kraft-inequality").click();
   await note(page, "coding/kraft-inequality").click();
   await expect(page).toHaveURL(/#\/n\/coding\/kraft-inequality$/);
@@ -281,12 +281,12 @@ test("held with a finger, a note already given offers to take it back (M14)", as
     await page.locator(".atlas").dispatchEvent("pointerup", at);
   };
   await hold();
-  await page.getByRole("menu", { name: "Huffman codes" }).getByRole("menuitem", { name: "Give to Iso" }).click();
+  await page.getByRole("menu", { name: "Huffman codes" }).getByRole("menuitem", { name: "Give to the agent" }).click();
   await hold();
   const offer = page.getByRole("menu", { name: "Huffman codes" });
-  await expect(offer.getByRole("menuitem").first()).toHaveText("◇Take back from Iso");
-  await offer.getByRole("menuitem", { name: "Take back from Iso" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is out of Iso's context" })).toBeVisible();
+  await expect(offer.getByRole("menuitem").first()).toHaveText("◇Take back from the agent");
+  await offer.getByRole("menuitem", { name: "Take back from the agent" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is out of the agent's context" })).toBeVisible();
 });
 
 test("a drag from a note never moves the map; a drag from open ground does", async ({ page }) => {
@@ -317,7 +317,7 @@ test("a drag from a note never moves the map; a drag from open ground does", asy
 test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given to Iso; a drag inside moves the map", async ({ page }) => {
   await atlas(page);
   const tray = await showContext(page, "Atlas");
-  // Held still on a note, three tags appear (M33); let go on the gold one and it goes into Iso's context, listed in Iso's
+  // Held still on a note, three tags appear (M33); let go on the gold one and it goes into the agent's context, listed in Iso's
   // Context view, and the map says so.
   const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
   await page.mouse.move(huffman.x + 10, huffman.y + 6);
@@ -327,7 +327,7 @@ test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given t
   const tag = (await send.boundingBox())!;
   await page.mouse.move(tag.x + tag.width / 2, tag.y + tag.height / 2, { steps: 4 });
   await page.mouse.up();
-  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in Iso's context" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in the agent's context" })).toBeVisible();
   await expect(tray.locator("li")).toHaveText([/^◆\s*Huffman codes\s*$/]);
   await page.mouse.move(huffman.x - 60, huffman.y + 120); // off it, so it is not lit by pointing
   await expect(note(page, "coding/huffman-codes")).not.toHaveClass(/\bat\b/); // held, not chosen
@@ -342,7 +342,7 @@ test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given t
   await page.mouse.up();
   await expect(tray.locator("li")).toHaveText([/^◆\s*Huffman codes\s*$/, /^◆\s*Surprise\s*$/]);
   // Taken out again.
-  await tray.getByRole("button", { name: "Take Huffman codes out of Iso's context" }).click();
+  await tray.getByRole("button", { name: "Take Huffman codes out of the agent's context" }).click();
   await expect(tray.locator("li")).toHaveText([/^◆\s*Surprise\s*$/]);
 });
 
@@ -383,7 +383,7 @@ test("the grid is fine, coarse or coarser (key c), and the map draws on each", a
 
 test("an agent's look-ups through isorite's MCP are drawn on the Atlas: what it searched, what it reached along a link, what it reads; its turn ends idle", async ({ page, request, baseURL }) => {
   await atlas(page);
-  // Drawn with Iso's context on, the diamond in the Atlas's header (M12).
+  // Drawn with the agent's context on, the diamond in the Atlas's header (M12).
   await setSwitch(page, "context", true);
   // As a harness's plugin asks: from the server's origin, with the token it hands out.
   const { token } = await (await request.get("api/session")).json() as { token: string };

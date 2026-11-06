@@ -56,10 +56,10 @@
     <p class="faint">With an agent attached, what it has in hand shows here: isorite's part, the notes it was given and read, and the room left.</p>
   {/if}
   <h2 class="label">in the tray</h2>
-  <ul class="rows" aria-label="What you gave Iso" title="Given to the session before its next prompt, asked here or in its front end, unless given already">
+  <ul class="rows" aria-label="What you gave the agent" title="Given to the session before its next prompt, asked here or in its front end, unless given already">
     {#each tray.sent as p (tray.keyOf(p))}
       <li class="row"><span class="r"><span class="mk" aria-hidden="true">◆</span><span class="t">{p.kind === "passage" ? `“${p.text}”` : p.title}</span></span>
-        <button type="button" class="x" aria-label="Take {p.title} out of Iso's context" onclick={() => tray.remove(p)}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 8M12 4l-8 8" /></svg></button></li>
+        <button type="button" class="x" aria-label="Take {p.title} out of the agent's context" onclick={() => tray.remove(p)}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 8M12 4l-8 8" /></svg></button></li>
     {/each}
   </ul>
 </div>

@@ -9,7 +9,7 @@ const SCRIPTED = fileURLToPath(new URL("../../packages/server/test/fixtures/scri
 const URL_ = `http://localhost:${PORT}`;
 
 async function toIso(page: Page) {
-  if ((page.viewportSize()?.width ?? 1280) <= 760) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
+  if ((page.viewportSize()?.width ?? 1280) <= 760) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Agent/ }).click();
 }
 
 test.afterEach(async () => {

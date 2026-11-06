@@ -15,7 +15,7 @@ test("removing a chip that was given asks the server to withdraw it; an agent th
   await editor.click();
   await page.keyboard.press("Control+Home");
   await page.keyboard.press("Shift+End");
-  await page.getByRole("button", { name: "add to Iso's message" }).click();
+  await page.getByRole("button", { name: "add to the agent's message" }).click();
   await toIso(page);
   const tray = page.getByRole("list", { name: "Going with your message" });
   await expect(tray.getByRole("listitem")).toHaveCount(1);

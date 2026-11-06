@@ -4,7 +4,7 @@
   // with its note), and what it asks before doing, answered here or in its front end, whichever is first. Drawn as
   // Iso's turns were (M24): what was given before a prompt, the crystal growing while it works, and once a turn is
   // over the notes it drew on as parts under the reply, lit with the phrases citing them and with the note on the
-  // Atlas when pointed at. A conversation with Iso from before M25 is read here the same way.
+  // Atlas when pointed at. A conversation with the agent from before M25 is read here the same way.
   import AttachAgent from "./AttachAgent.svelte";
   import Crystal from "./Crystal.svelte";
   import type { Given, TerminalItem, TerminalPermission, TerminalTurn } from "@isorite/engine";
@@ -138,7 +138,7 @@
   {#if !view?.turns.length}
     <p class="faint">{view?.agent || "The agent"}'s session shows here: what is asked in its front end or here, what it does, and what it asks before doing. Notes put in the tray go before the next prompt.</p>
   {/if}
-  {#if terminal.old}<p class="faint">A conversation with Iso, from before isorite attached your own agent: kept to read.</p>
+  {#if terminal.old}<p class="faint">A conversation with the agent, from before isorite attached your own agent: kept to read.</p>
   {:else if view?.reading}<p class="faint">Kept here; {view.agent} isn't attached to carry it on.</p>{/if}
   {#if !terminal.connected}<AttachAgent />{/if}
 </div>

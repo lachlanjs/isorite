@@ -161,7 +161,7 @@ export function main(argv: string[]): number | Promise<number> {
     if (command === "new" && rest[0]) {
       const made = newBase(rest[0]);
       // The commands that come next, with the whole path.
-      const next = `${made}: a knowledge base, empty. Open it in the browser, and attach your agent from Iso's pane:\n  isorite serve ${made}`;
+      const next = `${made}: a knowledge base, empty. Open it in the browser, and attach your agent from the Agent pane:\n  isorite serve ${made}`;
       // In a git project, asked at a terminal: keep isorite's own files with the project, or apart from it (M27).
       if (process.stdin.isTTY && process.stdout.isTTY && repoOf(made)) {
         return (async () => {
@@ -194,7 +194,7 @@ export function main(argv: string[]): number | Promise<number> {
       return guide(folder, port === undefined ? {} : { port }).then(() => new Promise<number>(() => undefined), (e: Error) => { console.error(e.message); return 2; });
     }
     // OpenCode behind isorite (M11) is retired (M25): it is an ACP agent as any other.
-    if (command === "term" || command === "opencode") { console.error('isorite term and isorite opencode are retired: attach OpenCode as any agent, from Iso\'s pane or with isorite acp --agent "opencode acp", or give it isorite\'s MCP (isorite doctor offers the project\'s config)'); return 2; }
+    if (command === "term" || command === "opencode") { console.error('isorite term and isorite opencode are retired: attach OpenCode as any agent, from the Agent pane or with isorite acp --agent "opencode acp", or give it isorite\'s MCP (isorite doctor offers the project\'s config)'); return 2; }
     if (command === "mcp") {
       const flag = (name: string) => { const at = rest.indexOf(name); return at < 0 ? undefined : rest[at + 1]; };
       const port = flag("--port") === undefined ? undefined : Number(flag("--port")), agent = flag("--agent");

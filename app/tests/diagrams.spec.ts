@@ -81,7 +81,7 @@ test("an agent's answer with a diagram and code is drawn in Iso's pane, and the 
   const agent = await attach();
   try {
     await open(page, "iso");
-    if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
+    if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Agent/ }).click();
     await box(page).fill(`draw\nhow surprise and entropy stand, ${test.info().project.name}`);
     await box(page).press("Enter");
     const said = page.locator('[data-pane="iso"] .said').last();

@@ -9,7 +9,7 @@ Your project's notes as a map, beside the agent you already use, which reads and
 
 - **Notes:** plain Markdown files in a folder you own. Every change is kept, with who made it, yours or an agent's.
 - **The Atlas:** your notes laid out as a map, with folders as regions and links as routes. What your agent reads lights up on it.
-- **Iso:** the pane where your agent's session shows, beside the notes and the Atlas. Ask it there or in its own front end; it cites your notes in the sentence, asks questions back, and its words in your notes stay marked as its own.
+- **Agent:** the pane where your agent's session shows, beside the notes and the Atlas. Ask it there or in its own front end; it cites your notes in the sentence, asks questions back, and its words in your notes stay marked as its own.
 - **Your agent:** Claude, Codex, OpenCode, omp, Hermes, or any agent that speaks ACP. isorite gives it your notes over MCP, and reaches it over ACP. isorite calls no model itself.
 
 ## New to AI agents?
@@ -57,14 +57,14 @@ The first run of the installed executable takes a few seconds longer, while it u
 
 isorite calls no model itself, so it needs an agent. Have one working in its own terminal first (Claude Code, Codex, OpenCode, omp, Hermes, or any that speaks ACP): its key and model stay as you set them there. Then choose one of three ways in.
 
-**In Iso's pane, the simplest.** Start `isorite` from the terminal where your agent's key is set, because the agent gets that environment and no other:
+**In the Agent pane, the simplest.** Start `isorite` from the terminal where your agent's key is set, because the agent gets that environment and no other:
 
 ```sh
 export ANTHROPIC_API_KEY=...          # or CODEX_API_KEY for Codex, or whatever your agent reads; not needed if you've signed in
 isorite
 ```
 
-With no agent attached, Iso's pane lists the agents it finds on this machine (Claude Code, Codex, OpenCode, omp, Hermes) and says whether the key each reads is set where isorite started; *use it* attaches one. Nothing found, or one it doesn't know: it offers the [ACP registry](https://agentclientprotocol.com/get-started/registry)'s agents, or the command of one (`hermes acp`). Ask it something. isorite remembers the choice for this base. The first start can take a while, with nothing shown, while the agent's program is fetched; an agent run through `npx` or `uvx` needs that tool installed, even with the one-file install of isorite.
+With no agent attached, the Agent pane lists the agents it finds on this machine (Claude Code, Codex, OpenCode, omp, Hermes) and says whether the key each reads is set where isorite started; *use it* attaches one. Nothing found, or one it doesn't know: it offers the [ACP registry](https://agentclientprotocol.com/get-started/registry)'s agents, or the command of one (`hermes acp`). Ask it something. isorite remembers the choice for this base. The first start can take a while, with nothing shown, while the agent's program is fetched; an agent run through `npx` or `uvx` needs that tool installed, even with the one-file install of isorite.
 
 **From an ACP front end** (Toad, Zed, JetBrains). Give it this as its agent, and the session shows in the front end and in the pane at once:
 
@@ -76,7 +76,7 @@ isorite acp --agent "npx -y @agentclientprotocol/claude-agent-acp" ~/code/my-pro
 
 Each way in full, and how each agent differs: [docs/terminal.md](docs/terminal.md).
 
-**What the agent may do**, set by the switches in Iso's header:
+**What the agent may do**, set by the switches in the Agent pane's header:
 
 - **Edit the notes** (Alt+N): on unless you switch it off, and kept with the base. While it's off, isorite refuses the agent's writes to notes and artifacts, and its requests to edit a note's file. An agent whose own tools change a file without asking can't be stopped; through `isorite acp` the change is still kept under its name, to put back.
 - **Edit the project's files** (Alt+F) and **run commands** (Alt+R): off by default. What the agent asks to do while one is off is refused, as long as the page is open.

@@ -50,12 +50,12 @@
 {#if open}
   <div bind:this={face} class="folder frame {tone} {moment ? `mo-${moment}` : ''}" class:given data-folder={item.ref} style="{place};--inside:{inside};--behind:{behind};--ground-here:{inside}">
     {#if titled && editing}<input class="frame-title rename" aria-label="Rename the folder {name}" bind:value={draft} use:focus onpointerdown={(e) => e.stopPropagation()} onclick={(e) => e.stopPropagation()} onkeydown={(e) => { e.stopPropagation(); if (e.key === "Enter") done(true); else if (e.key === "Escape") done(false); }} onblur={() => done(false)} />
-    {:else if titled}<button class="frame-title" type="button" title={given ? "In Iso's context: shift+click takes it back. Double click renames it." : onrename ? "Double click renames it" : undefined} onclick={onpick} ondblclick={edit}>{name}</button>{/if}
+    {:else if titled}<button class="frame-title" type="button" title={given ? "In the agent's context: shift+click takes it back. Double click renames it." : onrename ? "Double click renames it" : undefined} onclick={onpick} ondblclick={edit}>{name}</button>{/if}
     {#if says}<span class="frame-title held">{says}</span>{/if}
     {#if bare}<span class="bare" aria-hidden="true"><i></i><i></i><i></i></span>{/if}
   </div>
 {:else}
-  <button bind:this={face} class="folder frame closed {tone} {moment ? `mo-${moment}` : ''}" class:dim class:given class:here aria-current={here ? "page" : undefined} type="button" data-folder={item.ref} style={place} title={given ? "In Iso's context: shift+click takes it back" : undefined} onclick={onpick}>
+  <button bind:this={face} class="folder frame closed {tone} {moment ? `mo-${moment}` : ''}" class:dim class:given class:here aria-current={here ? "page" : undefined} type="button" data-folder={item.ref} style={place} title={given ? "In the agent's context: shift+click takes it back" : undefined} onclick={onpick}>
     <span class="inner"><span class="name">{name}</span><span class="label">{says || `${count} ${count === 1 ? "note" : "notes"}`}</span></span>
   </button>
 {/if}

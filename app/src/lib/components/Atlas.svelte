@@ -544,7 +544,7 @@
   let givenTimer: ReturnType<typeof setTimeout> | undefined;
   function give(ref: string, kind: "note" | "folder" = "note"): void {
     const put = tray.add({ kind, id: ref, title: kind === "note" ? title(ref) : folderName(ref) });
-    given = put ? `${kind === "note" ? title(ref) : folderName(ref)} is in Iso's context` : `${kind === "note" ? title(ref) : folderName(ref)} is in Iso's context already`;
+    given = put ? `${kind === "note" ? title(ref) : folderName(ref)} is in the agent's context` : `${kind === "note" ? title(ref) : folderName(ref)} is in the agent's context already`;
     clearTimeout(givenTimer);
     givenTimer = setTimeout(() => (given = ""), 2200);
   }
@@ -553,7 +553,7 @@
     if (!tray.has(kind, ref)) { give(ref, kind); return; }
     const name = kind === "note" ? title(ref) : folderName(ref);
     tray.remove({ kind, id: ref, title: name });
-    given = `${name} is out of Iso's context`;
+    given = `${name} is out of the agent's context`;
     clearTimeout(givenTimer);
     givenTimer = setTimeout(() => (given = ""), 2200);
   }
@@ -725,7 +725,7 @@
     if (dragged) return;
     // A question Iso asked and not kept is kept, or not, in Iso's pane.
     if (ref.startsWith("?")) { panes.to("iso"); return; }
-    // Shift+click gives a note to Iso, or takes it back, with Iso's context shown or not (M14).
+    // Shift+click gives a note to Iso, or takes it back, with the agent's context shown or not (M14).
     if (e.shiftKey) { if (!ref.startsWith("@")) giveOrTake(ref); return; }
     // Chosen already: open it, beside the Atlas on a desktop (V1).
     if (chosen === ref) { void panes.open(opens(ref)); return; }
@@ -887,9 +887,9 @@
       {@const o = offered}
       <div class="offer frame" role="menu" aria-label={title(o.ref)} style="left:{Math.min(o.x, size.w - 170)}px;top:{o.y + 14}px">
         {#if tray.has("note", o.ref)}
-          <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); giveOrTake(o.ref); offered = null; }}><i aria-hidden="true">◇</i>Take back from Iso</button>
+          <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); giveOrTake(o.ref); offered = null; }}><i aria-hidden="true">◇</i>Take back from the agent</button>
         {:else}
-          <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); give(o.ref); offered = null; }}><i aria-hidden="true">◆</i>Give to Iso</button>
+          <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); give(o.ref); offered = null; }}><i aria-hidden="true">◆</i>Give to the agent</button>
         {/if}
         <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void panes.open(o.ref, true); }}><i aria-hidden="true">▣</i>Open</button>
         <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void makeKind("question", o.ref); }}><i class="q" aria-hidden="true">?</i>A question about it</button>

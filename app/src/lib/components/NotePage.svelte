@@ -169,7 +169,7 @@
       : null;
   });
   // Whose changes wait: Iso's, an agent's, or both.
-  const changesFrom = $derived([...new Set(iso.changes.map((c) => agentName(c.proposal.who) || "Iso"))].join(" and "));
+  const changesFrom = $derived([...new Set(iso.changes.map((c) => agentName(c.proposal.who) || "Agent"))].join(" and "));
   // A question or a problem (M12): its kind and when it was done, the notes it is about or uses, and on any note,
   // the questions and problems attached to it.
   const kind = $derived(kindOf(String(note.meta?.type ?? "")));
@@ -292,7 +292,7 @@
 
     {#if toIsoAt}
       <span class="toiso" role="group" aria-label="The selected passage" style:top="{toIsoAt.top}px" style:left="{toIsoAt.left}px">
-        <button type="button" title="Put it above Iso's box, to go with your next message from the pane" onpointerdown={(e) => { e.preventDefault(); sendToIso(); }} onclick={(e) => { if (e.detail === 0) sendToIso(); }}><i class="dia" aria-hidden="true">◆</i>add to Iso's message</button>
+        <button type="button" title="Put it above the agent's box, to go with your next message from the pane" onpointerdown={(e) => { e.preventDefault(); sendToIso(); }} onclick={(e) => { if (e.detail === 0) sendToIso(); }}><i class="dia" aria-hidden="true">◆</i>add to the agent's message</button>
         <button type="button" title="Copy it with the note it is from, to paste into an agent in your terminal" onpointerdown={(e) => { e.preventDefault(); copyPassage(); }} onclick={(e) => { if (e.detail === 0) copyPassage(); }}>{copied ? "copied" : "copy for a terminal"}</button>
       </span>
     {/if}

@@ -126,7 +126,7 @@
   function send(item: Item) {
     const put = tray.add({ kind: item.kind, id: item.id, title: item.title });
     said = "";
-    sent = put ? `${item.title} is with Iso.` : `${item.title} was with Iso already.`;
+    sent = put ? `${item.title} is with the agent.` : `${item.title} was with the agent already.`;
     clearTimeout(sentTimer);
     sentTimer = setTimeout(() => (sent = ""), 4000);
   }

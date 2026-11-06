@@ -20,7 +20,7 @@ async function look(page: Page, name: string) {
 /** Iso's pane in its Context view: what you gave Iso, listed. On a phone, back to where you were after. */
 async function showContext(page: Page, back?: "Note" | "Atlas") {
   const phone = (page.viewportSize()?.width ?? 1280) <= 760, nav = page.getByRole("navigation", { name: "Panes" });
-  if (phone) await nav.getByRole("button", { name: /^Iso/ }).click();
+  if (phone) await nav.getByRole("button", { name: /^Agent/ }).click();
   const ctx = page.locator('[data-pane="iso"]').getByRole("button", { name: "Context", exact: true });
   if ((await ctx.getAttribute("aria-pressed")) !== "true") await ctx.click();
   if (phone && back) {
@@ -28,7 +28,7 @@ async function showContext(page: Page, back?: "Note" | "Atlas") {
     // The row has scrolled back to the pane before anything is pressed in it.
     await expect.poll(async () => (await page.locator(`[data-pane="${back.toLowerCase()}"]`).boundingBox())?.x).toBe(0);
   }
-  return page.getByRole("list", { name: "What you gave Iso" });
+  return page.getByRole("list", { name: "What you gave the agent" });
 }
 
 test("a note with maths and a typed link is written, saved, and there when reopened", async ({ page }) => {
@@ -167,8 +167,8 @@ test("a passage chosen in a note is sent to Iso; the notes open over the note an
   await editor(page).click();
   await page.keyboard.press("Control+Home");
   await page.keyboard.press("Shift+End");
-  await page.getByRole("button", { name: "add to Iso's message" }).click();
-  await expect(page.getByRole("button", { name: "add to Iso's message" })).toHaveCount(0);
+  await page.getByRole("button", { name: "add to the agent's message" }).click();
+  await expect(page.getByRole("button", { name: "add to the agent's message" })).toHaveCount(0);
   await expect(await showContext(page, "Note")).toContainText("“An outcome of probability");
 
   await page.getByRole("button", { name: "All notes" }).click();

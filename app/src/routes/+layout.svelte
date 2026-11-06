@@ -103,7 +103,7 @@
     else return;
     e.preventDefault();
   }
-  const NAME: Record<Pane, string> = { note: "Note", atlas: "Atlas", iso: "Iso" };
+  const NAME: Record<Pane, string> = { note: "Note", atlas: "Atlas", iso: "Agent" };
   // The panes' switches (M12), each its letter with Alt.
   const SWITCH_KEYS: Record<string, Switch> = { p: "provenance", t: "timeline", q: "questions", b: "problems", w: "web", k: "code", i: "pictures", c: "context", n: "notes", f: "files", r: "run" };
   const inNote = $derived(page.route.id === "/n/[...id]");
@@ -157,7 +157,7 @@
             </PaneHead>
             <div class="pbody atlas-body"><AtlasPane /></div>
           {:else}
-            <PaneHead pane="iso" first={panes.narrow || standing[0] === "iso"} name="Iso" settings={isoSettings}>
+            <PaneHead pane="iso" first={panes.narrow || standing[0] === "iso"} name="Agent" settings={isoSettings}>
               {#snippet tools()}
                 <!-- An agent's turn told in Iso's header, unless its session is the pane's (M25), where it shows itself. -->
                 {#if run?.agent && !terminal.acp}
@@ -168,7 +168,7 @@
                 <!-- The drawer (M24, K): the agents' sessions, live and kept (M25), and Iso's own conversations from
                      before, under the crystal of the one shown. -->
                 {@const shownId = terminal.session?.session}
-                <button class="icon past" type="button" aria-label="Sessions" aria-pressed={terminal.shown === "past"} title="The agents' sessions, and Iso's earlier conversations" onclick={() => void terminal.drawer()}>
+                <button class="icon past" type="button" aria-label="Sessions" aria-pressed={terminal.shown === "past"} title="The agents' sessions, and earlier conversations" onclick={() => void terminal.drawer()}>
                   {#if shownId}<Crystal id={shownId} size={20} />{:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 4.5h11v8h-11zM2.5 7.5h11M6.5 10h3" /></svg>{/if}
                 </button>
                 <!-- What the agent has in hand (I8, M25), with how many parts are in the tray; a new session. -->

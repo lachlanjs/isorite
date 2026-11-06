@@ -13,7 +13,7 @@ test("with no agent attached, a chosen passage is copied as text that names its 
   await editor.click();
   await page.keyboard.press("Control+Home");
   await page.keyboard.press("Shift+End");
-  await page.getByRole("button", { name: "add to Iso's message" }).click();
+  await page.getByRole("button", { name: "add to the agent's message" }).click();
   await toIso(page);
 
   await expect(page.getByRole("list", { name: "Going with your message" }).getByRole("listitem")).toHaveCount(1);

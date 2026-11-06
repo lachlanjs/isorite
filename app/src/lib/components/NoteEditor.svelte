@@ -157,7 +157,7 @@
           const piece = mount(key.startsWith("r:") ? IsoChange : IsoBlock, { target: el, props: { iso, key } });
           return () => { void unmount(piece); };
         },
-      } : { placeholder: untrack(() => placeholder) ?? "Write what you understand, what you do not, and what you want from Iso. [[ links a note it should rest on." }),
+      } : { placeholder: untrack(() => placeholder) ?? "Write what you understand, what you do not, and what you want from the agent. [[ links a note it should rest on." }),
     });
     view = made;
     return () => { made.destroy(); pointing.set("note", null); };

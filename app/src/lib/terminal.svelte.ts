@@ -28,7 +28,7 @@ export function asAgentTurn(t: Turn): TerminalTurn {
 
 class TerminalState {
   view = $state.raw<TerminalView | null>(null);
-  /** An earlier conversation with Iso being read, in place of the agent's session. */
+  /** An earlier conversation with the agent being read, in place of the agent's session. */
   old = $state.raw<TerminalView | null>(null);
   /** What the pane shows: the session, what the agent has in hand (the Context view), or the drawer. */
   shown = $state<"session" | "context" | "past">("session");
@@ -145,12 +145,12 @@ class TerminalState {
     if (this.acp) void this.api?.list().catch(() => undefined);
     try { this.past = await app.api.conversations(); } catch { this.past = []; }
   }
-  /** An earlier conversation with Iso, read in the pane. */
+  /** An earlier conversation with the agent, read in the pane. */
   async read(id: string): Promise<void> {
     this.problem = "";
     try {
       const c = await app.api.conversation(id);
-      if (c) this.old = { connected: false, reading: true, agent: "Iso", agentId: "iso", session: c.id, title: c.turns[0]?.asked ?? "", busy: false, turns: c.turns.map(asAgentTurn), asking: [], cost: 0, tokens: { input: 0, output: 0 }, model: "" };
+      if (c) this.old = { connected: false, reading: true, agent: "Agent", agentId: "iso", session: c.id, title: c.turns[0]?.asked ?? "", busy: false, turns: c.turns.map(asAgentTurn), asking: [], cost: 0, tokens: { input: 0, output: 0 }, model: "" };
       this.shown = "session";
     } catch (e) { this.problem = (e as Error).message; }
   }

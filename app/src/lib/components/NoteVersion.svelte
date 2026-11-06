@@ -49,7 +49,7 @@
   {#if asked !== undefined}<p class="asked"><i class="dia" aria-hidden="true"></i><span>{asked}</span></p>{/if}
   <div class="text" bind:this={host}></div>
   {#if offered !== undefined}
-    <div class="offered" aria-label="What Iso offered">
+    <div class="offered" aria-label="What the agent offered">
       <p class="serif">{offered}</p>
     </div>
   {/if}

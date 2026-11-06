@@ -26,7 +26,7 @@
 {:else if key === "lost" && lost.length}
   <!-- Changes whose passages you have since edited: there is nowhere to set them, so they are told of here. -->
   <div class="between stopped">
-    <p class="label">{lost.length === 1 ? "One change Iso offered is" : `${lost.length} changes Iso offered are`} for text that is no longer in the note as it was, so {lost.length === 1 ? "it" : "they"} cannot be kept.</p>
+    <p class="label">{lost.length === 1 ? "One change the agent offered is" : `${lost.length} changes the agent offered are`} for text that is no longer in the note as it was, so {lost.length === 1 ? "it" : "they"} cannot be kept.</p>
     {#each lost as c (c.key)}
       <p class="soft lost"><span class="strike">{c.proposal.regions[c.k]!.old.text.trim()}</span> → {c.proposal.regions[c.k]!.new.trim() || "(taken out)"}</p>
     {/each}
@@ -36,7 +36,7 @@
   <div class="between" data-proposal={proposal.id}>
     {#if !iso.placed(proposal)}<p class="label">The place this was written for is no longer in the note, so it is shown here. Keeping it adds it at the end.</p>{/if}
     {#if editing}
-      <textarea class="revision" bind:value={editing.text} aria-label="Iso's text, to edit" rows={Math.max(3, editing.text.split("\n").length + 1)}></textarea>
+      <textarea class="revision" bind:value={editing.text} aria-label="The agent's text, to edit" rows={Math.max(3, editing.text.split("\n").length + 1)}></textarea>
     {:else}<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
       <div class="prose said" use:drawn={{ given: proposal.text, copy: true }}>{@html render(proposal.text)}</div>
     {/if}

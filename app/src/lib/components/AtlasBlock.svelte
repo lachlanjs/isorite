@@ -44,7 +44,7 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a data-lustre class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:dim={dim && !iso && !given} class:far={far > 1} class:given class:held={held === "on"} class:changed class:here class:file={!!file} class:prospect aria-current={here ? "page" : undefined} {href} aria-label={`${prospect ? "Asked back, not kept: " : kind === "question" ? "Question: " : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in Iso's context" : held === "on" ? ": read by the agent" : ""}${changed ? ", changed by the agent" : ""}`} title={given ? "In Iso's context: shift+click takes it back" : undefined} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
+<a data-lustre class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:dim={dim && !iso && !given} class:far={far > 1} class:given class:held={held === "on"} class:changed class:here class:file={!!file} class:prospect aria-current={here ? "page" : undefined} {href} aria-label={`${prospect ? "Asked back, not kept: " : kind === "question" ? "Question: " : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in the agent's context" : held === "on" ? ": read by the agent" : ""}${changed ? ", changed by the agent" : ""}`} title={given ? "In the agent's context: shift+click takes it back" : undefined} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
@@ -105,7 +105,7 @@
   .here { box-shadow: inset calc(3 * var(--px)) 0 0 var(--text); color: var(--text); }
   .mo-you { outline: calc(2.5 * var(--px)) solid var(--lattice); outline-offset: calc(3 * var(--px)); z-index: 3; }
   .mo-iso { outline: calc(2.5 * var(--px)) solid var(--growth); outline-offset: calc(3 * var(--px)); z-index: 3; }
-  /* The Iso lens (M10): in Iso's context, a gold fill; read by the agent, a blue one; changed by it, a diamond at
+  /* The Iso lens (M10): in the agent's context, a gold fill; read by the agent, a blue one; changed by it, a diamond at
      the corner; the order it read in, a gold number. */
   .given { background: var(--growth-soft); border-color: var(--growth); color: var(--text); }
   .held { background: var(--lattice-soft); border-color: var(--lattice); color: var(--text); }

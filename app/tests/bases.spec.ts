@@ -59,7 +59,7 @@ test("the project's agent looks and writes in its memory; the memory's own page 
   await page.goto(`/?base=memory#/atlas`);
   await expect(page.locator('[data-note="tools/opencode"]')).toBeVisible();
   if (phone()) await expect.poll(() => page.locator('[data-pane="atlas"]').evaluate((el) => Math.round(el.getBoundingClientRect().left))).toBe(0);
-  // An agent's path is drawn with Iso's context on (M12).
+  // An agent's path is drawn with the agent's context on (M12).
   await setSwitch(page, "context", true);
   await agent.status(true);
   const brief = await (await agent.tool("brief_base", {})).json() as { text: string };

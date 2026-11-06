@@ -21,7 +21,7 @@
   <span class="tags" class:point={mode === "point"} style={at} role="presentation">
     <span class="tag move" class:on={g.tag === "move"} data-tag="move">move</span>
     <span class="tag delete" class:on={g.tag === "delete"} data-tag="delete">delete</span>
-    <span class="tag send" class:on={g.tag === "send"} data-tag="send">send to Iso</span>
+    <span class="tag send" class:on={g.tag === "send"} data-tag="send">send to the agent</span>
   </span>
 {/if}
 

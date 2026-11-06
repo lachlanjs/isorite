@@ -73,7 +73,7 @@ test("the agent asks a question back: it stands dotted on the Atlas where it wou
   try {
     await page.goto(`#/n/${n}`);
     await expect(page.getByRole("textbox", { name: "The note", exact: true })).toContainText("Plain.");
-    if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
+    if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Agent/ }).click();
     const q = `Why does asked-${name} hold?`;
     await box(page).fill(`ask ${n} ${q}`);
     await box(page).press("Enter");

@@ -46,7 +46,7 @@ export async function attach(): Promise<Attached> {
 /** The pane's box, and Iso's pane brought forward on a phone. */
 export const box = (page: Page) => page.getByRole("textbox", { name: "Message the agent" });
 export async function toIso(page: Page): Promise<void> {
-  if ((page.viewportSize()?.width ?? 1280) <= 760) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
+  if ((page.viewportSize()?.width ?? 1280) <= 760) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Agent/ }).click();
 }
 /** The session shown in the pane. */
 export const log = (page: Page) => page.getByRole("log", { name: "The agent's session" });

@@ -65,7 +65,7 @@
       <p class="path" class:taken={isTaken}>{#if isTaken}<code>{path}</code> is taken: Enter makes it <code>{free}.{ext}</code>{:else}<code>{path}</code>{/if}</p>
     {/if}
     <label><span>what it shows</span>
-      <input class="field" bind:value={alt} placeholder="Iso reads this, not the picture" aria-label="What it shows" autocomplete="off" bind:this={altInput} />
+      <input class="field" bind:value={alt} placeholder="The agent reads this, not the picture" aria-label="What it shows" autocomplete="off" bind:this={altInput} />
     </label>
     <div class="actions">
       {#if same !== null}<button class="btn" type="button" onclick={() => { copy = !copy; if (copy) requestAnimationFrame(() => { input?.focus(); input?.select(); }); }}>{copy ? "Use the one there" : "Save a copy"}</button>{/if}

@@ -80,7 +80,7 @@
     <div class="frame box">
       <span class="frame-title">a frame</span>
       <input class="field" placeholder="a field" aria-label="A field" />
-      <div class="row"><i class="sq"></i><span>you</span><i class="sq empty"></i><span>not yet</span><i class="dia"></i><span>Iso</span><i class="dia open"></i><span>Iso, unkept</span></div>
+      <div class="row"><i class="sq"></i><span>you</span><i class="sq empty"></i><span>not yet</span><i class="dia"></i><span>Agent</span><i class="dia open"></i><span>Agent, unkept</span></div>
     </div>
     <div class="dots ground"></div>
   </section>

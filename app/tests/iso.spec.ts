@@ -26,7 +26,7 @@ async function open(page: Page, what: string): Promise<{ id: string; text: strin
 }
 
 async function toIso(page: Page) {
-  if ((page.viewportSize()?.width ?? 1280) <= 760) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
+  if ((page.viewportSize()?.width ?? 1280) <= 760) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Agent/ }).click();
 }
 
 test.beforeAll(() => { mkdirSync(join(NOTES, "iso"), { recursive: true }); });
@@ -46,8 +46,8 @@ test("settings are in each pane's header: the ground in the Note pane's, and in 
   await expect(note).toHaveCount(0);
 
   await toIso(page);
-  await page.getByRole("button", { name: "Iso settings" }).click();
-  const menu = page.getByRole("dialog", { name: "Iso settings" });
+  await page.getByRole("button", { name: "Agent settings" }).click();
+  const menu = page.getByRole("dialog", { name: "Agent settings" });
   const agents = menu.getByLabel("AGENTS.md: your instructions for this base");
   await expect(agents).toBeVisible();
   await look(page, "settings");

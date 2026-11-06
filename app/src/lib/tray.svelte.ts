@@ -1,5 +1,5 @@
-// What Iso is sent (M10, §7): the tray above Iso's box. Notes, folders and passages are put there by dragging or
-// holding on the Atlas, by tapping in the Atlas's Iso lens, and by "send to Iso" on a selection in a note. Each can
+// What Iso is sent (M10, §7): the tray above the agent's box. Notes, folders and passages are put there by dragging or
+// holding on the Atlas, by tapping in the Atlas's Iso lens, and by "send to the agent" on a selection in a note. Each can
 // be taken out again. Nothing is put there that you did not put there.
 
 import { app } from "./app.svelte.ts";

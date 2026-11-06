@@ -10,8 +10,8 @@
   import { makeKind } from "$lib/make.ts";
   import { kept } from "$lib/here.ts";
 
-  const NAME: Record<Pane, string> = { note: "Note", atlas: "Atlas", iso: "Iso" };
-  const LAYOUT_NAME: Record<string, string> = { cols: "Three columns", stack: "The note beside the Atlas over Iso", one: "One pane: the one in focus" };
+  const NAME: Record<Pane, string> = { note: "Note", atlas: "Atlas", iso: "Agent" };
+  const LAYOUT_NAME: Record<string, string> = { cols: "Three columns", stack: "The note beside the Atlas over the agent", one: "One pane: the one in focus" };
 
   // Fullscreen where the browser has it. Opened from the Home Screen, isorite already has the whole screen.
   let can = $state(false);

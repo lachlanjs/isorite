@@ -52,7 +52,7 @@ test("a problem marked solved is ticked on the Atlas, kept over a reload, and go
 
 test("the finder answers what is asked with the notes that match, and says it is no model", async ({ page }) => {
   await start(page);
-  if (phone(page)) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Iso/ }).click();
+  if (phone(page)) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Agent/ }).click();
   const box = page.getByRole("textbox", { name: "Message the agent" });
   await box.fill("what is the Atlas?");
   await box.press("Enter");

@@ -71,17 +71,17 @@
     </div>
   {/each}
   {#if terminal.past.length}
-    <h2 class="label none">earlier, with Iso</h2>
+    <h2 class="label none">earlier, with the agent</h2>
     {#each terminal.past as c (c.id)}
       <div role="listitem">
         <button type="button" class="spec frame" class:on={terminal.old?.session === c.id} data-lustre aria-current={terminal.old?.session === c.id ? "true" : undefined} onclick={() => void terminal.read(c.id)}>
           <Crystal id={c.id} size={44} />
-          <span class="m">Iso · to read{when(c.last) ? ` · ${when(c.last)}` : ""}</span>
+          <span class="m">Agent · to read{when(c.last) ? ` · ${when(c.last)}` : ""}</span>
           <span class="q">{c.asked}</span>
           <span class="m">{many(c.notes, "note")} · {many(c.turns, "turn")}</span>
         </button>
         {#if removing === `iso/${c.id}`}
-          <p class="sure" role="group" aria-label="Remove this conversation">Remove this conversation with Iso? <button type="button" class="more bad" onclick={() => void removePast(c.id)}>remove</button> · <button type="button" class="more" onclick={() => (removing = "")}>keep</button></p>
+          <p class="sure" role="group" aria-label="Remove this conversation">Remove this conversation with the agent? <button type="button" class="more bad" onclick={() => void removePast(c.id)}>remove</button> · <button type="button" class="more" onclick={() => (removing = "")}>keep</button></p>
         {:else}
           <button type="button" class="more drop" aria-label="Remove the conversation {c.asked}" onclick={() => (removing = `iso/${c.id}`)}>remove</button>
         {/if}
