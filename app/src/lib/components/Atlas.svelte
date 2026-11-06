@@ -797,7 +797,9 @@
   // Titles are set once, in the map's units (M12): shown while they are big enough on screen to read.
   const labels = $derived(TITLE_UNITS * drawnK >= TITLE_PX);
   /** The links out of the base switched on, beside their notes. */
-  const sats = $derived(L && report ? satellites(notes.map((n) => n.item), report.notes, { web: panes.on.web, code: panes.on.code }) : []);
+  /** The notes whose links out of the base are all shown, not the first few and a count of the rest (M37). */
+  let spread = $state.raw<ReadonlySet<string>>(new Set());
+  const sats = $derived(L && report ? satellites(notes.map((n) => n.item), report.notes, { web: panes.on.web, code: panes.on.code }, spread) : []);
   /** A picture satellite's thumbnail (M22), set once it's had. */
   function thumb(img: HTMLImageElement, p: { path: string; from: "notes" | "code" }) {
     const src = pictureSrc(app.api, p);
@@ -843,6 +845,8 @@
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- an address on the web, not in the app -->
           <a class="sat web" href={s.href} target="_blank" rel="noopener noreferrer" title={`${s.text} · ${s.href}`} aria-label={s.text} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}" onclick={(e) => { if (dragged) e.preventDefault(); e.stopPropagation(); }}>
             <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" /><path d="M2.5 8h11M8 2.5c-2 2.8-2 8.2 0 11M8 2.5c2 2.8 2 8.2 0 11" /></svg></a>
+        {:else if s.kind === "more"}
+          <button class="sat more" type="button" data-sat={s.key} style="--x:{s.gx};--y:{s.gy}" title={s.text === "fewer" ? "Fold them again" : `${s.text}: show them all`} aria-label={s.text} aria-expanded={s.text === "fewer"} onclick={() => { const next = new Set(spread); if (!next.delete(s.note)) next.add(s.note); spread = next; }}>{s.text === "fewer" ? "−" : `+${s.text.split(" ")[0]}`}</button>
         {:else if s.kind === "picture"}
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves -->
           <a class="sat picture" class:broken={s.broken} href={noteHref(s.note)} title={`${s.text} · ${s.picture!.from === "code" ? "code:" : ""}${s.picture!.path}${s.broken ? (s.picture!.from === "code" ? " · not in the repository" : " · not in the notes") : ""}`} aria-label={`${s.text}${s.broken ? ", missing" : ""}`} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}" onclick={(e) => { if (dragged) e.preventDefault(); e.stopPropagation(); }}>
@@ -922,6 +926,8 @@
   .sat svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
   .sat.web:hover, .sat.web:focus-visible, .sat.picture:hover, .sat.picture:focus-visible { border-color: var(--lattice); }
   .sat.picture { overflow: hidden; }
+  .sat.more { font: 600 12px var(--font-ui); color: var(--text-soft); cursor: pointer; padding: 0; }
+  .sat.more:hover, .sat.more:focus-visible { color: var(--text); border-color: var(--lattice); }
   .sat.picture img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .sat.broken { color: var(--rose); border-color: var(--rose); border-style: dashed; }
   /* Only while a changed base settles (K3): at any other time, a zoom changes the same places and must not ease. */

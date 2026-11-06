@@ -39,3 +39,17 @@ test("pictures are satellites when switched on, after the note's links (M22)", a
     ["picture", "gone", true, "combat/hitboxes", "code", 19, 0],
   ]);
 });
+
+test("a note with many links out has two columns of satellites at most, a place saying how many more, and all when spread (M37)", async () => {
+  const { satellites } = await import("./atlas/kinds.ts");
+  const item = { ref: "n", gx: 0, gy: 0, w: 10, h: 7 } as Parameters<typeof satellites>[0][number];
+  const links = Array.from({ length: 20 }, (_, i) => ({ kind: "web" as const, href: `https://e.org/${i}`, text: `l${i}` }));
+  const notes = { n: { title: "N", tokens: 1, links } } as unknown as Parameters<typeof satellites>[1];
+  const folded = satellites([item], notes, { web: true, code: false });
+  // Six places at the fewest, the last for the count.
+  expect(folded.map((s) => s.kind)).toEqual(["web", "web", "web", "web", "web", "more"]);
+  expect(folded.at(-1)!.text).toBe("15 more");
+  const all = satellites([item], notes, { web: true, code: false }, new Set(["n"]));
+  expect(all.length).toBe(21);
+  expect(all.at(-1)).toMatchObject({ kind: "more", text: "fewer" });
+});

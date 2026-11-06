@@ -41,7 +41,7 @@ export function withoutNotes(model: MapModel, drop: (ref: string) => boolean): M
 }
 
 export interface Satellite {
-  key: string; kind: "web" | "code" | "picture"; href: string; text: string; broken: boolean; gx: number; gy: number;
+  key: string; kind: "web" | "code" | "picture" | "more"; href: string; text: string; broken: boolean; gx: number; gy: number;
   /** The note it's beside; and for a picture (M22), where it is. */
   note: string; picture?: { path: string; from: "notes" | "code" };
 }
@@ -51,7 +51,7 @@ const SIDE = 3, GAP = 1;
 
 /** Each note's links out of the base that are switched on, and the pictures it shows (M22), beside it at its right:
  *  down its side, then a column further out. */
-export function satellites(items: LayoutItem[], notes: MapReport["notes"], on: { web: boolean; code: boolean; pictures?: boolean }): Satellite[] {
+export function satellites(items: LayoutItem[], notes: MapReport["notes"], on: { web: boolean; code: boolean; pictures?: boolean }, spread: ReadonlySet<string> = new Set()): Satellite[] {
   if (!on.web && !on.code && !on.pictures) return [];
   const out: Satellite[] = [];
   for (const n of items) {
@@ -61,9 +61,18 @@ export function satellites(items: LayoutItem[], notes: MapReport["notes"], on: {
       ...(on.pictures ? r?.pictures ?? [] : []).map((p) => ({ kind: "picture" as const, href: p.href, text: p.text, broken: !!p.broken, picture: { path: p.path, from: p.from } })),
     ];
     const per = Math.max(1, Math.floor((n.h + GAP) / (SIDE + GAP)));
+    // A note with many (M37): two columns at most (six places at the fewest), the last place saying how many more, and pressed, all of them with a place
+    // to press to fold them again; they otherwise grow out over the notes beside.
+    const room = Math.max(per * 2, 6), open = spread.has(n.ref);
+    if (links.length > room && room > 1) {
+      if (!open) {
+        const hidden = links.length - (room - 1);
+        links.splice(room - 1, links.length, { kind: "more", href: "", text: `${hidden} more`, broken: false });
+      } else links.push({ kind: "more", href: "", text: "fewer", broken: false });
+    }
     links.forEach((l, k) => {
       const col = Math.floor(k / per), row = k % per;
-      out.push({ ...l, key: `${n.ref} ${l.kind === "picture" ? "picture:" : ""}${l.href}`, note: n.ref, gx: n.gx + n.w + GAP + col * (SIDE + GAP), gy: n.gy + row * (SIDE + GAP) });
+      out.push({ ...l, key: `${n.ref} ${l.kind === "picture" ? "picture:" : l.kind === "more" ? "more:" : ""}${l.href}`, note: n.ref, gx: n.gx + n.w + GAP + col * (SIDE + GAP), gy: n.gy + row * (SIDE + GAP) });
     });
   }
   return out;
