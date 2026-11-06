@@ -11,6 +11,7 @@ import { EditorView, drawSelection, keymap, placeholder } from "@codemirror/view
 import { tags } from "@lezer/highlight";
 import { codeHighlighter, languages } from "$lib/code.ts";
 import { blocksTheme, embeds, renderedBlocks, type Embeds } from "./blocks.ts";
+import { tables } from "./tables.ts";
 import { format, formatKeymap, type Format } from "./commands.ts";
 import { linkAt, linkControl } from "./linkControl.ts";
 import { linkCompletion, type LinkTarget, type NoteMaker, type PictureSource } from "./links.ts";
@@ -143,6 +144,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       theme,
       ...(opts.source ? [sourceTheme] : [livePreview, livePreviewTheme, renderedBlocks, blocksTheme, linkControl, ...(opts.embeds ? [embeds.of(opts.embeds)] : []), ...(opts.codeBroken ? [codeBroken.of(opts.codeBroken)] : []), ...(opts.pictures ? [pictures.of(opts.pictures)] : []), ...(opts.artifacts ? [artifacts.of(opts.artifacts)] : [])]),
       closeBrackets(),
+      tables(),
       // Only brackets: closing quotes would get in the way of apostrophes in prose.
       EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["(", "["] } }]),
       ...(opts.mountOverlay ? [overlays(opts.mountOverlay)] : []),

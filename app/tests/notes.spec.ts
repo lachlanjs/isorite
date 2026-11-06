@@ -214,3 +214,22 @@ test("Back and Forward in the Note pane follow the notes opened, one after anoth
   await forward.click();
   await expect(page).toHaveURL(new RegExp(`trail/two-${p}`));
 });
+
+test("with the cursor in a table, a bar inserts and deletes its rows and columns (M37)", async ({ page }) => {
+  const name = test.info().project.name, id = `tables/grid-${name}`;
+  await page.goto("#/notes");
+  const token = ((await (await page.request.get("api/session")).json()) as { token: string }).token;
+  const headers = { "x-isorite-token": token, origin: new URL(page.url()).origin };
+  const text = `---\ntype: Concept\ntitle: Grid ${name}\n---\n\nBefore.\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\nAfter.\n`;
+  expect((await page.request.post(`api/note?id=${id}`, { headers, data: { text } })).ok()).toBe(true);
+  await page.reload();
+  await page.getByRole("link", { name: new RegExp(`Grid ${name}`) }).first().click();
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue(`Grid ${name}`);
+  await page.locator(".cm-lp-block table").first().click();
+  const bar = page.getByRole("toolbar", { name: "Table" });
+  await expect(bar).toBeVisible();
+  await bar.getByRole("button", { name: "Insert a column to the right" }).click();
+  await bar.getByRole("button", { name: "Insert a row below" }).click();
+  await saved(page);
+  expect(await file(page, id)).toContain("| a |  | b |\n| --- | --- | --- |\n|  |  |  |\n| 1 |  | 2 |");
+});
