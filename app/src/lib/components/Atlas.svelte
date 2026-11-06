@@ -105,7 +105,7 @@
       // Files beside the notes (M23: pictures, artifacts, data, documents, others) are on it when its switch is on.
       const next = { ...all, model: withoutNotes(all.model, (ref) => {
         const f = all.files?.[ref];
-        if (f) return !panes.on.pictures;
+        if (f) return f.kind === "artifact" ? !panes.on.artifacts : !panes.on.pictures;
         const n = all.notes[ref];
         return n?.kind === "question" ? !panes.on.questions : n?.kind === "problem" ? !panes.on.problems : false;
       }) };
@@ -155,7 +155,7 @@
   // A kind switched on or off lays the map out again, from where things stood (V5).
   let kindsWere = "";
   $effect(() => {
-    const now = `${panes.on.questions}|${panes.on.problems}|${panes.on.pictures}`;
+    const now = `${panes.on.questions}|${panes.on.problems}|${panes.on.pictures}|${panes.on.artifacts}`;
     if (kindsWere && kindsWere !== now) void load();
     kindsWere = now;
   });

@@ -10,20 +10,20 @@
 
   // The switches that stand for a kind of thing on the Atlas wear that kind's glyph (M30), the one the Atlas draws for it;
   // the rest (provenance, the timeline, what an agent may do) are drawn here, on the same grid and stroke.
-  const KIND: Partial<Record<Switch, GlyphKind>> = { questions: "question", problems: "problem", web: "web", code: "code", pictures: "image" };
+  const KIND: Partial<Record<Switch, GlyphKind>> = { questions: "question", problems: "problem", web: "web", code: "code", pictures: "image", artifacts: "artifact" };
 
   // `first`: the pane that stands first, whose name follows the base's (M20).
   let { pane, name, tools, settings, first = false }: { pane: Pane; name: string; tools?: Snippet; settings?: Snippet; first?: boolean } = $props();
 
   const SAYS: Record<Switch, string> = {
     provenance: "Provenance: whose words are whose (Alt+P)", timeline: "Timeline (Alt+T)", context: "The agent's context: what it was given, what it read and changed (Alt+C)",
-    questions: "Open questions (Alt+Q)", problems: "Problems (Alt+B)", web: "Links to the web (Alt+W)", code: "Links to code (Alt+K)", pictures: "Files beside the notes: pictures, artifacts, data (Alt+I)",
+    questions: "Open questions (Alt+Q)", problems: "Problems (Alt+B)", web: "Links to the web (Alt+W)", code: "Links to code (Alt+K)", pictures: "Pictures, data and other files beside the notes (Alt+I)", artifacts: "Artifacts beside the notes (Alt+A)",
     notes: "Agents may edit the notes (Alt+N)", files: "The agent may edit the project's files (Alt+F)", run: "The agent may run commands (Alt+R)",
   };
   // On the Atlas, each switch also says its name when the pane is wide enough (the pane is resized, so it is the pane's
   // width that decides, not the screen's: see the container queries below).
-  const NAMES: Partial<Record<Switch, string>> = { questions: "questions", problems: "problems", web: "web", code: "code", pictures: "files", context: "context" };
-  const COLOUR: Record<Switch, string> = { provenance: "growth", timeline: "lattice", questions: "rose", problems: "text", web: "lattice", code: "lattice", pictures: "lattice", context: "growth", notes: "growth", files: "growth", run: "growth" };
+  const NAMES: Partial<Record<Switch, string>> = { questions: "questions", problems: "problems", web: "web", code: "code", pictures: "files", artifacts: "artifacts", context: "context" };
+  const COLOUR: Record<Switch, string> = { provenance: "growth", timeline: "lattice", questions: "rose", problems: "text", web: "lattice", code: "lattice", pictures: "lattice", artifacts: "lattice", context: "growth", notes: "growth", files: "growth", run: "growth" };
   // The project's files and commands are the terminal's: offered only while one is attached (M11).
   const shown = $derived((SWITCHES[pane] as readonly Switch[]).filter((k) => (k !== "files" && k !== "run") || panes.attached));
   const open = $derived(panes.settings === pane);
