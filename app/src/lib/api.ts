@@ -17,6 +17,23 @@ export class ApiError extends Error {
   }
 }
 
+/** The native agent's model and keys (M36, step 8), from this machine only. A key is sent and never read back. */
+export interface PiState {
+  /** The pane of this base is the native agent's now (else a choice here takes effect at the next start). */
+  active: boolean;
+  choice: { provider: string; model: string } | null;
+  /** Who chose: the environment (ISORITE_PI) wins over the settings while it is set. */
+  source: "environment" | "settings" | null;
+  providers: { id: string; name: string; env: string }[];
+  keys: Record<string, "saved" | "environment" | null>;
+}
+export interface PiApi {
+  state(): Promise<PiState>;
+  setKey(provider: string, key: string): Promise<void>;
+  removeKey(provider: string): Promise<void>;
+  choose(provider: string, model: string): Promise<void>;
+}
+
 /** The pane's agent session (M11, on ACP since M25), through the isorite server; on the guide's site, the finder's. */
 export interface TerminalApi {
   view(): Promise<TerminalView>;
@@ -70,7 +87,7 @@ export interface BasesApi {
 /** Where the browser fetches a picture from (M22), so an `<img>` asks for it itself, cached and lazily. */
 export interface FileUrls { fileUrl(path: string, from?: "notes" | "code"): string }
 
-export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURIComponent(baseHere())}/api/` : "api/", document.baseURI).href): Api & FileUrls & { terminal: TerminalApi; bases: BasesApi; own: { repo(): Promise<OwnRepoInfo | null>; choose(choice: "project" | "separate"): Promise<OwnRepoInfo> } } {
+export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURIComponent(baseHere())}/api/` : "api/", document.baseURI).href): Api & FileUrls & { terminal: TerminalApi; pi: PiApi; bases: BasesApi; own: { repo(): Promise<OwnRepoInfo | null>; choose(choice: "project" | "separate"): Promise<OwnRepoInfo> } } {
   let token: Promise<string> | null = null;
   const ask = async <T>(path: string, init?: RequestInit): Promise<T> => {
     let res: Response;
@@ -152,6 +169,12 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       lend: async (name, lend) => (await write<{ bases: BaseRow[] }>("POST", "bases/lend", { name, lend })).bases,
     },
     own: { repo: () => ask<OwnRepoInfo | null>("own/repo"), choose: (choice) => write<OwnRepoInfo>("POST", "own/choose", { choice }) },
+    pi: {
+      state: () => ask<PiState>("pi"),
+      setKey: async (provider, key) => { await write("POST", "pi/key", { provider, key }); },
+      removeKey: async (provider) => { await write("POST", "pi/key/remove", { provider }); },
+      choose: async (provider, model) => { await write("POST", "pi/choose", { provider, model }); },
+    },
     terminal: {
       view: () => ask<TerminalView>("terminal"),
       prompt: async (asked, given) => { await write("POST", "terminal/prompt", { asked, given }); },

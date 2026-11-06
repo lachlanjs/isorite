@@ -41,6 +41,8 @@ export interface PiHostOptions {
   compaction?: Partial<Compaction>;
   /** Where sessions are kept between runs of the server. With none, a session ends with the server. */
   store?: PiStore;
+  /** The key to use for a provider, asked for at each request (so one changed in the settings is used by the next turn). */
+  getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
 }
 
 const OUTPUT = 4000;
@@ -56,10 +58,11 @@ const userText = (content: unknown): string => (typeof content === "string" ? co
 
 export class PiHost implements PaneSessions {
   readonly #api: PiHostOptions["api"];
-  readonly #model: Model<any>;
-  readonly #streamFn: StreamFn;
+  #model: Model<any>;
+  #streamFn: StreamFn;
+  readonly #getApiKey: PiHostOptions["getApiKey"];
   readonly #id: string;
-  readonly #name: string;
+  #name: string;
   readonly #ask: (tool: string) => boolean;
   readonly #more: () => AgentTool[];
   readonly #guard: NonNullable<PiHostOptions["guard"]>;
@@ -95,7 +98,8 @@ export class PiHost implements PaneSessions {
   #view: TerminalView = EMPTY;
   #listeners = new Set<(v: TerminalView) => void>();
 
-  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now, store, compaction }: PiHostOptions) {
+  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now, store, compaction, getApiKey }: PiHostOptions) {
+    this.#getApiKey = getApiKey;
     this.#api = api;
     this.#model = model;
     this.#streamFn = streamFn;
@@ -113,6 +117,15 @@ export class PiHost implements PaneSessions {
       this.#edit((items) => [...items, e.item as TerminalItem]);
       this.#tell();
     });
+    this.#tell();
+  }
+
+  /** Carry on with another model (and the way to reach it): the session stays, and the next request goes to it. */
+  use(model: Model<any>, streamFn: StreamFn, name?: string): void {
+    this.#model = model;
+    this.#streamFn = streamFn;
+    if (name) this.#name = name;
+    if (this.#agent) this.#agent.state.model = model;
     this.#tell();
   }
 
@@ -232,7 +245,9 @@ export class PiHost implements PaneSessions {
     this.#at = kept?.at ?? new Date(this.#now()).toISOString();
     this.#agent = new Agent({
       initialState: { systemPrompt: INSTRUCTIONS, model: this.#model, ...(kept ? { messages: kept.messages as never } : {}) },
-      streamFn: this.#streamFn,
+      // Through this host, so a model chosen later (`use`) is the one the next request goes to.
+      streamFn: ((...args: Parameters<NonNullable<StreamFn>>) => this.#streamFn!(...args)) as StreamFn,
+      ...(this.#getApiKey ? { getApiKey: this.#getApiKey } : {}),
       sessionId: this.#session,
       beforeToolCall: async ({ toolCall, args }) => {
         // The guard first, and shut if it cannot say.

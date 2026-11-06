@@ -15,6 +15,7 @@ import type { PaneSessions } from "./sessions.ts";
 import { McpEndpoint, agentName, clientName, type Rpc as McpRpc } from "./mcp-http.ts";
 import { VERSION } from "./version.ts";
 import { proposal, writeProposal } from "./connect.ts";
+import type { PiControl } from "./pi/index.ts";
 import { registryAgents, type AgentRunner } from "./agents.ts";
 import { configPath } from "./config.ts";
 import { listAgents } from "./detect.ts";
@@ -39,6 +40,8 @@ export interface ServerOptions {
   acp?: AcpFollower;
   /** What serves the pane's sessions (M35), where it is not the ACP follower's: the pages read and ask through this. */
   terminal?: PaneSessions;
+  /** The model and keys of the native agent (M36), set from this machine only. */
+  pi?: PiControl;
   /** The agent chosen in the base's settings, started for the pane (M25). */
   agents?: AgentRunner;
   /** The other bases the server holds (M20), and this one's name among them. */
@@ -75,7 +78,7 @@ const AgentEdit = z.union([
 const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
-export function createApp({ api, token, loopback, web, allowHosts = [], notes, acp, terminal, bases, base, agents, config }: ServerOptions): Hono {
+export function createApp({ api, token, loopback, web, allowHosts = [], notes, acp, terminal, bases, base, agents, config, pi }: ServerOptions): Hono {
   const pane: PaneSessions | undefined = terminal ?? acp;
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
@@ -285,6 +288,18 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
       if (!local(c)) throw new EngineError("an agent is chosen only from this machine", 403);
       return agents.choose(b.choice);
     });
+  }
+
+  // The native agent's model and keys (M36 step 8). A key is taken here and never given back: the pages are told
+  // where it comes from. Only from this machine, and never logged.
+  if (pi) {
+    const mine = (c: Context) => { if (!local(c)) throw new EngineError("the model and keys are set only from this machine", 403); };
+    app.get("/api/pi", (c) => answer(c, async () => { mine(c); return pi.state(); }));
+    const Provider = z.string().regex(/^[a-z0-9-]{1,40}$/);
+    const invalid = async (fn: () => Promise<void>) => { try { await fn(); } catch (e) { throw new EngineError((e as Error).message, 400); } };
+    post("/api/pi/key", z.object({ provider: Provider, key: z.string().max(2000) }).strict(), async (c, b) => { mine(c); await invalid(() => pi.creds.set(b.provider, b.key)); });
+    post("/api/pi/key/remove", z.object({ provider: Provider }).strict(), async (c, b) => { mine(c); await invalid(() => pi.creds.remove(b.provider)); });
+    post("/api/pi/choose", z.object({ provider: Provider, model: z.string().min(1).max(200) }).strict(), async (c, b) => { mine(c); await invalid(() => pi.choose(b.provider, b.model)); });
   }
 
   // The pane's agent session (M11, on ACP since M25): pages read it, ask in it, stop it and answer what it asks,

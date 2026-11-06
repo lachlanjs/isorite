@@ -12,6 +12,8 @@ export const NOTES = join(ROOT, "information-theory");
 /** The agent's memory (M20): a second base on the same server, lent to every session. */
 export const MEMORY = join(ROOT, "memory");
 /** isorite's own files for the base (format 2). */
+/** Where isorite keeps its own, apart from the base: the native agent's keys (M36). */
+export const DATA = join(ROOT, "data", "isorite");
 export const STUDY = join(NOTES, ".isorite");
 
 if (process.argv[1] === import.meta.filename) {
@@ -35,6 +37,7 @@ if (process.argv[1] === import.meta.filename) {
   writeFileSync(join(NOTES, "channels", "huffman-in-code.md"), "---\ntype: Concept\ntitle: Huffman in code\n---\n\nBuilt in [build](code:src/huffman.py#L1); decoded in [decode](code:src/decode.py). After [Huffman](https://en.wikipedia.org/wiki/Huffman_coding).\n");
   process.env.XDG_CONFIG_HOME = join(ROOT, "config");
   process.env.XDG_CACHE_HOME = join(ROOT, "cache");
+  process.env.XDG_DATA_HOME = join(ROOT, "data"); // keys and sessions of the native agent (M36)
   process.env.ISORITE_EMBED = "off"; // the browser tests are about the pages; the model has its own tests
   // The ACP registry, as a file: two agents to list (attached, in the tests, by a command of their own).
   writeFileSync(join(ROOT, "registry.json"), JSON.stringify({ version: "1", agents: [
