@@ -44,7 +44,7 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a data-lustre class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:dim={dim && !iso && !given} class:far={far > 1} class:given class:held={held === "on"} class:changed class:here class:file={!!file} class:prospect aria-current={here ? "page" : undefined} {href} aria-label={`${prospect ? "Asked back, not kept: " : kind === "question" ? "Question: " : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in the agent's context" : held === "on" ? ": read by the agent" : ""}${changed ? ", changed by the agent" : ""}`} title={given ? "In the agent's context: shift+click takes it back" : undefined} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
+<a data-lustre class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:dim={dim && !iso && !given} class:far={far > 1} class:given class:held={held === "on"} class:changed class:here class:file={!!file} class:prospect aria-current={here ? "page" : undefined} {href} aria-label={`${prospect ? "Asked back, not kept: " : kind === "question" ? `Question${done ? ", resolved" : ""}: ` : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in the agent's context" : held === "on" ? ": read by the agent" : ""}${changed ? ", changed by the agent" : ""}`} title={given ? "In the agent's context: shift+click takes it back" : undefined} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
@@ -83,7 +83,7 @@
   .notch { position: absolute; top: -7px; left: 9px; width: 14px; height: 14px; padding: 0 2px; box-sizing: content-box; background: var(--behind); fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
   .question .notch { color: var(--rose); }
   .problem .notch { color: var(--text-soft); }
-  .problem.done .notch { color: var(--malachite); }
+  .question.done .notch,   .problem.done .notch { color: var(--malachite); }
   .question .t, .problem .t { overflow: hidden; }
   /* A question Iso asked and not kept (R): no face of its own, a dotted rose edge, its name faint, until kept. */
   .prospect { background: var(--ground-0); border: calc(1.5 * var(--px)) dotted var(--rose); color: var(--text-faint); }

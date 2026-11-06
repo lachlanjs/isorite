@@ -107,7 +107,7 @@
         const f = all.files?.[ref];
         if (f) return !panes.on.pictures;
         const n = all.notes[ref];
-        return n?.kind === "question" ? !panes.on.questions || !!n.done : n?.kind === "problem" ? !panes.on.problems : false;
+        return n?.kind === "question" ? !panes.on.questions : n?.kind === "problem" ? !panes.on.problems : false;
       }) };
       // A changed base is laid out from where things stood (V5), on the same grid and the same way.
       const on = `${flow}|${grain}`, from = laid && laidOn === on && !fresh ? laid.layout.orders ?? null : null;
