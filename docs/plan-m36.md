@@ -37,6 +37,7 @@ Why: isorite's agent integration has two jobs that want different tools. Buildin
 - Type checks: kit, server and app all clean (`npm run check`).
 - Unit suites: all pass except `model.test.ts` (1 failure, only because the embedding model is installed on this machine; not a regression).
 - Browser suite, all four projects, one worker: 235 passed, 22 skipped, 3 failed in 11.7 minutes. The three that failed, `note-menu` (desktop-quartz), `atlas` zoom/drag (phone-quartz) and `note-drag` (phone-quartz), all pass when run alone on both quartz projects, so they are the drag and timing flakes seen before and not new. Later failures outside these are new.
+- Browser suite again at 0.18.0 (after steps 1 to 11), all four projects: 257 passed, 26 skipped, 5 failed. Four were `note-drag` "held, a note shows three tags" on every project: the test's selector found two rows named "Sent …" once Iso's tray showed chips with no agent attached (step 3); the selector is now the row in the list of notes, and it passes on all four. The fifth, `note-drag` "a note pulled to an empty folder moves there" on phone-quartz, is the drag flake of the first baseline: it passes alone, and failed once of two repeats.
 
 ### Step 11: several sessions
 
