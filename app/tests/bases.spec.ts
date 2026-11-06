@@ -78,3 +78,21 @@ test("the project's agent looks and writes in its memory; the memory's own page 
   expect(JSON.stringify(journal)).toContain("agent:opencode");
   expect(JSON.stringify(journal)).toContain("remember that I like short answers");
 });
+
+test("a base is shown by a title of its own, and by its name again when the title is emptied (M37)", async ({ page }) => {
+  await page.goto("#/notes");
+  await switcher(page).click();
+  const list = page.getByRole("dialog", { name: "Knowledge bases" });
+  await list.getByRole("button", { name: "Rename elsewhere" }).click();
+  await list.getByRole("textbox", { name: "A title for elsewhere" }).fill("Over there");
+  await page.keyboard.press("Enter");
+  await expect(list.getByRole("link")).toHaveText(["memory", "Over there", "information-theory"]);
+  await page.reload();
+  await switcher(page).click();
+  await expect(page.getByRole("dialog", { name: "Knowledge bases" }).getByRole("link", { name: "Over there" })).toBeVisible();
+  // Back to its name.
+  await page.getByRole("dialog", { name: "Knowledge bases" }).getByRole("button", { name: "Rename Over there" }).click();
+  await page.getByRole("textbox", { name: "A title for elsewhere" }).fill("");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Knowledge bases" }).getByRole("link")).toHaveText(["memory", "elsewhere", "information-theory"]);
+});

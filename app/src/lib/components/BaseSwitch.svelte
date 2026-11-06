@@ -22,11 +22,20 @@
     if (!api) return;
     try { ({ bases: rows, here, local } = await api.list()); failed = ""; } catch (e) { failed = (e as Error).message; }
   }
+  void load();
   async function toggle(): Promise<void> {
     open = !open;
     if (open && button) { const r = button.getBoundingClientRect(); at = { top: r.bottom + 14, left: Math.max(8, r.left - 8) }; }
     if (open) { await load(); menu?.querySelector<HTMLElement>("a")?.focus(); }
   }
+  let renaming = $state("");
+  let draft = $state("");
+  async function retitle(row: BaseRow): Promise<void> {
+    const name = row.name;
+    renaming = "";
+    try { rows = await api!.title(name, draft); failed = ""; } catch (e) { failed = (e as Error).message; }
+  }
+  const shownAs = $derived(rows.find((r) => r.name === (here || app.session?.name))?.title || app.session?.name || "");
   async function lend(row: BaseRow): Promise<void> {
     try { rows = await api!.lend(row.name, !row.lend); failed = ""; } catch (e) { failed = (e as Error).message; }
   }
@@ -41,7 +50,7 @@
 <svelte:window onpointerdown={outside} onkeydown={keys} />
 
 {#if api && app.session}
-  <button class="base" type="button" bind:this={button} aria-expanded={open} aria-haspopup="true" title="The knowledge bases: switch to another" onclick={toggle}>{app.session.name}</button>
+  <button class="base" type="button" bind:this={button} aria-expanded={open} aria-haspopup="true" title="The knowledge bases: switch to another" onclick={toggle}>{shownAs}</button>
   <span class="slash" aria-hidden="true">/</span>
   {#if open}
     <div class="frame bases" role="dialog" aria-label="Knowledge bases" tabindex="-1" bind:this={menu} style:top="{at.top}px" style:left="{at.left}px">
@@ -51,8 +60,15 @@
           {@const isHere = row.name === (here || app.session.name)}
           <li class:here={isHere}>
             <i class="tick" aria-hidden="true">{isHere ? "✓" : ""}</i>
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- another base's page, not in this app -->
-            <a href={basePage(row.name)} data-sveltekit-reload title={row.path} aria-current={isHere ? "page" : undefined}>{row.name}</a>
+            {#if renaming === row.name}
+              <input class="field name" aria-label="A title for {row.name}" bind:value={draft} placeholder={row.name} maxlength="60" onkeydown={(e) => { if (e.key === "Enter") void retitle(row); else if (e.key === "Escape") { e.stopPropagation(); renaming = ""; } }} />
+            {:else}
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- another base's page, not in this app -->
+              <a href={basePage(row.name)} data-sveltekit-reload title={row.title === row.name ? row.path : `${row.name}: ${row.path}`} aria-current={isHere ? "page" : undefined}>{row.title}</a>
+            {/if}
+            <button class="lend rename" type="button" disabled={!local} aria-label="Rename {row.title}" title={local ? "Show it by another title: its address stays the same" : "Renamed only from this machine"} onclick={() => { if (renaming === row.name) void retitle(row); else { draft = row.title === row.name ? "" : row.title; renaming = row.name; } }}>
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M3 13l.6-2.8L11 2.8l2.2 2.2-7.4 7.4z" /></svg>
+            </button>
             <button class="lend" type="button" aria-pressed={row.lend} disabled={!local}
               aria-label="Lent to every session"
               title={local ? (row.lend ? "Lent to every session's agent: press to keep it to itself" : "Lend it to every session's agent, as the agent's memory is") : "Lent or not is changed only from this machine"}
@@ -74,7 +90,7 @@
   .bases { --inside: var(--ground-2); position: fixed; z-index: 22; width: min(320px, calc(100vw - 16px)); padding: 22px 12px 12px; white-space: nowrap; user-select: none; }
   .bases:focus-visible { outline: none; }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-  li { display: grid; grid-template-columns: 16px 1fr 28px; align-items: center; gap: 6px; font-size: 13px; }
+  li { display: grid; grid-template-columns: 16px 1fr 28px 28px; align-items: center; gap: 6px; font-size: 13px; }
   .tick { font-style: normal; color: var(--lattice); font-size: 12px; text-align: center; }
   a { color: var(--text-soft); text-decoration: none; padding: 5px 0; overflow: hidden; text-overflow: ellipsis; }
   a:hover, a:focus-visible { color: var(--text); text-decoration: underline; }
@@ -83,5 +99,6 @@
   .lend:hover:not(:disabled), .lend:focus-visible { color: var(--text); }
   .lend[aria-pressed="true"] { --c: var(--growth); background: var(--c, var(--lattice)); color: var(--ground-0); --cut: 4px; clip-path: var(--chosen-cut); }
   .lend:disabled { cursor: default; }
+  .field.name { min-width: 0; font-size: 13px; padding: 3px 6px; }
   .bad { color: var(--rose); font-size: 12px; margin: 8px 0 0; white-space: normal; }
 </style>

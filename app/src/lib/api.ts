@@ -85,11 +85,13 @@ export interface OwnRepoInfo { state: "own" | "tracked" | "shared" | "none" | "u
 export interface RegistryAgent { id: string; name: string; version: string; description: string; site: string; how: "npx" | "uvx" | "binary" | null }
 
 /** The bases the server holds (M20), as the switcher lists them. */
-export interface BaseRow { name: string; path: string; lend: boolean; open: boolean }
+export interface BaseRow { name: string; path: string; lend: boolean; open: boolean; title: string }
 export interface BasesApi {
   list(): Promise<{ here: string; local: boolean; bases: BaseRow[] }>;
   /** Lend a base to every session, or stop (from this machine only). */
   lend(name: string, lend: boolean): Promise<BaseRow[]>;
+  /** Show a base by a title of its own; empty, by its name again. */
+  title(name: string, title: string): Promise<BaseRow[]>;
 }
 
 /** Where the browser fetches a picture from (M22), so an `<img>` asks for it itself, cached and lazily. */
@@ -175,6 +177,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     bases: {
       list: () => ask("bases"),
       lend: async (name, lend) => (await write<{ bases: BaseRow[] }>("POST", "bases/lend", { name, lend })).bases,
+      title: async (name, title) => (await write<{ bases: BaseRow[] }>("POST", "bases/title", { name, title })).bases,
     },
     own: { repo: () => ask<OwnRepoInfo | null>("own/repo"), choose: (choice) => write<OwnRepoInfo>("POST", "own/choose", { choice }) },
     pi: {

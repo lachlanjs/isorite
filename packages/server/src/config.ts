@@ -40,7 +40,7 @@ export function deviceId(path = configPath()): string {
 /** A knowledge base this device knows, by name (M20): `[<name>]` in bases.toml, beside config.toml, with its `path`,
  *  and `lend` when it is lent to every agent's session as well as the base the session is for (the agent's
  *  memory is). A file of its own, so that config.toml, written by hand, is left as it is. */
-export interface KnownBase { name: string; path: string; lend: boolean; used?: string }
+export interface KnownBase { name: string; path: string; lend: boolean; used?: string; title?: string }
 
 const BASE_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const expand = (p: string): string => (p === "~" ? homedir() : p.startsWith("~/") ? join(homedir(), p.slice(2)) : resolve(p));
@@ -55,7 +55,7 @@ export const basesPath = (config = configPath()): string => join(dirname(config)
 export function knownBases(config = configPath()): KnownBase[] {
   return Object.entries(readConfig(basesPath(config))).flatMap(([name, v]) => {
     const row = table(v);
-    return BASE_NAME.test(name) && typeof row.path === "string" && row.path ? [{ name, path: expand(row.path), lend: row.lend === true, ...(typeof row.used === "string" ? { used: row.used } : {}) }] : [];
+    return BASE_NAME.test(name) && typeof row.path === "string" && row.path ? [{ name, path: expand(row.path), lend: row.lend === true, ...(typeof row.used === "string" ? { used: row.used } : {}), ...(typeof row.title === "string" && row.title ? { title: row.title } : {}) }] : [];
   });
 }
 
@@ -88,6 +88,17 @@ export function rememberBase(folder: string, { path = configPath(), as, lend }: 
   bases[name] = { ...table(bases[name]), path: written(at), ...(lend === undefined ? {} : { lend }) };
   writeConfig(bases, basesPath(path));
   return name;
+}
+
+/** Give a known base a title to be shown by (M37), or take it back with an empty one: its name stays, as it is the base's
+ *  address and what the agent's sessions know it by. False when there is no base of that name. */
+export function titleBase(name: string, title: string, path = configPath()): boolean {
+  const bases = readConfig(basesPath(path));
+  if (!BASE_NAME.test(name) || !bases[name]) return false;
+  const { title: _was, ...rest } = table(bases[name]) as Record<string, unknown>;
+  bases[name] = { ...rest, ...(title.trim() ? { title: title.trim() } : {}) } as typeof bases[string];
+  writeConfig(bases, basesPath(path));
+  return true;
 }
 
 /** Lend a known base to every session, or stop lending it. False when there is no base of that name. */

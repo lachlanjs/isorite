@@ -226,6 +226,11 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
       if (!(await bases.lend(b.name, b.lend))) throw new EngineError(`no base ${b.name} is known here`, 404);
       return { bases: bases.list() };
     });
+    post("/api/bases/title", z.object({ name: z.string().max(40), title: z.string().max(60) }).strict(), async (c, b) => {
+      mine(c);
+      if (!bases.title(b.name, b.title)) throw new EngineError(`no base ${b.name} is known here`, 404);
+      return { bases: bases.list() };
+    });
     post("/api/bases/open", z.object({ path: z.string().min(1).max(4000) }).strict(), async (c, b) => {
       mine(c);
       if (!isAbsolute(b.path) || !existsSync(b.path) || !statSync(b.path).isDirectory()) throw new EngineError(`no folder at ${b.path}`, 404);

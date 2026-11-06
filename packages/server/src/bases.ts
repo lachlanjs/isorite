@@ -5,16 +5,18 @@
 
 import { resolve } from "node:path";
 import type { Engine, Elsewhere } from "@isorite/engine";
-import { knownBases, lendBase, rememberBase, type KnownBase } from "./config.ts";
+import { knownBases, lendBase, rememberBase, titleBase, type KnownBase } from "./config.ts";
 
 /** A base as the switcher lists it. */
-export interface BaseView { name: string; path: string; lend: boolean; open: boolean }
+export interface BaseView { name: string; path: string; lend: boolean; open: boolean; title: string }
 
 /** What a base's app is told of the others: the list, and, from this machine only, lending one, opening one by its
  *  folder (isorite acp and mcp, for a server that holds another), and holding the server open. */
 export interface BasesPort {
   list(): BaseView[];
   lend(name: string, on: boolean): Promise<boolean>;
+  /** Show a base by a title of its own (empty: by its name again). False where none has that name. */
+  title(name: string, title: string): boolean;
   open(path: string): Promise<{ name: string; first: boolean }>;
   hold(): () => void;
 }
@@ -80,7 +82,7 @@ export class Bases implements Elsewhere, BasesPort {
   // ---------------------------------------------------------------- BasesPort, for the apps
 
   list(): BaseView[] {
-    return knownBases(this.#config).map((b) => ({ name: b.name, path: b.path, lend: b.lend, open: this.#ready.has(b.name) }));
+    return knownBases(this.#config).map((b) => ({ name: b.name, path: b.path, lend: b.lend, open: this.#ready.has(b.name), title: b.title ?? b.name }));
   }
 
   async lend(name: string, on: boolean): Promise<boolean> {
@@ -88,6 +90,8 @@ export class Bases implements Elsewhere, BasesPort {
     if (on) await this.get(name);
     return true;
   }
+
+  title(name: string, title: string): boolean { return titleBase(name, title, this.#config); }
 
   async open(path: string): Promise<{ name: string; first: boolean }> {
     const name = rememberBase(resolve(path), { path: this.#config });
