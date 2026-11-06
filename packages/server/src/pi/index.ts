@@ -7,11 +7,12 @@ import { createModels } from "@earendil-works/pi-ai";
 import type { Api } from "@isorite/engine";
 import { PiHost, type PiHostOptions } from "./host.ts";
 import { fileTools, pathGuard, type Files } from "./files.ts";
+import { FileStore, storeDir } from "./store.ts";
 
 const camel = (s: string): string => s.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 
 /** The pi host for `api`, or null where pi is not chosen. Throws (naming what is wrong) where it is chosen and cannot be had. */
-export async function piHostFor(api: PiHostOptions["api"] & Pick<Api, "events">, env: NodeJS.ProcessEnv = process.env, project = process.cwd()): Promise<PiHost | null> {
+export async function piHostFor(api: PiHostOptions["api"] & Pick<Api, "events">, env: NodeJS.ProcessEnv = process.env, project = process.cwd(), notes = project): Promise<PiHost | null> {
   const choice = env.ISORITE_PI?.trim();
   if (!choice) return null;
   const [provider, ...rest] = choice.split("/");
@@ -29,5 +30,7 @@ export async function piHostFor(api: PiHostOptions["api"] & Pick<Api, "events">,
   const files = (env.ISORITE_PI_FILES?.trim() || "off") as Files, shell = ["1", "true", "on"].includes(env.ISORITE_PI_SHELL?.trim() ?? "");
   if (!["off", "read", "write"].includes(files)) throw new Error(`ISORITE_PI_FILES is read or write; it was "${files}"`);
   const asked = new Set((env.ISORITE_PI_ASK ?? "").split(",").map((t) => t.trim()).filter(Boolean));
-  return new PiHost({ api, model: chosen, streamFn: models.streamSimple.bind(models), name: `pi (${model})`, ...(asked.size ? { ask: (tool: string) => asked.has(tool) } : {}), ...(files !== "off" || shell ? { more: () => fileTools(project, { files, shell }), guard: pathGuard(project) } : {}) });
+  const host = new PiHost({ api, store: new FileStore(storeDir(notes, env)), model: chosen, streamFn: models.streamSimple.bind(models), name: `pi (${model})`, ...(asked.size ? { ask: (tool: string) => asked.has(tool) } : {}), ...(files !== "off" || shell ? { more: () => fileTools(project, { files, shell }), guard: pathGuard(project) } : {}) });
+  await host.resume();
+  return host;
 }

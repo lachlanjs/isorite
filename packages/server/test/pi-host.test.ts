@@ -123,6 +123,6 @@ test("ISORITE_PI chooses the pi agent for the pane, and says what is wrong when 
   await expect(piHostFor(api, { ISORITE_PI: "claude" })).rejects.toThrow(/<provider>\/<model>/);
   await expect(piHostFor(api, { ISORITE_PI: "nowhere/model" })).rejects.toThrow(/no provider "nowhere"/);
   await expect(piHostFor(api, { ISORITE_PI: "anthropic/not-a-model" })).rejects.toThrow(/no model "not-a-model"/);
-  const host = await piHostFor(api, { ISORITE_PI: "anthropic/claude-sonnet-4-6", ISORITE_PI_ASK: "read_note, edit_note" });
+  const host = await piHostFor(api, { ISORITE_PI: "anthropic/claude-sonnet-4-6", ISORITE_PI_ASK: "read_note, edit_note", XDG_DATA_HOME: join(root, "data") });
   expect(host?.view()).toMatchObject({ connected: true, agentId: "pi", session: null });
 });

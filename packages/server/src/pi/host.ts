@@ -3,8 +3,10 @@
 // into the pane's `TerminalView`. Nothing outside src/pi/ names a pi type.
 //
 // One session at a time (a new one replaces it). It asks before a tool in `ask` runs, through pi's `beforeToolCall`;
-// no tool is asked by default, as pi itself asks for none. Its model context is not kept between runs of the
-// server: what is kept is the pane's view of it (`keepAgentRecord`), as for any agent.
+// no tool is asked by default, as pi itself asks for none. With a store (`FileStore`, in isorite's data folder) the
+// pane's turns and the model's messages are written after each turn, and `resume()` takes up the session last kept;
+// without one a session ends with the server. The pane's view is also kept as a record (`keepAgentRecord`), as for
+// any agent.
 
 import { randomUUID } from "node:crypto";
 import { Agent, type AgentEvent } from "@earendil-works/pi-agent-core";
@@ -14,6 +16,7 @@ import type { AgentSession, Api, Given, TerminalItem, TerminalPermission, Termin
 import { givenKey } from "../acp.ts";
 import { INSTRUCTIONS } from "../mcp-http.ts";
 import type { PaneSessions } from "../sessions.ts";
+import { type PiRecord, type PiStore } from "./store.ts";
 import { isoriteTools, titleOf, type ToolsApi } from "./tools.ts";
 
 type StreamFn = NonNullable<ConstructorParameters<typeof Agent>[0]>["streamFn"];
@@ -33,6 +36,8 @@ export interface PiHostOptions {
   /** A reason to refuse a call before it runs, or undefined. Checked first; if it throws, the call is refused. */
   guard?: (call: { tool: string; args: unknown }) => string | undefined;
   clock?: () => number;
+  /** Where sessions are kept between runs of the server. With none, a session ends with the server. */
+  store?: PiStore;
 }
 
 const OUTPUT = 4000;
@@ -51,6 +56,9 @@ export class PiHost implements PaneSessions {
   readonly #more: () => AgentTool[];
   readonly #guard: NonNullable<PiHostOptions["guard"]>;
   readonly #now: () => number;
+  readonly #store: PiStore | null;
+  /** Why the last thing asked of the agent could not be done, shown in the pane. */
+  #problem = "";
   #agent: Agent | null = null;
   #session = "";
   #at = "";
@@ -70,7 +78,7 @@ export class PiHost implements PaneSessions {
   #view: TerminalView = EMPTY;
   #listeners = new Set<(v: TerminalView) => void>();
 
-  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now }: PiHostOptions) {
+  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now, store }: PiHostOptions) {
     this.#api = api;
     this.#model = model;
     this.#streamFn = streamFn;
@@ -80,6 +88,7 @@ export class PiHost implements PaneSessions {
     this.#more = more;
     this.#guard = guard;
     this.#now = clock;
+    this.#store = store ?? null;
     // What the agent asks back or offers (ask_question, offer_text) stands in its turn, until kept or not.
     api.events?.((e) => {
       if (e.type !== "agent-item" || e.agent !== this.#id || !this.#turns.length) return;
@@ -103,7 +112,8 @@ export class PiHost implements PaneSessions {
 
   async prompt(text: string): Promise<void> {
     if (this.#busy) throw new Error("the agent is working: stop it first");
-    if (!this.#agent) await this.#open();
+    this.#problem = "";
+    if (!this.#agent) this.#open();
     const agent = this.#agent!;
     const pending = this.#pending;
     this.#pending = null;
@@ -137,18 +147,44 @@ export class PiHost implements PaneSessions {
   }
   async fresh(_agent: string): Promise<void> {
     if (this.#busy) throw new Error("the agent is working: stop it first");
-    this.#agent = null; this.#session = ""; this.#turns = []; this.#title = ""; this.#cost = 0; this.#used = 0; this.#given.clear(); this.#pending = null;
+    this.#agent = null; this.#session = ""; this.#turns = []; this.#title = ""; this.#cost = 0; this.#used = 0; this.#given.clear(); this.#pending = null; this.#problem = "";
     this.#tell();
   }
   set(): void { throw new Error(`${this.#name} offers no modes or options yet`); }
   async forget(): Promise<void> { throw new Error("nothing is kept apart from the session shown"); }
   refresh(): void { /* one session, nothing to list again */ }
 
-  async #open(): Promise<void> {
-    this.#session = randomUUID();
-    this.#at = new Date(this.#now()).toISOString();
+  /** Take up the session last kept, if there is one: its turns in the pane, and its messages for the model. An
+   *  unreadable one is reported in the pane and left alone, and the agent starts fresh. */
+  async resume(): Promise<void> {
+    if (!this.#store || this.#agent) return;
+    let kept: PiRecord | null;
+    try { kept = await this.#store.latest(); } catch (e) { this.#problem = (e as Error).message; this.#tell(); return; }
+    if (!kept) return;
+    this.#open(kept);
+    // A turn that was running when the server went down is shown as stopped: it never finished.
+    this.#turns = kept.turns.map((t) => (t.state === "running" ? { ...t, state: "stopped" as const } : t));
+    this.#title = kept.title;
+    this.#cost = kept.cost;
+    this.#used = kept.used;
+    this.#given = new Set(kept.given);
+    this.#tell();
+  }
+
+  #save(): void {
+    if (!this.#store || !this.#agent || !this.#turns.length) return;
+    const record: PiRecord = {
+      version: 1, session: this.#session, title: this.#title, at: this.#at, last: this.#turns.at(-1)?.at ?? this.#at, cost: this.#cost, used: this.#used,
+      given: [...this.#given], turns: this.#turns, messages: JSON.parse(JSON.stringify(this.#agent.state.messages)) as unknown[],
+    };
+    this.#store.save(record).catch((e: Error) => { this.#problem = `Could not keep this session: ${e.message}`; this.#tell(); });
+  }
+
+  #open(kept?: PiRecord): void {
+    this.#session = kept?.session ?? randomUUID();
+    this.#at = kept?.at ?? new Date(this.#now()).toISOString();
     this.#agent = new Agent({
-      initialState: { systemPrompt: INSTRUCTIONS, model: this.#model },
+      initialState: { systemPrompt: INSTRUCTIONS, model: this.#model, ...(kept ? { messages: kept.messages as never } : {}) },
       streamFn: this.#streamFn,
       sessionId: this.#session,
       beforeToolCall: async ({ toolCall, args }) => {
@@ -210,6 +246,7 @@ export class PiHost implements PaneSessions {
     this.#stopping = false;
     void this.#api.agentStatus(this.#id, this.#session, false).catch(() => undefined);
     this.#keep();
+    this.#save();
     this.#tell();
   }
   #set(state: TerminalTurn["state"]): void {
@@ -236,7 +273,7 @@ export class PiHost implements PaneSessions {
     this.#view = {
       connected: true, agent: this.#name, agentId: this.#id, session: this.#session || null, title: this.#title, busy: this.#busy, turns: this.#turns,
       asking: [...this.#asking.values()].map(({ wait: _, ...p }) => p), cost: this.#cost, tokens: { input: this.#used, output: 0 },
-      model: this.#model.id ?? "", ...(this.#model.contextWindow ? { size: this.#model.contextWindow } : {}), sessions: entry ? [entry] : [],
+      model: this.#model.id ?? "", ...(this.#problem ? { problem: this.#problem } : {}), ...(this.#model.contextWindow ? { size: this.#model.contextWindow } : {}), sessions: entry ? [entry] : [],
     };
     for (const fn of this.#listeners) fn(this.#view);
   }

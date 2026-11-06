@@ -38,6 +38,15 @@ Why: isorite's agent integration has two jobs that want different tools. Buildin
 - Unit suites: all pass except `model.test.ts` (1 failure, only because the embedding model is installed on this machine; not a regression).
 - Browser suite, all four projects, one worker: 235 passed, 22 skipped, 3 failed in 11.7 minutes. The three that failed, `note-menu` (desktop-quartz), `atlas` zoom/drag (phone-quartz) and `note-drag` (phone-quartz), all pass when run alone on both quartz projects, so they are the drag and timing flakes seen before and not new. Later failures outside these are new.
 
+### Step 5: the model's context kept between runs
+
+- `packages/server/src/pi/store.ts`: `FileStore` keeps one JSON file per pi session holding the pane's turns, the model's messages (pi's, as they are), the cost, the size used and the keys of what was given. It is written to a temporary file and renamed, so a file is never half written, with owner-only permissions. The folder is isorite's data folder per base, `$XDG_DATA_HOME/isorite/pi/<12 hex of the notes path>/`, apart from the notes and the repository.
+- `PiHost` takes a `store`; after each turn it writes the session (not waited for), and `resume()`, called once at start by `piHostFor`, takes up the session last changed: its turns appear in the pane and the agent is built with the saved messages, so the model carries on. A turn that was running when the server went down comes back `stopped`.
+- A file that cannot be read (not JSON, or not a session this version wrote) is reported in the pane's `problem` with its full path, left where it is, and the agent starts fresh; the new session is kept beside it. Nothing is deleted.
+- Tests: `pi-store.test.ts` (4): a restart resumes the session and the model's next request carries the earlier question and answer; a running turn returns stopped; an unreadable file is reported, kept, and a new session is written beside it; the folder is under the data folder and differs by base. The pi, reach and loss suites and the full server suite still pass (apart from `model.test.ts`).
+- With a real model (`claude-haiku-5.5` through OpenRouter, two separate processes over one folder): told "my project is called Heron and my favourite number is 17", then after a restart asked without being allowed to look it up, it answered "Your project is called Heron, and your favourite number is 17."
+- Limits: one session is resumed (the last changed); keeping and choosing among several is step 11. A write is not waited for, so a hard exit within a moment of a turn ending can lose that turn (a first attempt at the real-model check did exactly that, because the script exited at once). A turn is written only when it ends, so a crash mid-turn loses that turn. Pi's message format is the file's format, so a pi upgrade that changes it can make old sessions unreadable, which will be reported, not hidden. The files hold what was said to the model, in the clear.
+
 ### Step 4: telling agents apart (scripted and read from code; no real client run yet)
 
 Over ACP:
