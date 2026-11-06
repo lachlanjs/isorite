@@ -54,6 +54,8 @@ export interface TerminalApi {
   withdraw(given: Given): Promise<void>;
   /** Show an agent's session (M25): a live one, one the agent carries on, or one kept, to read. */
   follow(agent: string, session: string): Promise<void>;
+  /** A new session that begins where a kept one is and goes its own way (M36), where the agent's sessions can be forked. */
+  fork(agent: string, session: string): Promise<void>;
   /** A new session with an attached agent, from here. */
   fresh(agent: string): Promise<void>;
   /** Ask the attached agents for their sessions again. */
@@ -192,6 +194,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       give: async (given) => { await write("POST", "acp/give", { given }); },
       withdraw: async (given) => { await write("POST", "terminal/withdraw", { given }); },
       follow: async (agent, session) => { await write("POST", "acp/follow", { agent, session }); },
+      fork: async (agent, session) => { await write("POST", "acp/fork", { agent, session }); },
       fresh: async (agent) => { await write("POST", "acp/new", { agent }); },
       list: async () => { await write("POST", "acp/list", {}); },
       set: async (kind, id, value) => { await write("POST", "acp/set", { kind, id, value }); },

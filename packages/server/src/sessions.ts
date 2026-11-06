@@ -32,6 +32,8 @@ export interface PaneSessions {
   follow(agent: string, session: string): Promise<void>;
   /** A new session from the pane. */
   fresh(agent: string): Promise<void>;
+  /** A new session that begins where `session` is and goes its own way. A host that cannot leaves this out. */
+  fork?(agent: string, session: string): Promise<void>;
   /** Set a mode or option of the session shown. */
   set(kind: "mode" | "config", id: string, value: string): void;
   /** Remove what is kept of a session that is not live. */

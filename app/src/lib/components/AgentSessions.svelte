@@ -37,6 +37,10 @@
   const idOf = (s: AgentSession): string => `${s.agent}/${s.session}`;
   async function removePast(id: string): Promise<void> { removing = ""; await terminal.forgetPast(id); }
   async function remove(s: AgentSession): Promise<void> { removing = ""; await terminal.forget(s.agent, s.session); }
+  async function fork(s: AgentSession): Promise<void> {
+    await terminal.fork(s.agent, s.session);
+    if (!terminal.problem) terminal.shown = "session";
+  }
   async function choose(s: AgentSession): Promise<void> {
     await terminal.follow(s.agent, s.session);
     if (!terminal.problem) terminal.shown = "session";
@@ -53,6 +57,9 @@
         <span class="q">{s.title || s.asked || "A session"}</span>
         <span class="m">{s.turns ? `${many(s.notes, "note")} · ${many(s.turns, "turn")}` : "not carried here yet"}</span>
       </button>
+      {#if terminal.view?.fork && s.kept}
+        <button type="button" class="more drop fork" aria-label="Fork {s.title || s.asked || 'this session'}: a new session from here" title="A new session that begins where this one is" onclick={() => void fork(s)}>fork</button>
+      {/if}
       {#if s.kept && !s.live}
         {#if removing === idOf(s)}
           <p class="sure" role="group" aria-label="Remove the kept copy">Remove what isorite kept of this?<span class="faint">The agent's own history stays.</span>
@@ -99,6 +106,8 @@
   .drop { position: absolute; top: 8px; right: 12px; font: 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); opacity: 0; transition: opacity var(--t-ack) var(--ease-out); }
   [role="listitem"]:hover .drop, [role="listitem"]:focus-within .drop, .drop:focus-visible { opacity: 1; }
   .drop:hover { color: var(--rose); }
+  .drop.fork { right: 76px; }
+  .drop.fork:hover { color: var(--text); }
   @media (hover: none) { .drop { opacity: 1; } }
   .sure { margin: 6px 0 0; font-size: 12px; color: var(--text-soft); }
   .more.bad { color: var(--rose); }

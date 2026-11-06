@@ -4,7 +4,7 @@
 // where it is; it is never deleted or replaced by a fresh session without saying so.
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { TerminalTurn } from "@isorite/engine";
@@ -37,6 +37,12 @@ export interface PiStore {
   save(record: PiRecord): Promise<void>;
   /** The session last changed, or null when none is kept. Throws `StoreError` when its file is unreadable. */
   latest(): Promise<PiRecord | null>;
+  /** Every session kept, newest first; those that cannot be read are named, not dropped. */
+  list(): Promise<{ records: PiRecord[]; unreadable: string[] }>;
+  /** One session, or null when none is kept under that id. Throws `StoreError` when its file is unreadable. */
+  load(session: string): Promise<PiRecord | null>;
+  /** Remove a kept session. */
+  remove(session: string): Promise<void>;
 }
 
 const ID = /^[0-9a-f-]{8,64}$/i;
@@ -59,12 +65,37 @@ export class FileStore implements PiStore {
     const dated = await Promise.all(names.map(async (n) => ({ n, t: (await stat(join(this.#dir, n))).mtimeMs })));
     const newest = dated.sort((a, b) => b.t - a.t)[0];
     if (!newest) return null;
-    const file = join(this.#dir, newest.n);
+    return this.#read(join(this.#dir, newest.n));
+  }
+
+  async #read(file: string): Promise<PiRecord> {
     let record: unknown;
     try { record = JSON.parse(await readFile(file, "utf8")); } catch (e) { throw new StoreError(file, (e as Error).message); }
     const r = record as Partial<PiRecord> | null;
     if (!r || r.version !== 1 || typeof r.session !== "string" || !Array.isArray(r.turns) || !Array.isArray(r.messages)) throw new StoreError(file, "it is not a session this version of isorite wrote");
     return r as PiRecord;
+  }
+
+  async list(): Promise<{ records: PiRecord[]; unreadable: string[] }> {
+    let names: string[];
+    try { names = (await readdir(this.#dir)).filter((n) => n.endsWith(".json")); } catch { return { records: [], unreadable: [] }; }
+    const records: PiRecord[] = [], unreadable: string[] = [];
+    for (const n of names) {
+      try { records.push(await this.#read(join(this.#dir, n))); } catch (e) { unreadable.push(e instanceof StoreError ? e.file : join(this.#dir, n)); }
+    }
+    return { records: records.sort((a, b) => (a.last < b.last ? 1 : -1)), unreadable };
+  }
+
+  async load(session: string): Promise<PiRecord | null> {
+    if (!ID.test(session)) return null;
+    const file = join(this.#dir, `${session}.json`);
+    try { await stat(file); } catch { return null; }
+    return this.#read(file);
+  }
+
+  async remove(session: string): Promise<void> {
+    if (!ID.test(session)) throw new Error("not a session id");
+    await rm(join(this.#dir, `${session}.json`), { force: true });
   }
 }
 

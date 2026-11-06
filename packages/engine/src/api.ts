@@ -99,6 +99,8 @@ export interface TerminalView {
   problem?: string;
   /** Whether the session shown can be steered while it works (M36). */
   steer?: boolean;
+  /** Whether a kept session can be forked from the pane (M36). */
+  fork?: boolean;
   /** The slash commands the agent offers in this session (ACP's available_commands_update). */
   commands?: AgentCommand[];
   /** What the agent lets you set in this session: its modes, and its options such as the model. */

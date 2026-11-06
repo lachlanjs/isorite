@@ -107,6 +107,7 @@ class TerminalState {
     if (!this.acp || !this.api) return;
     try { await this.api.withdraw(p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }); } catch { /* an agent that cannot take it back keeps what it was given */ }
   }
+  async fork(agent: string, session: string): Promise<void> { this.problem = ""; try { await this.api?.fork(agent, session); } catch (e) { this.problem = (e as Error).message; } }
   async follow(agent: string, session: string): Promise<void> { this.problem = ""; this.old = null; try { await this.api?.follow(agent, session); } catch (e) { this.problem = (e as Error).message; } }
   /** Set a mode or option of the session shown; the server's view settles it. */
   async set(kind: "mode" | "config", id: string, value: string): Promise<void> {

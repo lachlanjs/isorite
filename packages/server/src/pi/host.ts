@@ -81,6 +81,9 @@ export class PiHost implements PaneSessions {
   #summarising: AbortController | null = null;
   /** Why the last thing asked of the agent could not be done, shown in the pane. */
   #problem = "";
+  /** The other sessions kept, by id (the one shown is in the fields below); and the last write, waited for before one is left. */
+  #kept = new Map<string, Omit<AgentSession, "agent" | "name">>();
+  #saving: Promise<void> = Promise.resolve();
   #agent: Agent | null = null;
   #session = "";
   #at = "";
@@ -260,27 +263,84 @@ export class PiHost implements PaneSessions {
     asked.wait(decision);
   }
 
+  /** Show another kept session, and carry on in it. The one left is already kept (it is written after each turn). */
   async follow(_agent: string, session: string): Promise<void> {
-    if (session !== this.#session) throw new Error("that session is not here to carry on");
+    if (session === this.#session) return;
+    if (this.#busy) throw new Error("the agent is working: stop it first");
+    const kept = await this.#fetch(session);
+    this.#restore(kept);
   }
+
+  /** A new session from the pane; the one shown stays kept and can be shown again. */
   async fresh(_agent: string): Promise<void> {
     if (this.#busy) throw new Error("the agent is working: stop it first");
-    this.#agent = null; this.#session = ""; this.#turns = []; this.#title = ""; this.#cost = 0; this.#used = 0; this.#given.clear(); this.#withdrawn.clear(); this.#pending = null; this.#problem = "";
+    await this.#saving;
+    this.#blank();
     this.#tell();
   }
-  set(): void { throw new Error(`${this.#name} offers no modes or options yet`); }
-  async forget(): Promise<void> { throw new Error("nothing is kept apart from the session shown"); }
-  refresh(): void { /* one session, nothing to list again */ }
 
-  /** Take up the session last kept, if there is one: its turns in the pane, and its messages for the model. An
-   *  unreadable one is reported in the pane and left alone, and the agent starts fresh. */
-  async resume(): Promise<void> {
-    if (!this.#store || this.#agent) return;
-    let kept: PiRecord | null;
-    try { kept = await this.#store.latest(); } catch (e) { this.#problem = (e as Error).message; this.#tell(); return; }
-    if (!kept) return;
+  /** A new session that begins where `session` is (its turns and the model's messages), going its own way from there;
+   *  its cost starts again at nothing. The original is not changed. */
+  async fork(_agent: string, session: string): Promise<void> {
+    if (this.#busy) throw new Error("the agent is working: stop it first");
+    const from = session === this.#session && this.#agent ? this.#record() : await this.#fetch(session);
+    if (!from || !this.#store) throw new Error("that session is not kept, so there is nothing to fork");
+    const now = new Date(this.#now()).toISOString();
+    const copy: PiRecord = { ...JSON.parse(JSON.stringify(from)) as PiRecord, session: randomUUID(), title: `${from.title || "A session"} (fork)`.slice(0, 90), at: now, last: now, cost: 0 };
+    await this.#store.save(copy);
+    this.#kept.set(copy.session, this.#summary(copy));
+    this.#restore(copy);
+  }
+
+  set(): void { throw new Error(`${this.#name} offers no modes or options yet`); }
+
+  /** Remove what is kept of a session. The one shown is left first, for a new one. */
+  async forget(_agent: string, session: string): Promise<void> {
+    if (!this.#store) throw new Error("nothing is kept apart from the session shown");
+    if (session === this.#session) {
+      if (this.#busy) throw new Error("the agent is working: stop it first");
+      await this.#saving;
+      this.#blank();
+    }
+    await this.#store.remove(session);
+    this.#kept.delete(session);
+    this.#tell();
+  }
+
+  /** Read the list of kept sessions again. */
+  refresh(): void { void this.#index().then(() => this.#tell()); }
+
+  async #index(): Promise<void> {
+    if (!this.#store) return;
+    const { records, unreadable } = await this.#store.list();
+    this.#kept = new Map(records.map((r) => [r.session, this.#summary(r)]));
+    if (unreadable.length) this.#problem = `${unreadable.length === 1 ? "A saved session" : `${unreadable.length} saved sessions`} could not be read (${unreadable.join(", ")}). ${unreadable.length === 1 ? "It was" : "They were"} left where ${unreadable.length === 1 ? "it is" : "they are"}.`;
+  }
+
+  #summary(r: PiRecord): Omit<AgentSession, "agent" | "name"> {
+    return { session: r.session, title: r.title, asked: r.turns[0]?.asked ?? "", last: r.last, turns: r.turns.length, notes: 0, live: false, busy: false, kept: true, open: true };
+  }
+
+  async #fetch(session: string): Promise<PiRecord> {
+    if (!this.#store) throw new Error("that session is not here to carry on");
+    await this.#saving;
+    const kept = await this.#store.load(session);
+    if (!kept) throw new Error("that session is not kept");
+    return kept;
+  }
+
+  /** No session shown: the next question begins a new one. Everything of the last is let go (it stays kept). */
+  #blank(): void {
+    this.#agent = null; this.#session = ""; this.#at = ""; this.#turns = []; this.#title = ""; this.#cost = 0; this.#used = 0;
+    this.#given = new Set(); this.#withdrawn = new Set(); this.#pending = null; this.#queued = []; this.#problem = "";
+    this.#writing = -1; this.#thinkingAt = -1; this.#primed = false; this.#stopping = false;
+  }
+
+  /** Show `kept` and carry on from it: its turns for the pane, its messages for the model. A turn that was running when
+   *  the server went down is shown as stopped: it never finished. */
+  #restore(kept: PiRecord): void {
+    this.#blank();
     this.#open(kept);
-    // A turn that was running when the server went down is shown as stopped: it never finished.
     this.#turns = kept.turns.map((t) => (t.state === "running" ? { ...t, state: "stopped" as const } : t));
     this.#title = kept.title;
     this.#cost = kept.cost;
@@ -290,14 +350,31 @@ export class PiHost implements PaneSessions {
     this.#tell();
   }
 
-  #save(): void {
-    if (!this.#store || !this.#agent || !this.#turns.length) return;
-    const record: PiRecord = {
+  /** Take up the session last kept, if there is one. An unreadable one is reported in the pane and left alone, and the
+   *  agent starts fresh. */
+  async resume(): Promise<void> {
+    if (!this.#store || this.#agent) return;
+    let kept: PiRecord | null;
+    try { kept = await this.#store.latest(); } catch (e) { this.#problem = (e as Error).message; this.#tell(); return; }
+    try { await this.#index(); } catch { /* the list is ask again with refresh */ }
+    if (!kept) { this.#tell(); return; }
+    this.#restore(kept);
+  }
+
+  #record(): PiRecord {
+    return {
       version: 1, session: this.#session, title: this.#title, at: this.#at, last: this.#turns.at(-1)?.at ?? this.#at, cost: this.#cost, used: this.#used,
       given: [...this.#given], withdrawn: [...this.#withdrawn], turns: this.#turns, // The system prompt is the agent's own at every start, so a saved session does not carry an old one.
-      messages: (JSON.parse(JSON.stringify(this.#agent.state.messages)) as { role?: string }[]).filter((m) => m.role !== "system"),
+      messages: (JSON.parse(JSON.stringify(this.#agent!.state.messages)) as { role?: string }[]).filter((m) => m.role !== "system"),
     };
-    this.#store.save(record).catch((e: Error) => { this.#problem = `Could not keep this session: ${e.message}`; this.#tell(); });
+  }
+
+  #save(): void {
+    if (!this.#store || !this.#agent || !this.#turns.length) return;
+    const record = this.#record();
+    this.#kept.set(record.session, this.#summary(record));
+    const store = this.#store;
+    this.#saving = this.#saving.then(() => store.save(record)).catch((e: Error) => { this.#problem = `Could not keep this session: ${e.message}`; this.#tell(); });
   }
 
   #open(kept?: PiRecord): void {
@@ -475,13 +552,19 @@ export class PiHost implements PaneSessions {
     void this.#api.keepAgentRecord({ agent: this.#id, name: this.#name, session: this.#session, title: this.#title, at: this.#at, last, turns: this.#turns }).catch(() => undefined);
   }
 
+  /** The session shown, with the others kept, newest first. */
+  #sessions(entry: AgentSession | null): AgentSession[] {
+    const others = [...this.#kept.values()].filter((k) => k.session !== this.#session).map((k) => ({ agent: this.#id, name: this.#name, ...k }));
+    return [...(entry ? [entry] : []), ...others].sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : 0));
+  }
+
   #tell(): void {
     const last = this.#turns.at(-1)?.at ?? this.#at;
-    const entry: AgentSession | null = this.#session ? { agent: this.#id, name: this.#name, session: this.#session, title: this.#title, asked: this.#turns[0]?.asked ?? "", last, turns: this.#turns.length, notes: 0, live: true, busy: this.#busy, kept: false, open: true } : null;
+    const entry: AgentSession | null = this.#session ? { agent: this.#id, name: this.#name, session: this.#session, title: this.#title, asked: this.#turns[0]?.asked ?? "", last, turns: this.#turns.length, notes: 0, live: true, busy: this.#busy, kept: Boolean(this.#store), open: true } : null;
     this.#view = {
       connected: true, agent: this.#name, agentId: this.#id, session: this.#session || null, title: this.#title, busy: this.#busy, turns: this.#turns,
       asking: [...this.#asking.values()].map(({ wait: _, ...p }) => p), cost: this.#cost, tokens: { input: this.#used, output: 0 },
-      model: this.#model.id ?? "", ...(this.#problem ? { problem: this.#problem } : {}), steer: true, ...(this.#model.contextWindow ? { size: this.#model.contextWindow } : {}), sessions: entry ? [entry] : [],
+      model: this.#model.id ?? "", ...(this.#problem ? { problem: this.#problem } : {}), steer: true, ...(this.#model.contextWindow ? { size: this.#model.contextWindow } : {}), fork: Boolean(this.#store), sessions: this.#sessions(entry),
     };
     for (const fn of this.#listeners) fn(this.#view);
   }

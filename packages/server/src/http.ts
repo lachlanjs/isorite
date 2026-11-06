@@ -365,6 +365,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
     // What is in the pane's tray: what the session shown has not been given yet goes before its next prompt.
     post("/api/acp/give", z.object({ given: z.array(Given).max(40) }).strict(), async (_c, b) => { const r = await render(); await host.give(b.given as GivenPart[], r.text, r.embed).catch(refused); });
     post("/api/acp/follow", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await host.follow(b.agent, b.session).catch(refused); });
+    post("/api/acp/fork", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { if (!host.fork) throw new EngineError("this agent's sessions cannot be forked here", 409); await host.fork(b.agent, b.session).catch(refused); });
     post("/api/acp/forget", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await host.forget(b.agent, b.session).catch(refused); });
     post("/api/acp/set", z.object({ kind: z.enum(["mode", "config"]), id: z.string().max(100), value: z.string().max(200) }).strict(), async (_c, b) => { try { host.set(b.kind, b.id, b.value); } catch (e) { throw new EngineError((e as Error).message, 409); } });
     post("/api/acp/new", z.object({ agent: z.string().max(40) }).strict(), async (_c, b) => { await host.fresh(b.agent).catch(refused); });
