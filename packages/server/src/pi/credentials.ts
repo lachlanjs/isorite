@@ -25,7 +25,12 @@ export const PROVIDERS: { id: string; name: string; env: string }[] = [
 
 export interface Choice { provider: string; model: string }
 
-interface Kept { version: 1; keys: Record<string, string>; choice?: Choice }
+/** What the native agent may reach in the project (M36 step 9). */
+export interface Reach { files: "off" | "read" | "write"; shell: boolean }
+/** The default: the project's files to read, nothing to change them with, no shell. */
+export const DEFAULT_REACH: Reach = { files: "read", shell: false };
+
+interface Kept { version: 1; keys: Record<string, string>; choice?: Choice; reach?: Reach }
 
 const ID = /^[a-z0-9-]{1,40}$/;
 
@@ -57,7 +62,7 @@ export class Credentials {
     let parsed: Partial<Kept> | null;
     try { parsed = JSON.parse(text) as Partial<Kept> | null; } catch { throw new Error(`The keys file ${this.#file} is not valid JSON. It was left where it is.`); }
     if (!parsed || parsed.version !== 1 || typeof parsed.keys !== "object" || parsed.keys === null) throw new Error(`The keys file ${this.#file} is not one this version of isorite wrote. It was left where it is.`);
-    return (this.#kept = { version: 1, keys: parsed.keys, ...(parsed.choice ? { choice: parsed.choice } : {}) });
+    return (this.#kept = { version: 1, keys: parsed.keys, ...(parsed.choice ? { choice: parsed.choice } : {}), ...(parsed.reach ? { reach: parsed.reach } : {}) });
   }
 
   async #save(next: Kept): Promise<void> {
@@ -100,6 +105,18 @@ export class Credentials {
     if (!(provider in now.keys)) return;
     const { [provider]: _gone, ...keys } = now.keys;
     await this.#save({ ...now, keys });
+  }
+
+  /** What was chosen in the settings, else the default. Anything else in the file is not believed. */
+  async reach(): Promise<Reach> {
+    const r = (await this.#load()).reach;
+    return r && ["off", "read", "write"].includes(r.files) && typeof r.shell === "boolean" ? { files: r.files, shell: r.shell } : { ...DEFAULT_REACH };
+  }
+
+  async setReach(reach: Reach): Promise<void> {
+    if (!["off", "read", "write"].includes(reach.files) || typeof reach.shell !== "boolean") throw new Error("files is off, read or write; shell is on or off");
+    const now = await this.#load();
+    await this.#save({ ...now, reach: { files: reach.files, shell: reach.shell } });
   }
 
   async choice(): Promise<Choice | null> { return (await this.#load()).choice ?? null; }

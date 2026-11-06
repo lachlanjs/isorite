@@ -1,15 +1,15 @@
 // Choosing the pi agent for a base's pane (M35 prototype, settings in M36 step 8): `ISORITE_PI=<provider>/<model>`, as
 // `anthropic/claude-sonnet-4-6` or `openai/gpt-5`, else the model chosen in the settings (kept with the keys, in isorite's
 // data folder). A key is the one saved in the settings, else the provider's own variable (ANTHROPIC_API_KEY, ...). With
-// neither choice, the pane is the ACP agent's, as ever. `ISORITE_PI_ASK=<tool>,<tool>` makes the pane ask before those tools run. `ISORITE_PI_FILES=read|write`
-// gives it pi's tools for the project's files, and `ISORITE_PI_SHELL=1` its shell (which nothing can confine).
+// neither choice, the pane is the ACP agent's, as ever. `ISORITE_PI_ASK=<tool>,<tool>` makes the pane ask before those tools run. The project's files and shell are the settings' (default: read the files, nothing else); `ISORITE_PI_FILES=off|read|write` and
+// `ISORITE_PI_SHELL=1` set them from the environment and win (the shell is one nothing can confine).
 
 import { createModels } from "@earendil-works/pi-ai";
 import type { Api } from "@isorite/engine";
 import { PiHost, type PiHostOptions } from "./host.ts";
 import { fileTools, pathGuard, type Files } from "./files.ts";
 import { FileStore, storeDir } from "./store.ts";
-import { Credentials, PROVIDERS, type Choice } from "./credentials.ts";
+import { Credentials, DEFAULT_REACH, PROVIDERS, type Choice, type Reach } from "./credentials.ts";
 
 const camel = (s: string): string => s.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 
@@ -48,9 +48,28 @@ export class PiControl {
   readonly #hosts = new Set<PiHost>();
   constructor(env: NodeJS.ProcessEnv = process.env, creds = new Credentials(env)) { this.#env = env; this.creds = creds; }
 
+  /** What the agent may reach now, read synchronously where a prompt starts. Loaded by `load`. */
+  reach: Reach = { ...DEFAULT_REACH };
+  /** True where the environment (ISORITE_PI_FILES, ISORITE_PI_SHELL) sets it, and so wins. */
+  reachFromEnvironment = false;
+
+  async load(): Promise<void> {
+    const files = this.#env.ISORITE_PI_FILES?.trim(), shell = this.#env.ISORITE_PI_SHELL?.trim();
+    if (files !== undefined && files !== "" && !["off", "read", "write"].includes(files)) throw new Error(`ISORITE_PI_FILES is off, read or write; it was "${files}"`);
+    this.reachFromEnvironment = Boolean(files) || shell !== undefined && shell !== "";
+    const saved = await this.creds.reach();
+    this.reach = { files: (files || saved.files) as Files, shell: shell ? ["1", "true", "on"].includes(shell) : saved.shell };
+  }
+
+  async setReach(reach: Reach): Promise<void> {
+    await this.creds.setReach(reach);
+    if (!this.reachFromEnvironment) this.reach = { ...reach };
+  }
+
   attach(host: PiHost): void { this.#hosts.add(host); }
 
   async state() {
+    await this.load().catch(() => undefined);
     const want = await wanted(this.#env, this.creds).catch(() => null);
     return {
       /** True where the pane of this base is the native agent's now. */
@@ -60,6 +79,8 @@ export class PiControl {
       source: want?.source ?? null,
       providers: PROVIDERS.map((p) => ({ id: p.id, name: p.name, env: p.env })),
       keys: await this.creds.sources(),
+      reach: this.reach,
+      reachFromEnvironment: this.reachFromEnvironment,
     };
   }
 
@@ -77,10 +98,9 @@ export async function piHostFor(api: PiHostOptions["api"] & Pick<Api, "events">,
   if (!want) return null;
   const { provider, model } = want.choice;
   const { chosen, streamFn } = await modelFor(provider, model);
-  const files = (env.ISORITE_PI_FILES?.trim() || "off") as Files, shell = ["1", "true", "on"].includes(env.ISORITE_PI_SHELL?.trim() ?? "");
-  if (!["off", "read", "write"].includes(files)) throw new Error(`ISORITE_PI_FILES is read or write; it was "${files}"`);
+  await control.load();
   const asked = new Set((env.ISORITE_PI_ASK ?? "").split(",").map((t) => t.trim()).filter(Boolean));
-  const host = new PiHost({ api, store: new FileStore(storeDir(notes, env)), model: chosen, streamFn, name: `pi (${model})`, getApiKey: (p) => control.creds.key(p), ...(asked.size ? { ask: (tool: string) => asked.has(tool) } : {}), ...(files !== "off" || shell ? { more: () => fileTools(project, { files, shell }), guard: pathGuard(project) } : {}) });
+  const host = new PiHost({ api, store: new FileStore(storeDir(notes, env)), model: chosen, streamFn, name: `pi (${model})`, getApiKey: (p) => control.creds.key(p), ...(asked.size ? { ask: (tool: string) => asked.has(tool) } : {}), more: () => fileTools(project, control.reach), guard: pathGuard(project) });
   await host.resume();
   control.attach(host);
   return host;

@@ -38,6 +38,14 @@ Why: isorite's agent integration has two jobs that want different tools. Buildin
 - Unit suites: all pass except `model.test.ts` (1 failure, only because the embedding model is installed on this machine; not a regression).
 - Browser suite, all four projects, one worker: 235 passed, 22 skipped, 3 failed in 11.7 minutes. The three that failed, `note-menu` (desktop-quartz), `atlas` zoom/drag (phone-quartz) and `note-drag` (phone-quartz), all pass when run alone on both quartz projects, so they are the drag and timing flakes seen before and not new. Later failures outside these are new.
 
+### Step 9: tool tiers
+
+- **Tiers.** Project files: none, read, or read and write; and a shell, on or off. The base's own tools are always on. The default is read, no write, no shell (it was none before: the plan says read is on by default, because reading the project is how the agent answers about the code a note describes).
+- **Where set.** Iso's settings, under the model: radios for the files, a checkbox for the shell, and under each choice a line on what it promises and what it does not. Kept in the same owner-only file as the keys (`reach`), applied at the next question (the tools are made when a question starts), held across restarts. `ISORITE_PI_FILES` and `ISORITE_PI_SHELL` still work, win while set, and the settings say so and disable their controls.
+- **What the lines say.** Read: it can see everything there that you can, including files with secrets, and cannot change anything. Write: it changes your files directly, never in `.git`; keep the project in version control. Shell: not confined; it runs as you and can read or change any file, use the network and reach outside the project, the path checks do not apply; confine it with a container or disposable VM or a separate user account that has only the project, or leave it off.
+- **Checked.** `pi-tiers.test.ts` (3): a default session reads and every attempt to write, edit or run a command fails with the file unchanged; turning write, then shell, on in the settings applies to the next question, survives a restart, and turns off; the environment wins and a bad value is named. `pi-reach.test.ts` (unchanged) still covers the path guard. `models.spec.ts` (second test) on desktop and phone: defaults, the shell's warning in words, a change kept after a reload.
+- **Not done.** Asking before write or shell by default (`ISORITE_PI_ASK` exists; the settings do not expose it); confining the shell (nothing in isorite does).
+
 ### Step 8: models and keys
 
 - **Where things are kept.** `pi/credentials.ts`: one file, `$XDG_DATA_HOME/isorite/credentials.json` (mode 0600, folder 0700, written whole and renamed), holding the keys by provider and the model chosen. It is in isorite's data folder, apart from the notes and the repository. An unreadable or foreign file is reported by name and left alone.

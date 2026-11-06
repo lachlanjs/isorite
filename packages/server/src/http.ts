@@ -299,6 +299,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
     const invalid = async (fn: () => Promise<void>) => { try { await fn(); } catch (e) { throw new EngineError((e as Error).message, 400); } };
     post("/api/pi/key", z.object({ provider: Provider, key: z.string().max(2000) }).strict(), async (c, b) => { mine(c); await invalid(() => pi.creds.set(b.provider, b.key)); });
     post("/api/pi/key/remove", z.object({ provider: Provider }).strict(), async (c, b) => { mine(c); await invalid(() => pi.creds.remove(b.provider)); });
+    post("/api/pi/reach", z.object({ files: z.enum(["off", "read", "write"]), shell: z.boolean() }).strict(), async (c, b) => { mine(c); await invalid(() => pi.setReach(b)); });
     post("/api/pi/choose", z.object({ provider: Provider, model: z.string().min(1).max(200) }).strict(), async (c, b) => { mine(c); await invalid(() => pi.choose(b.provider, b.model)); });
   }
 

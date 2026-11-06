@@ -26,12 +26,16 @@ export interface PiState {
   source: "environment" | "settings" | null;
   providers: { id: string; name: string; env: string }[];
   keys: Record<string, "saved" | "environment" | null>;
+  /** What the native agent may reach in the project (step 9), and whether the environment sets it. */
+  reach: { files: "off" | "read" | "write"; shell: boolean };
+  reachFromEnvironment: boolean;
 }
 export interface PiApi {
   state(): Promise<PiState>;
   setKey(provider: string, key: string): Promise<void>;
   removeKey(provider: string): Promise<void>;
   choose(provider: string, model: string): Promise<void>;
+  setReach(files: "off" | "read" | "write", shell: boolean): Promise<void>;
 }
 
 /** The pane's agent session (M11, on ACP since M25), through the isorite server; on the guide's site, the finder's. */
@@ -174,6 +178,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       setKey: async (provider, key) => { await write("POST", "pi/key", { provider, key }); },
       removeKey: async (provider) => { await write("POST", "pi/key/remove", { provider }); },
       choose: async (provider, model) => { await write("POST", "pi/choose", { provider, model }); },
+      setReach: async (files, shell) => { await write("POST", "pi/reach", { files, shell }); },
     },
     terminal: {
       view: () => ask<TerminalView>("terminal"),
