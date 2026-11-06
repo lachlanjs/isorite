@@ -16,6 +16,9 @@ export interface PaneSessions {
   asked(agent: string): string;
   /** Ask in the session shown; with none yet, in a new one. */
   prompt(text: string): Promise<void>;
+  /** Say something to the agent while it works, to come in after the step now running (M36). Throws where the agent
+   *  cannot take it, or is not working. A host that cannot be steered leaves this out. */
+  steer?(text: string): Promise<void>;
   /** Stop what the session shown is doing. */
   interrupt(): Promise<void>;
   /** Notes and passages given from the pane: those not given in the session yet go before its next prompt. */

@@ -267,6 +267,7 @@ export async function acp(path: string | undefined, { agent, port = 4767, input,
   })();
   function command(c: Command): void {
     if (c.type === "prompt") { waiting.push({ session: c.session, text: c.text }); sendWaiting(); }
+    if (c.type === "steer") ask("_session/steering", { sessionId: c.session, prompt: [{ type: "text", text: c.text }] });
     if (c.type === "give") { if (c.text) given.set(c.session, { text: c.text, ...(c.blocks?.length ? { blocks: c.blocks } : {}) }); else given.delete(c.session); }
     if (c.type === "cancel") { const m = { method: "session/cancel", params: { sessionId: c.session } }; tap("ours", m); toAgent(m); }
     if (c.type === "list" && can.list) ask("session/list", { cwd });

@@ -49,6 +49,11 @@
     const c = matches[i];
     if (c) text = `/${c.name} `;
   }
+  /** While the agent works: Enter queues what is typed for when it would stop; this puts it in after the step running now. */
+  async function steer(): Promise<void> {
+    const keys = tray.sent.map(tray.keyOf);
+    if (await terminal.steer(text)) { text = ""; given = new Set([...given, ...keys]); }
+  }
   async function send(): Promise<void> {
     const keys = tray.sent.map(tray.keyOf);
     if (await terminal.send(text)) { text = ""; given = new Set([...given, ...keys]); }
@@ -59,7 +64,8 @@
       if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && text !== `/${matches[at]?.name}`)) { e.preventDefault(); complete(); return; }
       if (e.key === "Escape") { e.preventDefault(); text = ""; return; }
     }
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); void send(); }
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && terminal.canSteer && !e.isComposing) { e.preventDefault(); void steer(); }
+    else if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); void send(); }
     else if (e.key === "Escape" && busy) { e.preventDefault(); void terminal.stop(); }
   }
 </script>
@@ -118,6 +124,9 @@
         <button class="corner send" type="button" aria-label="Send" title="Send  (Enter)" onclick={() => void send()}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10M9 4l4 4-4 4" /></svg></button>
       {/if}
     </div>
+    {#if busy && text.trim()}
+      <p class="mid">Enter adds it for when the agent stops.{#if terminal.canSteer} <button type="button" class="more" onclick={() => void steer()} title="Put it in after the step running now (Ctrl+Enter)">Steer now</button>{/if}</p>
+    {/if}
     {#if terminal.problem || terminal.view?.problem}<p class="bad" role="alert">{terminal.problem || terminal.view?.problem}</p>{/if}
   </div>
 </div>
@@ -138,6 +147,8 @@
   .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 2px 4px 2px 8px; border: 1px solid var(--line-strong); background: var(--ground-1); font: 12px/1.4 var(--font-ui); color: var(--text); }
   .chip .g { color: var(--growth); flex: none; }
   .chip .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mid { margin: 0; font: 12px/1.4 var(--font-ui); color: var(--text-soft); }
+  .mid .more { background: none; border: 0; padding: 0; color: var(--growth); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .handoff { margin: 0; display: flex; align-items: center; gap: 8px; }
   .handoff .more { background: none; border: 0; padding: 0; color: var(--growth); font: 12px/1.4 var(--font-ui); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .chip.given { border-color: var(--line); color: var(--text-faint); }

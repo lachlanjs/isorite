@@ -83,6 +83,13 @@ class TerminalState {
       return true;
     } catch (e) { this.problem = (e as Error).message; return false; }
   }
+  /** Said while the agent works: in after the step running now. */
+  async steer(asked: string): Promise<boolean> {
+    this.problem = "";
+    if (!asked.trim() || !this.api) return false;
+    try { await this.api.steer(asked.trim(), givenOf()); return true; } catch (e) { this.problem = (e as Error).message; return false; }
+  }
+  get canSteer(): boolean { return this.running && !!this.view?.steer; }
   async stop(): Promise<void> { try { await this.api?.stop(); } catch (e) { this.problem = (e as Error).message; } }
   async reply(id: string, decision: Decision): Promise<void> { try { await this.api?.reply(id, decision); } catch (e) { this.problem = (e as Error).message; } }
   /** Keep a question the agent asked back, or a passage it offered (M25). */

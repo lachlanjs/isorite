@@ -21,6 +21,8 @@ export class ApiError extends Error {
 export interface TerminalApi {
   view(): Promise<TerminalView>;
   prompt(asked: string, given: Given[]): Promise<void>;
+  /** Say something while the agent works, to come in after the step running now (M36). */
+  steer(asked: string, given: Given[]): Promise<void>;
   stop(): Promise<void>;
   reply(id: string, decision: Decision): Promise<void>;
   /** Keep what the agent asked back or offered (M25). */
@@ -153,6 +155,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     terminal: {
       view: () => ask<TerminalView>("terminal"),
       prompt: async (asked, given) => { await write("POST", "terminal/prompt", { asked, given }); },
+      steer: async (asked, given) => { await write("POST", "terminal/steer", { asked, given }); },
       stop: async () => { await write("POST", "terminal/stop", {}); },
       reply: async (id, decision) => { await write("POST", "terminal/permission", { id, decision }); },
       take: (id) => write("POST", "agent/take", { id }),

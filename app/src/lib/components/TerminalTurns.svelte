@@ -81,6 +81,9 @@
   {#if i.kind === "text"}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
     <div class="said prose" use:drawn={{ given: i.text, copy: true }}>{@html render(i.text)}</div>
+  {:else if i.kind === "message"}
+    <!-- Said while the agent worked (M36): queued until the model has it, then where it came in. -->
+    <p class="mid" data-state={i.state} data-mode={i.mode}><span class="how">{i.mode === "steer" ? "steer" : "next"}{i.state === "queued" ? " · waiting" : i.state === "dropped" ? " · not taken up" : ""}</span> {i.text}</p>
   {:else if i.kind === "question"}
     <!-- A question the agent asked back through isorite (M25), as Iso's are: a rose ◇ and "keep", which makes it a
          question note, yours. Kept, it is a link to the note. -->
@@ -161,6 +164,10 @@
   .turn { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .you { padding-left: 16px; position: relative; display: flex; flex-direction: column; gap: 4px; }
   .you::before { content: "›"; position: absolute; left: 0; top: 0; color: var(--lattice); }
+  .mid { margin: 0; padding-left: 10px; border-left: 2px solid var(--line-strong); color: var(--text); font-size: 13px; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .mid[data-state="queued"], .mid[data-state="dropped"] { color: var(--text-faint); }
+  .mid[data-state="dropped"] { text-decoration: line-through; }
+  .mid .how { font: 11px var(--font-mono); color: var(--text-soft); margin-right: 4px; }
   .asked { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
   .from { font-size: 11px; color: var(--text-faint); }
   .said { padding-left: 16px; position: relative; font: 15px/1.6 var(--font-text); overflow-wrap: anywhere; min-width: 0; }

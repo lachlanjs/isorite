@@ -44,6 +44,7 @@ export class FinderTerminal implements TerminalApi {
     this.#busy = false;
     this.#changed();
   }
+  async steer(): Promise<void> { throw new Error("the finder answers at once: there is nothing to steer"); }
   async stop(): Promise<void> { /* it answers at once */ }
   async reply(): Promise<void> { throw new Error("the finder asks nothing"); }
   async take(): Promise<{ note: string }> { throw new Error("the finder offers nothing to keep"); }

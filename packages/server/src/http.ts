@@ -301,6 +301,13 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
       await pane.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim(), (parts) => givenEmbedded(parts, title, base ?? "notes")).catch(failed);
       await pane.prompt(b.asked.trim() + news).catch(failed);
     });
+    post("/api/terminal/steer", z.object({ asked: z.string().min(1).max(8000), given: z.array(Given).max(40) }).strict(), async (_c, b) => {
+      if (!pane.steer) throw new EngineError("this agent cannot be steered while it works: stop it and ask again", 409);
+      const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
+      const title = (id: string) => titles.get(id) ?? id;
+      await pane.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim(), (parts) => givenEmbedded(parts, title, base ?? "notes")).catch(failed);
+      await pane.steer(b.asked.trim()).catch(failed);
+    });
     post("/api/terminal/stop", z.object({}).strict(), async () => { await pane.interrupt().catch(failed); });
     post("/api/terminal/permission", z.object({ id: z.string().max(200), decision: z.enum(["once", "always", "reject"]) }).strict(), async (_c, b) => { await pane.reply(b.id, b.decision).catch(failed); });
   }

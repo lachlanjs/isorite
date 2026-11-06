@@ -46,6 +46,8 @@ const EMPTY: TerminalView = { connected: true, agent: "", session: null, title: 
 const textOf = (content: unknown): string =>
   (Array.isArray(content) ? content : []).map((b: { type?: string; text?: string }) => (b?.type === "text" ? b.text ?? "" : "")).join("");
 
+const userText = (content: unknown): string => (typeof content === "string" ? content : textOf(content));
+
 export class PiHost implements PaneSessions {
   readonly #api: PiHostOptions["api"];
   readonly #model: Model<any>;
@@ -73,6 +75,10 @@ export class PiHost implements PaneSessions {
   #allowed = new Set<string>();
   #pending: { parts: Given[]; text: string } | null = null;
   #given = new Set<string>();
+  /** What was said while it worked and has not reached the model: the item's id, and the text as the model will have it. */
+  #queued: { id: string; body: string }[] = [];
+  /** The first user message of a run is the prompt itself: it is not a queued message landing. */
+  #primed = false;
   /** The text item the assistant message now streaming writes into. */
   #writing = -1;
   #view: TerminalView = EMPTY;
@@ -111,7 +117,7 @@ export class PiHost implements PaneSessions {
   }
 
   async prompt(text: string): Promise<void> {
-    if (this.#busy) throw new Error("the agent is working: stop it first");
+    if (this.#busy) { await this.#say(text, "followUp"); return; }
     this.#problem = "";
     if (!this.#agent) this.#open();
     const agent = this.#agent!;
@@ -123,6 +129,8 @@ export class PiHost implements PaneSessions {
     this.#turns = [...this.#turns, turn];
     if (!this.#title) this.#title = text.slice(0, 80);
     this.#busy = true;
+    this.#primed = false;
+    this.#queued = [];
     this.#writing = -1;
     void this.#api.agentStatus(this.#id, this.#session, true).catch(() => undefined);
     this.#tell();
@@ -130,8 +138,30 @@ export class PiHost implements PaneSessions {
     void agent.prompt(pending?.text ? `${pending.text}\n\n${text}` : text).then(() => undefined, (e: Error) => { if (this.#stopping) this.#set("stopped"); else this.#fail(e.message); }).then(() => this.#end());
   }
 
+  async steer(text: string): Promise<void> {
+    if (!this.#busy) throw new Error("the agent is not working: ask it instead");
+    await this.#say(text, "steer");
+  }
+
+  /** Said while it works: a steer comes in after the step now running, a follow-up when it would otherwise stop. */
+  async #say(text: string, mode: "steer" | "followUp"): Promise<void> {
+    const agent = this.#agent;
+    if (!agent) return;
+    const pending = this.#pending;
+    this.#pending = null;
+    if (pending) for (const g of pending.parts) this.#given.add(givenKey(g));
+    const body = pending?.text ? `${pending.text}\n\n${text}` : text;
+    const id = randomUUID();
+    this.#queued.push({ id, body });
+    this.#edit((items) => [...items, { kind: "message", id, text, mode, state: "queued" }]);
+    const message = { role: "user" as const, content: [{ type: "text" as const, text: body }], timestamp: this.#now() };
+    if (mode === "steer") agent.steer(message); else agent.followUp(message);
+    this.#tell();
+  }
+
   async interrupt(): Promise<void> {
     this.#stopping = true;
+    this.#agent?.clearAllQueues();
     for (const a of this.#asking.values()) a.wait("reject");
     this.#agent?.abort();
   }
@@ -209,7 +239,18 @@ export class PiHost implements PaneSessions {
   }
 
   #on(e: AgentEvent): void {
-    if (e.type === "message_start" && (e.message as { role?: string }).role === "assistant") {
+    if (e.type === "message_start" && (e.message as { role?: string }).role === "user") {
+      if (!this.#primed) { this.#primed = true; return; }
+      const said = userText((e.message as { content?: unknown }).content);
+      const at = this.#queued.findIndex((q) => q.body === said);
+      if (at < 0) return;
+      const [q] = this.#queued.splice(at, 1);
+      // It now stands where the model took it up, after what came before.
+      this.#edit((items) => {
+        const was = items.find((i) => i.kind === "message" && i.id === q!.id) as Extract<TerminalItem, { kind: "message" }> | undefined;
+        return was ? [...items.filter((i) => i !== was), { ...was, state: "landed" as const }] : items;
+      });
+    } else if (e.type === "message_start" && (e.message as { role?: string }).role === "assistant") {
       this.#edit((items) => [...items, { kind: "text", text: "" }]);
       this.#writing = (this.#turns.at(-1)?.items.length ?? 1) - 1;
     } else if (e.type === "message_update" && e.assistantMessageEvent.type === "text_delta") {
@@ -236,6 +277,7 @@ export class PiHost implements PaneSessions {
     this.#set("failed");
   }
   #end(): void {
+    this.#dropQueued();
     const last = [...(this.#agent?.state.messages ?? [])].reverse().find((m) => (m as { role?: string }).role === "assistant") as { stopReason?: string; errorMessage?: string } | undefined;
     if (this.#turns.at(-1)?.state === "running") {
       if (this.#stopping || last?.stopReason === "aborted") this.#set("stopped");
@@ -248,6 +290,14 @@ export class PiHost implements PaneSessions {
     this.#keep();
     this.#save();
     this.#tell();
+  }
+  /** Said but never taken up (the run ended or was stopped first). */
+  #dropQueued(): void {
+    if (!this.#queued.length) return;
+    const ids = new Set(this.#queued.map((q) => q.id));
+    this.#queued = [];
+    this.#agent?.clearAllQueues();
+    this.#edit((items) => items.map((i) => (i.kind === "message" && ids.has(i.id) ? { ...i, state: "dropped" as const } : i)));
   }
   #set(state: TerminalTurn["state"]): void {
     const turns = [...this.#turns], t = turns.at(-1);
@@ -273,7 +323,7 @@ export class PiHost implements PaneSessions {
     this.#view = {
       connected: true, agent: this.#name, agentId: this.#id, session: this.#session || null, title: this.#title, busy: this.#busy, turns: this.#turns,
       asking: [...this.#asking.values()].map(({ wait: _, ...p }) => p), cost: this.#cost, tokens: { input: this.#used, output: 0 },
-      model: this.#model.id ?? "", ...(this.#problem ? { problem: this.#problem } : {}), ...(this.#model.contextWindow ? { size: this.#model.contextWindow } : {}), sessions: entry ? [entry] : [],
+      model: this.#model.id ?? "", ...(this.#problem ? { problem: this.#problem } : {}), steer: true, ...(this.#model.contextWindow ? { size: this.#model.contextWindow } : {}), sessions: entry ? [entry] : [],
     };
     for (const fn of this.#listeners) fn(this.#view);
   }

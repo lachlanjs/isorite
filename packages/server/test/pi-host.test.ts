@@ -56,7 +56,7 @@ test("a turn is folded into the pane's view: the question, a look-up in the base
   expect(events.some((e) => e.type === "agent-step" && e.agent === "pi")).toBe(true);
 });
 
-test("what was given goes before the question once, and the agent cannot be asked while it works", async () => {
+test("what was given goes before the question once", async () => {
   const { host, faux, settled } = await setup();
   const seen: string[] = [];
   faux.setResponses([
@@ -67,7 +67,6 @@ test("what was given goes before the question once, and the agent cannot be aske
   await host.give([passage], (parts) => `From ${parts[0]!.id}:\n> ${(parts[0] as { text: string }).text}`);
   let done = settled();
   await host.prompt("Say more.");
-  await expect(host.prompt("Another")).rejects.toThrow(/working/);
   const first = await done;
   expect(first.turns[0]).toMatchObject({ given: [passage] });
   // Given again with the question: not repeated in the same session.

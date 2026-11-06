@@ -70,6 +70,7 @@ export interface Rpc { jsonrpc?: "2.0"; id?: string | number | null; method?: st
 export type Command =
   | { type: "prompt"; session: string; text: string }
   | { type: "cancel"; session: string }
+  | { type: "steer"; session: string; text: string }
   | { type: "permission"; id: string; optionId: string }
   | { type: "give"; session: string; text: string; blocks?: unknown[] }
   | { type: "open"; session?: string; then?: string; give?: string; giveBlocks?: unknown[] }
@@ -136,6 +137,8 @@ interface Link {
   can: { load: boolean; resume: boolean; list: boolean };
   /** Whether it takes embedded resources in a prompt (promptCapabilities.embeddedContext). */
   embedded: boolean;
+  /** Whether it takes a message into a turn that is running (`_meta.steering.supported`, the `_session/steering` extension). */
+  steer: boolean;
   /** Requests toward the agent, by id, until answered; and the agent's own. */
   toAgent: Map<string, Rpc>;
   fromAgent: Map<string, Rpc>;
@@ -230,7 +233,7 @@ export class AcpFollower implements PaneSessions {
     if (live) {
       this.#view = {
         connected, agent: live.link.name, agentId: live.link.agent, session: live.session, title: live.title, busy: live.busy, turns: live.turns,
-        asking: [...live.asking.values()].map(({ options: _, ...p }) => p), cost: live.cost, tokens: { input: live.used, output: 0 }, model: "", size: live.size, ours: this.#ours, sessions: this.#sessions(), commands: live.commands, settings: [...(live.modes ? [live.modes] : []), ...live.configs], ...problem,
+        asking: [...live.asking.values()].map(({ options: _, ...p }) => p), cost: live.cost, tokens: { input: live.used, output: 0 }, model: "", size: live.size, ours: this.#ours, sessions: this.#sessions(), ...(live.link.steer ? { steer: true } : {}), commands: live.commands, settings: [...(live.modes ? [live.modes] : []), ...live.configs], ...problem,
       };
     } else if (read) {
       this.#view = { ...EMPTY, connected, reading: true, agent: read.name, agentId: read.agent, session: read.session, title: read.title, turns: read.turns, sessions: this.#sessions(), ...problem };
@@ -267,7 +270,7 @@ export class AcpFollower implements PaneSessions {
   /** A wrapper's channel: what the pane asks of its sessions goes down it. Returns the hang-up. */
   connect(id: string, send: (c: Command) => void, { pane = false }: { pane?: boolean } = {}): () => void {
     this.#hangUp(id);
-    this.#links.set(id, { id, send, agent: "", name: "", can: { load: false, resume: false, list: false }, embedded: false, toAgent: new Map(), fromAgent: new Map(), listed: [], opening: null, pane });
+    this.#links.set(id, { id, send, agent: "", name: "", can: { load: false, resume: false, list: false }, embedded: false, steer: false, toAgent: new Map(), fromAgent: new Map(), listed: [], opening: null, pane });
     this.#tell();
     return () => { if (this.#links.get(id)?.send === send) { this.#hangUp(id); this.#tell(); } };
   }
@@ -307,6 +310,15 @@ export class AcpFollower implements PaneSessions {
   #childCount = new Map<string, number>();
   /** Given before a session was open: for the one the next prompt opens. */
   #unopened: { parts: Given[]; text: string; blocks?: unknown[] } | null = null;
+  async steer(text: string): Promise<void> {
+    const live = this.#need();
+    if (!live.link.steer) throw new Error(`${live.link.name || "this agent"} cannot be steered while it works: stop it and ask again`);
+    if (!live.busy) throw new Error("the agent is not working: ask it instead");
+    live.link.send({ type: "steer", session: live.session, text });
+    // The agent takes it into the turn and does not say when: shown as sent.
+    this.#edit(live, (items) => [...items, { kind: "message", id: `steer-${live.turns.length}-${items.length}`, text, mode: "steer", state: "sent" }]);
+    this.#tell();
+  }
   async interrupt(): Promise<void> { const live = this.#need(); live.link.send({ type: "cancel", session: live.session }); }
   /** Notes and passages given from the pane: those not given in the session yet go before its next prompt. */
   async give(parts: Given[], render: (parts: Given[]) => string, embed?: Embed): Promise<void> {
@@ -449,6 +461,7 @@ export class AcpFollower implements PaneSessions {
           const info = m.result?.agentInfo as { name?: string; title?: string } | undefined;
           const caps = (m.result?.agentCapabilities ?? {}) as { loadSession?: boolean; promptCapabilities?: { embeddedContext?: boolean }; sessionCapabilities?: { resume?: unknown; list?: unknown } };
           link.embedded = caps.promptCapabilities?.embeddedContext === true;
+          link.steer = (m.result?._meta as { steering?: { supported?: unknown } } | undefined)?.steering?.supported === true;
           link.agent = agentName(info?.name ?? "agent");
           link.name = info?.title ?? info?.name ?? "The agent";
           link.can = { load: !!caps.loadSession, resume: !!caps.sessionCapabilities?.resume, list: !!caps.sessionCapabilities?.list };

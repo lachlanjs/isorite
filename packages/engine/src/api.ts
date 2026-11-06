@@ -97,6 +97,8 @@ export interface TerminalView {
   ours?: number;
   /** Why what the pane last asked of the agent was refused. */
   problem?: string;
+  /** Whether the session shown can be steered while it works (M36). */
+  steer?: boolean;
   /** The slash commands the agent offers in this session (ACP's available_commands_update). */
   commands?: AgentCommand[];
   /** What the agent lets you set in this session: its modes, and its options such as the model. */
@@ -119,6 +121,10 @@ export type TerminalItem =
   | { kind: "text"; text: string }
   /** A tool call. `title` is what it acted on (a command, a file, a note); `diff` an edit's lines, `-` and `+`. */
   | { kind: "tool"; id: string; name: string; title: string; status: "running" | "done" | "failed"; output: string; note?: string; diff?: string[]; base?: string }
+  /** What the person said while the agent worked (M36): a steer goes in after the step now running, a follow-up when
+   *  the agent would otherwise stop. `queued` until the model has it, then `landed` (where it came in); `sent` where
+   *  the agent takes it and does not say when; `dropped` if the turn ended or was stopped first. */
+  | { kind: "message"; id: string; text: string; mode: "steer" | "followUp"; state: "queued" | "landed" | "sent" | "dropped" }
   /** What the agent asked back, or offered, through isorite's MCP (M25): kept as Iso's are, or not. */
   | Extract<TurnItem, { kind: "question" | "offer" }>;
 /** The agent asks before doing: `action` (as `shell`) on `resources` (as the command). */
