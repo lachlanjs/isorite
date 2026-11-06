@@ -39,16 +39,15 @@ const settled = (host: PiHost): Promise<TerminalView> => new Promise((done) => {
   const off = host.listen((v) => { if (!v.busy && v.turns.at(-1)?.state !== "running") { off(); done(v); } });
 });
 
-test("the model's thinking is not in the view: pi sends it, the host drops it", async () => {
+test("the model's thinking is in the view (it was lost until M36 step 7), and pi sends it", async () => {
   const { api, faux, model, streamFn } = await setup();
   const host = new PiHost({ api, model, streamFn });
   faux.setResponses([fauxAssistantMessage([fauxThinking("Entropy is surprise, so I will say so."), fauxText("It is surprise.")])]);
   const done = settled(host);
   await host.prompt("What is entropy?");
   const view = await done;
-  expect(view.turns[0]!.items).toEqual([{ kind: "text", text: "It is surprise." }]);
-  expect(JSON.stringify(view)).not.toContain("so I will say so");
-  // Pi did send it: the same script, run as pi's own loop, carries the thinking through its events.
+  expect(view.turns[0]!.items).toEqual([{ kind: "thinking", text: "Entropy is surprise, so I will say so." }, { kind: "text", text: "It is surprise." }]);
+  // Pi sends it as events: the same script, run as pi's own loop, carries the thinking through them.
   faux.setResponses([fauxAssistantMessage([fauxThinking("Entropy is surprise, so I will say so."), fauxText("It is surprise.")])]);
   const agent = new Agent({ initialState: { systemPrompt: "", model }, streamFn });
   const kinds: string[] = [];
@@ -96,7 +95,7 @@ test("a steer reaches the model in pi, but the host has no way to send one and w
   expect(events.filter((r) => r === "user")).toHaveLength(2);
 });
 
-test("compaction is not an event of the loop: it is a call the host would have to make, and show", async () => {
+test("compaction is not an event of the loop: it is a call the host makes and shows (see pi-thinking.test.ts)", async () => {
   // Nothing in pi-agent-core's events says a context was shortened; pi-coding-agent offers the test and the work.
   expect(shouldCompact(190_000, 200_000, { enabled: true, reserveTokens: 16_000, keepRecentTokens: 20_000 })).toBe(true);
   expect(shouldCompact(50_000, 200_000, { enabled: true, reserveTokens: 16_000, keepRecentTokens: 20_000 })).toBe(false);

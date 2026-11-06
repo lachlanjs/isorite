@@ -30,6 +30,8 @@
   const bare = (name: string): string => name.replace(/^(mcp_+)?isorite[_:]+/, "");
   const verb = (name: string): string => VERB[bare(name)] ?? bare(name).replaceAll("_", " ");
   /** A question back or an offer stands as itself (M25), not as the call that made it. */
+  /** 18200 as 18.2k. */
+  const tokens = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
   const itself = (i: TerminalItem): boolean => i.kind === "tool" && /^(ask_question|offer_text)$/.test(bare(i.name));
   const WHAT: Record<string, string> = { shell: "run", edit: "edit", write: "write", read: "read", webfetch: "fetch", external_directory: "reach outside the project" };
   const asks = (p: TerminalPermission): string => `${WHAT[p.action] ?? p.action} ${p.resources.join(", ")}`.trim();
@@ -81,6 +83,15 @@
   {#if i.kind === "text"}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
     <div class="said prose" use:drawn={{ given: i.text, copy: true }}>{@html render(i.text)}</div>
+  {:else if i.kind === "thinking"}
+    <!-- What the model reasoned (M36): folded, since it is its working and not its answer. -->
+    <details class="think"><summary>thinking</summary><p>{i.text}</p></details>
+  {:else if i.kind === "compaction"}
+    <!-- The earlier conversation shortened so the session fits the model (M36). -->
+    <details class="squeeze" data-state={i.state}>
+      <summary>{#if i.state === "running"}Summarising the earlier conversation to make room…{:else if i.state === "failed"}Could not summarise the earlier conversation{i.error ? ` (${i.error})` : ""}; carrying on with all of it{:else}Earlier conversation summarised: {tokens(i.before)} → {tokens(i.after ?? 0)} tokens{/if}</summary>
+      {#if i.summary}<p>{i.summary}</p>{/if}
+    </details>
   {:else if i.kind === "message"}
     <!-- Said while the agent worked (M36): queued until the model has it, then where it came in. -->
     <p class="mid" data-state={i.state} data-mode={i.mode}><span class="how">{i.mode === "steer" ? "steer" : "next"}{i.state === "queued" ? " · waiting" : i.state === "dropped" ? " · not taken up" : ""}</span> {i.text}</p>
@@ -164,6 +175,10 @@
   .turn { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .you { padding-left: 16px; position: relative; display: flex; flex-direction: column; gap: 4px; }
   .you::before { content: "›"; position: absolute; left: 0; top: 0; color: var(--lattice); }
+  .think, .squeeze { margin: 0; font-size: 12.5px; color: var(--text-soft); }
+  .think summary, .squeeze summary { cursor: pointer; font: 11.5px var(--font-mono); color: var(--text-soft); }
+  .think p, .squeeze p { margin: 6px 0 0; padding-left: 10px; border-left: 2px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .squeeze[data-state="failed"] summary { color: var(--rose); }
   .mid { margin: 0; padding-left: 10px; border-left: 2px solid var(--line-strong); color: var(--text); font-size: 13px; overflow-wrap: anywhere; white-space: pre-wrap; }
   .mid[data-state="queued"], .mid[data-state="dropped"] { color: var(--text-faint); }
   .mid[data-state="dropped"] { text-decoration: line-through; }

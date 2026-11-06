@@ -9,13 +9,14 @@
 // any agent.
 
 import { randomUUID } from "node:crypto";
-import { Agent, type AgentEvent } from "@earendil-works/pi-agent-core";
+import { Agent, type AgentEvent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import type { AgentSession, Api, Given, TerminalItem, TerminalPermission, TerminalTurn, TerminalView } from "@isorite/engine";
 import { givenKey } from "../acp.ts";
 import { INSTRUCTIONS } from "../mcp-http.ts";
 import type { PaneSessions } from "../sessions.ts";
+import { DEFAULT_COMPACTION_SETTINGS, estimateTokens, generateSummary, shouldCompact } from "@earendil-works/pi-coding-agent";
 import { type PiRecord, type PiStore } from "./store.ts";
 import { isoriteTools, titleOf, type ToolsApi } from "./tools.ts";
 
@@ -36,11 +37,16 @@ export interface PiHostOptions {
   /** A reason to refuse a call before it runs, or undefined. Checked first; if it throws, the call is refused. */
   guard?: (call: { tool: string; args: unknown }) => string | undefined;
   clock?: () => number;
+  /** When the model's context is summarised: where it nears the model's window (default: pi's). */
+  compaction?: Partial<Compaction>;
   /** Where sessions are kept between runs of the server. With none, a session ends with the server. */
   store?: PiStore;
 }
 
 const OUTPUT = 4000;
+interface Compaction { enabled: boolean; reserveTokens: number; keepRecentTokens: number }
+/** What the summary of an earlier conversation begins with, in the message that stands for it. */
+const SUMMARY = "[The earlier part of this conversation, summarised to make room]\n";
 const EMPTY: TerminalView = { connected: true, agent: "", session: null, title: "", busy: false, turns: [], asking: [], cost: 0, tokens: { input: 0, output: 0 }, model: "", sessions: [] };
 
 const textOf = (content: unknown): string =>
@@ -59,6 +65,11 @@ export class PiHost implements PaneSessions {
   readonly #guard: NonNullable<PiHostOptions["guard"]>;
   readonly #now: () => number;
   readonly #store: PiStore | null;
+  readonly #compaction: Compaction;
+  /** The thinking item the assistant message now streaming writes into. */
+  #thinkingAt = -1;
+  /** Cancels a summary being written. */
+  #summarising: AbortController | null = null;
   /** Why the last thing asked of the agent could not be done, shown in the pane. */
   #problem = "";
   #agent: Agent | null = null;
@@ -84,7 +95,7 @@ export class PiHost implements PaneSessions {
   #view: TerminalView = EMPTY;
   #listeners = new Set<(v: TerminalView) => void>();
 
-  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now, store }: PiHostOptions) {
+  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now, store, compaction }: PiHostOptions) {
     this.#api = api;
     this.#model = model;
     this.#streamFn = streamFn;
@@ -95,6 +106,7 @@ export class PiHost implements PaneSessions {
     this.#guard = guard;
     this.#now = clock;
     this.#store = store ?? null;
+    this.#compaction = { enabled: compaction?.enabled ?? DEFAULT_COMPACTION_SETTINGS.enabled ?? true, reserveTokens: compaction?.reserveTokens ?? DEFAULT_COMPACTION_SETTINGS.reserveTokens ?? 16384, keepRecentTokens: compaction?.keepRecentTokens ?? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens ?? 20000 };
     // What the agent asks back or offers (ask_question, offer_text) stands in its turn, until kept or not.
     api.events?.((e) => {
       if (e.type !== "agent-item" || e.agent !== this.#id || !this.#turns.length) return;
@@ -132,10 +144,13 @@ export class PiHost implements PaneSessions {
     this.#primed = false;
     this.#queued = [];
     this.#writing = -1;
+    this.#thinkingAt = -1;
     void this.#api.agentStatus(this.#id, this.#session, true).catch(() => undefined);
     this.#tell();
-    // What was given goes before the question, in the same message.
-    void agent.prompt(pending?.text ? `${pending.text}\n\n${text}` : text).then(() => undefined, (e: Error) => { if (this.#stopping) this.#set("stopped"); else this.#fail(e.message); }).then(() => this.#end());
+    // What was given goes before the question, in the same message. An earlier conversation that has grown near the
+    // model's window is summarised first.
+    const body = pending?.text ? `${pending.text}\n\n${text}` : text;
+    void (async () => { await this.#compactIfNeeded(agent); if (this.#stopping) throw new Error("stopped"); await agent.prompt(body); })().then(() => undefined, (e: Error) => { if (this.#stopping) this.#set("stopped"); else this.#fail(e.message); }).then(() => this.#end());
   }
 
   async steer(text: string): Promise<void> {
@@ -161,6 +176,7 @@ export class PiHost implements PaneSessions {
 
   async interrupt(): Promise<void> {
     this.#stopping = true;
+    this.#summarising?.abort();
     this.#agent?.clearAllQueues();
     for (const a of this.#asking.values()) a.wait("reject");
     this.#agent?.abort();
@@ -205,7 +221,8 @@ export class PiHost implements PaneSessions {
     if (!this.#store || !this.#agent || !this.#turns.length) return;
     const record: PiRecord = {
       version: 1, session: this.#session, title: this.#title, at: this.#at, last: this.#turns.at(-1)?.at ?? this.#at, cost: this.#cost, used: this.#used,
-      given: [...this.#given], turns: this.#turns, messages: JSON.parse(JSON.stringify(this.#agent.state.messages)) as unknown[],
+      given: [...this.#given], turns: this.#turns, // The system prompt is the agent's own at every start, so a saved session does not carry an old one.
+      messages: (JSON.parse(JSON.stringify(this.#agent.state.messages)) as { role?: string }[]).filter((m) => m.role !== "system"),
     };
     this.#store.save(record).catch((e: Error) => { this.#problem = `Could not keep this session: ${e.message}`; this.#tell(); });
   }
@@ -253,14 +270,27 @@ export class PiHost implements PaneSessions {
     } else if (e.type === "message_start" && (e.message as { role?: string }).role === "assistant") {
       this.#edit((items) => [...items, { kind: "text", text: "" }]);
       this.#writing = (this.#turns.at(-1)?.items.length ?? 1) - 1;
+    } else if (e.type === "message_update" && e.assistantMessageEvent.type === "thinking_delta") {
+      const delta = e.assistantMessageEvent.delta;
+      if (this.#thinkingAt < 0) {
+        // Before the text item it belongs ahead of.
+        const at = Math.max(this.#writing, 0);
+        this.#edit((items) => [...items.slice(0, at), { kind: "thinking", text: "" }, ...items.slice(at)]);
+        this.#thinkingAt = at;
+        this.#writing = at + 1;
+      }
+      const t = this.#thinkingAt;
+      this.#edit((items) => items.map((i, k) => (k === t && i.kind === "thinking" ? { ...i, text: i.text + delta } : i)));
     } else if (e.type === "message_update" && e.assistantMessageEvent.type === "text_delta") {
       const at = this.#writing, delta = e.assistantMessageEvent.delta;
       this.#edit((items) => items.map((i, k) => (k === at && i.kind === "text" ? { ...i, text: i.text + delta } : i)));
     } else if (e.type === "message_end" && (e.message as { role?: string }).role === "assistant") {
       const m = e.message as { content?: unknown; usage?: { totalTokens?: number; cost?: { total?: number } } };
-      const at = this.#writing, whole = textOf(m.content);
-      this.#edit((items) => items.flatMap((i, k) => (k !== at ? [i] : whole ? [{ kind: "text", text: whole } as TerminalItem] : [])));
+      const at = this.#writing, think = this.#thinkingAt, whole = textOf(m.content);
+      const thought = (Array.isArray(m.content) ? (m.content as { type?: string; thinking?: string }[]) : []).map((b) => (b?.type === "thinking" ? b.thinking ?? "" : "")).join("");
+      this.#edit((items) => items.flatMap((i, k) => (k === think ? (thought.trim() ? [{ kind: "thinking", text: thought } as TerminalItem] : []) : k !== at ? [i] : whole ? [{ kind: "text", text: whole } as TerminalItem] : [])));
       this.#writing = -1;
+      this.#thinkingAt = -1;
       this.#cost += m.usage?.cost?.total ?? 0;
       this.#used = m.usage?.totalTokens ?? this.#used;
     } else if (e.type === "tool_execution_start") {
@@ -291,6 +321,58 @@ export class PiHost implements PaneSessions {
     this.#save();
     this.#tell();
   }
+  /** What the model would be sent now: the last answer's own count, and an estimate for what came after it. */
+  #contextTokens(messages: AgentMessage[]): number {
+    let last = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i] as { role?: string; usage?: { totalTokens?: number }; stopReason?: string };
+      if (m.role === "assistant" && m.usage?.totalTokens && m.stopReason !== "aborted" && m.stopReason !== "error") { last = i; break; }
+    }
+    const counted = last >= 0 ? ((messages[last] as { usage: { totalTokens: number } }).usage.totalTokens) : 0;
+    return counted + messages.slice(last + 1).reduce((n, m) => n + estimateTokens(m), 0);
+  }
+
+  /** Before a prompt: if what the model would be sent nears its window, summarise the earlier part of the conversation
+   *  and keep the recent part as it was (cut at a message of the person's, so a tool call and its result stay together).
+   *  The turn shows it. If the summary cannot be made the conversation goes on as it was and the turn says so. */
+  async #compactIfNeeded(agent: Agent): Promise<void> {
+    const window = this.#model.contextWindow, settings = this.#compaction;
+    if (!settings.enabled || !window) return;
+    const messages = [...agent.state.messages];
+    const before = this.#contextTokens(messages);
+    if (!shouldCompact(before, window, settings)) return;
+    // Leading system messages stay as they are; so does nothing else but the recent part.
+    const roleOf = (m: AgentMessage | undefined): string | undefined => (m as { role?: string } | undefined)?.role;
+    let head = 0;
+    while (roleOf(messages[head]) === "system") head++;
+    const earlier = (messages[head] as { content?: unknown } | undefined)?.content;
+    const previous = userText(earlier).startsWith(SUMMARY) ? userText(earlier).slice(SUMMARY.length) : undefined;
+    const from = head + (previous === undefined ? 0 : 1);
+    let acc = 0, cut = from;
+    for (let i = messages.length - 1; i >= from; i--) { acc += estimateTokens(messages[i]!); if (acc >= settings.keepRecentTokens) { cut = i; break; } }
+    while (cut > from && roleOf(messages[cut]) !== "user") cut--;
+    if (cut <= from) return;
+    const id = this.#turns.at(-1)?.items.length ?? 0;
+    this.#edit((items) => [...items, { kind: "compaction", state: "running", before }]);
+    this.#tell();
+    this.#summarising = new AbortController();
+    try {
+      const summary = await generateSummary(messages.slice(from, cut), this.#model, settings.reserveTokens, undefined, undefined, this.#summarising.signal, undefined, previous, undefined, this.#streamFn);
+      const stand = { role: "user" as const, content: [{ type: "text" as const, text: SUMMARY + summary }], timestamp: this.#now() };
+      // The recent answers' own counts describe the context as it was before: they are not trusted any more, so the
+      // size of what stands now is estimated until the model's next answer gives a count.
+      const recent = messages.slice(cut).map((m) => ((m as { role?: string }).role === "assistant" ? ({ ...m, usage: { ...(m as { usage?: object }).usage, totalTokens: 0 } } as AgentMessage) : m));
+      const kept: AgentMessage[] = [...messages.slice(0, head), stand, ...recent];
+      agent.state.messages = kept;
+      const after = this.#contextTokens(kept);
+      this.#used = after;
+      this.#edit((items) => items.map((i, k) => (k === id && i.kind === "compaction" ? { ...i, state: "done" as const, after, summary } : i)));
+    } catch (e) {
+      const error = this.#stopping ? "stopped" : (e as Error).message;
+      this.#edit((items) => items.map((i, k) => (k === id && i.kind === "compaction" ? { ...i, state: "failed" as const, error } : i)));
+    } finally { this.#summarising = null; this.#tell(); }
+  }
+
   /** Said but never taken up (the run ended or was stopped first). */
   #dropQueued(): void {
     if (!this.#queued.length) return;

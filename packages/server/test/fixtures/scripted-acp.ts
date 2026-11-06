@@ -7,6 +7,7 @@
 //                       would (titled "Why does it drift?" unless given)
 //   offer <note id> <text>   offer words for a note, the same way
 //   draw                answer with a diagram and a code block
+//   think <words>       think aloud (agent_thought_chunk) before replying
 //   wait <ms>           work for that long (a prompt to steer)
 //   permit              ask before running a command
 //   delegate <path> [<title>]  have a subagent read a file: its own session announced with subagent_update where the
@@ -61,6 +62,7 @@ async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; 
     }
     if (verb === "cite" && path) cited.push(`[cited](${path})`);
     if (verb === "glance" && path) update(sessionId, { sessionUpdate: "tool_call", toolCallId: call, title: `read: ${path}`, kind: "read", locations: [{ path }] });
+    if (verb === "think") update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: [path, ...rest].join(" ") } });
     if (verb === "wait") await new Promise((r) => setTimeout(r, Number(path) || 500));
     if (verb === "delegate" && path) {
       const at = isAbsolute(path) ? path : join(s.cwd, path), title = rest.join(" ") || "helper";

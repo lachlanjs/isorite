@@ -609,6 +609,19 @@ export class AcpFollower implements PaneSessions {
         });
         break;
       }
+      case "agent_thought_chunk": {
+        // What the agent reasoned (M36), folded into one item until it says or does something else.
+        live.replaying = false;
+        const text = textOf(u.content);
+        if (!text) break;
+        this.#edit(live, (items) => {
+          const end = items.at(-1);
+          if (end?.kind === "thinking") items[items.length - 1] = { kind: "thinking", text: end.text + text };
+          else items.push({ kind: "thinking", text });
+          return items;
+        });
+        break;
+      }
       case "tool_call":
       case "tool_call_update": {
         live.replaying = false;

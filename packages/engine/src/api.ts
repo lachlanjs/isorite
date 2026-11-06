@@ -121,6 +121,10 @@ export type TerminalItem =
   | { kind: "text"; text: string }
   /** A tool call. `title` is what it acted on (a command, a file, a note); `diff` an edit's lines, `-` and `+`. */
   | { kind: "tool"; id: string; name: string; title: string; status: "running" | "done" | "failed"; output: string; note?: string; diff?: string[]; base?: string }
+  /** What the model reasoned before it answered or acted (M36), as the provider streams it. */
+  | { kind: "thinking"; text: string }
+  /** The earlier conversation shortened to a summary so the session fits the model (M36): the size before and after, in tokens. */
+  | { kind: "compaction"; state: "running" | "done" | "failed"; before: number; after?: number; summary?: string; error?: string }
   /** What the person said while the agent worked (M36): a steer goes in after the step now running, a follow-up when
    *  the agent would otherwise stop. `queued` until the model has it, then `landed` (where it came in); `sent` where
    *  the agent takes it and does not say when; `dropped` if the turn ended or was stopped first. */

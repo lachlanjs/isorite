@@ -61,6 +61,8 @@ test("a restart takes up the session last kept: its turns in the pane, and the m
   // Still one session, now with both turns.
   await expect.poll(() => JSON.parse(readFileSync(join(dir, files(dir)[0]!), "utf8")).turns.length).toBe(2);
   expect(files(dir)).toHaveLength(1);
+  // The system prompt is not kept with the messages: the agent has its own at each start.
+  expect((JSON.parse(readFileSync(join(dir, files(dir)[0]!), "utf8")).messages as { role: string }[]).some((m) => m.role === "system")).toBe(false);
 });
 
 test("a turn that was running when the server went down comes back stopped", async () => {
