@@ -121,3 +121,20 @@ test("a folder is renamed from its heading in the list", async ({ page }) => {
   await expect.poll(() => existsSync(join(NOTES, `renamed-${p}`, `inside-${p}.md`))).toBe(true);
   await expect.poll(() => existsSync(join(NOTES, `rn-${p}`))).toBe(false);
 });
+
+test("a note in a folder is pulled out to the top of the base (M37)", async ({ page }) => {
+  const p = test.info().project.name;
+  await seed(page, p, [[`out/inner-${p}`, `Inner ${p}`]]);
+  const row = page.locator("li", { hasText: `Inner ${p}` });
+  const a = await centre(row);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(a.x + 30, a.y + 10, { steps: 3 });
+  const top = page.locator("section[data-dir='']");
+  await expect(top).toBeVisible();
+  const b = await centre(top.locator("h2"), false);
+  await page.mouse.move(b.x, b.y, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(() => existsSync(join(NOTES, `inner-${p}.md`))).toBe(true);
+  expect(existsSync(join(NOTES, "out", `inner-${p}.md`))).toBe(false);
+});

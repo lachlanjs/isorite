@@ -454,7 +454,8 @@
       if (carried !== null && (ref === carried || ref.startsWith(`${carried}/`))) return;
       if (!best || n.depth > best.depth) best = { ref, depth: n.depth };
     });
-    return (best as { ref: string } | null)?.ref ?? null;
+    // On the map but in no folder: the top of the base (M37), where a note could not be put before.
+    return (best as { ref: string } | null)?.ref ?? (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom ? "" : null);
   }
   async function moveHeld(item: Item, dir: string): Promise<void> {
     const from = item.id.replace(/\/$/, ""), name = from.split("/").at(-1)!, to = dir ? `${dir}/${name}` : name;
