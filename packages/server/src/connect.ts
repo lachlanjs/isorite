@@ -6,7 +6,8 @@
 // holds is kept as it is.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { homedir } from "node:os";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { repoOf } from "./git.ts";
 
 export interface Proposed {
@@ -26,9 +27,13 @@ const HARNESSES: { file: string; harness: string; entry: (rel: string) => [path:
   { file: "opencode.json", harness: "OpenCode", entry: (rel) => [["mcp", "servers", "isorite"], { type: "local", command: ["isorite", "mcp", rel] }] },
 ];
 
-/** Where the base's harness config goes: its repository, or the base's own folder when it is in none. */
+/** Where the base's harness config goes: its repository; in none, the folder holding a base named `notes` (what
+ *  `isorite` makes in a project, M37), so agents are started in the project and not in its notes; else the base's own
+ *  folder. Never a home folder or the root, which only look like a project's. */
 export function projectOf(notes: string): { repo: string; rel: string } {
-  const repo = repoOf(notes) ?? notes;
+  const up = dirname(resolve(notes));
+  const beside = basename(notes) === "notes" && up !== homedir() && dirname(up) !== up;
+  const repo = repoOf(notes) ?? (beside ? up : notes);
   return { repo, rel: relative(repo, notes).split(sep).join("/") || "." };
 }
 

@@ -35,3 +35,13 @@ test("a base in no repository has its harness config in its own folder", () => {
   mkdirSync(notes);
   expect(proposal(notes)).toMatchObject({ repo: notes, files: [{ after: expect.stringContaining('"mcp",\n        "."') }, {}] });
 });
+
+test("a base named notes in a folder that is no repository has its config in that folder, the project (M37)", () => {
+  const project = join(root, "plain-project"), notes = join(project, "notes");
+  mkdirSync(notes, { recursive: true });
+  const p = proposal(notes);
+  expect(p.repo).toBe(project);
+  expect(p.files[1]!.after).toContain('"notes"');
+  expect(writeProposal(notes, ["opencode.json"])).toEqual(["opencode.json"]);
+  expect(readFileSync(join(project, "opencode.json"), "utf8")).toContain('"notes"');
+});
