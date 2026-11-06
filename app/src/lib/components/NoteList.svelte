@@ -210,7 +210,7 @@
   <HoldTags {g} mode="ghost" />
 
   {#each folders as [dir, notes] (dir)}
-    <section data-dir={dir} class:over={over === dir && dragged !== null}>
+    <section data-dir={dir} style:margin-left="{dir ? dir.split("/").length * 14 : 0}px" class:over={over === dir && dragged !== null}>
       <h2 class="head" class:lifted={dragged === dir && dir !== ""} class:doomed={tagged("delete", dir)} class:sending={tagged("send", dir)} use:g.press={() => ({ kind: "folder", id: dir, title: dir })}>{#if renaming === dir && dir}<input class="field rename" aria-label="Rename the folder {dir}" bind:value={draft} use:focus onkeydown={(e) => { if (e.key === "Enter") void rename(dir); else if (e.key === "Escape") renaming = null; }} onblur={() => (renaming = null)} />{:else}<span class="label" ondblclick={() => { if (dir) { draft = last(dir); renaming = dir; } }} role="presentation">{dir || "the top of the base"}</span>{/if}<span class="acts"><button class="btn quiet add" type="button" onclick={() => start(dir)} aria-label={`New note in ${dir || "the top of the base"}`}>+</button>{#if dir}<button class="btn quiet" type="button" onclick={() => { draft = last(dir); renaming = dir; }} aria-label={`Rename the folder ${dir}`}>rename</button>{/if}{#if dir && !notes.length}<button class="btn quiet" type="button" onclick={() => void askRemove({ kind: "folder", id: dir, title: dir })} aria-label={`Delete the empty folder ${dir}`}>delete</button>{/if}</span>{@render tags("folder", dir)}</h2>
       <ul>
         {#each notes as n (n.id)}
