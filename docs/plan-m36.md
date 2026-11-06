@@ -38,6 +38,18 @@ Why: isorite's agent integration has two jobs that want different tools. Buildin
 - Unit suites: all pass except `model.test.ts` (1 failure, only because the embedding model is installed on this machine; not a regression).
 - Browser suite, all four projects, one worker: 235 passed, 22 skipped, 3 failed in 11.7 minutes. The three that failed, `note-menu` (desktop-quartz), `atlas` zoom/drag (phone-quartz) and `note-drag` (phone-quartz), all pass when run alone on both quartz projects, so they are the drag and timing flakes seen before and not new. Later failures outside these are new.
 
+### Step 4: telling agents apart (scripted and read from code; no real client run yet)
+
+Over ACP:
+- In pane mode isorite now declares `clientCapabilities.subagents` itself (`acp-wrap.ts`), so the Claude and Codex adapters (step 2) report each subagent as a session of its own instead of a tool call of the parent's. Behind a front end the front end's capabilities are passed through, so a front end that declares it gets the same.
+- The follower (`acp.ts`) reads `subagent_update`: it shows the subagent as a step in the parent's turn (running, then done or failed from its state), and keeps a hidden session for it. What that session reads or changes in the base is told under its own name, `<agent>-<first three words of its title>-<n>` (`scripted-scout-one-1`), so the Atlas sees a separate agent. The drawer does not list it. Without this, declaring the capability would have dropped a subagent's reads, since updates for a session the follower does not know are ignored.
+- Tests: `acp-subagents.test.ts` (three): a front end that declares it gets two steps and two named agents; one that does not gets the work under the parent's name, as before; and in pane mode isorite declares it itself. The scripted agent gained `delegate <path> <title>`.
+- Not seen: the real adapters' child sessions. The shapes come from the adapter's README and source (`subagent_update` with `title`, `description`, `state.state` of `running`, `requires_action` or `idle`), not from a run. A child's own messages and its permission requests are not folded into the pane, and the pane does not yet say which subagent asked.
+
+Over MCP:
+- The endpoint keeps no session: a caller is `?agent=` on the address, else the client name a request carries in `_meta`, else `"mcp"` (`mcp-identity.test.ts`). A harness and its subagents given one address are therefore one agent, and a client that sends `clientInfo` only in `initialize` is `"mcp"` on its later calls, since the endpoint does not remember it.
+- So over MCP alone a swarm is told apart only if each caller has an address of its own or names itself on every request. Whether Claude Code's subagents do either is not known; it is the check to make with a real client, below.
+
 ### Step 3b: chips as embedded resources for ACP agents
 
 - The follower records whether an agent declared `promptCapabilities.embeddedContext` at initialize (`Link.embedded`). When the pane gives something and the agent did, each passage goes as a resource block after the given text: `{type: "resource", resource: {uri: "isorite://<base>/<note id>", mimeType: "text/markdown", text: <the passage>}}`, the same address the MCP server lists its notes under. The text then says the passages are attached, names the note each is from, and says to read the note for the current text. Notes and folders stay as text that points to `read_note` and `search_notes`: a note's whole body is not embedded, because the agent can read it through the tools and an embedded copy would go stale.

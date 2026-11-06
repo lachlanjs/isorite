@@ -301,6 +301,10 @@ export class AcpFollower implements PaneSessions {
     link.opening = this.#reading?.session ?? "";
     link.send({ type: "open", ...(this.#reading ? { session: this.#reading.session } : {}), then: text, ...(this.#unopened ? { give: this.#unopened.text, ...(this.#unopened.blocks?.length ? { giveBlocks: this.#unopened.blocks } : {}) } : {}) });
   }
+  /** Subagents the agent announced (`subagent_update`), by their session: each is a session of its own that the pane
+   *  does not list, and what it reads and changes in the base is told under its own name, `<agent>-<title>-<n>`. */
+  #children = new Map<string, Live>();
+  #childCount = new Map<string, number>();
   /** Given before a session was open: for the one the next prompt opens. */
   #unopened: { parts: Given[]; text: string; blocks?: unknown[] } | null = null;
   async interrupt(): Promise<void> { const live = this.#need(); live.link.send({ type: "cancel", session: live.session }); }
@@ -501,7 +505,7 @@ export class AcpFollower implements PaneSessions {
       return;
     }
     if (m.method === "session/update") {
-      const live = this.#lives.get(keyOf(link.agent, sessionId));
+      const live = this.#lives.get(keyOf(link.agent, sessionId)) ?? this.#children.get(keyOf(link.agent, sessionId));
       if (live) this.#update(live, (m.params?.update ?? {}) as Record<string, unknown> & { sessionUpdate?: string });
     }
   }
@@ -639,6 +643,30 @@ export class AcpFollower implements PaneSessions {
       case "session_info_update":
         if (typeof u.title === "string") live.title = u.title;
         break;
+      case "subagent_update": {
+        const id = str(u.sessionId);
+        if (!id || live.link.agent === "") break;
+        const key = keyOf(live.link.agent, id), title = str(u.title) || str(u.description) || "subagent";
+        let child = this.#children.get(key);
+        if (!child) {
+          const n = (this.#childCount.get(live.link.agent) ?? 0) + 1;
+          this.#childCount.set(live.link.agent, n);
+          const agent = agentName(`${live.link.agent}-${title.split(/\s+/).slice(0, 3).join("-")}-${n}`);
+          child = { ...live, link: { ...live.link, agent }, session: id, title, turns: [{ id, asked: title, from: live.from, items: [], state: "running" }], seen: new Set(), asking: new Map(), pending: null, given: new Set(), loading: false, replaying: false };
+          this.#children.set(key, child);
+        }
+        // The parent's turn shows it as a step: running while it works, done when it is idle (failed on an error).
+        const state = (u.state ?? {}) as { state?: string; stopReason?: string; error?: unknown };
+        const status: Tool["status"] = state.state === "idle" ? (state.error || state.stopReason === "error" ? "failed" : "done") : "running";
+        this.#edit(live, (items) => {
+          const at = items.findIndex((i) => i.kind === "tool" && i.id === `subagent-${id}`);
+          const was = at < 0 ? null : (items[at] as Tool);
+          const now: Tool = { kind: "tool", id: `subagent-${id}`, name: "subagent", title: was?.title || title, status, output: str(u.description) || was?.output || "" };
+          if (at < 0) items.push(now); else items[at] = now;
+          return items;
+        });
+        break;
+      }
       case "available_commands_update":
         live.commands = commandsOf(u.availableCommands);
         break;

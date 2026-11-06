@@ -8,6 +8,8 @@
 //   offer <note id> <text>   offer words for a note, the same way
 //   draw                answer with a diagram and a code block
 //   permit              ask before running a command
+//   delegate <path> [<title>]  have a subagent read a file: its own session announced with subagent_update where the
+//                       client declared `subagents`, a step of this session where it did not
 // and it then replies, citing the first note it read in isorite's link form. Everything it was given (each prompt's
 // blocks, the MCP servers) it says back, so a test can see it. Its sessions can be listed and loaded (their history
 // replayed), and are kept in SCRIPTED_STORE when that is set, so another run of it (its "own terminal") has them.
@@ -27,6 +29,8 @@ const stored = (): Record<string, Kept> => (STORE && existsSync(STORE) ? JSON.pa
 const store = (id: string, k: Kept) => { if (STORE) writeFileSync(STORE, JSON.stringify({ ...stored(), [id]: k })); };
 const sessions = new Map<string, { cwd: string; mcp: { name: string; type?: string; url?: string }[]; kept: Kept }>();
 const waiting = new Map<string, (r: any) => void>();
+/** Whether the client declared `clientCapabilities.subagents`. */
+let subagents = false;
 /** What "draw" adds to a reply: a diagram and a code block. */
 const DRAWN = "Here is how they stand:\n\n```mermaid\nflowchart LR\n  s[Surprise] --> e[Entropy]\n```\n\nAnd in code:\n\n```python\ndef surprise(p):\n    return -log2(p)  # in bits\n```";
 let n = 0;
@@ -53,6 +57,16 @@ async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; 
     }
     if (verb === "cite" && path) cited.push(`[cited](${path})`);
     if (verb === "glance" && path) update(sessionId, { sessionUpdate: "tool_call", toolCallId: call, title: `read: ${path}`, kind: "read", locations: [{ path }] });
+    if (verb === "delegate" && path) {
+      const at = isAbsolute(path) ? path : join(s.cwd, path), title = rest.join(" ") || "helper";
+      const into = subagents ? `child-${++n}` : sessionId;
+      if (subagents) update(sessionId, { sessionUpdate: "subagent_update", sessionId: into, title, state: { state: "running" } });
+      else update(sessionId, { sessionUpdate: "tool_call", toolCallId: `${call}-task`, title: `Task: ${title}`, kind: "other", status: "in_progress" });
+      update(into, { sessionUpdate: "tool_call", toolCallId: `${call}-r`, title: `Read ${path}`, kind: "read", status: "in_progress", locations: [{ path: at }], rawInput: { path } });
+      update(into, { sessionUpdate: "tool_call_update", toolCallId: `${call}-r`, status: "completed", content: [{ type: "content", content: { type: "text", text: readFileSync(at, "utf8").slice(0, 200) } }] });
+      if (subagents) update(sessionId, { sessionUpdate: "subagent_update", sessionId: into, state: { state: "idle", stopReason: "end_turn" } });
+      else update(sessionId, { sessionUpdate: "tool_call_update", toolCallId: `${call}-task`, status: "completed" });
+    }
     if (verb === "edit" && path) {
       const at = isAbsolute(path) ? path : join(s.cwd, path), before = readFileSync(at, "utf8"), added = rest.join(" ");
       appendFileSync(at, `\n${added}\n`);
@@ -89,7 +103,7 @@ async function prompt(id: Rpc["id"], sessionId: string, blocks: { type: string; 
   const cite = read[0] ? `[as the note says](/${read[0]}.md)` : "with no note";
   // "draw": a diagram and code in the reply, as Markdown.
   const drawn = /^draw\b/m.test(text) ? `\n\n${DRAWN}` : "";
-  const said = `Done, ${cite}${cited.map((c) => `, ${c}`).join("")}. Blocks: ${blocks.length}.${blocks.filter((b) => b.type === "resource").map((b) => ` Resource ${b.resource?.uri}=${JSON.stringify(b.resource?.text)}.`).join("")} MCP: ${s.mcp.map((m) => `${m.name}/${m.type ?? "stdio"}`).join(",")}.${drawn}`;
+  const said = `Done, ${cite}${cited.map((c) => `, ${c}`).join("")}. Blocks: ${blocks.length}. Subagents: ${subagents ? "declared" : "no"}.${blocks.filter((b) => b.type === "resource").map((b) => ` Resource ${b.resource?.uri}=${JSON.stringify(b.resource?.text)}.`).join("")} MCP: ${s.mcp.map((m) => `${m.name}/${m.type ?? "stdio"}`).join(",")}.${drawn}`;
   update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: said } });
   s.kept.history.push({ user: text, agent: said });
   s.kept.updatedAt = new Date().toISOString();
@@ -112,7 +126,7 @@ for await (const line of createInterface({ input: process.stdin })) {
   if (!signedIn && (m.method === "session/new" || m.method === "session/list" || m.method === "session/load")) { send({ id: m.id, error: { code: -32000, message: "Authentication required" } }); continue; }
   switch (m.method) {
     case "authenticate": signedIn = p.methodId === "api-key"; send(signedIn ? { id: m.id, result: {} } : { id: m.id, error: { code: -32603, message: "no such method" } }); break;
-    case "initialize": send({ id: m.id, result: { protocolVersion: 1, agentInfo: { name: "scripted", title: "Scripted", version: "0" }, agentCapabilities: { ...(process.env.SCRIPTED_EMBEDDED === "1" ? { promptCapabilities: { embeddedContext: true } } : {}), loadSession: true, sessionCapabilities: { list: {} }, mcpCapabilities: { http: process.env.SCRIPTED_HTTP !== "0", sse: false } }, authMethods: AUTH ? [{ id: "api-key", name: "API Key" }, { id: "browser", name: "Sign in" }] : [] } }); break;
+    case "initialize": subagents = typeof p.clientCapabilities?.subagents === "object"; send({ id: m.id, result: { protocolVersion: 1, agentInfo: { name: "scripted", title: "Scripted", version: "0" }, agentCapabilities: { ...(process.env.SCRIPTED_EMBEDDED === "1" ? { promptCapabilities: { embeddedContext: true } } : {}), loadSession: true, sessionCapabilities: { list: {} }, mcpCapabilities: { http: process.env.SCRIPTED_HTTP !== "0", sse: false } }, authMethods: AUTH ? [{ id: "api-key", name: "API Key" }, { id: "browser", name: "Sign in" }] : [] } }); break;
     case "session/new": {
       const sessionId = `s-${process.pid}-${++n}`;
       sessions.set(sessionId, { cwd: p.cwd ?? process.cwd(), mcp: p.mcpServers ?? [], kept: { cwd: p.cwd ?? process.cwd(), title: "", updatedAt: new Date().toISOString(), history: [] } });

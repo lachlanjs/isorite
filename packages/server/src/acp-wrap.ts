@@ -291,7 +291,7 @@ export async function acp(path: string | undefined, { agent, port = 4767, input,
   }
 
   // With no front end, the wrapper is the agent's client: it says hello once the server hears what passes.
-  if (pane) void listening.then(() => ask("initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: "isorite", title: "isorite", version: VERSION } }));
+  if (pane) void listening.then(() => ask("initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false, subagents: {} }, clientInfo: { name: "isorite", title: "isorite", version: VERSION } }));
 
   const code = await new Promise<number>((done) => child.once("exit", (c) => done(c ?? 0)));
   commands.abort();
