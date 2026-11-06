@@ -78,7 +78,8 @@ test("held, a note shows three tags: the red one asks before deleting, the gold 
   await expect(page.getByRole("status").filter({ hasText: `Sent ${p} is with Iso.` })).toBeVisible();
   expect(existsSync(join(NOTES, "held", `sent-${p}.md`))).toBe(true);
   // Letting go off the tags changes nothing.
-  await holdThenGo(page, page.locator("li", { hasText: `Sent ${p}` }), "send");
+  // (Iso's tray now shows the chip too, with or without an agent: the row is the one in the list of notes.)
+  await holdThenGo(page, page.locator("li", { hasText: `Sent ${p}` }).filter({ has: page.locator("a.vein-row") }), "send");
   await page.mouse.move(2, 2);
   await page.mouse.up();
   await expect(page.locator("[data-tag]")).toHaveCount(0);
