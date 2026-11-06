@@ -125,6 +125,8 @@ test("a folder is renamed from its heading in the list", async ({ page }) => {
 test("a note in a folder is pulled out to the top of the base (M37)", async ({ page }) => {
   const p = test.info().project.name;
   await seed(page, p, [[`out/inner-${p}`, `Inner ${p}`]]);
+  // Narrowed to the one note, so the top of the base (offered at the end while one is carried) is in view.
+  await page.getByRole("searchbox", { name: "Find a note" }).fill(`Inner ${p}`);
   const row = page.locator("li", { hasText: `Inner ${p}` });
   const a = await centre(row);
   await page.mouse.move(a.x, a.y);

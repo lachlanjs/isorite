@@ -32,7 +32,7 @@ test("a passage chosen in a note is a chip in the box: taken out, put back, and 
   await expect(chips).toHaveCount(0);
 
   // Put back, and sent with a message: the chip stays, faint.
-  await page.getByRole("button", { name: "Note" }).first().click().catch(() => undefined);
+  await page.getByRole("button", { name: "Note", exact: true }).first().click({ timeout: 2000 }).catch(() => undefined);
   await page.goto("#/n/basics/surprise");
   await editor.click();
   await page.keyboard.press("Control+Home");
