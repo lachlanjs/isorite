@@ -147,7 +147,7 @@
   <article class="turn" data-state={t.state}>
     <div class="you"><p class="asked">{t.asked}</p>
       {#if t.given?.length}
-        <span class="gave">{#each t.given as g, k (k)}<span class="chip" data-to={g.kind === "note" ? g.id : undefined}><span class="k" aria-hidden="true">{SYM[g.kind]}</span><span class="t">{g.kind === "passage" ? g.text : g.kind === "folder" ? g.id || "the base" : titleOf(g.id)}</span></span>{/each}</span>
+        <span class="gave">{#each t.given as g, k (k)}<span class="chip" class:out={t.withdrawn?.includes(k)} title={t.withdrawn?.includes(k) ? "Taken out of the conversation afterwards: the agent is no longer sent it" : undefined} data-to={g.kind === "note" ? g.id : undefined}><span class="k" aria-hidden="true">{SYM[g.kind]}</span><span class="t">{g.kind === "passage" ? g.text : g.kind === "folder" ? g.id || "the base" : titleOf(g.id)}</span></span>{/each}</span>
       {/if}
       <span class="from">{terminal.old ? "" : t.from === "here" ? "from here" : "in its front end"}</span></div>
     {#each t.items as i, k (k)}{#if !itself(i) && !folded(t, i)}{@render item(i)}{/if}{/each}
@@ -231,6 +231,7 @@
   .doing { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-faint); }
   .gave { display: flex; flex-wrap: wrap; gap: 4px; }
   .chip { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px; border: 1px solid var(--line); font-size: 11px; color: var(--text-soft); max-width: 100%; }
+  .chip.out { text-decoration: line-through; opacity: 0.6; }
   .chip .k { color: var(--growth); }
   .chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
   /* What the agent drew on (M24, G): parts with bracketed corners, lit blue with the phrases that cite them. */

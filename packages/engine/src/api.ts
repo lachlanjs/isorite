@@ -110,7 +110,7 @@ export interface AgentCommand { name: string; description: string; hint?: string
 export interface AgentSetting { kind: "mode" | "config"; id: string; name: string; current: string; options: { value: string; name: string; description?: string }[] }
 /** A prompt and what the agent did with it. `from` says where it was asked: in the terminal, or from a page. `given`:
  *  the notes and passages put before it from the pane (M25). */
-export interface TerminalTurn { id: string; asked: string; from: "terminal" | "here"; items: TerminalItem[]; state: "running" | "done" | "stopped" | "failed"; given?: Given[]; at?: string }
+export interface TerminalTurn { id: string; asked: string; from: "terminal" | "here"; items: TerminalItem[]; state: "running" | "done" | "stopped" | "failed"; given?: Given[]; /** Which of `given` were taken out of the conversation afterwards (indexes), M36. */ withdrawn?: number[]; at?: string }
 /** An agent's session as isorite kept it (M25), in its own files beside Iso's conversations: what was asked, from
  *  where, what the agent read, changed, asked back and offered. */
 export interface AgentRecord { agent: string; name: string; session: string; title: string; at: string; last: string; turns: TerminalTurn[] }

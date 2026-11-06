@@ -50,6 +50,8 @@ export interface TerminalApi {
   take(id: string): Promise<{ note: string }>;
   /** What is in the tray, for the next prompt in the session shown, asked here or in the terminal (M25). */
   give(given: Given[]): Promise<void>;
+  /** A chip was taken out of the tray: the agent, where it can, stops being sent what was given with it (M36). */
+  withdraw(given: Given): Promise<void>;
   /** Show an agent's session (M25): a live one, one the agent carries on, or one kept, to read. */
   follow(agent: string, session: string): Promise<void>;
   /** A new session with an attached agent, from here. */
@@ -188,6 +190,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       reply: async (id, decision) => { await write("POST", "terminal/permission", { id, decision }); },
       take: (id) => write("POST", "agent/take", { id }),
       give: async (given) => { await write("POST", "acp/give", { given }); },
+      withdraw: async (given) => { await write("POST", "terminal/withdraw", { given }); },
       follow: async (agent, session) => { await write("POST", "acp/follow", { agent, session }); },
       fresh: async (agent) => { await write("POST", "acp/new", { agent }); },
       list: async () => { await write("POST", "acp/list", {}); },

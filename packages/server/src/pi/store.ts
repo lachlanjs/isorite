@@ -20,6 +20,8 @@ export interface PiRecord {
   used: number;
   /** The keys of what was given the model, so a resumed session does not give it twice. */
   given: string[];
+  /** The blocks of context taken back out, as `<key>@<turn>` (M36, step 10). */
+  withdrawn?: string[];
   /** The pane's turns, and the model's messages (pi's, kept as they are). */
   turns: TerminalTurn[];
   messages: unknown[];

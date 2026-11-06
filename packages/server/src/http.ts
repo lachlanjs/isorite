@@ -324,6 +324,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
       await pane.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim(), (parts) => givenEmbedded(parts, title, base ?? "notes")).catch(failed);
       await pane.steer(b.asked.trim()).catch(failed);
     });
+    post("/api/terminal/withdraw", z.object({ given: Given }).strict(), async (_c, b) => ({ withdrawn: pane.withdraw ? await pane.withdraw(b.given as GivenPart) : false }));
     post("/api/terminal/stop", z.object({}).strict(), async () => { await pane.interrupt().catch(failed); });
     post("/api/terminal/permission", z.object({ id: z.string().max(200), decision: z.enum(["once", "always", "reject"]) }).strict(), async (_c, b) => { await pane.reply(b.id, b.decision).catch(failed); });
   }

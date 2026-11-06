@@ -38,6 +38,16 @@ Why: isorite's agent integration has two jobs that want different tools. Buildin
 - Unit suites: all pass except `model.test.ts` (1 failure, only because the embedding model is installed on this machine; not a regression).
 - Browser suite, all four projects, one worker: 235 passed, 22 skipped, 3 failed in 11.7 minutes. The three that failed, `note-menu` (desktop-quartz), `atlas` zoom/drag (phone-quartz) and `note-drag` (phone-quartz), all pass when run alone on both quartz projects, so they are the drag and timing flakes seen before and not new. Later failures outside these are new.
 
+### Step 10: context from the tray
+
+- **Tagging.** For the native agent, each chip given with a question is its own block in the message, wrapped `[context <key> @<turn>] ... [/context]`, so the block can be found again in the saved messages. (Before, the blocks were joined into the question's text.)
+- **Withdrawing.** Taking a chip out of the tray (in the pane, the context list or the Atlas lens) tells the server (`POST /api/terminal/withdraw`), and the host marks every block given with that chip as withdrawn. From then on, every request to the model, and the input of a summary, carries one line in its place: the person took that context out, do not rely on it. The turns it came in stay in the pane with the chip struck through and a title saying why. Put in again, the chip is given afresh with the next question; the old block stays withdrawn. The withdrawn set is kept with the session.
+- **A reload is not a withdrawal.** The tray lives in the page and is empty after a reload, so withdrawing is an explicit request made when a chip is taken out, not inferred from the tray being short; a restart or a reload withdraws nothing.
+- **ACP agents.** The request is made but nothing is withdrawn: an ACP agent keeps its own history, which isorite cannot edit. The pane does not say it did.
+- **Dragging.** Notes are carried into the box from the note list and the Atlas by the existing press-and-drag gesture, and passages by "add to Iso's message" on a selection; there is no browser drag-and-drop of text into the box, and none was added.
+- **Checked.** `pi-withdraw.test.ts` (3): a withdrawn passage is gone from the next request while the other chip stays and the turn keeps it, marked; a chip put in again is given once, afresh, with the old block still withdrawn; the withdrawal survives a restart, and a restart with an empty tray withdraws nothing. `withdraw.spec.ts` on desktop and phone: removing a given chip sends the request and an ACP agent is not disturbed.
+- **Not tested.** That a summary leaves a withdrawn block out: the summary's input goes through the same function as every request, but no test inspects it.
+
 ### Step 9: tool tiers
 
 - **Tiers.** Project files: none, read, or read and write; and a shell, on or off. The base's own tools are always on. The default is read, no write, no shell (it was none before: the plan says read is on by default, because reading the project is how the agent answers about the code a note describes).

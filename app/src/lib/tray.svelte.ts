@@ -28,8 +28,12 @@ class Tray {
     if (panes.focus !== "iso") panes.unseen++;
     return true;
   }
+  /** Told when a part is taken out (by whoever holds the session), so that it can stop being sent. */
+  onRemove: ((part: Part) => void) | null = null;
   remove(part: Part): void {
+    const had = this.parts.some((p) => key(p) === key(part));
     this.parts = this.parts.filter((p) => key(p) !== key(part));
+    if (had) this.onRemove?.(part);
   }
   /** In if out, out if in: the Atlas's Iso lens. */
   toggle(part: Part): boolean {

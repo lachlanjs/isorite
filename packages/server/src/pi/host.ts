@@ -51,6 +51,12 @@ interface Compaction { enabled: boolean; reserveTokens: number; keepRecentTokens
 const SUMMARY = "[The earlier part of this conversation, summarised to make room]\n";
 const EMPTY: TerminalView = { connected: true, agent: "", session: null, title: "", busy: false, turns: [], asking: [], cost: 0, tokens: { input: 0, output: 0 }, model: "", sessions: [] };
 
+/** A block of context given from the tray is tagged with the chip it came from and the turn it came in with, so it can be
+ *  taken back out of what the model is sent when the chip is removed (M36, step 10). */
+const TAG = /^\[context (\S+) @(\S+)\]\n/;
+const WITHDRAWN = "[Context the person gave earlier here was withdrawn: they took it out of the conversation. Do not rely on it; read the notes again if you need them.]";
+const tagged = (key: string, turn: string, block: string): string => `[context ${encodeURIComponent(key)} @${turn}]\n${block}\n[/context]\n\n`;
+
 const textOf = (content: unknown): string =>
   (Array.isArray(content) ? content : []).map((b: { type?: string; text?: string }) => (b?.type === "text" ? b.text ?? "" : "")).join("");
 
@@ -87,7 +93,9 @@ export class PiHost implements PaneSessions {
   #used = 0;
   #asking = new Map<string, TerminalPermission & { wait: (d: Decision) => void }>();
   #allowed = new Set<string>();
-  #pending: { parts: Given[]; text: string } | null = null;
+  #pending: { parts: Given[]; blocks: string[] } | null = null;
+  /** The blocks taken back out: `<key>@<turn>` of each, kept with the session. */
+  #withdrawn = new Set<string>();
   #given = new Set<string>();
   /** What was said while it worked and has not reached the model: the item's id, and the text as the model will have it. */
   #queued: { id: string; body: string }[] = [];
@@ -138,7 +146,7 @@ export class PiHost implements PaneSessions {
 
   async give(parts: Given[], render: (parts: Given[]) => string): Promise<void> {
     const fresh = parts.filter((g) => !this.#given.has(givenKey(g)));
-    this.#pending = fresh.length ? { parts: fresh, text: render(fresh) } : null;
+    this.#pending = fresh.length ? { parts: fresh, blocks: fresh.map((g) => render([g])) } : null;
   }
 
   async prompt(text: string): Promise<void> {
@@ -162,8 +170,60 @@ export class PiHost implements PaneSessions {
     this.#tell();
     // What was given goes before the question, in the same message. An earlier conversation that has grown near the
     // model's window is summarised first.
-    const body = pending?.text ? `${pending.text}\n\n${text}` : text;
-    void (async () => { await this.#compactIfNeeded(agent); if (this.#stopping) throw new Error("stopped"); await agent.prompt(body); })().then(() => undefined, (e: Error) => { if (this.#stopping) this.#set("stopped"); else this.#fail(e.message); }).then(() => this.#end());
+    const message = this.#message(pending, turn.id.slice(0, 8), text);
+    void (async () => { await this.#compactIfNeeded(agent); if (this.#stopping) throw new Error("stopped"); await agent.prompt(message); })().then(() => undefined, (e: Error) => { if (this.#stopping) this.#set("stopped"); else this.#fail(e.message); }).then(() => this.#end());
+  }
+
+  /** The person's message for the model: each block given with it, tagged, then what they asked. */
+  #message(pending: { parts: Given[]; blocks: string[] } | null, turn: string, text: string) {
+    const blocks = (pending?.parts ?? []).map((g, i) => tagged(givenKey(g), turn, pending!.blocks[i] ?? ""));
+    return { role: "user" as const, content: [...blocks, text].map((t) => ({ type: "text" as const, text: t })), timestamp: this.#now() };
+  }
+
+  /** What the model is sent: the messages, with each withdrawn block replaced by a line saying so. */
+  #redact(messages: AgentMessage[]): AgentMessage[] {
+    if (!this.#withdrawn.size) return messages;
+    return messages.map((m) => {
+      const msg = m as { role?: string; content?: unknown };
+      if (msg.role !== "user" || !Array.isArray(msg.content)) return m;
+      let changed = false;
+      const content = (msg.content as { type?: string; text?: string }[]).map((c) => {
+        const tag = c?.type === "text" && c.text ? TAG.exec(c.text) : null;
+        if (!tag || !this.#withdrawn.has(`${decodeURIComponent(tag[1]!)}@${tag[2]}`)) return c;
+        changed = true;
+        return { type: "text", text: WITHDRAWN };
+      });
+      return changed ? ({ ...m, content } as AgentMessage) : m;
+    });
+  }
+
+  /** The person took a chip out of the tray: the block given with it comes out of everything the model is sent from now
+   *  on. The turns it came in stay as they were, marked. Says whether there was anything to take out. */
+  async withdraw(g: Given): Promise<boolean> {
+    const key = givenKey(g);
+    if (this.#pending) {
+      const keep = this.#pending.parts.map((p, i) => ({ p, b: this.#pending!.blocks[i]! })).filter((x) => givenKey(x.p) !== key);
+      this.#pending = keep.length ? { parts: keep.map((x) => x.p), blocks: keep.map((x) => x.b) } : null;
+    }
+    if (!this.#given.has(key)) return false;
+    // Taken back also means it is given afresh if it is put in again.
+    this.#given.delete(key);
+    for (const m of this.#agent?.state.messages ?? []) {
+      const msg = m as { role?: string; content?: unknown };
+      if (msg.role !== "user" || !Array.isArray(msg.content)) continue;
+      for (const c of msg.content as { type?: string; text?: string }[]) {
+        const tag = c?.type === "text" && c.text ? TAG.exec(c.text) : null;
+        if (tag && decodeURIComponent(tag[1]!) === key) this.#withdrawn.add(`${key}@${tag[2]}`);
+      }
+    }
+    this.#turns = this.#turns.map((t) => {
+      const at = (t.given ?? []).flatMap((x, i) => (givenKey(x) === key && !t.withdrawn?.includes(i) ? [i] : []));
+      return at.length ? { ...t, withdrawn: [...(t.withdrawn ?? []), ...at] } : t;
+    });
+    this.#save();
+    this.#keep();
+    this.#tell();
+    return true;
   }
 
   async steer(text: string): Promise<void> {
@@ -178,11 +238,10 @@ export class PiHost implements PaneSessions {
     const pending = this.#pending;
     this.#pending = null;
     if (pending) for (const g of pending.parts) this.#given.add(givenKey(g));
-    const body = pending?.text ? `${pending.text}\n\n${text}` : text;
     const id = randomUUID();
-    this.#queued.push({ id, body });
+    const message = this.#message(pending, (this.#turns.at(-1)?.id ?? id).slice(0, 8), text);
+    this.#queued.push({ id, body: userText(message.content) });
     this.#edit((items) => [...items, { kind: "message", id, text, mode, state: "queued" }]);
-    const message = { role: "user" as const, content: [{ type: "text" as const, text: body }], timestamp: this.#now() };
     if (mode === "steer") agent.steer(message); else agent.followUp(message);
     this.#tell();
   }
@@ -206,7 +265,7 @@ export class PiHost implements PaneSessions {
   }
   async fresh(_agent: string): Promise<void> {
     if (this.#busy) throw new Error("the agent is working: stop it first");
-    this.#agent = null; this.#session = ""; this.#turns = []; this.#title = ""; this.#cost = 0; this.#used = 0; this.#given.clear(); this.#pending = null; this.#problem = "";
+    this.#agent = null; this.#session = ""; this.#turns = []; this.#title = ""; this.#cost = 0; this.#used = 0; this.#given.clear(); this.#withdrawn.clear(); this.#pending = null; this.#problem = "";
     this.#tell();
   }
   set(): void { throw new Error(`${this.#name} offers no modes or options yet`); }
@@ -227,6 +286,7 @@ export class PiHost implements PaneSessions {
     this.#cost = kept.cost;
     this.#used = kept.used;
     this.#given = new Set(kept.given);
+    this.#withdrawn = new Set(kept.withdrawn ?? []);
     this.#tell();
   }
 
@@ -234,7 +294,7 @@ export class PiHost implements PaneSessions {
     if (!this.#store || !this.#agent || !this.#turns.length) return;
     const record: PiRecord = {
       version: 1, session: this.#session, title: this.#title, at: this.#at, last: this.#turns.at(-1)?.at ?? this.#at, cost: this.#cost, used: this.#used,
-      given: [...this.#given], turns: this.#turns, // The system prompt is the agent's own at every start, so a saved session does not carry an old one.
+      given: [...this.#given], withdrawn: [...this.#withdrawn], turns: this.#turns, // The system prompt is the agent's own at every start, so a saved session does not carry an old one.
       messages: (JSON.parse(JSON.stringify(this.#agent.state.messages)) as { role?: string }[]).filter((m) => m.role !== "system"),
     };
     this.#store.save(record).catch((e: Error) => { this.#problem = `Could not keep this session: ${e.message}`; this.#tell(); });
@@ -246,6 +306,7 @@ export class PiHost implements PaneSessions {
     this.#agent = new Agent({
       initialState: { systemPrompt: INSTRUCTIONS, model: this.#model, ...(kept ? { messages: kept.messages as never } : {}) },
       // Through this host, so a model chosen later (`use`) is the one the next request goes to.
+      transformContext: async (messages) => this.#redact(messages),
       streamFn: ((...args: Parameters<NonNullable<StreamFn>>) => this.#streamFn!(...args)) as StreamFn,
       ...(this.#getApiKey ? { getApiKey: this.#getApiKey } : {}),
       sessionId: this.#session,
@@ -372,7 +433,7 @@ export class PiHost implements PaneSessions {
     this.#tell();
     this.#summarising = new AbortController();
     try {
-      const summary = await generateSummary(messages.slice(from, cut), this.#model, settings.reserveTokens, undefined, undefined, this.#summarising.signal, undefined, previous, undefined, this.#streamFn);
+      const summary = await generateSummary(this.#redact(messages.slice(from, cut)), this.#model, settings.reserveTokens, undefined, undefined, this.#summarising.signal, undefined, previous, undefined, this.#streamFn);
       const stand = { role: "user" as const, content: [{ type: "text" as const, text: SUMMARY + summary }], timestamp: this.#now() };
       // The recent answers' own counts describe the context as it was before: they are not trusted any more, so the
       // size of what stands now is estimated until the model's next answer gives a count.

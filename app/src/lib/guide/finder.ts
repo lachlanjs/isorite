@@ -49,6 +49,7 @@ export class FinderTerminal implements TerminalApi {
   async reply(): Promise<void> { throw new Error("the finder asks nothing"); }
   async take(): Promise<{ note: string }> { throw new Error("the finder offers nothing to keep"); }
   async give(given: Given[]): Promise<void> { this.#given = given; }
+  async withdraw(): Promise<void> { /* the finder is told nothing it keeps */ }
   async follow(): Promise<void> { /* its one session */ }
   async fresh(): Promise<void> { this.#turns = []; this.#given = []; this.#changed(); }
   async list(): Promise<void> { /* its one session */ }

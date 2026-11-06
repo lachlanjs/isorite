@@ -23,6 +23,9 @@ export interface PaneSessions {
   interrupt(): Promise<void>;
   /** Notes and passages given from the pane: those not given in the session yet go before its next prompt. */
   give(parts: Given[], render: (parts: Given[]) => string, embed?: Embed): Promise<void>;
+  /** Take a chip's block back out of what the model is sent from now on (M36). Says whether there was one to take out.
+   *  A host whose agent keeps its own history cannot, and leaves this out. */
+  withdraw?(g: Given): Promise<boolean>;
   /** Answer what the agent asked before doing something. */
   reply(id: string, decision: "once" | "always" | "reject"): Promise<void>;
   /** Show a session: a live one, one that can be carried on, or one kept to read. */

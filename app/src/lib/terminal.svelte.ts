@@ -9,7 +9,7 @@ import type { ConversationSummary, Decision, EngineEvent, Given, TerminalItem, T
 import type { TerminalApi } from "./api.ts";
 import { app } from "./app.svelte.ts";
 import { panes } from "./panes.svelte.ts";
-import { tray } from "./tray.svelte.ts";
+import { tray, type Part } from "./tray.svelte.ts";
 
 const givenOf = (): Given[] => tray.sent.map((p) => (p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }));
 
@@ -102,6 +102,11 @@ class TerminalState {
     if (!this.acp || !this.api) return;
     try { await this.api.give(givenOf()); } catch (e) { this.problem = (e as Error).message; }
   }
+  /** A chip was taken out of the tray: what was given with it is taken back out of what the agent is sent. */
+  async withdraw(p: Part): Promise<void> {
+    if (!this.acp || !this.api) return;
+    try { await this.api.withdraw(p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }); } catch { /* an agent that cannot take it back keeps what it was given */ }
+  }
   async follow(agent: string, session: string): Promise<void> { this.problem = ""; this.old = null; try { await this.api?.follow(agent, session); } catch (e) { this.problem = (e as Error).message; } }
   /** Set a mode or option of the session shown; the server's view settles it. */
   async set(kind: "mode" | "config", id: string, value: string): Promise<void> {
@@ -151,3 +156,4 @@ class TerminalState {
 }
 
 export const terminal = new TerminalState();
+tray.onRemove = (part) => void terminal.withdraw(part);
