@@ -123,7 +123,8 @@ function brackets(): { at: (el: Element | null) => void; place: () => void } {
 export function install(): () => void {
   const ring = brackets();
   const over = (e: PointerEvent): void => {
-    if (e.pointerType !== "mouse") return;
+    // Not while a button is held: what a drag passes over is not being touched.
+    if (e.pointerType !== "mouse" || e.buttons) return;
     const el = (e.target as Element).closest?.<HTMLElement>(TOUCHED);
     if (el && !(e.relatedTarget instanceof Node && el.contains(e.relatedTarget))) lustre(el);
   };

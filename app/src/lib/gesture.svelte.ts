@@ -167,3 +167,9 @@ function dirAt(x: number, y: number): string | null {
   const d = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest<HTMLElement>("[data-dir]")?.dataset.dir;
   return d === undefined ? null : d;
 }
+
+/** Carried out to the page, so a pane that clips what is inside it does not cut short what is carried over it. */
+export function toBody(node: HTMLElement): { destroy: () => void } {
+  document.body.append(node);
+  return { destroy: () => node.remove() };
+}

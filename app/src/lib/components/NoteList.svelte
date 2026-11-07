@@ -202,10 +202,11 @@
 
   {#if sent}<p class="soft" role="status">{sent}</p>{/if}
   {#if asking}
-    <div class="frame ask" role="alertdialog" aria-label="Delete">
+    <!-- Over the list, at the top of what is in view, however far down the row asked about was: the list stays where it was. -->
+    <div class="ask-at"><div class="frame ask" role="alertdialog" aria-label="Delete">
       <span>{asking.text}</span>
       <div class="row"><button class="btn danger" type="button" onclick={() => void confirmRemove()}>{asking.item.kind === "folder" ? `delete ${asking.item.id}` : "delete"}</button><button class="btn quiet" type="button" onclick={() => (asking = null)}>keep it</button></div>
-    </div>
+    </div></div>
   {/if}
   <HoldTags {g} mode="ghost" />
 
@@ -257,7 +258,8 @@
   li.sending, h2.sending { background: var(--growth-soft); }
   .head { position: relative; }
   .acts { display: flex; gap: var(--space-2); }
-  .ask { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); }
+  .ask-at { position: sticky; top: 8px; height: 0; z-index: 40; }
+  .ask { position: absolute; left: 0; right: 0; top: 0; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); filter: var(--lift-drop); animation: appear var(--t-change) var(--ease-out); }
   .notes:has(:global(.tags)), .notes:has(:global(.ghost)) { user-select: none; -webkit-user-select: none; }
   li, .head { touch-action: pan-y; -webkit-touch-callout: none; }
   ul { list-style: none; margin: 0; padding: 0; }

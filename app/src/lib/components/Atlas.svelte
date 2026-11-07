@@ -17,7 +17,7 @@
   import { CELL, MAX_ZOOM, MIN_ZOOM, TITLE_UNITS, TITLE_PX, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
   import { satellites, withoutNotes, withProspects, type Prospect } from "$lib/atlas/kinds.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
-  import { Gesture, type Item } from "$lib/gesture.svelte.ts";
+  import { Gesture, toBody, type Item } from "$lib/gesture.svelte.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
   import HoldTags from "./HoldTags.svelte";
   import AtlasFolder from "./AtlasFolder.svelte";
@@ -498,10 +498,12 @@
     if (!viewport || !item || phase === "idle") return;
     const held = viewport.querySelector<HTMLElement>(item.kind === "folder" ? `[data-folder="${CSS.escape(item.id)}"]` : `[data-note="${CSS.escape(item.id)}"]`);
     const target = phase === "moving" && over ? viewport.querySelector<HTMLElement>(`[data-folder="${CSS.escape(over)}"]`) : null;
-    const cls = phase === "moving" ? "g-lifted" : tag === "delete" ? "g-doomed" : tag === "send" ? "g-sending" : "";
-    if (cls) held?.classList.add(cls);
-    target?.classList.add("g-over");
-    return () => { held?.classList.remove("g-lifted", "g-doomed", "g-sending"); target?.classList.remove("g-over"); };
+    // An attribute, not a class: a note's class is written whole whenever any part of it changes (dimmed as the pointer
+    // goes by), which took a class put on by hand off with it, and the note carried flashed back to full strength.
+    const mark = phase === "moving" ? "lifted" : tag === "delete" ? "doomed" : tag === "send" ? "sending" : "";
+    if (mark) held?.setAttribute("data-g", mark);
+    target?.setAttribute("data-g", "over");
+    return () => { held?.removeAttribute("data-g"); target?.removeAttribute("data-g"); };
   });
   function unhold(): void { g.stop(); clearTimeout(holdShow); clearTimeout(holdDone); holdShow = holdDone = undefined; gripped = null; if (!making) grasp = null; }
   /** The deepest folder of the base holding a place on the map (in cells): "" for the top. */
@@ -840,7 +842,7 @@
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
           <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} iso={isoMark(n.item.ref)} file={report.files?.[n.item.ref]?.kind ?? ""} prospect={n.item.ref.startsWith("?")} given={isoLens && givenNotes.has(n.item.ref)} held={isoLens && !givenNotes.has(n.item.ref) && readNotes.has(n.item.ref) ? "on" : ""} changed={isoLens && changedByIso.has(n.item.ref)} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={!!lit && !mark} href={noteHref(opens(n.item.ref))}
-            onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; pointing.onAtlas = pointed; }} />
+            onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { if (on && (dragged || g.phase === "moving")) return; pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; pointing.onAtlas = pointed; }} />
       {/each}
       {#each sats as s (s.key)}
         {#if s.kind === "web"}
@@ -860,7 +862,7 @@
       {/each}
       </div>
       {#if grasp}
-        <div class="grasp" class:folder={grasp.folder} style="--x:{grasp.gx};--y:{grasp.gy}">
+        <div class="grasp" class:folder={grasp.folder} class:inward={!!viewport && !!L && view.x + grasp.gx * L.cell * view.k > viewport.clientWidth - 220} style="--x:{grasp.gx};--y:{grasp.gy}">
           <svg viewBox="0 0 20 24" width="20" height="24" aria-hidden="true">{#if grasp.folder}<path d="M1.5 5.5h6l2 2.5h9v12.5h-17z" />{:else}<path d="M3.5 1.5h9l4.5 4.5v16.5h-13.5z M12.5 1.5v4.5h4.5" /><path class="ln" d="M6.5 11h7.5M6.5 14.5h7.5M6.5 18h5" />{/if}</svg>
           <span>{grasp.folder ? "a new folder" : "a new note"}{grasp.dir ? ` in ${grasp.dir}` : ""}</span>
         </div>
@@ -902,7 +904,7 @@
       </div>
     {/if}
     {#if tray.carrying}
-      <div class="carried" class:over={tray.carrying.over} style="left:{carryAt.x}px;top:{carryAt.y}px" aria-hidden="true">{tray.carrying.part.kind === "folder" ? "▭" : "▣"} {tray.carrying.part.title}</div>
+      <div class="carried" use:toBody class:over={tray.carrying.over} style="left:{carryAt.x}px;top:{carryAt.y}px" aria-hidden="true">{tray.carrying.part.kind === "folder" ? "▭" : "▣"} {tray.carrying.part.title}</div>
     {/if}
   {/if}
 </div>
@@ -914,13 +916,13 @@
   .atlas-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
   .atlas-world.moving { will-change: transform; }
   /* The dot grid, moved with the map by a transform a cell at most, so that a pan paints nothing. */
-  .asking { position: absolute; z-index: 30; left: 50%; top: 24px; transform: translateX(-50%); width: min(380px, calc(100% - 24px)); display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); font-size: 13px; line-height: 1.45; user-select: text; }
+  .asking { position: absolute; z-index: 30; left: 50%; top: 24px; transform: translateX(-50%); filter: var(--lift-drop); animation: appear var(--t-change) var(--ease-out); width: min(380px, calc(100% - 24px)); display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); font-size: 13px; line-height: 1.45; user-select: text; }
   .asking .row { display: flex; gap: var(--space-2); }
   /* What a held item shows (M33), on the map's own elements. */
-  :global(.g-lifted) { opacity: .45; }
-  :global(.g-doomed) { outline: calc(2.5 * var(--px, 1px)) solid var(--rose); outline-offset: calc(2 * var(--px, 1px)); background: var(--rose-soft); }
-  :global(.g-sending) { outline: calc(2.5 * var(--px, 1px)) solid var(--growth); outline-offset: calc(2 * var(--px, 1px)); }
-  :global(.g-over) { outline: calc(2 * var(--px, 1px)) dashed var(--lattice); outline-offset: calc(3 * var(--px, 1px)); }
+  :global([data-g="lifted"]) { opacity: .45; transition: opacity var(--t-ack) var(--ease-out); }
+  :global([data-g="doomed"]) { outline: calc(2.5 * var(--px, 1px)) solid var(--rose); outline-offset: calc(2 * var(--px, 1px)); background: var(--rose-soft); }
+  :global([data-g="sending"]) { outline: calc(2.5 * var(--px, 1px)) solid var(--growth); outline-offset: calc(2 * var(--px, 1px)); }
+  :global([data-g="over"]) { outline: calc(2 * var(--px, 1px)) dashed var(--lattice); outline-offset: calc(3 * var(--px, 1px)); }
   .ground { position: absolute; inset: -56px; opacity: .5; z-index: -1; pointer-events: none; will-change: transform; }
   .scaled { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
   /* A link out of the base (M12): a small block beside its note, in the map's units. */
@@ -946,6 +948,8 @@
   .grasp svg path { fill: var(--growth-soft); stroke: var(--growth); stroke-width: 1.5; stroke-linejoin: round; stroke-dasharray: 2 2.5; animation: march .6s linear infinite; }
   .grasp svg path.ln { fill: none; stroke-dasharray: none; animation: none; }
   .grasp span { white-space: nowrap; background: var(--ground-0); padding: 0 4px; }
+  /* Near the pane's right edge its words go to the left of the icon, which stays where it was held. */
+  .grasp.inward { flex-direction: row-reverse; translate: calc(-100% + 20px) 0; }
   @media (prefers-reduced-motion: reduce) { .grasp svg path { animation: none; } }
   @keyframes march { to { stroke-dashoffset: -9; } }
   .given { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--growth); font-size: 12px; z-index: 2; }
@@ -958,7 +962,7 @@
   .legend .d { width: 7px; height: 7px; background: var(--growth); transform: rotate(45deg); }
   .legend .n { width: 14px; height: 14px; background: var(--growth); color: var(--ground-0); font-size: 9px; font-weight: 700; }
   /* A note carried out of the Atlas towards Iso's pane. */
-  .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font-size: 12px; white-space: nowrap; }
+  .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font: 12px var(--font-ui); color: var(--text); white-space: nowrap; box-shadow: var(--lift); animation: appear var(--t-ack) var(--ease-out); }
   .carried.over { border-color: var(--growth); }
   .notice { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--rose); color: var(--rose); font-size: 12px; z-index: 2; }
   /* A pip at the edge (M17): towards the open note (the text's colour), or what is pointed at elsewhere. */
