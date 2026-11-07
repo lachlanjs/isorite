@@ -379,7 +379,9 @@
     .note.timed { padding-left: calc(var(--space-4) + 40px); }
     .tl-col { top: 40px; left: 8px; }
   }
-  .choice { padding: var(--space-6) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); --edge: var(--rose); }
+  /* Held at the top of the pane, over the note: it comes when the note is saved, and you may be far down it then, where
+     at the head of the note it was out of sight and nothing said why the note had stopped saving. */
+  .choice { position: sticky; top: var(--space-3); z-index: 5; filter: var(--lift-drop); animation: appear var(--t-change) var(--ease-out); padding: var(--space-6) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); --edge: var(--rose); }
   .row { display: flex; gap: var(--space-2); }
   .bad { color: var(--rose); }
   .changes { position: sticky; bottom: 28px; z-index: 8; display: flex; align-items: center; gap: 12px; padding: 10px 2px; background: var(--ground-0); border-top: 1px solid var(--line); }

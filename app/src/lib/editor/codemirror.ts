@@ -6,8 +6,8 @@ import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirro
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
-import { EditorState, Prec } from "@codemirror/state";
-import { EditorView, drawSelection, keymap, placeholder } from "@codemirror/view";
+import { EditorState, Prec, RangeSet, StateEffect } from "@codemirror/state";
+import { Decoration, EditorView, ViewPlugin, drawSelection, keymap, placeholder, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { codeHighlighter, languages } from "$lib/code.ts";
 import { blocksTheme, embeds, renderedBlocks, type Embeds } from "./blocks.ts";
@@ -141,6 +141,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       // Typing keeps a few lines of room below the cursor (and above, going up): the line written is not pressed to
       // the pane's edge. CodeMirror keeps it for every scroller it is in, the Note pane's own included.
       EditorView.cursorScrollMargin.of({ x: 5, y: 80 }),
+      arrived, arrivedTheme,
       // Before Markdown's own Enter, which is set high.
       Prec.highest(keymap.of([{ key: "Enter", run: endList }])),
       markdown({ base: markdownLanguage, extensions: [mathsSyntax], completeHTMLTags: false, codeLanguages: languages }),
@@ -219,9 +220,66 @@ export function applyFormat(view: EditorView, what: Format): void {
   view.focus();
 }
 
-/** Replace the whole text (their version after a conflict, a note changed elsewhere), keeping the cursor where it can. */
+/** Take a text written elsewhere (an agent's edit, their version after a conflict, a version restored). Only what
+ *  differs is replaced, between what the two have in common at the start and at the end: the cursor stays with the
+ *  words it was in, the lines around are kept as they are (so the pane's scroll holds on to them, and the page does
+ *  not move), and what came in is lit for a moment. Replaced whole, the cursor kept its offset into other words and
+ *  every edit moved the page. */
 export function setText(view: EditorView, text: string): void {
-  if (text === view.state.doc.toString()) return;
-  const at = Math.min(view.state.selection.main.head, text.length);
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, selection: { anchor: at } });
+  const old = view.state.doc.toString();
+  if (text === old) return;
+  const n = Math.min(old.length, text.length);
+  let a = 0;
+  while (a < n && old.charCodeAt(a) === text.charCodeAt(a)) a++;
+  let b = 0;
+  while (b < n - a && old.charCodeAt(old.length - 1 - b) === text.charCodeAt(text.length - 1 - b)) b++;
+  // Not between the halves of a character outside the BMP.
+  if (a > 0 && /[\uD800-\uDBFF]/.test(old[a - 1]!)) a--;
+  if (b > 0 && /[\uDC00-\uDFFF]/.test(old[old.length - b]!)) b--;
+  const insert = text.slice(a, text.length - b);
+  // The words at the top of what is in view stay where they are on the screen. CodeMirror holds them by the heights it
+  // has measured, and a paragraph that came in above, never drawn, it can only guess at: it is put right once drawn.
+  const scroller = scrollParent(view.dom), box = scroller?.getBoundingClientRect();
+  const top = box ? view.posAtCoords({ x: view.contentDOM.getBoundingClientRect().left + 1, y: Math.max(box.top, view.contentDOM.getBoundingClientRect().top) + 2 }, false) : null;
+  const was = top === null ? null : view.coordsAtPos(top, 1)?.top ?? null;
+  const tr = view.state.update({ changes: { from: a, to: old.length - b, insert }, effects: insert.trim() ? arrive.of({ from: a, to: a + insert.length }) : [] });
+  view.dispatch(tr);
+  if (scroller && top !== null && was !== null && top >= a) {
+    const at = tr.changes.mapPos(top, 1);
+    requestAnimationFrame(() => { const now = view.coordsAtPos(at, 1)?.top; if (now !== undefined && Math.abs(now - was) >= 1) scroller.scrollTop += now - was; });
+  }
 }
+/** The nearest element above `el` that scrolls up and down. */
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  for (let e = el.parentElement; e; e = e.parentElement) if (e.scrollHeight > e.clientHeight && /auto|scroll/.test(getComputedStyle(e).overflowY)) return e;
+  return null;
+}
+
+// What came in from elsewhere glows in the agent's gold and fades (--t-result twice over). The fade is set back by the
+// time gone whenever the line is drawn again, so a redraw (the cursor arriving, say) does not start it over.
+const ARRIVE_MS = 1200;
+const arrive = StateEffect.define<{ from: number; to: number }>();
+const arrived = ViewPlugin.fromClass(class {
+  ranges: { from: number; to: number }[] = [];
+  t0 = 0;
+  timer: ReturnType<typeof setTimeout> | undefined;
+  decorations: DecorationSet = Decoration.none;
+  constructor(readonly view: EditorView) {}
+  update(u: ViewUpdate): void {
+    if (u.docChanged) this.ranges = this.ranges.map((r) => ({ from: u.changes.mapPos(r.from, 1), to: u.changes.mapPos(r.to, -1) })).filter((r) => r.to > r.from);
+    for (const tr of u.transactions) for (const e of tr.effects) if (e.is(arrive)) {
+      this.ranges = [e.value];
+      this.t0 = performance.now();
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => { this.ranges = []; this.view.dispatch({}); }, ARRIVE_MS);
+    }
+    const gone = Math.round(performance.now() - this.t0);
+    this.decorations = this.ranges.length ? RangeSet.of(this.ranges.map((r) => Decoration.mark({ class: "cm-arrived", attributes: { style: `animation-delay: -${gone}ms` } }).range(r.from, r.to)), true) : Decoration.none;
+  }
+  destroy(): void { clearTimeout(this.timer); }
+}, { decorations: (p) => p.decorations });
+const arrivedTheme = EditorView.theme({
+  ".cm-arrived": { animation: `cm-arrived ${ARRIVE_MS}ms cubic-bezier(.2, .7, .2, 1) forwards`, borderRadius: "2px" },
+  "@keyframes cm-arrived": { from: { backgroundColor: "color-mix(in srgb, var(--growth) 34%, transparent)", boxShadow: "0 0 10px color-mix(in srgb, var(--growth) 30%, transparent)" }, to: { backgroundColor: "transparent", boxShadow: "0 0 0 transparent" } },
+  "@media (prefers-reduced-motion: reduce)": { ".cm-arrived": { animation: "none" } },
+});
