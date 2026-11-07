@@ -45,13 +45,23 @@ class LangWidget extends WidgetType {
 class MathsWidget extends WidgetType {
   constructor(readonly source: string) { super(); }
   eq(other: MathsWidget): boolean { return other.source === this.source; }
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const span = document.createElement("span");
     span.className = "cm-lp-imaths";
     const { tex, display } = formula(this.source);
     span.innerHTML = katex.renderToString(tex, { displayMode: display, throwOnError: false });
+    // A click on a formula opens its source with the cursor at its start, as a click on a display block does.
+    span.title = "Click to edit";
+    span.addEventListener("mousedown", (e) => {
+      if (e.button !== 0 || !view.state.facet(EditorView.editable)) return;
+      e.preventDefault();
+      const at = view.posAtDOM(span);
+      view.dispatch({ selection: { anchor: at }, scrollIntoView: true });
+      view.focus();
+    });
     return span;
   }
+  ignoreEvent(): boolean { return true; }
 }
 
 // A picture the note shows (M22): its own block, centred, or at the left with the text beside it. One that can't
@@ -356,6 +366,8 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-lp-codeblock.cm-lp-fence": { lineHeight: "12px", position: "relative" },
   ".cm-lp-lang": { position: "absolute", top: "8px", right: "12px", fontFamily: "var(--font-ui)", fontSize: "12px", lineHeight: "16px", color: "var(--text-faint)", pointerEvents: "none" },
   ".cm-lp-mathsrc": { fontFamily: "var(--font-mono)", fontSize: ".86em", color: "var(--text-soft)" },
+  // One box, so a click anywhere on a formula (between its glyphs too) is a click on it.
+  ".cm-lp-imaths": { display: "inline-block", cursor: "text" },
   ".cm-lp-imaths .katex": { fontSize: "1.05em" },
   // A displayed equation written on a line of its own inside a paragraph ($$…$$ with no empty line round it) is
   // drawn in the line. KaTeX gives it a margin of a whole line above and below, which with the line's own height

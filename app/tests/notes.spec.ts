@@ -165,6 +165,28 @@ test("changed elsewhere in another paragraph while you write: both are kept, and
   await expect(editor(page)).toContainText("First paragraph. Typed here.");
 });
 
+test("a click on a formula, inline, displayed in a sentence or on its own lines, puts the cursor at its start", async ({ page }) => {
+  const name = test.info().project.name, id = `basics/formulas-${name}`;
+  const made = await page.request.get("api/session").then((r) => r.json()) as { token: string };
+  const text = `---\ntype: Concept\ntitle: Formulas ${name}\n---\n\nInline $x^2$ here.\n\nShown so $$\\sum_i a_i$$ holds.\n\n$$\n\\int_0^1 f\n$$\n\nThe end.\n`;
+  await page.request.post(`api/note?id=${id}`, { data: { text }, headers: { "x-isorite-token": made.token, Origin: new URL(test.info().project.use.baseURL!).origin } });
+  await page.goto(`#/n/${id}`);
+  await expect(editor(page)).toContainText("The end.");
+  const formulas = notePane(page).locator(".cm-lp-imaths, .cm-lp-maths");
+  await expect(formulas).toHaveCount(3);
+  let want = text;
+  for (const [k, source] of [[0, "$x^2$"], [1, "$$\\sum_i a_i$$"], [2, "$$\n\\int_0^1 f\n$$"]] as const) {
+    // Away from the cursor, each is drawn; clicked, its source is there to edit, the cursor before it.
+    await editor(page).getByText("The end.").click();
+    await expect(formulas).toHaveCount(3);
+    await formulas.nth(k).click();
+    await page.keyboard.type("Q");
+    want = want.replace(source, () => `Q${source}`); // a function: in a replacement string, $$ is one $
+    await saved(page);
+    expect(await file(page, id)).toBe(want);
+  }
+});
+
 test("what is typed and not yet saved survives the tab closing", async ({ page, context }) => {
   const name = test.info().project.name;
   await page.goto("#/n/basics/surprise");
