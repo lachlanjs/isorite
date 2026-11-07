@@ -9,8 +9,9 @@
   const GROW = 1100, STAND = 1100, FPS = 24;
 
   const c = $derived(CRYSTALS[crystalOf(id)]!);
-  // Small, only its first growth, so it reads as its shape and not as a blot; scaled up to fill the box.
-  const reach = $derived(size >= 40 ? 1 : 0.45);
+  // Whole from 24 px; smaller, the inner seven tenths, scaled up to fill the box, so it reads as its shape. (Crystals
+  // are kept to a few dozen lines, crystal.ts, so even a small one is drawn open, not as a blot.)
+  const reach = $derived(size >= 24 ? 1 : 0.7);
   const segs = $derived(lines(c).filter((s) => s.out < reach).sort((a, b) => a.out - b.out));
   const zoom = $derived.by(() => { const r = Math.max(...segs.map((s) => Math.hypot(s.x2, s.y2))); return r > 0 ? 21 / r : 1; });
   // A line of about a pixel on the screen, a little finer for a crystal of many segments.

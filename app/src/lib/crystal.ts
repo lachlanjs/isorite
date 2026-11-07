@@ -14,10 +14,17 @@ function rng(seed: number): () => number {
 // Every [+X] has its [-X] at the same place, so each arm is mirror-symmetric.
 const RULES = ["F[+F][-F]F", "FF[+F][-F]F", "F[+F][-F][F]", "F[++F][--F]F", "F[+F][-F]F[+F][-F]", "F[+FF][-FF]F", "FF[+F][-F][++F][--F]", "F[+F[+F][-F]][-F[+F][-F]]F"];
 const FOLDS = [3, 4, 5, 6, 6, 6, 7, 8, 8];
+/** The most lines a crystal is drawn with, all its arms together. */
+const LINES = 96;
 
 function grow(seed: number): Crystal {
   const r = rng(seed + 1), n = FOLDS[Math.floor(r() * FOLDS.length)]!, rule = RULES[Math.floor(r() * RULES.length)]!;
-  const turn = (180 / n) * (r() < 0.5 ? 1 : 2) * (n <= 4 && r() < 0.5 ? 0.5 : 1), depth = rule.length > 14 ? 2 : r() < 0.55 ? 3 : 2;
+  const turn = (180 / n) * (r() < 0.5 ? 1 : 2) * (n <= 4 && r() < 0.5 ? 0.5 : 1);
+  // Grown as far as its rule and the session's id say, but never past LINES in all: a crystal is a mark a few dozen
+  // pixels wide, and past that its lines run together into a blot. A rich rule stops a generation sooner.
+  let depth = rule.length > 14 ? 2 : r() < 0.55 ? 3 : 2;
+  const fs = (rule.match(/F/g) ?? []).length;
+  while (depth > 1 && fs ** depth * n > LINES) depth--;
   let s = "F";
   for (let k = 0; k < depth; k++) s = s.replace(/F/g, rule);
   const segs: Segment[] = [], stack: [number, number, number, number][] = [];
