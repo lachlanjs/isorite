@@ -23,8 +23,9 @@ export type Layout = (typeof LAYOUTS)[number];
  *  here when off). */
 export const SWITCHES = { note: ["provenance", "timeline"], atlas: ["questions", "problems", "web", "code", "pictures", "artifacts", "context"], iso: ["notes", "files", "run"] } as const;
 export type Switch = (typeof SWITCHES)[keyof typeof SWITCHES][number];
-// The Atlas's kinds (M12): open questions and problems on the map from the first, links out of it when asked for.
-const OFF: Record<Switch, boolean> = { provenance: false, timeline: false, questions: true, problems: true, web: false, code: false, pictures: false, artifacts: false, context: false, notes: true, files: false, run: false };
+// The Atlas's kinds (M12): open questions and problems on the map from the first, links out of it when asked for;
+// what the agent reads lit from the first too, as the agent pane says it will be.
+const OFF: Record<Switch, boolean> = { provenance: false, timeline: false, questions: true, problems: true, web: false, code: false, pictures: false, artifacts: false, context: true, notes: true, files: false, run: false };
 
 /** The panes' relative widths when side by side. */
 const WIDTHS = { note: 1.25, atlas: 1, iso: 1.05 };

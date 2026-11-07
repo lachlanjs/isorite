@@ -27,6 +27,11 @@
   const width = (r: { strong: boolean; trunk: boolean }): string => `${(r.strong ? (r.trunk ? 3 : 1.5) : r.trunk ? 2 : 1) / k}px`;
 </script>
 
+<!-- A pulse in three strokes, widest and faintest first: the halo (blurred, so it reads as light around the line), the
+     glow, the sheen at its heart. -->
+{#snippet pulse(d: string, tone: string, w: number)}
+  <path class="pulse halo {tone}" pathLength="1" {d} style:stroke-width="{10 * w / k}px" style:filter="blur({3 / k}px)" /><path class="pulse glow {tone}" pathLength="1" {d} style:stroke-width="{4 * w / k}px" /><path class="pulse core {tone}" pathLength="1" {d} style:stroke-width="{1.3 * w / k}px" />
+{/snippet}
 <svg class="routes" aria-hidden="true" data-requires={counts.requires} data-builds={counts.builds} data-uses={counts.uses}>
   <g transform="scale({k})">
     {#if beat === "retract"}
@@ -37,13 +42,13 @@
       {#each rest as r (r.key)}<path class={r.strong ? "base" : "base weak"} class:trunk={r.trunk} d={r.d} />{/each}
       {#each hot as r (r.key)}
         {#if pointed && r.kind !== "iso"}<path class="along touch" pathLength="1" d={r.d} style:stroke-width="{2 / k}px" />
-          <path class="pulse glow blue" pathLength="1" d={r.d} style:stroke-width="{4 / k}px" /><path class="pulse core" pathLength="1" d={r.d} style:stroke-width="{1.3 / k}px" />
+          {@render pulse(r.d, "blue", 1)}
         {:else}<path class="lit {r.kind}" class:still={r.still} d={r.d} />
-          {#if !r.still && r.kind !== "uses"}<path class="pulse glow loop pk-{r.kind}" pathLength="1" d={r.d} style:stroke-width="{4 / k}px" /><path class="pulse core loop" pathLength="1" d={r.d} style:stroke-width="{1.3 / k}px" />{/if}{/if}
+          {#if !r.still && r.kind !== "uses"}{@render pulse(r.d, `loop pk-${r.kind}`, 1)}{/if}{/if}
       {/each}
     {/if}
     <!-- Measured along its own length (pathLength), so drawn in the map's units: its width is set by the zoom. -->
-    {#each grown as r (r.key)}<path class="pulse glow slow" pathLength="1" d={r.d} style:stroke-width="{5 / k}px" /><path class="pulse core slow" pathLength="1" d={r.d} style:stroke-width="{1.6 / k}px" />{/each}
+    {#each grown as r (r.key)}{@render pulse(r.d, "slow", 1.25)}{/each}
   </g>
 </svg>
 
@@ -66,8 +71,10 @@
      sheen the controls' pulse has. The dash is measured along the line (pathLength 1), so it runs the same on any line. */
   .pulse { vector-effect: none; stroke-linecap: round; stroke-dasharray: var(--len) 3; stroke-dashoffset: var(--len); animation: pulse var(--dur, .6s) cubic-bezier(.3, .5, .4, 1) forwards; }
   .pulse.glow { --len: .3; stroke: var(--growth); opacity: .22; }
-  .pulse.glow.blue { stroke: var(--lattice); }
-  .pulse.glow.pk-requires { stroke: var(--requires); } .pulse.glow.pk-builds { stroke: var(--builds); } .pulse.glow.pk-iso { stroke: var(--growth); }
+  /* The halo, longer than the glow so its light leads and trails it, and faint enough to read as light, not a line. */
+  .pulse.halo { --len: .36; stroke: var(--growth); opacity: .16; } /* blurred by 3 screen pixels at any zoom (set where it is drawn) */
+  .pulse:is(.glow, .halo).blue { stroke: var(--lattice); }
+  .pulse:is(.glow, .halo).pk-requires { stroke: var(--requires); } .pulse:is(.glow, .halo).pk-builds { stroke: var(--builds); } .pulse:is(.glow, .halo).pk-iso { stroke: var(--growth); }
   .pulse.loop { animation: pulse-loop 2.2s cubic-bezier(.3, .5, .4, 1) infinite; }
   @keyframes pulse-loop { 0% { stroke-dashoffset: var(--len); } 55%, 100% { stroke-dashoffset: -1; } }
   .pulse.core { --len: .09; stroke: rgb(var(--sheen)); opacity: .7; }
