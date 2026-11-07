@@ -8,13 +8,16 @@ isorite is a mapping that keeps structure (Iso is for isomorphism, not isometric
 
 ## Motion
 
-- One physical rule: things appear by growing along a line (a stroke drawing itself), never by fading or sliding in from nowhere. Lines extend; boxes are outlined before they are filled.
+- One physical rule: structure appears by growing along a line (a stroke drawing itself). Lines extend; boxes are outlined before they are filled.
+- Words and the items of a list may fade in (opacity only, in the time of a change), after the line that holds them has drawn. Nothing slides in from nowhere. What leaves the flow folds away (its height to nothing, ease-in, the time of a change), so what is below follows it rather than jumping.
+- Nothing jumps under the reader: content that grows after it arrives (a diagram, a code block) is followed, and what you are reading stays where it is.
 - Where there is a direction it follows the structure it belongs to (a line down a folder's edge, across a link), not a decorative one. (?)
 - Three durations: 120 ms (acknowledge: press, hover, focus), 260 ms (change: open, close, swap), 600 ms+ (a result worth noticing: Iso wrote into a note, a check resolved). Nothing else. In CSS: `--t-ack`, `--t-change`, `--t-result`.
 - One curve for arrivals (ease-out), one for departures (ease-in). No springs, no bounce. In CSS: `--ease-out`, `--ease-in`.
 - Held on a note or a folder (M33), three tags: move is blue, delete is rose, send is gold, the one place gold stands for something you do: the thing is being handed to Iso.
 - Gold moves, and so may blue. Iso's work and growth animate in gold; your own actions may animate too, in blue, but less than Iso's (a pointed-at note's routes draw out in 390 ms; nothing of yours loops).
 - Every animation has a `prefers-reduced-motion` form that keeps the information and drops the movement.
+- Respond at once. What you did shows within 100 ms (a press, a send), even while the server has yet to answer; a control that has been pressed stands down until it is answered, so nothing is done twice.
 
 ## Settled (from the inspiration rounds)
 
@@ -28,6 +31,8 @@ isorite is a mapping that keeps structure (Iso is for isomorphism, not isometric
 - Lyth Mono (hinted, OFL; from 0.17.0, in place of Ioskeley Mono and Departure Mono) is the interface, display and code face. It is not a pixel font, so any size will do; its advance is 0.604 em, about what Ioskeley had. Only the app loads it: the kit's artifact theme still inlines Ioskeley, whose files stay in `app/static/fonts`, since inlining Lyth would cost each artifact ~440 KB. Map labels drawn at the screen's own pixels, not scaled with the map: 11 px, and larger in steps (13, 15, 18, 22) as a box grows on the screen.
 - A row in a list (the notes) has a vein: touched or chosen, a blue marker grows down its left edge and a vein runs along its foot, and the lustre crosses it. `.vein-row` in `app/src/app.css`.
 - A link's kind is the weight of its vein, in the text's own colour: requires solid and blue (2 px), uses thin, see also dotted, the web dashed. Light runs along it when pointed at. The same in the note and in what Iso says. `.vein`.
+- The agent's session: what you asked is a block on the ground with a blue rule down its edge; the agent's words carry its gold ◆; what folds (thinking, a command's output, a diff) has a caret that turns. While it works, the line under the turn names the step ("is reading *Surprise*"), by the crystal. Its words are shown at a steady pace that catches up with what has come, never dropped in a burst. The session follows the newest only while you are at the end; scrolled up, you stay, and a lifted button takes you back.
+- The box you write in and its settings are one framed unit: the text above, a bar below with the session's settings as quiet words with a caret, and the button that sends (growth, solid once there is something to send) or stops (rose).
 - Iso cites in the sentence: the phrase that rests on a note is the link to it. What it drew on stands under the reply as parts in corner brackets, and a phrase and its part are lit together. No numbered tail.
 - Iso at work is a crystal growing (one of a hundred, chosen by the conversation's id), not a spinner; at rest it marks that conversation. Past conversations are specimens in a drawer, each with its crystal.
 - What Iso is sent is strata: hatched for what Iso is told, blue for notes, ruled for the conversation, malachite for its summary, empty for the room left.
@@ -46,7 +51,7 @@ Each has a replacement, or it stays banned until one is found.
 | Toast / snackbar | Mark in place: the thing that changed carries an edge for a beat, gold when Iso changed it |
 | Skeleton shimmer | The dotted ground showing through; content grows in |
 | "No items yet" empty state | A drawn, specific first move (?) |
-| Hover lift / drop shadow | Edge brightens one step; nothing casts a shadow |
+| Hover lift / drop shadow | Edge brightens one step. Nothing in the flow casts a shadow; only what floats over it (a menu, a button over a scrolling session) is lifted, with `--lift` |
 | Stock icon set | Icons drawn on one grid, 1.5 px stroke, round caps |
 | Generic error copy | Say what failed, what it touched, what to do, in isorite's voice |
 

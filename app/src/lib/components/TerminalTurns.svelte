@@ -8,8 +8,9 @@
   import AttachAgent from "./AttachAgent.svelte";
   import Crystal from "./Crystal.svelte";
   import type { Given, TerminalItem, TerminalPermission, TerminalTurn } from "@isorite/engine";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { slide } from "svelte/transition";
+  import { cubicIn } from "svelte/easing";
   import { app } from "$lib/app.svelte.ts";
   import { basePage } from "$lib/here.ts";
   import { render } from "$lib/markdown.ts";
@@ -25,6 +26,53 @@
   /** What a tool did, in a word, as the Iso pane says its own steps. */
   const VERB: Record<string, string> = { shell: "ran", bash: "ran", read: "read", write: "wrote", edit: "edited", glob: "found", grep: "searched", webfetch: "fetched", websearch: "searched the web",
     search_notes: "searched", find_similar: "by meaning", outline_note: "outlined", read_note: "read", brief_base: "looked over", edit_note: "changed", write_note: "wrote" };
+  /** What a tool is doing while it runs, as the line under the turn says it. */
+  const DOING: Record<string, string> = { shell: "running", bash: "running", execute: "running", read: "reading", write: "writing", edit: "editing", glob: "finding files", grep: "searching",
+    webfetch: "fetching", websearch: "searching the web", search_notes: "searching the notes for", find_similar: "looking by meaning for", outline_note: "outlining", read_note: "reading",
+    brief_base: "looking over the base", edit_note: "changing", write_note: "writing" };
+  /** The step a running turn is on: a tool by what it is doing and to what, else thinking, writing, or at work. */
+  function step(t: TerminalTurn): { what: string; to: string } {
+    const last = t.items.at(-1);
+    if (last?.kind === "tool" && last.status === "running") return { what: DOING[bare(last.name)] ?? bare(last.name).replaceAll("_", " "), to: last.note ? titleOf(last.note) : last.title };
+    if (last?.kind === "thinking") return { what: "thinking", to: "" };
+    if (last?.kind === "text") return { what: "writing", to: "" };
+    return { what: "at work", to: "" };
+  }
+
+  // What the agent is writing comes in bursts, as the server hears it; it is shown at a steady pace that catches up
+  // with what has come (a few frames behind, never more), so the reply reads as written rather than dropped in.
+  const liveTurn = $derived(view?.turns.at(-1)?.state === "running" && !terminal.old ? view.turns.at(-1)! : null);
+  const liveItem = $derived(liveTurn?.items.at(-1));
+  const liveKey = $derived(liveTurn && liveItem?.kind === "text" ? `${liveTurn.id}:${liveTurn.items.length - 1}` : "");
+  const liveLength = $derived(liveItem?.kind === "text" ? liveItem.text.length : 0);
+  let shownLen = $state(0);
+  let shownKey: string | null = null;
+  const still = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  $effect(() => {
+    const key = liveKey, target = liveLength;
+    let frame = 0;
+    untrack(() => {
+      // Already there when the pane opened: shown whole. New since: from its start.
+      if (key !== shownKey) { shownLen = shownKey === null ? target : 0; shownKey = key; }
+      if (!key || still()) { shownLen = target; return; }
+      if (shownLen > target) shownLen = target;
+      const on = () => {
+        const left = liveLength - shownLen;
+        if (left <= 0) return;
+        shownLen += Math.max(3, Math.ceil(left / 6));
+        frame = requestAnimationFrame(on);
+      };
+      frame = requestAnimationFrame(on);
+    });
+    return () => cancelAnimationFrame(frame);
+  });
+  /** The live reply as far as it is shown, ended at a word, not in one. */
+  function streamed(text: string): string {
+    if (shownLen >= text.length) return text;
+    const space = text.slice(shownLen, shownLen + 16).search(/\s/);
+    return text.slice(0, shownLen + Math.max(0, space));
+  }
+
   /** A note it changed opens in the note's Iso lens, where its words are marked (and the timeline undoes them). */
   const CHANGES = new Set(["edit_note", "write_note"]);
   function open(name: string, id: string): void { if (CHANGES.has(bare(name))) panes.flip("provenance", true); void panes.open(id, true); }
@@ -78,7 +126,7 @@
   $effect(() => { if (terminal.sending) { pinned = true; behind = false; toEnd(); } });
   /** Why a call the agent asked to make was refused here: a switch in this pane's header is off. */
   const REFUSED = { run: "Not run: running commands is switched off in this pane's header (Alt+R).", files: "Not written: editing the project's files is switched off in this pane's header (Alt+F)." };
-  const motion = () => (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 160);
+  const motion = () => (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 260);
 
   /** A note named in the session, under the mouse, is lit on the Atlas (M17): a link in what the agent said, or a
    *  note it read, changed or asked about. */
@@ -121,7 +169,8 @@
 {#snippet item(i: TerminalItem, live: boolean)}
   {#if i.kind === "text"}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
-    <div class="said prose" use:drawn={{ given: i.text, copy: true }}>{@html render(i.text)}</div>
+    {@const text = live ? streamed(i.text) : i.text}
+    <div class="said prose" use:drawn={{ given: text, copy: true }}>{@html render(text)}</div>
   {:else if i.kind === "thinking"}
     <!-- What the model reasoned (M36): folded, since it is its working and not its answer. -->
     <details class="think"><summary><span class="caret" aria-hidden="true"></span>{live ? "Thinking…" : "Thought"}</summary><p>{i.text}</p></details>
@@ -194,12 +243,12 @@
 
 {#snippet turn(t: TerminalTurn)}
   <article class="turn" data-state={t.state}>
-    <div class="you"><p class="asked">{plainAsked(t.asked)}</p>
+    <div class="you"><i class="rule" aria-hidden="true"></i><p class="asked">{plainAsked(t.asked)}</p>
       {#if t.given?.length}
         <span class="gave">{#each t.given as g, k (k)}<span class="chip" class:out={t.withdrawn?.includes(k)} title={t.withdrawn?.includes(k) ? "Taken out of the conversation afterwards: the agent is no longer sent it" : undefined} data-to={g.kind === "note" ? g.id : undefined}><span class="k" aria-hidden="true">{SYM[g.kind]}</span><span class="t">{g.kind === "passage" ? g.text : g.kind === "folder" ? g.id || "the base" : titleOf(g.id)}</span></span>{/each}</span>
       {/if}
       <span class="from">{terminal.old ? "" : t.from === "here" ? "from here" : "in its front end"}</span></div>
-    {#each t.items as i, k (k)}{#if !itself(i) && !folded(t, i)}<div class="it" out:slide={{ duration: motion() }}>{@render item(i, t.state === "running" && k === t.items.length - 1)}</div>{/if}{/each}
+    {#each t.items as i, k (k)}{#if !itself(i) && !folded(t, i)}<div class="it" out:slide={{ duration: motion(), easing: cubicIn }}>{@render item(i, t.state === "running" && k === t.items.length - 1)}</div>{/if}{/each}
     {#if t.state !== "running" && drew(t).length}
       <div class="parts" role="group" aria-label="What {view?.agent || 'the agent'} drew on">
         {#each drew(t) as id (id)}
@@ -209,7 +258,8 @@
     {/if}
     {#if t.state === "running"}
       <!-- At work (M24, I): over ACP, the session's crystal grows. -->
-      <p class="doing" role="status">{#if view?.session}<Crystal id={view.session} size={28} growing />{/if}{view?.agent || "The agent"} is at work</p>
+      {@const now = step(t)}
+      <p class="doing" role="status">{#if view?.session}<Crystal id={view.session} size={28} growing />{/if}<span class="who">{view?.agent || "The agent"}</span><span class="what">is {now.what}{#if now.to} <b>{now.to}</b>{/if}</span></p>
     {:else if t.state === "stopped"}
       <p class="faint end">stopped</p>
     {:else if t.state === "failed"}
@@ -224,13 +274,19 @@
   .flow { padding: 16px; display: flex; flex-direction: column; gap: 18px; }
   .title { font-size: 11px; margin-bottom: -8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Back to the newest, when you have scrolled up and more has come. */
-  .latest { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; background: var(--ground-1); border: 1px solid var(--line-strong); color: var(--text-soft); font: 11.5px var(--font-ui); cursor: pointer; box-shadow: 0 4px 14px rgb(0 0 0 / .25); animation: fade 140ms var(--ease-out, ease-out); }
-  @keyframes fade { from { opacity: 0; } }
+  /* It floats over the session, so it is lifted (the one kind of thing that casts a shadow), and only fades in. */
+  .latest { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px 0 10px; background: var(--ground-2); border: 1px solid var(--line-strong); color: var(--text-soft); font: 11.5px var(--font-ui); cursor: pointer; box-shadow: var(--lift); animation: show var(--t-ack) var(--ease-out); transition: color var(--t-ack) var(--ease-out), border-color var(--t-ack) var(--ease-out); }
+  .latest svg { color: var(--lattice); }
   .latest:hover, .latest:focus-visible { color: var(--text); border-color: var(--lattice); }
   /* What comes in, comes in gently: a turn, and each thing in it. */
-  .turn, .it { animation: appear 160ms var(--ease-out, ease-out); }
-  @keyframes appear { from { opacity: 0; transform: translateY(3px); } }
-  @media (prefers-reduced-motion: reduce) { .turn, .it, .latest { animation: none; } }
+  /* Motion (docs/taste.md): a line draws, then what it holds shows. A turn's rule draws down its edge in the time of a
+     change; its words show as it ends. Each thing the agent does after shows in the same time. */
+  .you .rule { animation: draw var(--t-change) var(--ease-out); }
+  .you > :not(.rule) { animation: show var(--t-change) var(--ease-out) calc(var(--t-change) / 2) both; }
+  .it { animation: show var(--t-change) var(--ease-out); }
+  @keyframes draw { from { transform: scaleY(0); } }
+  @keyframes show { from { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .you .rule, .you > *, .it, .latest { animation: none; } }
   .it { display: grid; min-width: 0; }
   /* A disclosure says it opens: a caret that turns. */
   /* It stands in the gutter, where a line's mark is: one mark per line, the text in one column. */
@@ -240,8 +296,10 @@
   .tool summary { margin-left: -16px; padding-left: 16px; }
   .tool:has(> details)::before { content: none; }
   .turn { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .you { padding-left: 16px; position: relative; display: flex; flex-direction: column; gap: 4px; }
-  .you::before { content: "›"; position: absolute; left: 0; top: 0; color: var(--lattice); }
+  /* What you asked: set apart as yours, a block on the ground with a blue rule that draws down its edge as it comes. */
+  .you { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 8px 12px 8px 14px; background: var(--ground-1); border: 1px solid var(--line); }
+  .you .rule { position: absolute; left: -1px; top: -1px; bottom: -1px; width: 2px; background: var(--lattice); transform-origin: top; }
+  .turn:not(:first-of-type) { margin-top: 6px; }
   .think, .squeeze { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--text-soft); }
   .think summary, .squeeze summary { margin-left: -16px; padding-left: 16px; display: flex; align-items: center; cursor: pointer; font: 11.5px var(--font-mono); color: var(--text-faint); list-style: none; width: fit-content; }
   .think summary:hover, .squeeze summary:hover { color: var(--text-soft); }
@@ -254,8 +312,10 @@
   .mid .how { font: 11px var(--font-mono); color: var(--text-soft); margin-right: 4px; }
   .asked { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
   .from { font-size: 11px; color: var(--text-faint); }
+  .from:empty { display: none; }
   .said { padding-left: 16px; position: relative; font: 15px/1.6 var(--font-text); overflow-wrap: anywhere; min-width: 0; }
-  .said::before { content: "▸"; position: absolute; left: 0; top: 1px; font: 11px var(--font-ui); color: var(--growth); }
+  /* The agent's words carry its mark, the gold diamond (docs/taste.md), at the height of their first line. */
+  .said::before { content: ""; position: absolute; left: 3px; top: calc(.8em - 2.5px); width: 5px; height: 5px; background: var(--growth); transform: rotate(45deg); }
   .said :global(p + p), .said :global(p + ul), .said :global(ul + p) { margin-top: 8px; }
   .said :global(ul), .said :global(ol) { margin: 0; padding-left: 20px; }
   .said > :global(:last-child), .offer .yours > :global(:last-child) { margin-bottom: 0; }
@@ -301,7 +361,10 @@
   .offer .for { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-faint); }
   .offer .in { color: var(--malachite); }
   .offer .insert { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
-  .doing { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-faint); }
+  .doing { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-faint); min-width: 0; }
+  .doing .who { color: var(--text-soft); flex: none; }
+  .doing .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .doing .what b { font-weight: inherit; color: var(--text-soft); }
   .gave { display: flex; flex-wrap: wrap; gap: 4px; }
   .chip { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px; border: 1px solid var(--line); font-size: 11px; color: var(--text-soft); max-width: 100%; }
   .chip.out { text-decoration: line-through; opacity: 0.6; }

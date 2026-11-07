@@ -7,7 +7,7 @@
   import type { AgentSession } from "@isorite/engine";
   import type { ChosenAgent, TerminalApi } from "$lib/api.ts";
   import { app } from "$lib/app.svelte.ts";
-  import { terminal } from "$lib/terminal.svelte.ts";
+  import { plainAsked, terminal } from "$lib/terminal.svelte.ts";
   import AttachAgent from "./AttachAgent.svelte";
   import Crystal from "./Crystal.svelte";
   import OwnFiles from "./OwnFiles.svelte";
@@ -54,18 +54,18 @@
       <button type="button" class="spec frame" class:on={shown(s)} class:live={s.live} data-lustre aria-current={shown(s) ? "true" : undefined} disabled={!s.open && !s.kept} title={!s.open && !s.kept ? `${s.name} isn't attached to carry it on` : !s.live && !s.kept ? `Carry on here what you did in ${s.name}'s own terminal` : undefined} onclick={() => void choose(s)}>
         <Crystal id={s.session} size={44} growing={s.busy} />
         <span class="m">{s.name} · {stateOf(s)}{when(s.last) ? ` · ${when(s.last)}` : ""}</span>
-        <span class="q">{s.title || s.asked || "A session"}</span>
+        <span class="q">{plainAsked(s.title) || plainAsked(s.asked) || "A session"}</span>
         <span class="m">{s.turns ? `${many(s.notes, "note")} · ${many(s.turns, "turn")}` : "not carried here yet"}</span>
       </button>
       {#if terminal.view?.fork && s.kept}
-        <button type="button" class="more drop fork" aria-label="Fork {s.title || s.asked || 'this session'}: a new session from here" title="A new session that begins where this one is" onclick={() => void fork(s)}>fork</button>
+        <button type="button" class="more drop fork" aria-label="Fork {plainAsked(s.title) || plainAsked(s.asked) || 'this session'}: a new session from here" title="A new session that begins where this one is" onclick={() => void fork(s)}>fork</button>
       {/if}
       {#if s.kept && !s.live}
         {#if removing === idOf(s)}
           <p class="sure" role="group" aria-label="Remove the kept copy">Remove what isorite kept of this?<span class="faint">The agent's own history stays.</span>
             <button type="button" class="more bad" onclick={() => void remove(s)}>remove</button> · <button type="button" class="more" onclick={() => (removing = "")}>keep</button></p>
         {:else}
-          <button type="button" class="more drop" aria-label="Remove the kept copy of {s.title || s.asked || 'this session'}" onclick={() => (removing = idOf(s))}>remove</button>
+          <button type="button" class="more drop" aria-label="Remove the kept copy of {plainAsked(s.title) || plainAsked(s.asked) || 'this session'}" onclick={() => (removing = idOf(s))}>remove</button>
         {/if}
       {/if}
     </div>

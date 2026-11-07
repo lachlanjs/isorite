@@ -82,17 +82,6 @@
     <div class="chat"><AttachAgent /></div>
   {/if}
   <div class="composer">
-    {#if settings.length && terminal.connected && !terminal.old}
-      <div class="settings">
-        {#each settings as s (`${s.kind}:${s.id}`)}
-          <label class="set"><span class="hidden-label">{s.name}</span>
-            <select class="field" aria-label={s.name} title={s.name} value={s.current} onchange={(e) => void terminal.set(s.kind, s.id, e.currentTarget.value)}>
-              {#each s.options as o (o.value)}<option value={o.value} title={o.description}>{s.kind === "mode" ? "" : `${s.name}: `}{o.name}</option>{/each}
-            </select>
-          </label>
-        {/each}
-      </div>
-    {/if}
     {#if matches.length}
       <ul class="slash" role="listbox" aria-label="Slash commands">
         {#each matches as c, i (c.name)}
@@ -115,17 +104,31 @@
         {#if copyProblem}<span class="bad" role="alert">{copyProblem}</span>{/if}
       </p>
     {/if}
-    <div class="box">
+    <div class="box" class:busy>
       <label class="hidden-label" for="iso-box">Message the agent</label>
       <textarea id="iso-box" bind:value={text} aria-busy={terminal.sending} readonly={terminal.sending} rows="2" placeholder={terminal.connected ? `Ask ${terminal.view?.agent || "the agent"}` : "Attach an agent to ask it here"} onkeydown={keys}></textarea>
-      {#if busy}
-        <button class="corner stop" type="button" aria-label="Stop the agent" title="Stop  (Escape)" onclick={() => void terminal.stop()}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="4" y="4" width="8" height="8" fill="currentColor" /></svg></button>
-      {:else if terminal.sending}
-        <span class="corner sending" role="status" aria-label="Sending"><span class="dot"></span></span>
-      {:else if text.trim()}
-        <!-- Enter sends; a phone's return makes a new line, so a phone has this (Q17). -->
-        <button class="corner send" type="button" aria-label="Send" title="Send  (Enter)" onclick={() => void send()}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10M9 4l4 4-4 4" /></svg></button>
-      {/if}
+      <div class="bar">
+        {#if settings.length && terminal.connected && !terminal.old}
+          <div class="settings">
+            {#each settings as s (`${s.kind}:${s.id}`)}
+              <label class="set"><span class="hidden-label">{s.name}</span>
+                <select class="field" aria-label={s.name} title={s.name} value={s.current} onchange={(e) => void terminal.set(s.kind, s.id, e.currentTarget.value)}>
+                  {#each s.options as o (o.value)}<option value={o.value} title={o.description}>{s.kind === "mode" ? "" : `${s.name}: `}{o.name}</option>{/each}
+                </select>
+              </label>
+            {/each}
+          </div>
+        {/if}
+        <span class="grow"></span>
+        {#if busy}
+          <button class="corner stop" type="button" aria-label="Stop the agent" title="Stop  (Escape)" onclick={() => void terminal.stop()}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="4" y="4" width="8" height="8" fill="currentColor" /></svg></button>
+        {:else if terminal.sending}
+          <span class="corner sending" role="status" aria-label="Sending"><span class="dot"></span></span>
+        {:else if terminal.connected}
+          <!-- Always there, so the bar does not move as you start to type; ready once there is something to send. -->
+          <button class="corner send" type="button" aria-label="Send" title="Send  (Enter)" disabled={!text.trim()} onclick={() => void send()}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10M9 4l4 4-4 4" /></svg></button>
+        {/if}
+      </div>
     </div>
     {#if busy && text.trim()}
       <p class="mid">Enter adds it for when the agent stops.{#if terminal.canSteer} <button type="button" class="more" onclick={() => void steer()} title="Put it in after the step running now (Ctrl+Enter)">Steer now</button>{/if}</p>
@@ -141,19 +144,20 @@
   .chat { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 18px; }
   .bad { color: var(--rose); font-size: 12px; padding-left: 16px; }
   .composer { flex: none; border-top: 1px solid var(--line); padding: 10px 12px 10px; display: grid; gap: 8px; }
-  .box { position: relative; display: flex; }
-  textarea { flex: 1 1 auto; min-width: 0; min-height: 42px; max-height: 160px; resize: none; field-sizing: content; background: var(--ground-1); border: 1px solid var(--line); padding: 9px 34px 9px 10px; font: 13px/1.5 var(--font-ui); color: var(--text); }
-  .corner { position: absolute; right: 5px; bottom: 5px; width: 26px; height: 26px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--growth); cursor: pointer; }
+  /* One framed unit: what you write, and under it a bar with the session's settings and the button that sends or stops. */
+  .box { display: flex; flex-direction: column; background: var(--ground-1); border: 1px solid var(--line); transition: border-color var(--t-ack) var(--ease-out), box-shadow var(--t-ack) var(--ease-out); }
+  .box:focus-within { border-color: var(--line-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--lattice) 14%, transparent); }
+  .box.busy:not(:focus-within) { border-color: color-mix(in srgb, var(--growth) 45%, var(--line)); }
+  textarea { flex: 1 1 auto; min-width: 0; min-height: 44px; max-height: 200px; resize: none; field-sizing: content; background: none; border: 0; padding: 10px 12px 4px; font: 13px/1.5 var(--font-ui); color: var(--text); }
+  textarea:focus { outline: none; }
+  .bar { display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 2px 4px 4px 6px; }
+  .grow { flex: 1 1 auto; }
+  .corner { flex: none; width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--growth); cursor: pointer; transition: background-color var(--t-ack) var(--ease-out), color var(--t-ack) var(--ease-out), opacity var(--t-ack) var(--ease-out); }
+  .corner.send:not(:disabled) { background: var(--growth); color: var(--ground-0); --cut: 4px; clip-path: var(--chosen-cut); }
+  .corner.send:not(:disabled):hover { background: color-mix(in srgb, var(--growth) 85%, var(--text)); }
+  .corner.send:disabled { color: var(--text-faint); opacity: .5; cursor: default; }
   .corner.stop { color: var(--rose); }
-  .corner.sending, .offline .dot { pointer-events: none; }
-  .dot { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--growth); animation: breathe 1s ease-in-out infinite alternate; }
-  @keyframes breathe { from { opacity: .25; } }
-  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
-  .offline { margin: 0; display: flex; align-items: center; gap: 8px; font: 12px/1.4 var(--font-ui); color: var(--text-soft); }
-  .offline .dot { background: var(--rose); }
-  textarea[readonly] { color: var(--text-soft); }
-  /* On a desktop Enter sends, so the arrow is for a touch screen only; stop is for both. */
-  @media (pointer: fine) { .corner.send { display: none; } }
+  .corner.stop:hover { background: var(--rose-soft); }
   .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; max-height: 84px; overflow: auto; }
   .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 2px 4px 2px 8px; border: 1px solid var(--line-strong); background: var(--ground-1); font: 12px/1.4 var(--font-ui); color: var(--text); }
   .chip .g { color: var(--growth); flex: none; }
@@ -166,12 +170,15 @@
   .chip.given .g { color: var(--text-faint); }
   .chip .x { flex: none; width: 18px; height: 18px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; }
   .chip .x:hover { color: var(--rose); }
-  .settings { display: flex; flex-wrap: wrap; gap: 6px; }
-  .set .field { font: 11.5px var(--font-ui); padding: 2px 6px; max-width: 14em; }
+  /* The session's settings, quiet until wanted: plain words with a caret, a ground under them when pointed at. */
+  .settings { display: flex; flex-wrap: wrap; gap: 2px; min-width: 0; }
+  .set { position: relative; display: inline-flex; align-items: center; }
+  .set::after { content: ""; position: absolute; right: 7px; top: 50%; margin-top: -1px; border-left: 3px solid transparent; border-right: 3px solid transparent; border-top: 4px solid currentColor; color: var(--text-faint); pointer-events: none; }
+  .set .field { appearance: none; height: 26px; font: 11.5px var(--font-ui); color: var(--text-soft); background: none; border: 0; padding: 0 18px 0 7px; max-width: 14em; cursor: pointer; transition: background-color var(--t-ack) var(--ease-out), color var(--t-ack) var(--ease-out); }
+  .set .field:hover, .set .field:focus-visible { background: var(--ground-2); color: var(--text); box-shadow: none; }
   .slash { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); background: var(--ground-1); max-height: 160px; overflow: auto; }
   .slash button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 6px 10px; font: 12.5px var(--font-ui); color: var(--text-soft); cursor: pointer; }
   .slash button.on, .slash button:hover { background: var(--ground-2, var(--ground-0)); color: var(--text); }
   .slash b { font: 500 12px var(--font-mono); color: var(--text); }
   .slash .d { color: var(--text-faint); }
-  textarea:focus { border-color: var(--line-strong); outline: none; }
 </style>

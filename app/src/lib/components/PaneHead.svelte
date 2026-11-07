@@ -39,7 +39,7 @@
 
 <svelte:window onpointerdown={outside} onkeydown={(e) => { if (open && e.key === "Escape") panes.settings = null; }} />
 
-<header class="phead" class:named={pane === "atlas"}>
+<header class="phead" class:named={pane === "atlas"} data-pane={pane}>
   {#if first}<BaseSwitch />{/if}
   <span class="pname">{name}</span>
   <span class="switches" role="group" aria-label="{name}'s switches">
@@ -100,6 +100,9 @@
     .named .lbl { display: inline; }
   }
   .grow { flex: 1 1 auto; }
+  /* The Agent pane's header is full on a phone: the base is switched from the Note pane's there, rather than shown
+     squeezed to nothing beside a stray slash. */
+  @container phead (max-width: 440px) { .phead[data-pane="iso"] :global(:is(.base, .slash)) { display: none; } }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; background: none; border: 0; padding: 0; cursor: pointer; }
   .icon:hover, .icon:focus-visible { color: var(--text); }
   .gear[aria-expanded="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }

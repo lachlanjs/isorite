@@ -48,6 +48,8 @@
   /* Motion (M24): acknowledge, change, a result worth noticing; ease-out to arrive, ease-in to leave. */
   --t-ack: 120ms; --t-change: 260ms; --t-result: 600ms;
   --ease-out: cubic-bezier(.2, .7, .2, 1); --ease-in: cubic-bezier(.6, 0, .8, .3);
+  /* What floats over the page (a menu, a button over a scrolling session) is lifted; nothing in the flow is. */
+  --lift: 0 8px 24px rgb(0 0 0 / .38), 0 2px 6px rgb(0 0 0 / .25);
 
   /* Space: a 4px base. */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px; --space-12: 48px; --space-16: 64px;
@@ -57,6 +59,7 @@
 :root[data-ground="quartz"] {
   color-scheme: light;
   --ground-0: #F2F0EA; --ground-1: #F8F7F3; --ground-2: #FFFFFF; --ground-3: #E6E4DC;
+  --lift: 0 8px 22px rgb(30 40 60 / .14), 0 2px 5px rgb(30 40 60 / .08);
   --line: #D3D0C5; --line-strong: #7F7D70;
   --text: #0E1726; --text-soft: #3B475B; --text-faint: #5B677A;
   --lattice: #1E4FB8; --lattice-deep: #2A62D8;
@@ -71,6 +74,7 @@
   :root:not([data-ground="lapis"]) {
     color-scheme: light;
     --ground-0: #F2F0EA; --ground-1: #F8F7F3; --ground-2: #FFFFFF; --ground-3: #E6E4DC;
+    --lift: 0 8px 22px rgb(30 40 60 / .14), 0 2px 5px rgb(30 40 60 / .08);
     --line: #D3D0C5; --line-strong: #7F7D70;
     --text: #0E1726; --text-soft: #3B475B; --text-faint: #5B677A;
     --lattice: #1E4FB8; --lattice-deep: #2A62D8;
