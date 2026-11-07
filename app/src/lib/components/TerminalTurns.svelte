@@ -1,3 +1,9 @@
+<script lang="ts" module>
+  /** Where you were reading in each session, while the pane shows the drawer or the context in its place: back to it,
+   *  you are there again, not at the end. A session you were at the end of is not kept, and goes on following. */
+  const kept = new Map<string, number>();
+</script>
+
 <script lang="ts">
   // An agent's session in Iso's pane (M11; over ACP since M25): each prompt (from its front end or from here), what
   // the agent said, a line for each tool call (a command with its output, a file with its diff, a look-up in the base
@@ -115,8 +121,11 @@
   let height = 0;
   const atEnd = (h: number) => !!list && h - list.scrollTop - list.clientHeight <= NEAR;
   const toEnd = (smooth = false) => { if (list) list.scrollTo({ top: list.scrollHeight, behavior: smooth ? "smooth" : "instant" }); };
+  /** Where you are, kept as you scroll: by the time the session is put away, it is out of the page and says 0. */
+  let top = 0;
   function scrolled(): void {
     if (!list) return;
+    top = list.scrollTop;
     pinned = atEnd(list.scrollHeight);
     if (pinned) behind = false;
   }
@@ -132,12 +141,27 @@
       else if (height > was) { pinned = false; behind = true; }
     });
     grew.observe(flow);
-    toEnd();
-    return () => grew.disconnect();
+    return () => {
+      grew.disconnect();
+      const s = untrack(() => view?.session);
+      if (s) { if (pinned) kept.delete(s); else kept.set(s, top); }
+    };
   });
-  // Another session shown, or a message sent from here: back to the newest.
+  // Another session shown, or a message sent from here: back to the newest. Shown again after the drawer or the
+  // context: where you were.
   const shownSession = $derived(view?.session ?? null);
-  $effect(() => { void shownSession; pinned = true; behind = false; toEnd(); });
+  let shownBefore: string | null | undefined;
+  $effect(() => {
+    const s = shownSession;
+    untrack(() => {
+      const first = shownBefore === undefined;
+      if (!first && s === shownBefore) return;
+      shownBefore = s;
+      const at = first && s ? kept.get(s) : undefined;
+      if (at !== undefined && list) { list.scrollTop = at; pinned = atEnd(list.scrollHeight); return; }
+      pinned = true; behind = false; toEnd();
+    });
+  });
   $effect(() => { if (terminal.sending) { pinned = true; behind = false; toEnd(); } });
   /** Why a call the agent asked to make was refused here: a switch in this pane's header is off. */
   const REFUSED = { run: "Not run: running commands is switched off in this pane's header (Alt+R).", files: "Not written: editing the project's files is switched off in this pane's header (Alt+F)." };

@@ -139,6 +139,11 @@
 </div>
 
 <style>
+  /* The session, the drawer and the context take each other's place by fading in (--t-ack), not between one frame and
+     the next: the drawer's list, which fills a frame after it opens, is in by the time it is seen. */
+  .iso > :global(:first-child) { animation: swap var(--t-ack) var(--ease-out); }
+  @keyframes swap { from { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .iso > :global(:first-child) { animation: none; } }
   .iso { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .iso.drop { outline: 2px dashed var(--growth); outline-offset: -4px; }
   .chat { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 18px; }

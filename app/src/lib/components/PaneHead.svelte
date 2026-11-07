@@ -106,7 +106,7 @@
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; background: none; border: 0; padding: 0; cursor: pointer; }
   .icon:hover, .icon:focus-visible { color: var(--text); }
   .gear[aria-expanded="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
-  .settings { --inside: var(--ground-2); filter: var(--lift-drop); position: absolute; z-index: 21; top: 54px; right: 8px; width: min(400px, calc(100% - 16px)); padding: 0; white-space: normal; user-select: text; }
+  .settings { --inside: var(--ground-2); filter: var(--lift-drop); animation: appear var(--t-ack) var(--ease-out); position: absolute; z-index: 21; top: 54px; right: 8px; width: min(400px, calc(100% - 16px)); padding: 0; white-space: normal; user-select: text; }
   .inner { max-height: calc(100dvh - 140px); overflow: auto; padding: 24px 18px 14px; display: flex; flex-direction: column; gap: var(--space-6); }
   .settings:focus-visible { outline: none; }
   @media (max-width: 760px) {

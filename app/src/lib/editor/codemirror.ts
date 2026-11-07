@@ -141,7 +141,8 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       // Typing keeps a few lines of room below the cursor (and above, going up): the line written is not pressed to
       // the pane's edge. CodeMirror keeps it for every scroller it is in, the Note pane's own included.
       EditorView.cursorScrollMargin.of({ x: 5, y: 80 }),
-      arrived, arrivedTheme,
+      // Lowest, so the glow is drawn inside the other marks (whose words are whose, a link) and never splits one.
+      Prec.lowest(arrived), arrivedTheme,
       // Before Markdown's own Enter, which is set high.
       Prec.highest(keymap.of([{ key: "Enter", run: endList }])),
       markdown({ base: markdownLanguage, extensions: [mathsSyntax], completeHTMLTags: false, codeLanguages: languages }),
