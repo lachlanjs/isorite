@@ -27,6 +27,9 @@
   // One session for the page's life: the route gives each note its own page ({#key}).
   // svelte-ignore state_referenced_locally
   const note = new NoteSession(id);
+  // Opening is quick (a frame or two): the drawing that says so would only blink. It shows when it is slow.
+  let slow = $state(false);
+  onMount(() => { const t = setTimeout(() => (slow = true), 300); return () => clearTimeout(t); });
   const iso = new NoteIso(note);
 
   let source = $state(false);
@@ -223,9 +226,9 @@
 {/snippet}
 
 
-<article class="note" bind:this={noteEl} class:reading={read} class:timed={timeline && note.loaded === "ready" && !asSource && !read}>
+<article class="note" bind:this={noteEl} class:ready={note.loaded === "ready"} class:reading={read} class:timed={timeline && note.loaded === "ready" && !asSource && !read}>
   {#if note.loaded === "loading"}
-    <p class="faint"><Drawing label="opening" /></p>
+    {#if slow}<p class="faint opening"><Drawing label="opening" /></p>{/if}
   {:else if note.loaded === "missing"}
     <p class="soft">There is no note at <span class="faint">{id}</span>.</p>
     <p><a href={resolve("/notes")}>all notes</a></p>
@@ -329,6 +332,11 @@
   .toiso button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; background: none; border: 0; color: var(--text); font-size: 12px; cursor: pointer; }
   .toiso button + button { border-left: 1px solid var(--line); color: var(--text-soft); }
   .toiso .dia { font-style: normal; font-size: 10px; color: var(--growth); }
+  /* A note opened comes in, rather than taking the place of the one before between one frame and the next (with a frame of
+     nothing between them). Only its opacity: what it holds is already where it will stay. */
+  .note.ready, .opening { animation: arrive var(--t-change) var(--ease-out); }
+  @keyframes arrive { from { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .note.ready, .opening { animation: none; } }
   .note { position: relative; max-width: calc(var(--measure) + 2 * var(--space-4)); margin: 0 auto; padding: 40px var(--space-4) 0; display: flex; flex-direction: column; gap: var(--space-2); }
   .head { display: flex; align-items: flex-start; gap: var(--space-3); }
   /* Read mode (M30): a heading, set larger, with room round it; the tools stay at the corner to leave it. */
