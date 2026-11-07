@@ -337,7 +337,8 @@
   .note.ready, .opening { animation: arrive var(--t-change) var(--ease-out); }
   @keyframes arrive { from { opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .note.ready, .opening { animation: none; } }
-  .note { position: relative; max-width: calc(var(--measure) + 2 * var(--space-4)); margin: 0 auto; padding: 40px var(--space-4) 0; display: flex; flex-direction: column; gap: var(--space-2); }
+  /* Room after the end, so the last line can be written somewhere other than the pane's bottom edge. */
+  .note { position: relative; max-width: calc(var(--measure) + 2 * var(--space-4)); margin: 0 auto; padding: 40px var(--space-4) 30vh; display: flex; flex-direction: column; gap: var(--space-2); }
   .head { display: flex; align-items: flex-start; gap: var(--space-3); }
   /* Read mode (M30): a heading, set larger, with room round it; the tools stay at the corner to leave it. */
   .reading { --text-size: 20px; padding-top: 64px; }
@@ -392,7 +393,7 @@
     .title { font-size: 30px; width: 100%; }
   }
   @media (max-width: 600px) {
-    .note { padding: 20px 20px 80px; }
+    .note { padding: 20px 20px 30vh; }
     .note.timed { padding-left: 56px; }
     .tl-col { top: 20px; left: 8px; bottom: 0; z-index: 1; padding-right: 2px; border-right: 1px solid var(--line); background: var(--ground-1); }
     .changes { bottom: 156px; flex-wrap: wrap; }

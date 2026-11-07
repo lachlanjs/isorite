@@ -4,6 +4,7 @@
 
 import { startCompletion } from "@codemirror/autocomplete";
 import { redo, undo } from "@codemirror/commands";
+import { syntaxTree } from "@codemirror/language";
 import { EditorSelection, type ChangeSpec } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 
@@ -107,3 +108,21 @@ export const formatKeymap = [
   { key: "Mod-Shift-h", preventDefault: true, run: (v: EditorView) => format(v, "heading") },
   { key: "Mod-Shift-8", preventDefault: true, run: (v: EditorView) => format(v, "list") },
 ];
+
+/** Enter on the empty item that ends a list (not one inside another): the marker goes and a blank line is left before
+ *  what comes next. CodeMirror's own leaves none after a list of two items or more, and a line straight after a list
+ *  is, to Markdown, more of its last item: the note would read one way here and another anywhere else. */
+export function endList(view: EditorView): boolean {
+  const { state } = view, sel = state.selection;
+  if (sel.ranges.length !== 1 || !sel.main.empty) return false;
+  const pos = sel.main.head, line = state.doc.lineAt(pos);
+  if (pos !== line.to || !/^([-*+]|\d+[.)])[ \t]+$/.test(line.text) || line.number === 1) return false;
+  if (!/\S/.test(state.doc.line(line.number - 1).text)) return false; // a blank line before it already: CodeMirror's own does
+  for (let n: ReturnType<ReturnType<typeof syntaxTree>["resolveInner"]> | null = syntaxTree(state).resolveInner(line.from, 1); n; n = n.parent) {
+    if (n.name !== "ListItem") continue;
+    if (n.parent?.parent?.name !== "Document") return false; // inside another list: stepping out a level is CodeMirror's
+    view.dispatch(state.update({ changes: { from: line.from, to: line.to, insert: state.lineBreak }, selection: { anchor: line.from + state.lineBreak.length }, scrollIntoView: true, userEvent: "input" }));
+    return true;
+  }
+  return false;
+}

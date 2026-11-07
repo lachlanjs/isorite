@@ -6,13 +6,13 @@ import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirro
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Prec } from "@codemirror/state";
 import { EditorView, drawSelection, keymap, placeholder } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { codeHighlighter, languages } from "$lib/code.ts";
 import { blocksTheme, embeds, renderedBlocks, type Embeds } from "./blocks.ts";
 import { tables } from "./tables.ts";
-import { format, formatKeymap, type Format } from "./commands.ts";
+import { endList, format, formatKeymap, type Format } from "./commands.ts";
 import { linkAt, linkControl } from "./linkControl.ts";
 import { linkCompletion, type LinkTarget, type NoteMaker, type PictureSource } from "./links.ts";
 import { artifacts, livePreview, livePreviewTheme, codeBroken, pictures, type ArtifactAt, type PictureAt } from "./livePreview.ts";
@@ -138,6 +138,11 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       history(),
       drawSelection(),
       EditorView.lineWrapping,
+      // Typing keeps a few lines of room below the cursor (and above, going up): the line written is not pressed to
+      // the pane's edge. CodeMirror keeps it for every scroller it is in, the Note pane's own included.
+      EditorView.cursorScrollMargin.of({ x: 5, y: 80 }),
+      // Before Markdown's own Enter, which is set high.
+      Prec.highest(keymap.of([{ key: "Enter", run: endList }])),
       markdown({ base: markdownLanguage, extensions: [mathsSyntax], completeHTMLTags: false, codeLanguages: languages }),
       syntaxHighlighting(highlight),
       syntaxHighlighting(codeHighlighter),

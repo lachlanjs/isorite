@@ -10,7 +10,7 @@ import type { EditorView } from "@codemirror/view";
 import katex from "katex";
 import MarkdownIt from "markdown-it";
 import texmath from "markdown-it-texmath";
-import { format } from "./commands.ts";
+import { endList, format } from "./commands.ts";
 import { formula, mathsSyntax } from "./maths.ts";
 import { choices, choicesFor, kindOf, labelFor, labelOf, linkAt, linksIn, ratingOf, setEmbed, setTitle, setTitles, sideOf } from "./linkControl.ts";
 
@@ -219,5 +219,21 @@ describe("what a link points at, for the Atlas (M17)", () => {
     expect(pointedBy("#/n/basics/surprise")).toEqual({ id: "basics/surprise", folder: false });
     expect(pointedBy("#/n/basics/surprise#Units")).toEqual({ id: "basics/surprise", folder: false });
     expect(pointedBy("https://example.org")).toBeNull();
+  });
+});
+
+describe("Enter on the empty item that ends a list", () => {
+  const end = (doc: string) => { const v = editor(doc, doc.length); const ran = endList(v); return { ran, doc: v.state.doc.toString(), at: v.state.selection.main.head }; };
+  test("leaves a blank line, so what is written next is not more of the last item", () => {
+    expect(end("- a\n- b\n- ")).toEqual({ ran: true, doc: "- a\n- b\n\n", at: 9 });
+    expect(end("1. a\n2. b\n3. ")).toEqual({ ran: true, doc: "1. a\n2. b\n\n", at: 11 });
+    // The page agrees: a line written there is a paragraph, not the end of the second item.
+    expect(page.render(end("- a\n- b\n- ").doc + "Next.")).toContain("<p>Next.</p>");
+  });
+  test("leaves to CodeMirror an item with words in it, one inside another list, and one after a blank line", () => {
+    expect(end("- a\n- b").ran).toBe(false);
+    expect(end("- a\n  - b\n  - ").ran).toBe(false);
+    expect(end("- a\n\n- ").ran).toBe(false);
+    expect(end("Title\n-").ran).toBe(false);
   });
 });
