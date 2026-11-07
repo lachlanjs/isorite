@@ -120,7 +120,10 @@
   .held { background: var(--lattice-soft); border-color: var(--lattice); color: var(--text); --glow: 0 0 var(--g) color-mix(in srgb, var(--lattice) calc(var(--glow-a) * .8), transparent); animation: read var(--t-result) var(--ease-out); }
   @keyframes read { from { box-shadow: var(--bar, 0 0 transparent), 0 0 0 calc(2 * var(--px)) color-mix(in srgb, var(--lattice) 70%, transparent), 0 0 calc(24 * var(--px)) color-mix(in srgb, var(--lattice) 60%, transparent); } }
   @media (prefers-reduced-motion: reduce) { .held { animation: none; } }
-  .changed, .order { overflow: visible; }
+  /* On the agent's way as well as read: the gold ring says so, and the blue stays in the fill, not a second ring. */
+  .held:is(.p-used, .p-link, .p-key) { border-color: var(--line-strong); }
+  /* What stands out over the corner (the diamond of a change, the order it read in) is not cut off by the block. */
+  .changed, .n:has(> .order) { overflow: visible; }
   .dia { position: absolute; top: -5px; right: -5px; width: 9px; height: 9px; background: var(--growth); transform: rotate(45deg); scale: var(--ik); }
-  .order { position: absolute; top: -9px; left: -9px; width: 16px; height: 16px; display: grid; place-items: center; background: var(--growth); color: var(--ground-0); font-size: 10px; font-weight: 700; z-index: 1; scale: var(--ik); }
+  .order { position: absolute; top: 0; left: 0; transform-origin: 0 0; translate: calc(-12 * var(--px)) calc(-12 * var(--px)); width: 16px; height: 16px; display: grid; place-items: center; background: var(--growth); color: var(--ground-0); font-size: 10px; font-weight: 700; z-index: 1; scale: var(--ik); }
 </style>

@@ -180,7 +180,7 @@
     return fit(box, size.w, size.h, 1, L?.cell);
   };
 
-  const RETRACT = 220, MOVE = 520, DRAW = 340;
+  const RETRACT = 220, MOVE = 450, DRAW = 340;
   const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
   /** Where a new layout is in its three beats (V7), and the lines retracting in the first. */
   let beat = $state<"" | "retract" | "move" | "draw">("");
@@ -193,14 +193,15 @@
   let grown = $state.raw<{ key: string; d: string }[]>([]);
   async function arrive(was: { refs: Set<string>; edges: Set<string> }): Promise<void> {
     shifting = true;
-    setTimeout(() => (shifting = false), 700);
+    setTimeout(() => (shifting = false), MOVE + 50);
     await tick();
     if (!L || !idx || !report) return;
     const quiet = matchMedia("(prefers-reduced-motion: reduce)").matches;
     for (const item of L.items) {
       if (was.refs.has(item.ref) || item.ref.startsWith("@")) continue;
       const el = viewport?.querySelector(item.kind === "folder" ? `[data-folder="${CSS.escape(item.ref)}"]` : `[data-note="${CSS.escape(item.ref)}"]`);
-      el?.animate([{ opacity: 0 }, { opacity: 0, offset: quiet ? 0 : 0.45 }, { opacity: 1 }], { duration: quiet ? 200 : 1000, easing: "ease-out" });
+      // In while the others make room, and there before the lines to it draw.
+      el?.animate([{ opacity: 0 }, { opacity: 0, offset: quiet ? 0 : 0.4 }, { opacity: 1 }], { duration: quiet ? 200 : MOVE, easing: "ease-out" });
     }
     const fresh = report.model.edges.filter(([a, b]) => !was.edges.has(`${a}>${b}`) && !a.startsWith("@") && !b.startsWith("@") && was.refs.has(a) && was.refs.has(b));
     // A pulse runs along the way the link is drawn at rest (the same route the lit links take), not a line of its own.
@@ -609,13 +610,14 @@
     cancelAnimationFrame(flying);
     still();
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) { view = to; return; }
-    const from = view, t0 = performance.now(), ms = 320;
+    const from = view, t0 = performance.now(), ms = 320, dk = to.k - from.k;
+    // Between two views at different zooms one point of the screen stays put. About it the map only grows or shrinks:
+    // everything on it moves in a straight line, all at one pace on screen, the same pace in as out (eased as a ratio,
+    // a zoom out would leap in its first frame). With barely a zoom, the map glides.
+    const p = Math.abs(dk) > from.k * 0.02 ? { x: (from.k * to.x - to.k * from.x) / -dk, y: (from.k * to.y - to.k * from.y) / -dk } : null;
     const step = (now: number): void => {
-      const t = Math.min(1, (now - t0) / ms), e = 1 - (1 - t) ** 3;
-      // The zoom eases as a ratio, so the map grows evenly; the place follows it.
-      const k = from.k * (to.k / from.k) ** e, cx = size.w / 2, cy = size.h / 2;
-      const wx = ((cx - from.x) / from.k) * (1 - e) + ((cx - to.x) / to.k) * e, wy = ((cy - from.y) / from.k) * (1 - e) + ((cy - to.y) / to.k) * e;
-      view = t === 1 ? to : { k, x: cx - wx * k, y: cy - wy * k };
+      const t = Math.min(1, (now - t0) / ms), e = 1 - (1 - t) ** 3, k = from.k + dk * e, f = k / from.k;
+      view = t === 1 ? to : p ? { k, x: p.x - (p.x - from.x) * f, y: p.y - (p.y - from.y) * f } : { k, x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e };
       if (t < 1) flying = requestAnimationFrame(step);
     };
     flying = requestAnimationFrame(step);
@@ -930,8 +932,8 @@
   .sat.more:hover, .sat.more:focus-visible { color: var(--text); border-color: var(--lattice); }
   .sat.picture img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .sat.broken { color: var(--rose); border-color: var(--rose); border-style: dashed; }
-  /* Only while a changed base settles (K3): at any other time, a zoom changes the same places and must not ease. */
-  .shifting :global(:is(.n, .sn, .folder)) { transition: left 0.45s ease, top 0.45s ease, width 0.45s ease, height 0.45s ease; }
+  /* Only while a changed base settles (K3), as long as its MOVE beat: at any other time, a zoom changes the same places and must not ease. */
+  .shifting :global(:is(.n, .sn, .folder)) { transition: left 450ms var(--ease-out), top 450ms var(--ease-out), width 450ms var(--ease-out), height 450ms var(--ease-out); }
   @media (prefers-reduced-motion: reduce) { .shifting :global(:is(.n, .sn, .folder)) { transition: none; } }
   .said { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-4); text-align: center; }
   /* What a hold will make: a note's or a folder's icon where it was held, and what it is (V6). */
