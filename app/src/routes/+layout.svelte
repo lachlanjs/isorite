@@ -80,6 +80,7 @@
   // On a phone, the pane swiped into view takes the focus.
   function scrolled(): void {
     if (!panes.narrow || !row) return;
+    at = row.scrollLeft / Math.max(1, row.clientWidth); // scroll events come once a frame, before it is drawn
     clearTimeout(settle);
     settle = setTimeout(() => {
       const p = PANES[Math.round(row!.scrollLeft / row!.clientWidth)];
@@ -87,6 +88,9 @@
     }, 60);
   }
   let settle: ReturnType<typeof setTimeout> | undefined;
+  /** Where the row of panes is, in panes (1.5: half way from the second to the third): the tabs' bar follows it, so it
+   *  moves with the panes as they slide, tapped or swiped, and the tab nearest it is lit as soon as it is past half way. */
+  let at = $state(0);
   // Keys: Alt+1/2/3 a pane, Alt+←/→ the next, Alt+↑/↓ its lens or Iso's mode, Alt+L the layout. The arrows are left
   // to the editor while you type in it, where they move lines and words.
   function keys(e: KeyboardEvent): void {
@@ -193,8 +197,9 @@
   </main>
 
   <nav class="tabs" aria-label="Panes">
-    {#each PANES as p (p)}
-      <button type="button" aria-current={panes.focus === p} aria-label={NAME[p]} onclick={() => panes.to(p)}>
+    <span class="bar" aria-hidden="true" style:translate="{at * 100}% 0"></span>
+    {#each PANES as p, i (p)}
+      <button type="button" class:near={Math.round(at) === i} aria-current={panes.focus === p} aria-label={NAME[p]} onclick={() => panes.to(p)}>
         {NAME[p]}
         {#if p === "iso" && panes.unseen}<span class="badge">{panes.unseen}</span>{/if}
       </button>
@@ -237,7 +242,8 @@
   .pane.first { border-left: 0; }
   .pane.top { border-bottom: 1px solid var(--line); }
   .pane[hidden] { display: none; }
-  .pbody { flex: 1 1 auto; min-height: 0; overflow: auto; position: relative; overscroll-behavior: contain; }
+  /* Contained up and down only: a sideways swipe in a pane goes on to the row of panes, so on a phone it changes pane. */
+  .pbody { flex: 1 1 auto; min-height: 0; overflow: auto; position: relative; overscroll-behavior: auto contain; }
   .atlas-body { overflow: hidden; }
   .iso-body { overflow: hidden; display: flex; flex-direction: column; }
   /* The note's page lays itself out by its pane's width, not the window's: its margin and timeline columns. */
@@ -256,9 +262,12 @@
     .panes::-webkit-scrollbar { display: none; }
     .pane, .pane[hidden] { display: flex; flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; border-left: 0; }
     .tabs { display: grid; grid-template-columns: repeat(3, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); background: var(--ground-0); }
-    .tabs button { height: 52px; background: none; border: 0; font-family: var(--font-pixel); font-size: 14px; color: var(--text-faint); position: relative; display: grid; place-content: center; gap: 2px; cursor: pointer; }
-    .tabs button[aria-current="true"] { color: var(--text); }
-    .tabs button[aria-current="true"]::before { content: ""; position: absolute; top: -1px; left: 20%; right: 20%; height: 2px; background: var(--text); }
+    .tabs button { -webkit-tap-highlight-color: transparent; height: 52px; background: none; border: 0; transition: color var(--t-ack) var(--ease-out); font-family: var(--font-pixel); font-size: 14px; color: var(--text-faint); position: relative; display: grid; place-content: center; gap: 2px; cursor: pointer; }
+    .tabs button.near { color: var(--text); }
+    .tabs button:active { background: var(--ground-1); }
+    /* The bar under the pane in view: a third of the row wide, its line inset as the label is, moved by the scroll itself. */
+    .tabs .bar { position: absolute; top: -1px; left: 0; width: calc(100% / 3); height: 2px; pointer-events: none; }
+    .tabs .bar::before { content: ""; position: absolute; inset: 0 20%; background: var(--text); }
     .tabs .badge { position: absolute; top: 8px; right: calc(50% - 30px); font: 10px var(--font-ui); color: var(--ground-0); background: var(--growth); min-width: 16px; height: 16px; display: grid; place-items: center; padding: 0 3px; }
   }
   button.chip { flex: 0 1 auto; min-width: 6.5em; background: none; border: 0; padding: 0 4px; font: 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); cursor: pointer; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
