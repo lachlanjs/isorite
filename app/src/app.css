@@ -10,6 +10,11 @@
 @font-face { font-family: "Charter"; font-style: italic; font-weight: 400; font-display: swap; src: url(/fonts/charter-italic.woff2) format("woff2"); }
 @font-face { font-family: "Charter"; font-style: normal; font-weight: 700; font-display: swap; src: url(/fonts/charter-bold.woff2) format("woff2"); }
 @font-face { font-family: "Charter"; font-style: italic; font-weight: 700; font-display: swap; src: url(/fonts/charter-bold-italic.woff2) format("woff2"); }
+/* The notes in a sans, when chosen (the notes' type, in the Note pane's settings): IBM Plex Sans, SIL OFL 1.1. */
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-sans-latin-regular.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: italic; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-sans-latin-italic.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 700; font-display: swap; src: url(/fonts/ibm-plex-sans-latin-bold.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: italic; font-weight: 700; font-display: swap; src: url(/fonts/ibm-plex-sans-latin-bold-italic.woff2) format("woff2"); }
 /* Maths letters and digits in Charter, to match the reading text; symbols, Greek and big operators stay in KaTeX's fonts. */
 @font-face { font-family: "Math Charter"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/charter-regular.woff2) format("woff2"); unicode-range: U+30-39, U+41-5A, U+61-7A; size-adjust: 92.6%; }
 @font-face { font-family: "Math Charter"; font-style: italic; font-weight: 400; font-display: swap; src: url(/fonts/charter-italic.woff2) format("woff2"); unicode-range: U+30-39, U+41-5A, U+61-7A; size-adjust: 92.6%; }
@@ -123,6 +128,7 @@ button { cursor: pointer; }
     linear-gradient(var(--b), var(--b)) bottom right / var(--l) var(--w) no-repeat, linear-gradient(var(--b), var(--b)) bottom right / var(--w) var(--l) no-repeat;
 }
 /* Chosen (P): solid, in its own colour (--c) or the lattice, cut at two corners as a chip is. Open: a bar. */
+:root[data-face="sans"] { --font-text: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; }
 :root { --chosen-cut: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); }
 /* Where the browser can draw curves in a clip, every vertex is eased a little: the cuts by --round-cut, the square
    corners by --round. (A cut vertex is eased along the cut by r times cos 45.) */

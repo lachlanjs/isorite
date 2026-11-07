@@ -165,6 +165,26 @@ test("changed elsewhere in another paragraph while you write: both are kept, and
   await expect(editor(page)).toContainText("First paragraph. Typed here.");
 });
 
+test("the notes are in a serif, or in a sans by the Note pane's setting, kept from the first paint", async ({ page }) => {
+  await page.goto("#/n/basics/surprise");
+  await expect(editor(page)).toContainText("An outcome of probability");
+  const text = editor(page).locator(".cm-line").first();
+  expect(await text.evaluate((e) => getComputedStyle(e).fontFamily)).toContain("Charter");
+  await page.getByRole("button", { name: "Note settings" }).click();
+  await page.getByRole("dialog", { name: "Note settings" }).getByRole("radio", { name: "sans" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-face", "sans");
+  await page.keyboard.press("Escape");
+  expect(await text.evaluate((e) => getComputedStyle(e).fontFamily)).toContain("IBM Plex Sans");
+  // The face itself, not a fallback: served from the app's own fonts.
+  await expect.poll(() => page.evaluate(() => document.fonts.check('16px "IBM Plex Sans"'))).toBe(true);
+  await look(page, "notes-sans");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-face", "sans");
+  await page.getByRole("button", { name: "Note settings" }).click();
+  await page.getByRole("dialog", { name: "Note settings" }).getByRole("radio", { name: "serif" }).click();
+  await expect(page.locator("html")).not.toHaveAttribute("data-face", "sans");
+});
+
 test("a click on a formula, inline, displayed in a sentence or on its own lines, puts the cursor at its start", async ({ page }) => {
   const name = test.info().project.name, id = `basics/formulas-${name}`;
   const made = await page.request.get("api/session").then((r) => r.json()) as { token: string };

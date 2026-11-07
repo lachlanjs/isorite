@@ -5,7 +5,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { app } from "$lib/app.svelte.ts";
-  import { CODE_LOOKS, GROUNDS, codeLook, ground } from "$lib/ground.svelte.ts";
+  import { CODE_LOOKS, FACES, GROUNDS, codeLook, face, ground } from "$lib/ground.svelte.ts";
   import { LAYOUTS, PANES, panes, type Pane } from "$lib/panes.svelte.ts";
   import { makeKind } from "$lib/make.ts";
   import { kept } from "$lib/here.ts";
@@ -98,6 +98,15 @@
   <div class="row" role="radiogroup" aria-label="Ground">
     {#each GROUNDS as [value, name] (value)}
       <button class="btn" class:on={ground.chosen === value} type="button" role="radio" aria-checked={ground.chosen === value} onclick={() => ground.choose(value)}>{name}</button>
+    {/each}
+  </div>
+</section>
+
+<section>
+  <h2 class="label">the notes' type</h2>
+  <div class="row" role="radiogroup" aria-label="The notes' type">
+    {#each FACES as [value, name] (value)}
+      <button class="btn" class:on={face.chosen === value} type="button" role="radio" aria-checked={face.chosen === value} title={value ? "IBM Plex Sans" : "Charter"} style:font-family={value ? '"IBM Plex Sans", sans-serif' : "var(--font-text)"} onclick={() => face.choose(value)}>{name}</button>
     {/each}
   </div>
 </section>

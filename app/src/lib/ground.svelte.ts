@@ -31,4 +31,22 @@ class CodeChoice {
 }
 
 export const codeLook = new CodeChoice();
+
+/** The notes' face: Charter, the serif (the default), or IBM Plex Sans, a sans whose squared curves are kin to the
+ *  interface's mono and which sets a line to nearly the same length. Kept in this browser, set on the root before
+ *  first paint as the ground is. Maths keeps its serif italic either way. */
+export type Face = "" | "sans";
+
+class FaceChoice {
+  chosen = $state<Face>((typeof document === "undefined" ? "" : document.documentElement.dataset.face ?? "") as Face);
+
+  choose(face: Face): void {
+    this.chosen = face;
+    if (face) document.documentElement.dataset.face = face; else delete document.documentElement.dataset.face;
+    try { if (face) localStorage.setItem("isorite.face", face); else localStorage.removeItem("isorite.face"); } catch { /* not kept */ }
+  }
+}
+
+export const face = new FaceChoice();
+export const FACES: [Face, string][] = [["", "serif"], ["sans", "sans"]];
 export const CODE_LOOKS: [CodeLook, string][] = [["", "in colour"], ["ink", "in ink"]];
