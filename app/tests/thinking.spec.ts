@@ -14,7 +14,8 @@ test("an agent's thinking is folded in the turn, ahead of its answer, and opens 
   await box(page).press("Enter");
   const thought = log(page).locator("details.think");
   await expect(thought).toHaveCount(1);
-  await expect(thought.locator("summary")).toHaveText("thinking");
+  // "Thinking…" while it is the last thing in a running turn, "Thought" once the agent has moved on.
+  await expect(thought.locator("summary")).toHaveText(/^(Thinking…|Thought)$/);
   await expect(thought.locator("p")).toBeHidden();
   await thought.locator("summary").click();
   await expect(thought.locator("p")).toHaveText("The note says surprise is rare outcomes.");

@@ -26,6 +26,11 @@ export function asAgentTurn(t: Turn): TerminalTurn {
   return { id: t.id, asked: t.asked, from: "here", items, state: t.state, given: t.given, at: t.at };
 }
 
+/** A prompt as the person wrote it: the notice isorite adds for the agent (code links gone stale, http.ts) is the
+ *  agent's to read, not part of what was asked, so it is not shown in the turn or the session's title. */
+export const plainAsked = (text: string): string => text.replace(/\s*\(isorite: [^]*$/, "").trimEnd();
+// The notice is always the last thing in a prompt, and an agent may cut a title short inside it: all of it goes.
+
 class TerminalState {
   view = $state.raw<TerminalView | null>(null);
   /** An earlier conversation with the agent being read, in place of the agent's session. */
@@ -38,7 +43,15 @@ class TerminalState {
   changing = $state(false);
   /** Why the last message could not be sent, or an answer not given. */
   problem = $state("");
+  /** A prompt or steer on its way to the server: the box waits, so one Enter sends one message. */
+  sending = $state(false);
+  /** Permissions answered here, until the server's view no longer asks them: their buttons stand down at once. */
+  answered = $state.raw<ReadonlySet<string>>(new Set());
+  /** Tool calls refused here because a switch is off, and which switch: said under the call, not just marked failed. */
+  refusedBy = $state.raw<Readonly<Record<string, "run" | "files">>>({});
   private started = false;
+  /** A view has come from the event stream: the first read, if it answers later, is older and is dropped. */
+  private heard = false;
 
   /** The session drawn: an old conversation being read, else the agent's. */
   get session(): TerminalView | null { return this.old ?? this.view; }
@@ -53,8 +66,11 @@ class TerminalState {
     void app.api.agentNotes().then(({ may }) => { panes.on.notes = may; }, () => undefined);
     panes.notesFlipped = (may) => { void app.api.setAgentNotes(may).catch((e: Error) => { panes.on.notes = !may; this.problem = e.message; }); };
     if (!this.api) { panes.setAttached(false); return; }
-    void this.api.view().then((v) => this.show(v), () => panes.setAttached(false));
-    app.on((e: EngineEvent) => { if (e.type === "terminal") this.show(e.terminal); });
+    const read = () => this.api?.view().then((v) => { if (!this.heard) this.show(v); }, () => { if (!this.heard) panes.setAttached(false); });
+    void read();
+    app.on((e: EngineEvent) => { if (e.type === "terminal") { this.heard = true; this.show(e.terminal); } });
+    // Back after the stream was lost: what happened meanwhile is read again, and the next event wins as ever.
+    app.onReconnect(() => { this.heard = false; void read(); });
   }
 
   private show(v: TerminalView): void {
@@ -64,8 +80,18 @@ class TerminalState {
     // What the agent asks to do that its switch does not allow is refused here (Q47); the rest it asks as before.
     for (const p of v.asking) {
       if (this.refused.has(p.id)) continue;
-      const off = /^(shell|bash|execute)$/.test(p.action) ? !panes.on.run : /^(edit|write|patch)$/.test(p.action) ? !panes.on.files : false;
-      if (off) { this.refused.add(p.id); void this.reply(p.id, "reject"); }
+      const off = /^(shell|bash|execute)$/.test(p.action) ? (!panes.on.run ? "run" : null) : /^(edit|write|patch)$/.test(p.action) ? (!panes.on.files ? "files" : null) : null;
+      if (off) {
+        this.refused.add(p.id);
+        if (p.tool) this.refusedBy = { ...this.refusedBy, [p.tool]: off };
+        void this.reply(p.id, "reject");
+      }
+    }
+    // What the server no longer asks needs no answer held for it.
+    if (this.answered.size) {
+      const open = new Set(v.asking.map((p) => p.id));
+      const still = [...this.answered].filter((id) => open.has(id));
+      if (still.length !== this.answered.size) this.answered = new Set(still);
     }
     // Asked from the agent's front end while you look elsewhere: Iso's tab says so.
     if (was && v.connected && panes.focus !== "iso" && v.turns.length > (this.seen ?? v.turns.length)) panes.unseen++;
@@ -75,23 +101,32 @@ class TerminalState {
   private readonly refused = new Set<string>();
 
   async send(asked: string): Promise<boolean> {
+    if (!asked.trim() || !this.api || this.sending) return false;
     this.problem = "";
-    if (!asked.trim() || !this.api) return false;
     this.old = null;
+    this.sending = true;
     try {
       await this.api.prompt(asked.trim(), givenOf());
       return true;
-    } catch (e) { this.problem = (e as Error).message; return false; }
+    } catch (e) { this.problem = (e as Error).message; return false; } finally { this.sending = false; }
   }
   /** Said while the agent works: in after the step running now. */
   async steer(asked: string): Promise<boolean> {
+    if (!asked.trim() || !this.api || this.sending) return false;
     this.problem = "";
-    if (!asked.trim() || !this.api) return false;
-    try { await this.api.steer(asked.trim(), givenOf()); return true; } catch (e) { this.problem = (e as Error).message; return false; }
+    this.sending = true;
+    try { await this.api.steer(asked.trim(), givenOf()); return true; } catch (e) { this.problem = (e as Error).message; return false; } finally { this.sending = false; }
   }
   get canSteer(): boolean { return this.running && !!this.view?.steer; }
   async stop(): Promise<void> { try { await this.api?.stop(); } catch (e) { this.problem = (e as Error).message; } }
-  async reply(id: string, decision: Decision): Promise<void> { try { await this.api?.reply(id, decision); } catch (e) { this.problem = (e as Error).message; } }
+  async reply(id: string, decision: Decision): Promise<void> {
+    if (this.answered.has(id)) return;
+    this.answered = new Set([...this.answered, id]);
+    try { await this.api?.reply(id, decision); } catch (e) {
+      this.problem = (e as Error).message;
+      this.answered = new Set([...this.answered].filter((x) => x !== id));
+    }
+  }
   /** Keep a question the agent asked back, or a passage it offered (M25). */
   async take(id: string): Promise<void> { try { await this.api?.take(id); } catch (e) { this.problem = (e as Error).message; } }
 

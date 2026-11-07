@@ -32,11 +32,23 @@ type Given = unknown | { given: unknown; copy?: boolean };
 const wantsCopy = (g: Given): boolean => typeof g === "object" && g !== null && "copy" in g && Boolean((g as { copy?: boolean }).copy);
 
 export function drawn(node: HTMLElement, given?: Given) {
-  const run = (g: Given) => {
+  // Drawn when what is in the node changes, not when Svelte calls update: update can come before {@html} has put
+  // the new text in (and comes for every object passed, equal or not, so a pane's session redrawn from every event
+  // would draw everything again). Only the node's own children are watched, so what drawing adds does not wake it.
+  let copy = wantsCopy(given);
+  let queued = false;
+  const run = () => {
+    queued = false;
     colourCode(node);
     drawDiagrams(node);
-    if (wantsCopy(g)) copyIcons(node);
+    if (copy) copyIcons(node);
   };
-  run(given);
-  return { update: (g: Given) => run(g) };
+  const soon = () => { if (!queued) { queued = true; queueMicrotask(run); } };
+  run();
+  const changed = new MutationObserver(soon);
+  changed.observe(node, { childList: true, characterData: true });
+  return {
+    update: (g: Given) => { const was = copy; copy = wantsCopy(g); if (copy && !was) soon(); },
+    destroy: () => changed.disconnect(),
+  };
 }

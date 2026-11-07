@@ -15,9 +15,12 @@
   const context = $derived(!view ? "Context: no agent attached" : view.size ? `${view.agent}: ${short(view.tokens.input)} of ${short(view.size)} tokens${view.cost ? `, ${money(view.cost)}` : ""}${long ? ": long enough to drift" : ""}` : `${view.agent || "The agent"} hasn't said how full its context is`);
 </script>
 
+<!-- Only where there is something to show: an empty bar is a gap in a crowded header that says nothing. -->
+{#if used}
 <button type="button" class="gauge" aria-label={context} title={context} onclick={() => (terminal.shown = terminal.shown === "context" ? "session" : "context")}>
   <i class="bar ctx" class:long class:full style:--fill={fill}></i>
 </button>
+{/if}
 
 <style>
   .gauge { display: inline-flex; flex-direction: column; gap: 3px; width: 32px; align-self: center; margin-right: 4px; background: none; border: 0; padding: 6px 0; cursor: pointer; }

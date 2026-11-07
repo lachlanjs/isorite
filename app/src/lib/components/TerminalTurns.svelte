@@ -8,16 +8,18 @@
   import AttachAgent from "./AttachAgent.svelte";
   import Crystal from "./Crystal.svelte";
   import type { Given, TerminalItem, TerminalPermission, TerminalTurn } from "@isorite/engine";
-  import { tick } from "svelte";
+  import { onMount } from "svelte";
+  import { slide } from "svelte/transition";
   import { app } from "$lib/app.svelte.ts";
   import { basePage } from "$lib/here.ts";
   import { render } from "$lib/markdown.ts";
   import { drawn } from "$lib/drawn.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { pointedBy, pointing } from "$lib/pointing.svelte.ts";
-  import { terminal } from "$lib/terminal.svelte.ts";
+  import { plainAsked, terminal } from "$lib/terminal.svelte.ts";
 
   let list = $state<HTMLElement>();
+  let flow = $state<HTMLElement>();
   const view = $derived(terminal.session);
   const titleOf = (id: string): string => app.listing.notes.find((n) => n.id === id)?.title ?? id.split("/").at(-1) ?? id;
   /** What a tool did, in a word, as the Iso pane says its own steps. */
@@ -39,8 +41,44 @@
   const askingFor = (id: string) => view?.asking.filter((p) => p.tool === id) ?? [];
   const loose = $derived(view?.asking.filter((p) => !p.tool || !view.turns.some((t) => t.items.some((i) => i.kind === "tool" && i.id === p.tool))) ?? []);
 
-  // Kept at the newest as the session grows.
-  $effect(() => { void view; void tick().then(() => { if (list) list.scrollTop = list.scrollHeight; }); });
+  // Kept at the newest as the session grows, but only while you are there: scrolled up to read, you stay where you
+  // are, and a button takes you back down. Followed by size, not by event, so a diagram or a code block that draws
+  // after the text has come still ends in view.
+  const NEAR = 48;
+  let pinned = $state(true);
+  let behind = $state(false);
+  /** How tall the session was when last measured: whether you were at the end is judged against that, since the
+   *  scroll event that says you moved can come after the content has already grown. */
+  let height = 0;
+  const atEnd = (h: number) => !!list && h - list.scrollTop - list.clientHeight <= NEAR;
+  const toEnd = (smooth = false) => { if (list) list.scrollTo({ top: list.scrollHeight, behavior: smooth ? "smooth" : "instant" }); };
+  function scrolled(): void {
+    if (!list) return;
+    pinned = atEnd(list.scrollHeight);
+    if (pinned) behind = false;
+  }
+  function latest(): void { pinned = true; behind = false; toEnd(!matchMedia("(prefers-reduced-motion: reduce)").matches); }
+  onMount(() => {
+    if (!flow || !list) return;
+    height = list.scrollHeight;
+    const grew = new ResizeObserver(() => {
+      if (!list) return;
+      const was = height;
+      height = list.scrollHeight;
+      if (pinned && atEnd(was)) toEnd();
+      else if (height > was) { pinned = false; behind = true; }
+    });
+    grew.observe(flow);
+    toEnd();
+    return () => grew.disconnect();
+  });
+  // Another session shown, or a message sent from here: back to the newest.
+  const shownSession = $derived(view?.session ?? null);
+  $effect(() => { void shownSession; pinned = true; behind = false; toEnd(); });
+  $effect(() => { if (terminal.sending) { pinned = true; behind = false; toEnd(); } });
+  /** Why a call the agent asked to make was refused here: a switch in this pane's header is off. */
+  const REFUSED = { run: "Not run: running commands is switched off in this pane's header (Alt+R).", files: "Not written: editing the project's files is switched off in this pane's header (Alt+F)." };
+  const motion = () => (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 160);
 
   /** A note named in the session, under the mouse, is lit on the Atlas (M17): a link in what the agent said, or a
    *  note it read, changed or asked about. */
@@ -73,23 +111,24 @@
 </script>
 
 {#snippet permit(p: TerminalPermission)}
+  {@const done = terminal.answered.has(p.id)}
   <div class="permit" role="group" aria-label="The agent asks before it does this">
     <p>{view?.agent || "The agent"} wants to <code>{asks(p)}</code>.</p>
-    <p class="acts"><button type="button" onclick={() => void terminal.reply(p.id, "once")}>Allow once</button><button type="button" onclick={() => void terminal.reply(p.id, "always")}>Always allow this</button><button type="button" class="no" onclick={() => void terminal.reply(p.id, "reject")}>Don't allow</button></p>
+    <p class="acts"><button type="button" disabled={done} onclick={() => void terminal.reply(p.id, "once")}>Allow once</button><button type="button" disabled={done} onclick={() => void terminal.reply(p.id, "always")}>Always allow this</button><button type="button" class="no" disabled={done} onclick={() => void terminal.reply(p.id, "reject")}>Don't allow</button>{#if done}<span class="faint">answered…</span>{/if}</p>
   </div>
 {/snippet}
 
-{#snippet item(i: TerminalItem)}
+{#snippet item(i: TerminalItem, live: boolean)}
   {#if i.kind === "text"}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render() -->
     <div class="said prose" use:drawn={{ given: i.text, copy: true }}>{@html render(i.text)}</div>
   {:else if i.kind === "thinking"}
     <!-- What the model reasoned (M36): folded, since it is its working and not its answer. -->
-    <details class="think"><summary>thinking</summary><p>{i.text}</p></details>
+    <details class="think"><summary><span class="caret" aria-hidden="true"></span>{live ? "Thinking…" : "Thought"}</summary><p>{i.text}</p></details>
   {:else if i.kind === "compaction"}
     <!-- The earlier conversation shortened so the session fits the model (M36). -->
     <details class="squeeze" data-state={i.state}>
-      <summary>{#if i.state === "running"}Summarising the earlier conversation to make room…{:else if i.state === "failed"}Could not summarise the earlier conversation{i.error ? ` (${i.error})` : ""}; carrying on with all of it{:else}Earlier conversation summarised: {tokens(i.before)} → {tokens(i.after ?? 0)} tokens{/if}</summary>
+      <summary><span class="caret" aria-hidden="true"></span>{#if i.state === "running"}Summarising the earlier conversation to make room…{:else if i.state === "failed"}Could not summarise the earlier conversation{i.error ? ` (${i.error})` : ""}; carrying on with all of it{:else}Earlier conversation summarised: {tokens(i.before)} → {tokens(i.after ?? 0)} tokens{/if}</summary>
       {#if i.summary}<p>{i.summary}</p>{/if}
     </details>
   {:else if i.kind === "message"}
@@ -116,7 +155,7 @@
       {#if i.output || i.diff}
         <details>
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- another base's page, not in this app -->
-          <summary><span class="v">{verb(i.name)}</span>{#if i.note && i.base}<a class="note-link" href={basePage(i.base, `#/n/${i.note}`)} data-sveltekit-reload target="_blank" rel="noopener" title="In {i.base}, in a tab of its own"><span class="in">{i.base}:</span> {i.note}</a>{:else if i.note}<button type="button" class="note-link" data-to={i.note} onclick={(e) => { e.preventDefault(); open(i.name, i.note!); }}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}{#if i.diff}<span class="n"><span class="add">+{i.diff.filter((l) => l.startsWith("+")).length}</span> <span class="del">−{i.diff.filter((l) => l.startsWith("-")).length}</span></span>{/if}</summary>
+          <summary><span class="caret" aria-hidden="true"></span><span class="v">{verb(i.name)}</span>{#if i.note && i.base}<a class="note-link" href={basePage(i.base, `#/n/${i.note}`)} data-sveltekit-reload target="_blank" rel="noopener" title="In {i.base}, in a tab of its own"><span class="in">{i.base}:</span> {i.note}</a>{:else if i.note}<button type="button" class="note-link" data-to={i.note} onclick={(e) => { e.preventDefault(); open(i.name, i.note!); }}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}{#if i.diff}<span class="n"><span class="add">+{i.diff.filter((l) => l.startsWith("+")).length}</span> <span class="del">−{i.diff.filter((l) => l.startsWith("-")).length}</span></span>{/if}</summary>
           {#if i.diff}<pre class="diff">{#each i.diff as l, k (k)}<span class:add={l.startsWith("+")} class:del={l.startsWith("-")}>{l}</span>{/each}</pre>
           {:else}<pre class="out">{i.output}</pre>{/if}
         </details>
@@ -124,13 +163,16 @@
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- another base's page, not in this app -->
         <p class="line"><span class="v">{verb(i.name)}</span>{#if i.note && i.base}<a class="note-link" href={basePage(i.base, `#/n/${i.note}`)} data-sveltekit-reload target="_blank" rel="noopener" title="In {i.base}, in a tab of its own"><span class="in">{i.base}:</span> {i.note}</a>{:else if i.note}<button type="button" class="note-link" data-to={i.note} onclick={() => open(i.name, i.note!)}>{titleOf(i.note)}</button>{:else}<code class="q">{i.title}</code>{/if}</p>
       {/if}
+      {#if terminal.refusedBy[i.id]}<p class="why">{REFUSED[terminal.refusedBy[i.id]!]}</p>{/if}
       {#each askingFor(i.id) as p (p.id)}{@render permit(p)}{/each}
     </div>
   {/if}
 {/snippet}
 
-<div class="chat" bind:this={list} role="log" aria-label="The agent's session" aria-live="polite" onpointerover={pointAt} onpointerleave={() => pointing.set("iso", null)}>
-  {#if view?.title}<p class="title faint">{view.title}</p>{/if}
+<div class="wrap">
+<div class="chat" bind:this={list} onscroll={scrolled} role="log" aria-label="The agent's session" aria-live="polite" onpointerover={pointAt} onpointerleave={() => pointing.set("iso", null)}>
+  <div class="flow" bind:this={flow}>
+  {#if view?.title && plainAsked(view.title)}<p class="title faint" title={plainAsked(view.title)}>{plainAsked(view.title)}</p>{/if}
   {#each view?.turns ?? [] as t (t.id)}
     {@render turn(t)}
   {/each}
@@ -141,16 +183,23 @@
   {#if terminal.old}<p class="faint">A conversation with the agent, from before isorite attached your own agent: kept to read.</p>
   {:else if view?.reading}<p class="faint">Kept here; {view.agent} isn't attached to carry it on.</p>{/if}
   {#if !terminal.connected}<AttachAgent />{/if}
+  </div>
+</div>
+{#if behind && !pinned}
+  <button type="button" class="latest" onclick={latest} title="Back to the newest">
+    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3v10M4 9l4 4 4-4" /></svg>{terminal.running ? "Following the agent" : "Newest"}
+  </button>
+{/if}
 </div>
 
 {#snippet turn(t: TerminalTurn)}
   <article class="turn" data-state={t.state}>
-    <div class="you"><p class="asked">{t.asked}</p>
+    <div class="you"><p class="asked">{plainAsked(t.asked)}</p>
       {#if t.given?.length}
         <span class="gave">{#each t.given as g, k (k)}<span class="chip" class:out={t.withdrawn?.includes(k)} title={t.withdrawn?.includes(k) ? "Taken out of the conversation afterwards: the agent is no longer sent it" : undefined} data-to={g.kind === "note" ? g.id : undefined}><span class="k" aria-hidden="true">{SYM[g.kind]}</span><span class="t">{g.kind === "passage" ? g.text : g.kind === "folder" ? g.id || "the base" : titleOf(g.id)}</span></span>{/each}</span>
       {/if}
       <span class="from">{terminal.old ? "" : t.from === "here" ? "from here" : "in its front end"}</span></div>
-    {#each t.items as i, k (k)}{#if !itself(i) && !folded(t, i)}{@render item(i)}{/if}{/each}
+    {#each t.items as i, k (k)}{#if !itself(i) && !folded(t, i)}<div class="it" out:slide={{ duration: motion() }}>{@render item(i, t.state === "running" && k === t.items.length - 1)}</div>{/if}{/each}
     {#if t.state !== "running" && drew(t).length}
       <div class="parts" role="group" aria-label="What {view?.agent || 'the agent'} drew on">
         {#each drew(t) as id (id)}
@@ -170,13 +219,33 @@
 {/snippet}
 
 <style>
-  .chat { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 18px; }
-  .title { font-size: 11px; margin-bottom: -8px; }
+  .wrap { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .chat { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
+  .flow { padding: 16px; display: flex; flex-direction: column; gap: 18px; }
+  .title { font-size: 11px; margin-bottom: -8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Back to the newest, when you have scrolled up and more has come. */
+  .latest { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; background: var(--ground-1); border: 1px solid var(--line-strong); color: var(--text-soft); font: 11.5px var(--font-ui); cursor: pointer; box-shadow: 0 4px 14px rgb(0 0 0 / .25); animation: fade 140ms var(--ease-out, ease-out); }
+  @keyframes fade { from { opacity: 0; } }
+  .latest:hover, .latest:focus-visible { color: var(--text); border-color: var(--lattice); }
+  /* What comes in, comes in gently: a turn, and each thing in it. */
+  .turn, .it { animation: appear 160ms var(--ease-out, ease-out); }
+  @keyframes appear { from { opacity: 0; transform: translateY(3px); } }
+  @media (prefers-reduced-motion: reduce) { .turn, .it, .latest { animation: none; } }
+  .it { display: grid; min-width: 0; }
+  /* A disclosure says it opens: a caret that turns. */
+  /* It stands in the gutter, where a line's mark is: one mark per line, the text in one column. */
+  .caret { position: absolute; left: 3px; top: calc(.5lh - 3.5px); width: 0; height: 0; border-left: 4px solid currentColor; border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent; opacity: .7; transition: transform var(--t-ack, 140ms) var(--ease-out, ease-out); }
+  details[open] > summary > .caret { transform: rotate(90deg); }
+  summary { position: relative; }
+  .tool summary { margin-left: -16px; padding-left: 16px; }
+  .tool:has(> details)::before { content: none; }
   .turn { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .you { padding-left: 16px; position: relative; display: flex; flex-direction: column; gap: 4px; }
   .you::before { content: "›"; position: absolute; left: 0; top: 0; color: var(--lattice); }
-  .think, .squeeze { margin: 0; font-size: 12.5px; color: var(--text-soft); }
-  .think summary, .squeeze summary { cursor: pointer; font: 11.5px var(--font-mono); color: var(--text-soft); }
+  .think, .squeeze { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--text-soft); }
+  .think summary, .squeeze summary { margin-left: -16px; padding-left: 16px; display: flex; align-items: center; cursor: pointer; font: 11.5px var(--font-mono); color: var(--text-faint); list-style: none; width: fit-content; }
+  .think summary:hover, .squeeze summary:hover { color: var(--text-soft); }
+  .think summary::-webkit-details-marker, .squeeze summary::-webkit-details-marker { display: none; }
   .think p, .squeeze p { margin: 6px 0 0; padding-left: 10px; border-left: 2px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
   .squeeze[data-state="failed"] summary { color: var(--rose); }
   .mid { margin: 0; padding-left: 10px; border-left: 2px solid var(--line-strong); color: var(--text); font-size: 13px; overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -189,6 +258,7 @@
   .said::before { content: "▸"; position: absolute; left: 0; top: 1px; font: 11px var(--font-ui); color: var(--growth); }
   .said :global(p + p), .said :global(p + ul), .said :global(ul + p) { margin-top: 8px; }
   .said :global(ul), .said :global(ol) { margin: 0; padding-left: 20px; }
+  .said > :global(:last-child), .offer .yours > :global(:last-child) { margin-bottom: 0; }
   .said :global(pre) { overflow-x: auto; }
   .tool { padding-left: 16px; font-size: 12px; color: var(--text-faint); position: relative; min-width: 0; display: grid; gap: 6px; }
   .tool::before { content: "·"; position: absolute; left: 4px; top: 0; }
@@ -204,6 +274,8 @@
   .del { color: var(--rose); }
   pre { margin: 6px 0 0; padding: 8px 10px; background: var(--ground-1); border: 1px solid var(--line); font: 11.5px/1.45 var(--font-mono); color: var(--text-soft); overflow: auto; max-height: 280px; white-space: pre; }
   .diff span { display: block; }
+  .diff span:not(.add):not(.del) { color: var(--text-faint); }
+  .why { margin: 0; font-size: 11.5px; color: var(--text-soft); }
   .in { color: var(--text-faint); }
   a.note-link { text-decoration: none; }
   .note-link { background: none; border: 0; padding: 0; font: inherit; color: var(--text-soft); cursor: pointer; text-align: left; overflow-wrap: anywhere; }
@@ -213,7 +285,8 @@
   .permit code { font: 12px var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
   .acts { display: flex; gap: 16px; flex-wrap: wrap; }
   .acts button { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
-  .acts button:hover { color: var(--text); }
+  .acts button:hover:not(:disabled) { color: var(--text); }
+  .acts button:disabled { color: var(--text-faint); cursor: default; }
   .acts .no { color: var(--text-faint); }
   .asks { padding-left: 16px; display: grid; gap: 2px; font-size: 13px; }
   .asks p { display: flex; align-items: center; gap: 6px; min-width: 0; }

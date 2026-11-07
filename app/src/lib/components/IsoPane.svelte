@@ -4,6 +4,7 @@
   // shown. Notes named in it open in the Note pane. Enter sends; Shift+Enter is a new line; Escape stops. With no
   // agent attached, the pane says how to attach one.
   import { onMount } from "svelte";
+  import { app } from "$lib/app.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import { handoffText } from "$lib/handoff.ts";
@@ -116,9 +117,11 @@
     {/if}
     <div class="box">
       <label class="hidden-label" for="iso-box">Message the agent</label>
-      <textarea id="iso-box" bind:value={text} rows="2" placeholder={terminal.connected ? `Ask ${terminal.view?.agent || "the agent"}` : "Attach an agent to ask it here"} onkeydown={keys}></textarea>
+      <textarea id="iso-box" bind:value={text} aria-busy={terminal.sending} readonly={terminal.sending} rows="2" placeholder={terminal.connected ? `Ask ${terminal.view?.agent || "the agent"}` : "Attach an agent to ask it here"} onkeydown={keys}></textarea>
       {#if busy}
         <button class="corner stop" type="button" aria-label="Stop the agent" title="Stop  (Escape)" onclick={() => void terminal.stop()}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="4" y="4" width="8" height="8" fill="currentColor" /></svg></button>
+      {:else if terminal.sending}
+        <span class="corner sending" role="status" aria-label="Sending"><span class="dot"></span></span>
       {:else if text.trim()}
         <!-- Enter sends; a phone's return makes a new line, so a phone has this (Q17). -->
         <button class="corner send" type="button" aria-label="Send" title="Send  (Enter)" onclick={() => void send()}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10M9 4l4 4-4 4" /></svg></button>
@@ -127,6 +130,7 @@
     {#if busy && text.trim()}
       <p class="mid">Enter adds it for when the agent stops.{#if terminal.canSteer} <button type="button" class="more" onclick={() => void steer()} title="Put it in after the step running now (Ctrl+Enter)">Steer now</button>{/if}</p>
     {/if}
+    {#if app.offline}<p class="offline" role="status"><span class="dot"></span>Lost touch with isorite; reconnecting…</p>{/if}
     {#if terminal.problem || terminal.view?.problem}<p class="bad" role="alert">{terminal.problem || terminal.view?.problem}</p>{/if}
   </div>
 </div>
@@ -141,6 +145,13 @@
   textarea { flex: 1 1 auto; min-width: 0; min-height: 42px; max-height: 160px; resize: none; field-sizing: content; background: var(--ground-1); border: 1px solid var(--line); padding: 9px 34px 9px 10px; font: 13px/1.5 var(--font-ui); color: var(--text); }
   .corner { position: absolute; right: 5px; bottom: 5px; width: 26px; height: 26px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--growth); cursor: pointer; }
   .corner.stop { color: var(--rose); }
+  .corner.sending, .offline .dot { pointer-events: none; }
+  .dot { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--growth); animation: breathe 1s ease-in-out infinite alternate; }
+  @keyframes breathe { from { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+  .offline { margin: 0; display: flex; align-items: center; gap: 8px; font: 12px/1.4 var(--font-ui); color: var(--text-soft); }
+  .offline .dot { background: var(--rose); }
+  textarea[readonly] { color: var(--text-soft); }
   /* On a desktop Enter sends, so the arrow is for a touch screen only; stop is for both. */
   @media (pointer: fine) { .corner.send { display: none; } }
   .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; max-height: 84px; overflow: auto; }

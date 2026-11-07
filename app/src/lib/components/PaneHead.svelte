@@ -75,8 +75,8 @@
 {/if}
 
 <style>
-  .phead { container: phead / inline-size; height: 40px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 10px 0 16px; border-bottom: 1px solid var(--line); white-space: nowrap; user-select: none; position: relative; min-width: 0; overflow: hidden; }
-  .pname { font-family: var(--font-pixel); font-size: 15px; color: var(--text-soft); display: flex; align-items: center; gap: 8px; }
+  .phead { container: phead / inline-size; height: 40px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 16px; border-bottom: 1px solid var(--line); white-space: nowrap; user-select: none; position: relative; min-width: 0; overflow: hidden; }
+  .pname { font-family: var(--font-pixel); font-size: 15px; color: var(--text-soft); display: flex; align-items: center; gap: 8px; margin-right: 6px; }
   .pname::before { content: ""; width: 6px; height: 6px; background: var(--line-strong); }
   :global(.pane.focus) .pname { color: var(--text); }
   :global(.pane.focus) .pname::before { background: var(--lattice); }

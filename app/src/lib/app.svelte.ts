@@ -41,7 +41,21 @@ class AppState {
       // A run of saves asks for the list once.
       if (this.relist) clearTimeout(this.relist);
       this.relist = setTimeout(() => { void this.refresh(); }, 300);
+    }, (up) => {
+      this.offline = !up;
+      if (!up) return;
+      void this.refresh();
+      for (const listener of this.back) listener();
     });
+  }
+
+  /** The event stream is down (the server restarted, the laptop slept): the browser is reconnecting. */
+  offline = $state(false);
+  private readonly back = new Set<() => void>();
+  /** Hear when the event stream is back after being lost, to read again what may have changed meanwhile. */
+  onReconnect(listener: () => void): () => void {
+    this.back.add(listener);
+    return () => { this.back.delete(listener); };
   }
 
   async refresh(): Promise<void> {

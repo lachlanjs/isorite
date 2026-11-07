@@ -78,6 +78,9 @@ const AgentEdit = z.union([
 const AgentChange = z.object({ agent: AgentName, session: z.string().min(1).max(200), note: z.string().max(400), asked: z.string().max(4000), edit: AgentEdit }).strict();
 const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(200), busy: z.boolean() }).strict();
 
+/** How often, at most, a page is sent the pane's view while it changes (ms): about two frames. */
+const VIEW_EVERY = 32;
+
 export function createApp({ api, token, loopback, web, allowHosts = [], notes, acp, terminal, bases, base, agents, config, pi }: ServerOptions): Hono {
   const pane: PaneSessions | undefined = terminal ?? acp;
   const app = new Hono();
@@ -407,7 +410,23 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   };
   app.get("/api/events", (c) => streamSSE(c, async (stream) => {
     const stop = api.events((event) => { void stream.writeSSE({ event: event.type, data: JSON.stringify(event) }); });
-    const send = (view: ReturnType<PaneSessions["view"]>) => { void stream.writeSSE({ event: "terminal", data: JSON.stringify({ type: "terminal", terminal: view }) }).catch(() => undefined); };
+    // The pane's view is the whole session; while an agent streams it changes many times a frame. A page is sent the
+    // newest at most every VIEW_EVERY ms, the first of a quiet spell at once, so a long session does not grow slower.
+    let latest: ReturnType<PaneSessions["view"]> | null = null, timer: ReturnType<typeof setTimeout> | null = null, last = 0;
+    const flush = () => {
+      timer = null;
+      if (!latest) return;
+      const view = latest;
+      latest = null;
+      last = Date.now();
+      void stream.writeSSE({ event: "terminal", data: JSON.stringify({ type: "terminal", terminal: view }) }).catch(() => undefined);
+    };
+    const send = (view: ReturnType<PaneSessions["view"]>) => {
+      latest = view;
+      if (timer) return;
+      const wait = VIEW_EVERY - (Date.now() - last);
+      if (wait <= 0) flush(); else timer = setTimeout(flush, wait);
+    };
     const unfollow = pane?.listen(send);
     const beat = setInterval(() => { void stream.write(": still here\n\n"); }, 25_000);
     await stream.writeSSE({ event: "open", data: "{}" });
@@ -418,6 +437,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
     streams.delete(stream);
     watchers();
     clearInterval(beat);
+    if (timer) clearTimeout(timer);
     stop();
     unfollow?.();
   }));

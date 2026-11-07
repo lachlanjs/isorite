@@ -209,8 +209,12 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       detected: () => ask<DetectedAgent[]>("acp/detected"),
       choose: (choice) => write<ChosenAgent>("POST", "acp/choose", { choice }),
     },
-    events(listener) {
+    events(listener, live) {
       const source = new EventSource(root + "events");
+      // The browser reconnects by itself; what changed while the stream was down is caught up by whoever hears `live`.
+      let down = false;
+      source.addEventListener("open", () => { if (down) { down = false; live?.(true); } });
+      source.addEventListener("error", () => { if (!down) { down = true; live?.(false); } });
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
       const types = ["note-changed", "journal", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "agent-item", "agent-taken", "terminal"] satisfies EngineEvent["type"][];
       for (const type of types) source.addEventListener(type, on);

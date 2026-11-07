@@ -11,7 +11,7 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { notesOfTurns, type AgentCommand, type AgentRecord, type AgentSetting, type AgentSession, type Api, type EngineEvent, type Given, type TerminalItem, type TerminalPermission, type TerminalTurn, type TerminalView } from "@isorite/engine";
-import { OWN_DIR } from "@isorite/core";
+import { OWN_DIR, diffLines } from "@isorite/core";
 import { repoOf } from "./git.ts";
 import { INSTRUCTIONS, agentName } from "./mcp-http.ts";
 import type { PaneSessions } from "./sessions.ts";
@@ -94,6 +94,26 @@ type Tool = Extract<TerminalItem, { kind: "tool" }>;
 const textOf = (blocks: unknown): string =>
   (Array.isArray(blocks) ? (blocks as Block[]) : [blocks as Block]).map((b) => (b?.type === "text" ? b.text ?? "" : b?.type === "resource_link" ? `@${b.name ?? b.uri ?? ""}` : "")).join("");
 const lines = (v: string | null | undefined) => (v ? v.replace(/\n$/, "").split("\n") : []);
+/** What an edit changed, as a reader wants it: the changed lines, with a line of context around each change, and a
+ *  "…" where unchanged lines are left out. Not the whole old file and the whole new one. */
+export function changedLines(oldText: string | null | undefined, newText: string | null | undefined, context = 1): string[] {
+  const a = lines(oldText), b = lines(newText);
+  const hunks = diffLines(a, b);
+  if (!hunks.length) return [];
+  const out: string[] = [];
+  let shown = 0; // the lines of `a` already accounted for
+  hunks.forEach((h, k) => {
+    const from = Math.max(shown, h.at - context);
+    if (from > shown && out.length) out.push("…");
+    for (let i = from; i < h.at; i++) out.push(" " + a[i]);
+    out.push(...h.del.map((l) => "-" + l), ...h.ins.map((l) => "+" + l));
+    shown = h.at + h.del.length;
+    const until = Math.min(a.length, shown + context, hunks[k + 1]?.at ?? Infinity);
+    for (let i = shown; i < until; i++) out.push(" " + a[i]);
+    shown = Math.max(shown, until);
+  });
+  return out;
+}
 const keyOf = (agent: string, session: string): string => `${agent}\u0000${session}`;
 
 type Raw = Record<string, unknown>;
@@ -650,7 +670,7 @@ export class AcpFollower implements PaneSessions {
             ...was, name, status, output,
             title: typeof u.title === "string" ? u.title : was.title,
             ...(note ? { note } : {}),
-            ...(diff ? { diff: [...lines(diff.oldText).map((l) => "-" + l), ...lines(diff.newText).map((l) => "+" + l)].slice(0, 200) } : {}),
+            ...(diff ? { diff: changedLines(diff.oldText, diff.newText).slice(0, 200) } : {}),
           };
           if (at < 0) items.push(now); else items[at] = now;
           if (status === "done" && note && !named && !live.loading) done = now;

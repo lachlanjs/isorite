@@ -289,7 +289,8 @@ export interface Api {
   /** Remove isorite's kept copy of an agent's session. The agent's own history is not touched. */
   deleteAgentRecord(agent: string, session: string): Promise<void>;
   /** Listen to everything the engine does, until the returned function is called. */
-  events(listener: (event: EngineEvent) => void): () => void;
+  /** `live` (optional) hears when the stream is lost and when it is back, so a page can say so and catch up. */
+  events(listener: (event: EngineEvent) => void, live?: (up: boolean) => void): () => void;
 }
 
 /** A request the engine refuses. `status` is the HTTP status it becomes. */
