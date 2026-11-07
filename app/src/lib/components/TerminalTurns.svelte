@@ -59,18 +59,33 @@
       const on = () => {
         const left = liveLength - shownLen;
         if (left <= 0) return;
-        shownLen += Math.max(3, Math.ceil(left / 6));
+        // About twelve frames to catch up: long enough to carry the text over an agent's short pauses, short
+        // enough that it is never far behind.
+        shownLen += Math.max(1, Math.ceil(left / 12));
         frame = requestAnimationFrame(on);
       };
       frame = requestAnimationFrame(on);
     });
     return () => cancelAnimationFrame(frame);
   });
-  /** The live reply as far as it is shown, ended at a word, not in one. */
+  /** The live reply as far as it is shown, ended at a word, not in one, and never in a link or a formula half
+   *  written, whose marks would show as typed until it closed. */
   function streamed(text: string): string {
     if (shownLen >= text.length) return text;
     const space = text.slice(shownLen, shownLen + 16).search(/\s/);
-    return text.slice(0, shownLen + Math.max(0, space));
+    let cut = text.slice(0, shownLen + Math.max(0, space));
+    // Inside a code block (an odd number of fences so far) a "[" or a "$" is code, and shown as it comes.
+    const inCode = (cut.match(/^```/gm) ?? []).length % 2 === 1;
+    if (!inCode) {
+      // A link begun and not ended: from its "[" on, held back until its ")" has come.
+      const open = cut.lastIndexOf("[");
+      if (open > cut.lastIndexOf(")") && !cut.slice(open).includes("\n")) cut = cut.slice(0, open);
+      // A formula begun and not ended: an odd number of $ on the line as it now ends.
+      const last = cut.slice(cut.lastIndexOf("\n") + 1);
+      const dollars = [...last.matchAll(/(?<!\\)\$(?!\d)/g)]; // $5 is money, not a formula
+      if (dollars.length % 2 === 1) cut = cut.slice(0, cut.length - last.length + dollars.at(-1)!.index!);
+    }
+    return cut;
   }
 
   /** A note it changed opens in the note's Iso lens, where its words are marked (and the timeline undoes them). */
@@ -146,8 +161,10 @@
     return [...ids].filter(known);
   }
   const folderOf = (id: string): string => app.listing.notes.find((n) => n.id === id)?.dir.split("/").at(-1) || "notes";
-  /** A read folded into the parts once its turn is over; a change, a command and anything outside the base stay. */
-  const folded = (t: TerminalTurn, i: TerminalItem): boolean => t.state !== "running" && i.kind === "tool" && !!i.note && !i.base && !i.diff && i.status === "done" && !CHANGES.has(bare(i.name)) && known(i.note);
+  /** A read folded into the parts once the next turn has begun; a change, a command and anything outside the base
+   *  stay. Not as the turn ends: the reads are then just above the reply being read, and folding them would slide it. */
+  const latestTurn = $derived(view?.turns.at(-1)?.id ?? "");
+  const folded = (t: TerminalTurn, i: TerminalItem): boolean => t.state !== "running" && t.id !== latestTurn && i.kind === "tool" && !!i.note && !i.base && !i.diff && i.status === "done" && !CHANGES.has(bare(i.name)) && known(i.note);
   const lit = $derived(pointing.elsewhere?.from === "iso" && !pointing.elsewhere.folder ? pointing.elsewhere.id : pointing.onAtlas);
   $effect(() => {
     const id = lit;
@@ -259,7 +276,7 @@
     {#if t.state === "running"}
       <!-- At work (M24, I): over ACP, the session's crystal grows. -->
       {@const now = step(t)}
-      <p class="doing" role="status">{#if view?.session}<Crystal id={view.session} size={28} growing />{/if}<span class="who">{view?.agent || "The agent"}</span><span class="what">is {now.what}{#if now.to} <b>{now.to}</b>{/if}</span></p>
+      <p class="doing" role="status">{#if view?.session}<Crystal id={view.session} size={28} growing />{/if}<span class="who">{view?.agent || "The agent"}</span><span class="what">is {now.what}{#if now.to}{" "}<b>{now.to}</b>{/if}</span></p>
     {:else if t.state === "stopped"}
       <p class="faint end">stopped</p>
     {:else if t.state === "failed"}
