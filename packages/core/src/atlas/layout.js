@@ -49,6 +49,9 @@ export function gridLayout(model, o) {
 // How much wider each gutter between two blocks of a floorplanned folder should be: by a lane (3 cells, 2 on the
 // coarse grid) for each line beyond the first running along it (lines side by side, counted by the columns, or
 // rows, that a highway runs at least 4 cells along within the gutter). ref -> { pair, wider: "refA|refB" -> cells }.
+/** An item's key among its folder's: a folder's ref with its slash, so a note of the same name is not taken for it. */
+const keyOf = (n) => (n.kind === "folder" ? `${n.ref}/` : n.ref);
+
 export function gutters(layout, highways) {
   const { items } = layout, lane = layout.cell > 7 ? 2 : 3, out = new Map();
   for (const [ref, pair] of layout.pairs ?? []) {
@@ -75,7 +78,7 @@ export function gutters(layout, highways) {
         }
       }
       const lines = [...runs.values()].filter((c) => c.size >= 4).length;
-      if (lines > 1) wider.set([A.ref, B.ref].sort().join("|"), lane * (lines - 1));
+      if (lines > 1) wider.set([keyOf(A), keyOf(B)].sort().join("|"), lane * (lines - 1));
     }
     out.set(ref, { pair, wider });
   }

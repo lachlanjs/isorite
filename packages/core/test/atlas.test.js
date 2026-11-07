@@ -142,6 +142,22 @@ describe("a changed base (V5)", () => {
     expect(warm.W * warm.H).toBeLessThanOrEqual(fresh.W * fresh.H * 1.25);
     expect(warm.items.some((n) => n.ref === "f4/new")).toBe(true);
   });
+  it("keeps a folder and a note of the same name apart: started from before, nothing overlaps (iso/artifacts.md beside iso/artifacts/)", () => {
+    const before = model(5, 4), f2 = before.root.children.find((c) => c.ref === "f2");
+    // A note f2/sub and a folder f2/sub, the folder making f2 one laid out in blocks.
+    f2.children.push({ kind: "concept", id: "c:f2/sub", ref: "f2/sub", weight: 1, rank: 0 }, { kind: "dir", id: "d:f2/sub", ref: "f2/sub", children: [] });
+    const was = gridLayout(before, { blocks: true });
+    const after = structuredClone(before);
+    after.root.children.find((c) => c.ref === "f2").children.find((c) => c.kind === "dir").children.push({ kind: "concept", id: "c:f2/sub/page", ref: "f2/sub/page", weight: 1, rank: 0 });
+    for (const L of [gridLayout(after, { blocks: true, from: was.orders }), gridLayout(before, { blocks: true, from: gridLayout(after, { blocks: true }).orders })]) {
+      const it = L.items, within = (i, j) => { for (let k = it[j].parent; k >= 0; k = it[k].parent) if (k === i) return true; return false; };
+      for (let i = 0; i < it.length; i++) for (let j = i + 1; j < it.length; j++) {
+        if (within(i, j) || within(j, i)) continue;
+        const a = it[i], b = it[j];
+        expect(a.gx < b.gx + b.w && b.gx < a.gx + a.w && a.gy < b.gy + b.h && b.gy < a.gy + a.h, `${a.ref} (${a.kind}) over ${b.ref} (${b.kind})`).toBe(false);
+      }
+    }
+  });
   it("is the same as before when nothing changed", () => {
     const m = model(6, 5), was = gridLayout(m, { blocks: true });
     expect(kept(was, gridLayout(m, { blocks: true, from: was.orders }))).toBe(1);

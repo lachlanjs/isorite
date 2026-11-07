@@ -44,7 +44,8 @@ export type Grain = "fine" | "coarse" | "coarser";
 /** `blocks`: a folder holding folders placed as blocks (floorplan.js), not in layers. `from`: the `orders` of a
  *  layout made before, for a changed base, so the search starts from where things stood (V5). Not part of the key. */
 export interface LayoutOptions { gridFlow?: "up" | "right"; grain?: Grain; blocks?: boolean; from?: Orders | null }
-/** A floorplanned folder's arrangement (its sequence pair), by the items' refs, by the folder's ref ("" the top). */
+/** A floorplanned folder's arrangement (its sequence pair), by the items' refs (a folder's with a slash after it), by the
+ *  folder's ref ("" the top). */
 export type Orders = Record<string, [string[], string[]]>;
 
 export const LAYOUT_VERSION: number;

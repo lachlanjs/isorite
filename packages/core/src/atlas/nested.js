@@ -88,6 +88,8 @@ export function nestedLayout(model, { flow = "up", grain = "fine", plan = false,
   const room = ROOMS[grain] ?? FINE;
   useRoom(room);
   const isDir = (n) => n.kind === "dir";
+  // A folder and a note may share a name (iso/artifacts.md beside iso/artifacts/): kept apart by the folder's slash.
+  const keyOf = (n) => (isDir(n) ? `${n.ref}/` : n.ref);
   const parent = new Map(), byRef = new Map(), dirs = [model.root];
   for (let k = 0; k < dirs.length; k++) for (const c of dirs[k].children || []) { parent.set(c, dirs[k]); if (isDir(c)) dirs.push(c); else byRef.set(c.ref, c); }
   const pathTo = (n) => { const out = []; for (let p = n; p; p = parent.get(p)) out.push(p); return out.reverse(); };
@@ -162,7 +164,7 @@ export function nestedLayout(model, { flow = "up", grain = "fine", plan = false,
     const all = [...joins.get(folder).values()].filter((j) => index.has(j.p) && index.has(j.q));
     // `again` (a layout made before, its highways counted): this folder's arrangement then, packed again with
     // each gutter between two blocks widened by what the highways along it need.
-    const name = folder === model.root ? "" : folder.ref, before = again?.get(name), wider = (i, j) => before?.wider.get([kids[i].ref, kids[j].ref].sort().join("|")) ?? 0;
+    const name = folder === model.root ? "" : folder.ref, before = again?.get(name), wider = (i, j) => before?.wider.get([keyOf(kids[i]), keyOf(kids[j])].sort().join("|")) ?? 0;
     const gap = (i, j) => (isDir(kids[i]) || isDir(kids[j]) ? GAP_FOLDERS : GAP) + wider(i, j);
     const sizes = kids.map((c) => [box.get(c).w, box.get(c).h]);
     // The whole map takes the screen's shape: wide where the top level runs right, tall where it runs up (a phone).
@@ -172,12 +174,15 @@ export function nestedLayout(model, { flow = "up", grain = "fine", plan = false,
     let start;
     const was = !before && from?.[name];
     if (was) {
-      const at = new Map(kids.map((c, i) => [c.ref, i])), fresh = kids.map((c, i) => i).filter((i) => !was[0].includes(kids[i].ref));
-      start = was.map((order) => [...order.filter((ref) => at.has(ref)).map((ref) => at.get(ref)), ...fresh]);
+      const at = new Map(kids.map((c, i) => [keyOf(c), i])), fresh = kids.map((c, i) => i).filter((i) => !was[0].includes(keyOf(kids[i])));
+      start = was.map((order) => [...order.filter((key) => at.has(key)).map((key) => at.get(key)), ...fresh]);
+      // Only a true arrangement (each block once in each order) is packed without overlaps: anything else is not
+      // started from.
+      if (!start.every((order) => order.length === kids.length && new Set(order).size === kids.length)) start = undefined;
     }
     const r = floorplan(sizes, all.map((j) => [index.get(j.p), index.get(j.q), j.count]), gap, way, { shape, ...planCosts, pair: before?.pair, start });
     pairs.set(name, r.pair);
-    orders[name] = r.pair.map((order) => order.map((i) => kids[i].ref));
+    orders[name] = r.pair.map((order) => order.map((i) => keyOf(kids[i])));
     kids.forEach((c, i) => Object.assign(box.get(c), { x: r.x[i], y: r.y[i] }));
     // A join is back where what is required stands past what requires it; implied, between notes, where a
     // longer way joins them.
