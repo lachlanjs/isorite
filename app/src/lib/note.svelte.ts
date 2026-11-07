@@ -1,14 +1,17 @@
 // One note, open for writing. The text here is the whole file. It is saved a
 // moment after the typing stops, when the note is left, and on Ctrl+S; what is
 // not yet saved is also kept in this browser, so a closed tab loses nothing.
-// Every save names the version it started from, and a note that was changed
-// elsewhere meanwhile is offered as a choice instead of being overwritten.
+// Every save names the version it started from. A note changed elsewhere
+// meanwhile (an agent's edit) is put together with what is written here when
+// the two are to different paragraphs (merge.ts), and otherwise offered as a
+// choice instead of being overwritten.
 
 import { hashText, spliceText, splitFrontmatter, splitSource } from "@isorite/core";
 import type { EngineEvent, NoteSource } from "@isorite/engine";
 import { ApiError } from "./api.ts";
 import { app } from "./app.svelte.ts";
 import { kept } from "./here.ts";
+import { merge3 } from "./merge.ts";
 
 /** How long after the last keystroke a note is saved. */
 export const SAVE_AFTER_MS = 1500;
@@ -19,7 +22,9 @@ export type Saving = "saved" | "unsaved" | "saving" | "conflict" | "failed";
 /** The fields the editor shows; everything else in the frontmatter is left as it is. */
 export interface Fields { title: string; type: string; description: string; tags: string }
 
-type Draft = { base: string; text: string };
+/** What was typed and not saved, the version it was typed over, and that version's text (to merge with, when the note
+ *  has moved on since; older drafts have none). */
+type Draft = { base: string; text: string; from?: string };
 const draftKey = (id: string) => kept(`isorite.draft.${id}`);
 function draft(id: string, value?: Draft | null): Draft | null {
   try {
@@ -72,9 +77,9 @@ export class NoteSession {
       const kept = draft(this.id);
       this.take(note);
       if (kept && kept.text !== note.text) {
-        this.text = kept.text;
-        if (kept.base === note.version) this.changed();
-        else { this.theirs = note; this.saving = "conflict"; draft(this.id, kept); }
+        const both = kept.base === note.version ? kept.text : kept.from === undefined ? null : merge3(kept.from, kept.text, note.text);
+        if (both !== null) { this.text = both; this.revision++; this.changed(); }
+        else { this.text = kept.text; this.theirs = note; this.saving = "conflict"; draft(this.id, kept); }
       }
       this.loaded = "ready";
       this.stop = app.on((e) => this.hear(e));
@@ -163,7 +168,7 @@ export class NoteSession {
   }
 
   private changed(): void {
-    draft(this.id, { base: this.base, text: this.text });
+    draft(this.id, { base: this.base, text: this.text, from: this.saved });
     if (this.saving === "conflict") return; // nothing is sent until the choice is made
     this.saving = "unsaved";
     if (this.timer) clearTimeout(this.timer);
@@ -194,6 +199,8 @@ export class NoteSession {
       if (e instanceof ApiError && e.status === 409 && e.current !== undefined) {
         // The same text arrived there another way (the other tab saved it): nothing to choose.
         if (e.current?.text === text) return this.take(e.current);
+        // Changed there in other paragraphs than here: both, saved over theirs.
+        if (e.current && this.merge(e.current)) return this.send();
         this.theirs = e.current;
         this.saving = "conflict";
       } else {
@@ -204,14 +211,33 @@ export class NoteSession {
     }
   }
 
-  /** The note was written somewhere. With nothing unsaved here, take the new text; otherwise the next save will ask. */
+  /** The note was written somewhere. With nothing unsaved here, take the new text; with something unsaved, put the two
+   *  together now if they are to different paragraphs (the change is seen as it comes, not at the next save), and
+   *  otherwise leave it to the next save, which will ask. */
   private hear(event: EngineEvent): void {
     if (event.type !== "note-changed" || event.id !== this.id) return;
     if (event.version === this.base || event.version === hashText(this.text)) return; // our own save
-    if (this.saving !== "saved") return;
+    if (this.saving !== "saved" && this.saving !== "unsaved") return;
+    const from = this.base;
     void app.api.readNote(this.id).then((note) => {
-      if (this.saving === "saved" && note.version !== this.base) this.take(note);
+      if (this.base !== from || note.version === this.base) return;
+      if (this.saving === "saved") this.take(note);
+      else if (this.saving === "unsaved") this.merge(note);
     }, () => undefined);
+  }
+
+  /** What is written here, put together with the note as it is now elsewhere, over that version. False when they
+   *  change the same paragraph. */
+  private merge(theirs: NoteSource): boolean {
+    const both = merge3(this.saved, this.text, theirs.text);
+    if (both === null) return false;
+    this.base = theirs.version;
+    this.saved = theirs.text;
+    this.theirs = undefined;
+    if (both !== this.text) { this.text = both; this.revision++; }
+    draft(this.id, { base: this.base, text: this.text, from: this.saved });
+    if (both === this.saved) { this.saving = "saved"; draft(this.id, null); }
+    return true;
   }
 
   // ------------------------------------------------------------ the choice

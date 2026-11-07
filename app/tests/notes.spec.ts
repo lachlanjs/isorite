@@ -110,7 +110,7 @@ test("the label is always there under the title, and changes only its own lines 
   await expect(page.getByLabel("description")).toHaveValue(said);
 });
 
-test("a note changed elsewhere while you write is offered as a choice, and nothing is overwritten", async ({ page }) => {
+test("a paragraph changed elsewhere while you write in it is offered as a choice, and nothing is overwritten", async ({ page }) => {
   const name = test.info().project.name, id = `channels/capacity-${name}`;
   const made = await page.request.get("api/session").then((r) => r.json()) as { token: string };
   const mine = `---\ntype: Concept\ntitle: Capacity ${name}\n---\n\nThe most a channel carries.\n`;
@@ -118,7 +118,8 @@ test("a note changed elsewhere while you write is offered as a choice, and nothi
   await page.goto(`#/n/${id}`);
   await expect(editor(page)).toContainText("The most a channel carries.");
 
-  const theirs = mine + "\nWritten in another editor.\n";
+  // The same paragraph as the one typed in below: no merge.
+  const theirs = mine.replace("The most a channel carries.", "The most a channel carries. Written in another editor.");
   writeFileSync(join(NOTES, `${id}.md`), theirs);
   await editor(page).click();
   await page.keyboard.press("Control+End");
@@ -142,6 +143,26 @@ test("a note changed elsewhere while you write is offered as a choice, and nothi
   await page.getByRole("button", { name: "keep mine" }).click();
   await saved(page);
   expect(await file(page, id)).toContain("Mine stays.");
+});
+
+test("changed elsewhere in another paragraph while you write: both are kept, and nothing is asked", async ({ page }) => {
+  const name = test.info().project.name, id = `channels/merged-${name}`;
+  const made = await page.request.get("api/session").then((r) => r.json()) as { token: string };
+  const base = `---\ntype: Concept\ntitle: Merged ${name}\n---\n\nFirst paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n`;
+  await page.request.post(`api/note?id=${id}`, { data: { text: base }, headers: { "x-isorite-token": made.token, Origin: new URL(test.info().project.use.baseURL!).origin } });
+  await page.goto(`#/n/${id}`);
+  await expect(editor(page)).toContainText("Third paragraph.");
+
+  await editor(page).getByText("First paragraph.").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Typed here.");
+  writeFileSync(join(NOTES, `${id}.md`), base.replace("Third paragraph.", "Third paragraph, changed elsewhere."));
+  // Theirs comes into the editor with what was typed here, and the two are saved together.
+  await expect(editor(page)).toContainText("Third paragraph, changed elsewhere.");
+  await saved(page);
+  await expect(notePane(page).getByRole("alert")).toHaveCount(0);
+  expect(await file(page, id)).toBe(base.replace("First paragraph.", "First paragraph. Typed here.").replace("Third paragraph.", "Third paragraph, changed elsewhere."));
+  await expect(editor(page)).toContainText("First paragraph. Typed here.");
 });
 
 test("what is typed and not yet saved survives the tab closing", async ({ page, context }) => {
