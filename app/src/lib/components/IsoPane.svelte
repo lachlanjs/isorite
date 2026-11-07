@@ -145,9 +145,12 @@
   .bad { color: var(--rose); font-size: 12px; padding-left: 16px; }
   .composer { flex: none; border-top: 1px solid var(--line); padding: 10px 12px 10px; display: grid; gap: 8px; }
   /* One framed unit: what you write, and under it a bar with the session's settings and the button that sends or stops. */
-  .box { display: flex; flex-direction: column; background: var(--ground-1); border: 1px solid var(--line); transition: border-color var(--t-ack) var(--ease-out), box-shadow var(--t-ack) var(--ease-out); }
-  .box:focus-within { border-color: var(--line-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--lattice) 14%, transparent); }
-  .box.busy:not(:focus-within) { border-color: color-mix(in srgb, var(--growth) 45%, var(--line)); }
+  .box { display: flex; flex-direction: column; background: var(--ground-1); border: 1px solid var(--line); border-radius: calc(var(--round) + 1px); transition: border-color var(--t-change) var(--ease-out), box-shadow var(--t-change) var(--ease-out); }
+  .box:focus-within { border-color: color-mix(in srgb, var(--lattice) 55%, var(--line-strong)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--lattice) 12%, transparent), 0 0 18px color-mix(in srgb, var(--lattice) 10%, transparent); }
+  /* While the agent works, its edge is gold and breathes, slowly: the box is still yours to write in. */
+  .box.busy:not(:focus-within) { border-color: color-mix(in srgb, var(--growth) 45%, var(--line)); animation: working 2.4s ease-in-out infinite alternate; }
+  @keyframes working { to { box-shadow: 0 0 16px color-mix(in srgb, var(--growth) calc(var(--glow-a) * .6), transparent); border-color: color-mix(in srgb, var(--growth) 70%, var(--line)); } }
+  @media (prefers-reduced-motion: reduce) { .box.busy { animation: none; } }
   textarea { flex: 1 1 auto; min-width: 0; min-height: 44px; max-height: 200px; resize: none; field-sizing: content; background: none; border: 0; padding: 10px 12px 4px; font: 13px/1.5 var(--font-ui); color: var(--text); }
   textarea:focus { outline: none; }
   .bar { display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 2px 4px 4px 6px; }
@@ -159,7 +162,7 @@
   .corner.stop { color: var(--rose); }
   .corner.stop:hover { background: var(--rose-soft); }
   .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; max-height: 84px; overflow: auto; }
-  .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 2px 4px 2px 8px; border: 1px solid var(--line-strong); background: var(--ground-1); font: 12px/1.4 var(--font-ui); color: var(--text); }
+  .chip { border-radius: var(--round); display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 2px 4px 2px 8px; border: 1px solid var(--line-strong); background: var(--ground-1); font: 12px/1.4 var(--font-ui); color: var(--text); }
   .chip .g { color: var(--growth); flex: none; }
   .chip .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mid { margin: 0; font: 12px/1.4 var(--font-ui); color: var(--text-soft); }
@@ -174,9 +177,9 @@
   .settings { display: flex; flex-wrap: wrap; gap: 2px; min-width: 0; }
   .set { position: relative; display: inline-flex; align-items: center; }
   .set::after { content: ""; position: absolute; right: 7px; top: 50%; margin-top: -1px; border-left: 3px solid transparent; border-right: 3px solid transparent; border-top: 4px solid currentColor; color: var(--text-faint); pointer-events: none; }
-  .set .field { appearance: none; height: 26px; font: 11.5px var(--font-ui); color: var(--text-soft); background: none; border: 0; padding: 0 18px 0 7px; max-width: 14em; cursor: pointer; transition: background-color var(--t-ack) var(--ease-out), color var(--t-ack) var(--ease-out); }
+  .set .field { border-radius: var(--round); appearance: none; height: 26px; font: 11.5px var(--font-ui); color: var(--text-soft); background: none; border: 0; padding: 0 18px 0 7px; max-width: 14em; cursor: pointer; transition: background-color var(--t-ack) var(--ease-out), color var(--t-ack) var(--ease-out); }
   .set .field:hover, .set .field:focus-visible { background: var(--ground-2); color: var(--text); box-shadow: none; }
-  .slash { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); background: var(--ground-1); max-height: 160px; overflow: auto; }
+  .slash { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line-strong); border-radius: calc(var(--round) + 1px); background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: var(--lift); max-height: 160px; overflow: auto; }
   .slash button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 6px 10px; font: 12.5px var(--font-ui); color: var(--text-soft); cursor: pointer; }
   .slash button.on, .slash button:hover { background: var(--ground-2, var(--ground-0)); color: var(--text); }
   .slash b { font: 500 12px var(--font-mono); color: var(--text); }

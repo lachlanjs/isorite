@@ -50,6 +50,17 @@
   --ease-out: cubic-bezier(.2, .7, .2, 1); --ease-in: cubic-bezier(.6, 0, .8, .3);
   /* What floats over the page (a menu, a button over a scrolling session) is lifted; nothing in the flow is. */
   --lift: 0 8px 24px rgb(0 0 0 / .38), 0 2px 6px rgb(0 0 0 / .25);
+  --lift-drop: drop-shadow(0 8px 18px rgb(0 0 0 / .4)) drop-shadow(0 2px 4px rgb(0 0 0 / .25));
+  /* Corners: a square one is eased by --round; a cut one keeps its 45 degrees, its two vertices eased by
+     --round-cut. Barely: a corner should still read as a corner. */
+  --round: 2px; --round-cut: 2px; --round-n: 2; /* --round-n: --round-cut as a number, for a layer at a zoom */
+  /* Glow: light from what is live or the agent's, never from what merely sits there. --glow-a is how strong. */
+  --glow-a: 34%;
+  --glow-growth: 0 0 0 1px color-mix(in srgb, var(--growth) 26%, transparent), 0 0 14px color-mix(in srgb, var(--growth) var(--glow-a), transparent);
+  --glow-lattice: 0 0 0 1px color-mix(in srgb, var(--lattice) 26%, transparent), 0 0 14px color-mix(in srgb, var(--lattice) var(--glow-a), transparent);
+  --glow-rose: 0 0 0 1px color-mix(in srgb, var(--rose) 26%, transparent), 0 0 14px color-mix(in srgb, var(--rose) var(--glow-a), transparent);
+  /* Glass: what floats over moving content is a little see-through, and blurs what is behind it. */
+  --glass: color-mix(in srgb, var(--ground-2) 82%, transparent);
 
   /* Space: a 4px base. */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px; --space-12: 48px; --space-16: 64px;
@@ -60,6 +71,7 @@
   color-scheme: light;
   --ground-0: #F2F0EA; --ground-1: #F8F7F3; --ground-2: #FFFFFF; --ground-3: #E6E4DC;
   --lift: 0 8px 22px rgb(30 40 60 / .14), 0 2px 5px rgb(30 40 60 / .08);
+  --lift-drop: drop-shadow(0 8px 16px rgb(30 40 60 / .16)) drop-shadow(0 2px 4px rgb(30 40 60 / .1)); --glow-a: 24%;
   --line: #D3D0C5; --line-strong: #7F7D70;
   --text: #0E1726; --text-soft: #3B475B; --text-faint: #5B677A;
   --lattice: #1E4FB8; --lattice-deep: #2A62D8;
@@ -75,6 +87,7 @@
     color-scheme: light;
     --ground-0: #F2F0EA; --ground-1: #F8F7F3; --ground-2: #FFFFFF; --ground-3: #E6E4DC;
     --lift: 0 8px 22px rgb(30 40 60 / .14), 0 2px 5px rgb(30 40 60 / .08);
+    --lift-drop: drop-shadow(0 8px 16px rgb(30 40 60 / .16)) drop-shadow(0 2px 4px rgb(30 40 60 / .1)); --glow-a: 24%;
     --line: #D3D0C5; --line-strong: #7F7D70;
     --text: #0E1726; --text-soft: #3B475B; --text-faint: #5B677A;
     --lattice: #1E4FB8; --lattice-deep: #2A62D8;
@@ -111,6 +124,15 @@ button { cursor: pointer; }
 }
 /* Chosen (P): solid, in its own colour (--c) or the lattice, cut at two corners as a chip is. Open: a bar. */
 :root { --chosen-cut: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); }
+/* Where the browser can draw curves in a clip, every vertex is eased a little: the cuts by --round-cut, the square
+   corners by --round. (A cut vertex is eased along the cut by r times cos 45.) */
+@supports (clip-path: shape(from 0 0, line to 1px 1px)) {
+  :root { --chosen-cut: shape(from 6px 0, line to calc(100% - 1.6px) 0, curve to 100% 1.6px with 100% 0,
+    line to 100% calc(100% - 6px), curve to calc(100% - 1.41px) calc(100% - 2.59px) with 100% calc(100% - 4px),
+    line to calc(100% - 2.59px) calc(100% - 1.41px), curve to calc(100% - 6px) 100% with calc(100% - 4px) 100%,
+    line to 1.6px 100%, curve to 0 calc(100% - 1.6px) with 0 100%,
+    line to 0 6px, curve to 1.41px 2.59px with 0 4px, line to 2.59px 1.41px, curve to 6px 0 with 4px 0, close); }
+}
 canvas.lustre { position: fixed; z-index: 999; pointer-events: none; }
 /* A row with a vein (M24, D): touched or chosen, a blue marker grows down its left edge and a vein runs along its
    foot; the lustre crosses it (lustre.ts, data-lustre). Chosen keeps both, on the raised ground. */
@@ -171,6 +193,22 @@ canvas.lustre { position: fixed; z-index: 999; pointer-events: none; }
     linear-gradient(315deg, transparent var(--c), var(--fill) 0) right bottom / var(--cut) var(--cut) no-repeat;
 }
 .btn { height: 32px; padding: 0 14px; font-size: 13px; }
+/* Where curves can be clipped, a button's fill is a layer of its own under it, cut by a shape with eased vertices,
+   in place of the painted cut (which cannot be eased). Its contents, and anything that opens out of it, are not
+   clipped. */
+@supports (clip-path: shape(from 0 0, line to 1px 1px)) {
+  .btn { position: relative; isolation: isolate; background: none; transition: color var(--t-ack) var(--ease-out); }
+  .btn::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--fill); transition: background-color var(--t-ack) var(--ease-out);
+    --k: var(--cut); --r: var(--round-cut); --d: calc(var(--r) * .7071); --q: var(--round);
+    clip-path: shape(from calc(var(--k) + var(--r)) 0, line to calc(100% - var(--q)) 0, curve to 100% var(--q) with 100% 0,
+      line to 100% calc(100% - var(--k) - var(--r)), curve to calc(100% - var(--d)) calc(100% - var(--k) + var(--d)) with 100% calc(100% - var(--k)),
+      line to calc(100% - var(--k) + var(--d)) calc(100% - var(--d)), curve to calc(100% - var(--k) - var(--r)) 100% with calc(100% - var(--k)) 100%,
+      line to var(--q) 100%, curve to 0 calc(100% - var(--q)) with 0 100%,
+      line to 0 calc(var(--k) + var(--r)), curve to var(--d) calc(var(--k) - var(--d)) with 0 var(--k),
+      line to calc(var(--k) - var(--d)) var(--d), curve to calc(var(--k) + var(--r)) 0 with var(--k) 0, close);
+  }
+}
 a.btn:hover { text-decoration: none; color: var(--text); }
 .btn:hover:not(:disabled) { --fill: var(--line); }
 .btn:disabled { color: var(--text-faint); cursor: default; }
@@ -202,13 +240,27 @@ a.btn:hover { text-decoration: none; color: var(--text); }
   --k: var(--cut);
   clip-path: polygon(var(--k) 0, calc(100% - var(--k)) 0, 100% var(--k), 100% calc(100% - var(--k)), calc(100% - var(--k)) 100%, var(--k) 100%, 0 calc(100% - var(--k)), 0 var(--k));
 }
+@supports (clip-path: shape(from 0 0, line to 1px 1px)) {
+  .frame::before, .frame::after {
+    --r: calc(var(--round-n) * var(--px, 1px)); --d: calc(var(--r) * .7071);
+    clip-path: shape(from calc(var(--k) + var(--r)) 0,
+      line to calc(100% - var(--k) - var(--r)) 0, curve to calc(100% - var(--k) + var(--d)) var(--d) with calc(100% - var(--k)) 0,
+      line to calc(100% - var(--d)) calc(var(--k) - var(--d)), curve to 100% calc(var(--k) + var(--r)) with 100% var(--k),
+      line to 100% calc(100% - var(--k) - var(--r)), curve to calc(100% - var(--d)) calc(100% - var(--k) + var(--d)) with 100% calc(100% - var(--k)),
+      line to calc(100% - var(--k) + var(--d)) calc(100% - var(--d)), curve to calc(100% - var(--k) - var(--r)) 100% with calc(100% - var(--k)) 100%,
+      line to calc(var(--k) + var(--r)) 100%, curve to calc(var(--k) - var(--d)) calc(100% - var(--d)) with var(--k) 100%,
+      line to var(--d) calc(100% - var(--k) + var(--d)), curve to 0 calc(100% - var(--k) - var(--r)) with 0 calc(100% - var(--k)),
+      line to 0 calc(var(--k) + var(--r)), curve to var(--d) calc(var(--k) - var(--d)) with 0 var(--k),
+      line to calc(var(--k) - var(--d)) var(--d), curve to calc(var(--k) + var(--r)) 0 with var(--k) 0, close);
+  }
+}
 /* --px: a screen pixel, where the frame is in a layer scaled to a zoom (the Atlas, M12); else a pixel. */
 .frame::after { z-index: -1; inset: var(--px, 1px); background: var(--inside); --k: max(0px, calc(var(--cut) - .586 * var(--px, 1px))); }
 /* A frame's title sits in its top edge. */
 .frame > .frame-title { position: absolute; top: -9px; left: 22px; padding: 0 6px; font-size: 12px; line-height: 18px; color: var(--text-faint); background: var(--behind, var(--ground-0)); white-space: nowrap; }
 
 /* A field: a fill and one line under it. */
-.field { background: var(--ground-2); border: 0; border-bottom: 1px solid var(--line-strong); height: 32px; padding: 0 10px; min-width: 0; }
+.field { background: var(--ground-2); border: 0; border-bottom: 1px solid var(--line-strong); border-radius: var(--round) var(--round) 0 0; height: 32px; padding: 0 10px; min-width: 0; transition: border-color var(--t-ack) var(--ease-out), box-shadow var(--t-ack) var(--ease-out); }
 .field::placeholder { color: var(--text-faint); }
 .field:focus-visible { outline: none; border-bottom-color: var(--lattice); box-shadow: 0 1px 0 var(--lattice); }
 
@@ -245,7 +297,7 @@ a.btn:hover { text-decoration: none; color: var(--text); }
 .tok-c { color: var(--tok-c); font-style: normal; }
 /* A code block rendered from Markdown: its language at the top right, and a copy icon where a pane offers one. */
 .code-block { position: relative; }
-.code-block > pre { margin: 0; font: 13px/20px var(--font-mono); background: var(--ground-1); border-left: 2px solid var(--line-strong); padding: 12px 16px; overflow-x: auto; }
+.code-block > pre { margin: 0; font: 13px/20px var(--font-mono); background: var(--ground-1); border-left: 2px solid var(--line-strong); border-radius: 0 var(--round) var(--round) 0; padding: 12px 16px; overflow-x: auto; }
 .code-block > pre > code { font: inherit; }
 .prose > .code-block, .prose > .diagram { margin: 0 0 20px; }
 .code-block > .code-lang { position: absolute; top: 8px; right: 12px; font: 12px/16px var(--font-ui); color: var(--text-faint); pointer-events: none; }

@@ -33,6 +33,10 @@ isorite is a mapping that keeps structure (Iso is for isomorphism, not isometric
 - A link's kind is the weight of its vein, in the text's own colour: requires solid and blue (2 px), uses thin, see also dotted, the web dashed. Light runs along it when pointed at. The same in the note and in what Iso says. `.vein`.
 - The agent's session: what you asked is a block on the ground with a blue rule down its edge; the agent's words carry its gold ◆; what folds (thinking, a command's output, a diff) has a caret that turns. While it works, the line under the turn names the step ("is reading *Surprise*"), by the crystal. Its words are shown at a steady pace that catches up with what has come, never dropped in a burst. The session follows the newest only while you are at the end; scrolled up, you stay, and a lifted button takes you back.
 - The box you write in and its settings are one framed unit: the text above, a bar below with the session's settings as quiet words with a caret, and the button that sends (growth, solid once there is something to send) or stops (rose).
+- Corners, eased: a square corner by `--round` (2 px), each vertex of a 45-degree cut by `--round-cut` (2 px; on the Atlas, two screen pixels at any zoom). Barely: a corner still reads as a corner, a cut as a cut. Where the browser cannot draw curves in a clip, the cuts stay sharp.
+- Light (glow) belongs to what is live or the agent's, never to what merely sits there: the crystal at work; the agent's diamond while it writes; on the Atlas what it used, reached, has in hand or read, and a moment pointed at on the timeline; the part lit with its phrase; the session shown in the drawer. Gold for the agent, blue for you and for reading. `--glow-growth`, `--glow-lattice`, `--glow-rose`; `--glow-a` is how strong, less on quartz.
+- Pulses are few, and each says that something has just happened: a note the agent has just read (once, the time of a result); a permission asked (twice); the box you write in while the agent works (slow, and only while it is not in use). None plays with reduced motion.
+- Glass: what floats over moving content (the "Newest" button, the slash commands) is a little see-through and blurs what is behind it, `--glass`. Nothing else is see-through.
 - Iso cites in the sentence: the phrase that rests on a note is the link to it. What it drew on stands under the reply as parts in corner brackets, and a phrase and its part are lit together. No numbered tail.
 - Iso at work is a crystal growing (one of a hundred, chosen by the conversation's id), not a spinner; at rest it marks that conversation. Past conversations are specimens in a drawer, each with its crystal.
 - What Iso is sent is strata: hatched for what Iso is told, blue for notes, ruled for the conversation, malachite for its summary, empty for the room left.
@@ -51,7 +55,7 @@ Each has a replacement, or it stays banned until one is found.
 | Toast / snackbar | Mark in place: the thing that changed carries an edge for a beat, gold when Iso changed it |
 | Skeleton shimmer | The dotted ground showing through; content grows in |
 | "No items yet" empty state | A drawn, specific first move (?) |
-| Hover lift / drop shadow | Edge brightens one step. Nothing in the flow casts a shadow; only what floats over it (a menu, a button over a scrolling session) is lifted, with `--lift` |
+| Hover lift / drop shadow | Edge brightens one step. Nothing in the flow casts a shadow; only what floats over it (a menu, a settings panel, a button over a scrolling session) is lifted, with `--lift`, or `--lift-drop` for a cut frame, whose shadow follows its cut |
 | Stock icon set | Icons drawn on one grid, 1.5 px stroke, round caps |
 | Generic error copy | Say what failed, what it touched, what to do, in isorite's voice |
 

@@ -87,7 +87,7 @@
   .base { font: inherit; font-size: 12px; color: var(--text-faint); background: none; border: 0; padding: 4px 0; cursor: pointer; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
   .base:hover, .base:focus-visible, .base[aria-expanded="true"] { color: var(--text); }
   .slash { color: var(--text-faint); font-size: 12px; margin: 0 -4px; }
-  .bases { --inside: var(--ground-2); position: fixed; z-index: 22; width: min(320px, calc(100vw - 16px)); padding: 22px 12px 12px; white-space: nowrap; user-select: none; }
+  .bases { --inside: var(--ground-2); filter: var(--lift-drop); position: fixed; z-index: 22; width: min(320px, calc(100vw - 16px)); padding: 22px 12px 12px; white-space: nowrap; user-select: none; }
   .bases:focus-visible { outline: none; }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
   li { display: grid; grid-template-columns: 16px 1fr 28px 28px; align-items: center; gap: 6px; font-size: 13px; }

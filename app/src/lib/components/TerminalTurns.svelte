@@ -292,7 +292,7 @@
   .title { font-size: 11px; margin-bottom: -8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Back to the newest, when you have scrolled up and more has come. */
   /* It floats over the session, so it is lifted (the one kind of thing that casts a shadow), and only fades in. */
-  .latest { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px 0 10px; background: var(--ground-2); border: 1px solid var(--line-strong); color: var(--text-soft); font: 11.5px var(--font-ui); cursor: pointer; box-shadow: var(--lift); animation: show var(--t-ack) var(--ease-out); transition: color var(--t-ack) var(--ease-out), border-color var(--t-ack) var(--ease-out); }
+  .latest { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px 0 10px; background: var(--glass); -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2); border: 1px solid var(--line-strong); border-radius: 14px; color: var(--text-soft); font: 11.5px var(--font-ui); cursor: pointer; box-shadow: var(--lift); animation: show var(--t-ack) var(--ease-out); transition: color var(--t-ack) var(--ease-out), border-color var(--t-ack) var(--ease-out); }
   .latest svg { color: var(--lattice); }
   .latest:hover, .latest:focus-visible { color: var(--text); border-color: var(--lattice); }
   /* What comes in, comes in gently: a turn, and each thing in it. */
@@ -303,7 +303,7 @@
   .it { animation: show var(--t-change) var(--ease-out); }
   @keyframes draw { from { transform: scaleY(0); } }
   @keyframes show { from { opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .you .rule, .you > *, .it, .latest { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .you .rule, .you > *, .it, .latest, .permit, .said::before { animation: none !important; } }
   .it { display: grid; min-width: 0; }
   /* A disclosure says it opens: a caret that turns. */
   /* It stands in the gutter, where a line's mark is: one mark per line, the text in one column. */
@@ -314,7 +314,7 @@
   .tool:has(> details)::before { content: none; }
   .turn { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   /* What you asked: set apart as yours, a block on the ground with a blue rule that draws down its edge as it comes. */
-  .you { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 8px 12px 8px 14px; background: var(--ground-1); border: 1px solid var(--line); }
+  .you { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 8px 12px 8px 14px; background: var(--ground-1); border: 1px solid var(--line); border-radius: 0 var(--round) var(--round) 0; }
   .you .rule { position: absolute; left: -1px; top: -1px; bottom: -1px; width: 2px; background: var(--lattice); transform-origin: top; }
   .turn:not(:first-of-type) { margin-top: 6px; }
   .think, .squeeze { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--text-soft); }
@@ -333,6 +333,9 @@
   .said { padding-left: 16px; position: relative; font: 15px/1.6 var(--font-text); overflow-wrap: anywhere; min-width: 0; }
   /* The agent's words carry its mark, the gold diamond (docs/taste.md), at the height of their first line. */
   .said::before { content: ""; position: absolute; left: 3px; top: calc(.8em - 2.5px); width: 5px; height: 5px; background: var(--growth); transform: rotate(45deg); }
+  /* While it writes, its diamond is lit, and breathes. */
+  .turn[data-state="running"] .it:has(+ .doing) .said::before { box-shadow: 0 0 8px 1px color-mix(in srgb, var(--growth) 70%, transparent); animation: breathe-glow 1.6s ease-in-out infinite alternate; }
+  @keyframes breathe-glow { from { box-shadow: 0 0 3px 0 color-mix(in srgb, var(--growth) 40%, transparent); } }
   .said :global(p + p), .said :global(p + ul), .said :global(ul + p) { margin-top: 8px; }
   .said :global(ul), .said :global(ol) { margin: 0; padding-left: 20px; }
   .said > :global(:last-child), .offer .yours > :global(:last-child) { margin-bottom: 0; }
@@ -349,7 +352,7 @@
   .n { flex: none; }
   .add { color: var(--malachite); }
   .del { color: var(--rose); }
-  pre { margin: 6px 0 0; padding: 8px 10px; background: var(--ground-1); border: 1px solid var(--line); font: 11.5px/1.45 var(--font-mono); color: var(--text-soft); overflow: auto; max-height: 280px; white-space: pre; }
+  pre { border-radius: var(--round); margin: 6px 0 0; padding: 8px 10px; background: var(--ground-1); border: 1px solid var(--line); font: 11.5px/1.45 var(--font-mono); color: var(--text-soft); overflow: auto; max-height: 280px; white-space: pre; }
   .diff span { display: block; }
   .diff span:not(.add):not(.del) { color: var(--text-faint); }
   .why { margin: 0; font-size: 11.5px; color: var(--text-soft); }
@@ -357,7 +360,9 @@
   a.note-link { text-decoration: none; }
   .note-link { background: none; border: 0; padding: 0; font: inherit; color: var(--text-soft); cursor: pointer; text-align: left; overflow-wrap: anywhere; }
   .note-link:hover, .note-link:focus-visible { color: var(--lattice); }
-  .permit { margin-left: 16px; border: 1px solid var(--growth); padding: 10px 12px; display: grid; gap: 8px; font-size: 12.5px; color: var(--text-soft); }
+  .permit { margin-left: 16px; border: 1px solid var(--growth); border-radius: var(--round); padding: 10px 12px; display: grid; gap: 8px; font-size: 12.5px; color: var(--text-soft); background: color-mix(in srgb, var(--growth) 5%, transparent); animation: ask 1.2s var(--ease-out) 2; }
+  /* It asks for you: a glow swells round it twice as it comes, then it waits, lit a little. */
+  @keyframes ask { 50% { box-shadow: var(--glow-growth); } }
   .tool .permit { margin-left: 0; }
   .permit code { font: 12px var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
   .acts { display: flex; gap: 16px; flex-wrap: wrap; }
@@ -371,7 +376,7 @@
   .asks .qt { color: var(--text); overflow-wrap: anywhere; }
   .asks .note-link { color: var(--text); }
   .asks .qb { color: var(--text-soft); font-size: 12.5px; display: block; }
-  .asks .keep { --cut: 5px; flex: none; margin-left: 4px; height: 22px; padding: 0 9px; background: none; border: 1px solid var(--rose); color: var(--rose); font: 10px/20px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; cursor: pointer; --glint: .4; transition: background-color var(--t-ack) var(--ease-out); }
+  .asks .keep { border-radius: var(--round); --cut: 5px; flex: none; margin-left: 4px; height: 22px; padding: 0 9px; background: none; border: 1px solid var(--rose); color: var(--rose); font: 10px/20px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; cursor: pointer; --glint: .4; transition: background-color var(--t-ack) var(--ease-out); }
   .asks .keep:hover { background: var(--rose-soft); }
   .offer { margin-left: 16px; border-left: 2px solid var(--line-strong); padding: 2px 0 2px 12px; display: grid; gap: 4px; }
   .offer .yours { font: 15px/1.6 var(--font-text); color: var(--text); overflow-wrap: anywhere; }
@@ -383,13 +388,13 @@
   .doing .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .doing .what b { font-weight: inherit; color: var(--text-soft); }
   .gave { display: flex; flex-wrap: wrap; gap: 4px; }
-  .chip { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px; border: 1px solid var(--line); font-size: 11px; color: var(--text-soft); max-width: 100%; }
+  .chip { border-radius: var(--round); display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px; border: 1px solid var(--line); font-size: 11px; color: var(--text-soft); max-width: 100%; }
   .chip.out { text-decoration: line-through; opacity: 0.6; }
   .chip .k { color: var(--growth); }
   .chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
   /* What the agent drew on (M24, G): parts with bracketed corners, lit blue with the phrases that cite them. */
   .parts { display: flex; flex-wrap: wrap; gap: 8px; margin-left: 16px; }
-  .part { position: relative; display: grid; gap: 1px; justify-items: start; min-width: 0; max-width: 100%; padding: 6px 10px 5px; background: none; border: 0; text-align: left; font: 10px/14px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); cursor: pointer; --glint: .3; transition: background-color var(--t-ack) var(--ease-out); }
+  .part { border-radius: var(--round); position: relative; display: grid; gap: 1px; justify-items: start; min-width: 0; max-width: 100%; padding: 6px 10px 5px; background: none; border: 0; text-align: left; font: 10px/14px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); cursor: pointer; --glint: .3; transition: background-color var(--t-ack) var(--ease-out); }
   .part > s { position: absolute; inset: 0; pointer-events: none; --b: var(--line-strong); --l: 6px; background:
     linear-gradient(var(--b), var(--b)) top left / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) top left / 1px var(--l) no-repeat,
     linear-gradient(var(--b), var(--b)) top right / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) top right / 1px var(--l) no-repeat,
@@ -397,7 +402,7 @@
     linear-gradient(var(--b), var(--b)) bottom right / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom right / 1px var(--l) no-repeat; }
   .part b { font: 13px/18px var(--font-text); text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--text); overflow-wrap: anywhere; }
   .part:hover > s, .part.lit > s { --b: var(--lattice); }
-  .part:hover, .part.lit { background: var(--lattice-soft); }
+  .part:hover, .part.lit { background: var(--lattice-soft); box-shadow: 0 0 12px color-mix(in srgb, var(--lattice) var(--glow-a), transparent); }
   .bad { color: var(--rose); font-size: 12px; padding-left: 16px; }
   .end { font-size: 12px; padding-left: 16px; }
 </style>

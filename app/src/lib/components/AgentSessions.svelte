@@ -118,7 +118,8 @@
   .spec:disabled { cursor: default; opacity: .6; }
   .spec.live { color: var(--growth); }
   /* The one shown (P: chosen): its edge in the lattice and its crystal in gold. */
-  .spec.on { --edge: var(--lattice); color: var(--growth); }
+  /* The session shown: its edge blue, and a little of that blue as light round its cut outline. */
+  .spec.on { --edge: var(--lattice); color: var(--growth); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--lattice) var(--glow-a), transparent)); }
   .q { font: 15px/22px var(--font-text); color: var(--text); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .m { font: 11px/16px var(--font-ui); color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; overflow-wrap: anywhere; }
 </style>

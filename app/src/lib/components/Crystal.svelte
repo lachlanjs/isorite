@@ -41,5 +41,6 @@
 <style>
   .crystal { flex: none; display: block; }
   line { stroke: currentColor; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-  .growing { color: var(--growth); }
+  /* At work, it is lit: a soft gold light round it, in its own shape. */
+  .growing { color: var(--growth); filter: drop-shadow(0 0 3px color-mix(in srgb, var(--growth) 55%, transparent)); }
 </style>

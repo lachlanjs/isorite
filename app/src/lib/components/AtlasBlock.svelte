@@ -55,7 +55,11 @@
   .n {
     position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(var(--w) * var(--u)); height: calc(var(--h) * var(--u));
     overflow: hidden; color: var(--text-soft); text-decoration: none; --glint: .3;
-    background: var(--ground-2); border: var(--px) solid var(--line-strong); transition: opacity .15s;
+    background: var(--ground-2); border: var(--px) solid var(--line-strong); transition: opacity .15s, box-shadow var(--t-change) var(--ease-out);
+    /* Its corners eased by a couple of screen pixels at any zoom; its light (the bar of the note open, a glow) in two
+       parts, so a block can have both. */
+    border-radius: calc(var(--round-n) * var(--px)); --g: calc(14 * var(--px));
+    box-shadow: var(--bar, 0 0 transparent), var(--glow, 0 0 transparent);
   }
   .n:hover { color: var(--text); text-decoration: none; }
   /* A file (M23): its glyph, its name in the faint ink, a lighter edge, and no fill of its own. */
@@ -93,6 +97,9 @@
   .p-sem { outline: calc(2 * var(--px)) dotted var(--growth); outline-offset: calc(3 * var(--px)); }
   .p-link { outline: calc(1.5 * var(--px)) solid var(--growth); outline-offset: calc(3 * var(--px)); }
   .p-used { outline: calc(1.5 * var(--px)) solid var(--growth); outline-offset: calc(3 * var(--px)); background: var(--growth-soft); color: var(--text); }
+  /* The agent's light: what it used, reached or has in hand glows gold; what it read, blue, and as it first reads it
+     a pulse runs out from it once. Your moments on the timeline glow in your blue, the agent's in its gold. */
+  .p-used, .p-link { --glow: 0 0 var(--g) color-mix(in srgb, var(--growth) var(--glow-a), transparent); }
   .at, .req, .bld { color: var(--text); outline: calc(2 * var(--px)) solid var(--text); outline-offset: calc(2 * var(--px)); }
   .req { outline-color: color-mix(in srgb, var(--requires) var(--lit, 100%), transparent); }
   .req.far { outline-width: var(--px); color: var(--text-soft); }
@@ -102,13 +109,17 @@
   /* Picked (Mobile-Pick): a blue outline and its number at the corner. The number stands outside the block, and
      keeps its size on screen. */
   /* Open in the Note pane (M17): a bar three pixels wide inside the left edge, in the text's colour. */
-  .here { box-shadow: inset calc(3 * var(--px)) 0 0 var(--text); color: var(--text); }
+  .here { --bar: inset calc(3 * var(--px)) 0 0 var(--text); color: var(--text); }
   .mo-you { outline: calc(2.5 * var(--px)) solid var(--lattice); outline-offset: calc(3 * var(--px)); z-index: 3; }
   .mo-iso { outline: calc(2.5 * var(--px)) solid var(--growth); outline-offset: calc(3 * var(--px)); z-index: 3; }
+  .mo-you { --glow: 0 0 var(--g) color-mix(in srgb, var(--lattice) var(--glow-a), transparent); }
+  .mo-iso { --glow: 0 0 var(--g) color-mix(in srgb, var(--growth) var(--glow-a), transparent); }
   /* The Iso lens (M10): in the agent's context, a gold fill; read by the agent, a blue one; changed by it, a diamond at
      the corner; the order it read in, a gold number. */
-  .given { background: var(--growth-soft); border-color: var(--growth); color: var(--text); }
-  .held { background: var(--lattice-soft); border-color: var(--lattice); color: var(--text); }
+  .given { background: var(--growth-soft); border-color: var(--growth); color: var(--text); --glow: 0 0 var(--g) color-mix(in srgb, var(--growth) calc(var(--glow-a) * .7), transparent); }
+  .held { background: var(--lattice-soft); border-color: var(--lattice); color: var(--text); --glow: 0 0 var(--g) color-mix(in srgb, var(--lattice) calc(var(--glow-a) * .8), transparent); animation: read var(--t-result) var(--ease-out); }
+  @keyframes read { from { box-shadow: var(--bar, 0 0 transparent), 0 0 0 calc(2 * var(--px)) color-mix(in srgb, var(--lattice) 70%, transparent), 0 0 calc(24 * var(--px)) color-mix(in srgb, var(--lattice) 60%, transparent); } }
+  @media (prefers-reduced-motion: reduce) { .held { animation: none; } }
   .changed, .order { overflow: visible; }
   .dia { position: absolute; top: -5px; right: -5px; width: 9px; height: 9px; background: var(--growth); transform: rotate(45deg); scale: var(--ik); }
   .order { position: absolute; top: -9px; left: -9px; width: 16px; height: 16px; display: grid; place-items: center; background: var(--growth); color: var(--ground-0); font-size: 10px; font-weight: 700; z-index: 1; scale: var(--ik); }
