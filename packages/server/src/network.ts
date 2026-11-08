@@ -60,10 +60,14 @@ export function unreachable(err: unknown, url: string): string {
   said = said.split("\n")[0]!.replace(/^[0-9A-F]{8,}:error:[0-9A-F]+:SSL routines:[^:]*:/, "").replace(/:\.\.\/deps\/.*$/, "");
   let host = url;
   try { host = new URL(url).host; } catch { /* as given */ }
-  const proxy = /Proxy response \((\d{3})\)/.exec(said)?.[1];
+  // How a proxy's refusal is said: by undici (Node's fetch), and by https.Agent's own proxy (Node 24) for a tunnel.
+  const proxy = /Proxy response \((\d{3})\)/.exec(said)?.[1] ?? (code === "ERR_PROXY_TUNNEL" || /establish tunnel/i.test(said) ? /HTTP\/\d(?:\.\d)? (\d{3})/.exec(said)?.[1] : undefined);
   const advice =
     proxy === "407" ? "The proxy (HTTPS_PROXY) refused with 407: it wants credentials of its own, as http://user:password@proxy:port in HTTPS_PROXY, or its own sign-in. isorite can't answer a proxy that signs in by Kerberos or NTLM."
     : proxy ? `The proxy (HTTPS_PROXY) answered ${proxy}: check HTTPS_PROXY, and NO_PROXY for hosts reached directly.`
+    : /CERTIFICATE_REQUIRED|alert certificate required|alert number 116/i.test(code + said) ? "It asks for a client certificate (mTLS) and was shown none: name yours under [provider] in config.toml, as pfx (with pfx_passphrase) or cert and cert_key."
+    : /ALERT_(BAD|UNKNOWN|UNSUPPORTED|REVOKED|EXPIRED)_CERTIFICATE|ALERT_UNKNOWN_CA|ALERT_ACCESS_DENIED|alert (bad|unknown|unsupported|revoked|expired) certificate|alert unknown ca|alert access denied/i.test(code + said) ? "It refused the client certificate shown: check that [provider] pfx (or cert) is the one the gateway expects, and has not expired."
+    : code === "ECONNRESET" && /handshake|socket disconnected before secure/i.test(said) ? "The connection closed during the TLS handshake, as a gateway does that wants a client certificate and was shown none, or not the one it expects: name it under [provider] in config.toml (pfx, or cert and cert_key)."
     : UNTRUSTED.has(code) ? "Its certificate is signed by an authority not trusted here, often a company's own. Add it to the system's authorities (isorite trusts those), or set NODE_EXTRA_CA_CERTS to its certificate (a .pem)."
     : code === "CERT_HAS_EXPIRED" ? "Its certificate has expired."
     : code === "ENOTFOUND" || code === "EAI_AGAIN" ? `The name ${host} could not be found: check whether it is only found on the company's network or VPN.`

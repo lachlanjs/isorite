@@ -10,12 +10,22 @@ import { PiHost, type PiHostOptions } from "./host.ts";
 import { fileTools, pathGuard, type Files } from "./files.ts";
 import { FileStore, storeDir } from "./store.ts";
 import { Credentials, DEFAULT_REACH, PROVIDERS, type Choice, type Reach } from "./credentials.ts";
+import { GATEWAY, gatewayFetch, gatewayFor, gatewayModels, readGateway, type Gateway } from "./gateway.ts";
+import { unreachable } from "../network.ts";
+import { configPath } from "../config.ts";
+import { basename } from "node:path";
 
 const camel = (s: string): string => s.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 
 /** The model `provider/model` and the way to reach it. Throws (naming what is wrong) where pi has no such provider or model. */
-export async function modelFor(provider: string, model: string): Promise<{ chosen: NonNullable<ReturnType<ReturnType<typeof createModels>["getModel"]>>; streamFn: PiHostOptions["streamFn"] }> {
+export async function modelFor(provider: string, model: string, env: NodeJS.ProcessEnv = process.env): Promise<{ chosen: NonNullable<ReturnType<ReturnType<typeof createModels>["getModel"]>>; streamFn: PiHostOptions["streamFn"] }> {
   if (!provider || !model || !/^[a-z0-9-]+$/.test(provider)) throw new Error(`a model is <provider>/<model>, as anthropic/claude-sonnet-4-6; it was "${provider}/${model}"`);
+  // A gateway of your own: any model it serves, by the address, headers and certificate config.toml gives it.
+  if (provider === GATEWAY) {
+    const g = readGateway(configPath(env), env);
+    if (!g) throw new Error(`no gateway is set: name one under [provider] in ${configPath(env)} (url, and pfx or cert if it asks for a certificate)`);
+    return gatewayFor(g, model, env) as never;
+  }
   let make: unknown;
   try {
     make = ((await import(`@earendil-works/pi-ai/providers/${provider}`)) as Record<string, unknown>)[`${camel(provider)}Provider`];
@@ -46,7 +56,14 @@ export class PiControl {
   readonly creds: Credentials;
   readonly #env: NodeJS.ProcessEnv;
   readonly #hosts = new Set<PiHost>();
-  constructor(env: NodeJS.ProcessEnv = process.env, creds = new Credentials(env)) { this.#env = env; this.creds = creds; }
+  constructor(env: NodeJS.ProcessEnv = process.env, creds = new Credentials(env)) {
+    this.#env = env; this.creds = creds;
+    // The gateway's key may be written in its configuration ([provider] key, or a "$NAME" there).
+    creds.fallback ??= (p) => { if (p !== GATEWAY) return undefined; try { return readGateway(configPath(env), env)?.key; } catch { return undefined; } };
+  }
+  /** What starts the agent in a base whose pane is not the agent's yet, once a model is chosen (serve.ts, per base). */
+  readonly #starters = new Set<() => Promise<void>>();
+  whenChosen(start: () => Promise<void>): () => void { this.#starters.add(start); return () => this.#starters.delete(start); }
 
   /** What the agent may reach now, read synchronously where a prompt starts. Loaded by `load`. */
   reach: Reach = { ...DEFAULT_REACH };
@@ -81,14 +98,60 @@ export class PiControl {
       keys: await this.creds.sources(),
       reach: this.reach,
       reachFromEnvironment: this.reachFromEnvironment,
+      gateway: await this.gateway(),
     };
   }
 
+  /** The gateway config.toml names, as the settings show it (never a key, a passphrase or a header's value), with the
+   *  models it offers; or why it cannot be used; or null where there is none. */
+  async gateway(): Promise<{ name: string; url: string; models: string[]; certificate: string[]; keyHeader: string | null; headers: string[] } | { problem: string } | null> {
+    let g: Gateway | null;
+    try { g = readGateway(configPath(this.#env), this.#env); } catch (e) { return { problem: (e as Error).message }; }
+    if (!g) return null;
+    const models = await gatewayModels(g, await this.creds.key(GATEWAY), this.#env).catch(() => g.models);
+    return { name: g.name, url: g.url, models, certificate: g.tls?.files.map((f) => basename(f)) ?? [], keyHeader: g.keyHeader ?? null, headers: Object.keys(g.headers) };
+  }
+
+  /** The models `provider` offers, by id: its catalogue in pi, or the gateway's own list. */
+  async models(provider: string): Promise<string[]> {
+    if (provider === GATEWAY) {
+      const g = (() => { try { return readGateway(configPath(this.#env), this.#env); } catch { return null; } })();
+      return g ? await gatewayModels(g, await this.creds.key(GATEWAY), this.#env).catch(() => g.models) : [];
+    }
+    if (!/^[a-z0-9-]+$/.test(provider)) return [];
+    try {
+      const make = ((await import(`@earendil-works/pi-ai/providers/${provider}`)) as Record<string, unknown>)[`${camel(provider)}Provider`] as (() => { getModels(): readonly { id: string }[] }) | undefined;
+      return make ? make().getModels().map((m) => m.id).filter((id) => !id.startsWith("~")) : [];
+    } catch { return []; }
+  }
+
+  /** One short request to `provider`'s `model` with the key it would use: how long it took, or why it did not answer,
+   *  with what to change. For a gateway that cannot be reached, it is asked once more directly, for the reason Node
+   *  keeps (a certificate wanted, an authority not trusted, a proxy refusing), which the model's client does not say. */
+  async check(provider: string, model: string): Promise<{ ms: number; said: string }> {
+    const { chosen, streamFn } = await modelFor(provider, model.trim(), this.#env);
+    const key = (await this.creds.key(provider)) ?? (provider === GATEWAY ? "none" : undefined);
+    if (!key) throw new Error(`no key is set for ${PROVIDERS.find((p) => p.id === provider)?.name ?? provider}: keep one here, or set ${PROVIDERS.find((p) => p.id === provider)?.env}`);
+    const t0 = Date.now();
+    const out = await (await streamFn!(chosen, { messages: [{ role: "user", content: "Reply with the single word: ready", timestamp: t0 }] } as never, { apiKey: key, maxTokens: 16, signal: AbortSignal.timeout(30_000) } as never)).result();
+    if (out.stopReason === "error" || out.stopReason === "aborted") {
+      let why = out.errorMessage ?? "it did not answer";
+      if (provider === GATEWAY && /connection error|fetch failed|ECONN|socket|certificate|TLS/i.test(why)) {
+        const g = readGateway(configPath(this.#env), this.#env)!;
+        try { await gatewayFetch(g, this.#env)(`${g.url}/models`, { signal: AbortSignal.timeout(10_000) }); } catch (e) { why = unreachable(e, g.url); }
+      }
+      throw new Error(why);
+    }
+    return { ms: Date.now() - t0, said: out.content.map((c: { type: string; text?: string }) => (c.type === "text" ? c.text ?? "" : "")).join("").trim().slice(0, 80) };
+  }
+
   async choose(provider: string, model: string): Promise<void> {
-    const { chosen, streamFn } = await modelFor(provider, model.trim());
+    const { chosen, streamFn } = await modelFor(provider, model.trim(), this.#env);
     await this.creds.choose(provider, chosen.id);
     // A host already running carries on with it; the environment, if it names one, still wins at the next start.
     if (!this.#env.ISORITE_PI?.trim()) for (const h of this.#hosts) h.use(chosen, streamFn, `pi (${chosen.id})`);
+    // A base whose pane is not the agent's yet takes it now, with no restart.
+    if (!this.#hosts.size) for (const start of this.#starters) await start();
   }
 }
 
@@ -97,10 +160,10 @@ export async function piHostFor(api: PiHostOptions["api"] & Pick<Api, "events">,
   const want = await wanted(env, control.creds);
   if (!want) return null;
   const { provider, model } = want.choice;
-  const { chosen, streamFn } = await modelFor(provider, model);
+  const { chosen, streamFn } = await modelFor(provider, model, env);
   await control.load();
   const asked = new Set((env.ISORITE_PI_ASK ?? "").split(",").map((t) => t.trim()).filter(Boolean));
-  const host = new PiHost({ api, store: new FileStore(storeDir(notes, env)), model: chosen, streamFn, name: `pi (${model})`, getApiKey: (p) => control.creds.key(p), ...(asked.size ? { ask: (tool: string) => asked.has(tool) } : {}), more: () => fileTools(project, control.reach), guard: pathGuard(project) });
+  const host = new PiHost({ api, store: new FileStore(storeDir(notes, env)), model: chosen, streamFn, name: `pi (${model})`, getApiKey: async (p) => (await control.creds.key(p)) ?? (p === GATEWAY ? "none" : undefined), ...(asked.size ? { ask: (tool: string) => asked.has(tool) } : {}), more: () => fileTools(project, control.reach), guard: pathGuard(project) });
   await host.resume();
   control.attach(host);
   return host;

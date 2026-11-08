@@ -29,12 +29,19 @@ export interface PiState {
   /** What the native agent may reach in the project (step 9), and whether the environment sets it. */
   reach: { files: "off" | "read" | "write"; shell: boolean };
   reachFromEnvironment: boolean;
+  /** The gateway config.toml's [provider] names (never a key, a passphrase or a header's value), why it cannot be
+   *  used, or null where it names none. */
+  gateway: { name: string; url: string; models: string[]; certificate: string[]; keyHeader: string | null; headers: string[] } | { problem: string } | null;
 }
 export interface PiApi {
   state(): Promise<PiState>;
   setKey(provider: string, key: string): Promise<void>;
   removeKey(provider: string): Promise<void>;
   choose(provider: string, model: string): Promise<void>;
+  /** The models a provider offers, by id. */
+  models(provider: string): Promise<string[]>;
+  /** One short request with the key and model: how long it took, or (thrown) why it did not answer. */
+  check(provider: string, model: string): Promise<{ ms: number; said: string }>;
   setReach(files: "off" | "read" | "write", shell: boolean): Promise<void>;
 }
 
@@ -185,6 +192,8 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       setKey: async (provider, key) => { await write("POST", "pi/key", { provider, key }); },
       removeKey: async (provider) => { await write("POST", "pi/key/remove", { provider }); },
       choose: async (provider, model) => { await write("POST", "pi/choose", { provider, model }); },
+      models: async (provider) => (await ask<{ models: string[] }>(`pi/models?provider=${encodeURIComponent(provider)}`)).models,
+      check: (provider, model) => write("POST", "pi/check", { provider, model }) as Promise<{ ms: number; said: string }>,
       setReach: async (files, shell) => { await write("POST", "pi/reach", { files, shell }); },
     },
     terminal: {

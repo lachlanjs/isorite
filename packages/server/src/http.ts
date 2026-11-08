@@ -309,6 +309,9 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
     post("/api/pi/key/remove", z.object({ provider: Provider }).strict(), async (c, b) => { mine(c); await invalid(() => pi.creds.remove(b.provider)); });
     post("/api/pi/reach", z.object({ files: z.enum(["off", "read", "write"]), shell: z.boolean() }).strict(), async (c, b) => { mine(c); await invalid(() => pi.setReach(b)); });
     post("/api/pi/choose", z.object({ provider: Provider, model: z.string().min(1).max(200) }).strict(), async (c, b) => { mine(c); await invalid(() => pi.choose(b.provider, b.model)); });
+    app.get("/api/pi/models", (c) => answer(c, async () => { mine(c); return { models: await pi.models(c.req.query("provider") ?? "") }; }));
+    // One short request, so a key, a model or a gateway is known to work before the first question (it costs a few tokens).
+    post("/api/pi/check", z.object({ provider: Provider, model: z.string().min(1).max(200) }).strict(), async (c, b) => { mine(c); let r: { ms: number; said: string } | undefined; await invalid(async () => { r = await pi.check(b.provider, b.model); }); return r; });
   }
 
   // The pane's agent session (M11, on ACP since M25): pages read it, ask in it, stop it and answer what it asks,

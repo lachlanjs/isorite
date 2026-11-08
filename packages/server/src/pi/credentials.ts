@@ -21,6 +21,8 @@ export const PROVIDERS: { id: string; name: string; env: string }[] = [
   { id: "together", name: "Together", env: "TOGETHER_API_KEY" },
   { id: "fireworks", name: "Fireworks", env: "FIREWORKS_API_KEY" },
   { id: "cerebras", name: "Cerebras", env: "CEREBRAS_API_KEY" },
+  // A gateway of your own (gateway.ts): its address, headers and client certificate in config.toml's [provider].
+  { id: "gateway", name: "Your gateway", env: "ISORITE_GATEWAY_KEY" },
 ];
 
 export interface Choice { provider: string; model: string }
@@ -78,13 +80,16 @@ export class Credentials {
     await turn;
   }
 
-  /** The key to use for `provider`: the one saved here, else the provider's own variable in the environment. */
+  /** The key to use for `provider`: the one saved here, else the provider's own variable in the environment, else (for
+   *  a gateway) the one its configuration names. */
   async key(provider: string): Promise<string | undefined> {
     const kept = (await this.#load()).keys[provider];
     if (kept) return kept;
     const env = PROVIDERS.find((p) => p.id === provider)?.env;
-    return (env && this.#env[env]) || undefined;
+    return (env && this.#env[env]) || this.fallback?.(provider) || undefined;
   }
+  /** A key from elsewhere, asked last (the gateway's `[provider] key`). */
+  fallback: ((provider: string) => string | undefined) | null = null;
 
   /** Where each provider's key comes from, never the key. */
   async sources(): Promise<Record<string, "saved" | "environment" | null>> {

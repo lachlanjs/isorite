@@ -4,7 +4,9 @@
   // terminal (isorite's MCP in its config; and, to share the session live with the pane, run behind `isorite acp` in
   // an ACP front end). An agent of the ACP registry, or a command of your own, is under "another agent". Choosing is
   // from this machine only, since it runs a program. With `compact` it is the drawer's "change agent": no heading.
-  import type { AgentChoice, ChosenAgent, DetectedAgent, ProjectConfig, RegistryAgent, TerminalApi } from "$lib/api.ts";
+  import type { AgentChoice, ChosenAgent, DetectedAgent, PiApi, PiState, ProjectConfig, RegistryAgent, TerminalApi } from "$lib/api.ts";
+  import { panes } from "$lib/panes.svelte.ts";
+  import { tick } from "svelte";
   import { app } from "$lib/app.svelte.ts";
   import { baseHere } from "$lib/here.ts";
   import OwnFiles from "./OwnFiles.svelte";
@@ -15,6 +17,18 @@
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
 
   let problem = $state("");
+  // isorite's own agent (M36): offered here beside the agents found, since it needs nothing installed, only a key (or a
+  // gateway). Set up in the pane's settings, where a key is typed: from this machine only.
+  const pi = (app.api as { pi?: PiApi } | undefined)?.pi ?? null;
+  let own = $state.raw<PiState | null>(null);
+  $effect(() => { if (pi && local) void pi.state().then((s) => (own = s), () => undefined); });
+  async function setUp(): Promise<void> {
+    panes.settings = "iso";
+    await tick();
+    const at = document.getElementById("pi-provider");
+    at?.scrollIntoView({ block: "center" });
+    at?.focus();
+  }
   let chosen = $state.raw<ChosenAgent | null>(null);
   let known = $state.raw<DetectedAgent[] | null>(null);
   let starting = $state("");
@@ -87,6 +101,13 @@
     {#if local}
       {#if known === null}<p class="faint">Looking for agents on this machine…</p>{/if}
       <ul class="cards">
+        {#if own}
+          <li class="card frame own" class:on={own.active} data-lustre data-testid="own-agent">
+            <div class="head"><b>isorite's own agent</b><span class="state">{own.active ? "in this pane" : "built in"}</span></div>
+            <p class="faint note">Any model by its key: OpenRouter, Anthropic, OpenAI and others, or your company's gateway. Nothing to install.</p>
+            <div class="acts"><button type="button" class="btn" onclick={() => void setUp()}>{own.active ? "its settings" : "set it up"}</button></div>
+          </li>
+        {/if}
         {#each known ?? [] as a (a.id)}
           <li class="card frame" class:on={on(a)} class:absent={!a.found} data-lustre>
             <div class="head"><b>{a.name}</b><span class="state">{on(a) ? (chosen?.running ? "in this pane · running" : "in this pane") : a.found ? "found" : "not found"}</span></div>

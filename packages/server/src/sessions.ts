@@ -43,3 +43,31 @@ export interface PaneSessions {
 }
 
 export type { AgentSession };
+
+/** A pane whose host can change while the server runs (M36: isorite's own agent chosen in the settings takes the pane
+ *  at once, with no restart). Everything is asked of the host shown now, read anew at each call, so a method one host
+ *  has and the other leaves out (steer, withdraw, fork) is there or not as the host now shown has it. Whoever listens
+ *  goes on listening to whichever host it is, and is told its view as it changes hands. */
+export function switchable(first: PaneSessions): { pane: PaneSessions; use(next: PaneSessions): void } {
+  let now = first;
+  const listeners = new Map<(view: TerminalView) => void, () => void>();
+  const pane = new Proxy({} as PaneSessions, {
+    get(_, key) {
+      if (key === "listen") return (fn: (view: TerminalView) => void) => {
+        listeners.set(fn, now.listen(fn));
+        return () => { listeners.get(fn)?.(); listeners.delete(fn); };
+      };
+      const v = (now as unknown as Record<PropertyKey, unknown>)[key];
+      return typeof v === "function" ? v.bind(now) : v;
+    },
+    has(_, key) { return key in now; },
+  });
+  return {
+    pane,
+    use(next) {
+      if (next === now) return;
+      now = next;
+      for (const [fn, hangUp] of listeners) { hangUp(); listeners.set(fn, next.listen(fn)); fn(next.view()); }
+    },
+  };
+}
