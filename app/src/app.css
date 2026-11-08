@@ -163,6 +163,12 @@ canvas.lustre { position: fixed; z-index: 999; pointer-events: none; }
 .vein:hover::after, .vein.lit::after { background-position: 140% 0; transition: background-position var(--t-result) var(--ease-out); }
 @media (prefers-reduced-motion: reduce) { .vein-row::before, .vein-row::after, .vein::after { transition: none !important; } }
 
+/* What a hold does once let go, seen happen (flight.ts): the agent's gold diamond flying to it and the ring where it
+   lands, and the card carried as it is put down. */
+.flight-send { position: fixed; left: 0; top: 0; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; z-index: 70; pointer-events: none; background: var(--growth); box-shadow: 0 0 12px color-mix(in srgb, var(--growth) 70%, transparent); }
+.flight-ring { position: fixed; width: 22px; height: 22px; z-index: 70; pointer-events: none; border: 2px solid var(--growth); }
+.landing { pointer-events: none; z-index: 60; }
+
 /* What appears where you are working (tags held up, a question asked, a thing carried) comes in: from a few pixels
    below and from nothing, quickly, so it is seen to arrive and does not merely blink on. By `translate`, so it keeps any
    transform of its own. Reduced motion: it is simply there. */

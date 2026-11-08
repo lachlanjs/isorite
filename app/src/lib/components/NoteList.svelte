@@ -7,6 +7,7 @@
   import FolderField from "$lib/components/FolderField.svelte";
   import { resolve } from "$app/paths";
   import { Gesture, type Item } from "$lib/gesture.svelte.ts";
+  import { vanish } from "$lib/flight.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import HoldTags from "$lib/components/HoldTags.svelte";
   import NoteMenu from "$lib/components/NoteMenu.svelte";
@@ -24,7 +25,7 @@
     move: (item, dir) => void moveItem(item, dir),
     remove: (item) => void askRemove(item),
     send: (item) => send(item),
-  });
+  }, { targetOf: (dir) => document.querySelector(`.notes section[data-dir="${CSS.escape(dir)}"] h2`) });
   let asking = $state.raw<{ item: Item; text: string; empty: boolean } | null>(null);
   const dragged = $derived(g.phase === "moving" ? g.item?.id ?? null : null);
   const over = $derived(g.phase === "moving" ? g.over : null);
@@ -112,6 +113,8 @@
     const a = asking;
     asking = null;
     if (!a) return;
+    // It goes before it is gone: folded away where it stands, then deleted (put back if that fails).
+    const back = await vanish(document.querySelector(a.item.kind === "folder" ? `.notes section[data-dir="${CSS.escape(a.item.id)}"]` : `.notes li[data-row="${CSS.escape(a.item.id)}"]`));
     try {
       if (a.item.kind === "folder") await app.api.deleteFolder(a.item.id);
       else {
@@ -120,6 +123,7 @@
       }
       await app.refresh();
     } catch (e) {
+      back();
       said = (e as Error).message;
     }
   }
@@ -215,7 +219,7 @@
       <h2 class="head" class:lifted={dragged === dir && dir !== ""} class:doomed={tagged("delete", dir)} class:sending={tagged("send", dir)} use:g.press={() => ({ kind: "folder", id: dir, title: dir })}>{#if renaming === dir && dir}<input class="field rename" aria-label="Rename the folder {dir}" bind:value={draft} use:focus onkeydown={(e) => { if (e.key === "Enter") void rename(dir); else if (e.key === "Escape") renaming = null; }} onblur={() => (renaming = null)} />{:else}<span class="label" ondblclick={() => { if (dir) { draft = last(dir); renaming = dir; } }} role="presentation">{dir || "the top of the base"}</span>{/if}<span class="acts"><button class="btn quiet add" type="button" onclick={() => start(dir)} aria-label={`New note in ${dir || "the top of the base"}`}>+</button>{#if dir}<button class="btn quiet" type="button" onclick={() => { draft = last(dir); renaming = dir; }} aria-label={`Rename the folder ${dir}`}>rename</button>{/if}{#if dir && !notes.length}<button class="btn quiet" type="button" onclick={() => void askRemove({ kind: "folder", id: dir, title: dir })} aria-label={`Delete the empty folder ${dir}`}>delete</button>{/if}</span>{@render tags("folder", dir)}</h2>
       <ul>
         {#each notes as n (n.id)}
-          <li class:lifted={dragged === n.id} class:doomed={tagged("delete", n.id)} class:sending={tagged("send", n.id)} use:g.press={() => ({ kind: "note", id: n.id, title: n.title })}><a class="vein-row" class:on={n.id === panes.last} data-lustre draggable="false" href={noteHref(n.id)}><span class="serif title">{n.title}</span>{#if n.description}<span class="soft desc">{n.description}</span>{/if}</a><NoteMenu id={n.id} title={n.title} />{@render tags("note", n.id)}</li>
+          <li data-row={n.id} class:lifted={dragged === n.id} class:doomed={tagged("delete", n.id)} class:sending={tagged("send", n.id)} use:g.press={() => ({ kind: "note", id: n.id, title: n.title })}><a class="vein-row" class:on={n.id === panes.last} data-lustre draggable="false" href={noteHref(n.id)}><span class="serif title">{n.title}</span>{#if n.description}<span class="soft desc">{n.description}</span>{/if}</a><NoteMenu id={n.id} title={n.title} />{@render tags("note", n.id)}</li>
         {/each}
       </ul>
     </section>
@@ -254,13 +258,15 @@
   section.over h2 { border-bottom-color: var(--text-soft); }
   li.lifted, h2.lifted { opacity: 0.45; }
   /* Held (M33): the tags, and the item tinted for what letting go would do. Blue moves, red deletes, gold is Iso's. */
-  li.doomed, h2.doomed { background: var(--rose-soft); }
-  li.sending, h2.sending { background: var(--growth-soft); }
+  li.doomed, h2.doomed { background: var(--rose-soft); animation: tremble .32s ease-in-out infinite; }
+  li.sending, h2.sending { background: var(--growth-soft); box-shadow: inset 2px 0 0 var(--growth); }
+  @keyframes tremble { 0%, 100% { translate: 0 0; } 25% { translate: -1px 0; } 75% { translate: 1px 0; } }
+  @media (prefers-reduced-motion: reduce) { li.doomed, h2.doomed { animation: none; } }
   .head { position: relative; }
   .acts { display: flex; gap: var(--space-2); }
   .ask-at { position: sticky; top: 8px; height: 0; z-index: 40; }
   .ask { position: absolute; left: 0; right: 0; top: 0; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); filter: var(--lift-drop); animation: appear var(--t-change) var(--ease-out); }
-  .notes:has(:global(.tags)), .notes:has(:global(.ghost)) { user-select: none; -webkit-user-select: none; }
+  :global(body:has(.ring, .ghost)) .notes { user-select: none; -webkit-user-select: none; }
   li, .head { touch-action: pan-y; -webkit-touch-callout: none; }
   ul { list-style: none; margin: 0; padding: 0; }
   /* Rows with a vein (M24, D): the note last open is chosen. */

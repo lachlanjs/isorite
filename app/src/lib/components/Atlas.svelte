@@ -18,6 +18,7 @@
   import { satellites, withoutNotes, withProspects, type Prospect } from "$lib/atlas/kinds.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import { Gesture, toBody, type Item } from "$lib/gesture.svelte.ts";
+  import { vanish } from "$lib/flight.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
   import HoldTags from "./HoldTags.svelte";
   import AtlasFolder from "./AtlasFolder.svelte";
@@ -441,7 +442,7 @@
     move: (item, dir) => void moveHeld(item, dir),
     remove: (item) => void askRemove(item),
     send: (item) => give(item.id, item.kind),
-  }, { drift: "cancel", scroll: false, dropAt: (x, y) => folderUnder(x, y) });
+  }, { drift: "cancel", scroll: false, dropAt: (x, y) => folderUnder(x, y), targetOf: (dir) => viewport?.querySelector(`[data-folder="${CSS.escape(dir)}"]`) ?? null });
   let asking = $state.raw<{ item: Item; text: string } | null>(null);
   /** The folder of the map under a point of the screen: the deepest one shown, not the one carried nor inside it. */
   function folderUnder(x: number, y: number): string | null {
@@ -485,12 +486,14 @@
     const a = asking;
     asking = null;
     if (!a) return;
+    // It goes before it is gone: folded away where it stands, then deleted (put back if that fails).
+    const back = await vanish(viewport?.querySelector(a.item.kind === "folder" ? `[data-folder="${CSS.escape(a.item.id)}"]` : `[data-note="${CSS.escape(a.item.id)}"]`) ?? null);
     try {
       if (a.item.kind === "folder") await app.api.deleteFolder(a.item.id);
       else await app.api.deleteNote(a.item.id, (await app.api.readNote(a.item.id)).version);
       await app.refresh();
       void load();
-    } catch (e) { notice = (e as Error).message; }
+    } catch (e) { back(); notice = (e as Error).message; }
   }
   // The held item and the folder it is over wear what letting go would do, on the map's own elements.
   $effect(() => {
@@ -504,6 +507,17 @@
     if (mark) held?.setAttribute("data-g", mark);
     target?.setAttribute("data-g", "over");
     return () => { held?.removeAttribute("data-g"); target?.removeAttribute("data-g"); };
+  });
+  // Pointing stands still while something is held (the tags pass under the pointer as they come out); once let go, the
+  // note pointed at is the one under the pointer now, if any.
+  let holdWas = "idle";
+  $effect(() => {
+    const phase = g.phase;
+    if (phase === "idle" && holdWas !== "idle") {
+      const under = document.elementFromPoint(g.x, g.y)?.closest<HTMLElement>(".atlas [data-note]")?.dataset.note ?? "";
+      pointed = under; pointing.onAtlas = under;
+    }
+    holdWas = phase;
   });
   function unhold(): void { g.stop(); clearTimeout(holdShow); clearTimeout(holdDone); holdShow = holdDone = undefined; gripped = null; if (!making) grasp = null; }
   /** The deepest folder of the base holding a place on the map (in cells): "" for the top. */
@@ -817,6 +831,10 @@
   });
 </script>
 
+<!-- A pointer let go off the map (over the tags of a hold, which stand over the page, or past the pane): the map lets go
+     of it too, or it would take the next press for part of this one. -->
+<svelte:window onpointerup={(e) => { if (!(e.target instanceof Node && viewport?.contains(e.target))) up(e); }} onpointercancel={(e) => { if (!(e.target instanceof Node && viewport?.contains(e.target))) up(e); }} />
+
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div class="atlas" class:lit={!!lit} bind:this={viewport} role="application" aria-label="The atlas: the map of the base" tabindex="0"
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onclick={ground} onkeydown={key}
@@ -842,7 +860,7 @@
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
           <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} iso={isoMark(n.item.ref)} file={report.files?.[n.item.ref]?.kind ?? ""} prospect={n.item.ref.startsWith("?")} given={isoLens && givenNotes.has(n.item.ref)} held={isoLens && !givenNotes.has(n.item.ref) && readNotes.has(n.item.ref) ? "on" : ""} changed={isoLens && changedByIso.has(n.item.ref)} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={!!lit && !mark} href={noteHref(opens(n.item.ref))}
-            onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { if (on && (dragged || g.phase === "moving")) return; pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; pointing.onAtlas = pointed; }} />
+            onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { if ((on && dragged) || g.phase !== "idle") return; pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; pointing.onAtlas = pointed; }} />
       {/each}
       {#each sats as s (s.key)}
         {#if s.kind === "web"}
@@ -920,6 +938,11 @@
   .asking .row { display: flex; gap: var(--space-2); }
   /* What a held item shows (M33), on the map's own elements. */
   :global([data-g="lifted"]) { opacity: .45; transition: opacity var(--t-ack) var(--ease-out); }
+  /* Aimed at delete, the item trembles; at send, it glows the agent's gold. */
+  :global([data-g="doomed"]) { animation: tremble .32s ease-in-out infinite; }
+  :global([data-g="sending"]) { box-shadow: var(--glow-growth); }
+  @keyframes -global-tremble { 0%, 100% { translate: 0 0; } 25% { translate: calc(-.8 * var(--px, 1px)) 0; } 75% { translate: calc(.8 * var(--px, 1px)) 0; } }
+  @media (prefers-reduced-motion: reduce) { :global([data-g="doomed"]) { animation: none; } }
   :global([data-g="doomed"]) { outline: calc(2.5 * var(--px, 1px)) solid var(--rose); outline-offset: calc(2 * var(--px, 1px)); background: var(--rose-soft); }
   :global([data-g="sending"]) { outline: calc(2.5 * var(--px, 1px)) solid var(--growth); outline-offset: calc(2 * var(--px, 1px)); }
   :global([data-g="over"]) { outline: calc(2 * var(--px, 1px)) dashed var(--lattice); outline-offset: calc(3 * var(--px, 1px)); }

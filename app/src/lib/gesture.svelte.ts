@@ -1,13 +1,15 @@
-// Press and hold on a note or a folder's heading (M33): three tags appear, and the one the pointer goes to, and is
-// let go on, is what happens: move (blue: the item is picked up and carried to a folder), delete (red: asked first)
-// or send (gold: put in the tray for Iso). On a mouse, pulling the item at once carries it, as before. On a touch
-// screen a single finger that moves scrolls the list; one held still starts this.
+// Press and hold on a note or a folder's heading (M33): three tags stand out round it (HoldTags), and the one the
+// pointer goes to is what happens: move (blue: reached, the item is picked up, and carried to a folder), delete (rose:
+// let go there, it is asked about first) or send (gold: let go there, it is put in the tray for the agent). On a mouse,
+// pulling the item at once carries it, as before. On a touch screen a single finger that moves scrolls the list; one
+// held still starts this. What letting go does is seen happen (flight.ts).
+
+import { land, sendFlight, shudder } from "./flight.ts";
 
 export type Item = { kind: "note" | "folder"; id: string; title: string };
 export type Tag = "move" | "delete" | "send";
 
 export const HOLD = 380; // ms held still before the tags appear
-const DWELL = 140; // ms on the move tag before the item is picked up
 const SLOP = 6; // px a pointer may drift and still be "held"
 
 export type Done = {
@@ -35,7 +37,6 @@ export class Gesture {
   private touch = false;
   private cleanup: (() => void) | undefined;
   private frame = 0;
-  private dwell: ReturnType<typeof setTimeout> | undefined;
   private node: HTMLElement | null = null;
 
   /** Where the item held was, on screen, as it was held: the tags stand by it. */
@@ -44,7 +45,7 @@ export class Gesture {
   /** `dropAt`: the folder under a point (`""` the top of the base), or null where nothing can be dropped (the list's rows
    *  are in sections; the Atlas finds it by the map). `drift`: what a mouse moving before the hold does, `carry` (the list:
    *  the item is picked up at once) or `cancel` (the Atlas: it carries to Iso, or moves the map, as it always did). */
-  constructor(private done: Done, private opts: { dropAt?: (x: number, y: number) => string | null; drift?: "carry" | "cancel"; scroll?: boolean } = {}) {}
+  constructor(private done: Done, private opts: { dropAt?: (x: number, y: number) => string | null; drift?: "carry" | "cancel"; scroll?: boolean; targetOf?: (dir: string) => Element | null } = {}) {}
   private dropAt = (x: number, y: number): string | null => (this.opts.dropAt ?? dirAt)(x, y);
 
   /** An action for a row or heading: `use:g.press={() => item}`. */
@@ -103,14 +104,14 @@ export class Gesture {
       // Drifting before the hold: a mouse carries the item; a finger is scrolling.
       if (this.touch || this.opts.drift === "cancel") { this.stop(); return; }
       clearTimeout(this.timer); this.timer = undefined;
+      this.rect = this.node?.getBoundingClientRect() ?? null;
       this.item = it; this.phase = "moving"; this.tag = "move";
     }
     if (this.phase === "held") {
       const t = tagAt(e.clientX, e.clientY);
-      // Crossing the move tag on the way to another must not pick the item up: it takes a moment on it.
-      if (t === "move" && this.tag !== "move") this.dwell = setTimeout(() => { if (this.phase === "held" && this.tag === "move") { this.phase = "moving"; this.over = this.dropAt(this.x, this.y); this.scrolling(); } }, DWELL);
-      if (t !== "move") { clearTimeout(this.dwell); this.dwell = undefined; }
       this.tag = t;
+      // Reached, the move tag picks the item up: the tags stand apart round it, so none is crossed on the way to another.
+      if (t === "move") { this.phase = "moving"; this.over = this.dropAt(this.x, this.y); this.scrolling(); try { navigator.vibrate?.(8); } catch { /* none */ } }
     }
     if (this.phase === "moving") { this.over = this.dropAt(e.clientX, e.clientY); this.scrolling(); }
   }
@@ -134,8 +135,15 @@ export class Gesture {
   }
 
   private release(): void {
-    const { item, phase, tag, over } = this;
+    const { item, phase, tag, over, rect, node } = this;
     const acted = phase !== "idle";
+    // Seen happen: the card carried put down into the folder it is over, or back where it came from; a note sent flies
+    // to the agent; one to delete shudders before it is asked about.
+    if (phase === "moving") {
+      const target = over === null ? null : this.opts.targetOf?.(over)?.getBoundingClientRect() ?? null;
+      land(document.querySelector<HTMLElement>(".ghost"), target ?? rect, target !== null);
+    } else if (phase === "held" && tag === "send") sendFlight(rect);
+    else if (phase === "held" && tag === "delete") shudder(node);
     this.stop();
     // The click that follows the pointer going up must not open the note.
     if (acted) {
@@ -151,7 +159,6 @@ export class Gesture {
 
   stop(): void {
     clearTimeout(this.timer); this.timer = undefined;
-    clearTimeout(this.dwell); this.dwell = undefined;
     cancelAnimationFrame(this.frame); this.frame = 0;
     this.cleanup?.(); this.cleanup = undefined;
     this.item = null; this.rect = null; this.phase = "idle"; this.tag = null; this.over = null;
