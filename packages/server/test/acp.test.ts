@@ -247,7 +247,7 @@ test("the agent chosen in the base's settings (M25): started for the pane, with 
     await post("/api/acp/choose", { choice: null }).catch(() => undefined);
     server.release();
   }
-});
+}, 90_000); // a server and an agent started: longer than the default on Windows' runner
 
 test("the ACP registry: its agents as the settings list them, and how each is run here", async () => {
   const file = join(root, "registry.json");

@@ -95,6 +95,6 @@ test("a file that cannot be read is reported with its path, left in place, and t
 
 test("sessions are kept in isorite's data folder, apart from the notes", () => {
   const dir = storeDir("/some/notes", { XDG_DATA_HOME: "/data" });
-  expect(dir.startsWith("/data/isorite/pi/")).toBe(true);
+  expect(dir.startsWith(join("/data", "isorite", "pi"))).toBe(true);
   expect(storeDir("/other/notes", { XDG_DATA_HOME: "/data" })).not.toBe(dir);
 });

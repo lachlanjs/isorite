@@ -48,7 +48,7 @@ function setUp(provider: string): NodeJS.ProcessEnv {
 const full = (more = "") => [
   `url = "https://localhost:PORT/v1"`, `name = "Our gateway"`, `key = "$GW_KEY"`, `key_header = "api-key"`,
   `headers = { "X-Team" = "physics" }`, `query = { "api-version" = "2024-06-01" }`,
-  `pfx = "${join(TLS, "person.pfx")}"`, `pfx_passphrase = "$PFX_PASS"`, `ca = "${join(TLS, "ca.pem")}"`, more,
+  `pfx = '${join(TLS, "person.pfx")}'`, `pfx_passphrase = "$PFX_PASS"`, `ca = '${join(TLS, "ca.pem")}'`, more,
 ].join("\n");
 
 async function ask(env: NodeJS.ProcessEnv, key: string | undefined): Promise<{ text: string; error?: string }> {
@@ -86,7 +86,7 @@ describe("isorite's own agent through a gateway that asks for a client certifica
   });
 
   test("without the certificate the gateway refuses, and the agent says so rather than hanging", async () => {
-    const env = setUp([`url = "https://localhost:${port}/v1"`, `ca = "${join(TLS, "ca.pem")}"`].join("\n"));
+    const env = setUp([`url = "https://localhost:${port}/v1"`, `ca = '${join(TLS, "ca.pem")}'`].join("\n"));
     const got = await ask(env, "k");
     expect(got.error).toBeTruthy();
   });
@@ -119,13 +119,14 @@ describe("isorite's own agent through a gateway that asks for a client certifica
   test("the settings' check: one short request, answered through the gateway; without the certificate, the reason and what to change", async () => {
     const ok = await new PiControl(setUp(full().replace("PORT", String(port)))).check("gateway", "our-model");
     expect(ok.said).toBe("Through the gateway.");
-    const without = new PiControl(setUp([`url = "https://localhost:${port}/v1"`, `ca = "${join(TLS, "ca.pem")}"`, `key = "k"`].join("\n")));
+    const without = new PiControl(setUp([`url = "https://localhost:${port}/v1"`, `ca = '${join(TLS, "ca.pem")}'`, `key = "k"`].join("\n")));
     await expect(without.check("gateway", "our-model")).rejects.toThrow(/client certificate \(mTLS\)/);
   });
 
   test("a gateway named wrongly says which setting", () => {
-    expect(() => readGateway(join(setUp(`url = "https://localhost/v1"\npfx = "/no/such.pfx"`).XDG_CONFIG_HOME!, "isorite", "config.toml"), {})).toThrow(/\[provider\] pfx: there is no file at \/no\/such\.pfx/);
-    expect(() => readGateway(join(setUp(`url = "http://localhost/v1"\ncert = "${join(TLS, "person.pem")}"\ncert_key = "${join(TLS, "person.key")}"`).XDG_CONFIG_HOME!, "isorite", "config.toml"), {})).toThrow(/not https/);
+    const nowhere = join(tmpdir(), "no", "such.pfx");
+    expect(() => readGateway(join(setUp(`url = "https://localhost/v1"\npfx = '${nowhere}'`).XDG_CONFIG_HOME!, "isorite", "config.toml"), {})).toThrow(`[provider] pfx: there is no file at ${nowhere}`);
+    expect(() => readGateway(join(setUp(`url = "http://localhost/v1"\ncert = '${join(TLS, "person.pem")}'\ncert_key = '${join(TLS, "person.key")}'`).XDG_CONFIG_HOME!, "isorite", "config.toml"), {})).toThrow(/not https/);
     expect(() => readGateway(join(setUp(`url = "https://localhost/v1"\nkey = "$NOT_SET_HERE"`).XDG_CONFIG_HOME!, "isorite", "config.toml"), {})).toThrow(/NOT_SET_HERE is not set/);
   });
 });

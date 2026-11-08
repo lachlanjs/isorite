@@ -81,9 +81,9 @@
         <p class="note">A gateway of your own (OpenAI-compatible, as a company's) is named in <code>~/.config/isorite/config.toml</code>:</p>
         <pre class="snippet">[provider]
 url = "https://gateway.example.com/v1"
-pfx = "~/certs/me.pfx"          # if it asks for a certificate
+pfx = '~/certs/me.pfx'          # if it asks for a certificate
 pfx_passphrase = "$PFX_PASSPHRASE"
-ca = "company-ca.pem"           # if its authority is the company's</pre>
+ca = 'company-ca.pem'           # if its authority is the company's</pre>
       {/if}
     {/if}
     <p class="note" data-testid="pi-key-state">{#if model.keys[provider] === "saved"}A key is saved.{:else if model.keys[provider] === "environment"}Using the key in {model.providers.find((p) => p.id === provider)?.env}.{:else if provider === "gateway"}No key is set{gateway?.certificate.length ? ": the certificate may be enough" : ""}.{:else}No key is set.{/if}</p>

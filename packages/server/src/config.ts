@@ -18,7 +18,11 @@ export const table = (v: unknown): Table => (typeof v === "object" && v !== null
 
 export function readConfig(path = configPath()): Table {
   if (!existsSync(path)) return {};
-  try { return parse(readFileSync(path, "utf8")); } catch (e) { throw new Error(`${path}: ${(e as Error).message}`); }
+  try { return parse(readFileSync(path, "utf8")); } catch (e) {
+    const said = (e as Error).message;
+    // A Windows path in double quotes is read with its backslashes as escapes.
+    throw new Error(`${path}: ${said}${/escape sequence/i.test(said) ? "\nA path with backslashes goes in single quotes, as 'C:\\certs\\me.pfx', or is written with forward slashes." : ""}`);
+  }
 }
 
 /** Written for its owner alone. */

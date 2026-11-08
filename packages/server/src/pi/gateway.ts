@@ -9,10 +9,11 @@
 //   key_header = "api-key"                     # when it is not Authorization: Bearer
 //   headers = { "X-Team" = "physics" }         # added to every request
 //   query = { "api-version" = "2024-06-01" }  # added to every address
-//   pfx = "~/certs/me.pfx"                     # the client certificate and its key...
+//   pfx = '~/certs/me.pfx'                     # the client certificate and its key (a path in single quotes,
+//                                              # so a Windows one keeps its backslashes)...
 //   pfx_passphrase = "$PFX_PASSPHRASE"
 //   # cert = "me.pem"  cert_key = "me.key"     # ...or both as PEM files
-//   ca = "company-ca.pem"                      # the authority the gateway's own certificate is signed by
+//   ca = 'company-ca.pem'                      # the authority the gateway's own certificate is signed by
 //   models = ["gpt-4.1", "claude-sonnet"]      # offered in the settings (the gateway's /models is asked too)
 //
 // Any value may be "$NAME", read from the environment, so a second secret need not be written there. The certificate

@@ -27,8 +27,10 @@ test("a key is kept owner-only in the data folder, is read back to be used, and 
   expect(await creds.key("openrouter")).toBeUndefined();
   await creds.set("openrouter", `  ${KEY}\n`);
   const file = join(data, "isorite", "credentials.json");
-  expect(statSync(file).mode & 0o777).toBe(0o600);
-  expect(statSync(join(data, "isorite")).mode & 0o777).toBe(0o700);
+  if (process.platform !== "win32") { // Windows has no mode: the profile's ACL keeps it
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(statSync(join(data, "isorite")).mode & 0o777).toBe(0o700);
+  }
   expect(await new Credentials(env).key("openrouter")).toBe(KEY);
   // Where a key comes from is said; the key is not.
   const sources = await creds.sources();
