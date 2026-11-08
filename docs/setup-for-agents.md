@@ -1,6 +1,6 @@
 # Setting isorite up: for an AI helping someone
 
-You're helping someone set up isorite: a local web app over a folder of Markdown notes (the browser), attached to the agent they already use (Claude Code, Codex, OpenCode, omp, Hermes, or any ACP agent) over MCP and ACP. isorite calls no model itself (since M25): the agent's key and model are its own, set up as for its own terminal. This is everything isorite reads, writes and runs for the setup, and how each failure shows. `isorite help setup` prints this file.
+You're helping someone set up isorite: a local web app over a folder of Markdown notes (the browser), attached either to isorite's own agent (built in: a model's key from OpenRouter, Anthropic, OpenAI and others, or a company gateway) or to the agent they already use (Claude Code, Codex, OpenCode, omp, Hermes, or any ACP agent) over MCP and ACP. An agent of their own has its key and model set up as for its own terminal; isorite's own agent's are kept by isorite. This is everything isorite reads, writes and runs for the setup, and how each failure shows. `isorite help setup` prints this file.
 
 **Start here:** ask them to run `isorite doctor --report` (add the notes folder if they have one) and paste what it prints. It shows isorite's and Node's versions, the platform, the configuration with secrets replaced by their lengths, the environment variables isorite reads, and a line for each check, ✓ passed, ✗ failed, ! a warning, – skipped. Most failures say what to change. Never ask them to paste a key or passphrase, and don't ask them to turn off certificate checking (`NODE_TLS_REJECT_UNAUTHORIZED=0`).
 
@@ -26,7 +26,8 @@ You're helping someone set up isorite: a local web app over a folder of Markdown
 
 | Where | What |
 |---|---|
-| `~/.config/isorite/config.toml` (or `$XDG_CONFIG_HOME/isorite/`) | This machine's `device` id. Mode 600. A `[provider]` or `[tiers]` from before M25 is left as written and no longer read. |
+| `~/.config/isorite/config.toml` (or `$XDG_CONFIG_HOME/isorite/`) | This machine's `device` id, and `[provider]`: a gateway for isorite's own agent (url, key or `"$NAME"`, key_header, headers, query, pfx + pfx_passphrase or cert + cert_key, ca, models; see setup.md). Mode 600. The model names in `[tiers]` are offered in the settings; nothing else of it is read. |
+| `~/.local/share/isorite/credentials.json` (or `$XDG_DATA_HOME/isorite/`) | isorite's own agent's keys, the provider and model chosen, and what it may reach in the project. Mode 600, in a folder of mode 700. A value is never logged or shown, only whether it is set. |
 | `~/.config/isorite/bases.toml` | The bases this machine knows, a table each: `[<name>] path = "…"`, `lend = true` to lend it to every session, and `agent = "<registry id>"` or `agent_command = "…"` for the agent the pane starts. Each base opened is added, under its folder's name. |
 | `<notes>/AGENTS.md` | The base's own instructions (notation, level, how notes are named), given to every agent in `brief_base`. Not a note: not on the Atlas, not linted. |
 | `<notes>/.isorite/` | isorite's own folder in the notes: journals of every change, the agents' sessions it carried (`conversations/agents/`), Iso's conversations from before M25 (`conversations/`), and `settings.toml` (`repository = "<path>"`, where code links point when it isn't the git repository the notes are in, or for notes outside any, the one an agent was first attached in; `agents_write_notes = false`, the pane's switch). Made on first open; commit it with the notes. |
@@ -81,6 +82,10 @@ The agent the pane starts is given the server's environment: its own keys (`ANTH
 | Claude asks before each of isorite's tools | Claude's own permissions. | Answer *always*, or allow `mcp__isorite` in its settings. |
 | `isorite: starting…` and then nothing | The server it starts is stalled. | Read the log the line names (`isorite-server-<port>.log`). |
 | `port 4767 is serving <other>, not <notes>` | An isorite from before M20 serves another base there. | Stop it, or `--port`. |
+| `[provider] pfx: there is no file at …` (or `cert`, `ca`) | A path in `config.toml` that isn't there. On Windows, a path in double quotes loses its backslashes. | Write it in single quotes: `pfx = 'C:\certs\me.pfx'`. |
+| `[provider] pfx_passphrase does not open …` | The passphrase is not the .pfx's. | Fix it (or the variable it names), then choose the gateway again. |
+| `[provider] key is "$NAME", and NAME is not set` | The variable isn't set where `isorite` started. | Set it there, or put the key in the settings. |
+| The settings' *Check* says the gateway wants a client certificate (mTLS) | `pfx` (or `cert` and `cert_key`) is not in `[provider]`, or the gateway doesn't trust it. | Add it, and `ca` if the gateway's own certificate is the company's. |
 | `isorite term and isorite opencode are retired` | A command from before M25. | Attach OpenCode with `opencode acp`, from the pane or a front end. |
 | `! search by meaning: no model …` | Not installed (optional). `doctor` says whether the release (or the mirror) answers from here. | `isorite model`. Its failures name each source; offline, `isorite model --from <the .tgz>` with the file it names. |
 | `The model could not be fetched:` and a line for each source | None reachable from here. | Fetch the file it prints another way, check its SHA-256, and `isorite model --from <the .tgz>`. Or set `ISORITE_MODEL_BASE_URL` to a mirror's folder, or `isorite model --url <address>`. |
@@ -88,7 +93,7 @@ The agent the pane starts is given the server's environment: its own keys (`ANTH
 | `Proxy response (407)` | The company's proxy wants credentials of its own. | Credentials in `HTTPS_PROXY` (`http://user:password@proxy:port`). A proxy that signs in by Kerberos or NTLM can't be answered by isorite. |
 | The link doesn't open, over SSH | `localhost` is the remote machine. | `ssh -L 4767:localhost:4767 <host>` from the person's own machine. |
 
-The agent's own model, gateway or provider failing is the agent's to fix, in its own settings: isorite passes what it said into the pane.
+The model, gateway or provider of an agent of their own failing is that agent's to fix, in its own settings: isorite passes what it said into the pane. For isorite's own agent, the settings' *Check* names the cause.
 
 ## Another model for search by meaning
 

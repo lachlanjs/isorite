@@ -1,6 +1,6 @@
 # isorite
 
-An agentic harness for understanding: your notes as a knowledge base, an Atlas of them, questions and problems of your own, and the agent you already use (Claude, Codex, OpenCode, omp, Hermes, or any that speaks ACP) attached to them: it gets the notes over MCP, and its session shows in Iso's pane over ACP. isorite calls no model itself.
+An agentic harness for understanding: your notes as a knowledge base, an Atlas of them, questions and problems of your own, and the agent you already use (Claude, Codex, OpenCode, omp, Hermes, or any that speaks ACP) attached to them: it gets the notes over MCP, and its session shows in Iso's pane over ACP. Or isorite's own agent, built in, with a key of your own or a company gateway.
 
 Needs Node 24 or later.
 

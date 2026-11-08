@@ -2,7 +2,7 @@
 
 From nothing to your notes in the browser, with the agent you already use attached to them. If anything fails on the way, run `isorite doctor`: it checks each step and says what to change.
 
-isorite calls no model itself (since M25). It is the notes, the Atlas and the record of how your understanding changed, attached to your agent: Claude, Codex, OpenCode, omp, Hermes, or any that speaks ACP. The agent's key and model are its own, set up as for its own terminal.
+isorite is the notes, the Atlas and the record of how your understanding changed, beside an agent. The agent is either **isorite's own** (built in; you give it a model's key, or your company's gateway) or **your own**: Claude, Codex, OpenCode, omp, Hermes, or any that speaks ACP, whose key and model are its own, set up as for its own terminal.
 
 ## 1. Install
 
@@ -47,7 +47,9 @@ How you want the base kept (your notation, the level, the language, how notes ar
 
 ## 3. Your agent
 
-Three ways in; [terminal.md](terminal.md) has each in full.
+Four ways in; [terminal.md](terminal.md) has each in full.
+
+- **isorite's own agent.** The quickest with no agent of your own: nothing to install, only a key. With no agent attached, the pane offers it; its settings (the icon at the right of the pane's header) take a provider (OpenRouter, Anthropic, OpenAI, Google, Mistral, Groq, xAI, DeepSeek, Together, Fireworks, Cerebras, or your gateway), the key and a model. *Check* sends one short request and says what to change if it fails; *Use* puts it in the pane, with no restart. The key is kept in `~/.local/share/isorite/credentials.json` (mode 600), or read from the provider's usual variable (`OPENROUTER_API_KEY`, …). Its tools for the notes are always on; the project's files are read-only by default; changing them and running commands are off until you switch them on. No Claude or ChatGPT subscription sign-in is offered (their terms don't allow a product like this to use it): to use a subscription, attach Claude Code or Codex. See [isorite's own agent](#isorites-own-agent) below for a company gateway.
 
 - **In Iso's pane.** With no agent attached, the pane offers one: an agent of the [ACP registry](https://agentclientprotocol.com/get-started/registry) (fetched and run as the registry says: its program checked against its SHA-256, else `npx` or `uvx`), or the command of one it doesn't list (`hermes acp`). isorite starts it for the base, in the base's repository, with the server's environment. Chosen from this machine only, and kept in `bases.toml`.
 - **From an ACP front end** (Toad, Zed, JetBrains): give it `isorite acp --agent "<the agent's command>"` as its agent. The session is live in the front end and in the pane at once.
@@ -91,4 +93,25 @@ It checks, in turn: the configuration, how Node reaches the network (the proxy, 
 
 Your agent's own failures (its key, its model, its gateway) are its own: its front end, or the pane, says what it said. A refusal is shown in the pane; an agent that asks to be signed in with its API key (Codex) is signed in with it when isorite starts it.
 
-Until M25, `config.toml` also held Iso's provider, under `[provider]` and `[tiers]`. They are left as written, and no longer read.
+## isorite's own agent
+
+Set up in the pane's settings (above). A company's gateway, an OpenAI-compatible address that may also ask for a client certificate (mTLS), is set in `~/.config/isorite/config.toml`:
+
+```toml
+[provider]
+url = "https://gateway.example.com/v1"   # OpenAI-compatible: <url>/chat/completions
+name = "Our gateway"                       # what the pane calls it
+key = "$GATEWAY_KEY"                       # or the key in the settings, or ISORITE_GATEWAY_KEY
+key_header = "api-key"                     # when it is not Authorization: Bearer
+headers = { "X-Team" = "physics" }         # added to every request
+query = { "api-version" = "2024-06-01" }   # added to every address
+pfx = '~/certs/me.pfx'                     # the client certificate and its key (single quotes, so a Windows path keeps its backslashes)...
+pfx_passphrase = "$PFX_PASSPHRASE"
+# cert = 'me.pem'  cert_key = 'me.key'     # ...or both as PEM files
+ca = 'company-ca.pem'                      # the authority the gateway's own certificate is signed by
+models = ["gpt-4.1", "claude-sonnet"]      # offered in the settings (the gateway's /models is asked too)
+```
+
+Any value may be `"$NAME"`, read from the environment. The certificate goes only to the gateway's own address, and the company's proxy (`HTTPS_PROXY`) is used for it. The settings show the gateway once `url` is set, and *Check* says whether it answers; without the certificate it names the setting to change. `[provider]` is changed by hand in this file; the settings show what it names and check it.
+
+Model names in `[tiers]` from before 0.13 are offered in the settings; nothing else of it is read.

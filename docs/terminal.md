@@ -1,6 +1,6 @@
 # isorite beside your agent
 
-How to use isorite with the agent you already use (Claude, Codex, OpenCode, omp, Hermes, or any that speaks ACP) on a project of your own. isorite gives the agent your notes over MCP, and reaches the agent over ACP: the agent gets the notes, the Atlas sees the agent, and Iso's pane shows the session. isorite calls no model itself: the agent's key and model are its own, set up as for its own terminal.
+How to use isorite with the agent you already use (Claude, Codex, OpenCode, omp, Hermes, or any that speaks ACP) on a project of your own. isorite gives the agent your notes over MCP, and reaches the agent over ACP: the agent gets the notes, the Atlas sees the agent, and Iso's pane shows the session. The agent's key and model are its own, set up as for its own terminal. (isorite's own agent, built in, is the other way: [setup.md](setup.md).)
 
 Setting isorite up the first time is in [setup.md](setup.md).
 
