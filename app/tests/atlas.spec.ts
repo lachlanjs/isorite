@@ -236,19 +236,36 @@ test("a new layout comes in three beats: the lines retract, the notes move with 
   expect((await page.request.post(`api/note/delete?id=${id}`, { headers, data: { base: version } })).ok()).toBe(true);
 });
 
-test("held with a finger, a note offers to go to Iso, to open, or a question or problem of its own (Q16, M12)", async ({ page }) => {
+test("held with a finger, a note shows the tags; let go on none, it offers to go to Iso or to open (Q16, M33)", async ({ page }) => {
   await atlas(page);
   const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
   const at = { pointerId: 9, pointerType: "touch", isPrimary: true, button: 0, clientX: huffman.x + 10, clientY: huffman.y + 6 };
   await note(page, "coding/huffman-codes").dispatchEvent("pointerdown", at);
-  await page.waitForTimeout(800);
+  await expect(page.locator(".petal")).toHaveCount(3);
   await page.locator(".atlas").dispatchEvent("pointerup", at);
+  await expect(page.locator(".petal")).toHaveCount(0);
   const offer = page.getByRole("menu", { name: "Huffman codes" });
-  await expect(offer.getByRole("menuitem")).toHaveText(["◆Give to the agent", "▣Open", "?A question about it", "△A problem using it"]);
+  await expect(offer.getByRole("menuitem")).toHaveText(["◆Give to the agent", "▣Open"]);
   await look(page, "atlas-offer");
   await offer.getByRole("menuitem", { name: "Give to the agent" }).click();
   await expect(offer).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in the agent's context" })).toBeVisible();
+});
+
+test("held with a finger and let go on the gold tag, a note goes to the agent (M33)", async ({ page }) => {
+  await atlas(page);
+  const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
+  const at = { pointerId: 9, pointerType: "touch", isPrimary: true, button: 0, clientX: huffman.x + 10, clientY: huffman.y + 6 };
+  await note(page, "coding/huffman-codes").dispatchEvent("pointerdown", at);
+  const send = page.locator('.petal[data-tag="send"]');
+  await expect(send).toBeVisible();
+  await page.waitForTimeout(400); // out, and so to be pointed at
+  const b = (await send.boundingBox())!, on = { ...at, clientX: b.x + b.width / 2, clientY: b.y + b.height / 2 };
+  await page.locator(".atlas").dispatchEvent("pointermove", on);
+  await expect(send).toHaveClass(/\bon\b/);
+  await page.locator(".atlas").dispatchEvent("pointerup", on);
+  await expect(page.getByRole("status").filter({ hasText: "Huffman codes is in the agent's context" })).toBeVisible();
+  await expect(page.getByRole("menu", { name: "Huffman codes" })).toHaveCount(0);
 });
 
 test("with the agent's context shown, a click still opens a note; shift+click gives it to Iso and takes it back (M14)", async ({ page }) => {
@@ -277,7 +294,7 @@ test("held with a finger, a note already given offers to take it back (M14)", as
   const at = { pointerId: 9, pointerType: "touch", isPrimary: true, button: 0, clientX: huffman.x + 10, clientY: huffman.y + 6 };
   const hold = async () => {
     await note(page, "coding/huffman-codes").dispatchEvent("pointerdown", at);
-    await page.waitForTimeout(800);
+    await expect(page.locator(".petal")).toHaveCount(3);
     await page.locator(".atlas").dispatchEvent("pointerup", at);
   };
   await hold();

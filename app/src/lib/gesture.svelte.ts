@@ -19,6 +19,8 @@ export type Done = {
   remove: (item: Item) => void;
   /** Let go on the gold tag. */
   send: (item: Item) => void;
+  /** A finger let go with the tags out but on none of them, where it was let go (the Atlas offers what else it can do). */
+  unchosen?: (item: Item, x: number, y: number) => void;
 };
 
 export class Gesture {
@@ -135,7 +137,7 @@ export class Gesture {
   }
 
   private release(): void {
-    const { item, phase, tag, over, rect, node } = this;
+    const { item, phase, tag, over, rect, node, touch, x, y } = this;
     const acted = phase !== "idle";
     // Seen happen: the card carried put down into the folder it is over, or back where it came from; a note sent flies
     // to the agent; one to delete shudders before it is asked about.
@@ -155,6 +157,7 @@ export class Gesture {
     if (phase === "moving" && over !== null) this.done.move(item, over);
     else if (phase === "held" && tag === "delete") this.done.remove(item);
     else if (phase === "held" && tag === "send") this.done.send(item);
+    else if (phase === "held" && !tag && touch) this.done.unchosen?.(item, x, y);
   }
 
   stop(): void {

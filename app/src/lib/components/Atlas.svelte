@@ -6,7 +6,7 @@
   import { reach, STRENGTH } from "@isorite/core";
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
   import type { How, MapReport } from "@isorite/engine";
-  import { makeKind as makeNew, untitled } from "$lib/make.ts";
+  import { untitled } from "$lib/make.ts";
   import { tick, untrack } from "svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { pictureSrc } from "$lib/pictures.ts";
@@ -437,11 +437,17 @@
   let making = false;
   let holdShow: ReturnType<typeof setTimeout> | undefined, holdDone: ReturnType<typeof setTimeout> | undefined;
   // Press and hold on a note or a folder (M33), as in the list: tags to move it (carried to a folder of the map), delete it
-  // (asked first) or send it to Iso. A mouse only: a finger on the map pans it, and holds to be offered a choice (below).
+  // (asked first) or send it to Iso. A finger that moves before the hold pans the map; one let go with the tags out but
+  // on none of them is offered the rest (below).
   const g = new Gesture({
     move: (item, dir) => void moveHeld(item, dir),
     remove: (item) => void askRemove(item),
     send: (item) => give(item.id, item.kind),
+    unchosen: (item, x, y) => {
+      if (item.kind !== "note" || !viewport) return;
+      const r = viewport.getBoundingClientRect();
+      offered = { ref: item.id, x: x - r.left, y: y - r.top };
+    },
   }, { drift: "cancel", scroll: false, dropAt: (x, y) => folderUnder(x, y), targetOf: (dir) => viewport?.querySelector(`[data-folder="${CSS.escape(dir)}"]`) ?? null });
   let asking = $state.raw<{ item: Item; text: string } | null>(null);
   /** The folder of the map under a point of the screen: the deepest one shown, not the one carried nor inside it. */
@@ -530,8 +536,8 @@
     unhold();
     if (offered && !(e.target instanceof Element && e.target.closest(".offer"))) offered = null;
     if (making || !L || !idx || !(e.target instanceof Element)) return;
-    // A note or a folder held with a mouse: the tags. (A folder's rename field takes the press itself.)
-    if (e.pointerType === "mouse" && !e.target.closest("input, .dock, .offer")) {
+    // A note or a folder held: the tags. (A folder's rename field takes the press itself.)
+    if (!e.target.closest("input, .dock, .offer")) {
       const part = pressed(e);
       const face = e.target.closest<HTMLElement>(part?.kind === "folder" ? "[data-folder]" : "[data-note]");
       if (part && face && !part.id.startsWith("?") && !report?.files?.[part.id]) { g.begin({ kind: part.kind as "note" | "folder", id: part.id.replace(/\/$/, ""), title: part.title }, e, face); return; }
@@ -600,11 +606,6 @@
       await panes.open(id);
     } catch (err) { notice = (err as Error).message; }
     finally { making = false; grasp = null; }
-  }
-
-  /** A question about a note, or a problem using it (M12). */
-  async function makeKind(kind: "question" | "problem", about: string): Promise<void> {
-    try { await makeNew(kind, about); } catch (err) { notice = (err as Error).message; }
   }
 
   /** What an item opens: a note, a file, or for a folder of pictures, the note they were pasted into (M22). */
@@ -917,8 +918,6 @@
           <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); give(o.ref); offered = null; }}><i aria-hidden="true">◆</i>Give to the agent</button>
         {/if}
         <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void panes.open(o.ref, true); }}><i aria-hidden="true">▣</i>Open</button>
-        <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void makeKind("question", o.ref); }}><i class="q" aria-hidden="true">?</i>A question about it</button>
-        <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void makeKind("problem", o.ref); }}><i aria-hidden="true">△</i>A problem using it</button>
       </div>
     {/if}
     {#if tray.carrying}
