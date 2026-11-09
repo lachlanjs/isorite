@@ -154,12 +154,15 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     map: () => ask("map"),
     timeline: () => ask("timeline"),
     search: (query) => ask(`search?q=${encodeURIComponent(query)}`),
+    find: (query) => ask(`find?q=${encodeURIComponent(query)}`),
     agents: () => ask("agents"),
     saveAgents: (text) => write("POST", "agents", { text }),
     // The server's own: it tells the agent of broken code links with its next prompt.
     nameRepository: async () => false,
     agentNotes: () => ask("agents/notes"),
     setAgentNotes: (may) => write("POST", "agents/notes", { may }),
+    hidden: () => ask("hidden"),
+    setHidden: (ids) => write("POST", "hidden", { ids }),
     brokenNews: async () => [],
     conversations: () => ask("conversations"),
     deleteConversation: async (id) => { await write("POST", "conversation/delete", { id }); },
@@ -225,7 +228,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       source.addEventListener("open", () => { if (down) { down = false; live?.(true); } });
       source.addEventListener("error", () => { if (!down) { down = true; live?.(false); } });
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
-      const types = ["note-changed", "journal", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "agent-item", "agent-taken", "terminal"] satisfies EngineEvent["type"][];
+      const types = ["note-changed", "hidden", "journal", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "agent-item", "agent-taken", "terminal"] satisfies EngineEvent["type"][];
       for (const type of types) source.addEventListener(type, on);
       return () => source.close();
     },

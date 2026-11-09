@@ -4,7 +4,7 @@
 // underlines the open note's links to it.
 
 /** What points: the Note pane's text, Iso's pane, or the timeline; and whose the pointing is (the outline's colour). */
-export interface Elsewhere { id: string; folder: boolean; from: "note" | "iso" | "timeline"; who: "you" | "iso" }
+export interface Elsewhere { id: string; folder: boolean; from: "note" | "iso" | "timeline" | "finder"; who: "you" | "iso" }
 
 class Pointing {
   /** A note (or folder) pointed at outside the Atlas. */

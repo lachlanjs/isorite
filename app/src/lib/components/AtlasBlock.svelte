@@ -7,7 +7,7 @@
   import type { FileKind } from "@isorite/core";
   import Glyph from "./Glyph.svelte";
 
-  let { item, title, kind = "", file = "", prospect = false, done = false, behind = "var(--ground-0)", mark = "", far = 0, iso = "", dim = false, moment = "", given = false, held = "", changed = false, order = 0, here = false, href, onpick, onpoint }: {
+  let { item, title, kind = "", file = "", prospect = false, done = false, behind = "var(--ground-0)", mark = "", far = 0, iso = "", found = "", dim = false, moment = "", given = false, held = "", changed = false, order = 0, here = false, href, onpick, onpoint }: {
     item: LayoutItem;
     title: string;
     /** A question or a problem (M12), and whether it is solved. */
@@ -26,6 +26,8 @@
     /** On the agent's path (Marks): found by keyword, by meaning, along a link (or named outright), or being read now. */
     iso?: "" | "key" | "sem" | "link" | "used";
     dim?: boolean;
+    /** Found by Ctrl+K: by its words, its meaning, or both. */
+    found?: "" | "words" | "meaning" | "both";
     /** The note a moment of the timeline touched, while it is pointed at (Atlas-Timeline): yours or Iso's. */
     moment?: "" | "you" | "iso";
     /** In the Atlas's Iso lens (M10): in the tray, changed by the agent in the session shown, and the order it was
@@ -44,7 +46,7 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a data-lustre class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:dim={dim && !iso && !given} class:far={far > 1} class:given class:held={held === "on"} class:changed class:here class:file={!!file} class:prospect aria-current={here ? "page" : undefined} {href} aria-label={`${prospect ? "Asked back, not kept: " : kind === "question" ? `Question${done ? ", resolved" : ""}: ` : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in the agent's context" : held === "on" ? ": read by the agent" : ""}${changed ? ", changed by the agent" : ""}`} title={given ? "In the agent's context: shift+click takes it back" : undefined} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
+<a data-lustre class="n {moment ? `mo-${moment}` : ''} {iso ? `p-${iso}` : ''} {mark} {kind}" class:done class:dim={dim && !iso && !given} class:f-key={found === "words"} class:f-sem={found === "meaning"} class:f-both={found === "both"} class:far={far > 1} class:given class:held={held === "on"} class:changed class:here class:file={!!file} class:prospect aria-current={here ? "page" : undefined} {href} aria-label={`${prospect ? "Asked back, not kept: " : kind === "question" ? `Question${done ? ", resolved" : ""}: ` : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in the agent's context" : held === "on" ? ": read by the agent" : ""}${changed ? ", changed by the agent" : ""}`} title={given ? "In the agent's context: shift+click takes it back" : undefined} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
@@ -92,6 +94,11 @@
   /* A question Iso asked and not kept (R): no face of its own, a dotted rose edge, its name faint, until kept. */
   .prospect { background: var(--ground-0); border: calc(1.5 * var(--px)) dotted var(--rose); color: var(--text-faint); }
   .dim { opacity: .5; }
+  /* Found by Ctrl+K (you, so blue): dashed by its words, dotted by its meaning, solid by both. */
+  .f-key, .f-sem, .f-both { color: var(--text); z-index: 3; opacity: 1; outline-color: var(--lattice); outline-offset: calc(3 * var(--px)); }
+  .f-key { outline: calc(2 * var(--px)) dashed var(--lattice); }
+  .f-sem { outline: calc(2 * var(--px)) dotted var(--lattice); }
+  .f-both { outline: calc(2.5 * var(--px)) solid var(--lattice); }
   /* Iso's path (Marks, Desktop-Think), under the outlines of what is chosen. */
   .p-key { outline: calc(1.5 * var(--px)) dashed var(--growth); outline-offset: calc(3 * var(--px)); }
   .p-sem { outline: calc(2 * var(--px)) dotted var(--growth); outline-offset: calc(3 * var(--px)); }

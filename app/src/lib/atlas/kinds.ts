@@ -40,6 +40,21 @@ export function withoutNotes(model: MapModel, drop: (ref: string) => boolean): M
   return gone.size ? { root, edges: model.edges.filter(([a, b]) => !gone.has(a) && !gone.has(b)) } : model;
 }
 
+/** The model without what is hidden (by id: a note, or a folder with all that is in it), and the links of what goes. */
+export function withoutHidden(model: MapModel, hidden: (id: string) => boolean): MapModel {
+  const gone = new Set<string>();
+  const sweep = (d: MapDir): void => { for (const c of d.children) { if (c.kind === "dir") sweep(c); else gone.add(c.ref); } };
+  const keep = (d: MapDir): MapDir => ({
+    ...d,
+    children: d.children.flatMap((c): (MapDir | MapNote)[] => {
+      if (c.kind === "dir") return hidden(c.ref.replace(/\/$/, "")) ? (sweep(c), []) : [keep(c)];
+      return hidden(c.ref) ? (gone.add(c.ref), []) : [c];
+    }),
+  });
+  const root = keep(model.root);
+  return gone.size ? { root, edges: model.edges.filter(([a, b]) => !gone.has(a) && !gone.has(b)) } : model;
+}
+
 export interface Satellite {
   key: string; kind: "web" | "code" | "picture" | "more"; href: string; text: string; broken: boolean; gx: number; gy: number;
   /** The note it's beside; and for a picture (M22), where it is. */

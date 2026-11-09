@@ -75,6 +75,10 @@ export interface SearchHit {
   snippet: string;
 }
 
+/** A note found for a few words (Ctrl+K): by the words in it, by its meaning, or both. Both first, then words, then meaning. */
+export interface FindHit { id: string; title: string; snippet: string; by: "words" | "meaning" | "both" }
+export interface FindResult { hits: FindHit[]; /** Whether search by meaning took part: `off` where the device has none, `pending` while its vectors are made. */ meaning: "on" | "pending" | "off" }
+
 /** A conversation with Iso from before M25, as the pane draws it, to read. */
 export interface Conversation { id: string; turns: Turn[] }
 /** A past conversation, as the drawer of them shows it (M24, K): when it began and was last added to, what was
@@ -141,6 +145,8 @@ export type EngineEvent =
   | { type: "note-changed"; id: string; version: string | null; who: string }
   /** An entry was added to a note's journal. */
   | { type: "journal"; id: string; entry: Entry }
+  /** What is hidden from the Atlas and the list changed. */
+  | { type: "hidden" }
   /** A terminal agent (`agent` is its name, as `opencode`) began a turn in one of its sessions. Each turn ends in agent-done. */
   | { type: "agent-start"; request: string; agent: string; session: string }
   /** It looked something up in the base, with Iso's own tools. */
@@ -251,6 +257,11 @@ export interface Api {
   /** Whether agents may change this base's notes, through isorite's tools or by asking to edit its files. */
   agentNotes(): Promise<{ may: boolean }>;
   setAgentNotes(may: boolean): Promise<void>;
+  /** The notes and folders kept off the Atlas and the list (by id), shared by everyone with the base. Agents still see them. */
+  hidden(): Promise<{ ids: string[] }>;
+  setHidden(ids: string[]): Promise<void>;
+  /** The notes for a few words, by the words and by meaning together (Ctrl+K). */
+  find(query: string): Promise<FindResult>;
   /** Code links broken since an agent was last told; each is told once (Q27). */
   brokenNews(): Promise<{ id: string; title: string; href: string }[]>;
   /** Write a proposal of Iso's still waiting in a note's journal (from before M25) into its note. For a rewrite,

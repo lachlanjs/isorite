@@ -1,13 +1,13 @@
-// Press and hold on a note or a folder's heading (M33): three tags stand out round it (HoldTags), and the one the
+// Press and hold on a note or a folder's heading (M33): four tags stand out round it (HoldTags), and the one the
 // pointer goes to is what happens: move (blue: reached, the item is picked up, and carried to a folder), delete (rose:
-// let go there, it is asked about first) or send (gold: let go there, it is put in the tray for the agent). On a mouse,
+// let go there, it is asked about first) send (gold: let go there, it is put in the tray for the agent) or hide (grey: let go there, it is kept off the Atlas and the list). On a mouse,
 // pulling the item at once carries it, as before. On a touch screen a single finger that moves scrolls the list; one
 // held still starts this. What letting go does is seen happen (flight.ts).
 
 import { land, sendFlight, shudder } from "./flight.ts";
 
 export type Item = { kind: "note" | "folder"; id: string; title: string };
-export type Tag = "move" | "delete" | "send";
+export type Tag = "move" | "delete" | "send" | "hide";
 
 export const HOLD = 380; // ms held still before the tags appear
 const SLOP = 6; // px a pointer may drift and still be "held"
@@ -19,6 +19,8 @@ export type Done = {
   remove: (item: Item) => void;
   /** Let go on the gold tag. */
   send: (item: Item) => void;
+  /** Let go on the grey tag: kept off the Atlas and the list (it can be brought back). */
+  hide: (item: Item) => void;
   /** A finger let go with the tags out but on none of them, where it was let go (the Atlas offers what else it can do). */
   unchosen?: (item: Item, x: number, y: number) => void;
 };
@@ -157,6 +159,7 @@ export class Gesture {
     if (phase === "moving" && over !== null) this.done.move(item, over);
     else if (phase === "held" && tag === "delete") this.done.remove(item);
     else if (phase === "held" && tag === "send") this.done.send(item);
+    else if (phase === "held" && tag === "hide") this.done.hide(item);
     else if (phase === "held" && !tag && touch) this.done.unchosen?.(item, x, y);
   }
 
@@ -170,7 +173,7 @@ export class Gesture {
 
 function tagAt(x: number, y: number): Tag | null {
   const t = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest<HTMLElement>("[data-tag]")?.dataset.tag;
-  return t === "move" || t === "delete" || t === "send" ? t : null;
+  return t === "move" || t === "delete" || t === "send" || t === "hide" ? t : null;
 }
 
 function dirAt(x: number, y: number): string | null {

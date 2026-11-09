@@ -15,13 +15,15 @@
   import { pointing } from "$lib/pointing.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
   import { CELL, MAX_ZOOM, MIN_ZOOM, TITLE_UNITS, TITLE_PX, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
-  import { satellites, withoutNotes, withProspects, type Prospect } from "$lib/atlas/kinds.ts";
+  import { satellites, withoutHidden, withoutNotes, withProspects, type Prospect } from "$lib/atlas/kinds.ts";
   import { layoutOf, routesOf } from "$lib/atlas/layout.ts";
   import { Gesture, toBody, type Item } from "$lib/gesture.svelte.ts";
   import { vanish } from "$lib/flight.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
   import HoldTags from "./HoldTags.svelte";
   import SpotTags from "./SpotTags.svelte";
+  import HiddenPicker from "./HiddenPicker.svelte";
+  import { finder } from "$lib/finder.svelte.ts";
   import AtlasFolder from "./AtlasFolder.svelte";
   import AtlasRoutes from "./AtlasRoutes.svelte";
 
@@ -105,12 +107,12 @@
       const all = { ...got, model: withProspects(got.model, asked), notes };
       // The kinds switched off are not on the map (M12), and a resolved question leaves it.
       // Files beside the notes (M23: pictures, artifacts, data, documents, others) are on it when its switch is on.
-      const next = { ...all, model: withoutNotes(all.model, (ref) => {
+      const next = { ...all, model: withoutHidden(withoutNotes(all.model, (ref) => {
         const f = all.files?.[ref];
         if (f) return f.kind === "artifact" ? !panes.on.artifacts : !panes.on.pictures;
         const n = all.notes[ref];
         return n?.kind === "question" ? !panes.on.questions : n?.kind === "problem" ? !panes.on.problems : false;
-      }) };
+      }), (id) => !id.startsWith("?") && app.isHidden(id)) };
       // A changed base is laid out from where things stood (V5), on the same grid and the same way.
       const on = `${flow}|${grain}`, from = laid && laidOn === on && !fresh ? laid.layout.orders ?? null : null;
       fresh = false;
@@ -160,6 +162,12 @@
     const now = `${panes.on.questions}|${panes.on.problems}|${panes.on.pictures}|${panes.on.artifacts}`;
     if (kindsWere && kindsWere !== now) void load();
     kindsWere = now;
+  });
+  // Hiding or showing a note or a folder lays the map out again, from where things stood.
+  let hiddenWere = "";
+  $effect(() => {
+    const now = app.hidden.join("\n");
+    if (now !== hiddenWere) { const first = hiddenWere === "" && now === ""; hiddenWere = now; if (!first) void load(); }
   });
   $effect(() => {
     void load();
@@ -433,7 +441,9 @@
   /** What a hold on open ground is of: a place (in cells) and the folder it is in. */
   type Place = { dir: string; gx: number; gy: number; folder: boolean };
   /** The two tags stood out from the spot held (SpotTags), where it is on the map's surface, the pointer, and the one it is on. */
-  let spot = $state.raw<{ x: number; y: number; px: number; py: number; choice: "note" | "folder" | null; what: Place } | null>(null);
+  let spot = $state.raw<{ x: number; y: number; px: number; py: number; choice: "note" | "folder" | "hidden" | null; what: Place } | null>(null);
+  /** The finder of what is hidden, open at a place on the map's surface. */
+  let finding = $state.raw<{ x: number; y: number } | null>(null);
   /** Held long enough: the gesture is ours until the pointer is let go. Where it began, on the screen. */
   let gripped: { x: number; y: number } | null = null;
   /** Let go: the note being made. */
@@ -446,6 +456,7 @@
     move: (item, dir) => void moveHeld(item, dir),
     remove: (item) => void askRemove(item),
     send: (item) => give(item.id, item.kind),
+    hide: (item) => { void app.hide(item.id).then(() => { given = `${item.kind === "folder" ? folderName(item.id) : title(item.id)} is hidden`; clearTimeout(givenTimer); givenTimer = setTimeout(() => (given = ""), 2200); }, (e: Error) => { notice = e.message; }); },
     unchosen: (item, x, y) => {
       if (item.kind !== "note" || !viewport) return;
       const r = viewport.getBoundingClientRect();
@@ -504,6 +515,8 @@
       void load();
     } catch (e) { back(); notice = (e as Error).message; }
   }
+  /** A folder holding a note Ctrl+K found. */
+  const foundIn = (ref: string): boolean => { const d = ref.replace(/\/$/, ""); for (const id of finder.lit.keys()) if (!d || id.startsWith(`${d}/`)) return true; return false; };
   // The held item and the folder it is over wear what letting go would do, on the map's own elements.
   $effect(() => {
     const phase = g.phase, tag = g.tag, item = g.item, over = g.over;
@@ -562,7 +575,7 @@
   function drawHeld(e: PointerEvent, at: { x: number; y: number }): void {
     if (!spot) return;
     const on = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-spot]")?.dataset.spot;
-    spot = { ...spot, px: at.x, py: at.y, choice: on === "note" || on === "folder" ? on : null };
+    spot = { ...spot, px: at.x, py: at.y, choice: on === "note" || on === "folder" || on === "hidden" ? on : null };
   }
   /** A note held with a finger: what can be done with it, offered where it was held. */
   let offered = $state.raw<{ ref: string; x: number; y: number } | null>(null);
@@ -591,7 +604,8 @@
     if (!gripped) return;
     gripped = null;
     const s = spot;
-    if (s?.choice) void make({ ...s.what, folder: s.choice === "folder" });
+    if (s?.choice === "hidden") { finding = { x: s.x, y: s.y }; spot = null; }
+    else if (s?.choice) void make({ ...s.what, folder: s.choice === "folder" });
     else spot = null;
   }
   async function make(g: Place): Promise<void> {
@@ -856,7 +870,7 @@
     <div class="atlas-world" class:labels class:shifting class:moving data-open={open} style="transform: translate({moving ? view.x : Math.round(view.x)}px, {moving ? view.y : Math.round(view.y)}px) scale({view.k / drawnK}); --u: {(L?.cell ?? 7) * drawnK}px; --k: {drawnK}">
       <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each folders as f (f.item.id)}
-          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} bare={f.open && !L.items.some((x) => x.parent === f.i)} dim={!!lit && !f.open && !held.has(f.i)} given={isoLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} onrename={f.item.ref.startsWith("@") || !f.item.ref ? undefined : (name) => void rename(f.item.ref, name)} />
+          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} bare={f.open && !L.items.some((x) => x.parent === f.i)} dim={(!!lit && !f.open && !held.has(f.i)) || (finder.lit.size > 0 && !f.open && !foundIn(f.item.ref))} given={isoLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} onrename={f.item.ref.startsWith("@") || !f.item.ref ? undefined : (name) => void rename(f.item.ref, name)} />
       {/each}
       </div>
       <AtlasRoutes k={drawnK} {rest} pointed={!chosen && !!pointed} hot={[...(isoLens ? isoHot : []), ...hot, ...thereHot]} counts={litCount} {grown} {beat} {retracting} />
@@ -865,7 +879,7 @@
       {#each notes as n (n.item.id)}
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
-          <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} iso={isoMark(n.item.ref)} file={report.files?.[n.item.ref]?.kind ?? ""} prospect={n.item.ref.startsWith("?")} given={isoLens && givenNotes.has(n.item.ref)} held={isoLens && !givenNotes.has(n.item.ref) && readNotes.has(n.item.ref) ? "on" : ""} changed={isoLens && changedByIso.has(n.item.ref)} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={!!lit && !mark} href={noteHref(opens(n.item.ref))}
+          <AtlasBlock item={n.item} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} iso={isoMark(n.item.ref)} file={report.files?.[n.item.ref]?.kind ?? ""} prospect={n.item.ref.startsWith("?")} given={isoLens && givenNotes.has(n.item.ref)} held={isoLens && !givenNotes.has(n.item.ref) && readNotes.has(n.item.ref) ? "on" : ""} changed={isoLens && changedByIso.has(n.item.ref)} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={(!!lit && !mark) || (finder.lit.size > 0 && !finder.lit.has(n.item.ref))} found={finder.lit.get(n.item.ref) ?? ""} href={noteHref(opens(n.item.ref))}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { if ((on && dragged) || g.phase !== "idle") return; pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; pointing.onAtlas = pointed; }} />
       {/each}
       {#each sats as s (s.key)}
@@ -894,7 +908,10 @@
       {/if}
     {/each}
     {#if spot && viewport}
-      <SpotTags x={spot.x} y={spot.y} w={viewport.clientWidth} h={viewport.clientHeight} choice={spot.choice} px={spot.px} py={spot.py} />
+      <SpotTags x={spot.x} y={spot.y} w={viewport.clientWidth} h={viewport.clientHeight} choice={spot.choice} px={spot.px} py={spot.py} hidden={app.hidden.length > 0} />
+    {/if}
+    {#if finding && viewport}
+      <HiddenPicker x={finding.x} y={finding.y} w={viewport.clientWidth} h={viewport.clientHeight} onclose={() => (finding = null)} />
     {/if}
     {#if notice}
       <p class="notice" role="alert">{notice}</p>

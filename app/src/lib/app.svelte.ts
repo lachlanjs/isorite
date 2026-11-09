@@ -10,6 +10,17 @@ class AppState {
   api!: Api;
   session = $state.raw<Session | null>(null);
   listing = $state.raw<Listing>({ notes: [], dirs: [] });
+  /** The notes and folders kept off the Atlas and the list, by id (a folder hides what is in it). */
+  hidden = $state.raw<string[]>([]);
+  /** Whether an id (a note, or a folder) is hidden, itself or by a folder it is in. */
+  isHidden(id: string): boolean { const x = id.replace(/\/$/, ""); return this.hidden.some((h) => x === h || x.startsWith(`${h}/`)); }
+  async hide(id: string): Promise<void> { await this.keep([...this.hidden, id.replace(/\/$/, "")]); }
+  async unhide(id: string): Promise<void> { const x = id.replace(/\/$/, ""); await this.keep(this.hidden.filter((h) => h !== x)); }
+  private async keep(ids: string[]): Promise<void> {
+    const was = this.hidden;
+    this.hidden = [...new Set(ids)].sort();
+    try { await this.api.setHidden(this.hidden); } catch (e) { this.hidden = was; throw e; }
+  }
   /** Why nothing could be loaded, when nothing could. */
   error = $state("");
   /** The note that is open: its id, or "". */
@@ -34,7 +45,9 @@ class AppState {
       this.error = (e as Error).message;
       return;
     }
+    void api.hidden().then((h) => { this.hidden = h.ids; }, () => undefined);
     api.events((event) => {
+      if (event.type === "hidden") void api.hidden().then((h) => { this.hidden = h.ids; }, () => undefined);
       this.follow(event);
       for (const listener of this.listeners) listener(event);
       if (event.type !== "note-changed") return;

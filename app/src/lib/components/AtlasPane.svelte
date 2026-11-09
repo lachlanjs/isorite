@@ -6,6 +6,8 @@
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { momentKey } from "@isorite/core";
   import { pointing } from "$lib/pointing.svelte.ts";
+  import FindBar from "$lib/components/FindBar.svelte";
+  import { finder } from "$lib/finder.svelte.ts";
 
   // The Atlas, with the session's timeline at its side. It stands in its own pane in the shell (M10).
 
@@ -44,6 +46,7 @@
 
 <div class="map">
   <Atlas />
+  {#if finder.open}<FindBar />{/if}
   <div class="side">
     <button class="icon" type="button" aria-label="this session's timeline" title="this session's timeline" aria-pressed={timeline} onclick={toggle}>
       <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1v14" stroke="currentColor" stroke-width="1.2" fill="none" /><rect x="5.5" y="2" width="5" height="3.2" fill="currentColor" /><path d="M8 6.3l2.3 2.3L8 10.9 5.7 8.6z" fill="currentColor" /><rect x="5.5" y="12" width="5" height="3" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>

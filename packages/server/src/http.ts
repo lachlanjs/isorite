@@ -143,6 +143,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   app.get("/api/map", (c) => answer(c, () => api.map()));
   app.get("/api/timeline", (c) => answer(c, () => api.timeline()));
   app.get("/api/search", (c) => answer(c, () => api.search(c.req.query("q") ?? "")));
+  app.get("/api/find", (c) => answer(c, () => api.find((c.req.query("q") ?? "").slice(0, 300))));
   app.get("/api/pictures", (c) => answer(c, () => api.pictures()));
   // A picture pasted or dropped (M22): its bytes as the body, not JSON, of the type its name says. The same origin
   // and token as every write; never over a file that's there.
@@ -206,6 +207,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   post("/api/agents", z.object({ text: z.string().max(50_000) }).strict(), (_c, b) => api.saveAgents(b.text));
   app.get("/api/agents/notes", (c) => answer(c, () => api.agentNotes()));
   post("/api/agents/notes", z.object({ may: z.boolean() }).strict(), (_c, b) => api.setAgentNotes(b.may));
+  app.get("/api/hidden", (c) => answer(c, () => api.hidden()));
+  post("/api/hidden", z.object({ ids: z.array(z.string().max(512)).max(5000) }).strict(), (_c, b) => api.setHidden(b.ids));
   app.get("/api/conversations", (c) => answer(c, () => api.conversations()));
   post("/api/conversation/delete", z.object({ id: z.string().max(64) }).strict(), (_c, b) => api.deleteConversation(b.id));
   app.get("/api/conversation", (c) => answer(c, async () => (await api.conversation(c.req.query("id") || undefined)) ?? { id: "", turns: [] }));

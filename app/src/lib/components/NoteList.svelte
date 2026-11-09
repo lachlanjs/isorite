@@ -25,6 +25,7 @@
     move: (item, dir) => void moveItem(item, dir),
     remove: (item) => void askRemove(item),
     send: (item) => send(item),
+    hide: (item) => { void app.hide(item.id).then(() => { said = ""; sent = `${item.title} is hidden. Hold on open ground on the Atlas to bring it back.`; clearTimeout(sentTimer); sentTimer = setTimeout(() => (sent = ""), 5000); }, (e: Error) => { said = e.message; }); },
   }, { targetOf: (dir) => document.querySelector(`.notes section[data-dir="${CSS.escape(dir)}"] h2`) });
   let asking = $state.raw<{ item: Item; text: string; empty: boolean } | null>(null);
   const dragged = $derived(g.phase === "moving" ? g.item?.id ?? null : null);
@@ -46,11 +47,12 @@
 
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
   const matches = (n: NoteSummary) => words.every((w) => `${n.title}\n${n.id}\n${n.description}`.toLowerCase().includes(w));
-  const shown = $derived(words.length ? app.listing.notes.filter(matches) : app.listing.notes);
+  const seen = $derived(app.hidden.length ? app.listing.notes.filter((n) => !app.isHidden(n.id)) : app.listing.notes);
+  const shown = $derived(words.length ? seen.filter(matches) : seen);
   const folders = $derived.by(() => {
     const by = new Map<string, NoteSummary[]>();
     // Empty folders are listed too, so a note can be made in one; not while narrowing.
-    if (!words.length) for (const dir of app.listing.dirs) by.set(dir, []);
+    if (!words.length) for (const dir of app.listing.dirs) if (!app.isHidden(dir)) by.set(dir, []);
     for (const n of shown) by.set(n.dir, [...(by.get(n.dir) ?? []), n]);
     const sorted = [...by].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     // The top of the base is somewhere to drop a note too, though nothing be there: at the end, so nothing moves under the pointer.
@@ -58,7 +60,7 @@
     return sorted;
   });
   // Notes that match in their text and were not already listed by title.
-  const inText = $derived(words.length ? hits.filter((h) => !shown.some((n) => n.id === h.id)) : []);
+  const inText = $derived(words.length ? hits.filter((h) => !app.isHidden(h.id) && !shown.some((n) => n.id === h.id)) : []);
 
   $effect(() => {
     const q = query.trim();

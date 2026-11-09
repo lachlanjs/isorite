@@ -127,3 +127,43 @@ test("a folder is moved with its notes, and refused into itself or onto a note",
   expect(listed.dirs).not.toContain("a");
   await expect(engine.moveFolder("a", "q")).rejects.toMatchObject({ status: 404 });
 });
+
+test("a folder holding pictures is moved with them, and the links to them follow", async () => {
+  const { engine, notes } = await open();
+  await engine.makeFolder("a");
+  await engine.savePicture("a/fig.png", new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
+  await engine.moveNote("global/euler", "a/euler", (await engine.readNote("global/euler")).version);
+  const v = await engine.readNote("a/euler");
+  await engine.saveNote("a/euler", { base: v.version, text: `${v.text}\n![fig](/a/fig.png)\n` });
+  await engine.moveFolder("a", "z/a");
+  expect(await notes.readBytes("z/a/fig.png")).not.toBeNull();
+  expect(await notes.readBytes("a/fig.png")).toBeNull();
+  expect(notes.files.get("z/a/euler.md")).toContain("](/z/a/fig.png)");
+  expect((await engine.notes()).dirs).not.toContain("a");
+});
+
+test("what is hidden is kept in the base's settings, tidied, and the other settings are left alone", async () => {
+  const { engine } = await open();
+  expect(await engine.hidden()).toEqual({ ids: [] });
+  await engine.setAgentNotes(false);
+  await engine.setHidden(["/global/euler/", "global", "global/euler", ""]);
+  expect(await engine.hidden()).toEqual({ ids: ["global", "global/euler"] });
+  expect(await engine.agentNotes()).toEqual({ may: false });
+  await engine.setHidden([]);
+  expect(await engine.hidden()).toEqual({ ids: [] });
+  expect(await engine.agentNotes()).toEqual({ may: false });
+});
+
+test("find joins the words and the meaning: both first, then words, then meaning", async () => {
+  const notes = new MemoryFiles({ "global/gauss-bonnet.md": GB, "global/euler.md": EULER, "global/angles.md": P });
+  const similar = async () => ({ ready: true, hits: [
+    { note: "global/euler", heading: "Euler", body: "", score: 0.6 },
+    { note: "global/angles", heading: "Angles", body: "", score: 0.55 },
+    { note: "global/gauss-bonnet", heading: "GB", body: "", score: 0.1 },
+  ] });
+  const engine = await Engine.open({ notes, own: new MemoryFiles(), clock: { now: () => 0 }, device: "d", name: "dg", similar });
+  const found = await engine.find("euler characteristic");
+  expect(found.meaning).toBe("on");
+  expect(found.hits.map((h) => [h.id, h.by])).toEqual([["global/euler", "both"], ["global/angles", "meaning"]]);
+  expect((await engine.find("")).hits).toEqual([]);
+});

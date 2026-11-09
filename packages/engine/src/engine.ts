@@ -5,7 +5,7 @@
 import {
   AGENTS_FILE, STRENGTH, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, pending, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, written, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session } from "./api.ts";
+import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type FindResult, type FindHit } from "./api.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Similar, type ToolDef } from "./lookup.ts";
 import { ARTIFACTS, ARTIFACT_RECIPE, ASK_QUESTION, OFFER_TEXT, CONVERSATIONS_DIR, ISORITE, PRACTICE, READ_ARTIFACT, READ_DATA, WRITE_ARTIFACT, conversationPath, readTurns, type TurnItem } from "./turn.ts";
 import { WRITING } from "./writing.ts";
@@ -292,6 +292,15 @@ export class Engine implements Api {
       await this.opts.own.write(SETTINGS_FILE, settingsText(may ? rest : { ...rest, agents_write_notes: false }));
     });
   }
+  async hidden(): Promise<{ ids: string[] }> { return { ids: (await this.settingsOfBase()).hidden ?? [] }; }
+  async setHidden(ids: string[]): Promise<void> {
+    const clean = [...new Set(ids.map((x) => x.trim().replace(/^\/+|\/+$/g, "")).filter(Boolean))].sort();
+    await this.one(async () => {
+      const { hidden: _, ...rest } = await this.settingsOfBase();
+      await this.opts.own.write(SETTINGS_FILE, settingsText(clean.length ? { ...rest, hidden: clean } : rest));
+    });
+    this.publish({ type: "hidden" });
+  }
   private async agentMayWrite(): Promise<void> {
     if (!(await this.agentNotes()).may) throw new EngineError(REFUSED_NOTES, 403);
   }
@@ -343,6 +352,30 @@ export class Engine implements Api {
   async search(query: string): Promise<SearchHit[]> {
     this.index ??= new SearchIndex(this.bundle);
     return this.index.search(query, { limit: 30 }).map((h) => ({ id: h.concept.id, title: h.concept.title, snippet: h.snippet }));
+  }
+
+  async find(query: string): Promise<FindResult> {
+    const q = query.trim();
+    if (!q) return { hits: [], meaning: this.similar ? "on" : "off" };
+    const words = await this.search(q);
+    const out = new Map<string, FindHit>(words.map((h) => [h.id, { ...h, by: "words" as const }]));
+    let state: FindResult["meaning"] = "off";
+    const similar = this.similar;
+    if (similar && q.length >= 3) {
+      try {
+        const m = await similar(q, { limit: 8 });
+        state = m.ready ? "on" : "pending";
+        const top = m.hits[0]?.score ?? 0;
+        for (const h of m.hits) {
+          if (h.score < 0.25 || h.score < top - 0.12) continue;
+          const kept = out.get(h.note);
+          if (kept) kept.by = "both";
+          else out.set(h.note, { id: h.note, title: this.bundle.concepts.get(h.note)?.title ?? h.note, snippet: h.heading, by: "meaning" });
+        }
+      } catch { state = "pending"; }
+    }
+    const rank = { both: 0, words: 1, meaning: 2 };
+    return { hits: [...out.values()].sort((a, b) => rank[a.by] - rank[b.by]), meaning: state };
   }
 
   // ------------------------------------------------------------ terminal agents
@@ -650,14 +683,35 @@ export class Engine implements Api {
     const inside = [...this.files.values()].filter((f) => f.path.startsWith(`${from}/`));
     const dirs = inside.filter((f) => "dir" in f && f.dir).map((f) => f.path);
     const notes = inside.filter((f) => !("dir" in f && f.dir) && f.path.endsWith(".md")).map((f) => f.path.slice(0, -3));
-    const others = inside.filter((f) => !("dir" in f && f.dir) && !f.path.endsWith(".md")).length;
+    const others = inside.filter((f) => !("dir" in f && f.dir) && !f.path.endsWith(".md")).map((f) => f.path);
     if (!this.files.has(from) && !inside.length) throw new EngineError(`there is no folder ${from}`, 404);
-    if (others) throw new EngineError(`${from} holds ${others} ${others === 1 ? "file" : "files"} that ${others === 1 ? "isn't a note" : "aren't notes"} (pictures, say); move those by hand first`, 409);
     const at = (p: string) => `${to}${p.slice(from.length)}`;
     if (this.files.has(`${to}.md`)) throw new EngineError(`there is a note at ${to} already`, 409);
     for (const id of notes) if (this.files.has(`${at(id)}.md`)) throw new EngineError(`there is already a note at ${at(id)}`, 409);
+    for (const f of others) if (this.files.has(at(f)) || await this.opts.notes.readBytes(at(f)) !== null) throw new EngineError(`there is already a file at ${at(f)}`, 409);
     for (const d of [from, ...dirs].sort()) await this.makeFolder(at(d));
     for (const id of notes) await this.moveNote(id, at(id), (await this.readNote(id)).version);
+    // The files that are not notes (pictures, artifacts, data) go with it, and the links to them are written anew.
+    if (others.length) {
+      await this.one(async () => {
+        for (const f of others) {
+          const bytes = await this.opts.notes.readBytes(f);
+          if (!bytes) throw new EngineError(`${f} could not be read to move it`, 409);
+          await this.opts.notes.writeBytes(at(f), bytes);
+          await this.opts.notes.remove(f);
+          this.files.delete(f);
+          this.files.set(at(f), { path: at(f) });
+        }
+        this.pictureCache.clear();
+        this.built = this.index = null;
+      });
+      for (const c of [...this.bundle.concepts.values()]) {
+        const source = await this.readNote(c.id);
+        let changed = source.text;
+        for (const f of others) changed = changed.replace(new RegExp(`(\\]\\(|\\[\\[!)/${escapeRe(f)}(?=[#\\s)\\]])`, "g"), `$1/${at(f)}`);
+        if (changed !== source.text) await this.one(() => this.put(c.id, changed, source.version, "edit", {}, "you"));
+      }
+    }
     await this.dropFolder(from, false);
   }
 

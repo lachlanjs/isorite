@@ -17,6 +17,7 @@
   import { terminal } from "$lib/terminal.svelte.ts";
   import { PANES, panes, type Pane, type Switch } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
+  import { finder } from "$lib/finder.svelte.ts";
   import IsoGauge from "$lib/components/IsoGauge.svelte";
   import Crystal from "$lib/components/Crystal.svelte";
   import IsoSettings from "$lib/components/IsoSettings.svelte";
@@ -94,6 +95,13 @@
   let at = $state(0);
   // Keys: Alt+1/2/3 a pane, Alt+←/→ the next, Alt+↑/↓ its lens or Iso's mode, Alt+L the layout. The arrows are left
   // to the editor while you type in it, where they move lines and words.
+  // Ctrl+K (⌘K): find a note on the Atlas, whichever pane has the keys (taken before the editor sees it).
+  function find(e: KeyboardEvent): void {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.code !== "KeyK") return;
+    e.preventDefault(); e.stopPropagation();
+    panes.to("atlas");
+    finder.show();
+  }
   function keys(e: KeyboardEvent): void {
     if (e.key === "Escape" && panes.tree) { panes.tree = false; return; }
     // What the editor took (Alt+L, Alt+1… on a link) is its own, not the panes'.
@@ -207,7 +215,7 @@
     {/each}
   </nav>
 </div>
-<svelte:window onkeydown={keys} />
+<svelte:window onkeydown={keys} onkeydowncapture={find} />
 <SelectionTags />
 
 {#snippet noteSettings()}<NoteSettings />{/snippet}

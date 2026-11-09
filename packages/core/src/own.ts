@@ -20,8 +20,9 @@ export const SETTINGS_FILE = "settings.toml";
 
 /** The base's settings. `repository`: the folder code links resolve against, relative to the notes folder (or
  *  absolute), when it isn't the git repository the notes are in. `agents_write_notes = false`: agents may not change
- *  the notes (they may unless it says so). */
-export interface Settings { repository?: string; agents_write_notes?: boolean }
+ *  the notes (they may unless it says so). `hidden`: notes and folders (by id) kept off the Atlas and the list: a way of
+ *  looking, so agents still find them. */
+export interface Settings { repository?: string; agents_write_notes?: boolean; hidden?: string[] }
 
 export function parseSettings(text: string | null): Settings {
   if (!text) return {};
@@ -30,6 +31,7 @@ export function parseSettings(text: string | null): Settings {
   return {
     ...(typeof raw.repository === "string" && raw.repository.trim() ? { repository: raw.repository.trim() } : {}),
     ...(typeof raw.agents_write_notes === "boolean" ? { agents_write_notes: raw.agents_write_notes } : {}),
+    ...(Array.isArray(raw.hidden) && raw.hidden.some((x) => typeof x === "string") ? { hidden: raw.hidden.filter((x): x is string => typeof x === "string") } : {}),
   };
 }
 
