@@ -34,7 +34,7 @@ const write = (path: string, body: unknown, { method = "PUT", headers = {} as Re
 
 test("a folder of notes is opened with isorite's own files in its .isorite/, made the first time", () => {
   expect(locate(notes)).toEqual({ notes });
-  expect(readFileSync(join(study, ".gitattributes"), "utf8")).toBe("*.jsonl merge=union\n");
+  expect(readFileSync(join(study, ".gitattributes"), "utf8")).toBe("*.jsonl merge=union\nhidden.txt merge=union\n");
 });
 
 test("the session, the listing and the search", async () => {

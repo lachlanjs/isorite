@@ -61,7 +61,7 @@ export const citeKind = (path: string): FileKind | null => {
 export type IssueCode =
   | "broken-link" | "requires-cycle" | "frontmatter-invalid" | "frontmatter-missing" | "type-missing"
   | "generated-without-by" | "verified-without-by" | "index-frontmatter" | "root-index-frontmatter"
-  | "log-heading-date" | "embed-broken";
+  | "log-heading-date" | "embed-broken" | "merge-conflict";
 
 export interface Issue {
   path: string;
@@ -182,6 +182,13 @@ const LOG_DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** Sort paths part by part, as Python sorts Path objects. */
 function comparePaths(a: string, b: string): number {
   return cmpTuple(a.split("/"), b.split("/"));
+}
+
+/** Git's markers of a merge it could not finish (all three, in order, outside a fenced block of code: a note that
+ *  shows what they look like is not in conflict). */
+export function hasConflict(source: string): boolean {
+  const text = source.replace(/^(`{3,}|~{3,})[^\n]*\n[^]*?^\1[ \t]*$/gm, "");
+  return /^<{7}( .*)?$[^]*?^={7}$[^]*?^>{7}( .*)?$/m.test(text);
 }
 
 export class Bundle {
@@ -315,6 +322,7 @@ export class Bundle {
     const concept = new Concept(cid, rel, meta ?? {}, body, mtime);
     if (meta === null) this.issue(rel, "error", "frontmatter-missing", "missing YAML frontmatter");
     else if (!concept.type) this.issue(rel, "error", "type-missing", "frontmatter has no non-empty 'type'");
+    if (hasConflict(source)) this.issue(rel, "error", "merge-conflict", "an unresolved merge conflict (<<<<<<< … ======= … >>>>>>>) is in the text");
     if ("generated" in concept.meta && !("by" in concept.generated)) {
       this.issue(rel, "warning", "generated-without-by", "'generated' should record 'by'");
     }

@@ -8,6 +8,7 @@
 //   .isorite/drafts/<id>.md            notes Iso has written that are not in the base yet
 //   .isorite/record/<device>.jsonl     this device's record of usage: context cleared, what turns cost
 //   .isorite/settings.toml             the base's settings: its repository, where code links point (M12)
+//   .isorite/hidden.txt                the notes and folders kept off the Atlas and the list, one id a line (merge=union)
 //
 // Format 1 kept these in a study base, a second repository beside the notes; `isorite migrate` moves one in.
 
@@ -15,13 +16,15 @@ import { parse, stringify } from "smol-toml";
 
 export const OWN_DIR = ".isorite";
 export const OWN_FORMAT = 2;
-export const GITATTRIBUTES = "*.jsonl merge=union\n";
+export const HIDDEN_FILE = "hidden.txt";
+/** Lines from two devices are put together, not conflicted: the journals, and what is hidden (one id a line). */
+export const GITATTRIBUTES = `*.jsonl merge=union\n${HIDDEN_FILE} merge=union\n`;
 export const SETTINGS_FILE = "settings.toml";
 
 /** The base's settings. `repository`: the folder code links resolve against, relative to the notes folder (or
  *  absolute), when it isn't the git repository the notes are in. `agents_write_notes = false`: agents may not change
- *  the notes (they may unless it says so). `hidden`: notes and folders (by id) kept off the Atlas and the list: a way of
- *  looking, so agents still find them. */
+ *  the notes (they may unless it says so). `hidden`: where it was kept before `hidden.txt`
+ *  (one line of a list could not be merged); read still, and moved out when it is next changed. */
 export interface Settings { repository?: string; agents_write_notes?: boolean; hidden?: string[] }
 
 export function parseSettings(text: string | null): Settings {

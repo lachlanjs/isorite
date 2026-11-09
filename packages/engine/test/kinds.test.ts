@@ -167,3 +167,28 @@ test("find joins the words and the meaning: both first, then words, then meaning
   expect(found.hits.map((h) => [h.id, h.by])).toEqual([["global/euler", "both"], ["global/angles", "meaning"]]);
   expect((await engine.find("")).hits).toEqual([]);
 });
+
+test("what is hidden is one id a line in its own file, merged by lines in git; the old place in the settings is moved out", async () => {
+  const own = new MemoryFiles({ "settings.toml": "repository = \"../code\"\nhidden = [ \"old/one\" ]\n", ".gitattributes": "*.jsonl merge=union\n" });
+  const engine = await Engine.open({ notes: new MemoryFiles({ "global/euler.md": EULER }), own, clock: { now: () => 0 }, device: "d", name: "dg" });
+  expect((await engine.hidden()).ids).toEqual(["old/one"]);
+  await engine.setHidden(["old/one", "global/euler"]);
+  expect(own.files.get("hidden.txt")).toBe("global/euler\nold/one\n");
+  expect(own.files.get("settings.toml")).not.toContain("hidden");
+  expect(own.files.get("settings.toml")).toContain("repository");
+  expect(own.files.get(".gitattributes")).toBe("*.jsonl merge=union\nhidden.txt merge=union\n");
+  // Lines git left as markers are not ids.
+  own.files.set("hidden.txt", "<<<<<<< HEAD\na\n=======\nb\n>>>>>>> theirs\n");
+  expect((await engine.hidden()).ids).toEqual(["a", "b"]);
+});
+
+test("a note git left in conflict is listed and mapped as one; a note that shows the markers in a code block is not", async () => {
+  const conflict = "---\ntype: Concept\ntitle: Torn\n<<<<<<< HEAD\ntags: [a]\n=======\ntags: [b]\n>>>>>>> theirs\n---\n\nText.\n";
+  const shows = "---\ntype: Concept\ntitle: Shows\n---\n\nGit writes:\n\n```\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n```\n";
+  const engine = await Engine.open({ notes: new MemoryFiles({ "torn.md": conflict, "shows.md": shows, "global/euler.md": EULER }), own: new MemoryFiles(), clock: { now: () => 0 }, device: "d", name: "dg" });
+  const listed = (await engine.notes()).notes;
+  expect(listed.find((n) => n.id === "torn")).toMatchObject({ conflicted: true });
+  expect(listed.find((n) => n.id === "shows")).not.toHaveProperty("conflicted");
+  expect(listed.find((n) => n.id === "global/euler")).not.toHaveProperty("conflicted");
+  expect((await engine.map()).notes.torn).toMatchObject({ conflicted: true });
+});

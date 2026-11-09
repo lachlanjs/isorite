@@ -2,7 +2,7 @@
 // them, the journal and what is worked out from them. fixtures/README.md is the contract
 // the note reader keeps.
 
-export { AGENTS_FILE, Bundle, Concept, Directory, OKF_VERSION, citeKind, type FileKind } from "./bundle.ts";
+export { AGENTS_FILE, Bundle, hasConflict, Concept, Directory, OKF_VERSION, citeKind, type FileKind } from "./bundle.ts";
 export { fileType, pictureSize, pictureType } from "./picture.ts";
 export type { Cite, FileEntry, Issue, IssueCode, Link, Trust } from "./bundle.ts";
 export { FrontmatterError, dumpFrontmatter, frontmatterText, parseYaml, repairFrontmatter, splitFrontmatter } from "./frontmatter.ts";
@@ -24,7 +24,7 @@ export { DiffError, applyHunks, diffLines } from "./diff.ts";
 export type { Hunk } from "./diff.ts";
 export { LAYER_IDLE_MS, SESSION_GAP_MS, SNAPSHOT_EVERY, authors, change, wordAuthors, hashText, insertAt, journalLine, locate, moments, passageOf, findPassage, pending, readJournal, reconcile, replay, sessionMoments, stamp, textAt, touched, written } from "./journal.ts";
 export type { Change, Cost, Discard, Entry, Insert, Moment, Passage, Placement, Proposal, Revise, Rewrite, Run, SessionMoment, Stamp, Who, Why } from "./journal.ts";
-export { GITATTRIBUTES, OWN_DIR, OWN_FORMAT, SETTINGS_FILE, journalPath, parseSettings, recordPath, settingsText } from "./own.ts";
+export { GITATTRIBUTES, HIDDEN_FILE, OWN_DIR, OWN_FORMAT, SETTINGS_FILE, journalPath, parseSettings, recordPath, settingsText } from "./own.ts";
 export type { Settings as BaseSettings } from "./own.ts";
 export { CONFIG_FILE, STUDY_DIR, STUDY_FORMAT, StudyError, parseStudyConfig } from "./study.ts";
 export { isFileRef, mapModel, reach } from "./map.ts";

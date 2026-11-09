@@ -3,7 +3,7 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  AGENTS_FILE, STRENGTH, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, pending, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, written, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
+  AGENTS_FILE, STRENGTH, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, HIDDEN_FILE, GITATTRIBUTES, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, pending, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, written, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
 } from "@isorite/core";
 import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type FindResult, type FindHit } from "./api.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Similar, type ToolDef } from "./lookup.ts";
@@ -201,10 +201,15 @@ export class Engine implements Api {
   }
 
   async notes(): Promise<Listing> {
-    const broken = await this.brokenCode();
-    const notes = [...this.bundle.concepts.values()].map((c) => ({ id: c.id, title: c.title, description: c.description, type: c.type, dir: c.directory, ...(c.kind === "note" ? {} : { kind: c.kind, attached: c.attached }), ...(c.done ? { done: c.done } : {}), ...(broken.has(c.id) ? { broken: broken.get(c.id) } : {}) }));
+    const broken = await this.brokenCode(), conflicted = this.conflicted();
+    const notes = [...this.bundle.concepts.values()].map((c) => ({ id: c.id, title: c.title, description: c.description, type: c.type, dir: c.directory, ...(c.kind === "note" ? {} : { kind: c.kind, attached: c.attached }), ...(c.done ? { done: c.done } : {}), ...(broken.has(c.id) ? { broken: broken.get(c.id) } : {}), ...(conflicted.has(c.id) ? { conflicted: true as const } : {}) }));
     notes.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     return { notes, dirs: [...this.bundle.directories.keys()].filter(Boolean).sort() };
+  }
+
+  /** The notes git left in conflict (a merge it could not finish): found as the notes are read. */
+  private conflicted(): Set<string> {
+    return new Set(this.bundle.issues.filter((i) => i.code === "merge-conflict").map((i) => i.path.replace(/\.md$/, "")));
   }
 
   /** A note's file. What it holds that the journal has not seen (an edit made elsewhere, or a note older than
@@ -222,7 +227,7 @@ export class Engine implements Api {
 
   /** The base as the Atlas draws it: the model the layout takes, and what each block says. */
   async map(): Promise<MapReport> {
-    const notes: MapReport["notes"] = {}, broken = await this.brokenCode();
+    const notes: MapReport["notes"] = {}, broken = await this.brokenCode(), conflicted = this.conflicted();
     for (const c of this.bundle.concepts.values()) {
       const bad = broken.get(c.id) ?? [];
       const links = c.outward.filter((o) => !(o.kind === "code" && o.picture)).map((o) => ({ kind: o.kind, href: o.href, text: o.text, ...(bad.includes(o.href) ? { broken: true as const } : {}) }));
@@ -237,7 +242,7 @@ export class Engine implements Api {
         if (o.kind !== "code" || !o.picture) continue;
         pictures.push({ href: o.href, path: o.path, from: "code", text: o.text, ...(bad.includes(o.href) ? { broken: true as const } : {}) });
       }
-      notes[c.id] = { title: c.title, tokens: estimate(c.body.trim()), ...(c.kind !== "note" ? { kind: c.kind } : {}), ...(c.done ? { done: c.done } : {}), ...(links.length ? { links } : {}), ...(pictures.length ? { pictures } : {}) };
+      notes[c.id] = { title: c.title, tokens: estimate(c.body.trim()), ...(conflicted.has(c.id) ? { conflicted: true as const } : {}), ...(c.kind !== "note" ? { kind: c.kind } : {}), ...(c.done ? { done: c.done } : {}), ...(links.length ? { links } : {}), ...(pictures.length ? { pictures } : {}) };
     }
     // Files (M23): each by its title or name, and an artifact joined to the data it says it uses.
     const model = mapModel(this.bundle), files: NonNullable<MapReport["files"]> = {};
@@ -292,12 +297,26 @@ export class Engine implements Api {
       await this.opts.own.write(SETTINGS_FILE, settingsText(may ? rest : { ...rest, agents_write_notes: false }));
     });
   }
-  async hidden(): Promise<{ ids: string[] }> { return { ids: (await this.settingsOfBase()).hidden ?? [] }; }
+  /** What is hidden: one id a line in `.isorite/hidden.txt`, so that two people hiding different things merge in git (the
+   *  lines are put together); the list in the settings, where it was first kept, is read too. */
+  async hidden(): Promise<{ ids: string[] }> {
+    const tidy = (x: string): string => x.trim().replace(/^\/+|\/+$/g, "");
+    const lines = ((await this.opts.own.read(HIDDEN_FILE)) ?? "").split("\n").map(tidy).filter((l) => l && !/^(<<<<<<<|=======|>>>>>>>)/.test(l));
+    return { ids: [...new Set([...lines, ...((await this.settingsOfBase()).hidden ?? []).map(tidy)])].filter(Boolean).sort() };
+  }
   async setHidden(ids: string[]): Promise<void> {
     const clean = [...new Set(ids.map((x) => x.trim().replace(/^\/+|\/+$/g, "")).filter(Boolean))].sort();
     await this.one(async () => {
-      const { hidden: _, ...rest } = await this.settingsOfBase();
-      await this.opts.own.write(SETTINGS_FILE, settingsText(clean.length ? { ...rest, hidden: clean } : rest));
+      const own = this.opts.own, had = await own.read(HIDDEN_FILE) !== null;
+      if (clean.length || had) await own.write(HIDDEN_FILE, clean.length ? `${clean.join("\n")}\n` : "");
+      // Moved out of the settings, where it was first kept.
+      const { hidden, ...rest } = await this.settingsOfBase();
+      if (hidden !== undefined) await own.write(SETTINGS_FILE, settingsText(rest));
+      // A base made before this one does not merge the file by lines yet.
+      if (clean.length) {
+        const attrs = (await own.read(".gitattributes")) ?? "";
+        if (!attrs.split("\n").some((l) => l.trim().startsWith(`${HIDDEN_FILE} `))) await own.write(".gitattributes", `${attrs}${attrs && !attrs.endsWith("\n") ? "\n" : ""}${GITATTRIBUTES.split("\n").find((l) => l.startsWith(HIDDEN_FILE))}\n`);
+      }
     });
     this.publish({ type: "hidden" });
   }

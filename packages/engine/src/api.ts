@@ -28,6 +28,8 @@ export interface NoteSummary {
   done?: string;
   /** Its code links whose file is not in the base's repository (M12). */
   broken?: string[];
+  /** Git left an unresolved merge conflict in its text: its markers are still there to be settled. */
+  conflicted?: true;
 }
 
 export interface Listing {
@@ -57,6 +59,8 @@ export interface MapReport {
     tokens: number;
     /** A question or a problem (M12). */
     kind?: "question" | "problem";
+    /** Git left an unresolved merge conflict in its text. */
+    conflicted?: true;
     /** A question resolved or a problem solved (M12): when, as written. */
     done?: string;
     /** Its links out of the base, to the web and to code (M12): drawn beside it on the Atlas. */

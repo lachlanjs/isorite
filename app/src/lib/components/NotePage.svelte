@@ -7,7 +7,7 @@
   import { onMount, tick } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { doneOf, kindOf, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
+  import { doneOf, hasConflict, kindOf, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
@@ -32,6 +32,8 @@
   onMount(() => { const t = setTimeout(() => (slow = true), 300); return () => clearTimeout(t); });
   const iso = new NoteIso(note);
 
+  // Git left markers in it, from a merge it could not finish: it goes on being a note, with the text as it is.
+  const torn = $derived(hasConflict(note.text));
   let source = $state(false);
   // Frontmatter that cannot be read is mended in the source, where all of the file shows.
   const asSource = $derived(source || note.meta === null);
@@ -217,6 +219,13 @@
       </div>
     {/if}
 
+    {#if torn}
+      <div class="frame torn" role="alert">
+        <span class="frame-title">merge conflict</span>
+        <p>Git could not put two versions of this note together, and left both in the text. Choose what to keep between the lines <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>, <code>=======</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>, and delete the lines of the markers. This stays until none is left.</p>
+      </div>
+    {/if}
+
     <div class="head">
       {#if read}
         <div class="titlerow">
@@ -341,6 +350,8 @@
   }
   /* Held at the top of the pane, over the note: it comes when the note is saved, and you may be far down it then, where
      at the head of the note it was out of sight and nothing said why the note had stopped saving. */
+  .torn { margin-bottom: var(--space-4); padding: var(--space-6) var(--space-4) var(--space-4); --edge: var(--rose); }
+  .torn p { margin: 0; color: var(--text-soft); }
   .choice { position: sticky; top: var(--space-3); z-index: 5; filter: var(--lift-drop); animation: appear var(--t-change) var(--ease-out); padding: var(--space-6) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); --edge: var(--rose); }
   .row { display: flex; gap: var(--space-2); }
   .bad { color: var(--rose); }
