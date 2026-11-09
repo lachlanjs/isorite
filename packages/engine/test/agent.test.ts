@@ -51,6 +51,9 @@ test("an agent builds an artifact (M23, an agent's since M25): a recipe, the dat
   const BODY = (y: string) => `<iso-page><iso-panel><h2>Energy</h2><iso-chart data="runs.csv" x="t" y="${y}"></iso-chart></iso-panel></iso-page>`;
   const brief = (await engine.agentLook({ agent: "claude", session: "s1", tool: "brief_base", args: {} })).text;
   expect(brief).toContain("# Artifacts");
+  // How to write and teach comes before the artifacts, and the base's own AGENTS.md (its notation, level) after it.
+  expect(brief.indexOf("# Writing and teaching")).toBeGreaterThan(brief.indexOf("# Keeping it well"));
+  expect(brief.indexOf("# Writing and teaching")).toBeLessThan(brief.indexOf("# Artifacts"));
   expect(brief).not.toContain("AGENTS.md");
   await engine.saveAgents("Write in British English.");
   expect((await engine.agentLook({ agent: "claude", session: "s1", tool: "brief_base", args: {} })).text).toContain("# Their instructions for this knowledge base (AGENTS.md)\n\nWrite in British English.");

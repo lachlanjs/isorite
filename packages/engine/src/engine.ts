@@ -8,6 +8,7 @@ import {
 import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session } from "./api.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Similar, type ToolDef } from "./lookup.ts";
 import { ARTIFACTS, ARTIFACT_RECIPE, ASK_QUESTION, OFFER_TEXT, CONVERSATIONS_DIR, ISORITE, PRACTICE, READ_ARTIFACT, READ_DATA, WRITE_ARTIFACT, conversationPath, readTurns, type TurnItem } from "./turn.ts";
+import { WRITING } from "./writing.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
 import type { Clock, Files } from "./ports.ts";
 import { RECIPES, REFERENCE, checkArtifact, readsOf, columnsOf, describeShape, manifestOf, parseData, shapeOf, withManifest } from "@isorite/kit";
@@ -582,7 +583,7 @@ export class Engine implements Api {
       `Folders, with the notes directly in each:\n${lines.join("\n")}${dirs.length > 60 ? `\n(and ${dirs.length - 60} more)` : ""}`,
       `To look: search_notes by the words a note would use${this.similar ? ", find_similar by meaning when the words are unknown" : ""}; outline_note to see a note's headings and links; read_note for one section. Follow a note's links to what it rests on before searching again. Cite a note by its title and section.`,
       // How the base is kept, so what the agent writes in it matches (M15), and how an artifact is made (M23).
-      `${ISORITE}\n\n${PRACTICE}\n\n${ARTIFACTS}`,
+      `${ISORITE}\n\n${PRACTICE}\n\n${WRITING}\n\n${ARTIFACTS}`,
     ].join("\n\n");
   }
 
