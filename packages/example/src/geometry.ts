@@ -62,7 +62,7 @@ export async function buildGeometry(sources: Sources, code: Record<string, strin
   const given = (id: string): Given[] => [{ kind: "note", id }];
   /** A turn whose questions back become question notes (at once, where agents may write notes). */
   const keeping = async (...turn: Parameters<ScriptedAgent["turn"]>) => {
-    for (const q of await agent.turn(...turn)) if (!q.made) await engine.agentTake(q.id);
+    for (const q of await agent.turn(...turn)) if (q.kind === "question" && !q.made) await engine.agentTake(q.id);
   };
 
   const ops: [number, number, () => Promise<unknown>][] = [];
