@@ -1,8 +1,10 @@
 <script lang="ts">
   // A pane's header: its name, then its switches (M12: in place of M10's lenses and Iso's modes), its own tools, and
   // at its right the pane's settings (M10b: there is no header above the panes). A switch says what it is on hover;
-  // when on, its icon takes its colour, with a bar under it.
-  import type { Snippet } from "svelte";
+  // when on, its icon takes its colour, with a bar under it. What does not fit in the header folds into a menu at its
+  // right ("more"), the least needed first: the folder it is in, then the switches from the last, then what the pane
+  // says and its gauge, then the tools; the menu lists them, and a row does what its button did.
+  import { onMount, tick, type Snippet } from "svelte";
   import { SWITCHES, panes, type Pane, type Switch } from "$lib/panes.svelte.ts";
   import BaseSwitch from "./BaseSwitch.svelte";
   import Glyph from "./Glyph.svelte";
@@ -29,17 +31,86 @@
   const open = $derived(panes.settings === pane);
   let menu = $state<HTMLElement>();
   $effect(() => { if (open) menu?.focus(); });
-  // A press outside the settings, and not on their button, closes them.
+  // A press outside the settings, and not on their button, closes them (and the folded menu).
   function outside(e: PointerEvent): void {
-    if (!open || !(e.target instanceof Element)) return;
+    if (!(e.target instanceof Element)) return;
+    if (folds && !foldMenu?.contains(e.target) && !e.target.closest(`[data-more="${pane}"]`)) folds = false;
+    if (!open) return;
     if (menu?.contains(e.target) || e.target.closest(`[data-settings="${pane}"]`)) return;
     panes.settings = null;
   }
+
+  // ------------------------------------------------------------ what does not fit
+
+  let head = $state<HTMLElement>();
+  let foldMenu = $state<HTMLElement>();
+  let folded = $state(0);
+  let folds = $state(false);
+  type Row = { label: string; icon: string; pressed: boolean | null; act: (() => void) | null };
+  let rows = $state.raw<Row[]>([]);
+
+  /** What can fold: the switches, and what the pane's tools put in the header. */
+  const movable = (): HTMLElement[] => (head ? [...head.querySelectorAll<HTMLElement>(".sw, .tools > *")] : []);
+  /** Which goes first: the folder it is in, then the switches (from the last), then what the pane says and its gauge,
+   *  then the rest (the agent's name, the buttons that are the pane's own). */
+  const rank = (el: HTMLElement): number => (el.matches(".where") ? 0 : el.matches(".sw") ? 1 : el.matches(".says, .gauge") ? 2 : 3);
+
+  function fit(): void {
+    if (!head) return;
+    const items = movable();
+    for (const el of items) el.removeAttribute("data-folded");
+    const css = getComputedStyle(head), gap = parseFloat(css.columnGap) || 6;
+    const room = head.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+    // What the header would take with everything in it: its direct children, the tools' too, but not the space that grows.
+    const flat = [...head.children].flatMap((c) => (c.classList.contains("tools") ? [...c.children] : [c])).filter((c): c is HTMLElement => c instanceof HTMLElement && !c.classList.contains("grow") && !c.classList.contains("more") && c.offsetWidth > 0);
+    let need = flat.reduce((t, c) => t + c.offsetWidth, 0) + Math.max(0, flat.length - 1) * gap;
+    const widths = new Map(items.map((el) => [el, el.offsetWidth + (el.matches(".sw") ? 2 : gap)]));
+    let n = 0;
+    if (need > room) {
+      need += 28 + gap; // the button that opens the menu
+      const order = items.map((el, i) => ({ el, i })).filter(({ el }) => el.offsetWidth > 0).sort((a, b) => rank(a.el) - rank(b.el) || b.i - a.i);
+      for (const { el } of order) {
+        if (need <= room) break;
+        el.setAttribute("data-folded", "");
+        need -= widths.get(el) ?? 0;
+        n++;
+      }
+    }
+    folded = n;
+    if (!n) folds = false;
+  }
+  let frame = 0;
+  const later = (): void => { cancelAnimationFrame(frame); frame = requestAnimationFrame(fit); };
+  onMount(() => {
+    const size = new ResizeObserver(later), content = new MutationObserver(later);
+    if (head) { size.observe(head); content.observe(head, { childList: true, subtree: true, characterData: true }); }
+    later();
+    return () => { size.disconnect(); content.disconnect(); cancelAnimationFrame(frame); };
+  });
+
+  /** The menu's rows: what is folded, as it reads in the header, each doing what its button did. */
+  function list(): Row[] {
+    const folded = head ? [...head.querySelectorAll<HTMLElement>("[data-folded]")] : [];
+    return folded.map((el) => ({
+      label: (el.getAttribute("aria-label") || el.textContent || el.title || "").replace(/\s+/g, " ").trim(),
+      icon: el.querySelector("svg")?.outerHTML ?? "",
+      pressed: el.hasAttribute("aria-pressed") ? el.getAttribute("aria-pressed") === "true" : null,
+      act: el instanceof HTMLButtonElement ? () => el.click() : null,
+    }));
+  }
+  async function toggleFolds(): Promise<void> {
+    folds = !folds;
+    if (!folds) return;
+    rows = list();
+    await tick();
+    foldMenu?.querySelector<HTMLElement>("button")?.focus();
+  }
+  function choose(row: Row): void { row.act?.(); folds = false; requestAnimationFrame(() => head?.querySelector<HTMLElement>(`[data-more="${pane}"]`)?.focus()); }
 </script>
 
-<svelte:window onpointerdown={outside} onkeydown={(e) => { if (open && e.key === "Escape") panes.settings = null; }} />
+<svelte:window onpointerdown={outside} onkeydown={(e) => { if (e.key !== "Escape") return; if (folds) folds = false; else if (open) panes.settings = null; }} />
 
-<header class="phead" class:named={pane === "atlas"} data-head={pane}>
+<header class="phead" class:named={pane === "atlas"} data-head={pane} bind:this={head}>
   {#if first}<BaseSwitch />{/if}
   <span class="pname">{name}</span>
   <span class="switches" role="group" aria-label="{name}'s switches">
@@ -59,13 +130,31 @@
     {/each}
   </span>
   <span class="grow"></span>
-  {@render tools?.()}
+  <span class="tools">{@render tools?.()}</span>
+  {#if folded}
+    <button class="icon more" type="button" data-more={pane} aria-label="More of {name}'s tools" aria-haspopup="menu" aria-expanded={folds} title="More" onclick={() => void toggleFolds()}>
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><circle cx="3.5" cy="8" r="1.3" /><circle cx="8" cy="8" r="1.3" /><circle cx="12.5" cy="8" r="1.3" /></svg>
+    </button>
+  {/if}
   {#if settings}
     <button class="icon gear" type="button" data-settings={pane} aria-label="{name} settings" aria-expanded={open} title="{name} settings" onclick={() => (panes.settings = open ? null : pane)}>
       <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" /><rect x="9" y="3" width="2.5" height="3" fill="var(--ground-0)" /><rect x="4.5" y="6.5" width="2.5" height="3" fill="var(--ground-0)" /><rect x="10" y="10" width="2.5" height="3" fill="var(--ground-0)" /></svg>
     </button>
   {/if}
 </header>
+{#if folds && folded}
+  <div class="frame foldmenu" role="menu" aria-label="More of {name}'s tools" tabindex="-1" bind:this={foldMenu}>
+    {#each rows as r, i (i)}
+      {#if r.act}
+        <button type="button" class="row" role={r.pressed === null ? "menuitem" : "menuitemcheckbox"} aria-checked={r.pressed === null ? undefined : r.pressed} onclick={() => choose(r)}>
+          <span class="ic" aria-hidden="true">{@html r.icon}</span><span class="t">{r.label}</span>{#if r.pressed}<span class="on" aria-hidden="true"></span>{/if}
+        </button>
+      {:else}
+        <p class="row said" role="presentation">{r.label}</p>
+      {/if}
+    {/each}
+  </div>
+{/if}
 {#if settings && open}
   <div class="frame settings" role="dialog" aria-label="{name} settings" tabindex="-1" bind:this={menu}>
     <span class="frame-title">{name.toLowerCase()}</span>
@@ -100,9 +189,21 @@
     .named .lbl { display: inline; }
   }
   .grow { flex: 1 1 auto; }
-  /* The Agent pane's header is full on a phone: the base is switched from the Note pane's there, rather than shown
+  /* The pane's tools lie in the header as if put there directly; any folded away are not drawn. */
+  .tools { display: contents; }
+  .phead :global([data-folded]) { display: none !important; }
+  .foldmenu { --inside: var(--ground-2); filter: var(--lift-drop); animation: appear var(--t-ack) var(--ease-out); position: absolute; z-index: 21; top: 44px; right: 8px; min-width: 200px; max-width: calc(100% - 16px); padding: 6px; display: grid; gap: 1px; white-space: nowrap; }
+  .row { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; background: none; border: 0; color: var(--text); font: 13px var(--font-ui); text-align: left; cursor: pointer; margin: 0; }
+  button.row:hover, button.row:focus-visible { background: var(--ground-3); outline: none; }
+  .row .ic { width: 16px; height: 16px; display: grid; place-items: center; flex: none; color: var(--text-soft); }
+  .row .ic :global(svg) { width: 16px; height: 16px; }
+  .row .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .row .on { width: 6px; height: 6px; background: var(--lattice); flex: none; }
+  .row.said { color: var(--text-faint); font-size: 12px; cursor: default; white-space: normal; }
+  .more[aria-expanded="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
+  /* The Agent's and the Atlas's headers are full on a phone: the base is switched from the Note pane's there, rather than shown
      squeezed to nothing beside a stray slash. */
-  @container phead (max-width: 440px) { .phead[data-head="iso"] :global(:is(.base, .slash)) { display: none; } }
+  @container phead (max-width: 440px) { .phead:is([data-head="iso"], [data-head="atlas"]) :global(:is(.base, .slash)) { display: none; } }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; background: none; border: 0; padding: 0; cursor: pointer; }
   .icon:hover, .icon:focus-visible { color: var(--text); }
   .gear[aria-expanded="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
@@ -111,10 +212,8 @@
   .settings:focus-visible { outline: none; }
   @media (max-width: 760px) {
     .phead { height: 48px; }
-    /* A phone's header is short of room: what a pane's tools say ("2 steps back") keeps its width, and the switches
-       give way, scrolled sideways. */
-    .switches { flex: 0 1 auto; min-width: 56px; overflow-x: auto; scrollbar-width: none; }
     .settings { top: 62px; }
+    .foldmenu { top: 56px; }
     .inner { max-height: calc(100dvh - 210px); }
   }
 </style>
