@@ -261,7 +261,7 @@
 
 <div class="wrap">
 <div class="chat" bind:this={list} onscroll={scrolled} role="log" aria-label="The agent's session" aria-live="polite" onpointerover={pointAt} onpointerleave={() => pointing.set("iso", null)}>
-  <div class="flow" bind:this={flow}>
+  <div class="flow" bind:this={flow} data-point="turn">
   {#if view?.title && plainAsked(view.title)}<p class="title faint" title={plainAsked(view.title)}>{plainAsked(view.title)}</p>{/if}
   {#each view?.turns ?? [] as t (t.id)}
     {@render turn(t)}

@@ -22,7 +22,7 @@ test("while the agent works, a steer is offered, sent, and shown in the turn", a
   const said = log(page).locator(".mid[data-mode='steer']");
   await expect(said).toContainText("Actually, be brief.");
   await expect(said).toHaveAttribute("data-state", "sent");
-  await expect(box(page)).toHaveValue("");
+  await expect(box(page).locator(".cm-placeholder")).toBeVisible(); // empty
   await expect(log(page)).toContainText("Steered: Actually, be brief", { timeout: 20_000 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "no wider than the window").toBe(true);
 });

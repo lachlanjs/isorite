@@ -8,6 +8,8 @@
   import { terminal } from "$lib/terminal.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import { handoffText } from "$lib/handoff.ts";
+  import { pointers } from "$lib/pointers.svelte.ts";
+  import PromptBox from "./PromptBox.svelte";
   import AgentSessions from "./AgentSessions.svelte";
   import AttachAgent from "./AttachAgent.svelte";
   import ContextView from "./ContextView.svelte";
@@ -53,11 +55,11 @@
   /** While the agent works: Enter queues what is typed for when it would stop; this puts it in after the step running now. */
   async function steer(): Promise<void> {
     const keys = tray.sent.map(tray.keyOf);
-    if (await terminal.steer(text)) { text = ""; given = new Set([...given, ...keys]); }
+    if (await terminal.steer(await pointers.expand(text))) { text = ""; given = new Set([...given, ...keys]); }
   }
   async function send(): Promise<void> {
     const keys = tray.sent.map(tray.keyOf);
-    if (await terminal.send(text)) { text = ""; given = new Set([...given, ...keys]); }
+    if (await terminal.send(await pointers.expand(text))) { text = ""; given = new Set([...given, ...keys]); }
   }
   function keys(e: KeyboardEvent): void {
     if (matches.length && !e.isComposing) {
@@ -105,8 +107,7 @@
       </p>
     {/if}
     <div class="box" class:busy>
-      <label class="hidden-label" for="iso-box">Message the agent</label>
-      <textarea id="iso-box" bind:value={text} aria-busy={terminal.sending} readonly={terminal.sending} rows="2" placeholder={terminal.connected ? `Ask ${terminal.view?.agent || "the agent"}` : "Attach an agent to ask it here"} onkeydown={keys}></textarea>
+      <PromptBox bind:value={text} readonly={terminal.sending} placeholder={terminal.connected ? `Ask ${terminal.view?.agent || "the agent"}` : "Attach an agent to ask it here"} onkeydown={keys} />
       <div class="bar">
         {#if settings.length && terminal.connected && !terminal.old}
           <div class="settings">
@@ -156,8 +157,6 @@
   .box.busy:not(:focus-within) { border-color: color-mix(in srgb, var(--growth) 45%, var(--line)); animation: working 2.4s ease-in-out infinite alternate; }
   @keyframes working { to { box-shadow: 0 0 16px color-mix(in srgb, var(--growth) calc(var(--glow-a) * .6), transparent); border-color: color-mix(in srgb, var(--growth) 70%, var(--line)); } }
   @media (prefers-reduced-motion: reduce) { .box.busy { animation: none; } }
-  textarea { flex: 1 1 auto; min-width: 0; min-height: 44px; max-height: 200px; resize: none; field-sizing: content; background: none; border: 0; padding: 10px 12px 4px; font: 13px/1.5 var(--font-ui); color: var(--text); }
-  textarea:focus { outline: none; }
   .bar { display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 2px 4px 4px 6px; }
   .grow { flex: 1 1 auto; }
   .corner { flex: none; width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--growth); cursor: pointer; transition: background-color var(--t-ack) var(--ease-out), color var(--t-ack) var(--ease-out), opacity var(--t-ack) var(--ease-out); }

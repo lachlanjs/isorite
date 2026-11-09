@@ -21,6 +21,7 @@
   import Crystal from "$lib/components/Crystal.svelte";
   import IsoSettings from "$lib/components/IsoSettings.svelte";
   import NoteSettings from "$lib/components/NoteSettings.svelte";
+  import SelectionTags from "$lib/components/SelectionTags.svelte";
 
   let { children }: { children: Snippet } = $props();
 
@@ -207,6 +208,7 @@
   </nav>
 </div>
 <svelte:window onkeydown={keys} />
+<SelectionTags />
 
 {#snippet noteSettings()}<NoteSettings />{/snippet}
 {#snippet isoSettings()}<IsoSettings />{/snippet}

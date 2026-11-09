@@ -17,20 +17,6 @@ async function look(page: Page, name: string) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} is no wider than the window`).toBe(true);
 }
 
-/** Iso's pane in its Context view: what you gave Iso, listed. On a phone, back to where you were after. */
-async function showContext(page: Page, back?: "Note" | "Atlas") {
-  const phone = (page.viewportSize()?.width ?? 1280) <= 760, nav = page.getByRole("navigation", { name: "Panes" });
-  if (phone) await nav.getByRole("button", { name: /^Agent/ }).click();
-  const ctx = page.locator('[data-pane="iso"]').getByRole("button", { name: "Context", exact: true });
-  if ((await ctx.getAttribute("aria-pressed")) !== "true") await ctx.click();
-  if (phone && back) {
-    await nav.getByRole("button", { name: new RegExp(`^${back}`) }).click();
-    // The row has scrolled back to the pane before anything is pressed in it.
-    await expect.poll(async () => (await page.locator(`[data-pane="${back.toLowerCase()}"]`).boundingBox())?.x).toBe(0);
-  }
-  return page.getByRole("list", { name: "What you gave the agent" });
-}
-
 test("a note with maths and a typed link is written, saved, and there when reopened", async ({ page }) => {
   const name = test.info().project.name, id = `basics/entropy-${name}`;
   await page.goto("");
@@ -225,14 +211,15 @@ test("what is typed and not yet saved survives the tab closing", async ({ page, 
   expect(await file(again, "basics/surprise")).toContain(`Kept for ${name}.`);
 });
 
-test("a passage chosen in a note is sent to Iso; the notes open over the note and close when one is chosen", async ({ page }) => {
+test("a passage chosen in a note is pointed to in the agent's box (Ctrl+[); the notes open over the note and close when one is chosen", async ({ page }) => {
   await page.goto("#/n/basics/surprise");
   await editor(page).click();
   await page.keyboard.press("Control+Home");
   await page.keyboard.press("Shift+End");
-  await page.getByRole("button", { name: "add to the agent's message" }).click();
-  await expect(page.getByRole("button", { name: "add to the agent's message" })).toHaveCount(0);
-  await expect(await showContext(page, "Note")).toContainText("“An outcome of probability");
+  if ((page.viewportSize()?.width ?? 1280) > 760) {
+    await page.keyboard.press("Control+[");
+    await expect(page.locator(".pt:not(.pt-ghost)")).toHaveCount(1);
+  }
 
   await page.getByRole("button", { name: "All notes" }).click();
   await expect(page.getByRole("searchbox", { name: "Find a note" })).toBeVisible();

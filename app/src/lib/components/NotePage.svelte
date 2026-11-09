@@ -184,37 +184,7 @@
     try { await note.setDone(!done); } catch { /* said by the session's saving state */ } finally { marking = false; }
   }
 
-  // The passage chosen in the note.
-  const chosen = $derived(iso.cursor && iso.cursor.to > iso.cursor.from ? note.text.slice(iso.cursor.from, iso.cursor.to).trim() : "");
-  // A passage chosen in the note can be sent to Iso (M10): one button by the selection, above it on a desktop and
-  // below it on a phone, where the system's own handles are above.
   let noteEl = $state<HTMLElement>();
-  let toIsoAt = $state<{ top: number; left: number } | null>(null);
-  $effect(() => {
-    void iso.cursor;
-    if (!chosen || !noteEl || asSource || at) { toIsoAt = null; return; }
-    const frame = requestAnimationFrame(() => {
-      const sel = getSelection(), box = noteEl!.getBoundingClientRect();
-      const r = sel?.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
-      if (!r || (!r.width && !r.height)) { toIsoAt = { top: 8, left: box.width - 140 }; return; }
-      toIsoAt = { top: panes.narrow ? r.bottom - box.top + 30 : r.top - box.top - 36, left: Math.max(8, Math.min(r.left - box.left, box.width - 140)) };
-    });
-    return () => cancelAnimationFrame(frame);
-  });
-  // Sent as the button is pressed, not when the press ends: on a touch screen the selection is let go by then (W1).
-  // A click with no press (Enter on the button) sends too.
-  let copied = $state(false);
-  /** The passage with where it is from, as an agent in a terminal can be given it (M29): the note's path, so it can read the rest. */
-  function copyPassage(): void {
-    if (!chosen) return;
-    const quoted = chosen.split("\n").map((l) => `> ${l}`).join("\n");
-    void navigator.clipboard?.writeText(`From /${id}.md in the notes:\n\n${quoted}\n`).then(() => { copied = true; setTimeout(() => { copied = false; toIsoAt = null; }, 900); }, () => undefined);
-  }
-  function sendToIso(): void {
-    if (!chosen) return;
-    tray.add({ kind: "passage", id, title: note.fields.title || id, text: chosen });
-    toIsoAt = null;
-  }
 </script>
 
 <svelte:window onkeydown={keys} />
@@ -293,12 +263,6 @@
       {#key momentKey(at)}<NoteVersion id={note.id} text={version.text} title={note.fields.title} touched={version.touched} asked={version.asked} offered={version.offered} />{/key}
     {/if}
 
-    {#if toIsoAt}
-      <span class="toiso" role="group" aria-label="The selected passage" style:top="{toIsoAt.top}px" style:left="{toIsoAt.left}px">
-        <button type="button" title="Put it above the agent's box, to go with your next message from the pane" onpointerdown={(e) => { e.preventDefault(); sendToIso(); }} onclick={(e) => { if (e.detail === 0) sendToIso(); }}><i class="dia" aria-hidden="true">◆</i>add to the agent's message</button>
-        <button type="button" title="Copy it with the note it is from, to paste into an agent in your terminal" onpointerdown={(e) => { e.preventDefault(); copyPassage(); }} onclick={(e) => { if (e.detail === 0) copyPassage(); }}>{copied ? "copied" : "copy for a terminal"}</button>
-      </span>
-    {/if}
     <div class="live" hidden={Boolean(at && version)}>
       {#key `${asSource}${read}`}<NoteEditor {note} {iso} source={asSource} reading={read} touched={live} lens={lensMarks} />{/key}
     </div>
@@ -328,10 +292,6 @@
 </article>
 
 <style>
-  .toiso { position: absolute; z-index: 6; display: inline-flex; background: var(--ground-2); border: 1px solid var(--growth); }
-  .toiso button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; background: none; border: 0; color: var(--text); font-size: 12px; cursor: pointer; }
-  .toiso button + button { border-left: 1px solid var(--line); color: var(--text-soft); }
-  .toiso .dia { font-style: normal; font-size: 10px; color: var(--growth); }
   /* A note opened comes in, rather than taking the place of the one before between one frame and the next (with a frame of
      nothing between them). Only its opacity: what it holds is already where it will stay. */
   .note.ready, .opening { animation: arrive var(--t-change) var(--ease-out); }

@@ -1,0 +1,143 @@
+<script lang="ts">
+  // The box the agent is asked in (it was a textarea; it is CodeMirror so that a pointer can stand in the text, as one
+  // glowing character that moves and goes like any other). `value` is the text with each pointer as its private
+  // character (pointers.ts). Keys are IsoPane's (`onkeydown`): Enter sends, and a key it handles it marks as handled.
+  import { onMount } from "svelte";
+  import { Compartment, EditorState, type Range } from "@codemirror/state";
+  import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, placeholder as hint, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+  import { history, historyKeymap, insertNewline } from "@codemirror/commands";
+  import { MARKS, idOf, markOf } from "$lib/pointers.ts";
+  import { pointers } from "$lib/pointers.svelte.ts";
+  import { tokenEl } from "$lib/pointerToken.ts";
+
+  let { value = $bindable(""), readonly = false, placeholder = "", onkeydown }: { value?: string; readonly?: boolean; placeholder?: string; onkeydown?: (e: KeyboardEvent) => void } = $props();
+
+  let host: HTMLDivElement;
+  let view = $state.raw<EditorView>();
+
+  /** A pointer in the text. Pressed and moved, it is carried to another place in the prompt (or let go where it was). */
+  class Pointed extends WidgetType {
+    id: number;
+    constructor(id: number) { super(); this.id = id; }
+    eq(o: Pointed): boolean { return o.id === this.id; }
+    ignoreEvent(): boolean { return true; }
+    toDOM(v: EditorView): HTMLElement {
+      const p = pointers.get(this.id);
+      const el = tokenEl(p ?? { id: this.id, title: "A pointer", from: 0, to: 0, kind: "turn" });
+      el.addEventListener("pointerenter", () => { if (p) pointers.hover = p; });
+      el.addEventListener("pointerleave", () => { if (pointers.hover?.id === this.id) pointers.hover = null; });
+      el.addEventListener("pointerdown", (e) => carry(v, el, e));
+      return el;
+    }
+  }
+
+  function carry(v: EditorView, el: HTMLElement, down: PointerEvent): void {
+    if (down.button !== 0) return;
+    down.preventDefault();
+    let ghost: HTMLElement | null = null;
+    const move = (e: PointerEvent): void => {
+      if (!ghost) {
+        if (Math.hypot(e.clientX - down.clientX, e.clientY - down.clientY) < 4) return;
+        ghost = el.cloneNode(true) as HTMLElement;
+        ghost.classList.add("pt-ghost");
+        document.body.append(ghost);
+        el.classList.add("pt-lifted");
+      }
+      ghost.style.left = `${e.clientX}px`;
+      ghost.style.top = `${e.clientY}px`;
+      const at = v.posAtCoords({ x: e.clientX, y: e.clientY });
+      ghost.classList.toggle("pt-ready", at !== null);
+    };
+    const up = (e: PointerEvent): void => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      if (!ghost) return;
+      ghost.remove();
+      el.classList.remove("pt-lifted");
+      const from = v.posAtDOM(el), at = v.posAtCoords({ x: e.clientX, y: e.clientY });
+      // Let go off the box, or where it was: it stays.
+      if (at === null || at === from || at === from + 1) return;
+      const ch = v.state.doc.sliceString(from, from + 1);
+      v.dispatch({ changes: [{ from, to: from + 1 }, { from: at, insert: ch }], selection: { anchor: at > from ? at : at + 1 } });
+      v.focus();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }
+
+  function marks(state: EditorState): DecorationSet {
+    const out: Range<Decoration>[] = [], text = state.doc.toString();
+    for (const m of text.matchAll(MARKS)) {
+      const id = idOf(m[0]);
+      if (id !== null) out.push(Decoration.replace({ widget: new Pointed(id) }).range(m.index!, m.index! + 1));
+    }
+    return Decoration.set(out);
+  }
+  const shown = ViewPlugin.fromClass(class {
+    decorations: DecorationSet;
+    constructor(v: EditorView) { this.decorations = marks(v.state); }
+    update(u: ViewUpdate) { if (u.docChanged) this.decorations = marks(u.state); }
+  }, { decorations: (p) => p.decorations, provide: (p) => EditorView.atomicRanges.of((v) => v.plugin(p)?.decorations ?? Decoration.none) });
+
+  const look = EditorView.theme({
+    "&": { background: "none", fontSize: "13px" },
+    "&.cm-focused": { outline: "none" },
+    ".cm-scroller": { maxHeight: "200px", overflow: "auto", fontFamily: "var(--font-ui)", lineHeight: "1.5" },
+    ".cm-content": { padding: "10px 12px 4px", minHeight: "44px", caretColor: "var(--text)", color: "var(--text)" },
+    ".cm-line": { padding: "0" },
+    ".cm-placeholder": { color: "var(--text-faint)" },
+  });
+
+  const lock = new Compartment();
+  onMount(() => {
+    const v = new EditorView({
+      parent: host,
+      state: EditorState.create({
+        doc: value,
+        extensions: [
+          history(), EditorView.lineWrapping, shown, look, hint(placeholder),
+          lock.of(EditorState.readOnly.of(readonly)),
+          EditorView.contentAttributes.of({ role: "textbox", "aria-label": "Message the agent", "aria-multiline": "true", id: "iso-box", spellcheck: "true" }),
+          // IsoPane's keys first (Enter sends, a slash command is chosen); what it leaves, the editor does.
+          EditorView.domEventHandlers({ keydown: (e) => { onkeydown?.(e); return e.defaultPrevented; } }),
+          keymap.of([{ key: "Shift-Enter", run: insertNewline }, ...historyKeymap]),
+          EditorView.updateListener.of((u) => { if (u.docChanged) { const t = u.state.doc.toString(); if (t !== value) value = t; } }),
+        ],
+      }),
+    });
+    view = v;
+    pointers.insert = (p, at) => {
+      const pos = (at && v.posAtCoords(at)) ?? v.state.selection.main.head, doc = v.state.doc;
+      const before = doc.sliceString(Math.max(0, pos - 1), pos), after = doc.sliceString(pos, pos + 1);
+      const s = (before && !/\s/.test(before) ? " " : "") + markOf(p.id) + (/\s/.test(after) ? "" : " ");
+      v.dispatch({ changes: { from: pos, insert: s }, selection: { anchor: pos + s.length }, scrollIntoView: true });
+      v.focus();
+    };
+    return () => { pointers.insert = null; v.destroy(); };
+  });
+  // Written from outside (cleared once sent, a slash command chosen).
+  $effect(() => {
+    const t = value;
+    if (view && t !== view.state.doc.toString()) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: t }, selection: { anchor: t.length } });
+  });
+  $effect(() => { view?.dispatch({ effects: lock.reconfigure(EditorState.readOnly.of(readonly)) }); });
+</script>
+
+<div class="prompt" data-prompt bind:this={host}></div>
+
+<style>
+  .prompt { flex: 1 1 auto; min-width: 0; }
+  /* A pointer: a small glowing bar in isorite's blue, a branching fleck at each end. */
+  :global(.pt) { display: inline-block; vertical-align: middle; margin: 0 2px; line-height: 0; cursor: grab; user-select: none; color: var(--lattice);
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--lattice) 60%, transparent)); transition: filter var(--t-ack) var(--ease-out); animation: pt-breathe 3.2s ease-in-out infinite alternate; }
+  :global(.pt:hover) { filter: drop-shadow(0 0 7px color-mix(in srgb, var(--lattice) 90%, transparent)); }
+  :global(.pt .bar) { fill: color-mix(in srgb, var(--lattice) 30%, transparent); stroke: var(--lattice); stroke-width: 1; }
+  :global(.pt .tw) { fill: none; stroke: var(--lattice); stroke-width: 1.2; stroke-linecap: round; }
+  :global(.pt-lifted) { opacity: .25; }
+  :global(.pt-ghost) { position: fixed; z-index: 80; pointer-events: none; transform: translate(-50%, -50%) scale(1.08); animation: none; cursor: grabbing; }
+  :global(.pt-ghost.pt-ready) { filter: drop-shadow(0 0 10px var(--lattice)); }
+  @keyframes pt-breathe { to { filter: drop-shadow(0 0 7px color-mix(in srgb, var(--lattice) 85%, transparent)); } }
+  @media (prefers-reduced-motion: reduce) { :global(.pt) { animation: none; } }
+</style>

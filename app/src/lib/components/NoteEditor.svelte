@@ -17,8 +17,8 @@
   import { address, titled } from "$lib/editor/links.ts";
   import { MAX_FILE_BYTES, type PictureInfo } from "@isorite/engine";
   import PictureName from "./PictureName.svelte";
-  import { setPointedNote } from "$lib/editor/pointing.ts";
-  import { tray } from "$lib/tray.svelte.ts";
+  import { setPointedLines, setPointedNote } from "$lib/editor/pointing.ts";
+  import { pointers } from "$lib/pointers.svelte.ts";
   import type { NoteIso } from "$lib/iso.svelte.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
   import IsoBlock from "./IsoBlock.svelte";
@@ -146,10 +146,12 @@
       ...(iso ? {
         // Ctrl+Enter goes to Iso's pane (M10), with the text selected, if any, given to Iso.
         onAsk: (w: Where) => {
+          // What is selected goes into the prompt as a pointer (pointers), at its cursor.
           const chosen = note.text.slice(w.from + head.chars, w.to + head.chars).trim();
-          if (chosen) tray.add({ kind: "passage", id: note.id, title: note.fields.title || note.id, text: chosen });
+          const doc = view?.state.doc;
+          const p = chosen && doc ? pointers.make({ kind: "note", ref: note.id, title: note.fields.title || note.id, from: doc.lineAt(w.from).number + head.lines, to: doc.lineAt(Math.max(w.from, w.to - (doc.lineAt(w.to).from === w.to && w.to > w.from ? 1 : 0))).number + head.lines, text: chosen }) : null;
+          if (p) pointers.insert?.(p); else document.getElementById("iso-box")?.focus();
           panes.to("iso");
-          requestAnimationFrame(() => document.getElementById("iso-box")?.focus());
         },
         onCursor: (w: Where) => { iso.cursor = { line: w.line + head.lines, from: w.from + head.chars, to: w.to + head.chars }; },
         mountOverlay: (el: HTMLElement, key: string) => {
@@ -167,6 +169,12 @@
   $effect(() => {
     void note.revision;
     untrack(() => { if (view) setText(view, source ? note.text : note.body); });
+  });
+
+  // A pointer in the prompt pointed at: its words in this note are marked, if it is this note's.
+  $effect(() => {
+    const h = pointers.hover, id = note.id, lines = head.lines;
+    if (view) view.dispatch({ effects: setPointedLines.of(h && h.kind === "note" && h.ref === id ? { from: h.from - lines, to: h.to - lines } : null) });
   });
 
   // What a moment of the timeline changed, in the lines the editor shows.
@@ -188,7 +196,7 @@
   });
 </script>
 
-<div class="editor" class:source bind:this={host}></div>
+<div class="editor" class:source bind:this={host} data-point="note:{note.id}" data-line-offset={head.lines}></div>
 {#if naming}<PictureName {...naming} />{/if}
 {#if said}<p class="said" role="status">{said}</p>{/if}
 

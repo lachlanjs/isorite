@@ -3,17 +3,17 @@
 
 import { expect, test } from "@playwright/test";
 import { toIso } from "./agent.ts";
+import { setSwitch } from "./switches.ts";
 
 test.use({ permissions: ["clipboard-read", "clipboard-write"] });
 
-test("with no agent attached, a chosen passage is copied as text that names its note for the agent to read", async ({ page, browserName }) => {
+test("with no agent attached, a note given is copied as text that names it for the agent to read", async ({ page, browserName }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) <= 760, "a phone has no shift: it is given from the Atlas's hold menu");
   test.skip(browserName !== "chromium", "clipboard permissions are Chromium's");
-  await page.goto("#/n/basics/surprise");
-  const editor = page.getByRole("textbox", { name: "The note", exact: true });
-  await editor.click();
-  await page.keyboard.press("Control+Home");
-  await page.keyboard.press("Shift+End");
-  await page.getByRole("button", { name: "add to the agent's message" }).click();
+  await page.goto("#/atlas");
+  await expect(page.locator('[data-note="basics/surprise"]')).toBeVisible();
+  await setSwitch(page, "context", true);
+  await page.locator('[data-note="basics/surprise"]').click({ modifiers: ["Shift"] });
   await toIso(page);
 
   await expect(page.getByRole("list", { name: "Going with your message" }).getByRole("listitem")).toHaveCount(1);
@@ -24,6 +24,5 @@ test("with no agent attached, a chosen passage is copied as text that names its 
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toContain("read_note");
   expect(copied).toContain("(basics/surprise)");
-  expect(copied).toMatch(/> An outcome of probability/);
   expect(copied.endsWith("Explain this.")).toBe(true);
 });

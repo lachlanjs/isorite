@@ -45,19 +45,37 @@ const pointedField = StateField.define<{ id: string; marks: DecorationSet }>({
   provide: (f) => EditorView.decorations.from(f, (v) => v.marks),
 });
 
+/** The words a pointer in the prompt is of, marked while it is pointed at (pointers): by line of what the editor shows. */
+export const setPointedLines = StateEffect.define<{ from: number; to: number } | null>();
+const range = Decoration.mark({ class: "cm-pointer-range" });
+const rangeField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(v, tr) {
+    for (const e of tr.effects) if (e.is(setPointedLines)) {
+      const l = e.value, n = tr.state.doc.lines;
+      if (!l || l.to < 1 || l.from > n) return Decoration.none;
+      const a = tr.state.doc.line(Math.max(1, l.from)), b = tr.state.doc.line(Math.min(n, l.to));
+      return b.to > a.from ? Decoration.set([range.range(a.from, b.to)]) : Decoration.none;
+    }
+    return tr.docChanged ? Decoration.none : v;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
 const theme = EditorView.theme({
   ".cm-pointed": { backgroundColor: "var(--lattice-soft)", boxShadow: "0 2px 0 var(--lattice)" },
+  ".cm-pointer-range": { backgroundColor: "color-mix(in srgb, var(--lattice) 22%, transparent)", boxShadow: "0 0 0 2px color-mix(in srgb, var(--lattice) 22%, transparent)", borderRadius: "2px" },
 });
 
 /** Both ways: `onPoint` hears the link under a mouse (null when it leaves one), and `setPointedNote` marks links. */
 export function pointingLinks(onPoint?: (to: Pointed | null) => void): Extension {
-  if (!onPoint) return [pointedField, theme];
+  if (!onPoint) return [pointedField, rangeField, theme];
   let last = "";
   const tell = (to: Pointed | null) => {
     const key = to ? `${to.folder ? "d" : "n"}:${to.id}` : "";
     if (key !== last) { last = key; onPoint(to); }
   };
-  return [pointedField, theme, EditorView.domEventHandlers({
+  return [pointedField, rangeField, theme, EditorView.domEventHandlers({
     pointermove(e, view) {
       if (e.pointerType !== "mouse") return false;
       const pos = view.posAtCoords({ x: e.clientX, y: e.clientY }, false);

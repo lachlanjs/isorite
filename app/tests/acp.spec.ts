@@ -103,7 +103,7 @@ test("the agent's slash commands, mode and model in the pane (M27): offered whil
   await box(page).fill("/pl");
   await expect(menu.getByRole("option")).toHaveCount(1);
   await box(page).press("Tab");
-  await expect(box(page)).toHaveValue("/plan ");
+  await expect(box(page)).toHaveText("/plan");
   await expect(menu).toHaveCount(0);
   await box(page).fill("");
 

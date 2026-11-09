@@ -4,18 +4,18 @@
 
 import { expect, test } from "@playwright/test";
 import { attach, box, toIso, type Attached } from "./agent.ts";
+import { setSwitch } from "./switches.ts";
 
 let agent: Attached;
 test.beforeAll(async () => { agent = await attach(); });
 test.afterAll(() => agent.detach());
 
 test("removing a chip that was given asks the server to withdraw it; an agent that cannot is not disturbed", async ({ page }) => {
-  await page.goto("#/n/basics/surprise");
-  const editor = page.getByRole("textbox", { name: "The note", exact: true });
-  await editor.click();
-  await page.keyboard.press("Control+Home");
-  await page.keyboard.press("Shift+End");
-  await page.getByRole("button", { name: "add to the agent's message" }).click();
+  test.skip((page.viewportSize()?.width ?? 1280) <= 760, "a phone has no shift: it is given from the Atlas's hold menu");
+  await page.goto("#/atlas");
+  await expect(page.locator('[data-note="basics/surprise"]')).toBeVisible();
+  await setSwitch(page, "context", true);
+  await page.locator('[data-note="basics/surprise"]').click({ modifiers: ["Shift"] });
   await toIso(page);
   const tray = page.getByRole("list", { name: "Going with your message" });
   await expect(tray.getByRole("listitem")).toHaveCount(1);
@@ -24,9 +24,9 @@ test("removing a chip that was given asks the server to withdraw it; an agent th
   await expect(page.getByRole("log").first()).toContainText("hello");
 
   const sent = page.waitForRequest((r) => r.url().endsWith("/api/terminal/withdraw") && r.method() === "POST");
-  await tray.getByRole("button", { name: /^Remove the passage/ }).click();
+  await tray.getByRole("button", { name: /^Remove Surprise from the message/ }).click();
   const body = (await sent).postDataJSON() as { given: { kind: string } };
-  expect(body.given.kind).toBe("passage");
+  expect(body.given.kind).toBe("note");
   await expect(tray.getByRole("listitem")).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
 });

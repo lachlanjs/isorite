@@ -76,7 +76,7 @@
   {#if problem}<p class="why">{problem}</p>
   {:else if got && got.state !== "ok"}<p class="why broken">{path}: {WHY[got.state] ?? got.state}</p>
   {:else if got}
-    <div class="pre" bind:this={box} aria-label="The file {path}" role="region">
+    <div class="pre" bind:this={box} data-point="code:{path}" aria-label="The file {path}" role="region">
       {#each lines as html, i (i)}
         <div class="row" class:on={marked(i + 1)} data-n={i + 1}><button type="button" class="num" aria-label="Line {i + 1}" onclick={(e) => choose(i + 1, e)}>{i + 1}</button><span class="code">{@html html || " "}</span></div>
       {/each}
