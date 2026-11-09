@@ -29,6 +29,9 @@ if (process.argv[1] === import.meta.filename) {
   writeFileSync(join(NOTES, "coding", "kraft-inequality.md"), coding("Kraft inequality", "coding/source-coding"));
   // The last of them also joined by weaker links: "uses", which the map draws lighter, and "see also", which it does not draw.
   writeFileSync(join(NOTES, "coding", "huffman-codes.md"), coding("Huffman codes", "coding/kraft-inequality") + `\nIt counts in [bits](/basics/bit.md "uses"). See also [surprise](/basics/surprise.md "see also").\n`);
+  // Files beside the notes that are not notes: an artifact and a data file (the list of notes holds them; the Atlas shows them only when its switches are on).
+  writeFileSync(join(NOTES, "basics", "dashboard.html"), "<!doctype html><title>Coin dashboard</title><p>hello</p>");
+  writeFileSync(join(NOTES, "basics", "tosses.csv"), "tosses,bits\n1,1\n2,2\n");
   // Code beside the notes (M12): the repository code links point into, named in the base's settings.
   mkdirSync(join(ROOT, "code", "src"), { recursive: true });
   writeFileSync(join(ROOT, "code", "src", "huffman.py"), "def build(freqs):\n    pass\n");

@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Find what it rests on
+tags: [atlas, practice]
 uses: [atlas/the-atlas]
 ---
 

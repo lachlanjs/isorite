@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Ask in Iso's pane
+tags: [agent, practice]
 uses: [iso/iso]
 ---
 

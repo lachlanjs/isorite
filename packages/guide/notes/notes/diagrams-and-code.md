@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Diagrams and code
+tags: [notes, markdown, diagrams]
 description: A fenced block of code is coloured by its language, one written in Mermaid is drawn as a diagram, and a picture is shown in place.
 ---
 

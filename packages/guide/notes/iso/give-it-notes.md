@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Give it notes
+tags: [agent, practice, context]
 uses: [iso/in-hand]
 ---
 

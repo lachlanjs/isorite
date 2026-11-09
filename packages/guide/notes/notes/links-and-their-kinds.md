@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Links and their kinds
+tags: [notes, links]
 description: A link joins two notes, and says how one stands on the other.
 ---
 

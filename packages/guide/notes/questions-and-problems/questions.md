@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Questions
+tags: [questions]
 description: An open question marks where your understanding stops.
 ---
 

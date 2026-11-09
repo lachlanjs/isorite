@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Your own agent
+tags: [agent, setup]
 description: Claude, Codex, OpenCode, omp, Hermes or any agent that speaks ACP, attached to a base, and how each differs.
 ---
 

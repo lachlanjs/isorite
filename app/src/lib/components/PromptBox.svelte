@@ -5,7 +5,7 @@
   import { onMount } from "svelte";
   import { Compartment, EditorState, type Range } from "@codemirror/state";
   import { Decoration, EditorView, ViewPlugin, WidgetType, drawSelection, keymap, placeholder as hint, type DecorationSet, type ViewUpdate } from "@codemirror/view";
-  import { history, historyKeymap, insertNewline } from "@codemirror/commands";
+  import { cursorGroupLeft, cursorGroupRight, deleteGroupBackward, deleteGroupForward, history, historyKeymap, insertNewline, selectGroupLeft, selectGroupRight } from "@codemirror/commands";
   import { MARKS, idOf, markOf } from "$lib/pointers.ts";
   import { pointers } from "$lib/pointers.svelte.ts";
   import { tokenEl } from "$lib/pointerToken.ts";
@@ -108,7 +108,12 @@
           EditorView.contentAttributes.of({ role: "textbox", "aria-label": "Message the agent", "aria-multiline": "true", id: "iso-box", spellcheck: "true" }),
           // IsoPane's keys first (Enter sends, a slash command is chosen); what it leaves, the editor does.
           EditorView.domEventHandlers({ keydown: (e) => { onkeydown?.(e); return e.defaultPrevented; } }),
-          keymap.of([{ key: "Shift-Enter", run: insertNewline }, ...historyKeymap]),
+          // A word at a time is the editor's own, not the browser's, which stops at each pointer (it is not text).
+          keymap.of([{ key: "Shift-Enter", run: insertNewline }, ...historyKeymap,
+            { key: "Mod-ArrowLeft", mac: "Alt-ArrowLeft", run: cursorGroupLeft, shift: selectGroupLeft },
+            { key: "Mod-ArrowRight", mac: "Alt-ArrowRight", run: cursorGroupRight, shift: selectGroupRight },
+            { key: "Mod-Backspace", mac: "Alt-Backspace", run: deleteGroupBackward },
+            { key: "Mod-Delete", mac: "Alt-Delete", run: deleteGroupForward }]),
           EditorView.updateListener.of((u) => { if (u.docChanged) { const t = u.state.doc.toString(); if (t !== value) value = t; } }),
         ],
       }),

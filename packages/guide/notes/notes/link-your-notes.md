@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Link your notes
+tags: [notes, links, practice]
 uses: [notes/links-and-their-kinds]
 ---
 

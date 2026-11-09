@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Let it write
+tags: [agent, practice]
 uses: [iso/iso-writes-marked]
 ---
 

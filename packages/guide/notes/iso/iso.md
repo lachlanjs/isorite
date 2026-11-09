@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Iso
+tags: [agent, panes]
 description: The pane where your own agent works in your base, and the way of working isorite asks of it.
 ---
 

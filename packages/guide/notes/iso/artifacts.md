@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Artifacts
+tags: [agent, artifacts]
 description: A page beside your notes that works, such as a dashboard of your data or a simulation.
 ---
 

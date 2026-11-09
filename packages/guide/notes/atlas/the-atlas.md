@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: The Atlas
+tags: [atlas, map]
 description: The map of the base, drawn from what rests on what.
 ---
 

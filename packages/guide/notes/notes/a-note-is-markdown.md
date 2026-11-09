@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: A note is Markdown
+tags: [notes, markdown]
 description: A note is a Markdown file, written as you read it.
 ---
 

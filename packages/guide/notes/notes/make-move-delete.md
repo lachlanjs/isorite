@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Make, move and delete a note
+tags: [notes, folders, practice]
 uses: [notes/folders]
 ---
 

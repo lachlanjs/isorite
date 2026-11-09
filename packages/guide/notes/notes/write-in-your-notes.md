@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Write in your notes
+tags: [notes, practice]
 uses: [notes/a-note-is-markdown]
 ---
 

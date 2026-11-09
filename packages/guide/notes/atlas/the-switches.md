@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: The switches
+tags: [atlas, interface]
 description: Each pane's header switches choose what it shows, and what an attached agent may do.
 ---
 

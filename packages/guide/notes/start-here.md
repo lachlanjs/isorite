@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Start here
+tags: [guide, basics]
 description: What isorite is, its three panes, and how this guide works.
 ---
 

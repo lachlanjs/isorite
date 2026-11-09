@@ -44,11 +44,12 @@
       {#each rest as r (r.key)}<path class={r.strong ? "base" : "base weak"} class:trunk={r.trunk} d={r.d} />{/each}
       {#each hot as r (r.key)}
         {#if pointed && r.kind !== "iso"}<path class="along touch" pathLength="1" d={r.d} style:stroke-width="{2 / k}px" />
-          {@render pulse(r.d, "blue", 1)}
         {:else}<path class="lit {r.kind}" class:still={r.still} d={r.d} />
           {#if r.kind === "iso"}{@render pulse(r.d, `loop pk-${r.kind}`, 1)}{/if}{/if}
       {/each}
-      {#if !pointed}{#each pulses as r (r.key)}{@render pulse(r.d, `loop pk-${r.kind}`, 1)}{/each}{/if}
+      {#each pulses as r (r.key)}
+        {#if pointed}{@render pulse(r.d, "blue", 1)}{:else if r.kind !== "uses"}{@render pulse(r.d, `loop pk-${r.kind}`, 1)}{/if}
+      {/each}
     {/if}
     <!-- Measured along its own length (pathLength), so drawn in the map's units: its width is set by the zoom. -->
     {#each grown as r (r.key)}{@render pulse(r.d, "slow", 1.25)}{/each}

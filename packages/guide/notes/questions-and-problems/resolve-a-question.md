@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Resolve a question
+tags: [questions, practice]
 uses: [questions-and-problems/questions]
 ---
 

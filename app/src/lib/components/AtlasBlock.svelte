@@ -50,7 +50,7 @@
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
-  onfocus={() => onpoint(true)} onblur={() => onpoint(false)}>{#if kind}<svg class="notch" viewBox="0 0 16 16" aria-hidden="true">{#if kind === "question"}<path d="M8 2.5L13.5 8L8 13.5L2.5 8Z" fill={done ? "currentColor" : "none"} />{:else}<path d="M8 2.5l5.8 10.5H2.2z" fill={done ? "currentColor" : "none"} />{/if}</svg>{/if}<span class="inner">{#if file}<Glyph kind={file} size={11} />{/if}<span class="t">{#if file && /^[^\s]+\.\w+$/.test(title)}{title.slice(0, title.lastIndexOf("."))}<wbr />{title.slice(title.lastIndexOf("."))}{:else}{title}{/if}</span></span>{#if order}<b class="order" aria-hidden="true">{order}</b>{/if}{#if changed}<i class="dia" aria-hidden="true"></i>{/if}</a>
+  onfocus={() => onpoint(true)} onblur={() => onpoint(false)}>{#if kind}<svg class="notch" viewBox="0 0 16 16" aria-hidden="true">{#if kind === "question"}<path d="M5.7 6C5.7 3.2 10.3 3.2 10.3 6C10.3 8.2 8 8.2 8 10.2M8 12.2v1.3" />{:else}<path d="M8 2.6v7M8 12.2v1.3" />{/if}{#if done}<circle cx="8" cy="8" r="7.2" />{/if}</svg>{/if}<span class="inner">{#if file}<Glyph kind={file} size={11} />{/if}<span class="t">{#if file && /^[^\s]+\.\w+$/.test(title)}{title.slice(0, title.lastIndexOf("."))}<wbr />{title.slice(title.lastIndexOf("."))}{:else}{title}{/if}</span></span>{#if order}<b class="order" aria-hidden="true">{order}</b>{/if}{#if changed}<i class="dia" aria-hidden="true"></i>{/if}</a>
 
 <style>
   /* In the map's units: the layer the block is in is scaled to the zoom, and --px is a screen pixel in it. */

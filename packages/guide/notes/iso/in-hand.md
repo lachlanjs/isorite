@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: What the agent has in hand
+tags: [agent, context]
 description: The Context view, as far as isorite can see into the agent's session.
 ---
 

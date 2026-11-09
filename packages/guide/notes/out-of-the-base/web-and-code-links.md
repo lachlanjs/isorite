@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Web and code links
+tags: [links, code]
 description: Links from a note to the web, and to a project's code.
 ---
 

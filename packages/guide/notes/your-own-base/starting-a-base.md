@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Starting a base
+tags: [bases, setup]
 description: Installing isorite, making a base, and attaching your agent.
 ---
 

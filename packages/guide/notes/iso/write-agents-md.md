@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Write an AGENTS.md
+tags: [agent, instructions, practice]
 uses: [iso/agents-md]
 ---
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   // A note's label (plan-m23 §5.2, sketch U), in place of M10's details: always there, one strip under the title,
   // with no field names. The description is the italic line under the title, written in place. The kind is three
-  // slots. The path is where the note lives: a folder or the name, pressed, moves or renames it. Tags are parts in
+  // slots. The name is pressed to rename it (folders are the Atlas's and the list's). Tags are parts in
   // corner brackets. A question adds what it's about and its mark; a problem, what it uses and its. Other frontmatter
   // fields are not shown here and are never touched. Deleting is in the pane's menu, away from the name.
   import { goto } from "$app/navigation";
@@ -10,7 +10,6 @@
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { lustre } from "$lib/lustre.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
-  import FolderField from "./FolderField.svelte";
   import Glyph from "./Glyph.svelte";
 
   let { note, kind, done, marking, onmark }: { note: NoteSession; kind: Kind; done: string | null; marking: boolean; onmark: () => void } = $props();
@@ -27,11 +26,10 @@
     void tick().then(() => lustre(slot, true));
   }
 
-  // Where it is: its folder and its name, pressed to change; a change moves it.
+  // Its name, pressed to change; a change renames it where it is.
   const dirOf = (id: string) => id.split("/").slice(0, -1).join("/");
   const nameOf = (id: string) => id.split("/").at(-1)!;
-  let editing = $state<"folder" | "name" | null>(null);
-  let folder = $state("");
+  let editing = $state<"name" | null>(null);
   async function move(dir: string, name: string): Promise<void> {
     const clean = (s: string) => s.trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/, "");
     const to = [clean(dir), clean(name)].filter(Boolean).join("/");
@@ -80,18 +78,11 @@
 <div class="label">
   <span class="kinds" role="radiogroup" aria-label="kind">
     {#each KINDS as [k, name, type] (k)}
-      <button type="button" role="radio" class="slot {k}" aria-checked={kind === k} data-lustre onclick={(e) => setKind(k, type, e.currentTarget)}><Glyph kind={k === "note" ? "concept" : k} />{name}</button>
+      <button type="button" role="radio" class="slot {k}" aria-checked={kind === k} aria-label={name} title={type} data-lustre onclick={(e) => setKind(k, type, e.currentTarget)}><Glyph kind={k === "note" ? "concept" : k} size={18} /></button>
     {/each}
   </span>
   {#if inBase}
     <span class="path">
-      {#if editing === "folder"}
-        <span class="field" use:focus><FolderField id="note-folder" quiet label="folder" bind:value={folder} placeholder="the top of the base"
-          onpick={(d) => void move(d, nameOf(note.id))} onkeydown={(e) => { if (e.key === "Escape") editing = null; }} /></span>
-      {:else}
-        <button type="button" class="seg" aria-label={dirOf(note.id) ? undefined : "the top of the base"} onclick={() => { folder = dirOf(note.id); editing = "folder"; }}>{dirOf(note.id).replaceAll("/", " / ") || "·"}</button>
-      {/if}
-      <span class="sep">/</span>
       {#if editing === "name"}
         <input class="name" value={nameOf(note.id)} spellcheck="false" autocomplete="off" aria-label="name" size={Math.max(8, nameOf(note.id).length)} use:focus
           onblur={(e) => void move(dirOf(note.id), e.currentTarget.value)}
@@ -143,7 +134,7 @@
   .stand:focus-visible { outline: none; border-bottom-color: var(--lattice); color: var(--text); }
   .label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-top: var(--space-2); padding-bottom: var(--space-3); border-bottom: 1px solid var(--line); font-size: 11px; color: var(--text-faint); }
   .kinds { display: inline-flex; gap: 4px; }
-  .slot { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; background: none; border: 1px solid var(--line); color: var(--text-faint); font: 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; cursor: pointer; }
+  .slot { display: inline-flex; align-items: center; justify-content: center; height: 30px; width: 38px; padding: 0; background: none; border: 1px solid var(--line); color: var(--text-faint); font: 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; cursor: pointer; }
   .slot:hover { border-color: var(--text-soft); color: var(--text); }
   .slot[aria-checked="true"] { border-color: var(--lattice); background: var(--lattice); color: var(--ground-0); cursor: default; }
   .slot.question[aria-checked="true"] { border-color: var(--rose); background: var(--rose); }
@@ -152,8 +143,6 @@
   .seg { background: none; border: 0; border-bottom: 1px solid transparent; padding: 2px 0; color: var(--text-soft); font: inherit; cursor: pointer; }
   .seg.name { color: var(--text); }
   .seg:hover, .seg:focus-visible { border-bottom-color: var(--lattice); color: var(--text); outline: none; }
-  .sep { color: var(--text-faint); }
-  .field { display: inline-block; min-width: 160px; }
   input { background: none; border: 0; border-bottom: 1px solid var(--lattice); padding: 2px 0; color: var(--text); font: 12px var(--font-ui); }
   input:focus-visible { outline: none; }
   .parts, .extra { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }

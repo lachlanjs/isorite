@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: How the agent reads you
+tags: [questions, agent]
 description: Your agent reads where you stand from your own notes, questions and problems.
 ---
 

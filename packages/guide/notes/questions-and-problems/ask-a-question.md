@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Write a question
+tags: [questions, practice]
 uses: [questions-and-problems/questions]
 ---
 

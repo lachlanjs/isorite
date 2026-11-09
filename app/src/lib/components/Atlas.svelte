@@ -328,7 +328,7 @@
    *  wherever routes part and would each carry a pulse of their own; and a link lit twice (chosen, and pointed at in the
    *  Note pane) carries one. */
   type Pulse = { key: string; d: string; kind: LitKind };
-  const pulsesOf = (lits: Lit[]): Pulse[] => lits.filter((l) => l.kind !== "uses" && l.kind !== "iso").map((l) => ({ key: l.key, kind: l.kind, d: linePath(l.pts, 0, L!.cell) }));
+  const pulsesOf = (lits: Lit[]): Pulse[] => lits.filter((l) => l.kind !== "iso").map((l) => ({ key: l.key, kind: l.kind, d: linePath(l.pts, 0, L!.cell) }));
   const pairOf = (key: string): string => key.slice(key.indexOf(":") + 1).split("|").sort().join("|");
   let chosenPulses = $state.raw<Pulse[]>([]), therePulses = $state.raw<Pulse[]>([]);
   const pulses = $derived.by(() => {

@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: The agent writes, marked
+tags: [agent, history]
 description: An agent's changes are made, marked as its own, with what you asked, and put back from the timeline.
 ---
 

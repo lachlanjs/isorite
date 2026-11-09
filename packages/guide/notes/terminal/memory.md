@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Several bases, and the agent's memory
+tags: [agent, memory, bases]
 description: One isorite holds several bases at once; one lent to every session is the agent's memory.
 ---
 

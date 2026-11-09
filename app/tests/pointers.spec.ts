@@ -123,6 +123,26 @@ test("Ctrl+] copies where it is and the words", async ({ page, context }) => {
   await expect(page.locator('.tag[data-tag="copy"] .lbl')).toContainText("copied");
 });
 
+test("Ctrl+Shift+Arrow chooses a word at a time, across a pointer", async ({ page }) => {
+  await choose(page, "basics/surprise", "An outcome of probability");
+  await page.keyboard.press("Control+[");
+  await page.keyboard.type("two three");
+  await page.keyboard.press("Home");
+  await page.keyboard.type("one ");
+  await page.keyboard.press("End");
+  // Not stopped at the pointer: three words and the pointer are chosen in as many presses as there are things to cross.
+  for (let i = 0; i < 4; i++) await page.keyboard.press("Control+Shift+ArrowLeft");
+  await page.keyboard.type("X");
+  await expect(box(page)).toHaveText("X");
+  await expect(pointers(page)).toHaveCount(0);
+  // And to the right, from the start.
+  await page.keyboard.press("Control+z");
+  await page.keyboard.press("Home");
+  for (let i = 0; i < 4; i++) await page.keyboard.press("Control+Shift+ArrowRight");
+  await page.keyboard.type("Y");
+  await expect(box(page)).toHaveText("Y");
+});
+
 test("Ctrl+[ with nothing chosen is the editor's own (it indents)", async ({ page }) => {
   await page.goto("#/n/basics/surprise");
   await editor(page).click();

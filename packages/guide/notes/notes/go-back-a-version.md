@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Go back a version
+tags: [notes, history, practice]
 uses: [notes/every-change-is-kept]
 ---
 

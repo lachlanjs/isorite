@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Let the agent remember
+tags: [agent, memory, practice]
 uses: [terminal/memory]
 ---
 

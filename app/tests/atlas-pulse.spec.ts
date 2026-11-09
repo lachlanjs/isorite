@@ -12,4 +12,11 @@ test("each lit link carries one pulse", async ({ page }) => {
   await expect(routes).toHaveAttribute("data-requires", /[1-9]/);
   const links = Number(await routes.getAttribute("data-requires")) + Number(await routes.getAttribute("data-builds"));
   await expect(page.locator(".routes path.pulse.core")).toHaveCount(links);
+
+  // Pointed at, not chosen: the same, in blue.
+  await page.locator(".atlas").click({ position: { x: 4, y: 4 } });
+  await page.locator('[data-note="coding/huffman-codes"]').hover();
+  await expect(routes).toHaveAttribute("data-requires", /[1-9]/);
+  const all = ["data-requires", "data-builds", "data-uses"].reduce(async (n, a) => (await n) + Number(await routes.getAttribute(a)), Promise.resolve(0));
+  await expect(page.locator(".routes path.pulse.core")).toHaveCount(await all);
 });

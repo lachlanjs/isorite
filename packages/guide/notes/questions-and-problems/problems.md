@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Problems
+tags: [problems]
 description: A problem is something to do, and you say when it is solved.
 ---
 

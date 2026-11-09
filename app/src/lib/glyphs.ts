@@ -1,11 +1,11 @@
 // The kinds' glyphs (docs/taste.md's habit rule; sketch Q in inspiration/combinations/): each drawn on a 16-unit
-// grid in 1.5-unit strokes, a chamfered box for what lives in the notes, other habits for what doesn't. The label, the
+// grid in 1.5-unit strokes, a chamfered box for what lives in the notes, a question mark and an exclamation mark for a question and a problem, other habits for what doesn't. The label, the
 // file page and the Atlas draw the same ones.
 
 export const GLYPHS = {
   concept: ["M5 2.75H13.25V11L11 13.25H2.75V5Z"],
-  question: ["M8 1.75L14.25 8L8 14.25L1.75 8Z", "M8 5.75L10.25 8L8 10.25L5.75 8Z"],
-  problem: ["M5 2.75H13.25V11L11 13.25H2.75V5Z", "M8.5 2.75L9.75 6.25L8.25 8.5L10 13.25"],
+  question: ["M5.5 5.5C5.5 2.3 10.5 2.3 10.5 5.5C10.5 8 8 8 8 10.5", "M8 12.4V13.8"],
+  problem: ["M8 2.2V9.6", "M8 12.2V13.8"],
   folder: ["M4.25 4.25H14.25V12.25L12.25 14.25H1.75V6.75Z", "M5 1.75H9.5"],
   image: ["M4 2.75H13.25V10.5L11 12.75H2.75V4Z", "M4.5 10.5L7 7.5L8.75 9.25L10 8L11.75 10"],
   artifact: ["M5 2.75H13.25V11L11 13.25H2.75V5Z", "M2.75 5.75H13.25", "M4.75 11L7 8.5L8.75 10L11.25 7.5"],

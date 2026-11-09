@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Keeping a base well
+tags: [bases, practice]
 description: One idea a note, linked by what it rests on, in your own words.
 ---
 

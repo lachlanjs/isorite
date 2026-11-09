@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: A note's details
+tags: [notes, frontmatter]
 description: A note's type, title, description and tags, at its top.
 ---
 

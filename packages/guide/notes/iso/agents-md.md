@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: AGENTS.md
+tags: [agent, instructions]
 description: Your base's instructions, for every agent you attach.
 ---
 

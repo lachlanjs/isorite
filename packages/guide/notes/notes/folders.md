@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Folders
+tags: [notes, folders]
 description: A base's folders are its parts, and frames on the Atlas.
 ---
 

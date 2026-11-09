@@ -1,6 +1,7 @@
 ---
 type: Problem
 title: Solve this one
+tags: [guide, practice]
 uses: [start-here]
 ---
 

@@ -12,6 +12,8 @@
   import HoldTags from "$lib/components/HoldTags.svelte";
   import NoteMenu from "$lib/components/NoteMenu.svelte";
   import { panes } from "$lib/panes.svelte.ts";
+  import Glyph from "$lib/components/Glyph.svelte";
+  import type { Glyph as GlyphKind } from "$lib/glyphs.ts";
 
   let query = $state("");
   let hits = $state.raw<SearchHit[]>([]);
@@ -45,7 +47,20 @@
   let path = $state("");
   let said = $state("");
 
+  // The files beside the notes that are not notes (artifacts, data, documents, others), listed in their folders as the
+  // Atlas has them: found with the map, and again when the notes change.
+  type Beside = { ref: string; title: string; kind: GlyphKind; dir: string };
+  let besides = $state.raw<Beside[]>([]);
+  $effect(() => {
+    void app.listing;
+    void app.api.map().then((m) => {
+      besides = Object.entries(m.files ?? {}).filter(([ref]) => !ref.endsWith("/")).map(([ref, f]) => ({ ref, title: f.title, kind: (f.kind === "image" ? "image" : f.kind) as GlyphKind, dir: ref.split("/").slice(0, -1).join("/") })).filter((f) => !app.isHidden(f.ref));
+    }, () => undefined);
+  });
+
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
+  const seenBesides = $derived(words.length ? besides.filter((f) => words.every((w) => `${f.title}\n${f.ref}`.toLowerCase().includes(w))) : besides);
+  const besideIn = (dir: string): Beside[] => seenBesides.filter((f) => f.dir === dir);
   const matches = (n: NoteSummary) => words.every((w) => `${n.title}\n${n.id}\n${n.description}`.toLowerCase().includes(w));
   const seen = $derived(app.hidden.length ? app.listing.notes.filter((n) => !app.isHidden(n.id)) : app.listing.notes);
   const shown = $derived(words.length ? seen.filter(matches) : seen);
@@ -54,6 +69,7 @@
     // Empty folders are listed too, so a note can be made in one; not while narrowing.
     if (!words.length) for (const dir of app.listing.dirs) if (!app.isHidden(dir)) by.set(dir, []);
     for (const n of shown) by.set(n.dir, [...(by.get(n.dir) ?? []), n]);
+    for (const f of seenBesides) if (!by.has(f.dir)) by.set(f.dir, []);
     const sorted = [...by].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     // The top of the base is somewhere to drop a note too, though nothing be there: at the end, so nothing moves under the pointer.
     if (dragged !== null && !by.has("")) sorted.push(["", []]);
@@ -218,10 +234,13 @@
 
   {#each folders as [dir, notes] (dir)}
     <section data-dir={dir} style:margin-left="{dir ? dir.split("/").length * 14 : 0}px" class:over={over === dir && dragged !== null}>
-      <h2 class="head" class:lifted={dragged === dir && dir !== ""} class:doomed={tagged("delete", dir)} class:sending={tagged("send", dir)} use:g.press={() => ({ kind: "folder", id: dir, title: dir })}>{#if renaming === dir && dir}<input class="field rename" aria-label="Rename the folder {dir}" bind:value={draft} use:focus onkeydown={(e) => { if (e.key === "Enter") void rename(dir); else if (e.key === "Escape") renaming = null; }} onblur={() => (renaming = null)} />{:else}<span class="label" ondblclick={() => { if (dir) { draft = last(dir); renaming = dir; } }} role="presentation">{dir || "the top of the base"}</span>{/if}<span class="acts"><button class="btn quiet add" type="button" onclick={() => start(dir)} aria-label={`New note in ${dir || "the top of the base"}`}>+</button>{#if dir}<button class="btn quiet" type="button" onclick={() => { draft = last(dir); renaming = dir; }} aria-label={`Rename the folder ${dir}`}>rename</button>{/if}{#if dir && !notes.length}<button class="btn quiet" type="button" onclick={() => void askRemove({ kind: "folder", id: dir, title: dir })} aria-label={`Delete the empty folder ${dir}`}>delete</button>{/if}</span>{@render tags("folder", dir)}</h2>
+      <h2 class="head" class:lifted={dragged === dir && dir !== ""} class:doomed={tagged("delete", dir)} class:sending={tagged("send", dir)} use:g.press={() => ({ kind: "folder", id: dir, title: dir })}>{#if renaming === dir && dir}<input class="field rename" aria-label="Rename the folder {dir}" bind:value={draft} use:focus onkeydown={(e) => { if (e.key === "Enter") void rename(dir); else if (e.key === "Escape") renaming = null; }} onblur={() => (renaming = null)} />{:else}<span class="label" ondblclick={() => { if (dir) { draft = last(dir); renaming = dir; } }} role="presentation">{dir || "the top of the base"}</span>{/if}<span class="acts"><button class="btn quiet add" type="button" onclick={() => start(dir)} aria-label={`New note in ${dir || "the top of the base"}`}>+</button>{#if dir}<button class="btn quiet" type="button" onclick={() => { draft = last(dir); renaming = dir; }} aria-label={`Rename the folder ${dir}`}>rename</button>{/if}{#if dir && !notes.length && !besides.some((f) => f.dir === dir || f.dir.startsWith(`${dir}/`))}<button class="btn quiet" type="button" onclick={() => void askRemove({ kind: "folder", id: dir, title: dir })} aria-label={`Delete the empty folder ${dir}`}>delete</button>{/if}</span>{@render tags("folder", dir)}</h2>
       <ul>
         {#each notes as n (n.id)}
           <li data-row={n.id} class:lifted={dragged === n.id} class:doomed={tagged("delete", n.id)} class:sending={tagged("send", n.id)} use:g.press={() => ({ kind: "note", id: n.id, title: n.title })}><a class="vein-row" class:on={n.id === panes.last} data-lustre draggable="false" href={noteHref(n.id)}><span class="serif title">{n.title}</span>{#if n.description}<span class="soft desc">{n.description}</span>{/if}</a><NoteMenu id={n.id} title={n.title} />{@render tags("note", n.id)}</li>
+        {/each}
+        {#each besideIn(dir) as f (f.ref)}
+          <li data-file={f.ref}><a class="vein-row file" class:on={f.ref === panes.last} data-lustre draggable="false" href={noteHref(f.ref)}><span class="title"><Glyph kind={f.kind} size={14} /><span class="serif">{f.title}</span></span>{#if f.title !== f.ref.split("/").at(-1)}<span class="soft desc">{f.ref.split("/").at(-1)}</span>{/if}</a></li>
         {/each}
       </ul>
     </section>
@@ -238,7 +257,7 @@
     </section>
   {/if}
 
-  {#if words.length && !shown.length && !inText.length}
+  {#if words.length && !shown.length && !inText.length && !seenBesides.length}
     <p class="soft empty">No note matches.</p>
   {/if}
 </div>
@@ -254,6 +273,8 @@
   .empty { padding: var(--space-8) 0; text-align: center; }
   h2 { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); font-weight: 400; min-height: 28px; }
   .add { height: 24px; }
+  .file .title { display: inline-flex; align-items: center; gap: 8px; }
+  .file :global(.glyph) { color: var(--text-faint); }
   .rename { height: 24px; padding: 0 6px; width: min(260px, 60%); }
   /* A folder a note is over (M31): it is outlined, with no motion (gold is Iso's alone). */
   section.over { outline: 1px dashed var(--text-soft); outline-offset: 4px; }

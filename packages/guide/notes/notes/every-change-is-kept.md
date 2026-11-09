@@ -1,6 +1,7 @@
 ---
 type: Concept
 title: Every change is kept
+tags: [notes, history]
 description: Every change to a note is kept, with who made it.
 ---
 
