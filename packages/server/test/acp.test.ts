@@ -90,10 +90,9 @@ test("isorite acp (M25): between a front end and its agent; the session in the p
   const journal = (await (await fetch(`${url}/api/journal?id=integrators/eulers-method`)).json()) as { who: string; asked?: string }[];
   expect(journal.at(-1)).toMatchObject({ who: "agent:scripted", asked: expect.stringContaining("edit integrators/eulers-method.md") });
 
-  // Kept from the pane, the question is a note.
-  const kept = (await (await post("/api/agent/take", { id: question.id })).json()) as { note: string };
-  expect(readFileSync(join(base.notes, `${kept.note}.md`), "utf8")).toContain("Why does it drift?");
-  await expect.poll(async () => (await view()).turns[0].items.find((i: any) => i.kind === "question").made).toBe(kept.note);
+  // The question is a note at once, and the turn links to it.
+  expect(question.made).toBeTruthy();
+  expect(readFileSync(join(base.notes, `${question.made}.md`), "utf8")).toContain("Why does it drift?");
 
   // Asked from the pane, answered there: the front end sees the prompt as the user's, and the question withdrawn.
   expect((await post("/api/terminal/prompt", { asked: "permit", given: [] })).status).toBe(200);
