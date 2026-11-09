@@ -324,8 +324,20 @@
     }).catch(() => undefined);
     return () => { stale = true; };
   }
+  /** A pulse for each link lit, once: along the link's own way from end to end, not along the merged lines, which are cut
+   *  wherever routes part and would each carry a pulse of their own; and a link lit twice (chosen, and pointed at in the
+   *  Note pane) carries one. */
+  type Pulse = { key: string; d: string; kind: LitKind };
+  const pulsesOf = (lits: Lit[]): Pulse[] => lits.filter((l) => l.kind !== "uses" && l.kind !== "iso").map((l) => ({ key: l.key, kind: l.kind, d: linePath(l.pts, 0, L!.cell) }));
+  const pairOf = (key: string): string => key.slice(key.indexOf(":") + 1).split("|").sort().join("|");
+  let chosenPulses = $state.raw<Pulse[]>([]), therePulses = $state.raw<Pulse[]>([]);
+  const pulses = $derived.by(() => {
+    const seen = new Set<string>();
+    return [...chosenPulses, ...therePulses].filter((p) => { const k = pairOf(p.key); if (seen.has(k)) return false; seen.add(k); return true; });
+  });
   $effect(() => light(links, (h, lits) => {
     hot = h;
+    chosenPulses = pulsesOf(lits);
     litCount = { requires: lits.filter((l) => l.kind === "requires").length, builds: lits.filter((l) => l.kind === "builds").length, uses: lits.filter((l) => l.kind === "uses").length };
   }));
 
@@ -350,7 +362,7 @@
     return e ? [{ from: e[0], to: e[1], kind: (e[2] >= STRENGTH.requires ? "requires" : "uses") as LitKind }] : [];
   });
   let thereHot = $state.raw<Hot[]>([]);
-  $effect(() => light(thereLinks, (h) => { thereHot = h.map((r) => ({ ...r, key: `there:${r.key}` })); }));
+  $effect(() => light(thereLinks, (h, lits) => { thereHot = h.map((r) => ({ ...r, key: `there:${r.key}` })); therePulses = pulsesOf(lits); }));
 
   // The choice follows the open note (Q79): with the note chosen open, following one of its links in the Note pane
   // moves the choice there, along the walk where it is a note the chosen one requires.
@@ -873,7 +885,7 @@
           <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} bare={f.open && !L.items.some((x) => x.parent === f.i)} dim={(!!lit && !f.open && !held.has(f.i)) || (finder.lit.size > 0 && !f.open && !foundIn(f.item.ref))} given={isoLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} onrename={f.item.ref.startsWith("@") || !f.item.ref ? undefined : (name) => void rename(f.item.ref, name)} />
       {/each}
       </div>
-      <AtlasRoutes k={drawnK} {rest} pointed={!chosen && !!pointed} hot={[...(isoLens ? isoHot : []), ...hot, ...thereHot]} counts={litCount} {grown} {beat} {retracting} />
+      <AtlasRoutes k={drawnK} {rest} pointed={!chosen && !!pointed} hot={[...(isoLens ? isoHot : []), ...hot, ...thereHot]} {pulses} counts={litCount} {grown} {beat} {retracting} />
       <!-- The count of a merged route is not drawn (M37): the width of the line says enough. -->
       <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each notes as n (n.item.id)}

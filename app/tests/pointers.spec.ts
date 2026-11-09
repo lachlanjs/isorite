@@ -47,6 +47,13 @@ test("a selection offers two tags; Ctrl+[ puts a pointer in the box, which is se
   // The two tags stand clear of each other.
   const [a, b] = [(await page.locator('.tag[data-tag="agent"]').boundingBox())!, (await page.locator('.tag[data-tag="copy"]').boundingBox())!];
   expect(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y, "the tags do not overlap").toBe(true);
+  // A tag's name, said when it is pointed at, stands clear of the other tag.
+  for (const [which, other] of [["agent", "copy"], ["copy", "agent"]] as const) {
+    await page.locator(`.tag[data-tag="${which}"]`).hover();
+    const l = (await page.locator(`.tag[data-tag="${which}"] .lbl`).boundingBox())!, o = (await page.locator(`.tag[data-tag="${other}"]`).boundingBox())!;
+    await expect(page.locator(`.tag[data-tag="${which}"] .lbl`)).toHaveCSS("opacity", "1");
+    expect(l.x + l.width <= o.x || o.x + o.width <= l.x || l.y + l.height <= o.y || o.y + o.height <= l.y, `the name of ${which} does not cover ${other}`).toBe(true);
+  }
   await page.screenshot({ path: `test-results/screens/${test.info().project.name}-pointer-tags.png` });
   await page.keyboard.press("Control+[");
   await expect(pointers(page)).toHaveCount(1);
@@ -54,9 +61,41 @@ test("a selection offers two tags; Ctrl+[ puts a pointer in the box, which is se
   await page.keyboard.type("is that so?");
   await page.screenshot({ path: `test-results/screens/${test.info().project.name}-pointer-box.png` });
   await page.keyboard.press("Enter");
-  await expect(log(page)).toContainText(`[1: /basics/surprise.md L${line}]`);
-  await expect(log(page)).toContainText("> An outcome of probability");
+  await expect(log(page)).toContainText(`/basics/surprise.md L${line}`);
+  await expect(log(page)).toContainText("An outcome of probability");
   await expect(pointers(page)).toHaveCount(0);
+  // What the agent was sent is not shown as the person's own words: the turn shows what they wrote, and the pointers
+  // are folded under it.
+  await expect(log(page).locator(".asked").last()).toHaveText(/^is that so\?$|\[\^1\] is that so\?$|^\[\^1\]/);
+  await expect(log(page).locator(".asked").last()).not.toContainText("surprise.md");
+  await expect(log(page).locator("details.refs").last()).not.toHaveAttribute("open", "");
+});
+
+test("a third tag deletes the words chosen in a note; the words bloom as they go, and the keys show they were taken", async ({ page }) => {
+  const p = test.info().project.name, id = `basics/del-${p}`;
+  const token = ((await (await page.request.get("api/session")).json()) as { token: string }).token;
+  const headers = { "x-isorite-token": token, origin: new URL(test.info().project.use.baseURL ?? "http://localhost:4799/").origin };
+  expect((await page.request.post(`api/note?id=${id}`, { headers, data: { text: `---\ntype: Concept\ntitle: Del ${p}\n---\n\nKeep this line.\n\nRemove this line.\n\nAnd this one stays.\n` } })).ok()).toBe(true);
+  await page.goto(`#/n/${id}`);
+  await select(page, id, "Remove this line");
+  await expect(page.locator('.tag[data-tag="delete"]')).toBeVisible();
+  // The three stand clear of one another.
+  const boxes = await Promise.all(["agent", "copy", "delete"].map(async (w) => (await page.locator(`.tag[data-tag="${w}"]`).boundingBox())!));
+  for (const [i, a] of boxes.entries()) for (const b of boxes.slice(i + 1)) expect(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y, "the tags do not overlap").toBe(true);
+  await page.screenshot({ path: `test-results/screens/${p}-selection-three-tags.png` });
+  // Copying blooms the words (the flash is an element of its own, gone when it ends).
+  await page.keyboard.press("Control+]");
+  await expect(page.locator("body > div[aria-hidden]").first()).toBeAttached();
+  await select(page, id, "Remove this line");
+  await page.locator('.tag[data-tag="delete"]').click();
+  await expect(editor(page)).not.toContainText("Remove this line");
+  await expect(editor(page)).toContainText("Keep this line.");
+  await expect(page.locator(".tag")).toHaveCount(0);
+  // Undone like any change.
+  await page.keyboard.press("Control+z");
+  await expect(editor(page)).toContainText("Remove this line");
+  const now = (await (await page.request.get(`api/note?id=${id}`)).json()) as { version: string };
+  expect((await page.request.post(`api/note/delete?id=${id}`, { headers, data: { base: now.version } })).ok()).toBe(true);
 });
 
 test("pointers from two notes stand in one question, in the order they are in the box", async ({ page }) => {
@@ -69,9 +108,11 @@ test("pointers from two notes stand in one question, in the order they are in th
   await expect(pointers(page)).toHaveCount(2);
   await page.keyboard.type("have to do with the other?");
   await page.keyboard.press("Enter");
-  await expect(log(page)).toContainText("[1: /basics/surprise.md");
-  await expect(log(page)).toContainText("[2: /basics/bit.md");
-  await expect(log(page)).toContainText("> One fair coin toss");
+  await expect(log(page)).toContainText("[^1]");
+  await expect(log(page)).toContainText("/basics/surprise.md");
+  await expect(log(page)).toContainText("[^2]");
+  await expect(log(page)).toContainText("/basics/bit.md");
+  await expect(log(page)).toContainText("One fair coin toss");
 });
 
 test("Ctrl+] copies where it is and the words", async ({ page, context }) => {
@@ -142,7 +183,7 @@ test("a line of a file of the repository is pointed to by its path and line; the
   await expect(pointers(page)).toHaveCount(1);
   await page.keyboard.type("is this needed?");
   await page.keyboard.press("Enter");
-  await expect(log(page)).toContainText(`[1: ${file} L2]`);
+  await expect(log(page)).toContainText(`${file} L2`);
   await expect(log(page)).toContainText("heap = list(freqs)");
 
   // The agent's answer, chosen: a pointer with no file.
@@ -152,7 +193,7 @@ test("a line of a file of the repository is pointed to by its path and line; the
   await expect(pointers(page)).toHaveCount(1);
   await page.keyboard.type("say that again");
   await page.keyboard.press("Enter");
-  await expect(log(page)).toContainText("the agent's earlier answer]");
+  await expect(log(page)).toContainText("the agent's earlier answer");
 });
 
 test("text chosen in the box with a pointer in it marks the pointer too, so it is clear what a delete would take", async ({ page }) => {

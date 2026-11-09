@@ -6,12 +6,12 @@
   import type { Snippet } from "svelte";
   import type { HTMLButtonAttributes } from "svelte/elements";
 
-  let { x, y, label, hint = "", on = false, near = 0, below = true, i = 0, tone = "var(--lattice)", children, ...rest }: {
-    x: number; y: number; label: string; hint?: string; on?: boolean; near?: number; below?: boolean; i?: number; tone?: string; children: Snippet;
+  let { x, y, label, hint = "", on = false, near = 0, below = true, side = "", i = 0, tone = "var(--lattice)", children, ...rest }: {
+    x: number; y: number; label: string; hint?: string; on?: boolean; near?: number; below?: boolean; /** Its name beside it, not above or below (where those would be in the way of another tag). */ side?: "" | "right" | "left"; i?: number; tone?: string; children: Snippet;
   } & Omit<HTMLButtonAttributes, "children"> = $props();
 </script>
 
-<button type="button" class="tag" class:on class:below tabindex="-1" aria-label={label} style="left:{x}px;top:{y}px;--i:{i};--near:{near};--c:{tone}" {...rest}>
+<button type="button" class="tag" class:on class:below class:right={side === "right"} class:left={side === "left"} tabindex="-1" aria-label={label} style="left:{x}px;top:{y}px;--i:{i};--near:{near};--c:{tone}" {...rest}>
   <span class="face">{@render children()}</span>
   <span class="lbl">{label}{#if hint}<kbd>{hint}</kbd>{/if}</span>
 </button>
@@ -31,6 +31,9 @@
   .lbl { position: absolute; left: 50%; top: calc(100% + 6px); translate: -50% -4px; padding: 2px 6px; font: 11px/1.4 var(--font-ui); white-space: nowrap; color: var(--c); background: var(--ground-0); opacity: 0; transition: opacity var(--t-ack) var(--ease-out), translate var(--t-ack) var(--ease-out); pointer-events: none; }
   .tag:not(.below) .lbl { top: auto; bottom: calc(100% + 6px); translate: -50% 4px; }
   .tag:hover .lbl, .tag.on .lbl { opacity: 1; translate: -50% 0; }
+  .tag.right .lbl, .tag.left .lbl { top: 50%; bottom: auto; translate: 0 -50%; }
+  .tag.right .lbl { left: calc(100% + 6px); } .tag.left .lbl { left: auto; right: calc(100% + 6px); }
+  .tag.right:hover .lbl, .tag.right.on .lbl, .tag.left:hover .lbl, .tag.left.on .lbl { translate: 0 -50%; }
   .lbl :global(kbd) { margin-left: 6px; font: 10px var(--font-mono); color: var(--text-faint); }
   @media (prefers-reduced-motion: reduce) { .tag { animation: none; transition: none; } }
 </style>

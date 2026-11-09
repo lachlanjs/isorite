@@ -10,13 +10,14 @@
   import { panes } from "$lib/panes.svelte.ts";
   import { pointing } from "$lib/pointing.svelte.ts";
   import { toBody } from "$lib/gesture.svelte.ts";
+  import { copyFlight, flash, pointFlight } from "$lib/flight.ts";
   import { full, type Pointer } from "$lib/pointers.ts";
   import { pointers } from "$lib/pointers.svelte.ts";
   import { tokenEl } from "$lib/pointerToken.ts";
   import Petal from "./Petal.svelte";
 
   type Draft = Omit<Pointer, "id">;
-  type Armed = { draft: Draft; x: number; y: number };
+  type Armed = { draft: Draft; x: number; y: number; /** The lines of the words chosen, on the screen. */ rects: DOMRect[]; /** Takes the words out (a note's, where it can be changed). */ del?: () => void };
   let armed = $state.raw<Armed | null>(null);
   let said = $state("");
   let drag = $state.raw<{ x: number; y: number; over: boolean } | null>(null);
@@ -32,7 +33,7 @@
     if (!root || root.closest("[data-prompt]")) return null;
     const [kind, ...rest] = root.dataset.point!.split(":"), ref = rest.join(":");
     const rects = range.getClientRects(), last = rects.length ? rects[rects.length - 1]! : range.getBoundingClientRect();
-    const at = { x: last.right, y: last.bottom };
+    const at = { x: last.right, y: last.bottom, rects: [...rects] };
     if (kind === "note") {
       if (ref.startsWith("@")) return null;
       const cm = root.querySelector<HTMLElement>(".cm-content"), view = cm ? EditorView.findFromDOM(cm) : null;
@@ -42,7 +43,8 @@
       const end = m.to > m.from && doc.lineAt(m.to).from === m.to ? m.to - 1 : m.to;
       const text = doc.sliceString(m.from, m.to);
       if (!text.trim()) return null;
-      return { ...at, draft: { kind: "note", ref, title: app.listing.notes.find((n) => n.id === ref)?.title || ref, from: doc.lineAt(m.from).number + off, to: doc.lineAt(end).number + off, text } };
+      const del = view.state.readOnly || view.contentDOM.contentEditable === "false" ? undefined : () => { view.dispatch({ changes: { from: m.from, to: m.to }, selection: { anchor: m.from }, userEvent: "delete.selection" }); view.focus(); };
+      return { ...at, ...(del ? { del } : {}), draft: { kind: "note", ref, title: app.listing.notes.find((n) => n.id === ref)?.title || ref, from: doc.lineAt(m.from).number + off, to: doc.lineAt(end).number + off, text } };
     }
     const text = sel.toString();
     if (!text.trim()) return null;
@@ -85,29 +87,40 @@
   async function toAgent(a: Armed, at?: { x: number; y: number }): Promise<void> {
     const p = pointers.make(a.draft);
     done();
+    // Seen taken: the words bloom, and (put by key or a click, not carried) the pointer flies to the box.
+    flash(a.rects, "var(--lattice)");
+    if (!at) pointFlight(tokenEl(p), a.rects.at(-1) ?? null, document.querySelector("[data-prompt]")?.getBoundingClientRect() ?? null);
     // In at once, so that what is typed next goes to the prompt; on a phone, where it is on another page, its tab too.
     pointers.insert?.(p, at);
     if (!at) panes.to("iso");
   }
   async function copy(a: Armed): Promise<void> {
-    try { await navigator.clipboard.writeText(full(a.draft as Pointer)); said = "copied"; }
+    try { await navigator.clipboard.writeText(full(a.draft as Pointer)); said = "copied"; flash(a.rects, "var(--lattice)"); copyFlight(a.rects.at(-1) ?? null); }
     catch { said = "the browser would not copy"; }
     setTimeout(() => { said = ""; done(); }, 900);
   }
 
-  /** Where the two tags stand: out from where the selection ends, below it (above where there is no room). */
+  function remove(a: Armed): void {
+    flash(a.rects, "var(--rose)", true);
+    done();
+    a.del?.();
+  }
+
+  /** Where the tags stand: out from where the selection ends, below it (above where there is no room). */
   const tags = $derived.by(() => {
     if (!armed) return null;
     const below = armed.y + 80 < innerHeight, sign = below ? 1 : -1;
     // Far enough out, and far enough apart, that the two stand clear of each other (a tag is 34 wide).
-    const out = 50, tags = [{ which: "agent", deg: 22 * sign }, { which: "copy", deg: 82 * sign }].map((w, i) => {
+    const out = 50, tags = [{ which: "agent", deg: 22 * sign }, { which: "copy", deg: 82 * sign }, ...(armed.del ? [{ which: "delete", deg: 142 * sign }] : [])].map((w, i) => {
       const t = (w.deg * Math.PI) / 180, ux = Math.cos(t), uy = Math.sin(t);
       const x = Math.min(Math.max(armed!.x + ux * out + 6, 24), innerWidth - 24), y = armed!.y + uy * out + (below ? 8 : -8);
       return { ...w, x, y, i, ux, uy, sx: armed!.x + ux * 6, sy: armed!.y + uy * 6 + (below ? 4 : -4), ex: x - ux * 14, ey: y - uy * 14 };
     });
-    // Squeezed against an edge they could meet: the second is put clear of the first.
-    const [a, b] = tags as [(typeof tags)[number], (typeof tags)[number]];
-    if (Math.hypot(a.x - b.x, a.y - b.y) < 44) { b.x = a.x - (a.x > innerWidth / 2 ? 44 : -44); b.ex = b.x - b.ux * 14; }
+    // Squeezed against an edge they could meet: a later one is put clear of the earlier.
+    for (let j = 1; j < tags.length; j++) for (let k = 0; k < j; k++) {
+      const a = tags[k]!, b = tags[j]!;
+      if (Math.hypot(a.x - b.x, a.y - b.y) < 44) { b.x = Math.min(Math.max(a.x + (a.x > innerWidth / 2 ? -44 : 44), 24), innerWidth - 24); b.ex = b.x - b.ux * 14; }
+    }
     return tags;
   });
 
@@ -141,10 +154,11 @@
   <div class="tags" use:toBody role="presentation">
     <svg class="stems" aria-hidden="true">{#each tags as t (t.which)}<line x1={t.sx} y1={t.sy} x2={t.ex} y2={t.ey} />{/each}</svg>
     {#each tags as t (t.which)}
-      <Petal x={t.x} y={t.y} i={t.i} below={t.y >= armed.y} label={t.which === "agent" ? "to the agent" : said || "copy"} hint={t.which === "agent" ? "Ctrl+[" : "Ctrl+]"} data-tag={t.which}
-        aria-label={t.which === "agent" ? "Point to this in the message to the agent (Ctrl+[)" : "Copy this and where it is (Ctrl+])"}
-        onmousedown={(e) => e.preventDefault()} onpointerdown={(e) => { if (t.which === "agent") lift(e); else e.preventDefault(); }} onclick={() => { if (t.which === "copy") void copy(armed!); }}>
+      <Petal x={t.x} y={t.y} i={t.i} below={t.y >= armed.y} side={t.which === "agent" ? (t.x > innerWidth - 220 ? "left" : "right") : t.which === "delete" && t.x > 150 ? "left" : ""} tone={t.which === "delete" ? "var(--rose)" : undefined} label={t.which === "agent" ? "to the agent" : t.which === "delete" ? "delete" : said || "copy"} hint={t.which === "agent" ? "Ctrl+[" : t.which === "copy" ? "Ctrl+]" : ""} data-tag={t.which}
+        aria-label={t.which === "agent" ? "Point to this in the message to the agent (Ctrl+[)" : t.which === "delete" ? "Delete this text from the note" : "Copy this and where it is (Ctrl+])"}
+        onmousedown={(e) => e.preventDefault()} onpointerdown={(e) => { if (t.which === "agent") lift(e); else e.preventDefault(); }} onclick={() => { if (t.which === "copy") void copy(armed!); else if (t.which === "delete") remove(armed!); }}>
         {#if t.which === "agent"}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 6.5h5.5M5.5 4l3 2.5-3 2.5" /><path d="M3 11.5h10" /></svg>
+        {:else if t.which === "delete"}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 9h5.6l.7-9M7 7v4.5M9 7v4.5" /></svg>
         {:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3" width="9" height="11" /><path d="M6 3V1.8h4V3M5.8 7h4.4M5.8 9.5h4.4" /></svg>{/if}
       </Petal>
     {/each}

@@ -30,8 +30,10 @@ export const MARKS = /[-]/g;
 const span = (p: Pointer): string => (p.from === p.to ? `${p.from}` : `${p.from}–${p.to}`);
 /** Where it is: a note by the path the tools take, a file by its path, an answer by what it is. */
 export const where = (p: Pointer): string => (p.kind === "note" ? `/${p.ref}.md` : p.kind === "code" ? p.ref : "the agent's earlier answer");
-/** The short form that stands where the pointer was in the sentence. */
-export const label = (p: Pointer, n: number): string => `[${n}: ${p.kind === "turn" ? where(p) : `${where(p)} L${span(p)}`}]`;
+/** Where it is, with its lines. */
+const place = (p: Pointer): string => (p.kind === "turn" ? where(p) : `${where(p)} L${span(p)}${p.moved ? " (it may have moved)" : ""}`);
+/** The short form that stands where the pointer was in the sentence: a footnote's mark, defined at the end. */
+export const label = (_p: Pointer, n: number): string => `[^${n}]`;
 const quote = (t: string): string => t.replace(/\s+$/, "").split("\n").map((l) => `> ${l}`).join("\n");
 /** One pointer as it is copied: where it is, then the text. */
 export const full = (p: Pointer): string => (p.kind === "turn" ? `From ${where(p)}:\n${quote(p.text)}` : `${where(p)}, line${p.from === p.to ? "" : "s"} ${span(p)}${p.moved ? " (it may have moved)" : ""}:\n${quote(p.text)}`);
@@ -46,7 +48,8 @@ export function used(text: string, get: (id: number) => Pointer | undefined): Po
   return out;
 }
 
-/** The prompt as the agent is sent it: each pointer a short label where it stood, and under the prompt what each is. */
+/** The prompt as the agent is sent it: each pointer a footnote's mark where it stood, `[^1]`, and under the prompt a
+ *  footnote for each saying where it is and quoting it. Said once to the agent, in isorite's instructions (not here). */
 export function expand(text: string, get: (id: number) => Pointer | undefined): string {
   const list = used(text, get);
   const body = text.replace(MARKS, (ch) => {
@@ -54,8 +57,20 @@ export function expand(text: string, get: (id: number) => Pointer | undefined): 
     return p ? label(p, list.indexOf(p) + 1) : "";
   }).trim();
   if (!list.length) return body;
-  const blocks = list.map((p, i) => `[${i + 1}] ${full(p)}`);
-  return `${body}\n\nWhere I wrote [1], [2] and so on I mean these. Each is in my knowledge base or repository: read the file for the text around it (the quotes are as I chose them, and the lines may have moved since).\n\n${blocks.join("\n\n")}`;
+  const notes = list.map((p, i) => `[^${i + 1}]: ${place(p)}\n${quote(p.text).replace(/^/gm, "    ")}`);
+  return `${body}\n\n${notes.join("\n\n")}`;
+}
+
+/** A prompt sent with pointers, taken apart for showing: what the person wrote (its marks kept) and the footnotes
+ *  isorite added, which are the agent's to read and are shown folded. */
+export function askedParts(asked: string): { body: string; notes: { n: number; where: string; quote: string }[] } {
+  const m = /\n\n(\[\^\d+\]: [^]*)$/.exec(asked);
+  if (!m) return { body: asked, notes: [] };
+  const notes = m[1]!.split(/\n\n(?=\[\^\d+\]: )/).flatMap((b) => {
+    const h = /^\[\^(\d+)\]: ([^\n]*)\n?([^]*)$/.exec(b);
+    return h ? [{ n: Number(h[1]), where: h[2]!, quote: h[3]!.replace(/^ {4}> ?/gm, "").trimEnd() }] : [];
+  });
+  return notes.length ? { body: asked.slice(0, m.index), notes } : { body: asked, notes: [] };
 }
 
 const lineOf = (file: string, at: number): number => { let n = 1; for (let i = file.indexOf("\n"); i !== -1 && i < at; i = file.indexOf("\n", i + 1)) n++; return n; };

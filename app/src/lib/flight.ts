@@ -78,3 +78,50 @@ export async function vanish(el: Element | null): Promise<() => void> {
   await a.finished.catch(() => undefined);
   return () => a.cancel();
 }
+
+/** The words chosen, seen taken: a bloom over each line of them, in `tone`, which swells a little and fades. */
+export function flash(rects: DOMRect[], tone: string, shrink = false): void {
+  if (quiet()) return;
+  for (const r of rects) {
+    if (r.width < 2 || r.height < 2) continue;
+    const el = document.createElement("div");
+    el.setAttribute("aria-hidden", "true");
+    Object.assign(el.style, { position: "fixed", left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, zIndex: "70", pointerEvents: "none", background: `color-mix(in srgb, ${tone} 38%, transparent)`, boxShadow: `0 0 14px ${tone}`, borderRadius: "2px" });
+    document.body.append(el);
+    el.animate(shrink
+      ? [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(.6, .1)" }]
+      : [{ opacity: 0.95, transform: "scale(1)" }, { opacity: 0, transform: "scale(1.03, 1.35)" }], { duration: shrink ? 260 : 460, easing: shrink ? "cubic-bezier(.5, 0, .75, 0)" : "ease-out" }).onfinish = () => el.remove();
+  }
+}
+
+/** A pointer put to the agent: its chip lifts from where the words were, in an arc, and sinks into the box, which rings. */
+export function pointFlight(chip: HTMLElement, from: DOMRect | null, to: DOMRect | null): void {
+  if (quiet() || !from || !to) return;
+  const a = mid(from), b = { x: to.left + Math.min(60, to.width / 2), y: to.top + Math.min(20, to.height / 2) };
+  chip.classList.add("pt-ghost"); // a copy in flight, not the pointer in the box
+  Object.assign(chip.style, { position: "fixed", left: "0", top: "0", zIndex: "80", pointerEvents: "none", lineHeight: "0" });
+  chip.setAttribute("aria-hidden", "true");
+  document.body.append(chip);
+  const at = (x: number, y: number, sc: number, o = 1) => ({ transform: `translate(${x}px, ${y}px) translate(-50%, -50%) scale(${sc})`, opacity: o });
+  const lift = Math.min(120, Math.hypot(b.x - a.x, b.y - a.y) / 3);
+  chip.animate([at(a.x, a.y, 0.7, 0), at(a.x, a.y, 1.1), at((a.x + b.x) / 2, Math.min(a.y, b.y) - lift, 1), at(b.x, b.y, 0.8, 0.9)], { duration: 520, easing: EASE }).onfinish = () => { chip.remove(); lattice(b); };
+}
+/** A ring of blue where it landed. */
+function lattice(at: { x: number; y: number }): void {
+  const el = document.createElement("div");
+  el.setAttribute("aria-hidden", "true");
+  Object.assign(el.style, { position: "fixed", left: `${at.x}px`, top: `${at.y}px`, width: "26px", height: "26px", zIndex: "70", pointerEvents: "none", border: "2px solid var(--lattice)", borderRadius: "50%" });
+  document.body.append(el);
+  el.animate([{ transform: "translate(-50%, -50%) scale(.4)", opacity: 0.9 }, { transform: "translate(-50%, -50%) scale(2.4)", opacity: 0 }], { duration: 560, easing: "ease-out" }).onfinish = () => el.remove();
+}
+
+/** Copied: the clipboard's mark rises from where the words ended and fades, as the words bloom. */
+export function copyFlight(from: DOMRect | null): void {
+  if (quiet() || !from) return;
+  const el = document.createElement("div");
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = '<svg viewBox="0 0 16 16" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3" width="9" height="11" /><path d="M6 3V1.8h4V3M5.8 7h4.4M5.8 9.5h4.4" /></svg>';
+  Object.assign(el.style, { position: "fixed", left: `${from.right}px`, top: `${from.bottom}px`, zIndex: "80", pointerEvents: "none", color: "var(--lattice)", lineHeight: "0", filter: "drop-shadow(0 0 6px var(--lattice))" });
+  document.body.append(el);
+  el.animate([{ transform: "translate(-50%, 0) scale(.6)", opacity: 0 }, { transform: "translate(-50%, -14px) scale(1.1)", opacity: 1, offset: 0.35 }, { transform: "translate(-50%, -34px) scale(1)", opacity: 0 }], { duration: 700, easing: "ease-out" }).onfinish = () => el.remove();
+}

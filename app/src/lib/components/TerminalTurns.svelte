@@ -23,7 +23,7 @@
   import { drawn } from "$lib/drawn.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { pointedBy, pointing } from "$lib/pointing.svelte.ts";
-  import { plainAsked, terminal } from "$lib/terminal.svelte.ts";
+  import { askedOf, plainAsked, terminal } from "$lib/terminal.svelte.ts";
 
   let list = $state<HTMLElement>();
   let flow = $state<HTMLElement>();
@@ -283,8 +283,10 @@
 </div>
 
 {#snippet turn(t: TerminalTurn)}
+  {@const a = askedOf(t.asked)}
   <article class="turn" data-state={t.state}>
-    <div class="you"><i class="rule" aria-hidden="true"></i><p class="asked">{plainAsked(t.asked)}</p>
+    <div class="you"><i class="rule" aria-hidden="true"></i><p class="asked">{a.body}</p>
+      {#if a.notes.length}<details class="refs"><summary>{a.notes.length === 1 ? "1 pointer" : `${a.notes.length} pointers`}</summary>{#each a.notes as r (r.n)}<p class="ref"><b>[^{r.n}]</b> {r.where}</p><blockquote>{r.quote}</blockquote>{/each}</details>{/if}
       {#if t.given?.length}
         <span class="gave">{#each t.given as g, k (k)}<span class="chip" class:out={t.withdrawn?.includes(k)} title={t.withdrawn?.includes(k) ? "Taken out of the conversation afterwards: the agent is no longer sent it" : undefined} data-to={g.kind === "note" ? g.id : undefined}><span class="k" aria-hidden="true">{SYM[g.kind]}</span><span class="t">{g.kind === "passage" ? g.text : g.kind === "folder" ? g.id || "the base" : titleOf(g.id)}</span></span>{/each}</span>
       {/if}
@@ -351,6 +353,10 @@
   .mid[data-state="queued"], .mid[data-state="dropped"] { color: var(--text-faint); }
   .mid[data-state="dropped"] { text-decoration: line-through; }
   .mid .how { font: 11px var(--font-mono); color: var(--text-soft); margin-right: 4px; }
+  .refs { margin: 4px 0 0; font: 12px/1.4 var(--font-ui); color: var(--text-faint); }
+  .refs summary { cursor: pointer; width: max-content; }
+  .refs .ref { margin: 6px 0 0; color: var(--text-soft); overflow-wrap: anywhere; }
+  .refs blockquote { margin: 2px 0 0; padding-left: 8px; border-left: 2px solid var(--lattice); white-space: pre-wrap; overflow-wrap: anywhere; }
   .asked { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
   .from { font-size: 11px; color: var(--text-faint); }
   .from:empty { display: none; }

@@ -22,6 +22,11 @@
 
 /* ------------------------------------------------------------ tokens */
 
+/* Scrollbars: thin, no arrows, a thumb in the line's colour on no track, so they sit in the page as its rules do
+   (the browser's own is a wide grey bar with arrow buttons). Lit when the thing scrolled is pointed at. */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--line-strong) 45%, transparent) transparent; }
+*:hover { scrollbar-color: color-mix(in srgb, var(--line-strong) 80%, transparent) transparent; }
+
 :root {
   color-scheme: dark;
   --ground-0: #07101C; --ground-1: #0C1828; --ground-2: #122238; --ground-3: #1A3150;

@@ -10,6 +10,7 @@ import type { TerminalApi } from "./api.ts";
 import { app } from "./app.svelte.ts";
 import { panes } from "./panes.svelte.ts";
 import { tray, type Part } from "./tray.svelte.ts";
+import { askedParts } from "./pointers.ts";
 
 const givenOf = (): Given[] => tray.sent.map((p) => (p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }));
 
@@ -28,7 +29,8 @@ export function asAgentTurn(t: Turn): TerminalTurn {
 
 /** A prompt as the person wrote it: the notice isorite adds for the agent (code links gone stale, http.ts) is the
  *  agent's to read, not part of what was asked, so it is not shown in the turn or the session's title. */
-export const plainAsked = (text: string): string => text.replace(/\s*\(isorite: [^]*$/, "").trimEnd();
+export const askedOf = (text: string): ReturnType<typeof askedParts> => askedParts(text.replace(/\s*\(isorite: [^]*$/, "").trimEnd());
+export const plainAsked = (text: string): string => askedOf(text).body;
 // The notice is always the last thing in a prompt, and an agent may cut a title short inside it: all of it goes.
 
 class TerminalState {

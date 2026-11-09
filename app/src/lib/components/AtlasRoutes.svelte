@@ -6,11 +6,13 @@
   // carries: the count says how many. A lit line is 3 px however many links run along it, as on the boards; one
   // whose links run both ways stands still. Iso's steps along links are gold, as its lines on Desktop-Think, and a
   // note for Iso has a blue line to each note it links to.
-  let { k, rest, hot, counts, pointed = false, grown = [], beat = "", retracting = [] }: {
+  let { k, rest, hot, pulses = [], counts, pointed = false, grown = [], beat = "", retracting = [] }: {
     /** The zoom: paths are given at zoom 1. */
     k: number;
     /** `strong`: a "requires" runs along it. A route of weaker links only is drawn lighter. `trunk`: between two folders. */
     rest: { key: string; d: string; count: number; strong: boolean; trunk: boolean }[];
+    /** One pulse for each lit link, along its own way (see Atlas). */
+    pulses?: { key: string; d: string; kind: "requires" | "builds" | "uses" | "iso" }[];
     hot: { key: string; d: string; kind: "requires" | "builds" | "uses" | "iso"; count: number; still: boolean }[];
     /** The note's links are lit because it is pointed at, not chosen (M24): they draw out along their length in
      *  blue, and stand. Chosen, they run in their kinds' colours. */
@@ -44,8 +46,9 @@
         {#if pointed && r.kind !== "iso"}<path class="along touch" pathLength="1" d={r.d} style:stroke-width="{2 / k}px" />
           {@render pulse(r.d, "blue", 1)}
         {:else}<path class="lit {r.kind}" class:still={r.still} d={r.d} />
-          {#if !r.still && r.kind !== "uses"}{@render pulse(r.d, `loop pk-${r.kind}`, 1)}{/if}{/if}
+          {#if r.kind === "iso"}{@render pulse(r.d, `loop pk-${r.kind}`, 1)}{/if}{/if}
       {/each}
+      {#if !pointed}{#each pulses as r (r.key)}{@render pulse(r.d, `loop pk-${r.kind}`, 1)}{/each}{/if}
     {/if}
     <!-- Measured along its own length (pathLength), so drawn in the map's units: its width is set by the zoom. -->
     {#each grown as r (r.key)}{@render pulse(r.d, "slow", 1.25)}{/each}

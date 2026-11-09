@@ -92,6 +92,7 @@
       </ul>
     {/if}
     {#if chips.length}
+      <div class="tray">
       <ul class="chips" aria-label="Going with your message">
         {#each chips as p (tray.keyOf(p))}
           <li class="chip" class:given={given.has(tray.keyOf(p))} data-kind={p.kind} title={given.has(tray.keyOf(p)) ? "Already given to this session" : "Goes before your next message"}>
@@ -101,10 +102,12 @@
           </li>
         {/each}
       </ul>
-      <p class="handoff">
-        <button type="button" class="more" onclick={() => void copyForAgent()} title="Text that names these for an agent running in your own terminal, to paste there. It reads them through isorite's tools.">{copied ? "Copied" : "Copy for your agent"}</button>
-        {#if copyProblem}<span class="bad" role="alert">{copyProblem}</span>{/if}
-      </p>
+        <button type="button" class="copy" aria-label={copied ? "Copied" : "Copy for your agent"} title={copied ? "Copied" : "Copy for your agent: text that names these for an agent running in your own terminal, to paste there. It reads them through isorite's tools."} onclick={() => void copyForAgent()}>
+          {#if copied}<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7" /></svg>
+          {:else}<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3" width="9" height="11" /><path d="M6 3V1.8h4V3M5.8 7h4.4M5.8 9.5h4.4" /></svg>{/if}
+        </button>
+      </div>
+      {#if copyProblem}<p class="handoff"><span class="bad" role="alert">{copyProblem}</span></p>{/if}
     {/if}
     <div class="box" class:busy>
       <PromptBox bind:value={text} readonly={terminal.sending} placeholder={terminal.connected ? `Ask ${terminal.view?.agent || "the agent"}` : "Attach an agent to ask it here"} onkeydown={keys} />
@@ -172,11 +175,14 @@
   .mid { margin: 0; font: 12px/1.4 var(--font-ui); color: var(--text-soft); }
   .mid .more { background: none; border: 0; padding: 0; color: var(--growth); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .handoff { margin: 0; display: flex; align-items: center; gap: 8px; }
-  .handoff .more { background: none; border: 0; padding: 0; color: var(--growth); font: 12px/1.4 var(--font-ui); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .chip.given { border-color: var(--line); color: var(--text-faint); }
   .chip.given .g { color: var(--text-faint); }
   .chip .x { flex: none; width: 18px; height: 18px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; }
   .chip .x:hover { color: var(--rose); }
+  .tray { display: flex; align-items: flex-start; gap: 6px; }
+  .tray .chips { flex: 1; min-width: 0; }
+  .copy { width: 26px; height: 26px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--growth); cursor: pointer; opacity: .8; }
+  .copy:hover, .copy:focus-visible { opacity: 1; background: var(--ground-2); }
   /* The session's settings, quiet until wanted: plain words with a caret, a ground under them when pointed at. */
   .settings { display: flex; flex-wrap: wrap; gap: 2px; min-width: 0; }
   .set { position: relative; display: inline-flex; align-items: center; }
