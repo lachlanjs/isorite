@@ -9,7 +9,7 @@ The Atlas is the base as a map. Each note is a block, each folder a frame, and e
 - **Click a note** to choose it: it lights with its links, the notes it rests on and the notes that rest on it, and the rest dims. **Click it again** to open it in the Note pane. Click one it rests on to step back to it, the way kept lit; click open ground to let go.
 - **Click a folder** to bring it to the screen, and again to step out to the folder it is in. Folders open as you zoom in on them and close to one block as you zoom out: see [folders](/notes/folders.md "see also").
 - **Shift+click a note**, or hold on it, to give it to [Iso](/iso/iso.md "see also"). On a phone, a long press offers it.
-- **Hold on open ground** to make a note there.
+- **Hold on open ground** and two tags stand out from the spot: slide to one and let go to make a new note there, or a new folder (with its first note). Let go anywhere else and nothing is made.
 - Drag the ground to move about, and pinch or scroll to zoom.
 
 The note open in the Note pane has a bar inside its left edge. When it is off the screen, a pip at the Atlas's edge points to it: click the pip to bring it into view. A link under the mouse, in a note or in the agent's answer, is outlined on the map with its line lit, and a note under the mouse on the map marks the open note's links to it.

@@ -21,6 +21,7 @@
   import { vanish } from "$lib/flight.ts";
   import AtlasBlock from "./AtlasBlock.svelte";
   import HoldTags from "./HoldTags.svelte";
+  import SpotTags from "./SpotTags.svelte";
   import AtlasFolder from "./AtlasFolder.svelte";
   import AtlasRoutes from "./AtlasRoutes.svelte";
 
@@ -428,14 +429,16 @@
   // for away from where you held (Lachlan, on V6). What is marked is a note's or a folder's icon, not an area. Held on a note, the note is given to Iso
   // (M10): it goes into what Iso is sent.
 
-  const HOLD_SHOWN = 180, HOLD = 650, FOLDER_DRAG = 24;
-  /** What is gripped: a place (in cells), the folder it is in, and whether a drag has made it a folder. */
-  let grasp = $state.raw<{ dir: string; gx: number; gy: number; w: number; h: number; folder: boolean } | null>(null);
+  const HOLD = 650, SPOT_HOLD = 400;
+  /** What a hold on open ground is of: a place (in cells) and the folder it is in. */
+  type Place = { dir: string; gx: number; gy: number; folder: boolean };
+  /** The two tags stood out from the spot held (SpotTags), where it is on the map's surface, the pointer, and the one it is on. */
+  let spot = $state.raw<{ x: number; y: number; px: number; py: number; choice: "note" | "folder" | null; what: Place } | null>(null);
   /** Held long enough: the gesture is ours until the pointer is let go. Where it began, on the screen. */
   let gripped: { x: number; y: number } | null = null;
   /** Let go: the note being made. */
   let making = false;
-  let holdShow: ReturnType<typeof setTimeout> | undefined, holdDone: ReturnType<typeof setTimeout> | undefined;
+  let holdDone: ReturnType<typeof setTimeout> | undefined;
   // Press and hold on a note or a folder (M33), as in the list: tags to move it (carried to a folder of the map), delete it
   // (asked first) or send it to Iso. A finger that moves before the hold pans the map; one let go with the tags out but
   // on none of them is offered the rest (below).
@@ -525,7 +528,7 @@
     }
     holdWas = phase;
   });
-  function unhold(): void { g.stop(); clearTimeout(holdShow); clearTimeout(holdDone); holdShow = holdDone = undefined; gripped = null; if (!making) grasp = null; }
+  function unhold(): void { g.stop(); clearTimeout(holdDone); holdDone = undefined; gripped = null; if (!making) spot = null; }
   /** The deepest folder of the base holding a place on the map (in cells): "" for the top. */
   function folderAt(gx: number, gy: number): string {
     let best: { ref: string; depth: number } | null = null;
@@ -552,14 +555,14 @@
       return;
     }
     const u = L.cell * view.k, gx = Math.round((at.x - view.x) / u), gy = Math.round((at.y - view.y) / u);
-    const what = { dir: folderAt(gx, gy), gx, gy, w: 0, h: 0, folder: false };
-    holdShow = setTimeout(() => { grasp = what; }, HOLD_SHOWN);
-    holdDone = setTimeout(() => { holdDone = undefined; dragged = true; gripped = at; grasp = what; viewport?.setPointerCapture(e.pointerId); }, HOLD);
+    const what: Place = { dir: folderAt(gx, gy), gx, gy, folder: false };
+    holdDone = setTimeout(() => { holdDone = undefined; dragged = true; gripped = at; spot = { x: at.x, y: at.y, px: at.x, py: at.y, choice: null, what }; viewport?.setPointerCapture(e.pointerId); }, SPOT_HOLD);
   }
-  /** While gripped: a drag far enough makes it a folder. Its icon stays where the hold began. */
-  function drawHeld(at: { x: number; y: number }): void {
-    if (!gripped || !grasp || grasp.folder) return;
-    if (Math.hypot(at.x - gripped.x, at.y - gripped.y) >= FOLDER_DRAG) grasp = { ...grasp, folder: true };
+  /** While gripped: the pointer moves over the tags, and the one it is on is the one that will be made. */
+  function drawHeld(e: PointerEvent, at: { x: number; y: number }): void {
+    if (!spot) return;
+    const on = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-spot]")?.dataset.spot;
+    spot = { ...spot, px: at.x, py: at.y, choice: on === "note" || on === "folder" ? on : null };
   }
   /** A note held with a finger: what can be done with it, offered where it was held. */
   let offered = $state.raw<{ ref: string; x: number; y: number } | null>(null);
@@ -583,13 +586,15 @@
     clearTimeout(givenTimer);
     givenTimer = setTimeout(() => (given = ""), 2200);
   }
-  /** Let go while gripped: made, and opened. */
+  /** Let go while gripped: on a tag, what it says is made and opened; anywhere else, nothing. */
   function letGo(): void {
-    if (!gripped || !grasp) return;
+    if (!gripped) return;
     gripped = null;
-    void make(grasp);
+    const s = spot;
+    if (s?.choice) void make({ ...s.what, folder: s.choice === "folder" });
+    else spot = null;
   }
-  async function make(g: NonNullable<typeof grasp>): Promise<void> {
+  async function make(g: Place): Promise<void> {
     making = true;
     const ids = app.listing.notes.map((n) => n.id);
     let dir = g.dir;
@@ -605,7 +610,7 @@
       panes.fresh = id;
       await panes.open(id);
     } catch (err) { notice = (err as Error).message; }
-    finally { making = false; grasp = null; }
+    finally { making = false; spot = null; }
   }
 
   /** What an item opens: a note, a file, or for a folder of pictures, the note they were pasted into (M22). */
@@ -683,7 +688,7 @@
   function move(e: PointerEvent): void {
     if (!pointers.has(e.pointerId) || !grip || g.phase !== "idle" && g.item) return;
     pointers.set(e.pointerId, local(e));
-    if (gripped) { drawHeld(local(e)); return; }
+    if (gripped) { drawHeld(e, local(e)); return; }
     const ps = [...pointers.values()];
     const x = ps.reduce((s, p) => s + p.x, 0) / ps.length, y = ps.reduce((s, p) => s + p.y, 0) / ps.length;
     if (!dragged && ps.length === 1 && Math.hypot(x - grip.x, y - grip.y) < 5) return;
@@ -840,7 +845,7 @@
 <div class="atlas" class:lit={!!lit} bind:this={viewport} role="application" aria-label="The atlas: the map of the base" tabindex="0"
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onclick={ground} onkeydown={key}
   ondragstart={(e) => e.preventDefault()}
-  oncontextmenu={(e) => { if (grasp || holdShow !== undefined || holdDone !== undefined || offered) e.preventDefault(); }}>
+  oncontextmenu={(e) => { if (spot || holdDone !== undefined || offered) e.preventDefault(); }}>
   <div class="ground dots" aria-hidden="true" style="background-size: {dot}px {dot}px; transform: translate({(((view.x + 56 + dot / 2) % dot) + dot) % dot}px, {(((view.y + 56 + dot / 2) % dot) + dot) % dot}px)"></div>
   {#if failed}
     <p class="said">The map could not be drawn: {failed}</p>
@@ -880,12 +885,6 @@
         {/if}
       {/each}
       </div>
-      {#if grasp}
-        <div class="grasp" class:folder={grasp.folder} class:inward={!!viewport && !!L && view.x + grasp.gx * L.cell * view.k > viewport.clientWidth - 220} style="--x:{grasp.gx};--y:{grasp.gy}">
-          <svg viewBox="0 0 20 24" width="20" height="24" aria-hidden="true">{#if grasp.folder}<path d="M1.5 5.5h6l2 2.5h9v12.5h-17z" />{:else}<path d="M3.5 1.5h9l4.5 4.5v16.5h-13.5z M12.5 1.5v4.5h4.5" /><path class="ln" d="M6.5 11h7.5M6.5 14.5h7.5M6.5 18h5" />{/if}</svg>
-          <span>{grasp.folder ? "a new folder" : "a new note"}{grasp.dir ? ` in ${grasp.dir}` : ""}</span>
-        </div>
-      {/if}
     </div>
     {#each [{ p: herePip, i: hereAt, who: "here" }, { p: therePip, i: thereAt, who: there?.who ?? "you" }] as q (q.who === "here" ? "here" : "there")}
       {#if q.p}
@@ -894,6 +893,9 @@
           onclick={(e) => { e.stopPropagation(); bringIn(q.i); }}><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2 2l8 4-8 4z" /></svg></button>
       {/if}
     {/each}
+    {#if spot && viewport}
+      <SpotTags x={spot.x} y={spot.y} w={viewport.clientWidth} h={viewport.clientHeight} choice={spot.choice} px={spot.px} py={spot.py} />
+    {/if}
     {#if notice}
       <p class="notice" role="alert">{notice}</p>
     {/if}
@@ -965,15 +967,6 @@
   .offer button { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; background: none; border: 0; color: var(--text); font: 13px var(--font-ui); text-align: left; cursor: pointer; }
   .offer button:hover, .offer button:focus-visible { background: var(--ground-3); }
   .offer i { font-style: normal; width: 12px; color: var(--growth); font-size: 11px; }
-  .grasp { position: absolute; left: calc(var(--x) * var(--u) - 10px); top: calc(var(--y) * var(--u) - 12px); display: flex; align-items: center; gap: 6px; font-size: 11px; pointer-events: none; z-index: 1; }
-  .grasp svg { flex: none; overflow: visible; }
-  .grasp svg path { fill: var(--growth-soft); stroke: var(--growth); stroke-width: 1.5; stroke-linejoin: round; stroke-dasharray: 2 2.5; animation: march .6s linear infinite; }
-  .grasp svg path.ln { fill: none; stroke-dasharray: none; animation: none; }
-  .grasp span { white-space: nowrap; background: var(--ground-0); padding: 0 4px; }
-  /* Near the pane's right edge its words go to the left of the icon, which stays where it was held. */
-  .grasp.inward { flex-direction: row-reverse; translate: calc(-100% + 20px) 0; }
-  @media (prefers-reduced-motion: reduce) { .grasp svg path { animation: none; } }
-  @keyframes march { to { stroke-dashoffset: -9; } }
   .given { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--growth); font-size: 12px; z-index: 2; }
   .given::first-letter { color: var(--growth); }
   .legend { position: absolute; left: 12px; bottom: 10px; right: 12px; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--text-soft); pointer-events: none; z-index: 2; }

@@ -151,17 +151,25 @@ test("a note made while the map is open appears on it", async ({ page }) => {
 });
 
 /** Press and keep still until the hold is taken, then let go: a name is asked for there. */
-async function hold(page: Page, x: number, y: number) {
+/** Held on open ground until the two tags stand out, then let go on the one named (or on neither). */
+async function hold(page: Page, x: number, y: number, which: "note" | "folder" | null = "note") {
   await page.mouse.move(x, y);
   await page.mouse.down();
-  await expect(page.locator(".atlas .grasp")).toBeVisible();
-  await page.waitForTimeout(800);
+  const note = page.locator('.atlas [data-spot="note"]'), folderTag = page.locator('.atlas [data-spot="folder"]');
+  await expect(note).toBeVisible();
+  await expect(folderTag).toBeVisible();
+  await page.waitForTimeout(400); // out, and so to be pointed at
+  if (which) {
+    const b = (await (which === "note" ? note : folderTag).boundingBox())!;
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 4 });
+    await expect(page.locator(`.atlas [data-spot="${which}"]`)).toHaveClass(/\bon\b/);
+  } else await page.mouse.move(x + 3, y + 3);
   await page.mouse.up();
 }
 const asked = (page: Page, what: "note" | "folder") => page.getByLabel(what === "note" ? "the new note's title" : "the new folder's name");
 const session = async (page: Page) => ({ "x-isorite-token": ((await (await page.request.get("api/session")).json()) as { token: string }).token, origin: new URL(page.url()).origin });
 
-test("holding makes an untitled note in the folder held in, its title chosen to type over; holding, then dragging, an untitled folder with its first note; a press that moves is a drag", async ({ page }) => {
+test("holding on open ground offers a new note or a new folder: let go on one and it is made, its title chosen to type over; let go elsewhere, nothing; a press that moves is a drag", async ({ page }) => {
   await atlas(page);
   const name = test.info().project.name, box = (await page.locator(".atlas").boundingBox())!;
   const title = page.getByLabel("Title", { exact: true });
@@ -174,7 +182,7 @@ test("holding makes an untitled note in the folder held in, its title chosen to 
   await page.mouse.move(box.x + 30, box.y + 20, { steps: 3 });
   await page.waitForTimeout(900);
   await page.mouse.up();
-  await expect(page.locator(".atlas .grasp")).toHaveCount(0);
+  await expect(page.locator(".atlas [data-spot]")).toHaveCount(0);
   expect(page.url()).toBe(before);
 
   // Held still inside basics: an untitled note there, opened with its title chosen; typing names it.
@@ -191,15 +199,26 @@ test("holding makes an untitled note in the folder held in, its title chosen to 
   await expect(page).toHaveURL(new RegExp(`#/n/basics/held-${name}$`));
   made.push(`basics/held-${name}`);
 
-  // Held, then dragged on open ground: an untitled folder, made with its first note, which opens.
+  // Held on open ground and let go on neither tag: nothing is made.
+  await atlas(page);
+  const here = page.url();
+  await hold(page, box.x + 10, box.y + 10, null);
+  await expect(page.locator(".atlas [data-spot]")).toHaveCount(0);
+  expect(page.url()).toBe(here);
+
+  // Held on open ground and let go on the folder tag: an untitled folder, made with its first note, which opens.
   await atlas(page);
   await page.mouse.move(box.x + 10, box.y + 10);
   await page.mouse.down();
-  await page.waitForTimeout(900);
-  await page.mouse.move(box.x + 90, box.y + 70, { steps: 6 });
-  await expect(page.locator(".atlas .grasp.folder")).toBeVisible();
-  await look(page, "atlas-hold-folder");
+  await expect(page.locator('.atlas [data-spot="folder"]')).toBeVisible();
+  await page.waitForTimeout(400);
+  await look(page, "atlas-hold-tags");
+  // In a corner of the map, as here, the two stand clear of each other and of its edges.
+  const [a, b] = [(await page.locator('.atlas [data-spot="note"]').boundingBox())!, (await page.locator('.atlas [data-spot="folder"]').boundingBox())!];
+  expect(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y, "the tags do not overlap").toBe(true);
+  expect(Math.min(a.x, b.x) >= box.x - 1 && Math.min(a.y, b.y) >= box.y - 1, "inside the map").toBe(true);
   await page.mouse.up();
+  await hold(page, box.x + 10, box.y + 10, "folder");
   await expect(page).toHaveURL(/#\/n\/untitled-folder(-\d+)?\/untitled-note$/);
   made.push(decodeURIComponent(page.url().split("#/n/")[1]!));
   await expect(title).toHaveValue("Untitled note");

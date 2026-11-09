@@ -13,6 +13,7 @@
   import { full, type Pointer } from "$lib/pointers.ts";
   import { pointers } from "$lib/pointers.svelte.ts";
   import { tokenEl } from "$lib/pointerToken.ts";
+  import Petal from "./Petal.svelte";
 
   type Draft = Omit<Pointer, "id">;
   type Armed = { draft: Draft; x: number; y: number };
@@ -138,16 +139,14 @@
 
 {#if tags && armed}
   <div class="tags" use:toBody role="presentation">
-    <svg class="stems" aria-hidden="true">{#each tags as t (t.which)}<line x1={t.sx} y1={t.sy} x2={t.ex} y2={t.ey} style="--i:{t.i}" />{/each}</svg>
+    <svg class="stems" aria-hidden="true">{#each tags as t (t.which)}<line x1={t.sx} y1={t.sy} x2={t.ex} y2={t.ey} />{/each}</svg>
     {#each tags as t (t.which)}
-      <button type="button" class="tag" data-tag={t.which} tabindex="-1" aria-label={t.which === "agent" ? "Point to this in the message to the agent (Ctrl+[)" : "Copy this and where it is (Ctrl+])"}
-        style="left:{t.x}px;top:{t.y}px;--i:{t.i}" onmousedown={(e) => e.preventDefault()} onpointerdown={(e) => { if (t.which === "agent") lift(e); else e.preventDefault(); }} onclick={() => { if (t.which === "copy") void copy(armed!); }}>
-        <span class="face">
-          {#if t.which === "agent"}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 6.5h5.5M5.5 4l3 2.5-3 2.5" /><path d="M3 11.5h10" /></svg>
-          {:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3" width="9" height="11" /><path d="M6 3V1.8h4V3M5.8 7h4.4M5.8 9.5h4.4" /></svg>{/if}
-        </span>
-        <span class="lbl">{t.which === "agent" ? "to the agent" : said || "copy"}<kbd>{t.which === "agent" ? "Ctrl+[" : "Ctrl+]"}</kbd></span>
-      </button>
+      <Petal x={t.x} y={t.y} i={t.i} below={t.y >= armed.y} label={t.which === "agent" ? "to the agent" : said || "copy"} hint={t.which === "agent" ? "Ctrl+[" : "Ctrl+]"} data-tag={t.which}
+        aria-label={t.which === "agent" ? "Point to this in the message to the agent (Ctrl+[)" : "Copy this and where it is (Ctrl+])"}
+        onmousedown={(e) => e.preventDefault()} onpointerdown={(e) => { if (t.which === "agent") lift(e); else e.preventDefault(); }} onclick={() => { if (t.which === "copy") void copy(armed!); }}>
+        {#if t.which === "agent"}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 6.5h5.5M5.5 4l3 2.5-3 2.5" /><path d="M3 11.5h10" /></svg>
+        {:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3" width="9" height="11" /><path d="M6 3V1.8h4V3M5.8 7h4.4M5.8 9.5h4.4" /></svg>{/if}
+      </Petal>
     {/each}
   </div>
 {/if}
@@ -159,20 +158,6 @@
   .tags { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
   .stems { position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; overflow: visible; }
   .stems line { stroke: var(--lattice); stroke-width: 1.5; stroke-linecap: round; opacity: .7; }
-  .tag { --c: var(--lattice); padding: 0; border: 0; background: none; font: inherit; position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; pointer-events: auto; color: var(--c); user-select: none; -webkit-user-select: none; cursor: pointer;
-    filter: drop-shadow(0 4px 8px rgb(0 0 0 / .25)); transition: scale var(--t-ack) var(--ease-out), filter var(--t-ack) var(--ease-out);
-    animation: tag var(--t-change) cubic-bezier(.2, 1.3, .4, 1) backwards; animation-delay: calc(var(--i) * 30ms); }
-  .tag:hover { scale: 1.14; filter: drop-shadow(0 0 10px color-mix(in srgb, var(--c) 70%, transparent)) drop-shadow(0 4px 8px rgb(0 0 0 / .25)); }
-  @keyframes tag { from { scale: .3; opacity: 0; } }
-  .face { position: absolute; inset: 0; display: grid; place-items: center; background: var(--c); clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }
-  .face::before { content: ""; position: absolute; inset: 1.5px; background: var(--ground-2); transition: background-color var(--t-ack) var(--ease-out); clip-path: polygon(7.4px 0, 100% 0, 100% calc(100% - 7.4px), calc(100% - 7.4px) 100%, 0 100%, 0 7.4px); }
-  .face svg { position: relative; transition: color var(--t-ack) var(--ease-out); }
-  .tag:hover .face::before { background: var(--c); }
-  .tag:hover .face svg { color: var(--ground-0); }
-  .lbl { position: absolute; left: 50%; top: calc(100% + 6px); translate: -50% -4px; padding: 2px 6px; font: 11px/1.4 var(--font-ui); white-space: nowrap; color: var(--c); background: var(--ground-0); opacity: 0; transition: opacity var(--t-ack) var(--ease-out), translate var(--t-ack) var(--ease-out); pointer-events: none; }
-  .tag:hover .lbl { opacity: 1; translate: -50% 0; }
-  .lbl kbd { margin-left: 6px; font: 10px var(--font-mono); color: var(--text-faint); }
   .held { position: fixed; z-index: 80; pointer-events: none; transform: translate(-50%, -50%) scale(1.08); line-height: 0; }
   .held.ready { filter: drop-shadow(0 0 10px var(--lattice)); }
-  @media (prefers-reduced-motion: reduce) { .tag { animation: none; transition: none; } }
 </style>
