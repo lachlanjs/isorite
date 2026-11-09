@@ -167,3 +167,13 @@ test("text chosen in the box with a pointer in it marks the pointer too, so it i
   await page.keyboard.press("Backspace");
   await expect(pointers(page)).toHaveCount(0);
 });
+
+test("the box has a cursor you can see, in the text's colour", async ({ page }) => {
+  await page.goto("#/n/basics/bit");
+  await box(page).click();
+  const cursor = page.locator('[data-pane="iso"] .cm-cursor').first();
+  await expect(cursor).toBeAttached();
+  const c = await cursor.evaluate((el) => getComputedStyle(el).borderLeftColor);
+  const text = await box(page).evaluate((el) => getComputedStyle(el).color);
+  expect(c, "not the default black").toBe(text);
+});

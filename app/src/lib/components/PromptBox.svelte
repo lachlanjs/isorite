@@ -90,6 +90,8 @@
     ".cm-content": { padding: "10px 12px 4px", minHeight: "44px", caretColor: "var(--text)", color: "var(--text)" },
     ".cm-line": { padding: "0" },
     ".cm-placeholder": { color: "var(--text-faint)" },
+    // drawSelection draws the cursor itself (and blinks it): in the text's colour, not its default black.
+    ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--text)", borderLeftWidth: "1.5px" },
     ".cm-selectionBackground": { background: "color-mix(in srgb, var(--lattice) 30%, transparent) !important" },
     "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": { background: "color-mix(in srgb, var(--lattice) 38%, transparent) !important" },
   });
