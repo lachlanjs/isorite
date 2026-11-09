@@ -10,6 +10,8 @@ const NS = "http://www.w3.org/2000/svg";
 export function chipText(p: Pick<Pointer, "title" | "from" | "to" | "kind">): string {
   if (p.kind === "turn") return "the answer";
   const t = p.title.length > 16 ? `${p.title.slice(0, 15).trimEnd()}…` : p.title;
+  if (p.kind === "folder") return `${t}/`;
+  if (p.from === 0 && p.to === 0) return t;
   return `${t} · ${p.from === p.to ? p.from : `${p.from}–${p.to}`}`;
 }
 
@@ -18,7 +20,7 @@ export function tokenEl(p: Pick<Pointer, "id" | "title" | "from" | "to" | "kind"
   el.className = selected ? "pt pt-selected" : "pt";
   el.dataset.pt = String(p.id);
   el.contentEditable = "false";
-  el.title = p.kind === "turn" ? `${p.title}: a passage of the agent's answer` : `${p.title}, line${p.from === p.to ? "" : "s"} ${p.from === p.to ? p.from : `${p.from}–${p.to}`}`;
+  el.title = p.kind === "folder" || (p.kind === "note" && p.from === 0 && p.to === 0) ? `${p.title}: opens it` : p.kind === "turn" ? `${p.title}: a passage of the agent's answer` : `${p.title}, line${p.from === p.to ? "" : "s"} ${p.from === p.to ? p.from : `${p.from}–${p.to}`}`;
   const face = document.createElement("span");
   face.className = "pt-face";
   // A mark that points: an arrow's head, closed on a short stem.

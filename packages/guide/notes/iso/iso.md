@@ -9,7 +9,7 @@ isorite does not bring an agent of its own: it attaches to the one you already u
 
 The agent has your knowledge base as tools: it searches the notes, reads them, follows their links, and answers from them, with links to the notes it used. What it reads lights on the Atlas, and once a turn is over, the notes it drew on stand under its reply. How to attach one is in [your own agent](/terminal/your-own-agent.md "uses").
 
-Ask in the box at the foot of the pane, or in the agent's own front end: the session is the same. Notes you give it go in [the tray](/iso/give-it-notes.md "see also"), before your next prompt. What it has in hand is in [the Context view](/iso/in-hand.md "see also").
+Ask in the box at the foot of the pane, or in the agent's own front end: the session is the same. Notes you give it stand in your message as [pointers](/iso/give-it-notes.md "see also"). What it has in hand is in [the Context view](/iso/in-hand.md "see also").
 
 It may change your notes through isorite, and [its words are marked](/iso/iso-writes-marked.md "see also"). It can build [artifacts](/iso/artifacts.md "see also"): pages that work, from your data. How it should work in your base is [AGENTS.md](/iso/agents-md.md "see also"). What it may do in the project around the base (edit its files, run commands) is set by the pane's [switches](/atlas/the-switches.md "uses").
 

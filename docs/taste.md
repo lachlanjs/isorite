@@ -15,7 +15,7 @@ isorite is a mapping that keeps structure (Iso is for isomorphism, not isometric
 - Three durations: 120 ms (acknowledge: press, hover, focus), 260 ms (change: open, close, swap), 600 ms+ (a result worth noticing: Iso wrote into a note, a check resolved). Nothing else. In CSS: `--t-ack`, `--t-change`, `--t-result`.
 - One curve for arrivals (ease-out), one for departures (ease-in). No springs, no bounce. In CSS: `--ease-out`, `--ease-in`.
 - The Atlas flown from one view to another zooms about the one point of the screen that stays put: everything moves in a straight line, at one pace, the same zooming in as out. A new layout's three beats leave no gap, and a note that is new is there before the lines to it draw.
-- Held on a note or a folder (M33), four tags: move is blue, delete is rose, hide is a dark grey (it takes the thing away without deleting it), send is gold, the one place gold stands for something you do: the thing is being handed to Iso.
+- Held on a note or a folder (M33), four tags (a folder has a fifth, rename, blue): move is blue, delete is rose, hide is a dark grey (it takes the thing away without deleting it), send is gold, the one place gold stands for something you do: the thing is being handed to Iso.
 - Gold moves, and so may blue. Iso's work and growth animate in gold; your own actions may animate too, in blue, but less than Iso's (a pointed-at note's routes draw out in 390 ms; nothing of yours loops).
 - Every animation has a `prefers-reduced-motion` form that keeps the information and drops the movement.
 - Respond at once. What you did shows within 100 ms (a press, a send), even while the server has yet to answer; a control that has been pressed stands down until it is answered, so nothing is done twice.

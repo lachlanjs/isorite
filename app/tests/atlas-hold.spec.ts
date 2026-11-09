@@ -23,13 +23,14 @@ test("held on the Atlas, a note shows the tags: gold sends it, rose asks before 
     await page.mouse.down();
     const t = page.locator(`[data-tag="${tag}"]`);
     await expect(t).toBeVisible();
+    await page.waitForTimeout(400); // the tags take the pointer once they have grown out
     const b = (await t.boundingBox())!;
     await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 4 });
   };
   // Gold: sent.
   await go("send");
   await page.mouse.up();
-  await expect(page.getByRole("status").filter({ hasText: `Held ${p} is in the agent's context` })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: `Held ${p} is in your message` })).toBeVisible();
   // Rose: asked first.
   await go("delete");
   await page.screenshot({ path: `test-results/screens/${p}-atlas-held-delete.png` });
@@ -48,4 +49,32 @@ test("held on the Atlas, a note shows the tags: gold sends it, rose asks before 
   // Put the base back as it was: the other Atlas specs count what is in it.
   const now = (await (await page.request.get(`api/note?id=coding/held-${p}`)).json()) as { version: string };
   expect((await page.request.post(`api/note/delete?id=coding/held-${p}`, { headers, data: { base: now.version } })).ok()).toBe(true);
+});
+
+test("held on a folder, a fifth tag renames it: its name is typed over", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) <= 760, "a finger holds on a phone for a menu; the tags are for a mouse");
+  const p = test.info().project.name, dir = `hold-${p}`, id = `${dir}/inside`;
+  await page.goto("#/atlas");
+  const token = ((await (await page.request.get("api/session")).json()) as { token: string }).token;
+  const headers = { "x-isorite-token": token, origin: new URL(page.url()).origin };
+  expect((await page.request.post(`api/note?id=${id}`, { headers, data: { text: `---\ntype: Concept\ntitle: Inside ${p}\n---\n\nText.\n` } })).ok()).toBe(true);
+  await page.reload();
+  const title = page.locator(`[data-folder="${dir}"] .frame-title`);
+  await expect(title).toBeVisible({ timeout: 15000 });
+  const b = (await title.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.down();
+  const tag = page.locator('[data-tag="rename"]');
+  await expect(tag).toBeVisible();
+  await page.waitForTimeout(400);
+  const t = (await tag.boundingBox())!;
+  await page.mouse.move(t.x + t.width / 2, t.y + t.height / 2, { steps: 4 });
+  await page.mouse.up();
+  const field = page.getByRole("textbox", { name: `Rename the folder ${dir}` });
+  await expect(field).toBeVisible();
+  await field.fill(`${dir}-renamed`);
+  await field.press("Enter");
+  await expect.poll(() => existsSync(join(NOTES, `${dir}-renamed`, "inside.md"))).toBe(true);
+  const now = (await (await page.request.get(`api/note?id=${dir}-renamed/inside`)).json()) as { version: string };
+  expect((await page.request.post(`api/note/delete?id=${dir}-renamed/inside`, { headers, data: { base: now.version } })).ok()).toBe(true);
 });

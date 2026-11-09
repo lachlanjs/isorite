@@ -30,11 +30,10 @@
     problem = ""; said = "";
     try { await what(); said = done; await reload(); } catch (e) { problem = (e as Error).message; }
   }
-  const keep = () => act(async () => { await pi!.setKey(provider, key); key = ""; }, "Key kept. The next turn uses it.");
+  const keep = () => act(async () => { await pi!.setKey(provider, key); key = ""; }, "Key kept.");
   const forget = () => act(() => pi!.removeKey(provider), "Key removed.");
-  const reach = (files: "off" | "read" | "write", shell: boolean) => act(() => pi!.setReach(files, shell), "Saved. The next question uses it.");
   // Chosen, the model is used at once: where the pane was not the agent's, it is now.
-  const choose = () => act(() => pi!.choose(provider, name), "In use: the pane is isorite's own agent, on this model.");
+  const choose = () => act(() => pi!.choose(provider, name), "In use.");
   /** The models the provider offers, suggested as the name is typed. */
   let offered = $state<string[]>([]);
   $effect(() => { const p = provider; offered = []; if (pi && local) void pi.models(p).then((m) => { if (provider === p) offered = m; }, () => undefined); });
@@ -55,12 +54,11 @@
   {#if agents !== null}
     <h2 class="label">AGENTS.md</h2>
     <label class="hidden-label" for="agents">AGENTS.md: your instructions for this base</label>
-    <textarea id="agents" class="agents" bind:value={agents} rows="6" spellcheck="true" placeholder="notation, level, language, how notes are named" title="Your instructions for this base, read by the agents you attach. Kept at the top of your notes, as AGENTS.md." onblur={() => void keepAgents()}></textarea>
+    <textarea id="agents" class="agents" bind:value={agents} rows="6" spellcheck="true" placeholder="instructions for every agent" title="AGENTS.md" onblur={() => void keepAgents()}></textarea>
   {/if}
   {#if model}
-    <h2 class="label">Model for isorite's own agent</h2>
-    <p class="note">Used when the pane runs isorite's own agent rather than one of yours. Keys are kept in isorite's data folder, readable only by you, never in your notes or repository.</p>
-    {#if model.source === "environment"}<p class="note">ISORITE_PI names the model ({model.choice?.provider}/{model.choice?.model}) and wins while it is set.</p>{/if}
+    <h2 class="label">Model</h2>
+    {#if model.source === "environment"}<p class="note">ISORITE_PI sets the model.</p>{/if}
     {#if model.active && model.choice}<p class="note in-use" data-testid="pi-in-use">In use: {model.choice.provider === "gateway" ? gateway?.name ?? "your gateway" : model.providers.find((p) => p.id === model?.choice?.provider)?.name ?? model.choice.provider}, {model.choice.model}.</p>{/if}
     <label class="hidden-label" for="pi-provider">Provider</label>
     <select id="pi-provider" class="field" bind:value={provider}>
@@ -78,7 +76,7 @@
       {:else if gatewayProblem}
         <p class="bad" role="alert">{gatewayProblem}</p>
       {:else}
-        <p class="note">A gateway of your own (OpenAI-compatible, as a company's) is named in <code>~/.config/isorite/config.toml</code>:</p>
+        <p class="note"><code>~/.config/isorite/config.toml</code>:</p>
         <pre class="snippet">[provider]
 url = "https://gateway.example.com/v1"
 pfx = '~/certs/me.pfx'          # if it asks for a certificate
@@ -97,22 +95,10 @@ ca = 'company-ca.pem'           # if its authority is the company's</pre>
     <input id="pi-model" class="field" type="text" list="pi-models" bind:value={name} placeholder={provider === "openrouter" ? "anthropic/claude-haiku-5.5" : offered[0] ?? "model name"} spellcheck="false" autocomplete="off" />
     <datalist id="pi-models">{#each offered as m (m)}<option value={m}></option>{/each}</datalist>
     <div class="row">
-      <button type="button" class="btn" disabled={!name.trim() || checking} title="One short request with this key and model (a few tokens), to know it answers" onclick={() => void check()}>{checking ? "checking…" : "Check"}</button>
+      <button type="button" class="btn" disabled={!name.trim() || checking} onclick={() => void check()}>{checking ? "checking…" : "Check"}</button>
       <button type="button" class="btn primary" disabled={!name.trim()} onclick={() => void choose()}>Use this model</button>
     </div>
     {#if checked}<p class="note" class:ok={checked.ok} class:bad={!checked.ok} role="status" data-testid="pi-check">{checked.ok ? "✓ " : "✗ "}{checked.text}</p>{/if}
-    <h2 class="label">What it may do in your project</h2>
-    <p class="note">Its tools for your notes are always on. These are for the project's files, which it does not need to manage the knowledge base.{#if model.reachFromEnvironment} ISORITE_PI_FILES or ISORITE_PI_SHELL sets this and wins while it is set.{/if}</p>
-    <fieldset disabled={model.reachFromEnvironment}>
-      <legend class="hidden-label">Project files</legend>
-      <label><input type="radio" name="pi-files" checked={model.reach.files === "off"} onchange={() => void reach("off", model!.reach.shell)} /> No project files</label>
-      <label><input type="radio" name="pi-files" checked={model.reach.files === "read"} onchange={() => void reach("read", model!.reach.shell)} /> Read files</label>
-      <p class="note">Reads, searches and lists files inside the project folder. It can see everything there that you can, including files that hold secrets. It cannot change anything.</p>
-      <label><input type="radio" name="pi-files" checked={model.reach.files === "write"} onchange={() => void reach("write", model!.reach.shell)} /> Read and write files</label>
-      <p class="note">Also edits and creates files inside the project folder, never in .git. It changes your files directly: keep the project in version control.</p>
-      <label><input type="checkbox" checked={model.reach.shell} onchange={(e) => void reach(model!.reach.files, e.currentTarget.checked)} /> Run shell commands</label>
-      <p class="note warn">A shell is not confined. A command runs as you and can read or change any file you can, use the network, and reach outside the project folder; the checks on file paths do not apply to it. To confine it, run isorite inside a container or a disposable virtual machine, or under a separate user account that has only the project; or leave it off.</p>
-    </fieldset>
     {#if said}<p class="note" role="status">{said}</p>{/if}
   {/if}
   {#if problem}<p class="bad" role="alert">{problem}</p>{/if}
@@ -122,8 +108,6 @@ ca = 'company-ca.pem'           # if its authority is the company's</pre>
   section { display: flex; flex-direction: column; gap: var(--space-2); }
   h2 { font-weight: 400; }
   .note { color: var(--text-dim, var(--text)); font-size: 12px; }
-  fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-2); }
-  .warn { color: var(--rose); }
   .row { display: flex; gap: var(--space-2); }
   input:not([type="radio"], [type="checkbox"]), select { width: 100%; min-width: 0; font: 12.5px var(--font-mono); }
   .in-use { color: var(--growth); }

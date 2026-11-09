@@ -12,6 +12,8 @@
   import { pictureSrc } from "$lib/pictures.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
+  import { pointers as prompt } from "$lib/pointers.svelte.ts";
+  import { whole as wholePointer } from "$lib/pointers.ts";
   import { pointing } from "$lib/pointing.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
   import { CELL, MAX_ZOOM, MIN_ZOOM, TITLE_UNITS, TITLE_PX, fit, indexLayout, withHighways, linePath, litRoutes, mergeRoutes, openAt, restRoutes, shownAs, zoomAbout, type Lit, type LitKind, type View } from "$lib/atlas/geometry.ts";
@@ -414,8 +416,8 @@
   // The Iso lens (M10, the agent's since M25): what is in the tray, what the session shown read and changed, and the
   // order it read in during its last turn. The agent's path is drawn only in this lens.
   const isoLens = $derived(panes.on.context);
-  const givenNotes = $derived(new Set(tray.parts.filter((p) => p.kind === "note").map((p) => p.id)));
-  const givenFolders = $derived(new Set(tray.parts.filter((p) => p.kind === "folder").map((p) => p.id)));
+  const givenNotes = $derived(new Set(prompt.inPrompt.filter((p) => p.kind === "note" && wholePointer(p)).map((p) => p.ref)));
+  const givenFolders = $derived(new Set(prompt.inPrompt.filter((p) => p.kind === "folder").map((p) => p.ref)));
   const CHANGES = /(^|[_:./-])(edit_note|write_note|edit|write|patch)$/;
   /** The notes the session shown read, and changed. */
   const readNotes = $derived(new Set((terminal.session?.turns ?? []).flatMap((t) => t.items.flatMap((i) => (i.kind === "tool" && i.note && !i.base && i.status !== "failed" && !CHANGES.test(i.name) ? [i.note] : [])))));
@@ -468,6 +470,7 @@
     move: (item, dir) => void moveHeld(item, dir),
     remove: (item) => void askRemove(item),
     send: (item) => give(item.id, item.kind),
+    rename: (item) => { renamingRef = item.id; },
     hide: (item) => { void app.hide(item.id).then(() => { given = `${item.kind === "folder" ? folderName(item.id) : title(item.id)} is hidden`; clearTimeout(givenTimer); givenTimer = setTimeout(() => (given = ""), 2200); }, (e: Error) => { notice = e.message; }); },
     unchosen: (item, x, y) => {
       if (item.kind !== "note" || !viewport) return;
@@ -475,6 +478,8 @@
       offered = { ref: item.id, x: x - r.left, y: y - r.top };
     },
   }, { drift: "cancel", scroll: false, dropAt: (x, y) => folderUnder(x, y), targetOf: (dir) => viewport?.querySelector(`[data-folder="${CSS.escape(dir)}"]`) ?? null });
+  /** The folder whose name is being typed over, asked for by its hold tag. */
+  let renamingRef = $state("");
   let asking = $state.raw<{ item: Item; text: string } | null>(null);
   /** The folder of the map under a point of the screen: the deepest one shown, not the one carried nor inside it. */
   function folderUnder(x: number, y: number): string | null {
@@ -597,17 +602,19 @@
   let given = $state("");
   let givenTimer: ReturnType<typeof setTimeout> | undefined;
   function give(ref: string, kind: "note" | "folder" = "note"): void {
-    const put = tray.add({ kind, id: ref, title: kind === "note" ? title(ref) : folderName(ref) });
-    given = put ? `${kind === "note" ? title(ref) : folderName(ref)} is in the agent's context` : `${kind === "note" ? title(ref) : folderName(ref)} is in the agent's context already`;
+    const name = kind === "note" ? title(ref) : folderName(ref);
+    const put = !prompt.holds(kind, ref);
+    if (put) prompt.toggle(kind, ref, name);
+    given = put ? `${name} is in your message` : `${name} is in your message already`;
     clearTimeout(givenTimer);
     givenTimer = setTimeout(() => (given = ""), 2200);
   }
   /** Given to Iso if it isn't, else taken back. */
   function giveOrTake(ref: string, kind: "note" | "folder" = "note"): void {
-    if (!tray.has(kind, ref)) { give(ref, kind); return; }
+    if (!prompt.holds(kind, ref)) { give(ref, kind); return; }
     const name = kind === "note" ? title(ref) : folderName(ref);
-    tray.remove({ kind, id: ref, title: name });
-    given = `${name} is out of the agent's context`;
+    prompt.toggle(kind, ref, name);
+    given = `${name} is out of your message`;
     clearTimeout(givenTimer);
     givenTimer = setTimeout(() => (given = ""), 2200);
   }
@@ -882,7 +889,7 @@
     <div class="atlas-world" class:labels class:shifting class:moving data-open={open} style="transform: translate({moving ? view.x : Math.round(view.x)}px, {moving ? view.y : Math.round(view.y)}px) scale({view.k / drawnK}); --u: {(L?.cell ?? 7) * drawnK}px; --k: {drawnK}">
       <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each folders as f (f.item.id)}
-          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} bare={f.open && !L.items.some((x) => x.parent === f.i)} dim={(!!lit && !f.open && !held.has(f.i)) || (finder.lit.size > 0 && !f.open && !foundIn(f.item.ref))} given={isoLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} onrename={f.item.ref.startsWith("@") || !f.item.ref ? undefined : (name) => void rename(f.item.ref, name)} />
+          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} bare={f.open && !L.items.some((x) => x.parent === f.i)} dim={(!!lit && !f.open && !held.has(f.i)) || (finder.lit.size > 0 && !f.open && !foundIn(f.item.ref))} given={isoLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} renaming={renamingRef === f.item.ref} onstop={() => { if (renamingRef === f.item.ref) renamingRef = ""; }} onrename={f.item.ref.startsWith("@") || !f.item.ref ? undefined : (name) => void rename(f.item.ref, name)} />
       {/each}
       </div>
       <AtlasRoutes k={drawnK} {rest} pointed={!chosen && !!pointed} hot={[...(isoLens ? isoHot : []), ...hot, ...thereHot]} {pulses} counts={litCount} {grown} {beat} {retracting} />
@@ -943,10 +950,10 @@
     {#if offered}
       {@const o = offered}
       <div class="offer frame" role="menu" aria-label={title(o.ref)} style="left:{Math.min(o.x, size.w - 170)}px;top:{o.y + 14}px">
-        {#if tray.has("note", o.ref)}
-          <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); giveOrTake(o.ref); offered = null; }}><i aria-hidden="true">◇</i>Take back from the agent</button>
+        {#if prompt.holds("note", o.ref)}
+          <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); giveOrTake(o.ref); offered = null; }}><i aria-hidden="true">◇</i>Take out of the message</button>
         {:else}
-          <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); give(o.ref); offered = null; }}><i aria-hidden="true">◆</i>Give to the agent</button>
+          <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); give(o.ref); offered = null; }}><i aria-hidden="true">◆</i>Put in the message</button>
         {/if}
         <button type="button" role="menuitem" onclick={(e) => { e.stopPropagation(); offered = null; void panes.open(o.ref, true); }}><i aria-hidden="true">▣</i>Open</button>
       </div>

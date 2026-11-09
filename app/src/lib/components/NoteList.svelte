@@ -8,7 +8,7 @@
   import { resolve } from "$app/paths";
   import { Gesture, type Item } from "$lib/gesture.svelte.ts";
   import { vanish } from "$lib/flight.ts";
-  import { tray } from "$lib/tray.svelte.ts";
+  import { pointers } from "$lib/pointers.svelte.ts";
   import HoldTags from "$lib/components/HoldTags.svelte";
   import NoteMenu from "$lib/components/NoteMenu.svelte";
   import { panes } from "$lib/panes.svelte.ts";
@@ -27,6 +27,7 @@
     move: (item, dir) => void moveItem(item, dir),
     remove: (item) => void askRemove(item),
     send: (item) => send(item),
+    rename: (item) => { draft = last(item.id); renaming = item.id; },
     hide: (item) => { void app.hide(item.id).then(() => { said = ""; sent = `${item.title} is hidden. Hold on open ground on the Atlas to bring it back.`; clearTimeout(sentTimer); sentTimer = setTimeout(() => (sent = ""), 5000); }, (e: Error) => { said = e.message; }); },
   }, { targetOf: (dir) => document.querySelector(`.notes section[data-dir="${CSS.escape(dir)}"] h2`) });
   let asking = $state.raw<{ item: Item; text: string; empty: boolean } | null>(null);
@@ -146,9 +147,10 @@
     }
   }
   function send(item: Item) {
-    const put = tray.add({ kind: item.kind, id: item.id, title: item.title });
+    const put = !pointers.holds(item.kind, item.id);
+    if (put) pointers.toggle(item.kind, item.id, item.title);
     said = "";
-    sent = put ? `${item.title} is with the agent.` : `${item.title} was with the agent already.`;
+    sent = put ? `${item.title} is in your message.` : `${item.title} was in your message already.`;
     clearTimeout(sentTimer);
     sentTimer = setTimeout(() => (sent = ""), 4000);
   }

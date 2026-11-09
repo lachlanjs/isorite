@@ -1,4 +1,4 @@
-// What is chosen can be copied for an agent that isorite does not run (M36): the tray's chips show with no agent
+// What is chosen can be copied for an agent that isorite does not run (M36): a pointer is in the box with no agent
 // attached, and "Copy for your agent" puts a block on the clipboard that names them for the agent's own tools.
 
 import { expect, test } from "@playwright/test";
@@ -16,13 +16,13 @@ test("with no agent attached, a note given is copied as text that names it for t
   await page.locator('[data-note="basics/surprise"]').click({ modifiers: ["Shift"] });
   await toIso(page);
 
-  await expect(page.getByRole("list", { name: "Going with your message" }).getByRole("listitem")).toHaveCount(1);
-  await page.getByRole("textbox", { name: "Message the agent" }).fill("Explain this.");
+  await expect(page.locator("[data-prompt] .pt")).toHaveCount(1);
+  await page.getByRole("textbox", { name: "Message the agent" }).pressSequentially(" Explain this.");
   await page.getByRole("button", { name: "Copy for your agent" }).click();
   await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
 
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toContain("read_note");
-  expect(copied).toContain("(basics/surprise)");
-  expect(copied.endsWith("Explain this.")).toBe(true);
+  expect(copied).toContain("/basics/surprise.md");
+  expect(copied).toContain("Explain this.");
 });

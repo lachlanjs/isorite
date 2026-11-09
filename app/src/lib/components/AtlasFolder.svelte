@@ -5,7 +5,7 @@
   import type { LayoutItem } from "@isorite/core/atlas";
   import { lustre } from "$lib/lustre.ts";
 
-  let { item, name, count, open, titled = true, held = { req: 0, bld: 0 }, bare = false, dim = false, given = false, here = false, moment = "", onpick, onrename }: {
+  let { item, name, count, open, titled = true, held = { req: 0, bld: 0 }, bare = false, dim = false, given = false, here = false, moment = "", onpick, onrename, renaming = false, onstop }: {
     item: LayoutItem;
     name: string;
     /** The notes in it, however deep. */
@@ -27,6 +27,9 @@
     onpick: (e: MouseEvent) => void;
     /** Rename it (a double click on its name): the new name, or undefined where it cannot be. */
     onrename?: (name: string) => void;
+    /** Asked to take a new name from outside (the hold tag), and told when it is done. */
+    renaming?: boolean;
+    onstop?: () => void;
   } = $props();
 
   // A tone apart from the folder it is in: the ground and the surface, turn about.
@@ -36,7 +39,8 @@
   const says = $derived([held.req ? `${held.req} required here` : "", held.bld ? `${held.bld} ${held.bld === 1 ? "builds" : "build"} on it` : ""].filter(Boolean).join(" · "));
   let editing = $state(false), draft = $state("");
   function edit(e: MouseEvent): void { if (!onrename) return; e.stopPropagation(); draft = name; editing = true; }
-  function done(commit: boolean): void { const was = editing; editing = false; if (commit && was && draft.trim() && draft.trim() !== name) onrename?.(draft.trim()); }
+  $effect(() => { if (renaming && !editing && onrename) { draft = name; editing = true; } });
+  function done(commit: boolean): void { const was = editing; editing = false; onstop?.(); if (commit && was && draft.trim() && draft.trim() !== name) onrename?.(draft.trim()); }
   const focus = (el: HTMLInputElement): void => { el.focus(); el.select(); };
   // Lit as one the chosen note requires, or that builds on it: a pulse of light round its edge, in the tone's colour, as it comes.
   let face = $state<HTMLElement>();

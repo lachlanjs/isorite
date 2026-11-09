@@ -18,7 +18,7 @@ test("a key entered in the settings is kept owner-only, said to be set and never
   await toIso(page);
   await page.getByRole("button", { name: "Agent settings" }).click();
   const menu = page.getByRole("dialog", { name: "Agent settings" });
-  await expect(menu.getByText("Model for isorite's own agent")).toBeVisible();
+  await expect(menu.getByRole("heading", { name: "Model", exact: true })).toBeVisible();
   await menu.getByLabel("Provider", { exact: true }).selectOption("openrouter");
   await expect(menu.getByTestId("pi-key-state")).toHaveText("No key is set.");
   await menu.getByLabel("Key for this provider").fill(KEY);
@@ -41,22 +41,19 @@ test("a key entered in the settings is kept owner-only, said to be set and never
   expect(readFileSync(file, "utf8")).not.toContain("BROWSERSECRET");
 });
 
-test("the tiers: project files are read-only and the shell is off by default, the shell's warning says it is not confined, and a change is kept", async ({ page }) => {
+test("what the native agent may do is the header's switches: files and run set its reach, and the settings hold no copy of them", async ({ page }) => {
   await page.goto("#/");
   await toIso(page);
   await page.getByRole("button", { name: "Agent settings" }).click();
   const menu = page.getByRole("dialog", { name: "Agent settings" });
-  await expect(menu.getByRole("radio", { name: "Read files" })).toBeChecked();
-  await expect(menu.getByRole("checkbox", { name: "Run shell commands" })).not.toBeChecked();
-  await expect(menu.getByText("A shell is not confined.")).toBeVisible();
-  await expect(menu.getByText(/container or a disposable virtual machine/)).toBeVisible();
-  await menu.getByRole("radio", { name: "Read and write files" }).check();
-  await expect(menu.getByText("Saved.")).toBeVisible();
-  await page.reload();
-  await toIso(page);
-  await page.getByRole("button", { name: "Agent settings" }).click();
-  await expect(page.getByRole("dialog", { name: "Agent settings" }).getByRole("radio", { name: "Read and write files" })).toBeChecked();
-  expect(JSON.parse(readFileSync(file, "utf8")).reach).toEqual({ files: "write", shell: false });
-  await page.getByRole("dialog", { name: "Agent settings" }).getByRole("radio", { name: "Read files" }).check();
-  await expect(page.getByRole("dialog", { name: "Agent settings" }).getByText("Saved.")).toBeVisible();
+  await expect(menu.getByLabel("Provider", { exact: true })).toBeVisible();
+  await expect(menu.getByRole("checkbox", { name: "Run shell commands" })).toHaveCount(0);
+  await expect(menu.getByRole("radio")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  const run = page.locator('.sw[data-switch="run"]');
+  test.skip(!(await run.isVisible()), "the switches are offered while an agent is attached");
+  await run.click();
+  await expect.poll(() => JSON.parse(readFileSync(file, "utf8")).reach).toEqual({ files: "read", shell: true });
+  await run.click();
+  await expect.poll(() => JSON.parse(readFileSync(file, "utf8")).reach).toEqual({ files: "read", shell: false });
 });

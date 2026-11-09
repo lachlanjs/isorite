@@ -6,7 +6,7 @@
   import { Compartment, EditorState, type Range } from "@codemirror/state";
   import { Decoration, EditorView, ViewPlugin, WidgetType, drawSelection, keymap, placeholder as hint, type DecorationSet, type ViewUpdate } from "@codemirror/view";
   import { cursorGroupLeft, cursorGroupRight, deleteGroupBackward, deleteGroupForward, history, historyKeymap, insertNewline, selectGroupLeft, selectGroupRight } from "@codemirror/commands";
-  import { MARKS, idOf, markOf } from "$lib/pointers.ts";
+  import { MARKS, idOf, markOf, used } from "$lib/pointers.ts";
   import { pointers } from "$lib/pointers.svelte.ts";
   import { tokenEl } from "$lib/pointerToken.ts";
 
@@ -53,7 +53,7 @@
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
-      if (!ghost) return;
+      if (!ghost) { const p = pointers.get(Number(el.dataset.pt)); if (p) void pointers.open(p); return; }
       ghost.remove();
       el.classList.remove("pt-lifted");
       const from = v.posAtDOM(el), at = v.posAtCoords({ x: e.clientX, y: e.clientY });
@@ -126,13 +126,21 @@
       v.dispatch({ changes: { from: pos, insert: s }, selection: { anchor: pos + s.length }, scrollIntoView: true });
       v.focus();
     };
-    return () => { pointers.insert = null; v.destroy(); };
+    pointers.strip = (which) => {
+      const doc = v.state.doc.toString(), changes: { from: number; to: number }[] = [];
+      for (const m of doc.matchAll(MARKS)) { const id = idOf(m[0]), p = id === null ? undefined : pointers.get(id); if (p && which(p)) changes.push({ from: m.index!, to: m.index! + 1 }); }
+      if (changes.length) v.dispatch({ changes });
+    };
+    for (const p of pointers.pending.splice(0)) pointers.insert(p);
+    return () => { pointers.insert = null; pointers.strip = null; v.destroy(); };
   });
   // Written from outside (cleared once sent, a slash command chosen).
   $effect(() => {
     const t = value;
     if (view && t !== view.state.doc.toString()) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: t }, selection: { anchor: t.length } });
   });
+  // What the prompt holds, for the Atlas to show as given.
+  $effect(() => { pointers.inPrompt = used(value, pointers.get); });
   $effect(() => { view?.dispatch({ effects: lock.reconfigure(EditorState.readOnly.of(readonly)) }); });
 </script>
 
@@ -141,7 +149,7 @@
 <style>
   .prompt { flex: 1 1 auto; min-width: 0; }
   /* A pointer: a chip in the cut-corner frame and isorite's blue, glowing a little; where it is from is on it. */
-  :global(.pt) { --c: var(--lattice); display: inline-block; vertical-align: baseline; margin: 0 2px; line-height: 0; cursor: grab; user-select: none; color: var(--c);
+  :global(.pt) { --c: var(--lattice); display: inline-block; vertical-align: baseline; margin: 0 2px; line-height: 0; cursor: pointer; user-select: none; color: var(--c);
     filter: drop-shadow(0 0 3px color-mix(in srgb, var(--c) 55%, transparent)); transition: filter var(--t-ack) var(--ease-out); }
   :global(.pt:hover) { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--c) 85%, transparent)); }
   :global(.pt-face) { position: relative; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; font: 11.5px/1 var(--font-ui); color: var(--c); white-space: nowrap; background: var(--c);

@@ -12,7 +12,7 @@ The gauge in Iso's header shows how full the agent's context is, as the agent sa
 - **The rest**: the harness's own instructions and the conversation.
 - **Room**: what is left.
 
-Below it is the tray: what goes before the next prompt, asked here or in the agent's front end. Take a part out with ✕.
+What you point to in your message stands in the box, as pointers.
 
 What the agent dropped when it compacted its conversation can't be seen from here, and the view says so. It needs [Iso](/iso/iso.md "requires")'s pane to be showing a session.
 

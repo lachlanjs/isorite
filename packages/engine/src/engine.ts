@@ -442,7 +442,7 @@ export class Engine implements Api {
         : { oldString: str(args.oldString, "oldString"), newString: str(args.newString, "newString"), replaceAll: args.replaceAll === true };
       return this.agentWrite({ agent, session, note: str(args.note, "note"), asked, edit });
     }
-    if (tool === ASK_QUESTION.function.name || tool === OFFER_TEXT.function.name) return { text: this.agentOffer(agent, session, tool, args) };
+    if (tool === ASK_QUESTION.function.name || tool === OFFER_TEXT.function.name) return { text: await this.agentOffer(agent, session, tool, args) };
     if (ARTIFACT_TOOLS.has(tool)) return { text: await this.artifactTool(tool, args, `agent:${agent}`, asked) };
     const turn = this.turns.get(`${agent}/${session}`) ?? this.startTurn(agent, session);
     const { text, step } = await turn.lookup.call(tool, JSON.stringify(args));
@@ -520,8 +520,8 @@ export class Engine implements Api {
   /** What agents asked back or offered (M25), by id, until kept. In memory: a question not kept is a passing one. */
   private offered = new Map<string, { agent: string; item: Extract<TurnItem, { kind: "question" | "offer" }> }>();
 
-  /** An agent's ask_question or offer_text, checked as Iso's are, put to the person to keep or not. */
-  private agentOffer(agent: string, session: string, tool: string, args: Record<string, unknown>): string {
+  /** An agent's ask_question or offer_text, checked as Iso's are: a question is made a note at once (where agents may write notes), a passage put to the person to keep or not. */
+  private async agentOffer(agent: string, session: string, tool: string, args: Record<string, unknown>): Promise<string> {
     const id = newId(this.opts.clock.now());
     let item: Extract<TurnItem, { kind: "question" | "offer" }>;
     if (tool === ASK_QUESTION.function.name) {
@@ -539,7 +539,13 @@ export class Engine implements Api {
       item = { kind: "offer", id, note, text };
     }
     this.offered.set(id, { agent, item });
+    // A question is made a note at once, as an agent's note is, where agents may write notes; where they may not, it waits to be kept.
+    let made = "";
+    if (item.kind === "question" && (await this.agentNotes()).may) {
+      try { made = (await this.agentTake(id)).note; item = { ...item, made }; } catch { /* left to be kept */ }
+    }
     this.publish({ type: "agent-item", agent, session, item });
+    if (made) return `It is now an open question in their base: ${made}.`;
     return item.kind === "question" ? "It is put to them. They can make it a question note." : `It is offered to them for ${item.note === AGENTS_FILE ? "their AGENTS.md" : this.titleOf(item.note, "")}.`;
   }
 

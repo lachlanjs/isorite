@@ -12,7 +12,6 @@
   // over the notes it drew on as parts under the reply, lit with the phrases citing them and with the note on the
   // Atlas when pointed at. A conversation with the agent from before M25 is read here the same way.
   import AttachAgent from "./AttachAgent.svelte";
-  import Crystal from "./Crystal.svelte";
   import type { Given, TerminalItem, TerminalPermission, TerminalTurn } from "@isorite/engine";
   import { onMount, untrack } from "svelte";
   import { slide } from "svelte/transition";
@@ -300,9 +299,9 @@
       </div>
     {/if}
     {#if t.state === "running"}
-      <!-- At work (M24, I): over ACP, the session's crystal grows. -->
+      <!-- At work: the gold diamond, turning. -->
       {@const now = step(t)}
-      <p class="doing" role="status">{#if view?.session}<Crystal id={view.session} size={28} growing />{/if}<span class="who">{view?.agent || "The agent"}</span><span class="what">is {now.what}{#if now.to}{" "}<b>{now.to}</b>{/if}</span></p>
+      <p class="doing" role="status"><i class="gem" aria-hidden="true"></i><span class="who">{view?.agent || "The agent"}</span><span class="what">is {now.what}{#if now.to}{" "}<b>{now.to}</b>{/if}</span></p>
     {:else if t.state === "stopped"}
       <p class="faint end">stopped</p>
     {:else if t.state === "failed"}
@@ -413,7 +412,14 @@
   .offer .for { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-faint); }
   .offer .in { color: var(--malachite); }
   .offer .insert { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
-  .doing { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-faint); min-width: 0; }
+  /* The agent's mark while it works: the gold diamond turns on its point as a cut stone does, and a ring of light leaves it. */
+  .gem { position: relative; flex: none; width: 16px; height: 16px; display: grid; place-items: center; }
+  .gem::before { content: ""; width: 8px; height: 8px; background: var(--growth); transform: rotate(45deg); animation: gem-turn 2.4s ease-in-out infinite; box-shadow: 0 0 8px 1px color-mix(in srgb, var(--growth) 60%, transparent); }
+  .gem::after { content: ""; position: absolute; inset: 3px; border: 1px solid var(--growth); transform: rotate(45deg); opacity: 0; animation: gem-ring 2.4s ease-out infinite; }
+  @keyframes gem-turn { 0%, 100% { transform: rotate(45deg) scale(1); } 25% { transform: rotate(45deg) scaleX(.15); } 50% { transform: rotate(45deg) scale(1.15); } 75% { transform: rotate(45deg) scaleY(.15); } }
+  @keyframes gem-ring { 0%, 45% { opacity: 0; transform: rotate(45deg) scale(1); } 55% { opacity: .7; } 100% { opacity: 0; transform: rotate(45deg) scale(2.2); } }
+  @media (prefers-reduced-motion: reduce) { .gem::before, .gem::after { animation: none; } .gem::after { display: none; } }
+  .doing { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-faint); min-width: 0; }
   .doing .who { color: var(--text-soft); flex: none; }
   .doing .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .doing .what b { font-weight: inherit; color: var(--text-soft); }

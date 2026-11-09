@@ -7,7 +7,6 @@
   import { app } from "$lib/app.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
-  import { handoffText } from "$lib/handoff.ts";
   import { pointers } from "$lib/pointers.svelte.ts";
   import PromptBox from "./PromptBox.svelte";
   import AgentSessions from "./AgentSessions.svelte";
@@ -16,30 +15,22 @@
   import TerminalTurns from "./TerminalTurns.svelte";
 
   let text = $state("");
-  /** The tray's parts already given to the session shown: faint, as they go before a message once. */
-  let given = $state<Set<string>>(new Set());
-  const sessionId = $derived(terminal.view?.session ?? null);
-  $effect(() => { void sessionId; given = new Set(); });
-  // With no agent attached the tray is still shown, so what was chosen can be copied for an agent isorite does not run.
-  const chips = $derived(!terminal.old ? tray.sent : []);
   let copied = $state(false);
   let copyProblem = $state("");
   async function copyForAgent(): Promise<void> {
     copyProblem = "";
     try {
-      await navigator.clipboard.writeText(handoffText(tray.sent, text));
+      await navigator.clipboard.writeText(`${HANDOFF}\n\n${await pointers.expand(text)}`);
       copied = true;
       setTimeout(() => { copied = false; }, 1500);
     } catch { copyProblem = "The browser would not copy."; }
   }
-  const words = (t: string, n = 44): string => (t.length > n ? `${t.slice(0, n).trimEnd()}…` : t);
+  const HANDOFF = "From my isorite knowledge base. Read what I point to with the isorite tools (read_note, outline_note, search_notes), not from this message alone: the notes may have changed since I chose them.";
   const busy = $derived(terminal.running);
   /** A session to show: the agent's, or one kept, or Iso's from before, being read. */
   const shown = $derived(!!terminal.old || terminal.acp);
 
   onMount(() => { terminal.start(); });
-  // What is in the tray is told to the session shown, to go before its next prompt.
-  $effect(() => { void tray.sent; void terminal.view?.session; if (terminal.acp) void terminal.give(); });
 
   /** The agent's slash commands, offered while one is being typed, and what it lets you set (its mode, its model). */
   const commands = $derived(terminal.view?.commands ?? []);
@@ -54,12 +45,10 @@
   }
   /** While the agent works: Enter queues what is typed for when it would stop; this puts it in after the step running now. */
   async function steer(): Promise<void> {
-    const keys = tray.sent.map(tray.keyOf);
-    if (await terminal.steer(await pointers.expand(text))) { text = ""; given = new Set([...given, ...keys]); }
+    if (await terminal.steer(await pointers.expand(text))) text = "";
   }
   async function send(): Promise<void> {
-    const keys = tray.sent.map(tray.keyOf);
-    if (await terminal.send(await pointers.expand(text))) { text = ""; given = new Set([...given, ...keys]); }
+    if (await terminal.send(await pointers.expand(text))) text = "";
   }
   function keys(e: KeyboardEvent): void {
     if (matches.length && !e.isComposing) {
@@ -91,24 +80,6 @@
         {/each}
       </ul>
     {/if}
-    {#if chips.length}
-      <div class="tray">
-      <ul class="chips" aria-label="Going with your message">
-        {#each chips as p (tray.keyOf(p))}
-          <li class="chip" class:given={given.has(tray.keyOf(p))} data-kind={p.kind} title={given.has(tray.keyOf(p)) ? "Already given to this session" : "Goes before your next message"}>
-            <span class="g" aria-hidden="true">{p.kind === "passage" ? "❝" : p.kind === "folder" ? "▤" : "◆"}</span>
-            <span class="t">{p.kind === "passage" ? `${p.title}: “${words(p.text)}”` : p.title}</span>
-            <button type="button" class="x" aria-label="Remove {p.kind === 'passage' ? `the passage from ${p.title}` : p.title} from the message" onclick={() => tray.remove(p)}><svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8" /></svg></button>
-          </li>
-        {/each}
-      </ul>
-        <button type="button" class="copy" aria-label={copied ? "Copied" : "Copy for your agent"} title={copied ? "Copied" : "Copy for your agent: text that names these for an agent running in your own terminal, to paste there. It reads them through isorite's tools."} onclick={() => void copyForAgent()}>
-          {#if copied}<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7" /></svg>
-          {:else}<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3" width="9" height="11" /><path d="M6 3V1.8h4V3M5.8 7h4.4M5.8 9.5h4.4" /></svg>{/if}
-        </button>
-      </div>
-      {#if copyProblem}<p class="handoff"><span class="bad" role="alert">{copyProblem}</span></p>{/if}
-    {/if}
     <div class="box" class:busy>
       <PromptBox bind:value={text} readonly={terminal.sending} placeholder={terminal.connected ? `Ask ${terminal.view?.agent || "the agent"}` : "Attach an agent to ask it here"} onkeydown={keys} />
       <div class="bar">
@@ -124,6 +95,12 @@
           </div>
         {/if}
         <span class="grow"></span>
+        {#if text.trim() && !terminal.old}
+          <button type="button" class="copy" aria-label={copied ? "Copied" : "Copy for your agent"} title={copied ? "Copied" : "Copy for an agent in your own terminal: the message with what it points to, to paste there"} onclick={() => void copyForAgent()}>
+            {#if copied}<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7" /></svg>
+            {:else}<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3" width="9" height="11" /><path d="M6 3V1.8h4V3M5.8 7h4.4M5.8 9.5h4.4" /></svg>{/if}
+          </button>
+        {/if}
         {#if busy}
           <button class="corner stop" type="button" aria-label="Stop the agent" title="Stop  (Escape)" onclick={() => void terminal.stop()}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="4" y="4" width="8" height="8" fill="currentColor" /></svg></button>
         {:else if terminal.sending}
@@ -138,7 +115,7 @@
       <p class="mid">Enter adds it for when the agent stops.{#if terminal.canSteer} <button type="button" class="more" onclick={() => void steer()} title="Put it in after the step running now (Ctrl+Enter)">Steer now</button>{/if}</p>
     {/if}
     {#if app.offline}<p class="offline" role="status"><span class="dot"></span>Lost touch with isorite; reconnecting…</p>{/if}
-    {#if terminal.problem || terminal.view?.problem}<p class="bad" role="alert">{terminal.problem || terminal.view?.problem}</p>{/if}
+    {#if terminal.problem || terminal.view?.problem || copyProblem}<p class="bad" role="alert">{terminal.problem || terminal.view?.problem || copyProblem}</p>{/if}
   </div>
 </div>
 
@@ -168,20 +145,9 @@
   .corner.send:disabled { color: var(--text-faint); opacity: .5; cursor: default; }
   .corner.stop { color: var(--rose); }
   .corner.stop:hover { background: var(--rose-soft); }
-  .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; max-height: 84px; overflow: auto; }
-  .chip { border-radius: var(--round); display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 2px 4px 2px 8px; border: 1px solid var(--line-strong); background: var(--ground-1); font: 12px/1.4 var(--font-ui); color: var(--text); }
-  .chip .g { color: var(--growth); flex: none; }
-  .chip .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mid { margin: 0; font: 12px/1.4 var(--font-ui); color: var(--text-soft); }
   .mid .more { background: none; border: 0; padding: 0; color: var(--growth); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-  .handoff { margin: 0; display: flex; align-items: center; gap: 8px; }
-  .chip.given { border-color: var(--line); color: var(--text-faint); }
-  .chip.given .g { color: var(--text-faint); }
-  .chip .x { flex: none; width: 18px; height: 18px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; }
-  .chip .x:hover { color: var(--rose); }
-  .tray { display: flex; align-items: flex-start; gap: 6px; }
-  .tray .chips { flex: 1; min-width: 0; }
-  .copy { width: 26px; height: 26px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--growth); cursor: pointer; opacity: .8; }
+  .copy { flex: none; width: 28px; height: 28px; height: 26px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--growth); cursor: pointer; opacity: .8; }
   .copy:hover, .copy:focus-visible { opacity: 1; background: var(--ground-2); }
   /* The session's settings, quiet until wanted: plain words with a caret, a ground under them when pointed at. */
   .settings { display: flex; flex-wrap: wrap; gap: 2px; min-width: 0; }

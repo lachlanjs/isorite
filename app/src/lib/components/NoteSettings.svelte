@@ -9,6 +9,7 @@
   import { LAYOUTS, PANES, panes, type Pane } from "$lib/panes.svelte.ts";
   import { makeKind } from "$lib/make.ts";
   import { kept } from "$lib/here.ts";
+  import Glyph from "./Glyph.svelte";
 
   const NAME: Record<Pane, string> = { note: "Note", atlas: "Atlas", iso: "Agent" };
   const LAYOUT_NAME: Record<string, string> = { cols: "Three columns", stack: "The note beside the Atlas over the agent", one: "One pane: the one in focus" };
@@ -62,15 +63,14 @@
 {#if app.open && !app.open.startsWith("@")}
   {@const open = app.open}
   <section>
-    <h2 class="label">this note</h2>
     <div class="row">
-      <button class="btn" type="button" onclick={() => { panes.settings = null; void makeKind("question", open); }}>A question about it</button>
-      <button class="btn" type="button" onclick={() => { panes.settings = null; void makeKind("problem", open); }}>A problem using it</button>
-      {#if asking === null && app.listing.notes.some((n) => n.id === open)}<button class="btn quiet danger-text" type="button" onclick={() => void askDelete(open)}>Delete it</button>{/if}
+      <button class="icon" type="button" aria-label="A question about this note" title="A question about this note" onclick={() => { panes.settings = null; void makeKind("question", open); }}><Glyph kind="question" size={18} /></button>
+      <button class="icon" type="button" aria-label="A problem using this note" title="A problem using this note" onclick={() => { panes.settings = null; void makeKind("problem", open); }}><Glyph kind="problem" size={18} /></button>
+      {#if asking === null && app.listing.notes.some((n) => n.id === open)}<button class="icon danger-text" type="button" aria-label="Delete this note" title="Delete this note" onclick={() => void askDelete(open)}><svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M7 7v4M9 7v4" /></svg></button>{/if}
     </div>
     {#if asking !== null}
       <div class="ask" role="alertdialog" aria-label="delete this note">
-        <span>Delete this note? {#if asking.length}{asking.length === 1 ? "One note links" : `${asking.length} notes link`} to it ({asking.join(", ")}); {asking.length === 1 ? "its link is" : "their links are"} left broken.{:else}No note links to it.{/if} Its history stays.</span>
+        <span>Delete this note?{#if asking.length} Linked from {asking.join(", ")}: the links break.{/if}</span>
         <div class="row">
           <button class="btn danger" type="button" onclick={() => void remove(open)}>delete</button>
           <button class="btn quiet" type="button" onclick={() => { asking = null; }}>keep it</button>
@@ -83,8 +83,7 @@
 
 {#if app.session}
   <section>
-    <h2 class="label">the base</h2>
-    <p><span class="name">{app.session.name}</span> <span class="faint">· {app.listing.notes.length} {app.listing.notes.length === 1 ? "note" : "notes"}</span></p>
+    <p><span class="name">{app.session.name}</span></p>
     {#if site}
       <div class="row">
         <button class="btn" class:danger={sure} type="button" title="The guide as it was first, here in this browser: what you changed in it goes" onclick={() => void startAgain()} onblur={() => (sure = false)}>{sure ? "start again: your changes go" : "start the guide again"}</button>
@@ -94,7 +93,6 @@
 {/if}
 
 <section>
-  <h2 class="label">the ground</h2>
   <div class="row" role="radiogroup" aria-label="Ground">
     {#each GROUNDS as [value, name] (value)}
       <button class="btn" class:on={ground.chosen === value} type="button" role="radio" aria-checked={ground.chosen === value} onclick={() => ground.choose(value)}>{name}</button>
@@ -103,7 +101,6 @@
 </section>
 
 <section>
-  <h2 class="label">the notes' type</h2>
   <div class="row" role="radiogroup" aria-label="The notes' type">
     {#each FACES as [value, name] (value)}
       <button class="btn" class:on={face.chosen === value} type="button" role="radio" aria-checked={face.chosen === value} title={value ? "IBM Plex Sans" : "Charter"} style:font-family={value ? '"IBM Plex Sans", sans-serif' : "var(--font-text)"} onclick={() => face.choose(value)}>{name}</button>
@@ -112,18 +109,16 @@
 </section>
 
 <section>
-  <h2 class="label">the code</h2>
   <div class="row" role="radiogroup" aria-label="Code">
     {#each CODE_LOOKS as [value, name] (value)}
-      <button class="btn" class:on={codeLook.chosen === value} type="button" role="radio" aria-checked={codeLook.chosen === value} title={value ? "keywords bold, comments faint, as in print" : "coloured by what each word is"} onclick={() => codeLook.choose(value)}>{name}</button>
+      <button class="btn" class:on={codeLook.chosen === value} type="button" role="radio" aria-checked={codeLook.chosen === value}  onclick={() => codeLook.choose(value)}>{name}</button>
     {/each}
   </div>
 </section>
 
 {#if can || !panes.narrow}
   <section>
-    <h2 class="label">the screen</h2>
-    <div class="row">
+      <div class="row">
       {#if can}<button class="btn" class:on={full} type="button" aria-pressed={full} onclick={fullscreen}>fullscreen</button>{/if}
       {#if !panes.narrow}
         <span class="icons" role="group" aria-label="Layout">
@@ -149,7 +144,7 @@
 
 <style>
   section { display: flex; flex-direction: column; gap: var(--space-2); }
-  h2 { font-weight: 400; }
+  .icon.danger-text { color: var(--text-faint); }
   .name { color: var(--text); }
   .danger-text:hover, .danger-text:focus-visible { color: var(--rose); }
   .ask { display: flex; flex-direction: column; gap: var(--space-2); color: var(--text-soft); font-size: 13px; }

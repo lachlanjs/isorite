@@ -7,7 +7,7 @@
 import { land, sendFlight, shudder } from "./flight.ts";
 
 export type Item = { kind: "note" | "folder"; id: string; title: string };
-export type Tag = "move" | "delete" | "send" | "hide";
+export type Tag = "move" | "delete" | "send" | "hide" | "rename";
 
 export const HOLD = 380; // ms held still before the tags appear
 const SLOP = 6; // px a pointer may drift and still be "held"
@@ -21,6 +21,8 @@ export type Done = {
   send: (item: Item) => void;
   /** Let go on the grey tag: kept off the Atlas and the list (it can be brought back). */
   hide: (item: Item) => void;
+  /** Let go on the pencil tag, which only a folder has: its name is typed over. */
+  rename?: (item: Item) => void;
   /** A finger let go with the tags out but on none of them, where it was let go (the Atlas offers what else it can do). */
   unchosen?: (item: Item, x: number, y: number) => void;
 };
@@ -160,6 +162,7 @@ export class Gesture {
     else if (phase === "held" && tag === "delete") this.done.remove(item);
     else if (phase === "held" && tag === "send") this.done.send(item);
     else if (phase === "held" && tag === "hide") this.done.hide(item);
+    else if (phase === "held" && tag === "rename") this.done.rename?.(item);
     else if (phase === "held" && !tag && touch) this.done.unchosen?.(item, x, y);
   }
 
@@ -173,7 +176,7 @@ export class Gesture {
 
 function tagAt(x: number, y: number): Tag | null {
   const t = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest<HTMLElement>("[data-tag]")?.dataset.tag;
-  return t === "move" || t === "delete" || t === "send" || t === "hide" ? t : null;
+  return t === "move" || t === "delete" || t === "send" || t === "hide" || t === "rename" ? t : null;
 }
 
 function dirAt(x: number, y: number): string | null {

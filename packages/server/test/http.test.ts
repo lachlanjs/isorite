@@ -281,21 +281,18 @@ test("MCP over HTTP at /mcp (M25): stateless, a JSON answer to each request, the
   expect((await rpc("resources/read", { uri: "isorite://notes/basics/entropy" })).result.contents[0].text).toContain("The average surprise.");
   expect((await rpc("nothing/here")).error?.code).toBe(-32601);
 
-  // A question back is put to the person (an event for the pane), and made a note when kept.
+  // A question back is made an open question note at once (an event for the pane says so).
   const heard: any[] = [], abort = new AbortController();
   void fetch(`${url}/api/events`, { signal: abort.signal }).then(async (r) => {
     for await (const chunk of r.body!) for (const m of new TextDecoder().decode(chunk as Uint8Array).matchAll(/^data: (\{"type":"agent-item".*)$/gm)) heard.push(JSON.parse(m[1]!));
   }).catch(() => undefined);
   await new Promise((r) => setTimeout(r, 150));
   const asked = await rpc("tools/call", { name: "ask_question", arguments: { title: "Why is it an average?", text: "", about: ["basics/entropy"] } });
-  expect(asked.result.content[0].text).toMatch(/put to them/);
+  expect(asked.result.content[0].text).toMatch(/open question in their base: basics\/why-is-it-an-average/);
   await expect.poll(() => heard.length).toBe(1);
   expect(heard[0]).toMatchObject({ agent: "omp", session: "s1", item: { kind: "question", title: "Why is it an average?", about: ["basics/entropy"] } });
   abort.abort();
-  const kept = await write("/api/agent/take", { id: heard[0].item.id }, { method: "POST" });
-  expect(kept.status).toBe(200);
-  const { note } = (await kept.json()) as { note: string };
-  expect(readFileSync(join(notes, `${note}.md`), "utf8")).toContain("Why is it an average?");
+  expect(readFileSync(join(notes, "basics/why-is-it-an-average.md"), "utf8")).toContain("Why is it an average?");
   expect((await write("/api/agent/take", { id: heard[0].item.id }, { method: "POST" })).status).toBe(404);
 
   // No page from elsewhere.

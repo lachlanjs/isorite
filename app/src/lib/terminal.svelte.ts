@@ -6,7 +6,7 @@
 // Iso's own conversations, from before M25, are read here too: drawn as a session kept, with nothing to carry on.
 
 import type { ConversationSummary, Decision, EngineEvent, Given, TerminalItem, TerminalTurn, TerminalView, Turn } from "@isorite/engine";
-import type { TerminalApi } from "./api.ts";
+import type { PiApi, TerminalApi } from "./api.ts";
 import { app } from "./app.svelte.ts";
 import { panes } from "./panes.svelte.ts";
 import { tray, type Part } from "./tray.svelte.ts";
@@ -67,6 +67,13 @@ class TerminalState {
     this.started = true;
     void app.api.agentNotes().then(({ may }) => { panes.on.notes = may; }, () => undefined);
     panes.notesFlipped = (may) => { void app.api.setAgentNotes(may).catch((e: Error) => { panes.on.notes = !may; this.problem = e.message; }); };
+    // The native agent's reach is the header's two switches, held by the server: files on is read and write, run is the shell.
+    const pi = (app.api as { pi?: PiApi } | undefined)?.pi;
+    const local = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+    if (pi && local) {
+      void pi.state().then((m) => { panes.on.files = m.reach.files === "write"; panes.on.run = m.reach.shell; }, () => undefined);
+      panes.reachFlipped = () => { void pi.setReach(panes.on.files ? "write" : "read", panes.on.run).catch((e: Error) => { this.problem = e.message; }); };
+    }
     if (!this.api) { panes.setAttached(false); return; }
     const read = () => this.api?.view().then((v) => { if (!this.heard) this.show(v); }, () => { if (!this.heard) panes.setAttached(false); });
     void read();

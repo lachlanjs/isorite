@@ -88,7 +88,10 @@ class Panes {
     this.on[k] = to;
     keep("isorite.switches", JSON.stringify(this.on));
     if (k === "notes") this.notesFlipped?.(to);
+    if (k === "files" || k === "run") this.reachFlipped?.();
   }
+  /** Set by the terminal: what the native agent may reach follows the files and run switches. */
+  reachFlipped: (() => void) | null = null;
 
   /** Agents' changes to the notes are the base's to allow, kept by the server (terminal.svelte.ts). */
   notesFlipped: ((may: boolean) => void) | null = null;

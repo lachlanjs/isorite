@@ -1,8 +1,11 @@
 // The pointers in play (see pointers.ts): made when a stretch is chosen and sent to the prompt, kept for the session so
 // the prompt's characters can be told from what they stand for.
 
-import { app } from "./app.svelte.ts";
-import { COUNT, expand, relocate, used, type Pointer } from "./pointers.ts";
+import { goto } from "$app/navigation";
+import { app, codeHref } from "./app.svelte.ts";
+import { panes } from "./panes.svelte.ts";
+import { pointing } from "./pointing.svelte.ts";
+import { COUNT, expand, relocate, used, whole, type Pointer } from "./pointers.ts";
 
 class Pointers {
   readonly #all = new Map<number, Pointer>();
@@ -11,6 +14,33 @@ class Pointers {
   hover = $state.raw<Pointer | null>(null);
   /** Set by the prompt: put a pointer in it, at a point of the screen (a drop) or at its cursor. */
   insert: ((p: Pointer, at?: { x: number; y: number }) => void) | null = null;
+
+  /** The pointers the prompt holds now (set by the prompt). */
+  inPrompt = $state.raw<Pointer[]>([]);
+  /** Set by the prompt: take out of it each pointer that `which` says yes to. */
+  strip: ((which: (p: Pointer) => boolean) => void) | null = null;
+  /** Put in while the prompt was not on the screen: it takes them when it is. */
+  pending: Pointer[] = [];
+
+  /** Put a pointer in the prompt (or hold it for the prompt, which a hidden pane does not have). */
+  put(p: Pointer): void {
+    if (this.insert) this.insert(p); else this.pending.push(p);
+    if (panes.focus !== "iso") panes.unseen++;
+  }
+  /** A whole note or folder, in the prompt or not. */
+  holds(kind: "note" | "folder", ref: string): boolean { return this.inPrompt.some((p) => p.kind === kind && p.ref === ref && whole(p)); }
+  /** A note or folder as a pointer: put in the prompt if it is not there, else taken out. Whether it is now in. */
+  toggle(kind: "note" | "folder", ref: string, title: string): boolean {
+    if (this.holds(kind, ref)) { this.strip?.((p) => p.kind === kind && p.ref === ref && whole(p)); return false; }
+    this.put(this.make({ kind, ref, title, from: 0, to: 0, text: "" }));
+    return true;
+  }
+  /** Pressed, not carried: what it points to is shown (a note opens where the pointer was taken, the Atlas follows it). */
+  async open(p: Pointer): Promise<void> {
+    if (p.kind === "note") await panes.open(p.ref, true);
+    else if (p.kind === "code") { await goto(codeHref(p.ref)); if (panes.narrow) panes.to("note"); }
+    else if (p.kind === "folder") pointing.set("iso", { id: p.ref, folder: true, who: "you" });
+  }
 
   make(draft: Omit<Pointer, "id">): Pointer {
     const id = this.#next++ % COUNT, p = { ...draft, id };

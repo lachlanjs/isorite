@@ -1,6 +1,6 @@
 <script lang="ts">
   // What a press and hold on a note or a folder shows (M33): four tags standing out round it, a quarter of a turn apart,
-  // each on a stem from its edge: move (blue, up), send to the agent (gold), delete (rose), hide (grey, left). They grow out from the item;
+  // each on a stem from its edge: move (blue, up), rename (a folder only, blue, up and left), send to the agent (gold), delete (rose), hide (grey, left). They grow out from the item;
   // each leans towards the pointer as it comes near, and the one it is on fills, with the item answering (rose, it
   // trembles; gold, it glows). Reached, move picks the item up: its card lifts from where it was to the pointer and is
   // carried (`mode` "ghost"), put down into the folder it is let go over or taken back. `mode`: round an item in the
@@ -9,9 +9,11 @@
 
   let { g, mode, bounds }: { g: Gesture; mode: "row" | "point" | "ghost"; /** The box the tags are kept within. */ bounds?: DOMRect | null } = $props();
 
-  const LABEL: Record<Tag, string> = { move: "move", send: "send to the agent", delete: "delete", hide: "hide" };
+  const LABEL: Record<Tag, string> = { move: "move", send: "send to the agent", delete: "delete", hide: "hide", rename: "rename" };
   /** Each tag's way out from the item, in degrees (0 to the right, 90 down): move up, send towards the agent's pane. */
   const WAY: [Tag, number][] = [["move", -90], ["send", 0], ["delete", 90], ["hide", 180]];
+  /** A folder has a fifth, to rename it, between move and hide. */
+  const ways = $derived(g.item?.kind === "folder" && g.item.id ? [...WAY, ["rename", -135] as [Tag, number]] : WAY);
   const HALF = 17, GAP = 12; // the tag's half side; the stem between the item's edge and the tag
 
   type Petal = { tag: Tag; x: number; y: number; ex: number; ey: number; ux: number; uy: number; below: boolean };
@@ -22,7 +24,7 @@
     const w = mode === "row" ? Math.min(r.width, 120) : r.width, h = r.height;
     const cx = mode === "row" ? Math.min(Math.max(g.origin.x, r.left + w / 2), r.right - w / 2) : r.left + r.width / 2, cy = r.top + r.height / 2;
     const b = bounds ?? { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
-    const place = (turn: number): Petal[] => WAY.map(([tag, deg]) => {
+    const place = (turn: number): Petal[] => ways.map(([tag, deg]) => {
       const t = ((deg + turn) * Math.PI) / 180, ux = Math.cos(t), uy = Math.sin(t);
       // Where the way leaves the item's box, then the stem, then the tag's middle.
       const edge = Math.min(Math.abs(ux) > 1e-6 ? w / 2 / Math.abs(ux) : Infinity, Math.abs(uy) > 1e-6 ? h / 2 / Math.abs(uy) : Infinity);
@@ -71,6 +73,7 @@
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
             {#if p.tag === "move"}<path d="M8 2v12M2 8h12M6.3 3.7L8 2l1.7 1.7M6.3 12.3L8 14l1.7-1.7M3.7 6.3L2 8l1.7 1.7M12.3 6.3L14 8l-1.7 1.7" />
             {:else if p.tag === "hide"}<path d="M1.5 8s2.3-4 6.5-4 6.5 4 6.5 4-2.3 4-6.5 4-6.5-4-6.5-4z" /><path d="M2.5 13.5l11-11" />
+            {:else if p.tag === "rename"}<path d="M2.5 13.5l.7-3L11 2.7l2.3 2.3-7.8 7.8zM9.6 4.1l2.3 2.3" />
             {:else if p.tag === "delete"}<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 9h5.6l.7-9M7 7v4.5M9 7v4.5" />
             {:else}<path d="M8 2.5l5.5 5.5L8 13.5 2.5 8z" /><path d="M6 8h4M8.6 6.6L10 8 8.6 9.4" />{/if}
           </svg>
@@ -87,7 +90,7 @@
   .stems { position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; overflow: visible; }
   .stems line { stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: calc(.4 + .6 * var(--near)); animation: stem var(--t-change) var(--ease-out) forwards; animation-delay: calc(var(--i) * 30ms); }
   .stems line.on { stroke-width: 2.5; opacity: 1; }
-  .stems .move { stroke: var(--lattice); } .stems .delete { stroke: var(--rose); } .stems .send { stroke: var(--growth); } .stems .hide { stroke: var(--text-faint); }
+  .stems .move { stroke: var(--lattice); } .stems .delete { stroke: var(--rose); } .stems .send { stroke: var(--growth); } .stems .hide { stroke: var(--text-faint); } .stems .rename { stroke: var(--lattice); }
   @keyframes stem { to { stroke-dashoffset: 0; } }
 
   /* A tag: a cut-corner square in its colour, as the frames are, growing out from the item to its place. */
@@ -98,7 +101,7 @@
   /* Not something to point at until it has come out: on its way it passes under the pointer, which would take the
      pointer off the item (and its links' light with it) for a moment. */
   @keyframes armed { from { pointer-events: none; } }
-  .petal.delete { --c: var(--rose); } .petal.send { --c: var(--growth); } .petal.hide { --c: var(--text-faint); }
+  .petal.delete { --c: var(--rose); } .petal.send { --c: var(--growth); } .petal.hide { --c: var(--text-faint); } .petal.rename { --c: var(--lattice); }
   @keyframes petal { from { translate: calc(var(--dx) * -1px) calc(var(--dy) * -1px); scale: .3; opacity: 0; } }
   .face { position: absolute; inset: 0; display: grid; place-items: center; background: var(--c);
     clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }
