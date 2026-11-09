@@ -25,6 +25,8 @@
   // On the Atlas, each switch also says its name when the pane is wide enough (the pane is resized, so it is the pane's
   // width that decides, not the screen's: see the container queries below).
   const NAMES: Partial<Record<Switch, string>> = { questions: "questions", problems: "problems", web: "web", code: "code", pictures: "files", artifacts: "artifacts", context: "context" };
+  // What a switch is called in the menu, where its long description would not fit.
+  const SHORT: Record<Switch, string> = { provenance: "Provenance", timeline: "Timeline", context: "Context", questions: "Questions", problems: "Problems", web: "Links to the web", code: "Links to code", pictures: "Files", artifacts: "Artifacts", notes: "Agent edits notes", files: "Agent edits files", run: "Agent runs commands" };
   const COLOUR: Record<Switch, string> = { provenance: "growth", timeline: "lattice", questions: "rose", problems: "text", web: "lattice", code: "lattice", pictures: "lattice", artifacts: "lattice", context: "growth", notes: "growth", files: "growth", run: "growth" };
   // The project's files and commands are the terminal's: offered only while one is attached (M11).
   const shown = $derived((SWITCHES[pane] as readonly Switch[]).filter((k) => (k !== "files" && k !== "run") || panes.attached));
@@ -92,7 +94,7 @@
   function list(): Row[] {
     const folded = head ? [...head.querySelectorAll<HTMLElement>("[data-folded]")] : [];
     return folded.map((el) => ({
-      label: (el.getAttribute("aria-label") || el.textContent || el.title || "").replace(/\s+/g, " ").trim(),
+      label: (el.dataset.short || el.getAttribute("aria-label") || el.textContent || el.title || "").replace(/\s+/g, " ").trim(),
       icon: el.querySelector("svg")?.outerHTML ?? "",
       pressed: el.hasAttribute("aria-pressed") ? el.getAttribute("aria-pressed") === "true" : null,
       act: el instanceof HTMLButtonElement ? () => el.click() : null,
@@ -115,7 +117,7 @@
   <span class="pname">{name}</span>
   <span class="switches" role="group" aria-label="{name}'s switches">
     {#each shown as k (k)}
-      <button type="button" class="sw" data-switch={k} aria-pressed={panes.on[k]} aria-label={SAYS[k].replace(/ \(Alt\+.\)$/, "")} title={SAYS[k]} style:--c="var(--{COLOUR[k]})" onclick={() => panes.flip(k)}>
+      <button type="button" class="sw" data-switch={k} data-short={SHORT[k]} aria-pressed={panes.on[k]} aria-label={SAYS[k].replace(/ \(Alt\+.\)$/, "")} title={SAYS[k]} style:--c="var(--{COLOUR[k]})" onclick={() => panes.flip(k)}>
         {#if KIND[k]}<Glyph kind={KIND[k]!} size={16} />{:else}
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter">
           {#if k === "provenance"}<rect x="2.5" y="2.5" width="11" height="11" /><path d="M8 2.5v11" /><rect x="8.6" y="3.1" width="4.3" height="9.8" fill="currentColor" stroke="none" />
@@ -192,8 +194,8 @@
   /* The pane's tools lie in the header as if put there directly; any folded away are not drawn. */
   .tools { display: contents; }
   .phead :global([data-folded]) { display: none !important; }
-  .foldmenu { --inside: var(--ground-2); filter: var(--lift-drop); animation: appear var(--t-ack) var(--ease-out); position: absolute; z-index: 21; top: 44px; right: 8px; min-width: 200px; max-width: calc(100% - 16px); padding: 6px; display: grid; gap: 1px; white-space: nowrap; }
-  .row { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; background: none; border: 0; color: var(--text); font: 13px var(--font-ui); text-align: left; cursor: pointer; margin: 0; }
+  .foldmenu { --inside: var(--ground-2); filter: var(--lift-drop); animation: appear var(--t-ack) var(--ease-out); position: absolute; z-index: 21; top: 44px; right: 8px; width: max-content; min-width: 210px; max-width: min(300px, calc(100% - 16px)); padding: 6px 8px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; white-space: nowrap; }
+  .row { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 36px; padding: 0 14px 0 10px; background: none; border: 0; color: var(--text); font: 13px var(--font-ui); text-align: left; cursor: pointer; margin: 0; }
   button.row:hover, button.row:focus-visible { background: var(--ground-3); outline: none; }
   .row .ic { width: 16px; height: 16px; display: grid; place-items: center; flex: none; color: var(--text-soft); }
   .row .ic :global(svg) { width: 16px; height: 16px; }

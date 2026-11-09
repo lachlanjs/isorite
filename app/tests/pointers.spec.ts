@@ -44,6 +44,9 @@ test("a selection offers two tags; Ctrl+[ puts a pointer in the box, which is se
   const line = await choose(page, "basics/surprise", "An outcome of probability");
   await expect(page.locator('.tag[data-tag="agent"]')).toBeVisible();
   await expect(page.locator('.tag[data-tag="copy"]')).toBeVisible();
+  // The two tags stand clear of each other.
+  const [a, b] = [(await page.locator('.tag[data-tag="agent"]').boundingBox())!, (await page.locator('.tag[data-tag="copy"]').boundingBox())!];
+  expect(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y, "the tags do not overlap").toBe(true);
   await page.screenshot({ path: `test-results/screens/${test.info().project.name}-pointer-tags.png` });
   await page.keyboard.press("Control+[");
   await expect(pointers(page)).toHaveCount(1);
@@ -101,7 +104,7 @@ test("the tag is picked up and let go in the box where the words need it; a poin
   await page.mouse.up();
   await expect(pointers(page)).toHaveCount(1);
   await expect(page.locator(".held")).toHaveCount(0);
-  const around = () => box(page).evaluate((el) => { const pt = el.querySelector(".pt")!, r = document.createRange(); r.setStart(el.querySelector(".cm-line")!, 0); r.setEndBefore(pt); return { before: r.toString().length, total: (el.textContent ?? "").length }; });
+  const around = () => box(page).evaluate((el) => { const pt = el.querySelector(".pt")!, r = document.createRange(); r.setStart(el.querySelector(".cm-line")!, 0); r.setEndBefore(pt); return { before: r.toString().length, total: (el.textContent ?? "").length - (pt.textContent ?? "").length }; });
   const put = await around();
   expect(put.before, "inside the sentence, not at its start").toBeGreaterThan(0);
   expect(put.total - put.before, "nor at its end").toBeGreaterThan(8);
@@ -150,4 +153,17 @@ test("a line of a file of the repository is pointed to by its path and line; the
   await page.keyboard.type("say that again");
   await page.keyboard.press("Enter");
   await expect(log(page)).toContainText("the agent's earlier answer]");
+});
+
+test("text chosen in the box with a pointer in it marks the pointer too, so it is clear what a delete would take", async ({ page }) => {
+  await choose(page, "basics/surprise", "An outcome of probability");
+  await page.keyboard.press("Control+[");
+  await page.keyboard.type("is this right?");
+  await expect(pointers(page)).toHaveCount(1);
+  await expect(page.locator(".pt-selected")).toHaveCount(0);
+  await page.keyboard.press("Shift+Home");
+  await expect(page.locator(".pt-selected")).toHaveCount(1);
+  await page.screenshot({ path: `test-results/screens/${test.info().project.name}-pointer-selected.png` });
+  await page.keyboard.press("Backspace");
+  await expect(pointers(page)).toHaveCount(0);
 });

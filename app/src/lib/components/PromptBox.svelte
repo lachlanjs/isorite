@@ -4,7 +4,7 @@
   // character (pointers.ts). Keys are IsoPane's (`onkeydown`): Enter sends, and a key it handles it marks as handled.
   import { onMount } from "svelte";
   import { Compartment, EditorState, type Range } from "@codemirror/state";
-  import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, placeholder as hint, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+  import { Decoration, EditorView, ViewPlugin, WidgetType, drawSelection, keymap, placeholder as hint, type DecorationSet, type ViewUpdate } from "@codemirror/view";
   import { history, historyKeymap, insertNewline } from "@codemirror/commands";
   import { MARKS, idOf, markOf } from "$lib/pointers.ts";
   import { pointers } from "$lib/pointers.svelte.ts";
@@ -18,12 +18,13 @@
   /** A pointer in the text. Pressed and moved, it is carried to another place in the prompt (or let go where it was). */
   class Pointed extends WidgetType {
     id: number;
-    constructor(id: number) { super(); this.id = id; }
-    eq(o: Pointed): boolean { return o.id === this.id; }
+    selected: boolean;
+    constructor(id: number, selected: boolean) { super(); this.id = id; this.selected = selected; }
+    eq(o: Pointed): boolean { return o.id === this.id && o.selected === this.selected; }
     ignoreEvent(): boolean { return true; }
     toDOM(v: EditorView): HTMLElement {
       const p = pointers.get(this.id);
-      const el = tokenEl(p ?? { id: this.id, title: "A pointer", from: 0, to: 0, kind: "turn" });
+      const el = tokenEl(p ?? { id: this.id, title: "A pointer", from: 0, to: 0, kind: "turn" }, this.selected);
       el.addEventListener("pointerenter", () => { if (p) pointers.hover = p; });
       el.addEventListener("pointerleave", () => { if (pointers.hover?.id === this.id) pointers.hover = null; });
       el.addEventListener("pointerdown", (e) => carry(v, el, e));
@@ -70,15 +71,16 @@
   function marks(state: EditorState): DecorationSet {
     const out: Range<Decoration>[] = [], text = state.doc.toString();
     for (const m of text.matchAll(MARKS)) {
-      const id = idOf(m[0]);
-      if (id !== null) out.push(Decoration.replace({ widget: new Pointed(id) }).range(m.index!, m.index! + 1));
+      const id = idOf(m[0]), at = m.index!;
+      // One inside the selection shows it, so what a delete would take is seen.
+      if (id !== null) out.push(Decoration.replace({ widget: new Pointed(id, state.selection.ranges.some((r) => !r.empty && r.from <= at && r.to > at)) }).range(at, at + 1));
     }
     return Decoration.set(out);
   }
   const shown = ViewPlugin.fromClass(class {
     decorations: DecorationSet;
     constructor(v: EditorView) { this.decorations = marks(v.state); }
-    update(u: ViewUpdate) { if (u.docChanged) this.decorations = marks(u.state); }
+    update(u: ViewUpdate) { if (u.docChanged || u.selectionSet) this.decorations = marks(u.state); }
   }, { decorations: (p) => p.decorations, provide: (p) => EditorView.atomicRanges.of((v) => v.plugin(p)?.decorations ?? Decoration.none) });
 
   const look = EditorView.theme({
@@ -88,6 +90,8 @@
     ".cm-content": { padding: "10px 12px 4px", minHeight: "44px", caretColor: "var(--text)", color: "var(--text)" },
     ".cm-line": { padding: "0" },
     ".cm-placeholder": { color: "var(--text-faint)" },
+    ".cm-selectionBackground": { background: "color-mix(in srgb, var(--lattice) 30%, transparent) !important" },
+    "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": { background: "color-mix(in srgb, var(--lattice) 38%, transparent) !important" },
   });
 
   const lock = new Compartment();
@@ -97,7 +101,7 @@
       state: EditorState.create({
         doc: value,
         extensions: [
-          history(), EditorView.lineWrapping, shown, look, hint(placeholder),
+          history(), drawSelection(), EditorView.lineWrapping, shown, look, hint(placeholder),
           lock.of(EditorState.readOnly.of(readonly)),
           EditorView.contentAttributes.of({ role: "textbox", "aria-label": "Message the agent", "aria-multiline": "true", id: "iso-box", spellcheck: "true" }),
           // IsoPane's keys first (Enter sends, a slash command is chosen); what it leaves, the editor does.
@@ -129,15 +133,21 @@
 
 <style>
   .prompt { flex: 1 1 auto; min-width: 0; }
-  /* A pointer: a small glowing bar in isorite's blue, a branching fleck at each end. */
-  :global(.pt) { display: inline-block; vertical-align: middle; margin: 0 2px; line-height: 0; cursor: grab; user-select: none; color: var(--lattice);
-    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--lattice) 60%, transparent)); transition: filter var(--t-ack) var(--ease-out); animation: pt-breathe 3.2s ease-in-out infinite alternate; }
-  :global(.pt:hover) { filter: drop-shadow(0 0 7px color-mix(in srgb, var(--lattice) 90%, transparent)); }
-  :global(.pt .bar) { fill: color-mix(in srgb, var(--lattice) 30%, transparent); stroke: var(--lattice); stroke-width: 1; }
-  :global(.pt .tw) { fill: none; stroke: var(--lattice); stroke-width: 1.2; stroke-linecap: round; }
+  /* A pointer: a chip in the cut-corner frame and isorite's blue, glowing a little; where it is from is on it. */
+  :global(.pt) { --c: var(--lattice); display: inline-block; vertical-align: baseline; margin: 0 2px; line-height: 0; cursor: grab; user-select: none; color: var(--c);
+    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--c) 55%, transparent)); transition: filter var(--t-ack) var(--ease-out); }
+  :global(.pt:hover) { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--c) 85%, transparent)); }
+  :global(.pt-face) { position: relative; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; font: 11.5px/1 var(--font-ui); color: var(--c); white-space: nowrap; background: var(--c);
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+  :global(.pt-face)::before { content: ""; position: absolute; inset: 1px; background: color-mix(in srgb, var(--c) 14%, var(--ground-1)); transition: background-color var(--t-ack) var(--ease-out);
+    clip-path: polygon(4.3px 0, 100% 0, 100% calc(100% - 4.3px), calc(100% - 4.3px) 100%, 0 100%, 0 4.3px); }
+  :global(.pt-face > *) { position: relative; }
+  :global(.pt-face svg) { flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  :global(.pt-text) { max-width: 16em; overflow: hidden; text-overflow: ellipsis; }
+  /* Chosen with the text round it (to be deleted, or copied): filled. */
+  :global(.pt-selected .pt-face)::before { background: color-mix(in srgb, var(--c) 60%, var(--ground-1)); }
+  :global(.pt-selected .pt-face) { color: var(--text); }
   :global(.pt-lifted) { opacity: .25; }
-  :global(.pt-ghost) { position: fixed; z-index: 80; pointer-events: none; transform: translate(-50%, -50%) scale(1.08); animation: none; cursor: grabbing; }
+  :global(.pt-ghost) { position: fixed; z-index: 80; pointer-events: none; transform: translate(-50%, -50%) scale(1.06); cursor: grabbing; }
   :global(.pt-ghost.pt-ready) { filter: drop-shadow(0 0 10px var(--lattice)); }
-  @keyframes pt-breathe { to { filter: drop-shadow(0 0 7px color-mix(in srgb, var(--lattice) 85%, transparent)); } }
-  @media (prefers-reduced-motion: reduce) { :global(.pt) { animation: none; } }
 </style>

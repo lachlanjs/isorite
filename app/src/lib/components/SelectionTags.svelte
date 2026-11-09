@@ -98,11 +98,16 @@
   const tags = $derived.by(() => {
     if (!armed) return null;
     const below = armed.y + 80 < innerHeight, sign = below ? 1 : -1;
-    return [{ which: "agent", deg: 28 * sign }, { which: "copy", deg: 78 * sign }].map((w, i) => {
-      const t = (w.deg * Math.PI) / 180, ux = Math.cos(t), uy = Math.sin(t), out = 34;
+    // Far enough out, and far enough apart, that the two stand clear of each other (a tag is 34 wide).
+    const out = 50, tags = [{ which: "agent", deg: 22 * sign }, { which: "copy", deg: 82 * sign }].map((w, i) => {
+      const t = (w.deg * Math.PI) / 180, ux = Math.cos(t), uy = Math.sin(t);
       const x = Math.min(Math.max(armed!.x + ux * out + 6, 24), innerWidth - 24), y = armed!.y + uy * out + (below ? 8 : -8);
-      return { ...w, x, y, i, sx: armed!.x + ux * 6, sy: armed!.y + uy * 6 + (below ? 4 : -4), ex: x - ux * 14, ey: y - uy * 14 };
+      return { ...w, x, y, i, ux, uy, sx: armed!.x + ux * 6, sy: armed!.y + uy * 6 + (below ? 4 : -4), ex: x - ux * 14, ey: y - uy * 14 };
     });
+    // Squeezed against an edge they could meet: the second is put clear of the first.
+    const [a, b] = tags as [(typeof tags)[number], (typeof tags)[number]];
+    if (Math.hypot(a.x - b.x, a.y - b.y) < 44) { b.x = a.x - (a.x > innerWidth / 2 ? 44 : -44); b.ex = b.x - b.ux * 14; }
+    return tags;
   });
 
   function lift(e: PointerEvent): void {
@@ -138,7 +143,7 @@
       <button type="button" class="tag" data-tag={t.which} tabindex="-1" aria-label={t.which === "agent" ? "Point to this in the message to the agent (Ctrl+[)" : "Copy this and where it is (Ctrl+])"}
         style="left:{t.x}px;top:{t.y}px;--i:{t.i}" onmousedown={(e) => e.preventDefault()} onpointerdown={(e) => { if (t.which === "agent") lift(e); else e.preventDefault(); }} onclick={() => { if (t.which === "copy") void copy(armed!); }}>
         <span class="face">
-          {#if t.which === "agent"}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M1.5 5.5L4 8l-2.5 2.5M14.5 5.5L12 8l2.5 2.5M4.5 8h7" /></svg>
+          {#if t.which === "agent"}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 6.5h5.5M5.5 4l3 2.5-3 2.5" /><path d="M3 11.5h10" /></svg>
           {:else}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3" width="9" height="11" /><path d="M6 3V1.8h4V3M5.8 7h4.4M5.8 9.5h4.4" /></svg>{/if}
         </span>
         <span class="lbl">{t.which === "agent" ? "to the agent" : said || "copy"}<kbd>{t.which === "agent" ? "Ctrl+[" : "Ctrl+]"}</kbd></span>

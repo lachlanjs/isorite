@@ -9,7 +9,7 @@ export async function setSwitch(page: Page, key: Switch, on: boolean): Promise<v
   if ((await button.getAttribute("aria-pressed")) === String(on)) return;
   if (await button.isVisible()) { await button.click(); return; }
   // Folded into the header's menu, where the pane is too narrow to hold it.
-  const label = (await button.getAttribute("aria-label"))!;
+  const label = (await button.getAttribute("data-short"))!;
   await button.locator("xpath=ancestor::section[@data-pane]").getByRole("button", { name: /^More of/ }).click();
   await page.getByRole("menu", { name: /^More of/ }).getByRole("menuitemcheckbox", { name: label, exact: true }).click();
 }

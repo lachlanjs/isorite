@@ -22,8 +22,12 @@ test("where the Atlas's header has room, nothing is folded; where it has not, th
   const menu = page.getByRole("menu", { name: /^More of Atlas/ });
   const rows = menu.getByRole("menuitemcheckbox");
   await expect(rows.first()).toBeVisible();
+  await page.screenshot({ path: `test-results/screens/${test.info().project.name}-head-menu.png` });
+  // Every row is inside the frame, whatever its words.
+  const frame = (await menu.boundingBox())!;
+  for (const r of await rows.all()) { const b = (await r.boundingBox())!; expect(b.x + b.width, "a row stays in the menu").toBeLessThanOrEqual(frame.x + frame.width + 1); expect(await r.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true); }
   const name = (await rows.first().innerText()).trim();
-  const button = head(page, "atlas").locator(`.sw[aria-label="${name}"]`);
+  const button = head(page, "atlas").locator(`.sw[data-short="${name}"]`);
   const was = await button.getAttribute("aria-pressed");
   await rows.first().click();
   await expect(menu).toHaveCount(0);
