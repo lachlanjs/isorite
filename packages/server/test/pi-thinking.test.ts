@@ -13,14 +13,16 @@ import { locate, openEngine } from "../src/serve.ts";
 const root = mkdtempSync(join(tmpdir(), "isorite-pi-think-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-async function setup(options: { window?: number; compaction?: { reserveTokens: number; keepRecentTokens: number } } = {}) {
+async function setup(options: { window?: number; compaction?: { reserveTokens: number; keepRecentTokens: number }; getApiKey?: (provider: string) => string | undefined; keys?: (string | undefined)[] } = {}) {
   const base = await writeExample(join(root, `base-${Math.random().toString(36).slice(2)}`));
   const api = await openEngine(locate(base.notes), "testdev1", null);
   const faux = fauxProvider();
   const models = createModels();
   models.setProvider(faux.provider);
   const model = options.window ? { ...faux.getModel(), contextWindow: options.window } : faux.getModel();
-  const host = new PiHost({ api, model, streamFn: models.streamSimple.bind(models), ...(options.compaction ? { compaction: options.compaction } : {}) });
+  // Every request's key is noted where a test asks, so a test can see the summary is sent with the turns' key.
+  const streamFn = ((m: never, c: never, o?: { apiKey?: string }) => { options.keys?.push(o?.apiKey); return models.streamSimple(m, c, o as never); }) as typeof models.streamSimple;
+  const host = new PiHost({ api, model, streamFn, ...(options.compaction ? { compaction: options.compaction } : {}), ...(options.getApiKey ? { getApiKey: options.getApiKey } : {}) });
   const settled = (): Promise<TerminalView> => new Promise((done) => {
     const off = host.listen((v) => { if (!v.busy && v.turns.at(-1)?.state !== "running") { off(); done(v); } });
   });
@@ -87,4 +89,21 @@ test("a summary that cannot be made leaves the conversation as it was, and the t
   expect(failed).toMatchObject({ state: "failed" });
   expect(failed!.error).toBeTruthy();
   expect(host.view().turns.at(-1)!.state).toBe("done");
+});
+
+test("the summary is asked for with the same key as the turns (a gateway's 'none' included)", async () => {
+  const keys: (string | undefined)[] = [];
+  const { host, faux, settled } = await setup({ window: 3600, compaction: { reserveTokens: 200, keepRecentTokens: 500 }, getApiKey: () => "none", keys });
+  faux.setResponses(Array.from({ length: 20 }, () => (context: { messages: { content: unknown }[] }) =>
+    fauxAssistantMessage([fauxText(JSON.stringify(context.messages.at(-1)?.content).includes("<conversation>") ? "THE SUMMARY OF EARLIER" : "Noted.")])) as never);
+  let done: Extract<TerminalItem, { kind: "compaction" }> | undefined;
+  for (let turns = 0; turns < 8 && !done; turns++) {
+    const settledNow = settled();
+    await host.prompt(`Question ${turns + 1}. ${"The integrator advances the state by one small step. ".repeat(30)}`);
+    const view = await settledNow;
+    done = view.turns.at(-1)!.items.find((i): i is Extract<TerminalItem, { kind: "compaction" }> => i.kind === "compaction");
+  }
+  expect(done, "it summarised").toMatchObject({ state: "done", summary: "THE SUMMARY OF EARLIER" });
+  expect(keys.length).toBeGreaterThan(1);
+  expect(keys.every((k) => k === "none"), JSON.stringify(keys)).toBe(true);
 });

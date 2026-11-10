@@ -554,7 +554,10 @@ export class PiHost implements PaneSessions {
     this.#tell();
     this.#summarising = new AbortController();
     try {
-      const summary = await generateSummary(this.#redact(messages.slice(from, cut)), this.#model, settings.reserveTokens, undefined, undefined, this.#summarising.signal, undefined, previous, undefined, this.#streamFn);
+      // The summary is asked of the same model by the same key as the turns are (a gateway's is "none" where it
+      // knows you by certificate or headers): without it pi refuses before sending anything.
+      const key = (await this.#getApiKey?.(this.#model.provider)) ?? undefined;
+      const summary = await generateSummary(this.#redact(messages.slice(from, cut)), this.#model, settings.reserveTokens, key, undefined, this.#summarising.signal, undefined, previous, undefined, this.#streamFn);
       const stand = { role: "user" as const, content: [{ type: "text" as const, text: SUMMARY + summary }], timestamp: this.#now() };
       // The recent answers' own counts describe the context as it was before: they are not trusted any more, so the
       // size of what stands now is estimated until the model's next answer gives a count.
