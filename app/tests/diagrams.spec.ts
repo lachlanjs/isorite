@@ -1,6 +1,6 @@
 // Diagrams and code, drawn (M19): a Mermaid block drawn by Pele in the note, kept beneath its source while it is
-// edited and saying why it can't be drawn; code coloured by its language, in colour or in ink; and an agent's answer
-// with a diagram and code, drawn in Iso's pane with a copy icon on the code.
+// edited and saying why it can't be drawn; code coloured by its language, and an agent's answer
+// with a diagram and code, drawn in the Agent pane with a copy icon on the code.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -55,36 +55,15 @@ test("a diagram is drawn in the note, kept beneath its source while edited, and 
   await expect.poll(() => readFileSync(join(NOTES, `${id}.md`), "utf8")).toContain("e[Bits] -->|");
 });
 
-test("code is in colour, or in ink by the Note pane's setting", async ({ page }) => {
-  await open(page, "ink");
-  const def = editor(page).locator(".tok-k").first();
-  await expect(def).toHaveText("def");
-  const colour = await def.evaluate((e) => getComputedStyle(e).color);
-  await page.getByRole("button", { name: "Note settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Note settings" });
-  await settings.getByRole("radio", { name: "in ink" }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-code", "ink");
-  await page.keyboard.press("Escape");
-  expect(await def.evaluate((e) => getComputedStyle(e).color)).not.toBe(colour);
-  expect(await def.evaluate((e) => getComputedStyle(e).fontWeight)).toBe("700");
-  await look(page, "code-ink");
-  // Kept in this browser, from the first paint.
-  await page.reload();
-  await expect(page.locator("html")).toHaveAttribute("data-code", "ink");
-  await page.getByRole("button", { name: "Note settings" }).click();
-  await page.getByRole("dialog", { name: "Note settings" }).getByRole("radio", { name: "in colour" }).click();
-  await expect(page.locator("html")).not.toHaveAttribute("data-code", "ink");
-});
-
-test("an agent's answer with a diagram and code is drawn in Iso's pane, and the code can be copied", async ({ page, context }) => {
+test("an agent's answer with a diagram and code is drawn in the Agent pane, and the code can be copied", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const agent = await attach();
   try {
-    await open(page, "iso");
+    await open(page, "agent");
     if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Agent/ }).click();
     await box(page).fill(`draw\nhow surprise and entropy stand, ${test.info().project.name}`);
     await box(page).press("Enter");
-    const said = page.locator('[data-pane="iso"] .said').last();
+    const said = page.locator('[data-pane="agent"] .said').last();
     await expect(said.locator(".diagram svg").first()).toBeVisible();
     await expect(said.locator(".diagram")).toContainText("Entropy");
     await expect(said.locator(".code-lang")).toHaveText("python");
@@ -93,8 +72,8 @@ test("an agent's answer with a diagram and code is drawn in Iso's pane, and the 
     await said.getByRole("button", { name: "Copy the code" }).click();
     await expect(said.locator(".code-copy.done")).toHaveCount(1);
     expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("return -log2(p)");
-    await look(page, "iso-drawn");
-  } finally { agent.detach(); }
+    await look(page, "agent-drawn");
+  } finally { await agent.detach(); }
 });
 
 test("a diagram's text is only text: no script, handler or link from a note gets through; Markdown's own marks keep theirs", async ({ page }) => {

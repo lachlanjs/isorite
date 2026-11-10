@@ -1,23 +1,41 @@
-// A note's journal: every change to the note, and everything Iso offered for
-// it, one JSON entry per line, only ever added to. It lives in the study base
-// (study.ts says where), so it is personal and the knowledge base stays the
-// same for everyone.
+// A note's journal: every change to the note, one JSON entry per line, only ever added to. It lives in isorite's
+// own files beside the notes (own.ts says where), so it is personal and the notes stay the same for everyone.
 //
-// Three things rest on it:
+// Two things rest on it:
 //   History    Any earlier version of the note is rebuilt by replaying its changes.
-//   Unkept     Iso's text is a `proposal` entry and is never in the note's file.
-//              The editor lays it over the note; the file changes when it is
-//              kept, and that change is the entry that settles it.
 //   Timeline   The entries, folded into moments (a run of your own saves is one).
 //
-// Entries carry a ULID, so journals from two devices merge as a union by id.
-// Nothing here touches a file system or a clock: the caller gives the text and
-// the stamp.
+// Entries carry a ULID, so journals from two devices merge as a union by id. A journal from before M25 may hold
+// The agent's `proposal`, `revise` and `discard` entries (nothing writes them now): they are passed over when it is read.
+// Nothing here touches a file system or a clock: the caller gives the text and the stamp.
 
-import { anchorOf, blocks, findAnchor, type Anchor } from "./blocks.ts";
+import type { Anchor } from "./blocks.ts";
 import { applyHunks, diffLines, type Hunk } from "./diff.ts";
-import { newId } from "./record.ts";
 import { iso, sha256 } from "./text.ts";
+
+const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+function encode(n: bigint, length: number): string {
+  let out = "";
+  for (let i = length - 1; i >= 0; i--) out += CROCKFORD[Number((n >> BigInt(5 * i)) & 31n)];
+  return out;
+}
+
+const RANDOM_MASK = (1n << 80n) - 1n;
+let last: [number, bigint] = [0, 0n]; // the last id's time and random part
+
+function random80(): bigint {
+  const bytes = crypto.getRandomValues(new Uint8Array(10));
+  return bytes.reduce((acc, b) => (acc << 8n) | BigInt(b), 0n);
+}
+
+/** A ULID (a millisecond timestamp, then randomness, in 26 sortable characters). Within one millisecond the random
+ *  part counts up, so ids from one device sort in the order they were made. */
+export function newId(ms = Date.now()): string {
+  const rand = ms === last[0] ? last[1] + 1n : random80();
+  last = [ms, rand];
+  return encode(BigInt(ms), 10) + encode(rand & RANDOM_MASK, 16);
+}
 
 /** Who made an entry: `you`, `iso:<model>`, `agent:<name>`, or `external` for a change found already made. */
 export type Who = string;
@@ -43,13 +61,10 @@ export interface Change extends Stamp {
   hunks: Hunk[];
   /** The whole file after the change: on the first entry, at intervals, and wherever the chain was broken. */
   text?: string;
-  /** For `keep`: the proposal kept, and for a rewrite the one region kept (without it, all that were still open).
-   *  For `restore`: the entry restored to. For `move`: the note's id before (the file is unchanged). */
-  proposal?: string;
-  region?: number;
+  /** For `restore`: the entry restored to. For `move`: the note's id before (the file is unchanged). */
   to?: string;
   from?: string;
-  /** Iso's change in Write mode (M10): what it was asked, in its pane. */
+  /** What the agent was asked, for a change it made. */
   asked?: string;
 }
 
@@ -62,57 +77,14 @@ export interface Cost {
   usd: number;
 }
 
-interface ProposalBase extends Stamp {
-  kind: "proposal";
-  /** What was asked, in the person's words. */
-  asked: string;
-  cost?: Cost;
-  /** The notes Iso read to write it, in order. */
-  read?: string[];
-  /** For a reply to a note written for Iso, entered again in the note it became: the proposal it is a copy of, in
-   *  the draft's journal. A copy is the same exchange and the same cost, counted once. */
-  copyOf?: string;
-  /** Something the person should know about it: that part of the reply was left out, or that it was cut short. */
-  notice?: string;
-}
-/** New text at a point: between the block `after` and the block `before`. */
-export interface Insert extends ProposalBase {
-  form: "insert";
-  after: Anchor | null;
-  before: Anchor | null;
-  text: string;
-}
 /** A passage of the note, named by its text: `nth` tells apart passages with the same text, counted from 0 through
  *  the whole file. It may be a few words or several paragraphs. */
 export type Passage = Anchor;
-/** Chosen passages rewritten, and nothing else. An empty `new` takes the passage out. Each is kept or removed on
- *  its own. */
-export interface Rewrite extends ProposalBase {
-  form: "rewrite";
-  regions: { old: Passage; new: string }[];
-  /** As `pending` gives it: the regions neither kept nor removed yet, by index. */
-  open?: number[];
-}
-export type Proposal = Insert | Rewrite;
-
-/** The person's edit to a proposal before keeping it. */
-export interface Revise extends Stamp {
-  kind: "revise";
-  proposal: string;
-  text?: string;
-  /** For a rewrite: the new text of each region, in order. */
-  regions?: string[];
-}
-export interface Discard extends Stamp {
-  kind: "discard";
-  proposal: string;
-  /** For a rewrite: the one region removed. Without it, all that are still open. */
-  region?: number;
-}
-export type Entry = Change | Proposal | Revise | Discard;
-/** The kinds an entry may be. Format 1 also wrote `marks` (Iso's marking of an exercise): a journal moved in by
- *  `isorite migrate` may hold them, and they are passed over. */
-const KINDS: readonly string[] = ["change", "proposal", "revise", "discard"];
+/** An entry of the journal: a change to the note's file. */
+export type Entry = Change;
+/** The one kind an entry is. Older journals also hold `proposal`, `revise`, `discard` (the agent's offers before M25) and
+ *  format 1's `marks`: they are passed over. */
+const KIND = "change";
 
 export const SNAPSHOT_EVERY = 40;
 export const SESSION_GAP_MS = 30 * 60 * 1000;
@@ -137,7 +109,7 @@ export function readJournal(text: string): Entry[] {
     try { e = JSON.parse(line); } catch { continue; }
     if (typeof e !== "object" || e === null) continue;
     const entry = e as Entry;
-    if (typeof entry.id !== "string" || !KINDS.includes(entry.kind) || byId.has(entry.id)) continue;
+    if (typeof entry.id !== "string" || entry.kind !== KIND || byId.has(entry.id)) continue;
     byId.set(entry.id, entry);
   }
   return [...byId.keys()].sort().map((k) => byId.get(k)!);
@@ -146,16 +118,18 @@ export function readJournal(text: string): Entry[] {
 /** An entry as the line appended to the journal. */
 export const journalLine = (entry: Entry): string => JSON.stringify(entry) + "\n";
 
-const isChange = (e: Entry): e is Change => e.kind === "change";
-
 /** The note as the journal has it after the entry `upTo` (or after the last), and the changes that could not be
  *  replayed because the chain before them is missing. Null when the journal has no change yet. */
 export function replay(entries: readonly Entry[], upTo?: string): { text: string; hash: string; broken: string[] } | null {
   let text: string | null = null;
   const broken: string[] = [];
-  for (const e of entries) {
-    if (upTo !== undefined && e.id > upTo) break;
-    if (!isChange(e)) continue;
+  // A full snapshot makes everything before it irrelevant, so start from the last one at or before `upTo`: a save
+  // then replays at most SNAPSHOT_EVERY entries, however long the journal has grown.
+  let from = 0, end = entries.length;
+  if (upTo !== undefined) { end = 0; while (end < entries.length && entries[end]!.id <= upTo) end++; }
+  for (let k = end - 1; k >= 0; k--) if (entries[k]!.text !== undefined) { from = k; break; }
+  for (let k = from; k < end; k++) {
+    const e = entries[k]!;
     if (e.text !== undefined) text = e.text;
     else if (text !== null && hashText(text) === e.before) {
       try { text = applyHunks(text.split("\n"), e.hunks).join("\n"); } catch { broken.push(e.id); }
@@ -164,15 +138,12 @@ export function replay(entries: readonly Entry[], upTo?: string): { text: string
   return text === null ? null : { text, hash: hashText(text), broken };
 }
 
-/** Who last wrote each line of the note as the journal last has it: `you`, `iso:…`, `agent:…` or `external`. Text
- *  kept from a proposal is its proposer's. Null when the journal's chain is broken, as nothing can then be said. */
+/** Who last wrote each line of the note as the journal last has it: `you`, `iso:…`, `agent:…` or `external`. Null
+ *  when the journal's chain is broken, as nothing can then be said. */
 export function authors(entries: readonly Entry[]): string[] | null {
-  const proposers = new Map<string, string>();
   let owners: string[] | null = null, text: string[] | null = null;
   for (const e of entries) {
-    if (e.kind === "proposal") proposers.set(e.id, e.who);
-    if (!isChange(e)) continue;
-    const who = e.why === "keep" && e.proposal ? (proposers.get(e.proposal) ?? e.who) : e.who;
+    const who = e.who;
     if (owners === null || text === null) {
       if (e.text === undefined) return null;
       text = e.text.split("\n");
@@ -201,17 +172,14 @@ const tokens = (line: string): string[] => line.match(/\s+|[\p{L}\p{N}_]+|[^\s\p
 
 /** Who wrote each word of the note as the journal last has it, line by line, as runs. Where a change replaced
  *  lines, the old and the new are compared word by word, so a word kept keeps its writer and only the words put in
- *  are the changer's. Text kept from a proposal is its proposer's, as in `authors`. Null when the chain is broken. */
+ *  are the changer's. Null when the chain is broken. */
 export function wordAuthors(entries: readonly Entry[]): Run[][] | null {
-  const proposers = new Map<string, string>();
   // Each line as its tokens, each token with its writer.
   type Line = { t: string[]; w: string[] };
   let lines: Line[] | null = null, text: string[] | null = null;
   const line = (l: string, who: string) => { const t = tokens(l); return { t, w: t.map(() => who) }; };
   for (const e of entries) {
-    if (e.kind === "proposal") proposers.set(e.id, e.who);
-    if (!isChange(e)) continue;
-    const who = e.why === "keep" && e.proposal ? (proposers.get(e.proposal) ?? e.who) : e.who;
+    const who = e.who;
     if (lines === null || text === null) {
       if (e.text === undefined) return null;
       text = e.text.split("\n");
@@ -270,10 +238,10 @@ export const textAt = (entries: readonly Entry[], id?: string): string | null =>
 
 /** The entry for a change of the note's file to `after`, or null when nothing changed. The difference is taken
  *  from the journal's own last version, so the chain holds whatever the caller thought the file was. */
-export function change(entries: readonly Entry[], after: string, s: Stamp, why: Why, extra: { proposal?: string; region?: number; to?: string; asked?: string } = {}): Change | null {
+export function change(entries: readonly Entry[], after: string, s: Stamp, why: Why, extra: { to?: string; asked?: string } = {}): Change | null {
   const head = replay(entries);
   if (head && head.text === after) return null;
-  const changes = entries.filter(isChange);
+  const changes = entries;
   let sinceText = 0;
   for (let k = changes.length - 1; k >= 0 && changes[k]!.text === undefined; k--) sinceText++;
   const whole = !head || head.broken.length > 0 || sinceText + 1 >= SNAPSHOT_EVERY;
@@ -288,33 +256,6 @@ export function change(entries: readonly Entry[], after: string, s: Stamp, why: 
  *  the entry that records it. Call before anything else is entered. */
 export function reconcile(entries: readonly Entry[], file: string, s: Omit<Stamp, "who">): Change | null {
   return change(entries, file, { ...s, who: "external" }, "external");
-}
-
-// ------------------------------------------------------------ unkept text
-
-/** The proposals neither kept nor discarded, as last revised, oldest first. A rewrite waits while any of its
- *  regions does, and says which (`open`). */
-export function pending(entries: readonly Entry[]): Proposal[] {
-  const open = new Map<string, Proposal>();
-  const settle = (id: string, region: number | undefined) => {
-    const p = open.get(id);
-    if (!p) return;
-    const left = p.form === "rewrite" && region !== undefined ? (p.open ?? []).filter((k) => k !== region) : [];
-    if (p.form === "rewrite" && left.length) open.set(id, { ...p, open: left });
-    else open.delete(id);
-  };
-  for (const e of entries) {
-    if (e.kind === "proposal") open.set(e.id, e.form === "rewrite" ? { ...e, open: e.regions.map((_, k) => k) } : e);
-    else if (e.kind === "discard") settle(e.proposal, e.region);
-    else if (e.kind === "change" && e.proposal && e.why === "keep") settle(e.proposal, e.region);
-    else if (e.kind === "revise") {
-      const p = open.get(e.proposal);
-      if (!p) continue;
-      if (p.form === "insert" && e.text !== undefined) open.set(p.id, { ...p, text: e.text });
-      if (p.form === "rewrite" && e.regions) open.set(p.id, { ...p, regions: p.regions.map((r, k) => ({ old: r.old, new: e.regions![k] ?? r.new })) });
-    }
-  }
-  return [...open.values()];
 }
 
 /** Where a passage is in the note now, as character offsets, or null when its text is no longer there. */
@@ -334,69 +275,6 @@ export function findPassage(note: string, p: Passage): { from: number; to: numbe
   return { from: at, to: at + p.text.length };
 }
 
-/** The passage between two character offsets of the note, as it is named in the journal. */
-export function passageOf(note: string, from: number, to: number): Passage {
-  const text = note.slice(from, to);
-  let nth = 0;
-  for (let at = note.indexOf(text); at >= 0 && at < from; at = note.indexOf(text, at + 1)) nth++;
-  return { text, nth };
-}
-
-/** Where a proposal sits in the note as it now is. A rewrite's regions are placed one by one: one whose passage
- *  has been edited away is null, and the others stand. */
-export type Placement =
-  | { form: "insert"; line: number }
-  | { form: "rewrite"; regions: ({ from: number; to: number } | null)[] };
-
-/** Null when the place of new text cannot be found: the proposal is then shown apart from the text, and is not lost. */
-export function locate(note: string, p: Proposal): Placement | null {
-  if (p.form === "rewrite") return { form: "rewrite", regions: p.regions.map((r) => findPassage(note, r.old)) };
-  const all = blocks(note);
-  const a = p.after ? findAnchor(all, p.after) : -1, b = p.before ? findAnchor(all, p.before) : -1;
-  if (a >= 0) return { form: "insert", line: all[a]!.to };
-  if (b >= 0) return { form: "insert", line: all[b]!.from };
-  if (!p.after && !p.before) {
-    if (all.length) return { form: "insert", line: all[all.length - 1]!.to };
-    const lines = note.split("\n");
-    let end = lines.length;
-    while (end > 0 && !lines[end - 1]!.trim()) end--;
-    return { form: "insert", line: end };
-  }
-  // Text that was to open the note still can, whatever now follows it.
-  if (!p.after && all.length) return { form: "insert", line: all[0]!.from };
-  return null;
-}
-
-/** The note with a proposal written in. For a rewrite, `region` writes that one alone; without it, every region
- *  still open. Null when the place (or, for a rewrite, any of the places asked for) cannot be found. */
-export function written(note: string, p: Proposal, region?: number): string | null {
-  if (p.form === "rewrite") {
-    const which = region !== undefined ? [region] : p.open ?? p.regions.map((_, k) => k);
-    const places = which.map((k) => ({ k, at: p.regions[k] ? findPassage(note, p.regions[k]!.old) : null }));
-    if (!places.length || places.some((x) => !x.at)) return null;
-    // From the last to the first, so the offsets of the earlier ones hold.
-    let out = note;
-    for (const { k, at } of places.sort((x, y) => y.at!.from - x.at!.from)) out = out.slice(0, at!.from) + p.regions[k]!.new + out.slice(at!.to);
-    return out;
-  }
-  const place = locate(note, p);
-  if (!place || place.form !== "insert") return null;
-  const lines = note.split("\n");
-  const blank = (k: number): boolean => k < 0 || k >= lines.length || !lines[k]!.trim();
-  const ins = p.text.replace(/^\n+|\n+$/g, "").split("\n");
-  const at = place.line;
-  lines.splice(at, 0, ...(blank(at - 1) ? [] : [""]), ...ins, ...(blank(at) ? [] : [""]));
-  return lines.join("\n");
-}
-
-/** A proposal to put `text` at a line of the note as it stands. */
-export function insertAt(note: string, line: number): Pick<Insert, "form" | "after" | "before"> {
-  const all = blocks(note);
-  let prev = -1;
-  for (let k = 0; k < all.length; k++) if (all[k]!.from < line) prev = k;
-  return { form: "insert", after: prev >= 0 ? anchorOf(all, prev) : null, before: prev + 1 < all.length ? anchorOf(all, prev + 1) : null };
-}
-
 // ------------------------------------------------------------ the timeline
 
 export interface Moment {
@@ -405,44 +283,32 @@ export interface Moment {
   at: string;
   session: string;
   who: Who;
-  what: "wrote" | "found" | "edited" | "kept" | "offered" | "discarded" | "restored" | "moved" | "changed elsewhere";
-  /** What was asked, where the moment came from a proposal. */
+  what: "wrote" | "found" | "edited" | "kept" | "restored" | "moved" | "changed elsewhere";
+  /** What was asked, where the agent was asked something. */
   asked?: string;
-  /** How many lines it put in and took out of the note (M24, T: a layer's thickness). Nothing for text not kept. */
+  /** How many lines it put in and took out of the note (M24, T: a layer's thickness). */
   added: number;
   removed: number;
 }
 
 /** The journal as the timeline shows it. Your own edits in a row within a session are one moment, until ten minutes
- *  pass with none (LAYER_IDLE_MS); a proposal is one moment whose `what` says how it ended. Revisions are not
- *  moments. */
+ *  pass with none (LAYER_IDLE_MS). */
 export function moments(entries: readonly Entry[]): Moment[] {
-  const out: Moment[] = [], offered = new Map<string, Moment>(), asked = new Map<string, string>();
+  const out: Moment[] = [];
   /** Lines a change put in and took out: a note's first entry, all of its text. */
   const size = (c: Change): [number, number] => (c.why === "start" || (!c.hunks.length && c.before === null)
     ? [(c.text ?? "").split("\n").length, 0]
     : [c.hunks.reduce((n, h) => n + h.ins.length, 0), c.hunks.reduce((n, h) => n + h.del.length, 0)]);
   for (const e of entries) {
     const base = { ids: [e.id], at: e.at, session: e.session, who: e.who, added: 0, removed: 0 };
-    if (e.kind === "proposal") {
-      const m: Moment = { ...base, what: "offered", asked: e.asked };
-      offered.set(e.id, m); asked.set(e.id, e.asked);
-      out.push(m);
-    } else if (e.kind === "discard") {
-      const m = offered.get(e.proposal);
-      if (m) { m.what = "discarded"; m.ids.push(e.id); }
-    } else if (e.kind === "change") {
-      const m = e.proposal ? offered.get(e.proposal) : undefined;
-      const [added, removed] = size(e);
-      if (e.why === "keep" && m) { m.what = "kept"; m.ids.push(e.id); m.at = e.at; m.added += added; m.removed += removed; continue; }
-      const last = out[out.length - 1];
-      if (e.why === "edit" && last && last.what === "edited" && last.who === e.who && last.session === e.session && Date.parse(e.at) - Date.parse(last.at) <= LAYER_IDLE_MS) {
-        last.ids.push(e.id); last.at = e.at; last.added += added; last.removed += removed;
-        continue;
-      }
-      const what = e.why === "start" ? (e.who === "external" ? "found" : "wrote") : e.why === "edit" ? "edited" : e.why === "restore" ? "restored" : e.why === "keep" ? "kept" : e.why === "move" ? "moved" : "changed elsewhere";
-      out.push({ ...base, what, added, removed, ...(e.asked ? { asked: e.asked } : {}) });
+    const [added, removed] = size(e);
+    const last = out[out.length - 1];
+    if (e.why === "edit" && last && last.what === "edited" && last.who === e.who && last.session === e.session && Date.parse(e.at) - Date.parse(last.at) <= LAYER_IDLE_MS) {
+      last.ids.push(e.id); last.at = e.at; last.added += added; last.removed += removed;
+      continue;
     }
+    const what = e.why === "start" ? (e.who === "external" ? "found" : "wrote") : e.why === "edit" ? "edited" : e.why === "restore" ? "restored" : e.why === "keep" ? "kept" : e.why === "move" ? "moved" : "changed elsewhere";
+    out.push({ ...base, what, added, removed, ...(e.asked ? { asked: e.asked } : {}) });
   }
   return out;
 }
@@ -472,12 +338,11 @@ function putIn(c: Change): number[] {
 
 /** The lines of the note as the journal has it now that a moment put there and that are still there, as runs of
  *  lines (from 0, through the whole file, `to` exclusive). `removed` when it put lines in and none are left. A
- *  moment that changed nothing in the file (Iso's text not kept, a marking) touches nothing. */
+ *  moment that changed nothing in the file (nothing) touches nothing. */
 export function touched(entries: readonly Entry[], ids: readonly string[]): { runs: { from: number; to: number }[]; removed: boolean } {
   const mine = new Set(ids);
   let lines = new Set<number>(), put = false;
   for (const e of entries) {
-    if (!isChange(e)) continue;
     const next = new Set<number>();
     for (const l of lines) { const at = carried(e.hunks, l); if (at !== null) next.add(at); }
     lines = next;

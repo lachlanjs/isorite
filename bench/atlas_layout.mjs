@@ -5,6 +5,8 @@
 //     node bench/atlas_layout.mjs --save before         # and .bench/results/atlas-layout-before.json
 //     node bench/atlas_layout.mjs --against bench/baselines/2026-10-11-t117-before.json
 //     node bench/atlas_layout.mjs --snapshot            # rewrite the fixtures from built sites
+//     node bench/atlas_layout.mjs --app                 # the app's layout (blocks and highways), framed in three screens
+//     node bench/atlas_layout.mjs --app --no-aspect     # the same, laid out without the screen's shape (as before 2026-11)
 //
 // The fixtures are models kept in bench/fixtures/atlas (folders, notes and rated
 // links, no text), so a run now and a run later lay out the same thing:
@@ -12,6 +14,8 @@
 //   nanosim     the dummy codebase's notes (bench/nanosim.py)
 //   mockup      the 19 notes and 5 folders of the isorite brand canvas's Atlas board
 //   synth-*     the generated trees the unit tests use
+//   guide       the guide base (packages/guide/notes) as it stands now: it changes as the guide is written, so
+//               compare runs of one checkout only
 //
 // Trunks the layout draws are measured as drawn. A back trunk the layout gives
 // no path (all of them, before T117) is routed as the app routes it (router.js)
@@ -27,6 +31,7 @@ const GRID = join(REPO, "packages/core/src/atlas");
 const { nestedLayout, NOTE_W, NOTE_H } = await import(join(GRID, "nested.js"));
 const { buildCells } = await import(join(GRID, "cells.js"));
 const { makeRouter, routeAll } = await import(join(GRID, "router.js"));
+const { gridLayout } = await import(join(GRID, "layout.js"));
 const FIXTURES = join(REPO, "bench/fixtures/atlas");
 
 const RATING = { requires: 3, uses: 2, "see also": 1 };
@@ -93,9 +98,14 @@ function mockup() {
   return { root, edges };
 }
 
-function fixtures() {
+async function guide() {
+  const { loadBundle } = await import("@isorite/core/node"), { mapModel } = await import("@isorite/core"), { plainModel } = await import(join(GRID, "layout.js"));
+  return plainModel(mapModel(loadBundle(join(REPO, "packages/guide/notes"))));
+}
+
+async function fixtures() {
   const kept = (name) => JSON.parse(readFileSync(join(FIXTURES, name + ".json"), "utf8"));
-  return [["this-base", kept("this-base")], ["nanosim", kept("nanosim")], ["mockup", mockup()], ["synth-6x9", synth(6, 9)], ["synth-12x12", synth(12, 12)]];
+  return [["guide", await guide()], ["this-base", kept("this-base")], ["nanosim", kept("nanosim")], ["mockup", mockup()], ["synth-6x9", synth(6, 9)], ["synth-12x12", synth(12, 12)]];
 }
 
 const side = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
@@ -158,6 +168,44 @@ export function measure(model, flow = "up") {
   };
 }
 
+// The app's layout (gridLayout with blocks, as the Atlas asks for it), framed in a screen of `vw` by `vh`: how much of
+// the screen the whole map fills when fitted (Atlas.svelte's `whole`), the lines drawn at rest (highways between items
+// of one folder and the feeders from subfolders, layout.js) and where they cross, the highways between two folders
+// that run straight, the links that run against the folder's way, and the time.
+export function measureApp(model, vw, vh, { aspect = true, window = null } = {}) {
+  const flow = (window ?? [vw, vh])[0] >= (window ?? [vw, vh])[1] ? "right" : "up", o = { gridFlow: flow, blocks: true, ...(aspect ? { aspect: vw / vh } : {}) };
+  const t = performance.now(), L = gridLayout(model, o), ms = performance.now() - t;
+  const m = L.margin / 2, bw = (L.W - 2 * m + 4) * L.cell, bh = (L.H - 2 * m + 4) * L.cell, k = 0.96 * Math.min(vw / bw, vh / bh);
+  const lines = [...L.highways.trunks.filter((h) => h.pts && !h.implied), ...L.highways.feeders.filter((f) => !f.leaf && !L.highways.trunks[f.trunk].implied)];
+  // Drawn at rest, merged where lines share a half-cell step (geometry.ts mergeRoutes): the length of ink.
+  const steps = new Set();
+  for (const l of lines) for (let i = 1; i < l.pts.length; i++) {
+    const [x0, y0] = l.pts[i - 1], [x1, y1] = l.pts[i], n = Math.max(1, Math.round(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2));
+    for (let s = 0; s < n; s++) { const a = [x0 + ((x1 - x0) * s) / n, y0 + ((y1 - y0) * s) / n], b = [x0 + ((x1 - x0) * (s + 1)) / n, y0 + ((y1 - y0) * (s + 1)) / n], ka = a.map((v) => Math.round(v * 100)).join(","), kb = b.map((v) => Math.round(v * 100)).join(","); steps.add(ka < kb ? `${ka}|${kb}|${Math.hypot(b[0] - a[0], b[1] - a[1])}` : `${kb}|${ka}|${Math.hypot(b[0] - a[0], b[1] - a[1])}`); }
+  }
+  let ink = 0;
+  for (const s of steps) ink += +s.split("|")[2];
+  // Crossings: each line shifted a hair of its own, so that two meeting at a point either cross or do not (as `measure`).
+  // Lines that share a run (merged when drawn) touch along it and are not counted there.
+  const shifted = lines.map((l, i) => { const e = [((i * 0.618) % 1) * 0.02 - 0.01, ((i * 0.414) % 1) * 0.02 - 0.01]; return l.pts.map((p) => [p[0] + e[0], p[1] + e[1]]); });
+  let crossings = 0;
+  for (let i = 0; i < lines.length; i++) for (let j = i + 1; j < lines.length; j++) {
+    const P = shifted[i], Q = shifted[j];
+    for (let p = 1; p < P.length; p++) for (let q = 1; q < Q.length; q++) if (crosses(P[p - 1], P[p], Q[q - 1], Q[q])) crossings++;
+  }
+  const between = L.highways.trunks.filter((h) => h.pts && L.items[h.a].kind === "folder" && L.items[h.b].kind === "folder");
+  const bends = (P) => P.filter((p, k) => k && k < P.length - 1 && Math.abs((p[0] - P[k - 1][0]) * (P[k + 1][1] - p[1]) - (p[1] - P[k - 1][1]) * (P[k + 1][0] - p[0])) > 1e-6).length;
+  const strong = L.links.filter((l) => l.s >= 2);
+  return {
+    grid: [L.W, L.H], area: L.W * L.H, fill: +((k * bw * k * bh) / (vw * vh)).toFixed(2), ink: Math.round(ink * L.cell), crossings,
+    straight: +(between.filter((h) => !bends(h.pts)).length / (between.length || 1)).toFixed(2), back: +(strong.filter((l) => !l.placed).length / (strong.length || 1)).toFixed(2),
+    ms: Math.round(ms),
+  };
+}
+// A phone; the Atlas's pane between two others on a desktop of 1280 by 800 (as tall as wide, nearly twice over); and the
+// Atlas alone on that desktop. The way the top level runs is the window's (Atlas.svelte), the shape the pane's.
+const SCREENS = [["phone", 390, 780, [390, 844]], ["pane", 388, 760, [1280, 800]], ["wide", 1240, 740, [1280, 800]]];
+
 const COLUMNS = [["notes", "notes"], ["trunks", "drawn+back"], ["straight", "straight"], ["bends", "bends mean/max"], ["slanted", "slant"], ["crossings", "cross"], ["through", "thru"], ["detour", "detour"], ["columns", "cols/rows"], ["grid", "grid"], ["ms", "ms lay/route"]];
 const row = (m) => ({ notes: `${m.notes}/${m.folders}`, trunks: `${m.drawn}+${m.back}`, straight: `${m.straight} (${Math.round(m.straightShare * 100)}%)`, bends: `${m.meanBends} / ${m.maxBends}`, slanted: m.slanted ?? 0, crossings: m.crossings, through: m.throughNotes, detour: m.detour, columns: `${m.columns}/${m.rows}`, grid: m.grid.join("x"), ms: `${m.layoutMs} / ${m.routeMs}` });
 function table(results, base) {
@@ -180,7 +228,23 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       console.log(`${name}: snapshotted from ${data}`);
     }
   }
-  const results = Object.fromEntries(fixtures().map(([name, model]) => [name, measure(model)]));
+  if (args.includes("--app")) {
+    const aspect = !args.includes("--no-aspect"), out = {};
+    const lines = [["fixture", "screen", "grid", "fill", "line", "cross", "straight", "back", "ms"]];
+    const only = opt("--only");
+    for (const [name, model] of await fixtures()) for (const [screen, vw, vh, win] of SCREENS) {
+      if (only && !only.split(",").includes(name)) continue;
+      const m = measureApp(model, vw, vh, { aspect, window: win });
+      out[`${name}/${screen}`] = m;
+      lines.push([name, screen, m.grid.join("x"), m.fill.toFixed(2), String(m.ink), String(m.crossings), m.straight.toFixed(2), m.back.toFixed(2), String(m.ms)]);
+    }
+    const wide = lines[0].map((_, c) => Math.max(...lines.map((l) => l[c].length)));
+    console.log(lines.map((l) => l.map((x, c) => x.padEnd(wide[c])).join("  ")).join("\n"));
+    const save = opt("--save");
+    if (save) { const dir = join(REPO, ".bench/results"); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, `atlas-app-${save}.json`), JSON.stringify({ label: save, at: new Date().toISOString(), results: out }, null, 1) + "\n"); }
+    process.exit(0);
+  }
+  const results = Object.fromEntries((await fixtures()).filter(([name]) => name !== "guide").map(([name, model]) => [name, measure(model)]));
   const against = opt("--against");
   console.log(table(results, against && JSON.parse(readFileSync(against, "utf8")).results));
   const save = opt("--save");

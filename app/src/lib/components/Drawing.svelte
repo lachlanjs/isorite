@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A wait that is not Iso's (M24): the logo's strokes drawing themselves, over and over, in place of a spinner.
+  // A wait that is not the agent's (M24): the logo's strokes drawing themselves, over and over, in place of a spinner.
   // Still, under reduced motion: the logo, drawn.
   let { width = 26, label = "" }: { width?: number; label?: string } = $props();
 </script>

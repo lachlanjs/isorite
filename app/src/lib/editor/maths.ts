@@ -78,8 +78,3 @@ export function formula(source: string): { tex: string; display: boolean } {
   if ((m = /^\$([\s\S]*?)\$$/.exec(source))) return { tex: m[1]!, display: false };
   return { tex: source, display: false };
 }
-
-/** The equation number after a block, "(1)", if any. */
-export function equationNumber(source: string): string | null {
-  return /\(([^)\s$]+?)\)[ \t]*$/.exec(source.replace(/^[\s\S]*(?:\$\$|\\\])/, ""))?.[1] ?? null;
-}

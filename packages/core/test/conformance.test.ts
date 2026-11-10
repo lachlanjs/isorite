@@ -3,7 +3,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { mergeRecords, readRecord } from "../src/index.ts";
 import { loadBundle } from "../src/node.ts";
 import { snapshot } from "./snapshot.ts";
 
@@ -29,12 +28,4 @@ describe.each(names)("%s", (name) => {
       test(part, () => expect(got[part]).toEqual(want[part]));
     }
   }
-});
-
-describe("learner records", () => {
-  const want = JSON.parse(readFileSync(`${FIXTURES}expected/learner.json`, "utf8"));
-  const files = readdirSync(FIXTURES + "learner").filter((f) => f.endsWith(".jsonl")).sort();
-  const read = Object.fromEntries(files.map((f) => [f, readRecord(readFileSync(`${FIXTURES}learner/${f}`, "utf8"))]));
-  test.each(files)("%s is read the same", (f) => expect(read[f]).toEqual(want.read[f]));
-  test("merged the same", () => expect(mergeRecords(...Object.values(read))).toEqual(want.merged));
 });

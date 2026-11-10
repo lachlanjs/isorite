@@ -30,7 +30,7 @@ test("it opens on Start here, with the problems embedded and the Atlas of the gu
   await expect(page).toHaveURL(/#\/n\/start-here$/);
   await expect(await embed(page)).toBeVisible();
   await expect(solveThisOne(page)).toBeAttached();
-  await expect(page.locator('[data-pane="atlas"] [data-folder="iso"]')).toBeAttached();
+  await expect(page.locator('[data-pane="atlas"] [data-folder="agent"]')).toBeAttached();
   await shot(page, "start");
 });
 
@@ -44,8 +44,8 @@ test("a problem marked solved is ticked on the Atlas, kept over a reload, and go
   await expect(solveThisOne(page)).toHaveClass(/\bdone\b/, { timeout: 15_000 });
   // Start again, from the Note pane's settings: asked once more.
   await page.locator('[data-pane="note"] [data-settings="note"]').click();
-  await page.getByRole("button", { name: "start the guide again" }).click();
-  await page.getByRole("button", { name: "start again: your changes go" }).click();
+  await page.getByRole("button", { name: "Reset guide" }).click();
+  await page.getByRole("button", { name: "Reset? Your changes go" }).click();
   await expect(title(page)).toHaveValue("Start here", { timeout: 15_000 });
   await expect(solveThisOne(page)).not.toHaveClass(/\bdone\b/);
 });
@@ -56,7 +56,7 @@ test("the finder answers what is asked with the notes that match, and says it is
   const box = page.getByRole("textbox", { name: "Message the agent" });
   await box.fill("what is the Atlas?");
   await box.press("Enter");
-  const said = page.locator('[data-pane="iso"] .said').last();
+  const said = page.locator('[data-pane="agent"] .said').last();
   await expect(said).toContainText("not a model", { timeout: 15_000 });
   await expect(said.locator("a", { hasText: "The Atlas" })).toBeVisible();
   await shot(page, "finder");

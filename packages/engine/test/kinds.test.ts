@@ -30,7 +30,7 @@ test("a question is resolved today by you, and opened again; a note is neither",
   await expect(engine.setDone("global/euler", true, (await engine.readNote("global/euler")).version)).rejects.toBeInstanceOf(EngineError);
 });
 
-test("a change by Iso or an agent never resolves or solves: the field stays as it was", async () => {
+test("a change by the agent or an agent never resolves or solves: the field stays as it was", async () => {
   const { engine, notes } = await open();
   const said = await engine.agentWrite({ agent: "opencode", session: "s1", note: "global/angles", asked: "mark it solved", edit: { content: P.replace("uses:", "solved: 2026-10-25\nuses:").replace("Show it.", "Show it. Done.") } });
   expect(said.text).toBeTruthy();
@@ -67,7 +67,7 @@ test("code links point into the repository the notes are in, unless the settings
   expect((await outside.settingsOfBase())).toEqual({ repository: "../code" });
 });
 
-test("code links point into the repository named in the settings: a missing file is broken, and Iso is told once", async () => {
+test("code links point into the repository named in the settings: a missing file is broken, and the agent is told once", async () => {
   const clock = { t: Date.parse("2026-10-25T09:00:00Z"), now() { return this.t; } };
   const repo = new MemoryFiles({ "src/sim.py": "def step(): pass\n" });
   const notes = new MemoryFiles({ "sim/step.md": "---\ntype: Concept\ntitle: The step\n---\n\nIn [the code](code:src/sim.py#L1), and [gone](code:src/old.py); see [the paper](https://arxiv.org/abs/1).\n" });

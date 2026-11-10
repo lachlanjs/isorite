@@ -37,7 +37,7 @@ export const GEOMETRY_PROBLEMS = [SPHERE, GENUS, CYLINDER, TORUS, TRIANGLE, MOBI
 export const SOLVED = [SPHERE, GENUS, CYLINDER, TORUS];
 
 /** The questions the agent asked back in the history, by the title it gave; their ids are made from it. */
-export const ISO_QUESTIONS = {
+export const AGENT_QUESTIONS = {
   triangulation: { title: "Why doesn't the total depend on the triangulation?", text: "The last step of the proof needs it, and Euler characteristic only states it.", about: [BONNET] },
   disc: { title: "What makes T a disc?", text: "You used χ(T) = 1. Does the triangle have to lie in one coordinate patch?", about: [TRIANGLE] },
 };
@@ -101,7 +101,7 @@ export async function buildGeometry(sources: Sources, code: Record<string, strin
   });
   on(7, 0, () => write(COMPACT, final(COMPACT).split("\n\nIs it only")[0] + "\n"));
   on(6, 0, () => write(BONNET, sans(BONNET, ...examples)));
-  on(5, 0, () => { agent.begin("triangulation"); return keeping("is the total really the same for every triangulation?", [read(BONNET, "Proof sketch"), read(EULER), { tool: "ask_question", args: ISO_QUESTIONS.triangulation }],
+  on(5, 0, () => { agent.begin("triangulation"); return keeping("is the total really the same for every triangulation?", [read(BONNET, "Proof sketch"), read(EULER), { tool: "ask_question", args: AGENT_QUESTIONS.triangulation }],
     `Not yet. The last step of [the proof](/${BONNET}.md) needs it, and your note on [the Euler characteristic](/${EULER}.md) only states it. I have put it to you as a question.`, given(BONNET)); });
   on(4, 0, () => write(BONNET, final(BONNET)));
   on(4, 30, () => write(TORUS, solution(final(TORUS)) + "\n"));
@@ -110,7 +110,7 @@ export async function buildGeometry(sources: Sources, code: Record<string, strin
 
   // ---- the geodesic triangle, read by the agent
   on(2, 0, () => write(TRIANGLE, final(TRIANGLE)));
-  on(2, 20, () => { agent.begin("triangle"); return keeping("check my solution", [read(TRIANGLE), read(BONNET), { tool: "ask_question", args: ISO_QUESTIONS.disc }],
+  on(2, 20, () => { agent.begin("triangle"); return keeping("check my solution", [read(TRIANGLE), read(BONNET), { tool: "ask_question", args: AGENT_QUESTIONS.disc }],
     `The steps follow from [Gauss–Bonnet](/${BONNET}.md), and the edges give $k_g = 0$ as you say. They lean on $\\chi(T) = 1$, which [the solution](/${TRIANGLE}.md) does not show; I have put that to you as a question. I have not marked it.`, given(TRIANGLE)); });
   on(2, 50, () => write(CORNERS, final(CORNERS)));
 

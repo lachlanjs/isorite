@@ -6,8 +6,9 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export const PORT = 4799;
-export const ROOT = join(tmpdir(), "isorite-browser-tests");
+// ISORITE_TEST_PORT: another port, and a base of its own, so two runs can go at once.
+export const PORT = Number(process.env.ISORITE_TEST_PORT) || 4799;
+export const ROOT = join(tmpdir(), process.env.ISORITE_TEST_PORT ? `isorite-browser-tests-${PORT}` : "isorite-browser-tests");
 export const NOTES = join(ROOT, "information-theory");
 /** The agent's memory (M20): a second base on the same server, lent to every session. */
 export const MEMORY = join(ROOT, "memory");
@@ -42,12 +43,7 @@ if (process.argv[1] === import.meta.filename) {
   process.env.XDG_CACHE_HOME = join(ROOT, "cache");
   process.env.XDG_DATA_HOME = join(ROOT, "data"); // keys and sessions of the native agent (M36)
   process.env.ISORITE_EMBED = "off"; // the browser tests are about the pages; the model has its own tests
-  // The ACP registry, as a file: two agents to list (attached, in the tests, by a command of their own).
-  writeFileSync(join(ROOT, "registry.json"), JSON.stringify({ version: "1", agents: [
-    { id: "claude-acp", name: "Claude Agent", version: "0.99.1", description: "ACP wrapper for Anthropic's Claude", distribution: { npx: { package: "@agentclientprotocol/claude-agent-acp@0.99.1" } } },
-    { id: "codex-acp", name: "Codex", version: "2.5.0", description: "ACP adapter for OpenAI's coding assistant", distribution: { npx: { package: "@agentclientprotocol/codex-acp@2.5.0" } } },
-  ] }));
-  process.env.ISORITE_ACP_REGISTRY = join(ROOT, "registry.json");
+  process.env.ISORITE_SCRIPTED = "1"; // the scripted model for isorite's own agent, put in the pane by tests/agent.ts
   mkdirSync(join(ROOT, "config", "isorite"), { recursive: true });
   writeFileSync(join(ROOT, "config", "isorite", "config.toml"), `device = "browser01"\n`);
   // The agent's memory, lent to every session, and a base known but not lent.

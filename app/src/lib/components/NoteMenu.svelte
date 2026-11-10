@@ -6,6 +6,7 @@
   import { resolve } from "$app/paths";
   import { app } from "$lib/app.svelte.ts";
   import FolderField from "$lib/components/FolderField.svelte";
+  import { flyOut } from "$lib/motion.ts";
 
   let { id, title }: { id: string; title: string } = $props();
   let open = $state(false), mode = $state<"menu" | "move" | "delete">("menu"), folder = $state(""), linked = $state<string[]>([]), problem = $state("");
@@ -42,15 +43,15 @@
 </script>
 
 <span class="menu" role="presentation" onkeydown={key}>
-  <button class="more" type="button" aria-label="Do something with {title}" aria-expanded={open} onclick={toggle}>⋯</button>
+  <button class="more" type="button" aria-label="Do something with {title}" title="More" aria-expanded={open} onclick={toggle}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><circle cx="3.5" cy="8" r="1.3" /><circle cx="8" cy="8" r="1.3" /><circle cx="12.5" cy="8" r="1.3" /></svg></button>
   {#if open}
-    <span class="panel" role="group" aria-label="{title}">
+    <span class="panel" role="group" aria-label="{title}" out:flyOut>
       {#if mode === "menu"}
         <button class="item" type="button" onclick={() => (mode = "move")}>Move to a folder…</button>
         <button class="item danger-text" type="button" onclick={() => void askDelete()}>Delete…</button>
       {:else if mode === "move"}
         <label class="label" for="move-{id}">move to</label>
-        <FolderField id="move-{id}" label="Folder to move {title} to" bind:value={folder} placeholder="the top of the base" onpick={() => void move()} onkeydown={(e) => { if (e.key === "Enter") { e.preventDefault(); void move(); } }} />
+        <FolderField id="move-{id}" label="Folder to move {title} to" bind:value={folder} placeholder="(top level)" onpick={() => void move()} onkeydown={(e) => { if (e.key === "Enter") { e.preventDefault(); void move(); } }} />
         <span class="faint path">{target}.md</span>
         <span class="row"><button class="btn primary" type="button" onclick={() => void move()}>move</button><button class="btn quiet" type="button" onclick={() => (open = false)}>cancel</button></span>
       {:else}
@@ -64,11 +65,12 @@
 
 <style>
   .menu { position: relative; display: inline-block; }
-  .more { background: none; border: 0; color: var(--text-faint); font: 18px/1 var(--font-ui); padding: 4px 10px; cursor: pointer; }
-  .more:hover, .more[aria-expanded="true"] { color: var(--text); }
-  .panel { position: absolute; right: 0; top: 100%; z-index: 40; min-width: 240px; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); background: var(--ground-2); border: 1px solid var(--line); box-shadow: 0 6px 18px color-mix(in srgb, var(--ground-0) 60%, transparent); }
-  .item { background: none; border: 0; text-align: left; padding: 6px 4px; color: var(--text-soft); font: 13px var(--font-ui); cursor: pointer; }
-  .item:hover { color: var(--text); background: var(--ground-1); }
+  .more { width: 32px; height: 28px; display: grid; place-items: center; background: none; border: 0; color: var(--text-faint); padding: 0; margin-right: 6px; cursor: pointer; transition: color var(--dur-1) var(--ease-out); }
+  .more:hover, .more:focus-visible, .more[aria-expanded="true"] { color: var(--text); }
+  /* It floats over the list: lifted, coming in as floating things do and going a little down as it leaves. */
+  .panel { position: absolute; right: 0; top: 100%; z-index: 40; min-width: 240px; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2); background: var(--surface-float); border: 1px solid var(--line-faint); border-radius: var(--round); box-shadow: var(--lift); animation: appear var(--dur-1) var(--ease-out); }
+  .item { background: none; border: 0; text-align: left; padding: 6px 8px; color: var(--text-soft); font: 13px var(--font-ui); cursor: pointer; border-radius: var(--round); transition: background-color var(--dur-1) var(--ease-out); }
+  .item:hover, .item:focus-visible { color: var(--text); background: var(--fill-hover); }
   .danger-text { color: var(--rose); }
   .row { display: flex; gap: var(--space-2); }
   .path { overflow-wrap: anywhere; font-size: 12px; }

@@ -1,7 +1,7 @@
 // Several knowledge bases in one server (M20). Each has its own engine and its own API, at /b/<name>/api/, and its
 // page is the app's with ?base=<name>; / and /api/ stay the base the server was started for. A base is opened the first time it is
 // asked for, and a lent one (`lend = true` in config.toml: the agent's memory) at the start, for every session's
-// agent and Iso to look in.
+// agent and the agent to look in.
 
 import { resolve } from "node:path";
 import type { Engine, Elsewhere } from "@isorite/engine";
@@ -11,7 +11,7 @@ import { knownBases, lendBase, rememberBase, titleBase, type KnownBase } from ".
 export interface BaseView { name: string; path: string; lend: boolean; open: boolean; title: string }
 
 /** What a base's app is told of the others: the list, and, from this machine only, lending one, opening one by its
- *  folder (isorite acp and mcp, for a server that holds another), and holding the server open. */
+ *  folder (isorite mcp, for a server that holds another), and holding the server open. */
 export interface BasesPort {
   list(): BaseView[];
   lend(name: string, on: boolean): Promise<boolean>;
@@ -36,7 +36,7 @@ export class Bases implements Elsewhere, BasesPort {
   #holds = 0;
   readonly #idle: (() => void) | undefined;
 
-  /** `make` opens a base; `idle` is called when the last hold is let go (a server isorite acp or mcp started). */
+  /** `make` opens a base; `idle` is called when the last hold is let go (a server isorite mcp started). */
   constructor({ config, first, make, idle }: { config: string; first: string; make: (base: KnownBase) => Promise<Opened>; idle?: () => void }) {
     this.#config = config;
     this.first = first;

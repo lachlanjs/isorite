@@ -1,4 +1,4 @@
-// The isorite server beside a command that needs one (isorite acp, isorite mcp, isorite guide): found on its
+// The isorite server beside a command that needs one (isorite mcp, isorite guide): found on its
 // port, or started for the base, its output kept in a log, and held while the command uses it.
 
 import { spawn } from "node:child_process";

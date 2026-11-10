@@ -2,7 +2,13 @@
 
 import { appendFile, mkdir, readFile, readdir, rename, rmdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
+import { createHash } from "node:crypto";
+import { setSha256 } from "@isorite/core";
 import type { FileInfo, Files } from "@isorite/engine";
+
+// Node's own SHA-256 is about 30 times quicker than the core's pure one, and gives the same digest. Every server
+// engine reads its files through here, so this is where it is installed.
+setSha256((m) => createHash("sha256").update(m).digest("hex"));
 
 const gone = (e: unknown): boolean => ["ENOENT", "ENOTDIR"].includes((e as NodeJS.ErrnoException).code ?? "");
 

@@ -18,12 +18,12 @@
     /** Open with nothing in it: a large ellipsis gives it body. */
     bare?: boolean;
     dim?: boolean;
-    /** In what Iso is sent (the Iso lens, M10). */
+    /** In what the agent is sent (the agent lens, M10). */
     given?: boolean;
     /** Closed over the note open in the Note pane (M17): the block's bar. */
     here?: boolean;
-    /** Pointed at from elsewhere, a link or a moment (M17, Atlas-Timeline): outlined, yours or Iso's. */
-    moment?: "" | "you" | "iso";
+    /** Pointed at from elsewhere, a link or a moment (M17, Atlas-Timeline): outlined, yours or the agent's. */
+    moment?: "" | "you" | "agent";
     onpick: (e: MouseEvent) => void;
     /** Rename it (a double click on its name): the new name, or undefined where it cannot be. */
     onrename?: (name: string) => void;
@@ -68,7 +68,11 @@
   .folder {
     position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(var(--w) * var(--u)); height: calc(var(--h) * var(--u));
     --cut: 10px; /* 10 units of the map, as core's CORNER: routes meet a cut corner in its middle */
+    transition: opacity var(--t-change) var(--ease-out);
   }
+  /* A folder that comes onto the map, or opens as the zoom passes it (its frame takes the closed block's place), comes in:
+     its opacity, the time of a change, from a third and not from nothing, so an opening folder does not blink. */
+  @media (prefers-reduced-motion: no-preference) { @starting-style { .folder { opacity: .35; } } }
   /* Its name, a screen's size whatever the zoom: set in the edge, then scaled back from the layer's zoom. */
   .frame-title { z-index: 1; border: 0; top: 0; max-width: calc((100% - 44px) * var(--k)); overflow: hidden; text-overflow: ellipsis; cursor: pointer; transform-origin: 0 0; transform: scale(var(--ik)) translateY(-50%); }
   .rename { width: calc(180px * var(--k)); font: inherit; background: var(--ground-2); color: var(--text); border: 1px solid var(--lattice); padding: 1px 6px; }
@@ -92,6 +96,6 @@
   @container (max-height: 44px) { .closed .label { display: none; } }
   .here { box-shadow: inset calc(3 * var(--px)) 0 0 var(--text); }
   .mo-you { outline: calc(2.5 * var(--px)) solid var(--lattice); outline-offset: calc(3 * var(--px)); z-index: 3; }
-  .mo-iso { outline: calc(2.5 * var(--px)) solid var(--growth); outline-offset: calc(3 * var(--px)); z-index: 3; }
+  .mo-agent { outline: calc(2.5 * var(--px)) solid var(--growth); outline-offset: calc(3 * var(--px)); z-index: 3; }
   .given { outline: calc(2 * var(--px)) solid var(--growth); outline-offset: calc(2 * var(--px)); }
 </style>

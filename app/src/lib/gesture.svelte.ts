@@ -50,7 +50,7 @@ export class Gesture {
 
   /** `dropAt`: the folder under a point (`""` the top of the base), or null where nothing can be dropped (the list's rows
    *  are in sections; the Atlas finds it by the map). `drift`: what a mouse moving before the hold does, `carry` (the list:
-   *  the item is picked up at once) or `cancel` (the Atlas: it carries to Iso, or moves the map, as it always did). */
+   *  the item is picked up at once) or `cancel` (the Atlas: it carries to the agent, or moves the map, as it always did). */
   constructor(private done: Done, private opts: { dropAt?: (x: number, y: number) => string | null; drift?: "carry" | "cancel"; scroll?: boolean; targetOf?: (dir: string) => Element | null } = {}) {}
   private dropAt = (x: number, y: number): string | null => (this.opts.dropAt ?? dirAt)(x, y);
 

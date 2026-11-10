@@ -2,9 +2,12 @@
 import { describe, expect, it } from "vitest";
 import { gridLayout, gridRouter } from "../src/atlas/layout.js";
 import { buildCells, reachedCells, maskPaths, NOTE, KEEP } from "../src/atlas/cells.js";
-import { plainModel, feeders, HIGHWAY_COSTS } from "../src/atlas/layout.js";
+import { plainModel, feeders, HIGHWAY_COSTS, aspectOf, layoutKey } from "../src/atlas/layout.js";
 import { greedyOrder, NOTE_W, NOTE_H } from "../src/atlas/nested.js";
 import { floorplan } from "../src/atlas/floorplan.js";
+
+// The two cases that lay out about 1,200 notes take minutes: ISORITE_SLOW=1 runs them (the bench measures the same).
+const slow = process.env.ISORITE_SLOW ? it : it.skip;
 
 const GAP = 2; // clear cells between siblings, at least
 
@@ -111,8 +114,20 @@ describe("the layout", () => {
     expect([pos[0] < pos[1], pos[1] < pos[2], pos[2] < pos[0]]).toEqual([true, true, false]);
     expect(greedyOrder(3, [])).toEqual([0, 1, 2]);
   });
+  it("takes the shape of the screen it is framed in, in steps, and files a layout under it", () => {
+    const m = model(6, 9), tall = gridLayout(m, { blocks: true, aspect: 0.5 }), wide = gridLayout(m, { blocks: true, aspect: 2 });
+    expect(tall.W / tall.H).toBeLessThan(wide.W / wide.H);
+    expect(tall.W / tall.H).toBeLessThan(1);
+    expect(aspectOf({ aspect: 0.51 })).toBe(aspectOf({ aspect: 0.5 }));
+    expect(aspectOf({ aspect: 100 })).toBe(4);
+    expect(aspectOf({})).toBe(null);
+    expect(layoutKey(m, { aspect: 0.5 })).not.toBe(layoutKey(m, { aspect: 2 }));
+    expect(layoutKey(m, { aspect: 0.5 })).toBe(layoutKey(m, { aspect: 0.51 }));
+  });
   it("is the same for the same bundle, wider than tall flowing right and the other way flowing up", () => {
     expect(gridLayout(model(6, 9), {})).toEqual(gridLayout(model(6, 9), { gridFlow: "up" }));
+  });
+  slow("lays out a thousand notes, flowing up and right, within a guard against a layout gone badly wrong", () => {
     const big = model(40, 28), t = performance.now(), U = gridLayout(big, {}), R = gridLayout(big, { gridFlow: "right" });
     console.log(`layout at 1177 notes: up ${U.W} by ${U.H}, right ${R.W} by ${R.H} cells, ${(performance.now() - t).toFixed(0)} ms for both`);
     // A guard against a layout gone badly wrong, not a measure: about 11 s on a desktop, 23 s on GitHub's runner.
@@ -142,7 +157,7 @@ describe("a changed base (V5)", () => {
     expect(warm.W * warm.H).toBeLessThanOrEqual(fresh.W * fresh.H * 1.25);
     expect(warm.items.some((n) => n.ref === "f4/new")).toBe(true);
   });
-  it("keeps a folder and a note of the same name apart: started from before, nothing overlaps (iso/artifacts.md beside iso/artifacts/)", () => {
+  it("keeps a folder and a note of the same name apart: started from before, nothing overlaps (agent/artifacts.md beside agent/artifacts/)", () => {
     const before = model(5, 4), f2 = before.root.children.find((c) => c.ref === "f2");
     // A note f2/sub and a folder f2/sub, the folder making f2 one laid out in blocks.
     f2.children.push({ kind: "concept", id: "c:f2/sub", ref: "f2/sub", weight: 1, rank: 0 }, { kind: "dir", id: "d:f2/sub", ref: "f2/sub", children: [] });
@@ -231,7 +246,7 @@ describe("the routes", () => {
     expect(measures.beside).toBeGreaterThan(0);
     expect(measures.beside).toBeLessThanOrEqual(1);
   });
-  it("take a few milliseconds each at a thousand notes", () => {
+  slow("take a few milliseconds each at a thousand notes", () => {
     const big = gridLayout(model(40, 28), {});
     const some = big.links.filter((l) => l.s >= 2 && big.items[l.a].parent !== big.items[l.b].parent).slice(0, 40).map(({ a, b }) => ({ a, b }));
     const t = performance.now(), out = gridRouter(big)(some), ms = performance.now() - t;

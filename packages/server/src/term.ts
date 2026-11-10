@@ -1,7 +1,7 @@
 // How isorite's commands look in a terminal (M32): a little weight and colour, only where a person is looking.
 // Piped, in a file, with NO_COLOR set or TERM=dumb, the text is exactly what it was. FORCE_COLOR turns it on anyway.
 // Dim for what is said about a thing, bold for the thing, red for what failed, green for what is well, yellow for
-// what is worth a look. Gold is Iso's alone (docs/taste.md), so it is not used.
+// what is worth a look. Gold is the agent's alone (docs/taste.md), so it is not used.
 
 const wrap = (open: number, close: number) => (text: string): string => (colour() ? `\x1b[${open}m${text}\x1b[${close}m` : text);
 

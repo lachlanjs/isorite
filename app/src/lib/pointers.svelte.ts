@@ -25,7 +25,7 @@ class Pointers {
   /** Put a pointer in the prompt (or hold it for the prompt, which a hidden pane does not have). */
   put(p: Pointer): void {
     if (this.insert) this.insert(p); else this.pending.push(p);
-    if (panes.focus !== "iso") panes.unseen++;
+    if (panes.focus !== "agent") panes.unseen++;
   }
   /** A whole note or folder, in the prompt or not. */
   holds(kind: "note" | "folder", ref: string): boolean { return this.inPrompt.some((p) => p.kind === kind && p.ref === ref && whole(p)); }
@@ -39,7 +39,7 @@ class Pointers {
   async open(p: Pointer): Promise<void> {
     if (p.kind === "note") await panes.open(p.ref, true);
     else if (p.kind === "code") { await goto(codeHref(p.ref)); if (panes.narrow) panes.to("note"); }
-    else if (p.kind === "folder") pointing.set("iso", { id: p.ref, folder: true, who: "you" });
+    else if (p.kind === "folder") pointing.set("agent", { id: p.ref, folder: true, who: "you" });
   }
 
   make(draft: Omit<Pointer, "id">): Pointer {

@@ -14,10 +14,10 @@ Each pane's header has a row of small icons. Each is a switch: it says what it i
 **The Atlas:**
 - Open questions (Alt+Q) and problems (Alt+B), on the map.
 - Links to the web (Alt+W) and to code (Alt+K): see [links out of the base](/out-of-the-base/web-and-code-links.md "see also").
-- Files beside the notes (Alt+I): pictures, [artifacts](/iso/artifacts.md "see also"), data and documents, each in its folder with its kind's mark, joined to the notes that cite them. A note's pasted pictures are one item.
-- Iso's context (Alt+C): what the agent's session was given, what it read and what it changed, marked on the map.
+- Files beside the notes (Alt+I): pictures, [artifacts](/agent/artifacts.md "see also"), data and documents, each in its folder with its kind's mark, joined to the notes that cite them. A note's pasted pictures are one item.
+- The agent's context (Alt+C): what the agent's session was given, what it read and what it changed, marked on the map.
 
-**Iso:**
+**Agent:**
 - May agents edit the notes (Alt+N). On unless you switch it off, and kept with the base rather than in the browser, so it holds for an agent in its own terminal too: its tools for writing notes and artifacts are refused, and so is asking to edit a note's file. An agent whose own tools change a file without asking can't be stopped; the change is still kept, under its name, to put back.
 - With an agent attached, may it edit the project's files (Alt+F) and run commands (Alt+R): what it asks to do that is switched off is refused. See [your own agent](/terminal/your-own-agent.md "see also").
 

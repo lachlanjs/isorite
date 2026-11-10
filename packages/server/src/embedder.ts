@@ -1,6 +1,6 @@
 // The engine's Embedder port on this machine: the model in a worker thread
 // (embed-worker.ts), started the first time a vector is asked for. Where the
-// model's files are not installed there is no embedder, and Iso has keyword
+// model's files are not installed there is no embedder, and the agent has keyword
 // search and links alone.
 
 import { homedir } from "node:os";

@@ -1,5 +1,5 @@
 // Markdown drawn as HTML, for the blocks the editor shows rendered away from
-// the cursor (displayed maths, tables) and for what Iso and the agent say.
+// the cursor (displayed maths, tables) and for what the agent and the agent say.
 // markdown-it with KaTeX, sanitised: notes come from other people and from
 // models. Fenced code is coloured where its language is loaded already (the
 // rest by colourCode, code.ts, once it is); a mermaid fence is left as a

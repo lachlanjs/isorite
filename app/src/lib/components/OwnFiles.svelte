@@ -57,7 +57,7 @@
 {/if}
 
 <style>
-  .own { grid-column: 1 / -1; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 12.5px; color: var(--text-soft); }
+  .own { grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--line-faint); font-size: 12.5px; color: var(--text-soft); }
   .own summary { cursor: pointer; margin-bottom: 8px; }
   .body { display: grid; gap: 8px; }
   p { margin: 0; }

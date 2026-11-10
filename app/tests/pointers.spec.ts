@@ -7,15 +7,17 @@ import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { ROOT } from "./serve.ts";
 import { pressHead } from "./switches.ts";
-import { attach, box, log, toIso, type Attached } from "./agent.ts";
+import { attach, box, log, toAgent, type Attached } from "./agent.ts";
 
 let agent: Attached;
 test.beforeAll(async () => { agent = await attach(); });
-test.afterAll(() => agent.detach());
+test.afterAll(async () => { await agent.detach(); });
 test.beforeEach(({ }, info) => { test.skip((info.project.use.viewport?.width ?? 1280) <= 760, "a pointer is taken with keys, and moved and pointed at with a mouse"); });
 
+/** What the agent was sent in the last turn: the prompt with its footnotes (where each pointer is, and its words). */
+const sent = async (page: Page): Promise<string> => ((await (await page.request.get("api/terminal")).json()) as { turns: { asked: string }[] }).turns.at(-1)?.asked ?? "";
 const editor = (page: Page) => page.getByRole("textbox", { name: "The note", exact: true });
-const pointers = (page: Page) => page.locator(".pt:not(.pt-ghost)");
+const pointers = (page: Page) => page.locator("[data-prompt] .pt:not(.pt-ghost)");
 /** The first line of the note's text chosen, and the line of the file it is on. */
 async function choose(page: Page, id: string, word: string, soft = false): Promise<number> {
   // In the app, by its note list (an address typed in is a new page, and the box is empty).
@@ -61,14 +63,18 @@ test("a selection offers two tags; Ctrl+[ puts a pointer in the box, which is se
   await page.keyboard.type("is that so?");
   await page.screenshot({ path: `test-results/screens/${test.info().project.name}-pointer-box.png` });
   await page.keyboard.press("Enter");
-  await expect(log(page)).toContainText(`/basics/surprise.md L${line}`);
-  await expect(log(page)).toContainText("An outcome of probability");
+  // The agent is sent where it is and the words.
+  await expect.poll(() => sent(page)).toContain(`/basics/surprise.md L${line}`);
+  expect(await sent(page)).toContain("An outcome of probability");
   await expect(pointers(page)).toHaveCount(0);
-  // What the agent was sent is not shown as the person's own words: the turn shows what they wrote, and the pointers
-  // are folded under it.
-  await expect(log(page).locator(".asked").last()).toHaveText(/^is that so\?$|\[\^1\] is that so\?$|^\[\^1\]/);
-  await expect(log(page).locator(".asked").last()).not.toContainText("surprise.md");
-  await expect(log(page).locator("details.refs").last()).not.toHaveAttribute("open", "");
+  // The turn shows what they wrote, with the pointer as the same chip it was in the box, where it stood; where it is
+  // and its words are its tooltip, not the turn's text.
+  const asked = log(page).locator(".asked").last();
+  await expect(asked.locator(".pt")).toHaveText(`Surprise · ${line}`);
+  await expect(asked.locator(".pt")).toHaveAttribute("title", new RegExp(`^/basics/surprise\\.md L${line}\\n[^]*An outcome of probability`));
+  await expect(asked).toContainText("is that so?");
+  await expect(asked).not.toContainText("surprise.md");
+  await page.screenshot({ path: `test-results/screens/${test.info().project.name}-pointer-turn.png` });
 });
 
 test("a third tag deletes the words chosen in a note; the words bloom as they go, and the keys show they were taken", async ({ page }) => {
@@ -108,11 +114,10 @@ test("pointers from two notes stand in one question, in the order they are in th
   await expect(pointers(page)).toHaveCount(2);
   await page.keyboard.type("have to do with the other?");
   await page.keyboard.press("Enter");
-  await expect(log(page)).toContainText("[^1]");
-  await expect(log(page)).toContainText("/basics/surprise.md");
-  await expect(log(page)).toContainText("[^2]");
-  await expect(log(page)).toContainText("/basics/bit.md");
-  await expect(log(page)).toContainText("One fair coin toss");
+  await expect(log(page).locator(".asked").last().locator(".pt")).toHaveText([/^Surprise · \d+$/, /^The bit · \d+$/]);
+  await expect.poll(() => sent(page)).toMatch(/\[\^1\][^]*\[\^2\]/);
+  const text = await sent(page);
+  for (const w of ["/basics/surprise.md", "/basics/bit.md", "One fair coin toss"]) expect(text).toContain(w);
 });
 
 test("Ctrl+] copies where it is and the words", async ({ page, context }) => {
@@ -203,17 +208,19 @@ test("a line of a file of the repository is pointed to by its path and line; the
   await expect(pointers(page)).toHaveCount(1);
   await page.keyboard.type("is this needed?");
   await page.keyboard.press("Enter");
-  await expect(log(page)).toContainText(`${file} L2`);
-  await expect(log(page)).toContainText("heap = list(freqs)");
+  await expect.poll(() => sent(page)).toContain(`${file} L2`);
+  expect(await sent(page)).toContain("heap = list(freqs)");
+  await expect(log(page).locator(".asked").last().locator(".pt")).toHaveAttribute("title", new RegExp(`^${file.replace(/[.]/g, "\\.")} L2`));
 
   // The agent's answer, chosen: a pointer with no file.
-  await page.locator('[data-pane="iso"] .said').last().selectText();
+  await page.locator('[data-pane="agent"] .said').last().selectText();
   await expect(page.locator('.tag[data-tag="agent"]')).toBeVisible();
   await page.keyboard.press("Control+[");
   await expect(pointers(page)).toHaveCount(1);
   await page.keyboard.type("say that again");
   await page.keyboard.press("Enter");
-  await expect(log(page)).toContainText("the agent's earlier answer");
+  await expect.poll(() => sent(page)).toContain("the agent's earlier answer");
+  await expect(log(page).locator(".asked").last().locator(".pt")).toHaveText("the answer");
 });
 
 test("text chosen in the box with a pointer in it marks the pointer too, so it is clear what a delete would take", async ({ page }) => {
@@ -232,7 +239,7 @@ test("text chosen in the box with a pointer in it marks the pointer too, so it i
 test("the box has a cursor you can see, in the text's colour", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await box(page).click();
-  const cursor = page.locator('[data-pane="iso"] .cm-cursor').first();
+  const cursor = page.locator('[data-pane="agent"] .cm-cursor').first();
   await expect(cursor).toBeAttached();
   const c = await cursor.evaluate((el) => getComputedStyle(el).borderLeftColor);
   const text = await box(page).evaluate((el) => getComputedStyle(el).color);

@@ -91,12 +91,12 @@ test("a note named in the agent's answer, under the mouse, is outlined on the ma
     await open(page, "coding/huffman-codes");
     await box(page).fill(`cite /basics/surprise.md\nwhat is it measured in, ${test.info().project.name}`);
     await box(page).press("Enter");
-    const said = page.locator('[data-pane="iso"] .said a', { hasText: "cited" }).last();
+    const said = page.locator('[data-pane="agent"] .said a', { hasText: "cited" }).last();
     await expect(said).toBeVisible();
     await said.hover();
     await expect(note(page, "basics/surprise")).toHaveClass(/\bmo-you\b/);
     // The phrase and the part it cites are lit together (M24, G), whichever is pointed at.
-    const part = page.locator('[data-pane="iso"] .turn').last().locator(".part", { hasText: "Surprise" });
+    const part = page.locator('[data-pane="agent"] .turn').last().locator(".part", { hasText: "Surprise" });
     await expect(part).toHaveClass(/\blit\b/);
     await page.mouse.move(2, 2);
     await expect(part).not.toHaveClass(/\blit\b/);
@@ -104,5 +104,5 @@ test("a note named in the agent's answer, under the mouse, is outlined on the ma
     await expect(said).toHaveClass(/\blit\b/);
     await page.mouse.move(2, 2);
     await expect(note(page, "basics/surprise")).not.toHaveClass(/\bmo-you\b/);
-  } finally { agent.detach(); }
+  } finally { await agent.detach(); }
 });

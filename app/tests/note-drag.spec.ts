@@ -17,8 +17,8 @@ async function seed(page: Page, p: string, notes: Array<[string, string]>) {
 }
 async function folder(page: Page, name: string) {
   await page.getByRole("button", { name: "new folder" }).click();
-  await page.getByRole("textbox", { name: /name, with/ }).fill(name);
-  await page.getByRole("button", { name: "make it" }).click();
+  await page.getByRole("textbox", { name: "The new folder's path" }).fill(name);
+  await page.getByRole("button", { name: "Create" }).click();
   await expect.poll(() => existsSync(join(NOTES, name))).toBe(true);
 }
 async function centre(loc: ReturnType<Page["locator"]>, scroll = true) {
@@ -47,7 +47,9 @@ test("a note pulled to an empty folder moves there", async ({ page }) => {
   const row = page.locator("li", { hasText: `Dragged ${p}` });
   const heading = page.getByRole("heading", { name: `drag/to-${p} New note in drag/to-${p}` });
   await expect(heading).toBeVisible();
-  const a = await centre(row);
+  // The target in the middle of the view (not under the panes' tabs on a phone, nor at an edge that scrolls the list), the note still in view.
+  await heading.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  const a = await centre(row, false);
   await page.mouse.move(a.x, a.y);
   await page.mouse.down();
   await page.mouse.move(a.x + 30, a.y + 10, { steps: 3 });
@@ -59,7 +61,7 @@ test("a note pulled to an empty folder moves there", async ({ page }) => {
   expect(existsSync(join(NOTES, "drag", `dragged-${p}.md`))).toBe(false);
 });
 
-test("held, a note shows three tags: the red one asks before deleting, the gold one sends it to Iso", async ({ page }) => {
+test("held, a note shows three tags: the red one asks before deleting, the gold one sends it to the agent", async ({ page }) => {
   const p = test.info().project.name;
   await seed(page, p, [[`held/doomed-${p}`, `Doomed ${p}`], [`held/sent-${p}`, `Sent ${p}`]]);
   // Red: asked first.
@@ -79,7 +81,7 @@ test("held, a note shows three tags: the red one asks before deleting, the gold 
   await expect(page.getByRole("status").filter({ hasText: `Sent ${p} is in your message.` })).toBeVisible();
   expect(existsSync(join(NOTES, "held", `sent-${p}.md`))).toBe(true);
   // Letting go off the tags changes nothing.
-  // (Iso's tray now shows the chip too, with or without an agent: the row is the one in the list of notes.)
+  // (the agent's tray now shows the chip too, with or without an agent: the row is the one in the list of notes.)
   await holdThenGo(page, page.locator("li", { hasText: `Sent ${p}` }).filter({ has: page.locator("a.vein-row") }), "send");
   await page.mouse.move(2, 2);
   await page.mouse.up();

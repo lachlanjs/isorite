@@ -80,7 +80,7 @@
   $effect(() => {
     const h = pointers.hover;
     // Only the pointer under the mouse is this effect's: what else points (a link in an answer) is read by pointing, not here.
-    untrack(() => { if (h?.kind === "note") pointing.set("iso", { id: h.ref, folder: false, who: "you" }); else if (pointing.elsewhere?.from === "iso" && wasPointer) pointing.set("iso", null); wasPointer = h?.kind === "note"; });
+    untrack(() => { if (h?.kind === "note") pointing.set("agent", { id: h.ref, folder: false, who: "you" }); else if (pointing.elsewhere?.from === "agent" && wasPointer) pointing.set("agent", null); wasPointer = h?.kind === "note"; });
   });
 
   function done(): void { getSelection()?.removeAllRanges(); armed = null; }
@@ -92,7 +92,7 @@
     if (!at) pointFlight(tokenEl(p), a.rects.at(-1) ?? null, document.querySelector("[data-prompt]")?.getBoundingClientRect() ?? null);
     // In at once, so that what is typed next goes to the prompt; on a phone, where it is on another page, its tab too.
     pointers.insert?.(p, at);
-    if (!at) panes.to("iso");
+    if (!at) panes.to("agent");
   }
   async function copy(a: Armed): Promise<void> {
     try { await navigator.clipboard.writeText(full(a.draft as Pointer)); said = "copied"; flash(a.rects, "var(--lattice)"); copyFlight(a.rects.at(-1) ?? null); }
@@ -106,22 +106,22 @@
     a.del?.();
   }
 
-  /** Where the tags stand: out from where the selection ends, below it (above where there is no room). */
+  /** Where the tags stand: in a row under the selection's last line (over its first where there is no room below),
+   *  starting where it ends, side by side with a clear gap, so none covers the words chosen or another tag
+   *  (screenshots/selection-overlap.png). One stem joins the first to where the selection ends. */
   const tags = $derived.by(() => {
     if (!armed) return null;
-    const below = armed.y + 80 < innerHeight, sign = below ? 1 : -1;
-    // Far enough out, and far enough apart, that the two stand clear of each other (a tag is 34 wide).
-    const out = 50, tags = [{ which: "agent", deg: 22 * sign }, { which: "copy", deg: 82 * sign }, ...(armed.del ? [{ which: "delete", deg: 142 * sign }] : [])].map((w, i) => {
-      const t = (w.deg * Math.PI) / 180, ux = Math.cos(t), uy = Math.sin(t);
-      const x = Math.min(Math.max(armed!.x + ux * out + 6, 24), innerWidth - 24), y = armed!.y + uy * out + (below ? 8 : -8);
-      return { ...w, x, y, i, ux, uy, sx: armed!.x + ux * 6, sy: armed!.y + uy * 6 + (below ? 4 : -4), ex: x - ux * 14, ey: y - uy * 14 };
+    const SIDE = 34, GAP = 10, OUT = 12;
+    const lastRect = armed.rects.at(-1), firstRect = armed.rects[0];
+    const below = armed.y + OUT + SIDE + 40 < innerHeight;
+    const y = below ? armed.y + OUT + SIDE / 2 : (firstRect?.top ?? lastRect?.top ?? armed.y) - OUT - SIDE / 2;
+    const which = ["agent", "copy", ...(armed.del ? ["delete"] : [])];
+    const width = which.length * SIDE + (which.length - 1) * GAP;
+    const x0 = Math.min(Math.max(armed.x - SIDE / 2, 8 + SIDE / 2), innerWidth - 8 - width + SIDE / 2);
+    return which.map((w, i) => {
+      const x = x0 + i * (SIDE + GAP);
+      return { which: w, x, y, i, stem: i === 0, sx: armed!.x, sy: below ? armed!.y + 2 : (firstRect?.top ?? armed!.y) - 2, ex: x, ey: y + (below ? -SIDE / 2 : SIDE / 2) };
     });
-    // Squeezed against an edge they could meet: a later one is put clear of the earlier.
-    for (let j = 1; j < tags.length; j++) for (let k = 0; k < j; k++) {
-      const a = tags[k]!, b = tags[j]!;
-      if (Math.hypot(a.x - b.x, a.y - b.y) < 44) { b.x = Math.min(Math.max(a.x + (a.x > innerWidth / 2 ? -44 : 44), 24), innerWidth - 24); b.ex = b.x - b.ux * 14; }
-    }
-    return tags;
   });
 
   function lift(e: PointerEvent): void {
@@ -152,9 +152,9 @@
 
 {#if tags && armed}
   <div class="tags" use:toBody role="presentation">
-    <svg class="stems" aria-hidden="true">{#each tags as t (t.which)}<line x1={t.sx} y1={t.sy} x2={t.ex} y2={t.ey} />{/each}</svg>
+    <svg class="stems" aria-hidden="true">{#each tags.filter((t) => t.stem) as t (t.which)}<line x1={t.sx} y1={t.sy} x2={t.ex} y2={t.ey} />{/each}</svg>
     {#each tags as t (t.which)}
-      <Petal x={t.x} y={t.y} i={t.i} below={t.y >= armed.y} side={t.which === "agent" ? (t.x > innerWidth - 220 ? "left" : "right") : t.which === "delete" && t.x > 150 ? "left" : ""} tone={t.which === "delete" ? "var(--rose)" : undefined} label={t.which === "agent" ? "to the agent" : t.which === "delete" ? "delete" : said || "copy"} hint={t.which === "agent" ? "Ctrl+[" : t.which === "copy" ? "Ctrl+]" : ""} data-tag={t.which}
+      <Petal x={t.x} y={t.y} i={t.i} below={t.y >= armed.y} tone={t.which === "delete" ? "var(--rose)" : undefined} label={t.which === "agent" ? "to the agent" : t.which === "delete" ? "delete" : said || "copy with place"} hint={t.which === "agent" ? "Ctrl+[" : t.which === "copy" ? "Ctrl+]" : ""} data-tag={t.which}
         aria-label={t.which === "agent" ? "Point to this in the message to the agent (Ctrl+[)" : t.which === "delete" ? "Delete this text from the note" : "Copy this and where it is (Ctrl+])"}
         onmousedown={(e) => e.preventDefault()} onpointerdown={(e) => { if (t.which === "agent") lift(e); else e.preventDefault(); }} onclick={() => { if (t.which === "copy") void copy(armed!); else if (t.which === "delete") remove(armed!); }}>
         {#if t.which === "agent"}<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 6.5h5.5M5.5 4l3 2.5-3 2.5" /><path d="M3 11.5h10" /></svg>

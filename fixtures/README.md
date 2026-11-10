@@ -17,8 +17,6 @@ they were first recorded from a Python core; some comparisons in the core
   - `synthetic`: 63 generated notes (`bench/synth.py subject`), shaped like a
     real subject.
 - `queries.json`: search queries run against each bundle.
-- `learner/`: two devices' learner records, with repeats, unreadable lines and
-  events from before ids; `expected/learner.json` is each as read, and merged.
 - `expected/<bundle>.json`: what the core computes, from `expected.ts`.
 
 ## Use

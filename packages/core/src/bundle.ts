@@ -9,7 +9,7 @@ import { citeRefs, headings, linkRefs, rating, type Rating } from "./markdown.ts
 import { ABOUT, doneOf, embedRefs, idsOf, kindOf, outwardLinks, type Kind, type Outward } from "./kinds.ts";
 import { basename, cmp, cmpTuple, dirname, join, normpath, strip, text, toTime, unquote } from "./text.ts";
 
-/** The base's own instructions, for Iso and any other agent, at the top of the notes (M15). Not a note. */
+/** The base's own instructions, for the agent and any other agent, at the top of the notes (M15). Not a note. */
 export const AGENTS_FILE = "AGENTS.md";
 
 export const OKF_VERSION = "0.2";
@@ -191,6 +191,11 @@ export function hasConflict(source: string): boolean {
   return /^<{7}( .*)?$[^]*?^={7}$[^]*?^>{7}( .*)?$/m.test(text);
 }
 
+/** What reading one note's text gives before the base is linked: kept by the caller between loads, so a base that
+ *  changed in one note re-parses only that note. A hit needs the same text, so the result is the same as a fresh read. */
+export interface Parsed { source: string; meta: Meta | null; body: string; error: string | null; conflict: boolean }
+export type ParseCache = Map<string, Parsed>;
+
 export class Bundle {
   readonly concepts = new Map<string, Concept>();
   readonly directories = new Map<string, Directory>();
@@ -199,11 +204,14 @@ export class Bundle {
   readonly files = new Set<string>();
   rootMeta: Meta = {};
   private cache = new Map<string, unknown>();
+  private parsed: ParseCache | null = null;
 
   /** Load a bundle from its files (paths relative to the bundle root). */
-  static fromFiles(files: Iterable<FileEntry>): Bundle {
+  static fromFiles(files: Iterable<FileEntry>, parsed?: ParseCache): Bundle {
     const b = new Bundle();
+    b.parsed = parsed ?? null;
     b.scan([...files]);
+    if (parsed) for (const path of [...parsed.keys()]) if (!b.concepts.has(path.slice(0, -3))) parsed.delete(path);
     return b;
   }
 
@@ -231,10 +239,10 @@ export class Bundle {
     for (const f of [...entries.values()].sort((a, b) => comparePaths(a.path, b.path))) {
       const rel = f.path;
       // Line endings as Python's text mode reads them: CRLF and CR become LF.
-      if (f.text !== undefined) f.text = f.text.replace(/\r\n?/g, "\n");
+      if (f.text !== undefined && f.text.includes("\r")) f.text = f.text.replace(/\r\n?/g, "\n");
       if (rel.split("/").some((part) => part.startsWith("."))) continue;
       if (f.dir) { this.ensureDir(rel); continue; }
-      // AGENTS.md at the top is the base's instructions for Iso and other agents (M15): a file, not a note.
+      // AGENTS.md at the top is the base's instructions for the agent and other agents (M15): a file, not a note.
       if (!rel.endsWith(".md") || rel === AGENTS_FILE) { this.files.add(rel); continue; }
       const directory = dirname(rel);
       this.ensureDir(directory);
@@ -311,18 +319,25 @@ export class Bundle {
 
   private loadConcept(source: string, rel: string, mtime: number): void {
     const cid = rel.slice(0, -3);
-    let meta: Meta | null, body: string;
-    try {
-      [meta, body] = splitFrontmatter(source);
-    } catch (err) {
-      if (!(err instanceof FrontmatterError)) throw err;
-      this.issue(rel, "error", "frontmatter-invalid", err.message);
-      [meta, body] = [{}, source];
+    let p = this.parsed?.get(rel);
+    if (!p || p.source !== source) {
+      let meta: Meta | null, body: string, error: string | null = null;
+      try {
+        [meta, body] = splitFrontmatter(source);
+      } catch (err) {
+        if (!(err instanceof FrontmatterError)) throw err;
+        error = err.message;
+        [meta, body] = [{}, source];
+      }
+      p = { source, meta, body, error, conflict: source.includes("<<<<<<<") && hasConflict(source) };
+      this.parsed?.set(rel, p);
     }
+    if (p.error !== null) this.issue(rel, "error", "frontmatter-invalid", p.error);
+    const meta = p.meta, body = p.body;
     const concept = new Concept(cid, rel, meta ?? {}, body, mtime);
     if (meta === null) this.issue(rel, "error", "frontmatter-missing", "missing YAML frontmatter");
     else if (!concept.type) this.issue(rel, "error", "type-missing", "frontmatter has no non-empty 'type'");
-    if (hasConflict(source)) this.issue(rel, "error", "merge-conflict", "an unresolved merge conflict (<<<<<<< … ======= … >>>>>>>) is in the text");
+    if (p.conflict) this.issue(rel, "error", "merge-conflict", "an unresolved merge conflict (<<<<<<< … ======= … >>>>>>>) is in the text");
     if ("generated" in concept.meta && !("by" in concept.generated)) {
       this.issue(rel, "warning", "generated-without-by", "'generated' should record 'by'");
     }

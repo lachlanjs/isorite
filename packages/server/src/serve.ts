@@ -15,10 +15,7 @@ import { repoOf } from "./git.ts";
 import { Bases } from "./bases.ts";
 import { cacheDir, modelDir, nodeEmbedder } from "./embedder.ts";
 import { LOOPBACK, createApp } from "./http.ts";
-import { AcpFollower } from "./acp.ts";
-import { PiControl, piHostFor } from "./pi/index.ts";
-import { switchable } from "./sessions.ts";
-import { AgentRunner } from "./agents.ts";
+import { NoAgent, switchable } from "./sessions.ts";
 import { projectOf } from "./connect.ts";
 import { NodeFiles } from "./nodefiles.ts";
 import { defaultStudyPath, openStudyBase } from "./studybase.ts";
@@ -119,22 +116,32 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
   const embedder = model ? nodeEmbedder(model) : null;
   const token = randomBytes(24).toString("base64url"), loopback = LOOPBACK.has(host);
   const web = existsSync(join(WEB_DIR, "index.html")) ? WEB_DIR : null;
+  // The agent's SDK is about a second of loading: read only by a server that starts, not by every command.
+  const { PiControl, piHostFor } = await import("./pi/index.ts");
   const pi = new PiControl();
   const bases: Bases = new Bases({
     config, first, ...(idle ? { idle } : {}),
     make: async (known) => {
       const api = await openEngine({ notes: known.path }, device, model, { name: known.name, elsewhere: bases, embedder });
-      const acp = new AcpFollower({ api, notes: known.path });
-      // The pi agent in the pane instead of an ACP one, where ISORITE_PI chooses it (M35, a prototype).
+      // isorite's own agent in the pane, where a model is chosen (ISORITE_PI, or the settings'); until then, no agent.
       const terminal = await piHostFor(api, process.env, projectOf(known.path).repo, known.path, pi);
-      // The pane's host can change while isorite runs: choosing isorite's own agent in the settings starts it here at
-      // once, with no restart.
-      const shown = switchable(terminal ?? acp);
+      // The pane's host can change while isorite runs: choosing a model in the settings starts the agent here at once,
+      // with no restart.
+      const shown = switchable(terminal ?? new NoAgent());
       if (!terminal) pi.whenChosen(async () => { const host = await piHostFor(api, process.env, projectOf(known.path).repo, known.path, pi); if (host) shown.use(host); });
-      // The agent chosen for this base's pane, started once the server is listening (the wrapper waits for it).
-      const agents = new AgentRunner({ base: known.name, url: `http://127.0.0.1:${port}${known.name === first ? "" : `/b/${known.name}`}`, folder: projectOf(known.path).repo, config });
-      if (loopback) void agents.start();
-      const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, acp, terminal: shown.pane, ...(loopback ? { pi } : {}), bases, base: known.name, ...(loopback ? { agents } : {}), config });
+      // The tests' scripted model (ISORITE_SCRIPTED=1): put in the pane and taken out again by a test, as a model chosen would be.
+      let scripted: Awaited<ReturnType<typeof piHostFor>> = null;
+      const script = process.env.ISORITE_SCRIPTED === "1" ? {
+        async on() {
+          if (!scripted) scripted = await piHostFor(api, { ...process.env, ISORITE_PI: "scripted/scripted" }, projectOf(known.path).repo, known.path, pi);
+          if (!scripted) return;
+          await scripted.interrupt();
+          await scripted.fresh("pi").catch(() => undefined);
+          shown.use(scripted);
+        },
+        async off() { if (scripted) { await scripted.interrupt(); pi.detach(scripted); scripted = null; } shown.use(terminal ?? new NoAgent()); },
+      } : undefined;
+      const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, terminal: shown.pane, ...(loopback ? { pi } : {}), bases, base: known.name, config, ...(script ? { scripted: script } : {}) });
       return { engine: api, fetch: app.fetch };
     },
   });
@@ -142,7 +149,7 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
   return { notes: opened.notes, bases, embedder: Boolean(embedder), fetch: (req, env) => bases.fetch(req, env) };
 }
 
-/** `held`: started by isorite acp or mcp, it stops once the last of them lets it go. */
+/** `held`: started by isorite mcp, it stops once the last of them lets it go. */
 export async function serve(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], held = false }: { host?: string; port?: number; allowHosts?: string[]; held?: boolean } = {}): Promise<void> {
   let stop = () => undefined as void;
   const { notes, bases, embedder, fetch } = await openServer(path, { host, port, allowHosts, ...(held ? { idle: () => stop() } : {}) });

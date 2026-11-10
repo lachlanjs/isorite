@@ -1,8 +1,8 @@
-// A conversation with Iso in its own pane (M10, until M25 retired Iso's loop): what a turn was, and how it is kept,
+// A conversation with the agent in its own pane (M10, until M25 retired the agent's loop): what a turn was, and how it is kept,
 // to be read. The conversation is in .isorite/, one file each, `conversations/<id>.jsonl`, a line per turn, per
-// thing that happened in it and per ending. What Iso changed in a note is in that note's journal; the conversation
+// thing that happened in it and per ending. What the agent changed in a note is in that note's journal; the conversation
 // names the entry. Kept here too: what an agent is told of the base, and the tools isorite gives any agent that
-// came from Iso (M25): asking back, offering text, and artifacts.
+// came from the agent (M25): asking back, offering text, and artifacts.
 
 import type { Cost } from "@isorite/core";
 import type { Step, ToolDef } from "./lookup.ts";
@@ -10,13 +10,13 @@ import type { Step, ToolDef } from "./lookup.ts";
 /** The tier a turn was asked on, when isorite called a model itself. */
 export type Tier = "low" | "mid" | "max";
 
-/** What Iso may do (M12: worked out in the app from the switches in Iso's pane): read only, change the notes, or
+/** What the agent may do (M12: worked out in the app from the switches in the Agent pane): read only, change the notes, or
  *  change and run the project, which is the terminal's (M11). Conversations from before M12 may name a fourth,
  *  "understand"; it is read as ask. */
 export const MODES = ["ask", "write", "build"] as const;
 export type Mode = (typeof MODES)[number];
 
-/** Something you gave Iso: a note, a folder, or a passage of a note. */
+/** Something you gave the agent: a note, a folder, or a passage of a note. */
 export type Given =
   | { kind: "note"; id: string }
   | { kind: "folder"; id: string }
@@ -25,7 +25,7 @@ const GIVEN: readonly string[] = ["note", "folder", "passage"];
 
 /** One thing that happened in a turn, in order. */
 export type TurnItem =
-  /** What Iso said. Kept whole when the turn ends; streamed as `iso-text` while it is written. */
+  /** What the agent said. Kept whole when the turn ends; streamed as `iso-text` while it is written. */
   | { kind: "text"; text: string }
   /** Something it looked up. */
   | { kind: "look"; step: Step }
@@ -37,10 +37,10 @@ export type TurnItem =
   | { kind: "point"; note: string; why: string }
   /** You undid the turn's changes: the notes put back, and those that had changed since and were left. */
   | { kind: "undone"; notes: string[]; left: string[] }
-  /** A question Iso asks back (M12), about notes of the base: a question note once `made`, by Iso where it may
+  /** A question the agent asks back (M12), about notes of the base: a question note once `made`, by the agent where it may
    *  change the notes, or by you from the turn. */
   | { kind: "question"; id: string; title: string; text: string; about: string[]; made?: string }
-  /** Your own answers, joined by Iso into a remark for a note (M12): yours once you insert it (`taken`). */
+  /** Your own answers, joined by the agent into a remark for a note (M12): yours once you insert it (`taken`). */
   | { kind: "offer"; id: string; note: string; text: string; taken?: boolean };
 
 const ITEMS: readonly string[] = ["text", "look", "change", "permission", "point", "undone", "question", "offer"];
@@ -91,21 +91,21 @@ export function readTurns(text: string): Turn[] {
     }
     const t = turns.get(line.turn);
     if (!t) continue;
-    // Items of kinds there are no longer (what Understand mode recorded, before M12), and Iso's writes to an
+    // Items of kinds there are no longer (what Understand mode recorded, before M12), and the agent's writes to an
     // Understanding note (before M24), are passed over.
     if (line.kind === "item") { if (ITEMS.includes(line.item.kind) && !(line.item.kind === "change" && line.item.note.startsWith("@understanding/"))) t.items.push(line.item); }
     else if (line.kind === "answer") { for (const i of t.items) if (i.kind === "permission" && i.id === line.permission) i.answer = line.decision; }
     else if (line.kind === "taken") { for (const i of t.items) if (i.kind === "question" && i.id === line.item) i.made = line.note; else if (i.kind === "offer" && i.id === line.item) i.taken = true; }
     else { t.state = line.state; if (line.message) t.message = line.message; if (line.cost) t.cost = line.cost; }
   }
-  // A turn never ended (the program stopped while Iso worked) was stopped.
+  // A turn never ended (the program stopped while the agent worked) was stopped.
   return [...turns.values()].map((t) => (t.state === "running" ? { ...t, state: "stopped" as const } : t)).sort((a, b) => (a.id < b.id ? -1 : 1));
 }
 
 // ------------------------------------------------------------ what an agent is told
 
 /** What isorite is, as the notes on disk have it (docs/format.md). The example is loaded by core in a test, so
- *  what Iso is told stays what isorite reads. */
+ *  what the agent is told stays what isorite reads. */
 export const ISORITE = `# Their knowledge base
 
 - A note is a Markdown file with frontmatter: \`type\` (Concept, Question or
@@ -146,7 +146,7 @@ about: [basics/entropy]
 It follows from [surprise](/basics/surprise.md "requires"), but how?
 \`\`\``;
 
-/** How a knowledge base is kept well: what Iso does in it, and suggests. */
+/** How a knowledge base is kept well: what the agent does in it, and suggests. */
 export const PRACTICE = `# Keeping it well
 
 - One idea a note, with a title that names the idea and a description that
@@ -161,7 +161,7 @@ export const PRACTICE = `# Keeping it well
   merge: suggest it, do not do it unasked.
 - An open question marks where their understanding stops. Leave it open.`;
 
-/** How Iso helps them learn, in every mode. */
+/** How the agent helps them learn, in every mode. */
 export const LEARNING = `# Their learning
 
 - Their notes are in their words. Put no words in them they did not ask for.

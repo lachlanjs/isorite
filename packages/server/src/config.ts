@@ -1,5 +1,5 @@
 // What isorite keeps for this device, outside both repositories: ~/.config/isorite/config.toml, the device's id;
-// and bases.toml beside it, the bases it knows. (Until M25 config.toml also named Iso's provider, its key and its
+// and bases.toml beside it, the bases it knows. (Until M25 config.toml also named the agent's provider, its key and its
 // models, under [provider] and [tiers]: left as written, and no longer read.)
 
 import { randomBytes } from "node:crypto";

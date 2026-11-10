@@ -75,7 +75,7 @@ writeFileSync(join(OUT, "package.json"), JSON.stringify({
   engines: { node: ">=24" },
   repository: { type: "git", url: "git+https://github.com/lachlanjs/isorite.git" },
   homepage: "https://lachlanjs.github.io/isorite/",
-  keywords: ["notes", "knowledge-base", "markdown", "study", "agent", "mcp", "acp"],
+  keywords: ["notes", "knowledge-base", "markdown", "study", "agent", "mcp"],
   files: ["dist", "web", "notes", "guide", "docs", "README.md", "LICENSE"],
   dependencies,
 }, null, 2) + "\n");

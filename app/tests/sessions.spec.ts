@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { storeDir } from "../../packages/server/src/pi/store.ts";
 import { NOTES, ROOT } from "./serve.ts";
-import { toIso } from "./agent.ts";
+import { toAgent } from "./agent.ts";
 
 test.skip(!process.env.ISORITE_PI, "the native agent is chosen with ISORITE_PI");
 
@@ -23,7 +23,7 @@ test.beforeAll(() => {
 
 test("the drawer lists the kept sessions, switches between them, forks one and forgets one", async ({ page }) => {
   await page.goto("#/n/basics/surprise");
-  await toIso(page);
+  await toAgent(page);
   await page.getByRole("button", { name: "Sessions" }).click();
   const drawer = page.getByRole("list", { name: "The agents' sessions" });
   await expect(drawer.getByRole("listitem").filter({ hasText: "About entropy" })).toBeVisible();

@@ -2,10 +2,11 @@
   // The base this page is for, before the first pane's name (M20), as the board's header path begins with it
   // (Header-Context: `dmft / …`). Pressed, the bases the server holds: each a link to its own page (a new tab with
   // Ctrl or the middle button), the one here ticked, and a switch for whether it is lent to every session's agent and
-  // Iso. Only where the server holds bases: not on the guide's site.
+  // The agent. Only where the server holds bases: not on the guide's site.
   import { app } from "$lib/app.svelte.ts";
   import type { BaseRow, BasesApi } from "$lib/api.ts";
   import { basePage } from "$lib/here.ts";
+  import { flyOut } from "$lib/motion.ts";
 
   const api = (app.api as { bases?: BasesApi } | undefined)?.bases ?? null;
   let open = $state(false);
@@ -50,10 +51,10 @@
 <svelte:window onpointerdown={outside} onkeydown={keys} />
 
 {#if api && app.session}
-  <button class="base" type="button" bind:this={button} aria-expanded={open} aria-haspopup="true" title="The knowledge bases: switch to another" onclick={toggle}>{shownAs}</button>
+  <button class="base" type="button" bind:this={button} aria-expanded={open} aria-haspopup="true" title="Switch base" onclick={toggle}>{shownAs}</button>
   <span class="slash" aria-hidden="true">/</span>
   {#if open}
-    <div class="frame bases" role="dialog" aria-label="Knowledge bases" tabindex="-1" bind:this={menu} style:top="{at.top}px" style:left="{at.left}px">
+    <div class="frame bases" out:flyOut role="dialog" aria-label="Knowledge bases" tabindex="-1" bind:this={menu} style:top="{at.top}px" style:left="{at.left}px">
       <span class="frame-title">bases</span>
       <ul>
         {#each rows as row (row.name)}
@@ -66,12 +67,12 @@
               <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- another base's page, not in this app -->
               <a href={basePage(row.name)} data-sveltekit-reload title={row.title === row.name ? row.path : `${row.name}: ${row.path}`} aria-current={isHere ? "page" : undefined}>{row.title}</a>
             {/if}
-            <button class="lend rename" type="button" disabled={!local} aria-label="Rename {row.title}" title={local ? "Show it by another title: its address stays the same" : "Renamed only from this machine"} onclick={() => { if (renaming === row.name) void retitle(row); else { draft = row.title === row.name ? "" : row.title; renaming = row.name; } }}>
+            <button class="lend rename" type="button" disabled={!local} aria-label="Rename {row.title}" title={local ? "Rename (its address stays)" : "Renamed only from this machine"} onclick={() => { if (renaming === row.name) void retitle(row); else { draft = row.title === row.name ? "" : row.title; renaming = row.name; } }}>
               <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M3 13l.6-2.8L11 2.8l2.2 2.2-7.4 7.4z" /></svg>
             </button>
             <button class="lend" type="button" aria-pressed={row.lend} disabled={!local}
               aria-label="Lent to every session"
-              title={local ? (row.lend ? "Lent to every session's agent: press to keep it to itself" : "Lend it to every session's agent, as the agent's memory is") : "Lent or not is changed only from this machine"}
+              title={local ? (row.lend ? "Lent to every session" : "Lend to every session") : "Changed only from this machine"}
               onclick={() => lend(row)}>
               <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><rect x="2.5" y="5.5" width="7" height="8" /><path d="M6.5 5.5V2.5h7v8h-4" /></svg>
             </button>
@@ -87,7 +88,7 @@
   .base { font: inherit; font-size: 12px; color: var(--text-faint); background: none; border: 0; padding: 4px 0; cursor: pointer; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
   .base:hover, .base:focus-visible, .base[aria-expanded="true"] { color: var(--text); }
   .slash { color: var(--text-faint); font-size: 12px; margin: 0 -4px; }
-  .bases { --inside: var(--ground-2); filter: var(--lift-drop); position: fixed; z-index: 22; width: min(320px, calc(100vw - 16px)); padding: 22px 12px 12px; white-space: nowrap; user-select: none; }
+  .bases { --inside: var(--ground-2); filter: var(--lift-drop); animation: appear var(--dur-1) var(--ease-out); position: fixed; z-index: 22; width: min(320px, calc(100vw - 16px)); padding: 22px 12px 12px; white-space: nowrap; user-select: none; }
   .bases:focus-visible { outline: none; }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
   li { display: grid; grid-template-columns: 16px 1fr 28px 28px; align-items: center; gap: 6px; font-size: 13px; }
@@ -97,7 +98,8 @@
   li.here a { color: var(--text); }
   .lend { position: relative; width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .lend:hover:not(:disabled), .lend:focus-visible { color: var(--text); }
-  .lend[aria-pressed="true"] { --c: var(--growth); background: var(--c, var(--lattice)); color: var(--ground-0); --cut: 4px; clip-path: var(--chosen-cut); }
+  .lend { clip-path: var(--chosen-cut); transition: color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out); }
+  .lend[aria-pressed="true"] { background: color-mix(in srgb, var(--growth) var(--tint), transparent); color: var(--growth); box-shadow: inset 0 -2px 0 var(--growth); }
   .lend:disabled { cursor: default; }
   .field.name { min-width: 0; font-size: 13px; padding: 3px 6px; }
   .bad { color: var(--rose); font-size: 12px; margin: 8px 0 0; white-space: normal; }

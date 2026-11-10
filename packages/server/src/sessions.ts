@@ -1,11 +1,9 @@
-// What the Iso pane asks of the agent sessions on a base (M35): the pane-facing half of `AcpFollower`, named so that
-// something other than ACP can serve it. A host holds the sessions, says which is shown, and folds what happens in
-// them into one `TerminalView`; the pages read that view and nothing else, so they do not know which host (which
-// driver) is behind it. ACP's is `AcpFollower`, which also takes in what passes through `isorite acp`; that half
-// (`connect`, `tap`) is the wrapper's, not the pane's, and stays out of this.
+// What the Agent pane asks of the agent sessions on a base: the pane-facing interface, so that the pages do not know
+// which host (which driver) is behind it. A host holds the sessions, says which is shown, and folds what happens in
+// them into one `TerminalView`; the pages read that view and nothing else. isorite's own agent (`pi/host.ts`) is the
+// host; where none is chosen yet, `NoAgent` stands in and the pane shows its setup.
 
 import type { AgentSession, Given, TerminalView } from "@isorite/engine";
-import type { Embed } from "./acp.ts";
 
 export interface PaneSessions {
   /** The session shown, with every session on the base. */
@@ -22,7 +20,7 @@ export interface PaneSessions {
   /** Stop what the session shown is doing. */
   interrupt(): Promise<void>;
   /** Notes and passages given from the pane: those not given in the session yet go before its next prompt. */
-  give(parts: Given[], render: (parts: Given[]) => string, embed?: Embed): Promise<void>;
+  give(parts: Given[], render: (parts: Given[]) => string): Promise<void>;
   /** Take a chip's block back out of what the model is sent from now on (M36). Says whether there was one to take out.
    *  A host whose agent keeps its own history cannot, and leaves this out. */
   withdraw?(g: Given): Promise<boolean>;
@@ -34,9 +32,7 @@ export interface PaneSessions {
   fresh(agent: string): Promise<void>;
   /** A new session that begins where `session` is and goes its own way. A host that cannot leaves this out. */
   fork?(agent: string, session: string): Promise<void>;
-  /** Set a mode or option of the session shown. */
-  set(kind: "mode" | "config", id: string, value: string): void;
-  /** Remove what is kept of a session that is not live. */
+    /** Remove what is kept of a session that is not live. */
   forget(agent: string, session: string): Promise<void>;
   /** Ask again for the sessions the drawer lists. */
   refresh(): void;
@@ -70,4 +66,22 @@ export function switchable(first: PaneSessions): { pane: PaneSessions; use(next:
       for (const [fn, hangUp] of listeners) { hangUp(); listeners.set(fn, next.listen(fn)); fn(next.view()); }
     },
   };
+}
+
+const NONE: TerminalView = { connected: false, agent: "", session: null, title: "", busy: false, turns: [], asking: [], cost: 0, tokens: { input: 0, output: 0 }, model: "", sessions: [] };
+const NO_AGENT = "no agent is set up yet: choose a model for isorite's own agent in the pane's settings, or connect an outside agent over MCP (isorite setup)";
+
+/** The pane's host where no model is chosen yet: nothing is connected, and what asks of an agent says how to have one. */
+export class NoAgent implements PaneSessions {
+  view(): TerminalView { return NONE; }
+  listen(): () => void { return () => undefined; }
+  asked(): string { return ""; }
+  async prompt(): Promise<void> { throw new Error(NO_AGENT); }
+  async interrupt(): Promise<void> { /* nothing runs */ }
+  async give(): Promise<void> { /* nothing to give it to */ }
+  async reply(): Promise<void> { throw new Error(NO_AGENT); }
+  async follow(): Promise<void> { throw new Error(NO_AGENT); }
+  async fresh(): Promise<void> { throw new Error(NO_AGENT); }
+  async forget(): Promise<void> { throw new Error(NO_AGENT); }
+  refresh(): void { /* nothing to list */ }
 }

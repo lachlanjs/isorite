@@ -134,8 +134,8 @@ export function tracePath(L: Layout, idx: Index, a: number, b: number): Point[] 
   return pts.filter((p, k) => !k || !same(p, pts[k - 1]!));
 }
 
-/** What a lit route is: a link of the note chosen ("requires", "builds", "uses"), or a step of Iso's along a link ("iso"). */
-export type LitKind = "requires" | "builds" | "uses" | "iso";
+/** What a lit route is: a link of the note chosen ("requires", "builds", "uses"), or a step of the agent's along a link ("agent"). */
+export type LitKind = "requires" | "builds" | "uses" | "agent";
 export interface Lit { key: string; kind: LitKind; pts: Point[] }
 
 // ------------------------------------------------------------ routes merged where they overlap
@@ -145,7 +145,7 @@ export interface Lit { key: string; kind: LitKind; pts: Point[] }
  *  the way its points go (1), or both ways (0), when its dashes stand still. */
 export interface Run { key: string; pts: Point[]; count: number; strong: boolean; trunk: boolean; kind: LitKind; flow: 0 | 1 }
 
-const STRENGTH: LitKind[] = ["uses", "builds", "requires", "iso"];
+const STRENGTH: LitKind[] = ["uses", "builds", "requires", "agent"];
 interface Edge { a: string; b: string; A: Point; B: Point; count: number; strong: boolean; trunk: boolean; kind: number; fwd: number[]; back: number[] }
 
 /**
@@ -273,18 +273,6 @@ export function linePath(cells: Point[], lane = 0, cell = CELL): string {
   }
   const z = Q.at(-1)!;
   return out + `L${f(z[0])} ${f(z[1])}`;
-}
-
-/** A line drawn as the boards draw one between two blocks: from `p` to `q` (in cells), a run along the main
- *  axis, one run at 45 degrees halfway, and the rest of the run (or, where they are further apart across than
- *  along, 45 degrees, across, 45 degrees). */
-export function directLine(p: Point, q: Point, horizontal: boolean): Point[] {
-  const along = horizontal ? q[0] - p[0] : q[1] - p[1], across = horizontal ? q[1] - p[1] : q[0] - p[0];
-  const la = Math.abs(along), lc = Math.abs(across), sa = Math.sign(along), sc = Math.sign(across);
-  const at = (a: number, c: number): Point => (horizontal ? [p[0] + a, p[1] + c] : [p[0] + c, p[1] + a]);
-  if (la >= lc) { const before = (la - lc) / 2; return [at(0, 0), at(sa * before, 0), at(sa * (before + lc), sc * lc), at(along, across)]; }
-  const half = la / 2;
-  return [at(0, 0), at(sa * half, sc * half), at(sa * half, sc * (lc - half)), at(along, across)];
 }
 
 /** The view that frames a block of cells in a viewport, with a little room, no closer than `most`. */

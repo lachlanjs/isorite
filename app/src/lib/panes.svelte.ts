@@ -1,4 +1,4 @@
-// The three panes (M10): Note, Atlas and Iso, "think, connect, build". On a desktop they stand side by side in one
+// The three panes (M10): Note, Atlas and the agent, "think, connect, build". On a desktop they stand side by side in one
 // of three layouts; on a phone one stands at a time and the others are a swipe away. Each pane has switches in its
 // header (M12, in place of M10's lenses and modes): what the Note pane and the Atlas show, and what an agent attached
 // may do.
@@ -12,35 +12,44 @@ import { kept } from "./here.ts";
 
 const read = (key: string, fallback: string): string => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
 const keep = (key: string, value: string): void => { try { localStorage.setItem(key, value); } catch { /* not kept */ } };
-const json = <T>(key: string, fallback: T): T => { try { return { ...fallback, ...JSON.parse(read(key, "{}")) }; } catch { return fallback; } };
+// What was kept under the pane's old name (`iso`, before the Agent pane was named so in the code) is read as the agent's.
+const json = <T>(key: string, fallback: T): T => {
+  try {
+    const kept = JSON.parse(read(key, "{}"));
+    if (kept && typeof kept === "object" && "iso" in kept) { if (!("agent" in kept)) kept.agent = kept.iso; delete kept.iso; }
+    return { ...fallback, ...kept };
+  } catch { return fallback; }
+};
 
-export const PANES = ["note", "atlas", "iso"] as const;
+export const PANES = ["note", "atlas", "agent"] as const;
 export type Pane = (typeof PANES)[number];
 export const LAYOUTS = ["cols", "stack", "one"] as const;
 export type Layout = (typeof LAYOUTS)[number];
 /** Each pane's switches (M12). Note: whose words are whose, and the timeline. Atlas: what the agent was given and
- *  did. Iso: with an agent attached, may it edit the project's files, and run commands (its permissions, refused
- *  here when off). */
-export const SWITCHES = { note: ["provenance", "timeline"], atlas: ["questions", "problems", "web", "code", "pictures", "artifacts", "context"], iso: ["notes", "files", "run"] } as const;
-export type Switch = (typeof SWITCHES)[keyof typeof SWITCHES][number];
+ *  did. The Agent pane has none in its header: what the agent may reach is REACH, in its composer. */
+export const SWITCHES = { note: ["provenance", "timeline"], atlas: ["questions", "problems", "web", "code", "pictures", "artifacts", "context"] } as const;
+/** What the agent may reach (notes, the project's files, commands): switches in the Agent pane's composer, not its
+ *  header (design audit (f) 3). Alt+N, Alt+F, Alt+R as before. */
+export const REACH = ["notes", "files", "run"] as const;
+export type Switch = (typeof SWITCHES)[keyof typeof SWITCHES][number] | (typeof REACH)[number];
 // The Atlas's kinds (M12): open questions and problems on the map from the first, links out of it when asked for;
 // what the agent reads lit from the first too, as the agent pane says it will be.
 const OFF: Record<Switch, boolean> = { provenance: false, timeline: false, questions: true, problems: true, web: false, code: false, pictures: false, artifacts: false, context: true, notes: true, files: false, run: false };
 
 /** The panes' relative widths when side by side. */
-const WIDTHS = { note: 1.25, atlas: 1, iso: 1.05 };
+const WIDTHS = { note: 1.25, atlas: 1, agent: 1.05 };
 const LIMIT = { min: 0.4, max: 3 };
 
 class Panes {
   layout = $state<Layout>((LAYOUTS as readonly string[]).includes(read("isorite.layout", "")) ? read("isorite.layout", "") as Layout : "cols");
-  show = $state<Record<Pane, boolean>>(json("isorite.show", { note: true, atlas: true, iso: true }));
+  show = $state<Record<Pane, boolean>>(json("isorite.show", { note: true, atlas: true, agent: true }));
   widths = $state<Record<Pane, number>>(json("isorite.widths", WIDTHS));
   on = $state<Record<Switch, boolean>>(json("isorite.switches", OFF));
   /** The pane keys and new things go to. */
   focus = $state<Pane>("note");
   /** A phone's width: one pane at a time. */
   narrow = $state(false);
-  /** Things sent to Iso from another pane since Iso's pane was last looked at (the phone's tab shows it). */
+  /** Things sent to the agent from another pane since the Agent pane was last looked at (the phone's tab shows it). */
   unseen = $state(0);
   /** The notes, open over the note in the Note pane. */
   tree = $state(false);
@@ -73,7 +82,7 @@ class Panes {
   to(p: Pane): void {
     if (!this.narrow && !this.show[p]) this.toggle(p);
     this.focus = p;
-    if (p === "iso") this.unseen = 0;
+    if (p === "agent") this.unseen = 0;
     this.scroll?.(p);
   }
   /** Set by the shell: brings a pane into view on a phone. */
@@ -102,7 +111,7 @@ class Panes {
     return !!el && !!el.closest(`[data-pane="${p}"]`) && (el.matches("input, textarea, [contenteditable=true]") || !!el.closest(".cm-editor"));
   }
 
-  /** An agent is attached (M25), or a kept session of one shown: Iso's files and run switches are offered. */
+  /** An agent is attached (M25), or a kept session of one shown: the agent's files and run switches are offered. */
   attached = $state(false);
   setAttached(on: boolean): void { this.attached = on; }
 

@@ -16,13 +16,11 @@
 <meta name="apple-mobile-web-app-title" content="isorite">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2307101C'/%3E%3Cpath d='M16 5l11 11l-11 11l-11-11z' fill='%23F0BE4A'/%3E%3C/svg%3E">
 <script>
-  // The ground chosen, before first paint: lapis, quartz, or the system's; code in colour or in ink; notes in a serif or a sans.
+  // The ground chosen, before first paint: lapis, quartz, or the system's.
   (function () {
     try {
       var g = localStorage.getItem("isorite.ground");
       if (g === "lapis" || g === "quartz") document.documentElement.dataset.ground = g;
-      if (localStorage.getItem("isorite.code") === "ink") document.documentElement.dataset.code = "ink";
-      if (localStorage.getItem("isorite.face") === "sans") document.documentElement.dataset.face = "sans";
     } catch (e) { /* storage unavailable: the system's */ }
   })();
 </script>

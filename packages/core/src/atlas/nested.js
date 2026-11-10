@@ -84,11 +84,15 @@ function useRoom(r) {
 
 /** @param model { root, edges }: the map's plain model (layout.js `plainModel`) @param flow "up" or "right": the top level's direction
  *  @param plan a folder holding folders placed as blocks (floorplan.js), not in layers; `planCosts` its weights */
-export function nestedLayout(model, { flow = "up", grain = "fine", plan = false, planCosts = {}, planned: again = null, from = null } = {}) {
+export function nestedLayout(model, { flow = "up", grain = "fine", plan = false, planCosts = {}, planned: again = null, from = null, aspect = null } = {}) {
   const room = ROOMS[grain] ?? FINE;
   useRoom(room);
+  // The shape a folder's contents aim for, wide to tall: the top level takes the screen's (`aspect`, the viewport's
+  // width over its height) where it is given, so the whole map fills the screen it is framed in; the rest, SHAPE.
+  const top = aspect > 0 && Number.isFinite(aspect) ? Math.min(4, Math.max(0.25, aspect)) : null;
+  const shapeOf = (folder) => (folder === model.root && top ? top : SHAPE);
   const isDir = (n) => n.kind === "dir";
-  // A folder and a note may share a name (iso/artifacts.md beside iso/artifacts/): kept apart by the folder's slash.
+  // A folder and a note may share a name (agent/artifacts.md beside agent/artifacts/): kept apart by the folder's slash.
   const keyOf = (n) => (isDir(n) ? `${n.ref}/` : n.ref);
   const parent = new Map(), byRef = new Map(), dirs = [model.root];
   for (let k = 0; k < dirs.length; k++) for (const c of dirs[k].children || []) { parent.set(c, dirs[k]); if (isDir(c)) dirs.push(c); else byRef.set(c.ref, c); }
@@ -143,7 +147,7 @@ export function nestedLayout(model, { flow = "up", grain = "fine", plan = false,
     const made = [...parts].map(([key, list], k) => ({ list, loose: key === null, k, ...diagram(folder, list, way) }));
     made.sort((a, b) => a.loose - b.loose || b.w * b.h - a.w * a.h || a.k - b.k);
     const gap = kids.some(isDir) ? GAP_FOLDERS : GAP, area = made.reduce((t, d) => t + (d.w + gap) * (d.h + gap), 0);
-    const wide = Math.max(Math.ceil(Math.sqrt(area * SHAPE)), ...made.map((d) => d.w));
+    const wide = Math.max(Math.ceil(Math.sqrt(area * shapeOf(folder))), ...made.map((d) => d.w));
     let x = 0, y = 0, shelf = 0, w = 0;
     const out = [];
     for (const d of made) {
@@ -167,8 +171,9 @@ export function nestedLayout(model, { flow = "up", grain = "fine", plan = false,
     const name = folder === model.root ? "" : folder.ref, before = again?.get(name), wider = (i, j) => before?.wider.get([keyOf(kids[i]), keyOf(kids[j])].sort().join("|")) ?? 0;
     const gap = (i, j) => (isDir(kids[i]) || isDir(kids[j]) ? GAP_FOLDERS : GAP) + wider(i, j);
     const sizes = kids.map((c) => [box.get(c).w, box.get(c).h]);
-    // The whole map takes the screen's shape: wide where the top level runs right, tall where it runs up (a phone).
-    const shape = folder === model.root && way === "up" ? 1 / PLAN_COSTS.shape : PLAN_COSTS.shape;
+    // The whole map takes the screen's shape (`aspect`); without one, wide where the top level runs right, tall where
+    // it runs up (a phone).
+    const shape = folder === model.root ? top ?? (way === "up" ? 1 / PLAN_COSTS.shape : PLAN_COSTS.shape) : PLAN_COSTS.shape;
     // `from` (the arrangements of the layout before this one, by ref): the search starts from where this folder's
     // items stood then, any new ones last, and keeps what it can of it (V5).
     let start;
@@ -180,7 +185,7 @@ export function nestedLayout(model, { flow = "up", grain = "fine", plan = false,
       // started from.
       if (!start.every((order) => order.length === kids.length && new Set(order).size === kids.length)) start = undefined;
     }
-    const r = floorplan(sizes, all.map((j) => [index.get(j.p), index.get(j.q), j.count]), gap, way, { shape, ...planCosts, pair: before?.pair, start });
+    const r = floorplan(sizes, all.map((j) => [index.get(j.p), index.get(j.q), j.count]), gap, way, { shape, ...(folder === model.root && top ? { aspect: PLAN_COSTS.fit } : {}), ...planCosts, pair: before?.pair, start });
     pairs.set(name, r.pair);
     orders[name] = r.pair.map((order) => order.map((i) => keyOf(kids[i])));
     kids.forEach((c, i) => Object.assign(box.get(c), { x: r.x[i], y: r.y[i] }));
@@ -220,7 +225,7 @@ export function nestedLayout(model, { flow = "up", grain = "fine", plan = false,
 
     // Rows: a layer wraps when it is longer than the folder should be across.
     const area = kids.reduce((t, _, i) => t + (cross[i] + gap) * (main[i] + CHANNEL), 0);
-    const widest = Math.max(Math.ceil(Math.sqrt(up ? area * SHAPE : area / SHAPE)), ...cross);
+    const widest = Math.max(Math.ceil(Math.sqrt(up ? area * shapeOf(folder) : area / shapeOf(folder))), ...cross);
     // An item joined to nothing here stands apart, in rows after the rest (T117): among the others it only
     // lengthens their rows. A layer that must wrap is cut into rows of even length, what only requires
     // first and what is only required last, so its steps to the layers either side pass the fewest rows.

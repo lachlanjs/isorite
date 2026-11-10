@@ -2,11 +2,12 @@
 // as MCP's 2026-07-28 revision has it: no session is kept, and a client that still opens with `initialize` (as
 // those before it do) is answered without one. Each request is answered with JSON, never a stream.
 //
-// Who is asking is the agent's name: `?agent=` on the address (as `isorite acp` and `isorite mcp` give it), else the
+// Who is asking is the agent's name: `?agent=` on the address (as `isorite mcp` gives it), else the
 // client's own name where the request carries it, else "mcp". MCP says nothing of turns: one begins with a look-up,
-// and ends after a quiet spell, or when the agent's ACP prompt ends.
+// and ends after a quiet spell.
 
 import type { Api } from "@isorite/engine";
+import { slimLook, slimTools } from "./pi/slim.ts";
 
 export const PROTOCOL = "2026-07-28";
 /** The revisions answered, newest first: a client asking for one of these gets it. */
@@ -15,10 +16,10 @@ const KNOWN = [PROTOCOL, "2025-11-25", "2025-06-18", "2025-03-26"];
 export const QUIET_MS = 30_000;
 
 export const INSTRUCTIONS = [
-  "A knowledge base of notes, the person's own. Look in it before you answer from what you know: call brief_base first, then search_notes, outline_note and read_note, following a note's links before searching again. Where the notes don't cover what is asked, say so, and answer from what you know.",
-  "Where your answer rests on a note, cite it in the sentence: the phrase that rests on it is a Markdown link to the note by its path, as [the phrase](/folder/note.md) or [the phrase](/folder/note.md#Section), the path as the tools give it (/id.md). No numbered references and no list of sources at the end. Never invent a note, a link or a quotation.",
-  "Where a question back would do more than an answer (what is unclear, where their understanding stops), ask it with ask_question; it becomes an open question note in their base. Where their own words would fill a gap in a note, offer them with offer_text rather than writing them in.",
-  "Their message may point at passages they chose: a mark like [^1] stands where they mean it, defined at the end of the message with where it is (a file, and its lines) and the words quoted. Read the file for the text around it; the lines may have moved since.",
+  "A knowledge base of notes, the person's own. Look in it before you answer from what you know: brief_base once first, then search_notes, outline_note and read_note (a section, not the whole note, where one will do), following a note's links before searching again. Where the notes don't cover the question, say so, and answer from what you know. Answer plainly: the point first, in few words.",
+  "Where your answer rests on a note, cite it in the sentence: the phrase that rests on it is a Markdown link to the note by its path, as [the phrase](/folder/note.md) or [the phrase](/folder/note.md#Section), the path as the tools give it. No numbered references, no list of sources. Never invent a note, a link or a quotation.",
+  "Before you write or change a note, or teach them something, call brief_base with part=writing (once): how notes are kept. Where a question back would do more than an answer, ask it with ask_question; it becomes an open question note. Where their own words would fill a gap in a note, offer them with offer_text rather than writing them in.",
+  "Their message may point at passages they chose: a mark like [^1] stands where they mean it, defined at the end of the message with the file, its lines and the words quoted. Read the file for the text around it; the lines may have moved.",
   "Other knowledge bases lent to you (the agent's memory among them) are named by brief_base: pass base to the same tools to look or write there, and follow the practice each one's brief gives.",
 ].join("\n\n");
 
@@ -71,14 +72,14 @@ export class McpEndpoint {
       case "ping":
         return {};
       case "tools/list": {
-        const tools = await this.#api.agentTools();
+        const tools = slimTools(await this.#api.agentTools());
         return { tools: tools.map(({ function: t }) => ({ name: t.name, description: t.description, inputSchema: t.parameters })) };
       }
       case "tools/call": {
         const tool = String(p.name ?? ""), args = (p.arguments ?? {}) as Record<string, unknown>;
         this.#busy(who);
         try {
-          const { text } = await this.#api.agentLook({ agent: who.agent, session: who.session, tool, args, ...(who.asked ? { asked: who.asked } : {}) });
+          const { text } = await slimLook((t, a) => this.#api.agentLook({ agent: who.agent, session: who.session, tool: t, args: a, ...(who.asked ? { asked: who.asked } : {}) }), tool, args);
           return { content: [{ type: "text", text }] };
         } catch (e) {
           return { content: [{ type: "text", text: (e as Error).message }], isError: true };
@@ -107,8 +108,6 @@ export class McpEndpoint {
 
   /** A look-up keeps the agent's turn going; quiet for a while, it ends. */
   #busy({ agent, session, quiet = QUIET_MS }: Asker): void {
-    // isorite acp's session: its turn is the prompt's, begun and ended there.
-    if (session === "acp") return;
     const key = `${agent}/${session}`;
     clearTimeout(this.#quiet.get(key));
     this.#quiet.set(key, setTimeout(() => { this.#quiet.delete(key); void this.#api.agentStatus(agent, session, false).catch(() => undefined); }, quiet).unref());

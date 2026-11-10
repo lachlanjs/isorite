@@ -18,7 +18,7 @@ import { linkCompletion, type LinkTarget, type NoteMaker, type PictureSource } f
 import { artifacts, livePreview, livePreviewTheme, codeBroken, pictures, type ArtifactAt, type PictureAt } from "./livePreview.ts";
 import { mathsSyntax } from "./maths.ts";
 import { fileOf, noteOf } from "./noteOf.ts";
-import { overlays, touchedLines, type Mount } from "./overlays.ts";
+import { overlays, touchedLines } from "./overlays.ts";
 import { pointingLinks, type Pointed } from "./pointing.ts";
 
 export type { Format, LinkTarget };
@@ -41,12 +41,8 @@ export interface EditorOptions {
   onFollow?: (id: string) => void;
   /** A link to code was followed (Ctrl or Cmd and a click): the link, `code:path#anchor`, to be read in full (M34). */
   onCode?: (href: string) => void;
-  /** Iso was asked for (Ctrl or Cmd and Enter): where the cursor or the selection is. */
+  /** The agent was asked for (Ctrl or Cmd and Enter): where the cursor or the selection is. */
   onAsk?: (where: Where) => void;
-  /** The cursor or the selection moved. */
-  onCursor?: (where: Where) => void;
-  /** Draws what is laid over the text (overlays.ts). */
-  mountOverlay?: Mount;
   /** Shown, not written in: a version of the note from its timeline. */
   readOnly?: boolean;
   /** What an embed (`[[!name]]`, M12) names, and how it opens: drawn as a callout in the live preview. */
@@ -154,7 +150,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       tables(),
       // Only brackets: closing quotes would get in the way of apostrophes in prose.
       EditorState.languageData.of(() => [{ closeBrackets: { brackets: ["(", "["] } }]),
-      ...(opts.mountOverlay ? [overlays(opts.mountOverlay)] : []),
+      overlays(),
       touchedLines,
       pointingLinks(opts.onPoint),
       ...(opts.readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []),
@@ -195,7 +191,6 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       }),
       EditorView.updateListener.of((u) => {
         if (u.docChanged) opts.onChange(u.state.doc.toString());
-        if (opts.onCursor && (u.selectionSet || u.docChanged)) opts.onCursor(where(u.state));
       }),
     ],
   });
@@ -213,12 +208,6 @@ function codeLinkAt(state: EditorState, pos: number): string | null {
     }
   }
   return null;
-}
-
-/** Bold, a heading, a link…; the editor keeps the focus. */
-export function applyFormat(view: EditorView, what: Format): void {
-  format(view, what);
-  view.focus();
 }
 
 /** Take a text written elsewhere (an agent's edit, their version after a conflict, a version restored). Only what

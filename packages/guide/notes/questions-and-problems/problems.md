@@ -11,6 +11,6 @@ You mark it solved, with the mark at the end of its label (◇ unsolved, ◆ sol
 
 A problem has no steps inside it. One that takes several is several problems, each linking to the one before it as "requires" ([Write a link](/notes/links-and-their-kinds.md "see also") says how), in a folder of their own if they belong together: the Atlas then draws the chain, and each is solved in turn.
 
-Given a problem, [Iso](/iso/iso.md "see also") checks your working rather than solving it: it says where a step goes wrong, and leaves the next step to you.
+Given a problem, [The agent](/agent/agent.md "see also") checks your working rather than solving it: it says where a step goes wrong, and leaves the next step to you.
 
 The things to do in this guide are problems, and [Start here](/start-here.md "see also") holds the first.

@@ -1,37 +1,29 @@
 <script lang="ts">
-  // The agents' sessions (M25), in the drawer where Iso's conversations were (M24, K): each with its crystal, when it
-  // was last added to, what was first asked, its agent, and how many turns and notes isorite saw. Live ones first,
-  // growing while they work; then those the agents keep and those kept here. One chosen is shown: a live one followed,
-  // another carried on by its agent if it is attached, else read as it was kept. Under them, Iso's own conversations
-  // from before M25, to read.
+  // The agent's sessions, in the drawer where the agent's conversations were (M24, K): a list, a row each with its crystal,
+  // what was first asked, and when it was last added to; a live one has a dot, gold while it works. Fork and remove
+  // come on the row under the pointer. One chosen is shown: a live one followed, another carried on, else read as it
+  // was kept. Under them, the agent's own conversations from before M25, to read.
   import type { AgentSession } from "@isorite/engine";
-  import type { ChosenAgent, TerminalApi } from "$lib/api.ts";
-  import { app } from "$lib/app.svelte.ts";
   import { plainAsked, terminal } from "$lib/terminal.svelte.ts";
-  import AttachAgent from "./AttachAgent.svelte";
+  import { fadeIn, glide } from "$lib/motion.ts";
   import Crystal from "./Crystal.svelte";
   import OwnFiles from "./OwnFiles.svelte";
 
   const DAY = 86_400_000;
-  /** When, as a person says it: today with the time, yesterday, the weekday within a week, else the date. */
+  /** When, as a person says it: the time today, yesterday, the weekday within a week, else the date. */
   function when(at: string): string {
     const d = new Date(at), now = new Date(), midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     if (Number.isNaN(d.getTime())) return "";
-    if (d.getTime() >= midnight) return `today · ${d.toTimeString().slice(0, 5)}`;
+    if (d.getTime() >= midnight) return d.toTimeString().slice(0, 5);
     if (d.getTime() >= midnight - DAY) return "yesterday";
     if (d.getTime() >= midnight - 6 * DAY) return d.toLocaleDateString(undefined, { weekday: "short" });
     return d.toLocaleDateString(undefined, { day: "numeric", month: "short", ...(d.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }) });
   }
   const many = (n: number, one: string): string => `${n} ${one}${n === 1 ? "" : "s"}`;
-  const sessions = $derived(terminal.view?.sessions ?? []);
+  // Live first, then by when last used.
+  const sessions = $derived([...(terminal.view?.sessions ?? [])].sort((a, b) => Number(b.live) - Number(a.live) || (a.last < b.last ? 1 : a.last > b.last ? -1 : 0)));
   const shown = (s: AgentSession): boolean => !terminal.old && s.session === terminal.view?.session && s.agent === terminal.view?.agentId;
-  /** What it is, in a word: at work, live, from the agent's own terminal (it can be carried on here), or kept here. */
-  const stateOf = (s: AgentSession): string => (s.busy ? "at work" : s.live ? "live" : s.kept ? (s.open ? "kept" : "kept · to read") : s.open ? "from its terminal" : "the agent's own");
-  /** The agent started for the pane (chosen in the base's settings), to stop from here. */
-  const api = (app.api as { terminal?: TerminalApi } | undefined)?.terminal ?? null;
-  let chosen = $state.raw<ChosenAgent | null>(null);
-  $effect(() => { if (api && ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) void api.chosen().then((c) => (chosen = c), () => undefined); });
-  async function detach(): Promise<void> { try { chosen = (await api?.choose(null)) ?? null; } catch (e) { terminal.problem = (e as Error).message; } }
+  const titleOf = (s: AgentSession): string => plainAsked(s.title) || plainAsked(s.asked) || "A session";
   /** The session being asked about removing: its kept copy goes, the agent's own history does not. */
   let removing = $state("");
   const idOf = (s: AgentSession): string => `${s.agent}/${s.session}`;
@@ -47,79 +39,81 @@
   }
 </script>
 
-<div class="drawer" role="list" aria-label="The agents' sessions">
-  {#if !sessions.length}<p class="faint none">No sessions yet{terminal.acp ? ": those you start in the agent's own terminal show here too, to carry on" : ": attach an agent, and its sessions are kept here"}.</p>{/if}
-  {#each sessions as s (`${s.agent}/${s.session}`)}
-    <div role="listitem">
-      <button type="button" class="spec frame" class:on={shown(s)} class:live={s.live} data-lustre aria-current={shown(s) ? "true" : undefined} disabled={!s.open && !s.kept} title={!s.open && !s.kept ? `${s.name} isn't attached to carry it on` : !s.live && !s.kept ? `Carry on here what you did in ${s.name}'s own terminal` : undefined} onclick={() => void choose(s)}>
-        <Crystal id={s.session} size={44} growing={s.busy} />
-        <span class="m">{s.name} · {stateOf(s)}{when(s.last) ? ` · ${when(s.last)}` : ""}</span>
-        <span class="q">{plainAsked(s.title) || plainAsked(s.asked) || "A session"}</span>
-        <span class="m">{s.turns ? `${many(s.notes, "note")} · ${many(s.turns, "turn")}` : "not carried here yet"}</span>
-      </button>
-      {#if terminal.view?.fork && s.kept}
-        <button type="button" class="more drop fork" aria-label="Fork {plainAsked(s.title) || plainAsked(s.asked) || 'this session'}: a new session from here" title="A new session that begins where this one is" onclick={() => void fork(s)}>fork</button>
-      {/if}
-      {#if s.kept && !s.live}
-        {#if removing === idOf(s)}
-          <p class="sure" role="group" aria-label="Remove the kept copy">Remove what isorite kept of this?<span class="faint">The agent's own history stays.</span>
-            <button type="button" class="more bad" onclick={() => void remove(s)}>remove</button> · <button type="button" class="more" onclick={() => (removing = "")}>keep</button></p>
-        {:else}
-          <button type="button" class="more drop" aria-label="Remove the kept copy of {plainAsked(s.title) || plainAsked(s.asked) || 'this session'}" onclick={() => (removing = idOf(s))}>remove</button>
-        {/if}
-      {/if}
-    </div>
-  {/each}
-  {#if terminal.past.length}
-    <h2 class="label none">earlier, with the agent</h2>
-    {#each terminal.past as c (c.id)}
-      <div role="listitem">
-        <button type="button" class="spec frame" class:on={terminal.old?.session === c.id} data-lustre aria-current={terminal.old?.session === c.id ? "true" : undefined} onclick={() => void terminal.read(c.id)}>
-          <Crystal id={c.id} size={44} />
-          <span class="m">Agent · to read{when(c.last) ? ` · ${when(c.last)}` : ""}</span>
-          <span class="q">{c.asked}</span>
-          <span class="m">{many(c.notes, "note")} · {many(c.turns, "turn")}</span>
+<div class="drawer">
+  <div role="list" aria-label="The agents' sessions">
+    {#if !sessions.length}<p class="none">No sessions yet.</p>{/if}
+    {#each sessions as s (idOf(s))}
+      <div role="listitem" animate:glide in:fadeIn>
+        <button type="button" class="row" class:on={shown(s)} data-lustre aria-current={shown(s) ? "true" : undefined} disabled={!s.open && !s.kept} title={!s.open && !s.kept ? `${s.name} isn't set up to carry it on` : `${s.name}${s.turns ? ` · ${many(s.turns, "turn")}` : ""}`} onclick={() => void choose(s)}>
+          <span class="cr"><Crystal id={s.session} size={28} growing={s.busy} /></span>
+          <span class="q">{titleOf(s)}</span>
+          <span class="m">{#if s.live}<i class="live" class:busy={s.busy} aria-label={s.busy ? "at work" : "live"}></i>{/if}{when(s.last)}</span>
         </button>
-        {#if removing === `iso/${c.id}`}
-          <p class="sure" role="group" aria-label="Remove this conversation">Remove this conversation with the agent? <button type="button" class="more bad" onclick={() => void removePast(c.id)}>remove</button> · <button type="button" class="more" onclick={() => (removing = "")}>keep</button></p>
+        {#if removing === idOf(s)}
+          <p class="sure" role="group" aria-label="Remove the kept copy">Remove from isorite? <span class="faint">The agent's history stays.</span>
+            <button type="button" class="link bad" onclick={() => void remove(s)}>remove</button><button type="button" class="link" onclick={() => (removing = "")}>keep</button></p>
         {:else}
-          <button type="button" class="more drop" aria-label="Remove the conversation {c.asked}" onclick={() => (removing = `iso/${c.id}`)}>remove</button>
+          <span class="acts">
+            {#if terminal.view?.fork && s.kept}
+              <button type="button" class="act" aria-label="Fork {titleOf(s)}: a new session from here" title="Fork: a new session from here" onclick={() => void fork(s)}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="5" cy="3.5" r="1.5" /><circle cx="5" cy="12.5" r="1.5" /><circle cx="11" cy="5.5" r="1.5" /><path d="M5 5v6M11 7c0 3-6 2-6 4" /></svg></button>
+            {/if}
+            {#if s.kept && !s.live}
+              <button type="button" class="act del" aria-label="Remove the kept copy of {titleOf(s)}" title="Remove" onclick={() => (removing = idOf(s))}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5" /></svg></button>
+            {/if}
+          </span>
         {/if}
       </div>
     {/each}
+  </div>
+  {#if terminal.past.length}
+    <h2 class="label">Archived</h2>
+    <div role="list" aria-label="Earlier conversations">
+      {#each terminal.past as c (c.id)}
+        <div role="listitem">
+          <button type="button" class="row" class:on={terminal.old?.session === c.id} data-lustre aria-current={terminal.old?.session === c.id ? "true" : undefined} title="{many(c.notes, 'note')} · {many(c.turns, 'turn')}" onclick={() => void terminal.read(c.id)}>
+            <span class="cr"><Crystal id={c.id} size={28} /></span>
+            <span class="q">{c.asked}</span>
+            <span class="m">{when(c.last)}</span>
+          </button>
+          {#if removing === `legacy/${c.id}`}
+            <p class="sure" role="group" aria-label="Remove this conversation">Remove this conversation? <button type="button" class="link bad" onclick={() => void removePast(c.id)}>remove</button><button type="button" class="link" onclick={() => (removing = "")}>keep</button></p>
+          {:else}
+            <span class="acts"><button type="button" class="act del" aria-label="Remove the conversation {c.asked}" title="Remove" onclick={() => (removing = `legacy/${c.id}`)}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5" /></svg></button></span>
+          {/if}
+        </div>
+      {/each}
+    </div>
   {/if}
-  {#if chosen?.running}<p class="faint none">Started for this pane: <code>{chosen.choice && "id" in chosen.choice ? chosen.choice.id : chosen.command}</code> · <button type="button" class="more" onclick={() => void detach()}>stop it</button></p>{/if}
   {#if terminal.problem}<p class="bad none" role="alert">{terminal.problem}</p>{/if}
-  <details class="change none" bind:open={terminal.changing}><summary class="label">change agent</summary><AttachAgent compact /></details>
   <OwnFiles />
 </div>
 
 <style>
-  .drawer { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); align-content: start; gap: 11px; }
-  .none { grid-column: 1 / -1; font-size: 12px; }
-  .change { margin-top: 8px; padding-top: 10px; border-top: 1px dashed var(--line); }
-  .change summary { cursor: pointer; margin-bottom: 8px; }
-  h2.none { margin: 8px 0 0; font-weight: 400; }
+  .drawer { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px 10px 16px; display: flex; flex-direction: column; gap: 2px; }
+  .none { margin: 8px 6px; font: var(--fs-small) var(--font-ui); color: var(--text-faint); }
+  .label { margin: 18px 8px 6px; }
   .bad { color: var(--rose); }
-  code { font: 11.5px var(--font-mono); overflow-wrap: anywhere; }
+  .faint { color: var(--text-faint); }
   [role="listitem"] { position: relative; }
-  .drop { position: absolute; top: 8px; right: 12px; font: 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); opacity: 0; transition: opacity var(--t-ack) var(--ease-out); }
-  [role="listitem"]:hover .drop, [role="listitem"]:focus-within .drop, .drop:focus-visible { opacity: 1; }
-  .drop:hover { color: var(--rose); }
-  .drop.fork { right: 76px; }
-  .drop.fork:hover { color: var(--text); }
-  @media (hover: none) { .drop { opacity: 1; } }
-  .sure { margin: 6px 0 0; font-size: 12px; color: var(--text-soft); }
-  .more.bad { color: var(--rose); }
-  .more { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
-  .spec { --cut: 8px; --inside: var(--ground-1); --edge: var(--line); width: 100%; padding: 14px; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 4px 14px; align-content: start; text-align: left; color: var(--text-faint); cursor: pointer; --glint: .25; transition: color var(--t-ack) var(--ease-out); }
-  .spec :global(.crystal) { grid-row: span 3; }
-  .spec:hover:not(:disabled) { --edge: var(--line-strong); color: var(--growth); }
-  .spec:disabled { cursor: default; opacity: .6; }
-  .spec.live { color: var(--growth); }
-  /* The one shown (P: chosen): its edge in the lattice and its crystal in gold. */
-  /* The session shown: its edge blue, and a little of that blue as light round its cut outline. */
-  .spec.on { --edge: var(--lattice); color: var(--growth); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--lattice) var(--glow-a), transparent)); }
-  .q { font: 15px/22px var(--font-text); color: var(--text); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  .m { font: 11px/16px var(--font-ui); color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; overflow-wrap: anywhere; }
+  /* A row: its crystal, what was first asked, and at the right when; the one shown is a quiet chosen fill. */
+  .row { width: 100%; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 44px; padding: 6px 10px; background: none; border: 0; border-radius: var(--round); text-align: left; color: var(--text-faint); cursor: pointer; transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); }
+  .row:hover:not(:disabled) { background: var(--fill-hover); color: var(--growth); }
+  .row.on { background: var(--fill-chosen); color: var(--growth); }
+  .row:disabled { cursor: default; opacity: .6; }
+  .cr { display: grid; place-items: center; }
+  .q { font: 14px/1.35 var(--font-text); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .m { display: inline-flex; align-items: center; gap: 6px; font: var(--fs-meta) var(--font-ui); color: var(--text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .live { width: 6px; height: 6px; border-radius: 50%; background: var(--malachite); }
+  .live.busy { background: var(--growth); box-shadow: 0 0 6px var(--growth); }
+  /* Fork and remove: on the row under the pointer (always on a touch screen), over its time. */
+  .acts { position: absolute; right: 6px; top: 50%; translate: 0 -50%; display: flex; gap: 2px; opacity: 0; pointer-events: none; transition: opacity var(--dur-1) var(--ease-out); }
+  [role="listitem"]:hover .acts, [role="listitem"]:focus-within .acts { opacity: 1; pointer-events: auto; }
+  [role="listitem"]:hover .m, [role="listitem"]:focus-within .m { visibility: hidden; }
+  @media (hover: none) { .acts { opacity: 1; pointer-events: auto; position: static; translate: none; justify-content: flex-end; } [role="listitem"] .m { visibility: visible !important; } }
+  .act { width: 28px; height: 28px; display: grid; place-items: center; background: var(--surface-raised); border: 0; border-radius: var(--round); color: var(--text-faint); cursor: pointer; }
+  .act:hover, .act:focus-visible { color: var(--text); background: var(--fill-chosen); }
+  .act.del:hover { color: var(--rose); }
+  .sure { margin: 2px 10px 8px 50px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font: var(--fs-small) var(--font-ui); color: var(--text-soft); }
+  .link { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
+  .link.bad { color: var(--rose); }
 </style>

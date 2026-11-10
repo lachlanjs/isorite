@@ -23,7 +23,9 @@
 // on where things stood, but does not wander from it (M12: with taller blocks, a low temperature alone let one new
 // note turn a third of the top level round).
 
-export const PLAN_COSTS = { bend: 4, flow: 1, area: 0.01, aspect: 1, shape: 1.0, effort: 1000, seed: 0, cross: 20, stay: 5 };
+// `fit`: the weight of `aspect` for the top level when the screen's shape is asked for (nested.js): at 1 the whole map
+// filled 60% of a phone's screen when framed, at 6 77% (the guide, four seeds), for about a tenth more line.
+export const PLAN_COSTS = { bend: 4, flow: 1, area: 0.01, aspect: 1, shape: 1.0, effort: 1000, seed: 0, cross: 20, stay: 5, fit: 6 };
 
 /**
  * @param sizes [[w, h], ...] in cells

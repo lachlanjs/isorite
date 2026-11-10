@@ -71,13 +71,13 @@
   /* As the editor's [[ suggestions are drawn (codemirror.ts's .cm-tooltip-autocomplete). */
   .suggest {
     position: absolute; left: 0; top: calc(100% + 4px); z-index: 60; min-width: 220px; max-width: min(420px, 90vw);
-    margin: 0; padding: 4px 0; list-style: none; background: var(--ground-2); border: 1px solid var(--line); box-shadow: 0 6px 18px color-mix(in srgb, var(--ground-0) 60%, transparent);
+    margin: 0; padding: 4px 0; list-style: none; background: var(--surface-float); border: 1px solid var(--line-faint); border-radius: var(--round); box-shadow: var(--lift); animation: appear var(--dur-1) var(--ease-out);
   }
   .suggest button {
     display: flex; align-items: baseline; gap: 12px; width: 100%; padding: 5px 12px; border: 0; background: none; text-align: left;
     font: 13px/1.4 var(--font-mono); color: var(--text-soft); cursor: pointer;
   }
-  .suggest .at button { background: var(--ground-1); color: var(--text); }
+  .suggest .at button { background: var(--fill-chosen); color: var(--text); }
   .dir { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .detail { color: var(--text-faint); font-size: 11px; flex: none; }
 </style>

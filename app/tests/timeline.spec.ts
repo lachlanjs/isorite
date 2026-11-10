@@ -21,10 +21,10 @@ async function agentEdits(page: Page, id: string) {
   expect(written.ok()).toBe(true);
 }
 
-test.beforeAll(() => { mkdirSync(join(NOTES, "iso"), { recursive: true }); });
+test.beforeAll(() => { mkdirSync(join(NOTES, "agent"), { recursive: true }); });
 
 test("the timeline: marks only, pointing marks what each changed, a version shown and stepped through, restored as a new entry", async ({ page }) => {
-  const id = `iso/timeline-${test.info().project.name}`;
+  const id = `agent/timeline-${test.info().project.name}`;
   const text = "---\ntype: Concept\ntitle: Entropy on a timeline\n---\n\nThe average surprise of a source.\n\nIt is largest when every symbol is equally likely.\n\nPlain text.\n";
   writeFileSync(join(NOTES, `${id}.md`), text);
   await page.goto(`#/n/${id}`);
@@ -58,7 +58,7 @@ test("the timeline: marks only, pointing marks what each changed, a version show
 
   // With nothing pointed at, the agent's latest change is marked; pointing at your edit marks its line, in lattice, and
   // pointing at the agent's shows what was asked beside it.
-  await expect(page.locator(".cm-line.cm-touched-iso")).toHaveCount(1);
+  await expect(page.locator(".cm-line.cm-touched-agent")).toHaveCount(1);
   await marks.nth(1).hover();
   await expect(page.locator(".cm-line.cm-touched-you")).toHaveCount(1);
   await expect(page.locator(".cm-line.cm-touched-you")).toContainText("It is zero for a certain outcome.");
@@ -103,12 +103,12 @@ test("the timeline: marks only, pointing marks what each changed, a version show
   await expect(editor(page)).toBeVisible();
   await button.click();
   await expect(page.locator('[data-pane="note"] .timeline')).toHaveCount(0);
-  await expect(page.locator(".cm-line.cm-touched-iso")).toHaveCount(0);
+  await expect(page.locator(".cm-line.cm-touched-agent")).toHaveCount(0);
 });
 
 test("the Atlas's timeline: this session's moments as marks; pointing outlines the note touched, choosing opens it at that moment", async ({ page }) => {
   test.skip(phone(), "the session's timeline on a phone's Atlas is still open on the boards");
-  const id = `iso/on-the-map-${test.info().project.name}`;
+  const id = `agent/on-the-map-${test.info().project.name}`;
   writeFileSync(join(NOTES, `${id}.md`), "---\ntype: Concept\ntitle: On the map\n---\n\nThe average surprise of a source.\n");
   await page.goto(`#/n/${id}`);
   await editor(page).getByText("The average surprise").click();

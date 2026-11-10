@@ -1,6 +1,6 @@
 <script lang="ts">
   // The note as it was just after a moment of its timeline: its title and text, read only, with what the moment
-  // changed marked, what was asked above it, and Iso's text where the moment offered some that was not kept.
+  // changed marked, and what was asked above it.
   import { onMount } from "svelte";
   import { splitSource } from "@isorite/core";
   import type { EditorView } from "@codemirror/view";
@@ -9,7 +9,7 @@
   import { app } from "$lib/app.svelte.ts";
   import { pictureOf, pictureSrc } from "$lib/pictures.ts";
 
-  let { id, text, title: now, touched, asked, offered }: {
+  let { id, text, title: now, touched, asked }: {
     /** The note's id, which its pictures' paths are relative to. */
     id: string;
     /** The whole file as it was. */
@@ -19,7 +19,6 @@
     /** What the moment changed, by line of the whole file. */
     touched: Touched | null;
     asked?: string | undefined;
-    offered?: string | undefined;
   } = $props();
 
   // The title from the frontmatter, and the text under it with how many lines the frontmatter took.
@@ -48,11 +47,6 @@
   {#if parts.title && parts.title !== now}<h1 class="serif title">{parts.title}</h1>{/if}
   {#if asked !== undefined}<p class="asked"><i class="dia" aria-hidden="true"></i><span>{asked}</span></p>{/if}
   <div class="text" bind:this={host}></div>
-  {#if offered !== undefined}
-    <div class="offered" aria-label="What the agent offered">
-      <p class="serif">{offered}</p>
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -61,7 +55,5 @@
   .asked { display: flex; align-items: baseline; gap: 10px; margin: 0; font-size: 13px; color: var(--text-soft); }
   .asked .dia { flex: none; position: relative; top: -1px; }
   .text :global(.cm-content) { padding-bottom: 24px; }
-  .offered { border-top: 2px dotted var(--growth); border-bottom: 2px dotted var(--growth); padding: 12px 2px; margin-bottom: 40vh; }
-  .offered p { margin: 0; font-size: 17px; line-height: 1.6; white-space: pre-wrap; }
   @media (max-width: 600px) { .title { font-size: 30px; } }
 </style>

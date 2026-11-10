@@ -2,7 +2,7 @@
 // attached, and "Copy for your agent" puts a block on the clipboard that names them for the agent's own tools.
 
 import { expect, test } from "@playwright/test";
-import { toIso } from "./agent.ts";
+import { toAgent } from "./agent.ts";
 import { setSwitch } from "./switches.ts";
 
 test.use({ permissions: ["clipboard-read", "clipboard-write"] });
@@ -14,7 +14,7 @@ test("with no agent attached, a note given is copied as text that names it for t
   await expect(page.locator('[data-note="basics/surprise"]')).toBeVisible();
   await setSwitch(page, "context", true);
   await page.locator('[data-note="basics/surprise"]').click({ modifiers: ["Shift"] });
-  await toIso(page);
+  await toAgent(page);
 
   await expect(page.locator("[data-prompt] .pt")).toHaveCount(1);
   await page.getByRole("textbox", { name: "Message the agent" }).pressSequentially(" Explain this.");

@@ -17,11 +17,11 @@ async function atlas(page: Page) {
 }
 
 
-/** Iso's pane in its Context view: what you gave Iso, listed. On a phone, back to where you were after. */
+/** the Agent pane in its Context view: what you gave the agent, listed. On a phone, back to where you were after. */
 async function showContext(page: Page, back?: "Note" | "Atlas") {
   const phone = (page.viewportSize()?.width ?? 1280) <= 760, nav = page.getByRole("navigation", { name: "Panes" });
   if (phone) await nav.getByRole("button", { name: /^Agent/ }).click();
-  const ctx = page.locator('[data-pane="iso"]').getByRole("button", { name: "Context", exact: true });
+  const ctx = page.locator('[data-pane="agent"]').getByRole("button", { name: "Context", exact: true });
   if ((await ctx.getAttribute("aria-pressed")) !== "true") await ctx.click();
   if (phone && back) {
     await nav.getByRole("button", { name: new RegExp(`^${back}`) }).click();
@@ -89,13 +89,13 @@ test("the chain is walked a step at a time, the way kept", async ({ page }) => {
   await expect(note(page, "coding/huffman-codes")).toHaveClass(/\breq\b/);
   await expect(lines).toHaveAttribute("data-requires", "3");
   await expect(page.locator(".routes")).toHaveAttribute("data-builds", "0"); // what builds on it is the way walked
-  await expect(page.getByText("2 steps back")).toBeVisible();
+  await expect(page.getByTitle("2 steps back")).toHaveText("−2");
   await look(page, "atlas-walked");
 
   // A note already walked is returned to.
   await note(page, "coding/kraft-inequality").click();
   await expect(note(page, "coding/kraft-inequality")).toHaveClass(/\bat\b/);
-  await expect(page.getByText("1 step back")).toBeVisible();
+  await expect(page.getByTitle("1 step back")).toHaveText("−1");
   await expect(lines).toHaveAttribute("data-requires", "2");
 
 });
@@ -255,7 +255,7 @@ test("a new layout comes in three beats: the lines retract, the notes move with 
   expect((await page.request.post(`api/note/delete?id=${id}`, { headers, data: { base: version } })).ok()).toBe(true);
 });
 
-test("held with a finger, a note shows the tags; let go on none, it offers to go to Iso or to open (Q16, M33)", async ({ page }) => {
+test("held with a finger, a note shows the tags; let go on none, it offers to go to the agent or to open (Q16, M33)", async ({ page }) => {
   await atlas(page);
   const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
   const at = { pointerId: 9, pointerType: "touch", isPrimary: true, button: 0, clientX: huffman.x + 10, clientY: huffman.y + 6 };
@@ -287,7 +287,7 @@ test("held with a finger and let go on the gold tag, a note goes to the agent (M
   await expect(page.getByRole("menu", { name: "Huffman codes" })).toHaveCount(0);
 });
 
-test("with the agent's context shown, a click still opens a note; shift+click gives it to Iso and takes it back (M14)", async ({ page }) => {
+test("with the agent's context shown, a click still opens a note; shift+click gives it to the agent and takes it back (M14)", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) <= 760, "a phone has no shift: its hold menu gives and takes back");
   await atlas(page);
   await setSwitch(page, "context", true);
@@ -350,11 +350,11 @@ test("a drag from a note never moves the map; a drag from open ground does", asy
   expect(await at()).not.toBe(still);
 });
 
-test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given to Iso; a drag inside moves the map", async ({ page }) => {
+test("a note held on the Atlas, or dragged out of it onto the Agent pane, is given to the agent; a drag inside moves the map", async ({ page }) => {
   await atlas(page);
   await showContext(page, "Atlas");
   const tray = page.locator("[data-prompt] .pt");
-  // Held still on a note, four tags appear (M33); let go on the gold one and it goes into the agent's context, listed in Iso's
+  // Held still on a note, four tags appear (M33); let go on the gold one and it goes into the agent's context, listed in the agent's
   // Context view, and the map says so.
   const huffman = (await note(page, "coding/huffman-codes").boundingBox())!;
   await page.mouse.move(huffman.x + 10, huffman.y + 6);
@@ -370,12 +370,12 @@ test("a note held on the Atlas, or dragged out of it onto Iso's pane, is given t
   await page.mouse.move(huffman.x - 60, huffman.y + 120); // off it, so it is not lit by pointing
   await expect(note(page, "coding/huffman-codes")).not.toHaveClass(/\bat\b/); // held, not chosen
   if ((page.viewportSize()?.width ?? 1280) <= 760) return; // carrying is a mouse's: a phone holds
-  // Dragged out of the Atlas and let go over Iso's pane.
-  const surprise = (await note(page, "basics/surprise").boundingBox())!, iso = (await page.locator('[data-pane="iso"]').boundingBox())!;
+  // Dragged out of the Atlas and let go over the Agent pane.
+  const surprise = (await note(page, "basics/surprise").boundingBox())!, box = (await page.locator('[data-pane="agent"]').boundingBox())!;
   await page.mouse.move(surprise.x + 10, surprise.y + 6);
   await page.mouse.down();
   await page.mouse.move(surprise.x + 40, surprise.y + 20, { steps: 4 });
-  await page.mouse.move(iso.x + 80, iso.y + 200, { steps: 8 });
+  await page.mouse.move(box.x + 80, box.y + 200, { steps: 8 });
   await expect(page.locator(".carried")).toHaveText("▣ Surprise");
   await page.mouse.up();
   await expect(tray).toHaveText(["Huffman codes", "Surprise"]);
@@ -434,15 +434,15 @@ test("an agent's look-ups through isorite's MCP are drawn on the Atlas: what it 
   expect((await lookup("search_notes", { query: "kraft" })).ok()).toBe(true);
   await lookup("read_note", { id: "coding/kraft-inequality" });
   await lookup("read_note", { id: "/coding/source-coding.md" }); // the note it rests on, along its link
-  await expect(page.getByText("OpenCode is reading Source coding in its own terminal")).toBeAttached();
+  await expect(page.getByTitle("OpenCode, in its own terminal")).toHaveText(/Source coding/);
   await expect(note(page, "coding/source-coding")).toHaveClass(/\bp-used\b/);
   await expect(note(page, "coding/kraft-inequality")).toHaveClass(/\bp-key\b/);
-  await expect(page.locator(".routes path.iso")).toHaveCount(1);
+  await expect(page.locator(".routes path.agent")).toHaveCount(1);
   await expect(page.getByRole("button", { name: "[ stop ]" })).toHaveCount(0); // the browser cannot stop the terminal's agent
   await look(page, "atlas-agent");
 
   await status(false);
-  await expect(page.getByText(/OpenCode's turn is done/)).toBeAttached();
+  await expect(page.getByTitle("OpenCode, in its own terminal")).toHaveText("done");
   await expect(note(page, "coding/source-coding")).toHaveClass(/\bp-link\b/);
   const box = (await page.locator(".atlas").boundingBox())!;
   await page.mouse.click(box.x + 4, box.y + 4);

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A pane's header: its name, then its switches (M12: in place of M10's lenses and Iso's modes), its own tools, and
+  // A pane's header: its name, then its switches (M12: in place of M10's lenses and the agent's modes), its own tools, and
   // at its right the pane's settings (M10b: there is no header above the panes). A switch says what it is on hover;
   // when on, its icon takes its colour, with a bar under it. What does not fit in the header folds into a menu at its
   // right ("more"), the least needed first: the folder it is in, then the switches from the last, then what the pane
@@ -8,6 +8,7 @@
   import { SWITCHES, panes, type Pane, type Switch } from "$lib/panes.svelte.ts";
   import BaseSwitch from "./BaseSwitch.svelte";
   import Glyph from "./Glyph.svelte";
+  import { flyOut } from "$lib/motion.ts";
   import type { Glyph as GlyphKind } from "$lib/glyphs.ts";
 
   // The switches that stand for a kind of thing on the Atlas wear that kind's glyph (M30), the one the Atlas draws for it;
@@ -17,10 +18,11 @@
   // `first`: the pane that stands first, whose name follows the base's (M20).
   let { pane, name, tools, settings, first = false }: { pane: Pane; name: string; tools?: Snippet; settings?: Snippet; first?: boolean } = $props();
 
+  // What each says when pointed at: a few words and its key.
   const SAYS: Record<Switch, string> = {
-    provenance: "Provenance: whose words are whose (Alt+P)", timeline: "Timeline (Alt+T)", context: "The agent's context: what it was given, what it read and changed (Alt+C)",
-    questions: "Open questions (Alt+Q)", problems: "Problems (Alt+B)", web: "Links to the web (Alt+W)", code: "Links to code (Alt+K)", pictures: "Pictures, data and other files beside the notes (Alt+I)", artifacts: "Artifacts beside the notes (Alt+A)",
-    notes: "Agents may edit the notes (Alt+N)", files: "The agent may edit the project's files (Alt+F)", run: "The agent may run commands (Alt+R)",
+    provenance: "Provenance (Alt+P)", timeline: "Timeline (Alt+T)", context: "Context (Alt+C)",
+    questions: "Questions (Alt+Q)", problems: "Problems (Alt+B)", web: "Web links (Alt+W)", code: "Code links (Alt+K)", pictures: "Files (Alt+I)", artifacts: "Artifacts (Alt+A)",
+    notes: "Agent edits notes (Alt+N)", files: "Agent edits files (Alt+F)", run: "Agent runs commands (Alt+R)",
   };
   // On the Atlas, each switch also says its name when the pane is wide enough (the pane is resized, so it is the pane's
   // width that decides, not the screen's: see the container queries below).
@@ -28,8 +30,7 @@
   // What a switch is called in the menu, where its long description would not fit.
   const SHORT: Record<Switch, string> = { provenance: "Provenance", timeline: "Timeline", context: "Context", questions: "Questions", problems: "Problems", web: "Links to the web", code: "Links to code", pictures: "Files", artifacts: "Artifacts", notes: "Agent edits notes", files: "Agent edits files", run: "Agent runs commands" };
   const COLOUR: Record<Switch, string> = { provenance: "growth", timeline: "lattice", questions: "rose", problems: "text", web: "lattice", code: "lattice", pictures: "lattice", artifacts: "lattice", context: "growth", notes: "growth", files: "growth", run: "growth" };
-  // The project's files and commands are the terminal's: offered only while one is attached (M11).
-  const shown = $derived((SWITCHES[pane] as readonly Switch[]).filter((k) => (k !== "files" && k !== "run") || panes.attached));
+  const shown = $derived<readonly Switch[]>(pane === "agent" ? [] : SWITCHES[pane]);
   const open = $derived(panes.settings === pane);
   let menu = $state<HTMLElement>();
   $effect(() => { if (open) menu?.focus(); });
@@ -87,6 +88,8 @@
     const size = new ResizeObserver(later), content = new MutationObserver(later);
     if (head) { size.observe(head); content.observe(head, { childList: true, subtree: true, characterData: true }); }
     later();
+    // Measured again once the faces have come: with the fallback's wider letters, more would fold than need to.
+    void document.fonts?.ready.then(later);
     return () => { size.disconnect(); content.disconnect(); cancelAnimationFrame(frame); };
   });
 
@@ -145,7 +148,7 @@
   {/if}
 </header>
 {#if folds && folded}
-  <div class="frame foldmenu" role="menu" aria-label="More of {name}'s tools" tabindex="-1" bind:this={foldMenu}>
+  <div class="frame foldmenu" out:flyOut role="menu" aria-label="More of {name}'s tools" tabindex="-1" bind:this={foldMenu}>
     {#each rows as r, i (i)}
       {#if r.act}
         <button type="button" class="row" role={r.pressed === null ? "menuitem" : "menuitemcheckbox"} aria-checked={r.pressed === null ? undefined : r.pressed} onclick={() => choose(r)}>
@@ -158,7 +161,7 @@
   </div>
 {/if}
 {#if settings && open}
-  <div class="frame settings" role="dialog" aria-label="{name} settings" tabindex="-1" bind:this={menu}>
+  <div class="frame settings" out:flyOut role="dialog" aria-label="{name} settings" tabindex="-1" bind:this={menu}>
     <span class="frame-title">{name.toLowerCase()}</span>
     <!-- Scrolled inside, so the frame's title, which stands over its edge, is not cut off. -->
     <div class="inner">{@render settings()}</div>
@@ -166,20 +169,30 @@
 {/if}
 
 <style>
-  .phead { container: phead / inline-size; height: 40px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 16px; border-bottom: 1px solid var(--line); white-space: nowrap; user-select: none; position: relative; min-width: 0; overflow: hidden; }
-  .pname { font-family: var(--font-pixel); font-size: 15px; color: var(--text-soft); display: flex; align-items: center; gap: 8px; margin-right: 6px; }
-  .pname::before { content: ""; width: 6px; height: 6px; background: var(--line-strong); }
+  .phead { container: phead / inline-size; height: 40px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 16px; border-bottom: 1px solid var(--line-faint); white-space: nowrap; user-select: none; position: relative; min-width: 0; overflow: hidden; }
+  /* The one lit edge (design audit, P0): the pane the keys go to has a line along the top of its head, drawn from the
+     left when it takes the focus; the one that loses it fades. */
+  .phead::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--pane-lit); pointer-events: none; transform: scaleX(0); transform-origin: left; opacity: 0;
+    transition: transform 0s linear var(--dur-1), opacity var(--dur-1) var(--ease-in); }
+  :global(.pane.focus) .phead::after { transform: scaleX(1); opacity: 1; transition: transform var(--dur-2) var(--ease-out), opacity 0s; }
+  @media (max-width: 760px) { .phead::after { display: none; } }
+  .pname { font: var(--fw-strong) var(--fs-ui)/1 var(--font-ui); color: var(--text-faint); display: flex; align-items: center; gap: 8px; margin-right: 6px; transition: color var(--dur-1) var(--ease-out); }
+  .pname::before { content: ""; width: 6px; height: 6px; background: var(--line-strong); transition: background-color var(--dur-1) var(--ease-out); }
   :global(.pane.focus) .pname { color: var(--text); }
   :global(.pane.focus) .pname::before { background: var(--lattice); }
   .switches { display: flex; align-items: center; gap: 1px; margin-left: -4px; }
-  .sw { position: relative; width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
-  .sw:hover, .sw:focus-visible { color: var(--text); }
-  .sw[aria-pressed="true"] { background: var(--c, var(--lattice)); color: var(--ground-0); --cut: 4px; clip-path: var(--chosen-cut); }
+  /* A switch: faint while off; on, quietly: its colour as a tint and on its icon, and a bar under it in its colour that
+     grows from the middle (design audit, P0: chrome recedes so the content leads). */
+  .sw { position: relative; width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; clip-path: var(--chosen-cut);
+    transition: color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out); }
+  .sw::after { content: ""; position: absolute; left: 6px; right: 6px; bottom: 0; height: 2px; background: var(--c, var(--lattice)); transform: scaleX(0); transition: transform var(--dur-2) var(--ease-out); pointer-events: none; }
+  .sw:hover, .sw:focus-visible { color: var(--text); background: var(--fill-hover); }
+  .sw[aria-pressed="true"] { background: color-mix(in srgb, var(--c, var(--lattice)) var(--tint), transparent); color: var(--c, var(--lattice)); }
+  .sw[aria-pressed="true"]::after { transform: scaleX(1); }
   .lbl { display: none; font: 12px/1 var(--font-ui); letter-spacing: .02em; }
-  /* The Atlas's switches, the kinds it shows: each is tinted its own colour while off, so what it would bring back is
-     seen, and they take the width the pane has: wider buttons first, then each with its name. */
-  .named .sw:not([aria-pressed="true"]) { color: color-mix(in srgb, var(--c) 55%, var(--text-faint)); }
-  .named .sw:not([aria-pressed="true"]):hover, .named .sw:not([aria-pressed="true"]):focus-visible { color: var(--c); }
+  /* The Atlas's switches take the width the pane has: wider buttons first, then each with its name. Two groups: the
+     kinds it shows, then the lens (the agent's context), a little apart. */
+  .named .sw[data-switch="context"] { margin-left: 8px; }
   @container phead (min-width: 520px) {
     .named .switches { gap: 3px; }
     .named .sw { width: 38px; }
@@ -205,10 +218,11 @@
   .more[aria-expanded="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
   /* The Agent's and the Atlas's headers are full on a phone: the base is switched from the Note pane's there, rather than shown
      squeezed to nothing beside a stray slash. */
-  @container phead (max-width: 440px) { .phead:is([data-head="iso"], [data-head="atlas"]) :global(:is(.base, .slash)) { display: none; } }
+  @container phead (max-width: 440px) { .phead:is([data-head="agent"], [data-head="atlas"]) :global(:is(.base, .slash)) { display: none; } }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; background: none; border: 0; padding: 0; cursor: pointer; }
   .icon:hover, .icon:focus-visible { color: var(--text); }
   .gear[aria-expanded="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
+  .icon, .more { transition: color var(--dur-1) var(--ease-out); }
   .settings { --inside: var(--ground-2); filter: var(--lift-drop); animation: appear var(--t-ack) var(--ease-out); position: absolute; z-index: 21; top: 54px; right: 8px; width: min(400px, calc(100% - 16px)); padding: 0; white-space: normal; user-select: text; }
   .inner { max-height: calc(100dvh - 140px); overflow: auto; padding: 24px 18px 14px; display: flex; flex-direction: column; gap: var(--space-6); }
   .settings:focus-visible { outline: none; }

@@ -2,7 +2,7 @@
 // the note it points to; taken out with a delete.
 
 import { expect, test } from "@playwright/test";
-import { box, toIso } from "./agent.ts";
+import { box, toAgent } from "./agent.ts";
 import { setSwitch } from "./switches.ts";
 
 test("a note given to the agent is a pointer in the box; pressed it opens the note, and shift+click on the Atlas takes it out", async ({ page }) => {
@@ -11,7 +11,7 @@ test("a note given to the agent is a pointer in the box; pressed it opens the no
   await expect(page.locator('[data-note="basics/surprise"]')).toBeVisible();
   await setSwitch(page, "context", true);
   await page.locator('[data-note="basics/surprise"]').click({ modifiers: ["Shift"] });
-  await toIso(page);
+  await toAgent(page);
 
   const pt = page.locator("[data-prompt] .pt");
   await expect(pt).toHaveCount(1);

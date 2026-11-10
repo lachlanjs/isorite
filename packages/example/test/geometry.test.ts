@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { authors, hashText, readJournal, replay, splitFrontmatter } from "@isorite/core";
-import { buildGeometry, BONNET, COMPACT, GEOMETRY_PROBLEMS, ISO_QUESTIONS, READING, SOLVED, TRIANGLE } from "../src/index.ts";
+import { buildGeometry, BONNET, COMPACT, GEOMETRY_PROBLEMS, AGENT_QUESTIONS, READING, SOLVED, TRIANGLE } from "../src/index.ts";
 import { loadGeometry } from "../src/node.ts";
 
 const { notes: sources, code } = loadGeometry();
@@ -23,7 +23,7 @@ test("the agent asked two questions back, which you kept, and left open; the oth
   const made = Object.keys(built.notes).filter((p) => !(p in sources));
   expect(made).toHaveLength(2);
   const titles = made.map((p) => splitFrontmatter(built.notes[p]!)[0]?.title).sort();
-  expect(titles).toEqual([ISO_QUESTIONS.disc.title, ISO_QUESTIONS.triangulation.title].sort());
+  expect(titles).toEqual([AGENT_QUESTIONS.disc.title, AGENT_QUESTIONS.triangulation.title].sort());
   for (const p of made) {
     expect(splitFrontmatter(built.notes[p]!)[0]).toMatchObject({ type: "Question" });
     expect(readJournal(built.own[`journal/${p.replace(/\.md$/, "")}.jsonl`]!)[0]!).toMatchObject({ who: "you" });

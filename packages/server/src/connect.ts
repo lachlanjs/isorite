@@ -2,10 +2,10 @@
 // on a yes; nothing is written unasked. Each names `isorite mcp` with the base's folder relative to the repository,
 // so the same lines hold on every machine that has isorite, whatever port or name the base has there.
 //
-// .mcp.json is Claude Code's (and read by others, omp among them); opencode.json is OpenCode's. What else a file
+// .mcp.json is Claude Code's (and read by others, omp among them); opencode.json is OpenCode's.  .cursor/mcp.json and .vscode/mcp.json are offered where the project or person uses them. What else a file
 // holds is kept as it is.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { repoOf } from "./git.ts";
@@ -21,10 +21,12 @@ export interface Proposed {
   after: string;
 }
 
-const HARNESSES: { file: string; harness: string; entry: (rel: string) => [path: string[], value: unknown] }[] = [
+const HARNESSES: { file: string; harness: string; /** Offered only where the project (or the person) already uses it. */ when?: (repo: string) => boolean; entry: (rel: string) => [path: string[], value: unknown] }[] = [
   { file: ".mcp.json", harness: "Claude Code", entry: (rel) => [["mcpServers", "isorite"], { command: "isorite", args: ["mcp", rel] }] },
   // OpenCode 2's form (as `opencode mcp add` writes it), under mcp.servers; OpenCode 1's was under mcp.
   { file: "opencode.json", harness: "OpenCode", entry: (rel) => [["mcp", "servers", "isorite"], { type: "local", command: ["isorite", "mcp", rel] }] },
+  { file: ".cursor/mcp.json", harness: "Cursor", when: (repo) => existsSync(join(repo, ".cursor")) || existsSync(join(homedir(), ".cursor")), entry: (rel) => [["mcpServers", "isorite"], { command: "isorite", args: ["mcp", rel] }] },
+  { file: ".vscode/mcp.json", harness: "VS Code", when: (repo) => existsSync(join(repo, ".vscode")), entry: (rel) => [["servers", "isorite"], { type: "stdio", command: "isorite", args: ["mcp", rel] }] },
 ];
 
 /** Where the base's harness config goes: its repository; in none, the folder holding a base named `notes` (what
@@ -39,7 +41,7 @@ export function projectOf(notes: string): { repo: string; rel: string } {
 
 export function proposal(notes: string): { repo: string; files: Proposed[] } {
   const { repo, rel } = projectOf(notes);
-  const files = HARNESSES.map(({ file, harness, entry }) => {
+  const files = HARNESSES.filter((h) => !h.when || h.when(repo)).map(({ file, harness, entry }) => {
     const at = join(repo, file);
     const before = existsSync(at) ? readFileSync(at, "utf8") : null;
     let json: Record<string, unknown> = {};
@@ -62,6 +64,7 @@ export function writeProposal(notes: string, only?: string[]): string[] {
   for (const f of files) {
     if (f.current || (only && !only.includes(f.file))) continue;
     if (f.before !== null) { try { JSON.parse(f.before); } catch { continue; } }
+    mkdirSync(dirname(join(repo, f.file)), { recursive: true });
     writeFileSync(join(repo, f.file), f.after);
     written.push(f.file);
   }

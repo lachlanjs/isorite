@@ -26,14 +26,14 @@ describe("isorite doctor", () => {
   it("passes with no configuration yet, and asks nothing with --offline", async () => {
     const { code, text } = await run(null, { offline: true, env: { ISORITE_EMBED: "off" } });
     expect(text).toContain("✓ config: there is no");
-    expect(text).toContain("✓ port: 1 is free: isorite acp and isorite mcp start a server there");
+    expect(text).toContain("✓ port: 1 is free: isorite mcp starts a server there");
     expect(text).toMatch(/nothing failed$/);
     expect(code).toBe(0);
   });
 
-  it("says Iso's provider, from before M25, is no longer read", async () => {
+  it("says the agent's provider, from before M25, is no longer read", async () => {
     const { text } = await run(`${DEVICE}[provider]\nkey = "sk-or-old"\n[tiers]\nmid = "x"\n`, { offline: true });
-    expect(text).toContain("its [provider] and [tiers] were Iso's, and are no longer read; your agent's model is its own");
+    expect(text).toContain("its [provider] and [tiers] were the agent's, and are no longer read; your agent's model is its own");
     expect(text).not.toContain("sk-or-old");
   });
 

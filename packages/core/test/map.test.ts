@@ -1,7 +1,7 @@
 // The Atlas's model of a base, what a note rests on, and a format 1 study base's isorite.toml, read to move it.
 
 import { describe, expect, test } from "vitest";
-import { Bundle, StudyError, isFileRef, journalPath, mapModel, parseStudyConfig, reach, recordPath, type MapDir } from "../src/index.ts";
+import { Bundle, StudyError, isFileRef, journalPath, mapModel, parseStudyConfig, reach, type MapDir } from "../src/index.ts";
 import { gridLayout } from "../src/atlas/layout.js";
 
 const note = (title: string, body = "") => `---\ntype: Concept\ntitle: ${title}\n---\n\n${body}\n`;
@@ -25,10 +25,9 @@ describe("a format 1 study base's isorite.toml", () => {
 });
 
 describe("paths in .isorite/", () => {
-  test("a journal for each note, a record for each device", () => {
+  test("a journal for each note", () => {
     expect(journalPath("basics/entropy")).toBe("journal/basics/entropy.jsonl");
     expect(journalPath("@draft/01k7")).toBe("journal/@draft/01k7.jsonl");
-    expect(recordPath("laptop1")).toBe("record/laptop1.jsonl");
   });
   test("an id cannot climb out of the folder", () => {
     for (const bad of ["../x", "/etc/passwd", "a/../../b", "a//b", ""]) expect(() => journalPath(bad)).toThrow(/not a note's id/);

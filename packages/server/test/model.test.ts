@@ -73,7 +73,7 @@ test("isorite model says what is installed and where, and fetches nothing", asyn
 
 test("isorite model with nothing installed and nothing reachable says where it looked, what it tried, and what to do", async () => {
   const port = await closedPort(), said: string[] = [];
-  const code = await modelCommand(undefined, (l) => said.push(l), { ISORITE_EMBED_DIR: join(root, "empty") }, { pkg: join(root, "no-such.tgz"), release: `http://127.0.0.1:${port}/m.tgz`, hub: null });
+  const code = await modelCommand(undefined, (l) => said.push(l), { ISORITE_EMBED_DIR: join(root, "empty"), XDG_DATA_HOME: join(root, "data-empty") }, { pkg: join(root, "no-such.tgz"), release: `http://127.0.0.1:${port}/m.tgz`, hub: null });
   expect(code).toBe(1);
   const text = said.join("\n");
   expect(text).toContain(`No model in ${join(root, "empty")}`);

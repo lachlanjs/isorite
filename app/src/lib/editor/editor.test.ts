@@ -215,7 +215,7 @@ describe("what a link points at, for the Atlas (M17)", () => {
     expect(pointedOf("/a%20b/c.md")).toEqual({ id: "a b/c", folder: false });
     for (const url of ["https://example.org/x.md", "code:src/a.py#L1", "//host/x.md", "bit.md", "/", "#Units"]) expect(pointedOf(url), url).toBeNull();
   });
-  test("an address in the app, as Iso's answers link a note", () => {
+  test("an address in the app, as the agent's answers link a note", () => {
     expect(pointedBy("#/n/basics/surprise")).toEqual({ id: "basics/surprise", folder: false });
     expect(pointedBy("#/n/basics/surprise#Units")).toEqual({ id: "basics/surprise", folder: false });
     expect(pointedBy("https://example.org")).toBeNull();

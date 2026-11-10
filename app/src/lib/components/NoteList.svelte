@@ -14,6 +14,7 @@
   import { panes } from "$lib/panes.svelte.ts";
   import Glyph from "$lib/components/Glyph.svelte";
   import type { Glyph as GlyphKind } from "$lib/glyphs.ts";
+  import { DUR_2, fadeIn, foldAway, glide, growOpen } from "$lib/motion.ts";
 
   let query = $state("");
   let hits = $state.raw<SearchHit[]>([]);
@@ -76,6 +77,20 @@
     if (dragged !== null && !by.has("")) sorted.push(["", []]);
     return sorted;
   });
+  // Moving a note (M33), where it would land is shown before it is let go: in the folder it is over, a gap opens at the
+  // place it would take there (the list is by path), with its title in it.
+  const landing = (dir: string, notes: NoteSummary[]): { at: number; title: string } | null => {
+    if (dragged === null || over !== dir || g.item?.kind !== "note") return null;
+    const to = dir ? `${dir}/${last(g.item.id)}` : last(g.item.id);
+    if (to === g.item.id) return null;
+    const rest = notes.filter((n) => n.id !== g.item!.id), at = rest.findIndex((n) => n.id > to);
+    return { at: at < 0 ? rest.length : at, title: g.item.title };
+  };
+  // A list narrowed by typing changes at once (and for a moment after the box is cleared): rows gliding, fading and
+  // folding would make finding feel slow. Read when a row's motion starts. Nor while the list first fills (the files
+  // beside the notes come a moment after them).
+  let typedAt = performance.now();
+  const still = (): boolean => words.length > 0 || performance.now() - typedAt < 600;
   // Notes that match in their text and were not already listed by title.
   const inText = $derived(words.length ? hits.filter((h) => !app.isHidden(h.id) && !shown.some((n) => n.id === h.id)) : []);
 
@@ -186,38 +201,41 @@
   <div class="top">
     <label class="hidden-label" for="filter">Find a note</label>
     <!-- svelte-ignore a11y_autofocus -->
-    <input id="filter" class="field grow" type="search" placeholder="find a note" bind:value={query} autocomplete="off" autofocus />
-    <button class="btn quiet" type="button" onclick={() => (folding = !folding)} aria-expanded={folding}>new folder</button>
-    <button class="btn primary" type="button" data-tour="new-note" onclick={() => start()}>new note</button>
+    <input id="filter" class="field grow" type="search" placeholder="Find" bind:value={query} oninput={() => (typedAt = performance.now())} autocomplete="off" autofocus />
+    <button class="btn quiet icon-btn" type="button" onclick={() => (folding = !folding)} aria-expanded={folding} aria-label="New folder" title="New folder">
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M1.5 3.5h4.5l1.5 1.8h7v8.2h-13z" /><path d="M8 7.5v4M6 9.5h4" /></svg>
+    </button>
+    <button class="btn primary" type="button" data-tour="new-note" onclick={() => start()}>New note</button>
   </div>
 
   {#if folding}
-    <form class="frame new" onsubmit={makeFolder}>
-      <span class="frame-title">a new folder</span>
-      <label for="new-folder-path"><span class="label">name, with / for one inside another</span></label>
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <form class="frame new" onsubmit={makeFolder} transition:growOpen onkeydown={(e) => { if (e.key === "Escape") folding = false; }}>
+      <span class="frame-title">new folder</span>
       <!-- svelte-ignore a11y_autofocus -->
-      <input id="new-folder-path" class="field" bind:value={path} placeholder="geometry/surfaces" autocomplete="off" autofocus />
-      <div class="row"><button class="btn primary" type="submit" disabled={!path.trim()}>make it</button><button class="btn quiet" type="button" onclick={() => (folding = false)}>cancel</button></div>
+      <input id="new-folder-path" class="field" bind:value={path} placeholder="geometry/surfaces" aria-label="The new folder's path" autocomplete="off" autofocus />
+      <div class="row"><button class="btn primary" type="submit" disabled={!path.trim()}>Create</button><button class="btn quiet" type="button" title="Esc" onclick={() => (folding = false)}>Cancel</button></div>
     </form>
   {/if}
   {#if said}<p class="problem" role="alert">{said}</p>{/if}
 
   {#if making}
-    <form class="frame new" onsubmit={make}>
-      <span class="frame-title">a new note</span>
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <form class="frame new" onsubmit={make} transition:growOpen onkeydown={(e) => { if (e.key === "Escape") making = false; }}>
+      <span class="frame-title">new note</span>
       <label><span class="label">title</span>
         <!-- svelte-ignore a11y_autofocus -->
         <input class="field" bind:value={title} placeholder="Entropy" autocomplete="off" autofocus /></label>
       <label for="new-folder"><span class="label">folder</span></label>
-      <FolderField id="new-folder" label="folder" bind:value={folder} placeholder="none: the top of the base" />
+      <FolderField id="new-folder" label="folder" bind:value={folder} placeholder="(top level)" />
       <p class="faint path">{id ? `${id}.md` : " "}</p>
       {#if problem}<p class="problem" role="alert">{problem}</p>{/if}
-      <div class="row"><button class="btn primary" type="submit">make it</button><button class="btn quiet" type="button" onclick={() => (making = false)}>cancel</button></div>
+      <div class="row"><button class="btn primary" type="submit">Create</button><button class="btn quiet" type="button" title="Esc" onclick={() => (making = false)}>Cancel</button></div>
     </form>
   {/if}
 
   {#if !app.listing.notes.length && !making}
-    <p class="soft empty">This base has no notes yet. Make the first one.</p>
+    <p class="empty"><button class="btn tall first" type="button" onclick={() => start()}><span aria-hidden="true">+</span> New note</button></p>
   {/if}
 
   {#snippet tags(kind: "note" | "folder", id: string)}
@@ -235,14 +253,16 @@
   <HoldTags {g} mode="ghost" />
 
   {#each folders as [dir, notes] (dir)}
-    <section data-dir={dir} style:margin-left="{dir ? dir.split("/").length * 14 : 0}px" class:over={over === dir && dragged !== null}>
-      <h2 class="head" class:lifted={dragged === dir && dir !== ""} class:doomed={tagged("delete", dir)} class:sending={tagged("send", dir)} use:g.press={() => ({ kind: "folder", id: dir, title: dir })}>{#if renaming === dir && dir}<input class="field rename" aria-label="Rename the folder {dir}" bind:value={draft} use:focus onkeydown={(e) => { if (e.key === "Enter") void rename(dir); else if (e.key === "Escape") renaming = null; }} onblur={() => (renaming = null)} />{:else}<span class="label" ondblclick={() => { if (dir) { draft = last(dir); renaming = dir; } }} role="presentation">{dir || "the top of the base"}</span>{/if}<span class="acts"><button class="btn quiet add" type="button" onclick={() => start(dir)} aria-label={`New note in ${dir || "the top of the base"}`}>+</button>{#if dir}<button class="btn quiet" type="button" onclick={() => { draft = last(dir); renaming = dir; }} aria-label={`Rename the folder ${dir}`}>rename</button>{/if}{#if dir && !notes.length && !besides.some((f) => f.dir === dir || f.dir.startsWith(`${dir}/`))}<button class="btn quiet" type="button" onclick={() => void askRemove({ kind: "folder", id: dir, title: dir })} aria-label={`Delete the empty folder ${dir}`}>delete</button>{/if}</span>{@render tags("folder", dir)}</h2>
+    {@const lands = landing(dir, notes)}
+    <section data-dir={dir} style:margin-left="{dir ? (dir.split("/").length - 1) * 14 : 0}px" class:over={over === dir && dragged !== null} class:toplevel={!dir} animate:glide={{ duration: still() ? 0 : DUR_2 }}>
+      <h2 class="head" class:lifted={dragged === dir && dir !== ""} class:doomed={tagged("delete", dir)} class:sending={tagged("send", dir)} use:g.press={() => ({ kind: "folder", id: dir, title: dir })}>{#if renaming === dir && dir}<input class="field rename" aria-label="Rename the folder {dir}" bind:value={draft} use:focus onkeydown={(e) => { if (e.key === "Enter") void rename(dir); else if (e.key === "Escape") renaming = null; }} onblur={() => (renaming = null)} />{:else}<span class="label" ondblclick={() => { if (dir) { draft = last(dir); renaming = dir; } }} role="presentation">{dir || "top level"}</span>{/if}<span class="acts"><button class="act" type="button" onclick={() => start(dir)} aria-label={`New note in ${dir || "the top level"}`} title="New note here"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3v10M3 8h10" /></svg></button>{#if dir}<button class="act" type="button" onclick={() => { draft = last(dir); renaming = dir; }} aria-label={`Rename the folder ${dir}`} title="Rename"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M3 13l.6-2.8L11 2.8l2.2 2.2-7.4 7.4z" /></svg></button>{/if}{#if dir && !notes.length && !besides.some((f) => f.dir === dir || f.dir.startsWith(`${dir}/`))}<button class="act danger-text" type="button" onclick={() => void askRemove({ kind: "folder", id: dir, title: dir })} aria-label={`Delete the empty folder ${dir}`} title="Delete"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M7 7v4M9 7v4" /></svg></button>{/if}</span>{@render tags("folder", dir)}</h2>
       <ul>
-        {#each notes as n (n.id)}
-          <li data-row={n.id} class:lifted={dragged === n.id} class:doomed={tagged("delete", n.id)} class:sending={tagged("send", n.id)} use:g.press={() => ({ kind: "note", id: n.id, title: n.title })}><a class="vein-row" class:on={n.id === panes.last} data-lustre draggable="false" href={noteHref(n.id)}><span class="serif title">{n.title}</span>{#if n.conflicted}<span class="conflict" title="Git left an unresolved merge conflict in this note">merge conflict</span>{/if}{#if n.description}<span class="soft desc">{n.description}</span>{/if}</a><NoteMenu id={n.id} title={n.title} />{@render tags("note", n.id)}</li>
+        {#each notes as n, k (n.id)}
+          <li data-row={n.id} class:lifted={dragged === n.id} class:doomed={tagged("delete", n.id)} class:sending={tagged("send", n.id)} use:g.press={() => ({ kind: "note", id: n.id, title: n.title })} animate:glide={{ duration: still() ? 0 : DUR_2 }} in:fadeIn={{ delay: 130, duration: still() ? 0 : DUR_2 }} out:foldAway={{ duration: still() ? 0 : DUR_2 }}>{#if lands?.at === k}<span class="landing" aria-hidden="true" transition:fadeIn={{ duration: 120 }}><span class="serif">{lands.title}</span></span>{/if}<a class="vein-row" class:on={n.id === panes.last} data-lustre draggable="false" href={noteHref(n.id)}><span class="titleline"><span class="serif title">{n.title}</span>{#if n.conflicted}<span class="conflict" role="img" aria-label="Merge conflict" title="Merge conflict">!</span>{/if}</span>{#if n.description}<span class="desc">{n.description}</span>{/if}</a><NoteMenu id={n.id} title={n.title} />{@render tags("note", n.id)}</li>
         {/each}
+        {#if lands && lands.at === notes.length}<li class="landing-end" aria-hidden="true"><span class="landing" transition:fadeIn={{ duration: 120 }}><span class="serif">{lands.title}</span></span></li>{/if}
         {#each besideIn(dir) as f (f.ref)}
-          <li data-file={f.ref}><a class="vein-row file" class:on={f.ref === panes.last} data-lustre draggable="false" href={noteHref(f.ref)}><span class="title"><Glyph kind={f.kind} size={14} /><span class="serif">{f.title}</span></span>{#if f.title !== f.ref.split("/").at(-1)}<span class="soft desc">{f.ref.split("/").at(-1)}</span>{/if}</a></li>
+          <li data-file={f.ref}><a class="vein-row file" class:on={f.ref === panes.last} data-lustre draggable="false" href={noteHref(f.ref)}><span class="title"><Glyph kind={f.kind} size={14} /><span class="serif">{f.title}</span></span>{#if f.title !== f.ref.split("/").at(-1)}<span class="desc">{f.ref.split("/").at(-1)}</span>{/if}</a></li>
         {/each}
       </ul>
     </section>
@@ -250,10 +270,10 @@
 
   {#if inText.length}
     <section>
-      <h2><span class="label">in the text</span></h2>
+      <h2><span class="label">Matches in text</span></h2>
       <ul>
         {#each inText as h (h.id)}
-          <li><a class="vein-row" class:on={h.id === panes.last} data-lustre href={noteHref(h.id)}><span class="serif title">{h.title}</span><span class="soft desc">{h.snippet}</span></a></li>
+          <li><a class="vein-row" class:on={h.id === panes.last} data-lustre href={noteHref(h.id)}><span class="serif title">{h.title}</span><span class="desc">{h.snippet}</span></a></li>
         {/each}
       </ul>
     </section>
@@ -265,41 +285,68 @@
 </div>
 
 <style>
-  .notes { max-width: var(--measure); margin: 0 auto; padding: var(--space-8) var(--space-4) var(--space-16); display: flex; flex-direction: column; gap: var(--space-6); }
-  .top { display: flex; gap: var(--space-3); }
-  .new { padding: var(--space-6) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+  .notes { max-width: var(--measure); margin: 0 auto; padding: var(--space-8) var(--space-4) var(--space-16); display: flex; flex-direction: column; gap: var(--space-2); }
+  .top { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+  .icon-btn { padding: 0; width: 32px; justify-content: center; color: var(--text-faint); }
+  .new { padding: var(--space-6) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); margin: var(--space-2) 0 var(--space-4); }
   .new label { display: flex; flex-direction: column; gap: var(--space-1); }
-  .new .path { min-height: 1.5em; overflow-wrap: anywhere; }
+  .new .path { min-height: 1.5em; overflow-wrap: anywhere; font-size: var(--fs-small); }
   .row { display: flex; gap: var(--space-2); }
   .problem { color: var(--rose); }
   .empty { padding: var(--space-8) 0; text-align: center; }
-  h2 { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); font-weight: 400; min-height: 28px; }
-  .add { height: 24px; }
-  .conflict { align-self: flex-start; margin-top: 2px; font: 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--rose); border: 1px solid var(--rose); padding: 0 6px; }
+  /* The first move, drawn: an outline, not a sentence. */
+  .empty .first { --fill: transparent; outline: 1px dashed var(--line-strong); outline-offset: -1px; color: var(--text-soft); }
+  .empty .first:hover { color: var(--text); outline-color: var(--lattice); }
+  /* A folder's head: its name in a label's voice, with room above it and no rule (tone and space group, not lines). */
+  h2 { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-weight: 400; min-height: 28px; padding: 0 4px 0 var(--space-4); margin-top: var(--space-6); }
+  h2 .label { font-size: var(--fs-small); color: var(--text-soft); letter-spacing: .02em; }
+  section:first-of-type h2 { margin-top: 0; }
+  /* The top level has no head: its notes come first. Only while a note is carried does it say it can be put there. */
+  section.toplevel > h2 { min-height: 0; margin: 0; height: 0; overflow: hidden; }
+  section.toplevel > h2 .acts { display: none; }
+  :global(body:has(.ghost)) section.toplevel > h2 { height: auto; min-height: 28px; overflow: visible; margin-top: var(--space-6); }
+  /* The folder's actions, and the menu of a row: where you are, not repeated down the list. On a pointer, shown on hover
+     or when the keyboard is in them; on touch, always. */
+  .acts { display: flex; gap: 2px; }
+  .act { width: 26px; height: 26px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--text-faint); cursor: pointer; transition: color var(--dur-1) var(--ease-out); }
+  .act:hover, .act:focus-visible { color: var(--text); }
+  .act.danger-text:hover, .act.danger-text:focus-visible { color: var(--rose); }
+  @media (hover: hover) {
+    .acts, li :global(.menu > .more) { opacity: 0; transition: opacity var(--dur-1) var(--ease-out); }
+    h2:hover .acts, h2:focus-within .acts, li:hover :global(.menu > .more), li:focus-within :global(.menu > .more), li :global(.menu > .more[aria-expanded="true"]) { opacity: 1; }
+  }
+  .conflict { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; font: 700 11px/1 var(--font-ui); color: var(--ground-0); background: var(--rose); clip-path: var(--chosen-cut); }
+  .titleline { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
   .file .title { display: inline-flex; align-items: center; gap: 8px; }
   .file :global(.glyph) { color: var(--text-faint); }
   .rename { height: 24px; padding: 0 6px; width: min(260px, 60%); }
-  /* A folder a note is over (M31): it is outlined, with no motion (gold is Iso's alone). */
+  /* A folder a note is over (M31): it is outlined, with no motion (gold is the agent's alone), and the gap where it would land opens. */
   section.over { outline: 1px dashed var(--text-soft); outline-offset: 4px; }
-  section.over h2 { border-bottom-color: var(--text-soft); }
+  /* Where it would land: a line between the rows at that place, with its title on it. Drawn over the list, not in its
+     flow, so nothing moves under the pointer while it is carried. */
+  .landing { position: absolute; z-index: 3; left: 0; right: 0; top: -2px; height: 2px; background: var(--lattice); pointer-events: none; }
+  .landing > span { position: absolute; right: 8px; top: -9px; padding: 0 6px; font-size: 13px; line-height: 18px; color: var(--lattice); background: var(--ground-0); max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .landing-end { position: relative; height: 0; }
+  .landing-end:not(:first-child) { margin-top: -2px; }
+  .landing-end .landing { top: 0; }
   li.lifted, h2.lifted { opacity: 0.45; }
-  /* Held (M33): the tags, and the item tinted for what letting go would do. Blue moves, red deletes, gold is Iso's. */
+  /* Held (M33): the tags, and the item tinted for what letting go would do. Blue moves, red deletes, gold is the agent's. */
   li.doomed, h2.doomed { background: var(--rose-soft); animation: tremble .32s ease-in-out infinite; }
   li.sending, h2.sending { background: var(--growth-soft); box-shadow: inset 2px 0 0 var(--growth); }
   @keyframes tremble { 0%, 100% { translate: 0 0; } 25% { translate: -1px 0; } 75% { translate: 1px 0; } }
   @media (prefers-reduced-motion: reduce) { li.doomed, h2.doomed { animation: none; } }
   .head { position: relative; }
-  .acts { display: flex; gap: var(--space-2); }
   .ask-at { position: sticky; top: 8px; height: 0; z-index: 40; }
   .ask { position: absolute; left: 0; right: 0; top: 0; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); filter: var(--lift-drop); animation: appear var(--t-change) var(--ease-out); }
   :global(body:has(.ring, .ghost)) .notes { user-select: none; -webkit-user-select: none; }
   li, .head { touch-action: pan-y; -webkit-touch-callout: none; }
-  ul { list-style: none; margin: 0; padding: 0; }
-  /* Rows with a vein (M24, D): the note last open is chosen. */
+  ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  /* Rows with a vein (M24, D), no rule between them: space and the raised ground of the one pointed at or chosen. */
   li { position: relative; }
   li :global(.menu) { position: absolute; right: 0; top: 6px; }
-  li a { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) 44px var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); color: var(--text); }
-  li a:hover { text-decoration: none; }
-  .title { font-size: 18px; line-height: 1.3; }
-  .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  li a { display: flex; flex-direction: column; gap: 2px; padding: 10px 44px 10px var(--space-4); color: var(--text); transition: background-color var(--dur-1) var(--ease-out); }
+  li a:hover { text-decoration: none; background: var(--fill-hover); }
+  li a.on { background: var(--fill-chosen); }
+  .title { font-size: 16px; line-height: 1.35; }
+  .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: italic 13px/1.4 var(--font-text); color: var(--text-faint); }
 </style>

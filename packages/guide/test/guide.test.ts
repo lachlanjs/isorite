@@ -44,7 +44,7 @@ test("Start here embeds problems, the first of them the one about solving, and n
   for (const n of notes) expect(n.done, n.id).toBeNull();
 });
 
-test("what the guide says of keeping a base is what Iso is told", () => {
+test("what the guide says of keeping a base is what the agent is told", () => {
   const well = files["your-own-base/keeping-a-base-well.md"]!.toLowerCase(), told = `${PRACTICE}\n${LEARNING}`.toLowerCase();
   const AGREE: [guide: string, prompt: string][] = [
     ["one idea a note", "one idea a note"], ['"requires"', '"requires"'], ['"uses"', '"uses"'], ["look before you write", "before you write a note, look"],

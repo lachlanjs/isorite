@@ -1,0 +1,240 @@
+{
+ "label": "2026-11-09-aspect-after",
+ "at": "2026-11-09T22:56:20.065Z",
+ "results": {
+  "guide/phone": {
+   "grid": [
+    173,
+    259
+   ],
+   "area": 44807,
+   "fill": 0.7,
+   "ink": 4634,
+   "crossings": 32,
+   "straight": 0.57,
+   "back": 0.25,
+   "ms": 535
+  },
+  "guide/pane": {
+   "grid": [
+    158,
+    299
+   ],
+   "area": 47242,
+   "fill": 0.9,
+   "ink": 4433,
+   "crossings": 18,
+   "straight": 0.5,
+   "back": 0.25,
+   "ms": 514
+  },
+  "guide/wide": {
+   "grid": [
+    244,
+    181
+   ],
+   "area": 44164,
+   "fill": 0.75,
+   "ink": 5167,
+   "crossings": 13,
+   "straight": 0.57,
+   "back": 0.18,
+   "ms": 325
+  },
+  "this-base/phone": {
+   "grid": [
+    627,
+    577
+   ],
+   "area": 361779,
+   "fill": 0.42,
+   "ink": 42739,
+   "crossings": 120,
+   "straight": 0.79,
+   "back": 0.28,
+   "ms": 1142
+  },
+  "this-base/pane": {
+   "grid": [
+    446,
+    842
+   ],
+   "area": 375532,
+   "fill": 0.89,
+   "ink": 38183,
+   "crossings": 127,
+   "straight": 0.5,
+   "back": 0.31,
+   "ms": 1709
+  },
+  "this-base/wide": {
+   "grid": [
+    726,
+    656
+   ],
+   "area": 476256,
+   "fill": 0.61,
+   "ink": 42497,
+   "crossings": 121,
+   "straight": 0.61,
+   "back": 0.31,
+   "ms": 1294
+  },
+  "nanosim/phone": {
+   "grid": [
+    118,
+    201
+   ],
+   "area": 23718,
+   "fill": 0.8,
+   "ink": 2247,
+   "crossings": 6,
+   "straight": 0.17,
+   "back": 0.15,
+   "ms": 158
+  },
+  "nanosim/pane": {
+   "grid": [
+    108,
+    195
+   ],
+   "area": 21060,
+   "fill": 0.86,
+   "ink": 2017,
+   "crossings": 2,
+   "straight": 0.5,
+   "back": 0.05,
+   "ms": 66
+  },
+  "nanosim/wide": {
+   "grid": [
+    183,
+    125
+   ],
+   "area": 22875,
+   "fill": 0.81,
+   "ink": 1500,
+   "crossings": 2,
+   "straight": 0.67,
+   "back": 0.1,
+   "ms": 39
+  },
+  "mockup/phone": {
+   "grid": [
+    121,
+    225
+   ],
+   "area": 27225,
+   "fill": 0.87,
+   "ink": 1605,
+   "crossings": 1,
+   "straight": 1,
+   "back": 0.05,
+   "ms": 16
+  },
+  "mockup/pane": {
+   "grid": [
+    132,
+    248
+   ],
+   "area": 32736,
+   "fill": 0.9,
+   "ink": 1662,
+   "crossings": 3,
+   "straight": 1,
+   "back": 0,
+   "ms": 15
+  },
+  "mockup/wide": {
+   "grid": [
+    206,
+    161
+   ],
+   "area": 33166,
+   "fill": 0.71,
+   "ink": 2113,
+   "crossings": 3,
+   "straight": 0.67,
+   "back": 0,
+   "ms": 39
+  },
+  "synth-6x9/phone": {
+   "grid": [
+    207,
+    362
+   ],
+   "area": 74934,
+   "fill": 0.81,
+   "ink": 5373,
+   "crossings": 18,
+   "straight": 1,
+   "back": 0.14,
+   "ms": 164
+  },
+  "synth-6x9/pane": {
+   "grid": [
+    182,
+    351
+   ],
+   "area": 63882,
+   "fill": 0.92,
+   "ink": 5781,
+   "crossings": 11,
+   "straight": 0.86,
+   "back": 0.22,
+   "ms": 130
+  },
+  "synth-6x9/wide": {
+   "grid": [
+    344,
+    213
+   ],
+   "area": 73272,
+   "fill": 0.89,
+   "ink": 4840,
+   "crossings": 13,
+   "straight": 1,
+   "back": 0.19,
+   "ms": 122
+  },
+  "synth-12x12/phone": {
+   "grid": [
+    371,
+    608
+   ],
+   "area": 225568,
+   "fill": 0.76,
+   "ink": 20587,
+   "crossings": 53,
+   "straight": 0.61,
+   "back": 0.16,
+   "ms": 847
+  },
+  "synth-12x12/pane": {
+   "grid": [
+    367,
+    683
+   ],
+   "area": 250661,
+   "fill": 0.88,
+   "ink": 19304,
+   "crossings": 48,
+   "straight": 0.79,
+   "back": 0.16,
+   "ms": 955
+  },
+  "synth-12x12/wide": {
+   "grid": [
+    571,
+    373
+   ],
+   "area": 212983,
+   "fill": 0.85,
+   "ink": 20334,
+   "crossings": 44,
+   "straight": 0.86,
+   "back": 0.15,
+   "ms": 1088
+  }
+ }
+}

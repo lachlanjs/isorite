@@ -23,11 +23,11 @@ test("a note with maths and a typed link is written, saved, and there when reope
   await expect(notePane(page).getByRole("link", { name: "Surprise" })).toBeVisible();
   await look(page, "notes");
 
-  await page.getByRole("button", { name: "new note", exact: true }).click();
+  await page.getByRole("button", { name: "New note", exact: true }).click();
   await page.getByPlaceholder("Entropy").fill(`Entropy ${name}`);
   await page.getByLabel("folder", { exact: true }).fill("basics");
   await expect(page.getByText(`${id}.md`)).toBeVisible();
-  await page.getByRole("button", { name: "make it" }).click();
+  await page.getByRole("button", { name: "Create" }).click();
 
   await expect(page.getByLabel("Title", { exact: true })).toHaveValue(`Entropy ${name}`);
   await editor(page).click();
@@ -67,7 +67,7 @@ test("the list narrows as you type, by title and by what the notes say", async (
   await expect(notePane(page).getByRole("link", { name: /The bit/ })).toBeVisible();
   await expect(notePane(page).getByRole("link", { name: /^Surprise/ })).toHaveCount(0);
   await find.fill("coin toss");
-  await expect(page.getByText("in the text")).toBeVisible();
+  await expect(page.getByText("Matches in text")).toBeVisible();
   await expect(notePane(page).getByRole("link", { name: /The bit/ })).toBeVisible();
   await find.fill("zzzz");
   await expect(page.getByText("No note matches.")).toBeVisible();
@@ -151,26 +151,6 @@ test("changed elsewhere in another paragraph while you write: both are kept, and
   await expect(editor(page)).toContainText("First paragraph. Typed here.");
 });
 
-test("the notes are in a serif, or in a sans by the Note pane's setting, kept from the first paint", async ({ page }) => {
-  await page.goto("#/n/basics/surprise");
-  await expect(editor(page)).toContainText("An outcome of probability");
-  const text = editor(page).locator(".cm-line").first();
-  expect(await text.evaluate((e) => getComputedStyle(e).fontFamily)).toContain("Charter");
-  await page.getByRole("button", { name: "Note settings" }).click();
-  await page.getByRole("dialog", { name: "Note settings" }).getByRole("radio", { name: "sans" }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-face", "sans");
-  await page.keyboard.press("Escape");
-  expect(await text.evaluate((e) => getComputedStyle(e).fontFamily)).toContain("IBM Plex Sans");
-  // The face itself, not a fallback: served from the app's own fonts.
-  await expect.poll(() => page.evaluate(() => document.fonts.check('16px "IBM Plex Sans"'))).toBe(true);
-  await look(page, "notes-sans");
-  await page.reload();
-  await expect(page.locator("html")).toHaveAttribute("data-face", "sans");
-  await page.getByRole("button", { name: "Note settings" }).click();
-  await page.getByRole("dialog", { name: "Note settings" }).getByRole("radio", { name: "serif" }).click();
-  await expect(page.locator("html")).not.toHaveAttribute("data-face", "sans");
-});
-
 test("a click on a formula, inline, displayed in a sentence or on its own lines, puts the cursor at its start", async ({ page }) => {
   const name = test.info().project.name, id = `basics/formulas-${name}`;
   const made = await page.request.get("api/session").then((r) => r.json()) as { token: string };
@@ -228,10 +208,7 @@ test("a passage chosen in a note is pointed to in the agent's box (Ctrl+[); the 
   await expect(page.getByRole("searchbox", { name: "Find a note" })).toHaveCount(0);
 });
 
-test("the parts, the atlas pane, and a note that is not there", async ({ page }) => {
-  await page.goto("#/parts");
-  await expect(page.getByRole("button", { name: "keep" })).toBeVisible();
-  await look(page, "parts");
+test("the atlas pane, and a note that is not there", async ({ page }) => {
   await page.goto("#/atlas");
   await expect(page.getByRole("application", { name: "The atlas: the map of the base" })).toBeVisible();
   // An old link to the Atlas brings its pane forward (M10).

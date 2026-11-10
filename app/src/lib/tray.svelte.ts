@@ -1,5 +1,5 @@
-// What Iso is sent (M10, §7): the tray above the agent's box. Notes, folders and passages are put there by dragging or
-// holding on the Atlas, by tapping in the Atlas's Iso lens, and by "send to the agent" on a selection in a note. Each can
+// What the agent is sent (M10, §7): the tray above the agent's box. Notes, folders and passages are put there by dragging or
+// holding on the Atlas, by tapping in the Atlas's agent lens, and by "send to the agent" on a selection in a note. Each can
 // be taken out again. Nothing is put there that you did not put there.
 
 import { app } from "./app.svelte.ts";
@@ -16,16 +16,16 @@ class Tray {
   parts = $state.raw<Part[]>([]);
   /** The part last put in, for a moment: the tray shows it arriving. */
   fresh = $state("");
-  /** A note or folder being carried from the Atlas, and whether it is over Iso's pane. */
+  /** A note or folder being carried from the Atlas, and whether it is over the Agent pane. */
   carrying = $state.raw<{ part: Part; over: boolean } | null>(null);
 
   has(kind: Part["kind"], id: string): boolean { return this.parts.some((p) => p.kind === kind && p.id === id); }
-  /** Put a part in. Said where it came from, so a phone's Iso tab can count what it has not seen. */
+  /** Put a part in. Said where it came from, so a phone's Agent tab can count what it has not seen. */
   add(part: Part): boolean {
     if (this.parts.some((p) => key(p) === key(part))) return false;
     this.parts = [...this.parts, part];
     this.fresh = key(part);
-    if (panes.focus !== "iso") panes.unseen++;
+    if (panes.focus !== "agent") panes.unseen++;
     return true;
   }
   /** Told when a part is taken out (by whoever holds the session), so that it can stop being sent. */
@@ -35,7 +35,7 @@ class Tray {
     this.parts = this.parts.filter((p) => key(p) !== key(part));
     if (had) this.onRemove?.(part);
   }
-  /** In if out, out if in: the Atlas's Iso lens. */
+  /** In if out, out if in: the Atlas's agent lens. */
   toggle(part: Part): boolean {
     if (this.parts.some((p) => key(p) === key(part))) { this.remove(part); return false; }
     this.add(part);

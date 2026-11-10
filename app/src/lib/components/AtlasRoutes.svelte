@@ -4,16 +4,16 @@
   // line that does not run. Where routes overlap they are one line (geometry's mergeRoutes). At rest, as on the
   // boards, a line between two folders is heavy (3 px) and one inside a folder light (1.5 px), whatever it
   // carries: the count says how many. A lit line is 3 px however many links run along it, as on the boards; one
-  // whose links run both ways stands still. Iso's steps along links are gold, as its lines on Desktop-Think, and a
-  // note for Iso has a blue line to each note it links to.
+  // whose links run both ways stands still. The agent's steps along links are gold, as its lines on Desktop-Think, and a
+  // note for the agent has a blue line to each note it links to.
   let { k, rest, hot, pulses = [], counts, pointed = false, grown = [], beat = "", retracting = [] }: {
     /** The zoom: paths are given at zoom 1. */
     k: number;
     /** `strong`: a "requires" runs along it. A route of weaker links only is drawn lighter. `trunk`: between two folders. */
     rest: { key: string; d: string; count: number; strong: boolean; trunk: boolean }[];
     /** One pulse for each lit link, along its own way (see Atlas). */
-    pulses?: { key: string; d: string; kind: "requires" | "builds" | "uses" | "iso" }[];
-    hot: { key: string; d: string; kind: "requires" | "builds" | "uses" | "iso"; count: number; still: boolean }[];
+    pulses?: { key: string; d: string; kind: "requires" | "builds" | "uses" | "agent" }[];
+    hot: { key: string; d: string; kind: "requires" | "builds" | "uses" | "agent"; count: number; still: boolean }[];
     /** The note's links are lit because it is pointed at, not chosen (M24): they draw out along their length in
      *  blue, and stand. Chosen, they run in their kinds' colours. */
     pointed?: boolean;
@@ -43,9 +43,9 @@
     {:else if beat === ""}
       {#each rest as r (r.key)}<path class={r.strong ? "base" : "base weak"} class:trunk={r.trunk} d={r.d} />{/each}
       {#each hot as r (r.key)}
-        {#if pointed && r.kind !== "iso"}<path class="along touch" pathLength="1" d={r.d} style:stroke-width="{2 / k}px" />
+        {#if pointed && r.kind !== "agent"}<path class="along touch" pathLength="1" d={r.d} style:stroke-width="{2 / k}px" />
         {:else}<path class="lit {r.kind}" class:still={r.still} d={r.d} />
-          {#if r.kind === "iso"}{@render pulse(r.d, `loop pk-${r.kind}`, 1)}{/if}{/if}
+          {#if r.kind === "agent"}{@render pulse(r.d, `loop pk-${r.kind}`, 1)}{/if}{/if}
       {/each}
       {#each pulses as r (r.key)}
         {#if pointed}{@render pulse(r.d, "blue", 1)}{:else if r.kind !== "uses"}{@render pulse(r.d, `loop pk-${r.kind}`, 1)}{/if}
@@ -68,7 +68,7 @@
   .lit { stroke-width: 2px; opacity: .55; }
   .requires { stroke: var(--requires); }
   .builds { stroke: var(--builds); }
-  .iso { stroke: var(--growth); stroke-width: 2.5px; } /* as the boards' .au */
+  .agent { stroke: var(--growth); stroke-width: 2.5px; } /* as the boards' .au */
   .uses { stroke: var(--text-soft); stroke-width: 1.5px; opacity: 1; }
   /* A pulse of light along a line, as the one round a touched control (lustre.ts): a bright head with a tail that fades,
      run once from the start of the line past its end. A new link is gold, a pointed note's links blue; the core is the
@@ -78,7 +78,7 @@
   /* The halo, longer than the glow so its light leads and trails it, and faint enough to read as light, not a line. */
   .pulse.halo { --len: .36; stroke: var(--growth); opacity: .16; } /* blurred by 3 screen pixels at any zoom (set where it is drawn) */
   .pulse:is(.glow, .halo).blue { stroke: var(--lattice); }
-  .pulse:is(.glow, .halo).pk-requires { stroke: var(--requires); } .pulse:is(.glow, .halo).pk-builds { stroke: var(--builds); } .pulse:is(.glow, .halo).pk-iso { stroke: var(--growth); }
+  .pulse:is(.glow, .halo).pk-requires { stroke: var(--requires); } .pulse:is(.glow, .halo).pk-builds { stroke: var(--builds); } .pulse:is(.glow, .halo).pk-agent { stroke: var(--growth); }
   .pulse.loop { animation: pulse-loop 2.2s cubic-bezier(.3, .5, .4, 1) infinite; }
   @keyframes pulse-loop { 0% { stroke-dashoffset: var(--len); } 55%, 100% { stroke-dashoffset: -1; } }
   .pulse.core { --len: .09; stroke: rgb(var(--sheen)); opacity: .7; }

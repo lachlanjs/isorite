@@ -1,6 +1,6 @@
 <script lang="ts">
   // A picture pasted or dropped into a note (M22), named before it's saved: its name (made safe as it's typed, the
-  // file it will be shown), and what it shows (its alt text, which is what Iso reads of it). The same picture
+  // file it will be shown), and what it shows (its alt text, which is what the agent reads of it). The same picture
   // already in the notes is offered instead of a copy. Enter saves, Esc saves nothing.
   import { onMount } from "svelte";
   import { describedAs } from "$lib/editor/links.ts";

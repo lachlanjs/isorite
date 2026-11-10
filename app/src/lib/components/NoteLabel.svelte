@@ -98,7 +98,7 @@
       <input class="adding" size="10" aria-label="new tag" use:focus onblur={(e) => addTag(e.currentTarget.value)}
         onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); else if (e.key === "Escape") addingTag = false; }} />
     {:else}
-      <button type="button" class="add" aria-label="add a tag" onclick={() => (addingTag = true)}>+</button>
+      <button type="button" class="add" aria-label="add a tag" title="Add a tag" onclick={() => (addingTag = true)}>+</button>
     {/if}
   </span>
 </div>
@@ -132,13 +132,15 @@
   .stand.empty { border-bottom-color: var(--line); min-height: 26px; }
   .stand:hover { border-bottom-color: var(--line); }
   .stand:focus-visible { outline: none; border-bottom-color: var(--lattice); color: var(--text); }
-  .label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-top: var(--space-2); padding-bottom: var(--space-3); border-bottom: 1px solid var(--line); font-size: 11px; color: var(--text-faint); }
-  .kinds { display: inline-flex; gap: 4px; }
-  .slot { display: inline-flex; align-items: center; justify-content: center; height: 30px; width: 38px; padding: 0; background: none; border: 1px solid var(--line); color: var(--text-faint); font: 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; cursor: pointer; }
-  .slot:hover { border-color: var(--text-soft); color: var(--text); }
-  .slot[aria-checked="true"] { border-color: var(--lattice); background: var(--lattice); color: var(--ground-0); cursor: default; }
-  .slot.question[aria-checked="true"] { border-color: var(--rose); background: var(--rose); }
-  .slot.problem[aria-checked="true"] { border-color: var(--text-soft); background: var(--text-soft); }
+  /* The label's strip: no rule under it; space sets it apart from the text (design audit, P1). */
+  .label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: var(--space-2) 0 var(--space-4); font-size: 11px; color: var(--text-faint); }
+  /* The kind: three borderless slots, the chosen one tinted in its colour (as a switch that is on), its fill easing in. */
+  .kinds { display: inline-flex; gap: 2px; }
+  .slot { --c: var(--lattice); display: inline-flex; align-items: center; justify-content: center; height: 28px; width: 28px; padding: 0; background: none; border: 0; color: var(--text-faint); cursor: pointer; clip-path: var(--chosen-cut);
+    transition: color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out); }
+  .slot.question { --c: var(--rose); } .slot.problem { --c: var(--text-soft); }
+  .slot:hover { background: var(--fill-hover); color: var(--text); }
+  .slot[aria-checked="true"] { background: color-mix(in srgb, var(--c) var(--tint), transparent); color: var(--c); cursor: default; }
   .path { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
   .seg { background: none; border: 0; border-bottom: 1px solid transparent; padding: 2px 0; color: var(--text-soft); font: inherit; cursor: pointer; }
   .seg.name { color: var(--text); }
@@ -157,11 +159,13 @@
   .x { width: 16px; margin-left: -6px; opacity: 0; }
   .extra .br:hover + .x, .x:hover, .x:focus-visible { opacity: 1; color: var(--rose); outline: none; }
   .extra { display: flex; margin-top: var(--space-2); font-size: 11px; color: var(--text-faint); }
-  .word { text-transform: uppercase; letter-spacing: .06em; margin-right: 4px; }
+  .word { font-weight: var(--fw-medium); letter-spacing: .04em; margin-right: 4px; }
   .grow { flex: 1; }
-  .mark { height: 26px; padding: 0 10px; background: none; border: 1px solid var(--rose); color: var(--rose); font: 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; cursor: pointer; }
-  .problem .mark, .extra.problem .mark { border-color: var(--text-soft); color: var(--text-soft); }
-  .mark.done, .extra.problem .mark.done { border-color: var(--malachite); background: var(--malachite); color: var(--ground-0); }
+  /* Its mark: a quiet chip in the colour of where it stands (open rose, done malachite). */
+  .mark { --c: var(--rose); height: 26px; padding: 0 10px; border: 0; background: color-mix(in srgb, var(--c) var(--tint), transparent); color: var(--c); font: 12px var(--font-ui); cursor: pointer; clip-path: var(--chosen-cut);
+    transition: color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out); }
+  .extra.problem .mark { --c: var(--text-soft); }
+  .mark.done, .extra.problem .mark.done { --c: var(--malachite); }
   .mark:disabled { opacity: .6; cursor: default; }
   p.problem { margin: var(--space-1) 0 0; color: var(--rose); font-size: 12px; }
 </style>

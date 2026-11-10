@@ -66,20 +66,6 @@ test("notes in no repository have nothing to ask; the answer is kept in bases.to
   expect(() => setHistoryChoice("nope", "project", config)).toThrow();
 });
 
-test("an agent known by name has its ACP command, for isorite acp <name>; every known agent is listed, found ones first", async () => {
-  const { knownCommand, listAgents } = await import("../src/detect.ts");
-  expect(knownCommand("omp")).toBe("omp acp");
-  expect(knownCommand("claude")).toBe("npx -y @agentclientprotocol/claude-agent-acp");
-  expect(knownCommand("nope")).toBeNull();
-  const bin = join(root, "bin");
-  mkdirSync(bin, { recursive: true });
-  writeFileSync(join(bin, "hermes"), "#!/bin/sh\n");
-  execFileSync("chmod", ["755", join(bin, "hermes")]);
-  const all = listAgents({ PATH: bin });
-  expect(all.map((a) => `${a.id}:${a.found}`)).toEqual(["hermes:true", "claude:false", "codex:false", "opencode:false", "omp:false"]);
-  expect(all[1]!.note).toContain("isn't on this machine's PATH");
-});
-
 test("the question for a new base: nothing outside a project; apart says the commands and keeps the answer; the default is with the project", async () => {
   const config = join(root, "ask", "config.toml");
   const said: string[] = [];

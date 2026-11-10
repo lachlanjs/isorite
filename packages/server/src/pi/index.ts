@@ -1,7 +1,7 @@
 // Choosing the pi agent for a base's pane (M35 prototype, settings in M36 step 8): `ISORITE_PI=<provider>/<model>`, as
 // `anthropic/claude-sonnet-4-6` or `openai/gpt-5`, else the model chosen in the settings (kept with the keys, in isorite's
 // data folder). A key is the one saved in the settings, else the provider's own variable (ANTHROPIC_API_KEY, ...). With
-// neither choice, the pane is the ACP agent's, as ever. `ISORITE_PI_ASK=<tool>,<tool>` makes the pane ask before those tools run. The project's files and shell are the settings' (default: read the files, nothing else); `ISORITE_PI_FILES=off|read|write` and
+// neither choice, the pane has no agent and shows its setup. `ISORITE_PI_ASK=<tool>,<tool>` makes the pane ask before those tools run. The project's files and shell are the settings' (default: read the files, nothing else); `ISORITE_PI_FILES=off|read|write` and
 // `ISORITE_PI_SHELL=1` set them from the environment and win (the shell is one nothing can confine).
 
 import { createModels } from "@earendil-works/pi-ai";
@@ -13,6 +13,7 @@ import { Credentials, DEFAULT_REACH, PROVIDERS, type Choice, type Reach } from "
 import { GATEWAY, gatewayFetch, gatewayFor, gatewayModels, readGateway, type Gateway } from "./gateway.ts";
 import { unreachable } from "../network.ts";
 import { configPath } from "../config.ts";
+import { SCRIPTED, scriptedModel, scriptedOn } from "./scripted.ts";
 import { basename } from "node:path";
 
 const camel = (s: string): string => s.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
@@ -20,6 +21,8 @@ const camel = (s: string): string => s.replace(/-([a-z0-9])/g, (_, c: string) =>
 /** The model `provider/model` and the way to reach it. Throws (naming what is wrong) where pi has no such provider or model. */
 export async function modelFor(provider: string, model: string, env: NodeJS.ProcessEnv = process.env): Promise<{ chosen: NonNullable<ReturnType<ReturnType<typeof createModels>["getModel"]>>; streamFn: PiHostOptions["streamFn"] }> {
   if (!provider || !model || !/^[a-z0-9-]+$/.test(provider)) throw new Error(`a model is <provider>/<model>, as anthropic/claude-sonnet-4-6; it was "${provider}/${model}"`);
+  // The scripted model, for the tests, where the environment offers it (scripted.ts).
+  if (provider === SCRIPTED && scriptedOn(env)) return scriptedModel() as never;
   // A gateway of your own: any model it serves, by the address, headers and certificate config.toml gives it.
   if (provider === GATEWAY) {
     const g = readGateway(configPath(env), env);
@@ -84,6 +87,8 @@ export class PiControl {
   }
 
   attach(host: PiHost): void { this.#hosts.add(host); }
+  /** A host let go (the scripted one, put away by a test): no longer the pane's agent. */
+  detach(host: PiHost): void { this.#hosts.delete(host); }
 
   async state() {
     await this.load().catch(() => undefined);

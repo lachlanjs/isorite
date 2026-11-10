@@ -1,5 +1,4 @@
 import { expect, test } from "vitest";
-import { pending } from "@isorite/core";
 import { Engine, MemoryFiles, type EngineEvent } from "../src/index.ts";
 
 const note = (title: string, body: string) => `---\ntype: Concept\ntitle: ${title}\n---\n\n${body}\n`;
@@ -131,7 +130,6 @@ test("an agent's edit to a note is written at once, entered under its name with 
   const said = await engine.agentWrite({ agent: "opencode", session: "s1", note: "basics/entropy.md", asked: "say it is measured in bits", edit: { oldString: "The average surprise.", newString: "The average surprise, in bits." } });
   expect(said.text).toMatch(/Changed .* can undo it/);
   expect((await engine.readNote("basics/entropy")).text).toContain("The average surprise, in bits.");
-  expect(pending(await engine.journal("basics/entropy"))).toHaveLength(0);
   expect((await engine.journal("basics/entropy")).at(-1)).toMatchObject({ kind: "change", why: "edit", who: "agent:opencode", asked: "say it is measured in bits" });
 });
 
@@ -199,7 +197,7 @@ test("what isorite kept of an agent's session is removed alone: the others stay,
   await expect(engine.deleteAgentRecord("../x", "one")).rejects.toThrow();
 });
 
-test("one of Iso's old conversations is removed alone; a name that is not a conversation's id is refused", async () => {
+test("one of the agent's old conversations is removed alone; a name that is not a conversation's id is refused", async () => {
   const clock = { t: Date.parse("2026-10-18T09:00:00Z"), now() { return this.t; } };
   const own = new MemoryFiles();
   const engine = await Engine.open({ notes: new MemoryFiles(NOTES), own, clock, device: "laptop1", name: "information-theory" });

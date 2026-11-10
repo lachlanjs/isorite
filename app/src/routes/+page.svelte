@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Opening isorite opens the note last open, or else the notes. The Atlas and Iso stand beside it (M10).
+  // Opening isorite opens the note last open, or else the notes. The Atlas and the agent stand beside it (M10).
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { onMount } from "svelte";

@@ -23,6 +23,6 @@ A note can hold a question in place, on a line of its own, by the question's fil
 [[!why-does-leapfrog-not-drift]]
 ```
 
-Make one from the Atlas, holding on ground and choosing a question, or from the note's settings. [Iso](/iso/iso.md "see also") may ask you one back, which becomes a question note at once.
+Make one from the Atlas, holding on ground and choosing a question, or from the note's settings. [The agent](/agent/agent.md "see also") may ask you one back, which becomes a question note at once.
 
 A question is the start of [a problem](/questions-and-problems/problems.md "see also"), sometimes.

@@ -1,6 +1,6 @@
 // An artifact rendered unseen (plan-m23 §3.7, Q117): in a headless browser found on the machine, as isorite shows it
 // (a sandboxed frame given its document through srcdoc, its data over the bridge), its controls touched, so that its
-// errors and the kit's complaints come back to Iso with what it wrote. With no browser, only the static checks run.
+// errors and the kit's complaints come back to the agent with what it wrote. With no browser, only the static checks run.
 
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
@@ -102,7 +102,6 @@ async function browser(path: string): Promise<Browser> {
   })().catch((e) => { launched = null; throw e; });
   return launched;
 }
-export async function closeBrowser(): Promise<void> { const b = await launched?.catch(() => null); launched = null; await b?.close(); }
 
 /** Render an assembled artifact (packages/kit's assemble) unseen, answer its bridge from `read` for the files in
  *  `uses`, touch its controls, and say what happened. */

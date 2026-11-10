@@ -17,7 +17,7 @@ function shown(el: Element | null): DOMRect | null {
 
 /** Where a note sent to the agent goes: its pane's Context (what it has in hand), or on a phone its tab. */
 function agentAt(): DOMRect | null {
-  return shown(document.querySelector('[data-pane="iso"] button[aria-label="Context"]')) ?? shown(document.querySelector('.tabs button[aria-label="Agent"]'));
+  return shown(document.querySelector('[data-pane="agent"] button[aria-label="Context"]')) ?? shown(document.querySelector('.tabs button[aria-label="Agent"]'));
 }
 
 /** A note sent to the agent: a gold diamond from the note, in an arc, to what the agent has in hand, which rings once. */

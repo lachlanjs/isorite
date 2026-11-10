@@ -1,7 +1,7 @@
 <script lang="ts">
   // The box the agent is asked in (it was a textarea; it is CodeMirror so that a pointer can stand in the text, as one
   // glowing character that moves and goes like any other). `value` is the text with each pointer as its private
-  // character (pointers.ts). Keys are IsoPane's (`onkeydown`): Enter sends, and a key it handles it marks as handled.
+  // character (pointers.ts). Keys are AgentPane's (`onkeydown`): Enter sends, and a key it handles it marks as handled.
   import { onMount } from "svelte";
   import { Compartment, EditorState, type Range } from "@codemirror/state";
   import { Decoration, EditorView, ViewPlugin, WidgetType, drawSelection, keymap, placeholder as hint, type DecorationSet, type ViewUpdate } from "@codemirror/view";
@@ -97,16 +97,18 @@
   });
 
   const lock = new Compartment();
+  /** What the empty box says: who it asks, which changes once an agent is set up. */
+  const hinted = new Compartment();
   onMount(() => {
     const v = new EditorView({
       parent: host,
       state: EditorState.create({
         doc: value,
         extensions: [
-          history(), drawSelection(), EditorView.lineWrapping, shown, look, hint(placeholder),
+          history(), drawSelection(), EditorView.lineWrapping, shown, look, hinted.of(hint(placeholder)),
           lock.of(EditorState.readOnly.of(readonly)),
-          EditorView.contentAttributes.of({ role: "textbox", "aria-label": "Message the agent", "aria-multiline": "true", id: "iso-box", spellcheck: "true" }),
-          // IsoPane's keys first (Enter sends, a slash command is chosen); what it leaves, the editor does.
+          EditorView.contentAttributes.of({ role: "textbox", "aria-label": "Message the agent", "aria-multiline": "true", id: "agent-box", spellcheck: "true" }),
+          // AgentPane's keys first (Enter sends, a slash command is chosen); what it leaves, the editor does.
           EditorView.domEventHandlers({ keydown: (e) => { onkeydown?.(e); return e.defaultPrevented; } }),
           // A word at a time is the editor's own, not the browser's, which stops at each pointer (it is not text).
           keymap.of([{ key: "Shift-Enter", run: insertNewline }, ...historyKeymap,
@@ -142,6 +144,7 @@
   // What the prompt holds, for the Atlas to show as given.
   $effect(() => { pointers.inPrompt = used(value, pointers.get); });
   $effect(() => { view?.dispatch({ effects: lock.reconfigure(EditorState.readOnly.of(readonly)) }); });
+  $effect(() => { const p = placeholder; view?.dispatch({ effects: hinted.reconfigure(hint(p)) }); });
 </script>
 
 <div class="prompt" data-prompt bind:this={host}></div>

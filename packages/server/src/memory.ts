@@ -64,7 +64,7 @@ export function memory(folder = MEMORY_FOLDER, { config = configPath(), out = co
       : `isorite memory: made at ${at}; not a git repository (git did not answer, or is not here): git init it yourself`);
   }
   const name = rememberBase(at, { path: config, as: "memory", lend: true });
-  out(`  ${name}: lent to every session's agent and Iso, as listed in ${basesPath(config)}`);
+  out(`  ${name}: lent to every session's agent and the agent, as listed in ${basesPath(config)}`);
   out(`  watch it learn: isorite serve ${at}, or switch to ${name} in the page of a running server`);
   return 0;
 }

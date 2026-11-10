@@ -33,11 +33,11 @@ flowchart TB
   m["$$\mathcal{M}$$, a manifold"] -->|"$$T_p\mathcal{M}$$ at each point"| t["$$T\mathcal{M}$$, its tangent bundle"]
 ```
 
-Every kind of diagram Mermaid draws is drawn: [flowcharts, sequences, states, classes, timelines and more](https://mermaid.js.org/intro/ "see also"). [Iso](/iso/iso.md "see also") draws one where a picture helps, or when you ask it for one.
+Every kind of diagram Mermaid draws is drawn: [flowcharts, sequences, states, classes, timelines and more](https://mermaid.js.org/intro/ "see also"). [The agent](/agent/agent.md "see also") draws one where a picture helps, or when you ask it for one.
 
 ## Pictures
 
-Paste a picture into a note, or drop one on it. isorite asks for its name, and what it shows, then saves it in a folder named for the note and shows it where you pasted it: `![the player at rest](hitboxes/player-idle.png)`. What it shows is what [Iso](/iso/iso.md "see also") reads of it, since Iso can't see the picture. The same picture pasted twice is one file.
+Paste a picture into a note, or drop one on it. isorite asks for its name, and what it shows, then saves it in a folder named for the note and shows it where you pasted it: `![the player at rest](hitboxes/player-idle.png)`. What it shows is what [the agent](/agent/agent.md "see also") reads of it, since the agent can't see the picture. The same picture pasted twice is one file.
 
 To show a picture that's in the notes already, type `[[!` and choose it: each is listed with a small copy of itself. Any number of notes can show the same picture. `"left"` after its path sets it at the left, with the text beside it: `![a map](map.png "left")`.
 

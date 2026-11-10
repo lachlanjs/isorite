@@ -1,4 +1,4 @@
-// isorite kit 1, the core every artifact gets (docs/plan-m23.md §3.1). Built to one script that the host inlines into
+// isorite kit 1, the core every artifact gets (docs/archive/plan-m23.md §3.1). Built to one script that the host inlines into
 // the artifact; the chart (chart.ts) and 3D (model.ts) parts are added only when the artifact uses them.
 //   iso.data(path), iso.text(path)  a file the manifest names: from the host in isorite, from the page itself in a
 //                                   standalone export, or beside the file when it's opened on its own

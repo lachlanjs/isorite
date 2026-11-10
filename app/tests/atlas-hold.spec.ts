@@ -1,5 +1,5 @@
 // Press and hold a note or a folder on the Atlas (M33): the three tags stand at the point held; let go on gold and it is
-// sent to Iso, on blue after a moment it is carried to a folder of the map, on rose it is asked about first.
+// sent to the agent, on blue after a moment it is carried to a folder of the map, on rose it is asked about first.
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";

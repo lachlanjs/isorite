@@ -6,7 +6,6 @@
 
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { mergeRecords, readRecord } from "../packages/core/src/index.ts";
 import { loadBundle } from "../packages/core/src/node.ts";
 import { snapshot } from "../packages/core/test/snapshot.ts";
 
@@ -29,15 +28,9 @@ const sorted = (v: unknown): unknown => {
 };
 const dump = (v: unknown): string => JSON.stringify(sorted(v), null, 1) + "\n";
 
-function learner(): unknown {
-  const files = readdirSync(HERE + "learner").filter((f) => f.endsWith(".jsonl")).sort();
-  const read = Object.fromEntries(files.map((f) => [f, readRecord(readFileSync(`${HERE}learner/${f}`, "utf8"))]));
-  return { format: 1, read, merged: mergeRecords(...Object.values(read)) };
-}
-
 const update = process.argv.includes("--update");
 const names = readdirSync(HERE + "bundles", { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-const all: [string, unknown][] = [...names.map((n): [string, unknown] => [n, snapshot(loadBundle(`${HERE}bundles/${n}`), QUERIES[n] ?? [])]), ["learner", learner()]];
+const all: [string, unknown][] = [...names.map((n): [string, unknown] => [n, snapshot(loadBundle(`${HERE}bundles/${n}`), QUERIES[n] ?? [])])];
 let differ = 0;
 for (const [name, value] of all) {
   const path = `${HERE}expected/${name}.json`, text = dump(value);

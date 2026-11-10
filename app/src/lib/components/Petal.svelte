@@ -21,7 +21,7 @@
     scale: calc(1 + .14 * var(--near)); filter: drop-shadow(0 0 calc(var(--near) * 8px) color-mix(in srgb, var(--c) calc(var(--near) * 70%), transparent)) drop-shadow(0 4px 8px rgb(0 0 0 / .25));
     transition: scale var(--t-ack) var(--ease-out), filter var(--t-ack) var(--ease-out);
     animation: tag var(--t-change) cubic-bezier(.2, 1.3, .4, 1) backwards; animation-delay: calc(var(--i) * 30ms); }
-  .tag:hover, .tag.on { scale: 1.16; filter: drop-shadow(0 0 10px color-mix(in srgb, var(--c) 70%, transparent)) drop-shadow(0 4px 8px rgb(0 0 0 / .25)); }
+  .tag:hover, .tag.on { z-index: 2; scale: 1.16; filter: drop-shadow(0 0 10px color-mix(in srgb, var(--c) 70%, transparent)) drop-shadow(0 4px 8px rgb(0 0 0 / .25)); }
   @keyframes tag { from { scale: .3; opacity: 0; } }
   .face { position: absolute; inset: 0; display: grid; place-items: center; background: var(--c); clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }
   .face::before { content: ""; position: absolute; inset: 1.5px; background: var(--ground-2); transition: background-color var(--t-ack) var(--ease-out); clip-path: polygon(7.4px 0, 100% 0, 100% calc(100% - 7.4px), calc(100% - 7.4px) 100%, 0 100%, 0 7.4px); }

@@ -1,4 +1,4 @@
-// A pi agent run inside the isorite server, serving the Iso pane (M35): the same `PaneSessions` the ACP follower is,
+// A pi agent run inside the isorite server, serving the Agent pane (M35): the pane's `PaneSessions`,
 // so the pages cannot tell which is behind them. Pi's loop (`pi-agent-core`) runs here; what happens in it is folded
 // into the pane's `TerminalView`. Nothing outside src/pi/ names a pi type.
 //
@@ -13,7 +13,7 @@ import { Agent, type AgentEvent, type AgentMessage } from "@earendil-works/pi-ag
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import type { AgentSession, Api, Given, TerminalItem, TerminalPermission, TerminalTurn, TerminalView } from "@isorite/engine";
-import { givenKey } from "../acp.ts";
+import { givenKey } from "../given.ts";
 import { INSTRUCTIONS } from "../mcp-http.ts";
 import type { PaneSessions } from "../sessions.ts";
 import { DEFAULT_COMPACTION_SETTINGS, estimateTokens, generateSummary, shouldCompact } from "@earendil-works/pi-coding-agent";
@@ -60,6 +60,33 @@ const tagged = (key: string, turn: string, block: string): string => `[context $
 const textOf = (content: unknown): string =>
   (Array.isArray(content) ? content : []).map((b: { type?: string; text?: string }) => (b?.type === "text" ? b.text ?? "" : "")).join("");
 
+/** The base's tools that act on one note, and the argument naming it. */
+const NOTE_TOOLS: Record<string, string> = { read_note: "id", outline_note: "id", edit_note: "note", write_note: "note" };
+/** The note a call of isorite's own acts on, as its id (not a lent base's, written `base:id`). */
+function noteOf(tool: string, args: unknown): string | undefined {
+  const key = NOTE_TOOLS[tool], v = key ? (args as Record<string, unknown> | null)?.[key] : undefined;
+  if (typeof v !== "string" || !v.trim() || /^[a-z0-9-]+:(?!\/\/)/.test(v)) return undefined;
+  return v.trim().replace(/^\/+/, "").replace(/\.md$/i, "");
+}
+/** An edit's lines, `-` what went and `+` what came, from what the call was given: a note's or a file's edit, or a whole
+ *  file or note written (all of it added). */
+function diffOf(args: unknown): string[] | undefined {
+  const a = (args ?? {}) as Record<string, unknown>;
+  const lines = (v: unknown, mark: string): string[] => (typeof v === "string" && v ? v.replace(/\n$/, "").split("\n").map((l) => mark + l) : []);
+  // The lines the two sides share at either end are the same lines, not a change.
+  const pair = (from: unknown, to: unknown): string[] => {
+    const o = lines(from, ""), n = lines(to, "");
+    let head = 0, tail = 0;
+    while (head < o.length && head < n.length && o[head] === n[head]) head++;
+    while (tail < o.length - head && tail < n.length - head && o[o.length - 1 - tail] === n[n.length - 1 - tail]) tail++;
+    return [...o.slice(head, o.length - tail).map((l) => `-${l}`), ...n.slice(head, n.length - tail).map((l) => `+${l}`)];
+  };
+  if (typeof a.newString === "string" || typeof a.newText === "string") return pair(a.oldString ?? a.oldText, a.newString ?? a.newText).slice(0, 400);
+  if (Array.isArray(a.edits)) return a.edits.flatMap((x: Record<string, unknown>) => pair(x?.oldText ?? x?.oldString, x?.newText ?? x?.newString)).slice(0, 400);
+  if (typeof a.content === "string") return lines(a.content, "+").slice(0, 400);
+  return undefined;
+}
+
 const userText = (content: unknown): string => (typeof content === "string" ? content : textOf(content));
 
 export class PiHost implements PaneSessions {
@@ -94,6 +121,8 @@ export class PiHost implements PaneSessions {
   #stopping = false;
   #cost = 0;
   #used = 0;
+  /** When each tool call now running began, for how long it took. */
+  #started = new Map<string, number>();
   #asking = new Map<string, TerminalPermission & { wait: (d: Decision) => void }>();
   #allowed = new Set<string>();
   #pending: { parts: Given[]; blocks: string[] } | null = null;
@@ -124,6 +153,16 @@ export class PiHost implements PaneSessions {
     this.#compaction = { enabled: compaction?.enabled ?? DEFAULT_COMPACTION_SETTINGS.enabled ?? true, reserveTokens: compaction?.reserveTokens ?? DEFAULT_COMPACTION_SETTINGS.reserveTokens ?? 16384, keepRecentTokens: compaction?.keepRecentTokens ?? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens ?? 20000 };
     // What the agent asks back or offers (ask_question, offer_text) stands in its turn, until kept or not.
     api.events?.((e) => {
+      // Kept (a question made a note, words inserted): the item in its turn says so.
+      if (e.type === "agent-taken") {
+        const has = (t: TerminalTurn) => t.items.some((i) => (i.kind === "question" || i.kind === "offer") && i.id === e.id);
+        if (!this.#turns.some(has)) return;
+        this.#turns = this.#turns.map((t) => (has(t) ? { ...t, items: t.items.map((i) => (i.kind === "question" && i.id === e.id ? { ...i, made: e.note } : i.kind === "offer" && i.id === e.id ? { ...i, taken: true } : i)) } : t));
+        this.#save();
+        this.#keep();
+        this.#tell();
+        return;
+      }
       if (e.type !== "agent-item" || e.agent !== this.#id || !this.#turns.length) return;
       this.#edit((items) => [...items, e.item as TerminalItem]);
       this.#tell();
@@ -230,7 +269,7 @@ export class PiHost implements PaneSessions {
   }
 
   async steer(text: string): Promise<void> {
-    if (!this.#busy) throw new Error("the agent is not working: ask it instead");
+    if (!this.#busy) throw new Error("The agent is not working: ask it instead");
     await this.#say(text, "steer");
   }
 
@@ -259,21 +298,21 @@ export class PiHost implements PaneSessions {
 
   async reply(id: string, decision: Decision): Promise<void> {
     const asked = this.#asking.get(id);
-    if (!asked) throw new Error("the agent is not asking that");
+    if (!asked) throw new Error("The agent is not asking that");
     asked.wait(decision);
   }
 
   /** Show another kept session, and carry on in it. The one left is already kept (it is written after each turn). */
   async follow(_agent: string, session: string): Promise<void> {
     if (session === this.#session) return;
-    if (this.#busy) throw new Error("the agent is working: stop it first");
+    if (this.#busy) throw new Error("The agent is working: stop it first");
     const kept = await this.#fetch(session);
     this.#restore(kept);
   }
 
   /** A new session from the pane; the one shown stays kept and can be shown again. */
   async fresh(_agent: string): Promise<void> {
-    if (this.#busy) throw new Error("the agent is working: stop it first");
+    if (this.#busy) throw new Error("The agent is working: stop it first");
     await this.#saving;
     this.#blank();
     this.#tell();
@@ -282,7 +321,7 @@ export class PiHost implements PaneSessions {
   /** A new session that begins where `session` is (its turns and the model's messages), going its own way from there;
    *  its cost starts again at nothing. The original is not changed. */
   async fork(_agent: string, session: string): Promise<void> {
-    if (this.#busy) throw new Error("the agent is working: stop it first");
+    if (this.#busy) throw new Error("The agent is working: stop it first");
     const from = session === this.#session && this.#agent ? this.#record() : await this.#fetch(session);
     if (!from || !this.#store) throw new Error("that session is not kept, so there is nothing to fork");
     const now = new Date(this.#now()).toISOString();
@@ -292,13 +331,12 @@ export class PiHost implements PaneSessions {
     this.#restore(copy);
   }
 
-  set(): void { throw new Error(`${this.#name} offers no modes or options yet`); }
 
   /** Remove what is kept of a session. The one shown is left first, for a new one. */
   async forget(_agent: string, session: string): Promise<void> {
     if (!this.#store) throw new Error("nothing is kept apart from the session shown");
     if (session === this.#session) {
-      if (this.#busy) throw new Error("the agent is working: stop it first");
+      if (this.#busy) throw new Error("The agent is working: stop it first");
       await this.#saving;
       this.#blank();
     }
@@ -447,10 +485,14 @@ export class PiHost implements PaneSessions {
       this.#cost += m.usage?.cost?.total ?? 0;
       this.#used = m.usage?.totalTokens ?? this.#used;
     } else if (e.type === "tool_execution_start") {
-      this.#edit((items) => [...items, { kind: "tool", id: e.toolCallId, name: e.toolName, title: titleOf(e.args), status: "running", output: "" }]);
+      this.#started.set(e.toolCallId, this.#now());
+      const note = noteOf(e.toolName, e.args), diff = diffOf(e.args);
+      this.#edit((items) => [...items, { kind: "tool", id: e.toolCallId, name: e.toolName, title: titleOf(e.args), status: "running", output: "", ...(note ? { note } : {}), ...(diff ? { diff } : {}) }]);
     } else if (e.type === "tool_execution_end") {
       const out = textOf((e.result as { content?: unknown })?.content).slice(0, OUTPUT);
-      this.#edit((items) => items.map((i) => (i.kind === "tool" && i.id === e.toolCallId ? { ...i, status: e.isError ? "failed" : "done", output: out } : i)));
+      const began = this.#started.get(e.toolCallId), ms = began === undefined ? undefined : Math.max(0, this.#now() - began);
+      this.#started.delete(e.toolCallId);
+      this.#edit((items) => items.map((i) => (i.kind === "tool" && i.id === e.toolCallId ? { ...i, status: e.isError ? "failed" : "done", output: out, ...(ms === undefined ? {} : { ms }) } : i)));
     } else return;
     this.#tell();
   }
@@ -462,6 +504,8 @@ export class PiHost implements PaneSessions {
   #end(): void {
     this.#dropQueued();
     const last = [...(this.#agent?.state.messages ?? [])].reverse().find((m) => (m as { role?: string }).role === "assistant") as { stopReason?: string; errorMessage?: string } | undefined;
+    const t = this.#turns.at(-1);
+    if (t?.state === "running" && t.at) this.#turns = [...this.#turns.slice(0, -1), { ...t, took: Math.max(0, this.#now() - Date.parse(t.at)) }];
     if (this.#turns.at(-1)?.state === "running") {
       if (this.#stopping || last?.stopReason === "aborted") this.#set("stopped");
       else if (last?.stopReason === "error") this.#fail(last.errorMessage ?? "the model failed");

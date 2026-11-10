@@ -3,12 +3,13 @@
 
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { Api } from "@isorite/engine";
+import { slimLook, slimTools } from "./slim.ts";
 
 export type ToolsApi = Pick<Api, "agentTools" | "agentLook">;
 
 /** `who` names the agent and session as the base knows them; `asked` is what is being asked now, for a change the agent makes. */
 export async function isoriteTools(api: ToolsApi, who: { agent: string; session: string }, asked: () => string): Promise<AgentTool[]> {
-  const defs = await api.agentTools();
+  const defs = slimTools(await api.agentTools());
   return defs.map(({ function: f }): AgentTool => ({
     name: f.name,
     label: f.name,
@@ -17,7 +18,7 @@ export async function isoriteTools(api: ToolsApi, who: { agent: string; session:
     // Failure is thrown, as pi asks: the model sees it as an error result.
     execute: async (_id, params) => {
       const now = asked();
-      const { text } = await api.agentLook({ ...who, tool: f.name, args: params as Record<string, unknown>, ...(now ? { asked: now } : {}) });
+      const { text } = await slimLook((a, b) => api.agentLook({ ...who, tool: a, args: b, ...(now ? { asked: now } : {}) }), f.name, params as Record<string, unknown>);
       return { content: [{ type: "text", text }], details: undefined };
     },
   }));

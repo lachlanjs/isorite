@@ -7,6 +7,7 @@
   import { app } from "$lib/app.svelte.ts";
   import { terminal } from "$lib/terminal.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
+  import { fadeIn, foldAway, glide } from "$lib/motion.ts";
 
   const short = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n));
   let layer = $state<string | null>(null);
@@ -42,23 +43,22 @@
         </div>
         <p class="total" title="As {v.agent} counts it">{#if agentShown}<span>{agentShown.name} · {short(agentShown.tokens)}</span>{:else}<span>{short(v.tokens.input)}</span><span class="faint">of {short(v.size ?? 0)}</span>{/if}{#if v.cost}<span class="faint">· ${v.cost.toFixed(2)}</span>{/if}</p>
       {:else}
-        <p class="faint">{v.agent || "The agent"} hasn't said how full its context is{v.turns.length ? "" : " yet"}.</p>
+        <div class="strata empty" role="img" aria-label="Not reported yet" title="Not reported yet"></div>
       {/if}
-      <p class="faint">What {v.agent || "the agent"} dropped when it compacted can't be seen from here.</p>
     </div>
-    <h2 class="label">notes</h2>
+    {#if agentNotes.length}<h2 class="label">notes</h2>{/if}
     <ul class="rows" aria-label="The notes in the session">
       {#each agentNotes as n (n.id)}
-        <li class="row"><span class="r" title={n.how === "given" ? "Given from here" : `Read by ${v.agent}`}><span class="mk" class:iso={n.how === "read"} aria-hidden="true">{n.how === "given" ? "◆" : "◇"}</span><span class="t">{n.title}</span><span class="d">{n.how}</span>{#if n.tokens}<span class="num">{short(n.tokens)}</span>{/if}</span></li>
+        <li class="row"><span class="r" title={n.how === "given" ? "Given from here" : `Read by ${v.agent}`}><span class="mk" class:agent={n.how === "read"} aria-hidden="true">{n.how === "given" ? "◆" : "◇"}</span><span class="t">{n.title}</span><span class="d">{n.how}</span>{#if n.tokens}<span class="num">{short(n.tokens)}</span>{/if}</span></li>
       {/each}
     </ul>
   {:else}
-    <p class="faint">With an agent attached, what it has in hand shows here: isorite's part, the notes it was given and read, and the room left.</p>
+    <p class="faint">Nothing in hand.</p>
   {/if}
-  <h2 class="label">in the tray</h2>
+  {#if tray.sent.length}<h2 class="label">next prompt</h2>{/if}
   <ul class="rows" aria-label="What you gave the agent" title="Given to the session before its next prompt, asked here or in its front end, unless given already">
     {#each tray.sent as p (tray.keyOf(p))}
-      <li class="row"><span class="r"><span class="mk" aria-hidden="true">◆</span><span class="t">{p.kind === "passage" ? `“${p.text}”` : p.title}</span></span>
+      <li class="row" animate:glide in:fadeIn out:foldAway><span class="r"><span class="mk" aria-hidden="true">◆</span><span class="t">{p.kind === "passage" ? `“${p.text}”` : p.title}</span></span>
         <button type="button" class="x" aria-label="Take {p.title} out of the agent's context" onclick={() => tray.remove(p)}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 8M12 4l-8 8" /></svg></button></li>
     {/each}
   </ul>
@@ -70,7 +70,9 @@
   /* The figure under the column, so that a layer's name standing in it never moves the layers. */
   .column { display: flex; flex-direction: column; gap: 6px; }
   .strata { min-width: 0; height: 14px; display: flex; border: 1px solid var(--line-strong); background: var(--ground-0); }
-  .s { height: 100%; min-width: 2px; flex: none; transition: filter var(--t-ack) var(--ease-out); }
+  /* A layer's width eases when the tokens change: a result worth noticing. */
+  .s { height: 100%; min-width: 2px; flex: none; transition: filter var(--t-ack) var(--ease-out), width var(--dur-3) var(--ease-out); }
+  .strata.empty { border-color: var(--line); }
   .s + .s { box-shadow: inset 1px 0 0 var(--ground-0); }
   .s:hover { filter: brightness(1.25); }
   .instructions { background: repeating-linear-gradient(135deg, var(--text-faint) 0 1px, transparent 1px 4px); }
@@ -78,14 +80,14 @@
   .conversation { background: repeating-linear-gradient(90deg, var(--text-soft) 0 1px, transparent 1px 3px); }
   .room { flex: 1 1 auto; background: none; }
   .total { display: flex; gap: 6px; align-items: baseline; font-variant-numeric: tabular-nums; color: var(--text); }
-  .label { display: flex; align-items: center; gap: 6px; font-weight: 400; margin-top: 8px; min-height: 22px; }
+  .label { display: flex; align-items: center; gap: 6px; margin-top: 8px; min-height: 22px; }
   .rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   .row { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
   /* As the board: the name, a faint detail, the size on the right, and a thin bar of its share under it. */
   .r { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: 14px minmax(0, auto) minmax(0, 1fr) auto; column-gap: 8px; row-gap: 3px; align-items: baseline; background: none; border: 0; padding: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
   .r:disabled { cursor: default; }
   .mk { color: var(--growth); text-align: center; }
-  .mk.iso { color: var(--lattice); }
+  .mk.agent { color: var(--lattice); }
   .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .d { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); }
   .num { grid-column: 4; color: var(--text-faint); font-variant-numeric: tabular-nums; }

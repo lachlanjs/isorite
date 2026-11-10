@@ -1,8 +1,8 @@
 <script lang="ts">
-  // The text of a note, in CodeMirror: the body as a live preview, or the whole file as source. Iso's blocks
-  // are laid over it (overlays.ts) at the places the note's journal gives them.
+  // The text of a note, in CodeMirror: the body as a live preview, or the whole file as source. What the note's
+  // provenance lens marks is laid over it (overlays.ts).
   import { mount, onMount, unmount, untrack } from "svelte";
-  import { citeKind, codeTarget } from "@isorite/core";
+  import { citeKind, codeTarget, splitSource } from "@isorite/core";
   import { artifactOf } from "$lib/artifact.ts";
   import CodeEmbed from "$lib/components/CodeEmbed.svelte";
   import ArtifactEmbed from "./ArtifactEmbed.svelte";
@@ -10,7 +10,7 @@
   import type { EditorView } from "@codemirror/view";
   import { app, codeHref, findEmbed, noteHref, slug } from "$lib/app.svelte.ts";
   import { createEditor, setText, type Where } from "$lib/editor/codemirror.ts";
-  import { setMarks, setOverlays, setTouched, type Inline, type Mark, type Overlay, type Touched } from "$lib/editor/overlays.ts";
+  import { setMarks, setTouched, type Mark, type Touched } from "$lib/editor/overlays.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { pointing } from "$lib/pointing.svelte.ts";
   import { digest, pastedName, pictureOf, pictureSrc, safeName } from "$lib/pictures.ts";
@@ -19,15 +19,11 @@
   import PictureName from "./PictureName.svelte";
   import { setPointedLines, setPointedNote } from "$lib/editor/pointing.ts";
   import { pointers } from "$lib/pointers.svelte.ts";
-  import type { NoteIso } from "$lib/iso.svelte.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
-  import IsoBlock from "./IsoBlock.svelte";
-  import IsoChange from "./IsoChange.svelte";
 
-  // Without `iso` nothing is laid over the text.
   // `touched` is what a moment of the timeline changed, by line of the whole file, while it is pointed at.
-  // `lens` is what the note's Iso lens marks (M10), by character of the whole file: Iso's words, and what was given to Iso.
-  let { note, iso, source, reading = false, placeholder, touched = null, lens = [] }: { note: NoteSession; iso?: NoteIso; source: boolean; /** Read mode (M30): the note as it is read, not edited. */ reading?: boolean; placeholder?: string; touched?: Touched | null; lens?: Mark[] } = $props();
+  // `lens` is what the note's agent lens marks (M10), by character of the whole file: the agent's words, and what was given to the agent.
+  let { note, source, reading = false, touched = null, lens = [] }: { note: NoteSession; source: boolean; /** Read mode (M30): the note as it is read, not edited. */ reading?: boolean; touched?: Touched | null; lens?: Mark[] } = $props();
 
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
@@ -84,20 +80,15 @@
     view.focus();
   }
 
-  // The source shows the whole file; the live preview shows the text under the frontmatter. Iso's places are of
+  // The source shows the whole file; the live preview shows the text under the frontmatter. The agent's places are of
   // the whole file, so they are moved by the frontmatter's lines and characters on the way in and out.
-  const head = $derived(source || !iso ? { lines: 0, chars: 0 } : iso.head);
-
-  /** What Iso has over the text, placed in what the editor shows. */
-  const laid = $derived.by((): { blocks: Overlay[]; marks: Mark[]; inline: Inline[] } => {
-    if (!iso) return { blocks: [], marks: [], inline: [] };
-    const within = (kind: Mark["kind"]) => (s: { from: number; to: number }): Mark => ({ kind, from: s.from - head.chars, to: s.to - head.chars });
-    return {
-      blocks: iso.layout.blocks.map((b) => ({ key: b.key, line: Math.max(0, b.line - head.lines) })).sort((a, b) => a.line - b.line),
-      marks: [...iso.layout.old.map(within("old")), ...lens.map((m) => within(m.kind)(m))].filter((m) => m.to > 0),
-      inline: iso.layout.inline.map((i) => ({ key: i.key, at: i.at - head.chars })).filter((i) => i.at >= 0),
-    };
+  const head = $derived.by(() => {
+    if (source) return { lines: 0, chars: 0 };
+    try { const prefix = splitSource(note.text)[0]; return { lines: prefix.split("\n").length - 1, chars: prefix.length }; } catch { return { lines: 0, chars: 0 }; }
   });
+
+  /** What the lens marks, placed in what the editor shows. */
+  const laid = $derived(lens.map((m) => ({ kind: m.kind, from: m.from - head.chars, to: m.to - head.chars })).filter((m) => m.to > 0));
 
   onMount(() => {
     const made = createEditor(host, {
@@ -143,29 +134,21 @@
         const path = artifactOf(href, note.id);
         return path ? { path, mount: (el) => { const c = mount(ArtifactEmbed, { target: el, props: { path } }); return () => { void unmount(c); }; } } : null;
       },
-      ...(iso ? {
-        // Ctrl+Enter goes to Iso's pane (M10), with the text selected, if any, given to Iso.
-        onAsk: (w: Where) => {
-          // What is selected goes into the prompt as a pointer (pointers), at its cursor.
-          const chosen = note.text.slice(w.from + head.chars, w.to + head.chars).trim();
-          const doc = view?.state.doc;
-          const p = chosen && doc ? pointers.make({ kind: "note", ref: note.id, title: note.fields.title || note.id, from: doc.lineAt(w.from).number + head.lines, to: doc.lineAt(Math.max(w.from, w.to - (doc.lineAt(w.to).from === w.to && w.to > w.from ? 1 : 0))).number + head.lines, text: chosen }) : null;
-          if (p) pointers.insert?.(p); else document.getElementById("iso-box")?.focus();
-          panes.to("iso");
-        },
-        onCursor: (w: Where) => { iso.cursor = { line: w.line + head.lines, from: w.from + head.chars, to: w.to + head.chars }; },
-        mountOverlay: (el: HTMLElement, key: string) => {
-          // "r:…" is one change of a rewrite.
-          const piece = mount(key.startsWith("r:") ? IsoChange : IsoBlock, { target: el, props: { iso, key } });
-          return () => { void unmount(piece); };
-        },
-      } : { placeholder: untrack(() => placeholder) ?? "Write what you understand, what you do not, and what you want from the agent. [[ links a note it should rest on." }),
+      // Ctrl+Enter goes to the agent's pane (M10), with the text selected, if any, given to it.
+      onAsk: (w: Where) => {
+        // What is selected goes into the prompt as a pointer (pointers), at its cursor.
+        const chosen = note.text.slice(w.from + head.chars, w.to + head.chars).trim();
+        const doc = view?.state.doc;
+        const p = chosen && doc ? pointers.make({ kind: "note", ref: note.id, title: note.fields.title || note.id, from: doc.lineAt(w.from).number + head.lines, to: doc.lineAt(Math.max(w.from, w.to - (doc.lineAt(w.to).from === w.to && w.to > w.from ? 1 : 0))).number + head.lines, text: chosen }) : null;
+        if (p) pointers.insert?.(p); else document.getElementById("agent-box")?.focus();
+        panes.to("agent");
+      },
     });
     view = made;
     return () => { made.destroy(); pointing.set("note", null); };
   });
 
-  // The text was replaced from outside the editor (their version, a change made elsewhere, a proposal kept).
+  // The text was replaced from outside the editor (their version, a change made elsewhere).
   $effect(() => {
     void note.revision;
     untrack(() => { if (view) setText(view, source ? note.text : note.body); });
@@ -189,10 +172,10 @@
     if (view) view.dispatch({ effects: setPointedNote.of(id) });
   });
 
-  // The blocks are placed again whenever the note or what Iso has in it changes.
+  // The marks are placed again whenever the note or what the lens marks changes.
   $effect(() => {
-    const { blocks, marks, inline } = laid;
-    if (view) view.dispatch({ effects: [setOverlays.of(blocks), setMarks.of({ marks, inline })] });
+    const marks = laid;
+    if (view) view.dispatch({ effects: setMarks.of(marks) });
   });
 </script>
 

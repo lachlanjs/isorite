@@ -5,10 +5,10 @@ import { STRENGTH, type MapDir, type MapModel, type MapNote } from "@isorite/cor
 import type { LayoutItem } from "@isorite/core/atlas";
 import type { MapReport } from "@isorite/engine";
 
-/** A question Iso asked and you have not kept (M24, R): its ref begins with "?", so it is never a note's. */
+/** A question the agent asked and you have not kept (M24, R): its ref begins with "?", so it is never a note's. */
 export interface Prospect { ref: string; title: string; about: string[] }
 
-/** The model with the questions Iso asked and not kept, each where keeping it would put it: in the folder of the
+/** The model with the questions the agent asked and not kept, each where keeping it would put it: in the folder of the
  *  first note it is about, joined to each note it is about by a "uses" link, as a question note is (mapModel). One
  *  about no note on the map is left off. */
 export function withProspects(model: MapModel, prospects: readonly Prospect[]): MapModel {

@@ -151,7 +151,7 @@ test("the map: the base as one model, each block with its title and its size", a
     "basics/entropy": { title: "Entropy", tokens: expect.any(Number) },
     "basics/coding": { title: "Coding", tokens: expect.any(Number) },
   });
-  expect(map.notes["basics/entropy"]!.tokens).toBeGreaterThan(0); // its size, for the notes linked to a note for Iso
+  expect(map.notes["basics/entropy"]!.tokens).toBeGreaterThan(0); // its size, for the notes linked to a note for the agent
   expect(map.model.edges).toContainEqual(["basics/coding", "basics/entropy", 3]);
   expect(map.model.root.children.map((c) => c.ref)).toEqual(["basics"]);
 });

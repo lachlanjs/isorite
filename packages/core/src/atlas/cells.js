@@ -4,7 +4,7 @@
 // Height is nesting: 0 between folders, 1 inside a folder, 2 inside a
 // subfolder. The only contours are folder walls.
 
-export const FREE = 0, NOTE = 1;
+export const NOTE = 1;
 // Clearance: the cells a route keeps clear of a note or a folder's wall when it passes one. Notes and
 // folders stand 6 cells apart (grid/nested.js), so each keeps 2 and a third of the gap is left to run in.
 export const KEEP = 2;

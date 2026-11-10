@@ -83,7 +83,16 @@
   function stored(name: string): string | null {
     try { return localStorage.getItem(name); } catch { return null; }
   }
+  /** The shape the map is laid out for, wide to tall: the Atlas's own when it was last laid out afresh, so the whole map
+   *  fills it when framed. Kept until the map is laid out afresh (a new grid, the relayout button, a reload): a note
+   *  opened beside the Atlas narrows it, and that must not reshuffle the map. 0 until first known. */
+  let shapeFor = 0;
+  function shapeNow(): number {
+    const r = viewport?.getBoundingClientRect(), w = size.w || r?.width || 0, h = size.h || r?.height || 0;
+    return w > 0 && h > 0 ? w / h : window.innerWidth / Math.max(1, window.innerHeight);
+  }
   function nextGrain(): void {
+    shapeFor = 0;
     grain = GRAINS[(GRAINS.indexOf(grain) + 1) % GRAINS.length]!; moved = false; // a new grid is a new map: framed afresh
     try { localStorage.setItem("isorite.atlas.grain", grain); } catch { /* storage unavailable: not remembered */ }
     void load();
@@ -92,7 +101,7 @@
     leaves = on;
     try { localStorage.setItem("isorite.atlas.leaves", on ? "on" : "off"); } catch { /* storage unavailable: not remembered */ }
   }
-  /** The questions the agent asked back in its session shown (M25), or Iso in a conversation of its own being read,
+  /** The questions the agent asked back in its session shown (M25), or the agent in a conversation of its own being read,
    *  and you have not kept (M24, R), while questions are on the map. */
   const prospects = $derived.by((): Prospect[] => {
     if (!panes.on.questions) return [];
@@ -117,8 +126,9 @@
       }), (id) => !id.startsWith("?") && app.isHidden(id)) };
       // A changed base is laid out from where things stood (V5), on the same grid and the same way.
       const on = `${flow}|${grain}`, from = laid && laidOn === on && !fresh ? laid.layout.orders ?? null : null;
+      if (!shapeFor || fresh || !laid) shapeFor = shapeNow();
       fresh = false;
-      const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from });
+      const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from, aspect: shapeFor });
       laidOn = on;
       const changed = !!laid && laid.key !== next_laid.key;
       const was = laid && L ? { refs: new Set(L.items.map((n) => n.ref)), edges: new Set(report!.model.edges.map(([a, b]) => `${a}>${b}`)) } : null;
@@ -152,7 +162,7 @@
 
   // A note moved or deleted never sees the pointer leave it: what was pointed at goes with it.
   $effect(() => { if (pointed && L && !L.items.some((x) => x.ref === pointed)) pointed = ""; });
-  // A question Iso asks, or one kept or gone, lays the map out again: the dotted node comes, or the note takes its place.
+  // A question the agent asks, or one kept or gone, lays the map out again: the dotted node comes, or the note takes its place.
   let askedWere = "";
   $effect(() => {
     const now = prospects.map((p) => p.ref).join(" ");
@@ -308,7 +318,7 @@
   type Hot = { key: string; d: string; kind: LitKind; count: number; still: boolean };
   let hot = $state.raw<Hot[]>([]);
   /** The lit links of each kind, however their lines merge. */
-  let litCount = $state.raw<Record<Exclude<LitKind, "iso">, number>>({ requires: 0, builds: 0, uses: 0 });
+  let litCount = $state.raw<Record<Exclude<LitKind, "agent">, number>>({ requires: 0, builds: 0, uses: 0 });
   /** Light the links between notes (`a` requires `b`, by name), handing what is drawn to `set` now and again once
    *  the router has found the ways the layout has none for. Returns what stops a late answer. */
   function light(list: { from: string; to: string; kind: LitKind }[], set: (hot: Hot[], lits: Lit[]) => void): (() => void) | undefined {
@@ -330,7 +340,7 @@
    *  wherever routes part and would each carry a pulse of their own; and a link lit twice (chosen, and pointed at in the
    *  Note pane) carries one. */
   type Pulse = { key: string; d: string; kind: LitKind };
-  const pulsesOf = (lits: Lit[]): Pulse[] => lits.filter((l) => l.kind !== "iso").map((l) => ({ key: l.key, kind: l.kind, d: linePath(l.pts, 0, L!.cell) }));
+  const pulsesOf = (lits: Lit[]): Pulse[] => lits.filter((l) => l.kind !== "agent").map((l) => ({ key: l.key, kind: l.kind, d: linePath(l.pts, 0, L!.cell) }));
   const pairOf = (key: string): string => key.slice(key.indexOf(":") + 1).split("|").sort().join("|");
   let chosenPulses = $state.raw<Pulse[]>([]), therePulses = $state.raw<Pulse[]>([]);
   const pulses = $derived.by(() => {
@@ -405,7 +415,7 @@
   // ------------------------------------------------------------ the agent's path (Desktop-Think)
 
   /** An agent's latest turn, from whichever session it is in. */
-  const run = $derived(app.iso);
+  const run = $derived(app.agent);
   const running = $derived(run?.state === "reading" || run?.state === "writing");
   /** Each note it opened, and how it got there: by its words, by its meaning, along a link, or named outright. */
   const reached = $derived.by(() => {
@@ -413,15 +423,15 @@
     for (const s of run?.steps ?? []) if (s.opened && !s.failed && !out.has(s.opened)) out.set(s.opened, s.how);
     return out;
   });
-  // The Iso lens (M10, the agent's since M25): what is in the tray, what the session shown read and changed, and the
+  // The agent lens (M10, the agent's since M25): what is in the tray, what the session shown read and changed, and the
   // order it read in during its last turn. The agent's path is drawn only in this lens.
-  const isoLens = $derived(panes.on.context);
+  const agentLens = $derived(panes.on.context);
   const givenNotes = $derived(new Set(prompt.inPrompt.filter((p) => p.kind === "note" && wholePointer(p)).map((p) => p.ref)));
   const givenFolders = $derived(new Set(prompt.inPrompt.filter((p) => p.kind === "folder").map((p) => p.ref)));
   const CHANGES = /(^|[_:./-])(edit_note|write_note|edit|write|patch)$/;
   /** The notes the session shown read, and changed. */
   const readNotes = $derived(new Set((terminal.session?.turns ?? []).flatMap((t) => t.items.flatMap((i) => (i.kind === "tool" && i.note && !i.base && i.status !== "failed" && !CHANGES.test(i.name) ? [i.note] : [])))));
-  const changedByIso = $derived(new Set((terminal.session?.turns ?? []).flatMap((t) => t.items.flatMap((i) => (i.kind === "tool" && i.note && !i.base && i.status !== "failed" && CHANGES.test(i.name) ? [i.note] : [])))));
+  const changedByAgent = $derived(new Set((terminal.session?.turns ?? []).flatMap((t) => t.items.flatMap((i) => (i.kind === "tool" && i.note && !i.base && i.status !== "failed" && CHANGES.test(i.name) ? [i.note] : [])))));
   const readOrder = $derived.by(() => {
     const out = new Map<string, number>();
     for (const i of terminal.session?.turns.at(-1)?.items ?? []) if (i.kind === "tool" && i.note && !i.base && i.status !== "failed" && !CHANGES.test(i.name) && !out.has(i.note)) out.set(i.note, out.size + 1);
@@ -430,13 +440,13 @@
   /** The note it is reading now. */
   const reading = $derived(running ? (run!.steps.findLast((s) => s.opened && !s.failed)?.opened ?? "") : "");
   // Its steps along links, drawn as the map draws a link: from the note in hand to the one it led to.
-  const isoLinks = $derived((run?.steps ?? []).flatMap((s) => (s.how === "link" && s.from && s.opened && !s.failed ? [{ from: s.from, to: s.opened, kind: "iso" as const }] : [])));
-  let isoHot = $state.raw<Hot[]>([]);
+  const agentLinks = $derived((run?.steps ?? []).flatMap((s) => (s.how === "link" && s.from && s.opened && !s.failed ? [{ from: s.from, to: s.opened, kind: "agent" as const }] : [])));
+  let agentHot = $state.raw<Hot[]>([]);
   // Keyed apart from the chosen note's lit routes, which may run the same way.
-  $effect(() => light(isoLinks, (h) => { isoHot = h.map((r) => ({ ...r, key: `iso:${r.key}` })); }));
+  $effect(() => light(agentLinks, (h) => { agentHot = h.map((r) => ({ ...r, key: `agent:${r.key}` })); }));
   /** How a note is outlined for the agent's path: by keyword, by meaning, along a link (or named outright), or being read now. */
-  const isoMark = (ref: string): "" | "key" | "sem" | "link" | "used" => {
-    if (!isoLens) return "";
+  const agentMark = (ref: string): "" | "key" | "sem" | "link" | "used" => {
+    if (!agentLens) return "";
     if (ref === reading) return "used";
     const how = reached.get(ref);
     return how === "keyword" ? "key" : how === "meaning" ? "sem" : how ? "link" : "";
@@ -448,8 +458,8 @@
   // opens in the Note pane with its title chosen, to type over. Hold, then drag a little way, and it is a new folder
   // instead, "Untitled folder", made with a first note in it, since a folder is made when a note is put in it. Either
   // goes in the folder gripped in, numbered if the name is taken. Nothing is asked for on the map: the name was asked
-  // for away from where you held (Lachlan, on V6). What is marked is a note's or a folder's icon, not an area. Held on a note, the note is given to Iso
-  // (M10): it goes into what Iso is sent.
+  // for away from where you held (Lachlan, on V6). What is marked is a note's or a folder's icon, not an area. Held on a note, the note is given to the agent
+  // (M10): it goes into what the agent is sent.
 
   const HOLD = 650, SPOT_HOLD = 400;
   /** What a hold on open ground is of: a place (in cells) and the folder it is in. */
@@ -464,7 +474,7 @@
   let making = false;
   let holdDone: ReturnType<typeof setTimeout> | undefined;
   // Press and hold on a note or a folder (M33), as in the list: tags to move it (carried to a folder of the map), delete it
-  // (asked first) or send it to Iso. A finger that moves before the hold pans the map; one let go with the tags out but
+  // (asked first) or send it to the agent. A finger that moves before the hold pans the map; one let go with the tags out but
   // on none of them is offered the rest (below).
   const g = new Gesture({
     move: (item, dir) => void moveHeld(item, dir),
@@ -577,9 +587,9 @@
     }
     if (e.target.closest("button, .dock")) return;
     const on = e.target.closest<HTMLElement>("[data-note]")?.dataset.note ?? "";
-    if (on.startsWith("@")) return; // a note for Iso is not a place in the base
+    if (on.startsWith("@")) return; // a note for the agent is not a place in the base
     if (on) {
-      // A mouse gives it straight away; a finger is offered a choice there, since a phone has no Iso beside the map (Q16).
+      // A mouse gives it straight away; a finger is offered a choice there, since a phone has no the agent beside the map (Q16).
       const touch = e.pointerType !== "mouse";
       holdDone = setTimeout(() => { holdDone = undefined; dragged = true; if (touch) offered = { ref: on, x: at.x, y: at.y }; else give(on); }, HOLD);
       return;
@@ -598,7 +608,7 @@
   let offered = $state.raw<{ ref: string; x: number; y: number } | null>(null);
   /** Why a note or folder could not be made here. */
   let notice = $state("");
-  /** A note given to Iso: into the tray, said on the map for a moment. */
+  /** A note given to the agent: into the tray, said on the map for a moment. */
   let given = $state("");
   let givenTimer: ReturnType<typeof setTimeout> | undefined;
   function give(ref: string, kind: "note" | "folder" = "note"): void {
@@ -609,7 +619,7 @@
     clearTimeout(givenTimer);
     givenTimer = setTimeout(() => (given = ""), 2200);
   }
-  /** Given to Iso if it isn't, else taken back. */
+  /** Given to the agent if it isn't, else taken back. */
   function giveOrTake(ref: string, kind: "note" | "folder" = "note"): void {
     if (!prompt.holds(kind, ref)) { give(ref, kind); return; }
     const name = kind === "note" ? title(ref) : folderName(ref);
@@ -691,8 +701,8 @@
   const local = (e: PointerEvent | WheelEvent): { x: number; y: number } => { const r = viewport!.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
   // A drag that starts on a note, or on a folder's title, picks it up and never moves the map (V8): with a mouse it is
-  // carried, and let go over Iso's pane it is given to Iso; let go anywhere else, it is put back. A drag from anywhere
-  // else, inside a folder or on open ground, moves the map. A touch screen holds instead (Iso is not beside the map).
+  // carried, and let go over the Agent pane it is given to the agent; let go anywhere else, it is put back. A drag from anywhere
+  // else, inside a folder or on open ground, moves the map. A touch screen holds instead (the agent is not beside the map).
   let press: Part | null = null;
   let carryAt = $state({ x: 0, y: 0 });
   function pressed(e: PointerEvent): Part | null {
@@ -706,7 +716,7 @@
   function carry(e: PointerEvent): void {
     if (!press || e.pointerType !== "mouse") return;
     carryAt = { x: e.clientX, y: e.clientY };
-    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-pane="iso"]') != null;
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-pane="agent"]') != null;
     tray.carrying = { part: press, over };
   }
   function down(e: PointerEvent): void {
@@ -783,9 +793,9 @@
     e.preventDefault();
     e.stopPropagation();
     if (dragged) return;
-    // A question Iso asked and not kept is kept, or not, in Iso's pane.
-    if (ref.startsWith("?")) { panes.to("iso"); return; }
-    // Shift+click gives a note to Iso, or takes it back, with the agent's context shown or not (M14).
+    // A question the agent asked and not kept is kept, or not, in the Agent pane.
+    if (ref.startsWith("?")) { panes.to("agent"); return; }
+    // Shift+click gives a note to the agent, or takes it back, with the agent's context shown or not (M14).
     if (e.shiftKey) { if (!ref.startsWith("@")) giveOrTake(ref); return; }
     // Chosen already: open it, beside the Atlas on a desktop (V1).
     if (chosen === ref) { void panes.open(opens(ref)); return; }
@@ -809,7 +819,7 @@
     const folder = e.target.closest<HTMLElement>("[data-folder]");
     if (e.target.closest("a, button")) return;
     if (chosen) walk = [];
-    else if (run && !running) app.iso = null; // Iso's path is let go once it has ended
+    else if (run && !running) app.agent = null; // The agent's path is let go once it has ended
     else if (folder && L) enter(L.items.findIndex((n) => n.kind === "folder" && n.ref === folder.dataset.folder), e);
     else fly(whole());
   }
@@ -885,20 +895,20 @@
   {:else if L && report}
     {#if !L.items.length}<p class="said faint">There are no notes yet. The map draws itself as you write them.</p>{/if}
     <!-- One move for the whole map (M12): the folders and the notes are scaled as they stand, in the map's units;
-         what is drawn round them (routes, counts, Iso's note) is placed at the zoom. -->
+         what is drawn round them (routes, counts, the agent's note) is placed at the zoom. -->
     <div class="atlas-world" class:labels class:shifting class:moving data-open={open} style="transform: translate({moving ? view.x : Math.round(view.x)}px, {moving ? view.y : Math.round(view.y)}px) scale({view.k / drawnK}); --u: {(L?.cell ?? 7) * drawnK}px; --k: {drawnK}">
       <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each folders as f (f.item.id)}
-          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} bare={f.open && !L.items.some((x) => x.parent === f.i)} dim={(!!lit && !f.open && !held.has(f.i)) || (finder.lit.size > 0 && !f.open && !foundIn(f.item.ref))} given={isoLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} renaming={renamingRef === f.item.ref} onstop={() => { if (renamingRef === f.item.ref) renamingRef = ""; }} onrename={f.item.ref.startsWith("@") || !f.item.ref ? undefined : (name) => void rename(f.item.ref, name)} />
+          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} bare={f.open && !L.items.some((x) => x.parent === f.i)} dim={(!!lit && !f.open && !held.has(f.i)) || (finder.lit.size > 0 && !f.open && !foundIn(f.item.ref))} given={agentLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} renaming={renamingRef === f.item.ref} onstop={() => { if (renamingRef === f.item.ref) renamingRef = ""; }} onrename={f.item.ref.startsWith("@") || !f.item.ref ? undefined : (name) => void rename(f.item.ref, name)} />
       {/each}
       </div>
-      <AtlasRoutes k={drawnK} {rest} pointed={!chosen && !!pointed} hot={[...(isoLens ? isoHot : []), ...hot, ...thereHot]} {pulses} counts={litCount} {grown} {beat} {retracting} />
+      <AtlasRoutes k={drawnK} {rest} pointed={!chosen && !!pointed} hot={[...(agentLens ? agentHot : []), ...hot, ...thereHot]} {pulses} counts={litCount} {grown} {beat} {retracting} />
       <!-- The count of a merged route is not drawn (M37): the width of the line says enough. -->
       <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each notes as n (n.item.id)}
         {@const m = marks.get(n.item.ref)}
         {@const mark = m?.mark ?? ""}
-          <AtlasBlock item={n.item} conflicted={!!report.notes[n.item.ref]?.conflicted} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} iso={isoMark(n.item.ref)} file={report.files?.[n.item.ref]?.kind ?? ""} prospect={n.item.ref.startsWith("?")} given={isoLens && givenNotes.has(n.item.ref)} held={isoLens && !givenNotes.has(n.item.ref) && readNotes.has(n.item.ref) ? "on" : ""} changed={isoLens && changedByIso.has(n.item.ref)} order={isoLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={(!!lit && !mark) || (finder.lit.size > 0 && !finder.lit.has(n.item.ref))} found={finder.lit.get(n.item.ref) ?? ""} href={noteHref(opens(n.item.ref))}
+          <AtlasBlock item={n.item} conflicted={!!report.notes[n.item.ref]?.conflicted} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} agent={agentMark(n.item.ref)} file={report.files?.[n.item.ref]?.kind ?? ""} prospect={n.item.ref.startsWith("?")} given={agentLens && givenNotes.has(n.item.ref)} held={agentLens && !givenNotes.has(n.item.ref) && readNotes.has(n.item.ref) ? "on" : ""} changed={agentLens && changedByAgent.has(n.item.ref)} order={agentLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={(!!lit && !mark) || (finder.lit.size > 0 && !finder.lit.has(n.item.ref))} found={finder.lit.get(n.item.ref) ?? ""} href={noteHref(opens(n.item.ref))}
             onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { if ((on && dragged) || g.phase !== "idle") return; pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; pointing.onAtlas = pointed; }} />
       {/each}
       {#each sats as s (s.key)}
@@ -1012,7 +1022,7 @@
   .legend .h { background: var(--lattice-soft); border: 1px solid var(--lattice); }
   .legend .d { width: 7px; height: 7px; background: var(--growth); transform: rotate(45deg); }
   .legend .n { width: 14px; height: 14px; background: var(--growth); color: var(--ground-0); font-size: 9px; font-weight: 700; }
-  /* A note carried out of the Atlas towards Iso's pane. */
+  /* A note carried out of the Atlas towards the Agent pane. */
   .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font: 12px var(--font-ui); color: var(--text); white-space: nowrap; box-shadow: var(--lift); animation: appear var(--t-ack) var(--ease-out); }
   .carried.over { border-color: var(--growth); }
   .notice { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--rose); color: var(--rose); font-size: 12px; z-index: 2; }
@@ -1021,7 +1031,7 @@
   .pip svg { transform: rotate(var(--a)); fill: currentColor; }
   .pip:hover, .pip:focus-visible { border-color: var(--text); }
   .pip.you { color: var(--lattice); border-color: var(--lattice); }
-  .pip.iso { color: var(--growth); border-color: var(--growth); }
+  .pip.agent { color: var(--growth); border-color: var(--growth); }
   .count { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); font-size: 12px; line-height: 18px; color: var(--text-faint); pointer-events: none; }
   .count.right { transform: translate(7px, -50%); }
   .count.above { transform: translate(-50%, calc(-100% - 3px)); }

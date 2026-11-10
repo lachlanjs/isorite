@@ -1,19 +1,18 @@
 <script lang="ts">
   import Drawing from "./Drawing.svelte";
-  import { agentName } from "@isorite/core";
-  import { resolve } from "$app/paths";
+    import { resolve } from "$app/paths";
   // A note, open for writing: its title, its details when they are wanted, and its text. Saving is the
   // session's business (note.svelte.ts); this shows how it stands and offers the choice when a save is refused.
   import { onMount, tick } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { doneOf, hasConflict, kindOf, moments, textAt, touched as touchedBy, type Insert, type Moment, type Rewrite } from "@isorite/core";
+  import { doneOf, hasConflict, kindOf, moments, textAt, touched as touchedBy, type Moment } from "@isorite/core";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import { wordAuthors } from "@isorite/core";
   import type { Mark } from "$lib/editor/overlays.ts";
-  import { NoteIso } from "$lib/iso.svelte.ts";
+  import { NoteJournal } from "$lib/journal.svelte.ts";
   import { NoteSession } from "$lib/note.svelte.ts";
   import NoteLabel from "./NoteLabel.svelte";
   import NoteEditor from "./NoteEditor.svelte";
@@ -21,6 +20,7 @@
   import Timeline from "./Timeline.svelte";
   import { ago, describe, momentKey } from "@isorite/core";
   import type { Touched } from "$lib/editor/overlays.ts";
+  import { swap } from "$lib/motion.ts";
 
   let { id }: { id: string } = $props();
 
@@ -30,7 +30,8 @@
   // Opening is quick (a frame or two): the drawing that says so would only blink. It shows when it is slow.
   let slow = $state(false);
   onMount(() => { const t = setTimeout(() => (slow = true), 300); return () => clearTimeout(t); });
-  const iso = new NoteIso(note);
+  // svelte-ignore state_referenced_locally
+  const journal = new NoteJournal(id);
 
   // Git left markers in it, from a merge it could not finish: it goes on being a note, with the text as it is.
   const torn = $derived(hasConflict(note.text));
@@ -48,30 +49,26 @@
   let pointed = $state.raw<Moment | null>(null);
   let at = $state.raw<Moment | null>(null);
   let restoring = $state(false), restoreProblem = $state("");
-  const all = $derived(moments(iso.entries));
-  const isos = (m: Moment) => m.who.startsWith("iso:") || m.who.startsWith("agent:");
+  const all = $derived(moments(journal.entries));
+  const byAgent = (m: Moment) => m.who.startsWith("iso:") || m.who.startsWith("agent:");
   const lines = (runs: { from: number; to: number }[]) => runs.flatMap((r) => Array.from({ length: r.to - r.from }, (_, k) => r.from + k));
-  // In the note as it is: the moment pointed at, or, with the timeline open and nothing pointed at, Iso's latest
+  // In the note as it is: the moment pointed at, or, with the timeline open and nothing pointed at, the agent's latest
   // kept or written.
   const live = $derived.by((): Touched | null => {
     if (!timeline || at || asSource) return null;
-    // With provenance on, Iso's words are marked already, so only the moment pointed at is.
-    const m = pointed ?? (isoLens ? undefined : all.findLast((x) => isos(x) && (x.what === "kept" || x.what === "edited")));
+    // With provenance on, the agent's words are marked already, so only the moment pointed at is.
+    const m = pointed ?? (agentLens ? undefined : all.findLast((x) => byAgent(x) && (x.what === "kept" || x.what === "edited")));
     if (!m) return null;
-    const got = lines(touchedBy(iso.entries, m.ids).runs);
-    return got.length ? { who: isos(m) ? "iso" : "you", lines: got } : null;
+    const got = lines(touchedBy(journal.entries, m.ids).runs);
+    return got.length ? { who: byAgent(m) ? "agent" : "you", lines: got } : null;
   });
-  // The note as it was after the chosen moment, what that moment changed in it, and what Iso offered if not kept.
+  // The note as it was after the chosen moment, and what that moment changed in it.
   const version = $derived.by(() => {
     if (!at) return null;
-    const key = momentKey(at), text = textAt(iso.entries, key);
+    const key = momentKey(at), text = textAt(journal.entries, key);
     if (text === null) return null;
-    const upTo = iso.entries.filter((e) => e.id <= key);
-    const first = iso.entries.find((e) => e.id === at!.ids[0]);
-    const offered = at.what === "offered" || at.what === "discarded"
-      ? first?.kind === "proposal" ? (first.form === "insert" ? (first as Insert).text : (first as Rewrite).regions.map((r) => r.new).join("\n\n")) : undefined
-      : undefined;
-    return { text, touched: { who: isos(at) ? "iso" : "you", lines: lines(touchedBy(upTo, at.ids).runs) } as Touched, asked: at.asked, offered };
+    const upTo = journal.entries.filter((e) => e.id <= key);
+    return { text, touched: { who: byAgent(at) ? "agent" : "you", lines: lines(touchedBy(upTo, at.ids).runs) } as Touched, asked: at.asked };
   });
   // Opened from a moment chosen elsewhere (the Atlas's timeline): `?at=<entry>` shows the note as it was then.
   // The note may already be open in its pane when the moment is chosen, so the address is followed, not read once.
@@ -85,18 +82,18 @@
     wanted = null;
     panes.flip("timeline", true); at = m;
   });
-  // Provenance (M12; M10's Iso lens): the words Iso wrote are marked, and so is what was given to Iso.
-  const isoLens = $derived(panes.on.provenance);
+  // Provenance (M12; M10's agent lens): the words the agent wrote are marked, and so is what was given to the agent.
+  const agentLens = $derived(panes.on.provenance);
   $effect(() => { if (!timeline) { at = null; pointed = null; } });
   const lensMarks = $derived.by((): Mark[] => {
-    if (!isoLens || note.loaded !== "ready") return [];
+    if (!agentLens || note.loaded !== "ready") return [];
     const out: Mark[] = [];
     // Words: where the journal's text is the note's (not while unsaved typing runs ahead of it).
-    const runs = wordAuthors(iso.entries), lines = note.text.split("\n");
+    const runs = wordAuthors(journal.entries), lines = note.text.split("\n");
     if (runs && runs.length === lines.length) {
       let at = 0;
       for (const [k, line] of lines.entries()) {
-        for (const r of runs[k]!) if ((r.who.startsWith("iso:") || r.who.startsWith("agent:")) && r.to <= line.length && line.slice(r.from, r.to).trim()) out.push({ kind: "by-iso", from: at + r.from, to: at + r.to });
+        for (const r of runs[k]!) if ((r.who.startsWith("iso:") || r.who.startsWith("agent:")) && r.to <= line.length && line.slice(r.from, r.to).trim()) out.push({ kind: "by-agent", from: at + r.from, to: at + r.to });
         at += line.length + 1;
       }
     }
@@ -129,14 +126,14 @@
 
   onMount(() => {
     app.open = id;
-    void note.open().then(() => iso.open());
+    void note.open().then(() => journal.open());
     const leaving = () => { void note.save(); };
     addEventListener("pagehide", leaving);
     document.addEventListener("visibilitychange", leaving);
     return () => {
       removeEventListener("pagehide", leaving);
       document.removeEventListener("visibilitychange", leaving);
-      iso.close();
+      journal.close();
       void note.close();
       app.here = "";
       app.open = "";
@@ -173,8 +170,6 @@
       ? { text: note.saving === "failed" ? `not saved: ${note.message}` : SAYS[note.saving], bad: note.saving === "failed" || note.saving === "conflict" }
       : null;
   });
-  // Whose changes wait: Iso's, an agent's, or both.
-  const changesFrom = $derived([...new Set(iso.changes.map((c) => agentName(c.proposal.who) || "Agent"))].join(" and "));
   // A question or a problem (M12): its kind and when it was done, the notes it is about or uses, and on any note,
   // the questions and problems attached to it.
   const kind = $derived(kindOf(String(note.meta?.type ?? "")));
@@ -210,19 +205,19 @@
     {#if note.saving === "conflict"}
       <div class="frame choice" role="alert">
         <span class="frame-title">changed elsewhere</span>
-        <p>{note.theirs === null ? "This note was deleted or moved while you were writing." : "This note was changed somewhere else while you were writing. Nothing here has been saved over it."}</p>
+        <p>{note.theirs === null ? "Deleted or moved elsewhere while you wrote." : "This note was changed somewhere else while you wrote. Nothing was saved over it."}</p>
         <div class="row">
           <button class="btn primary" type="button" onclick={() => note.keepMine()}>keep mine</button>
           {#if note.theirs}<button class="btn" type="button" onclick={() => note.keepTheirs()}>take theirs</button>{/if}
         </div>
-        <p class="faint">Whichever you keep, the other stays in the note's journal.</p>
+        <p class="faint">The other stays in the journal.</p>
       </div>
     {/if}
 
     {#if torn}
       <div class="frame torn" role="alert">
         <span class="frame-title">merge conflict</span>
-        <p>Git could not put two versions of this note together, and left both in the text. Choose what to keep between the lines <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>, <code>=======</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>, and delete the lines of the markers. This stays until none is left.</p>
+        <p>Keep one side between <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>, then delete the markers.</p>
       </div>
     {/if}
 
@@ -242,12 +237,14 @@
           onkeydown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }} onblur={() => void named()}></textarea>
         </div>
       {:else}
-        <span class="grow faint">{id}.md{note.meta === null ? ": the frontmatter cannot be read, so the file is shown as it is" : ""}</span>
+        <span class="grow faint path">{id}.md{#if note.meta === null}<span class="broken"> · frontmatter broken: fix it here</span>{/if}</span>
       {/if}
       <div class="side">
-      <div class="tools">
-        <button class="btn quiet" type="button" aria-pressed={read} disabled={asSource} title="The note as it is read, to be read and not edited" onclick={() => (reading = !reading)}>read</button>
-        <button class="btn quiet" type="button" aria-pressed={asSource} disabled={note.meta === null} onclick={() => { reading = false; source = !source; }}>source</button>
+      <!-- Three modes of one thing, one control (design audit, P1); pressed again, read or source goes back to editing. -->
+      <div class="tools segs" role="group" aria-label="Mode">
+        <button type="button" aria-pressed={!read && !asSource} disabled={note.meta === null} title="Edit" onclick={() => swap(() => { reading = false; source = false; })}>edit</button>
+        <button type="button" aria-pressed={read} disabled={asSource} title="Read mode" onclick={() => swap(() => (reading = !reading))}>read</button>
+        <button type="button" aria-pressed={asSource} disabled={note.meta === null} title="The file as it is" onclick={() => swap(() => { reading = false; source = !source; })}>source</button>
       </div>
       </div>
     </div>
@@ -269,11 +266,11 @@
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 8h9M8 4.8 11.2 8 8 11.2" stroke="currentColor" stroke-width="1.3" fill="none" /><path d="M13.5 3v10" stroke="currentColor" stroke-width="1.3" /></svg>
         </button>
       </div>
-      {#key momentKey(at)}<NoteVersion id={note.id} text={version.text} title={note.fields.title} touched={version.touched} asked={version.asked} offered={version.offered} />{/key}
+      {#key momentKey(at)}<NoteVersion id={note.id} text={version.text} title={note.fields.title} touched={version.touched} asked={version.asked} />{/key}
     {/if}
 
     <div class="live" hidden={Boolean(at && version)}>
-      {#key `${asSource}${read}`}<NoteEditor {note} {iso} source={asSource} reading={read} touched={live} lens={lensMarks} />{/key}
+      {#key `${asSource}${read}`}<NoteEditor {note} source={asSource} reading={read} touched={live} lens={lensMarks} />{/key}
     </div>
 
     {#if attached.length && !asSource && !at && !read}
@@ -284,17 +281,6 @@
           <li><a href={noteHref(a.id)} class:done={!!a.done && a.kind === "question"}>{@render glyph(a.kind ?? "question", !!a.done)}<span>{a.title}</span>{#if a.done}<svg class="ok" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8.5l3 3 7-7" /></svg>{/if}</a></li>
         {/each}
       </ul>
-    {/if}
-
-    <!-- A rewrite's changes are kept or removed one by one in the text; here, all that are left at once. -->
-    {#if iso.changes.length}
-      <div class="changes" role="status">
-        <i class="dia" aria-hidden="true"></i>
-        <span class="soft">{iso.changes.length} {iso.changes.length === 1 ? "change" : "changes"} from {changesFrom} waiting</span>
-        <span class="grow"></span>
-        <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(true)}>keep all</button>
-        <button class="link" type="button" disabled={iso.busy === "all"} onclick={() => iso.settleAll(false)}>remove all</button>
-      </div>
     {/if}
 
   {/if}
@@ -312,17 +298,17 @@
   /* Read mode (M30): a heading, set larger, with room round it; the tools stay at the corner to leave it. */
   .reading { --text-size: 20px; padding-top: 64px; }
   .reading .title.read { margin: 0; font-size: 34px; line-height: 1.2; }
-  .reading .tools { opacity: .5; }
+  .reading .tools { opacity: .6; transition: opacity var(--dur-1) var(--ease-out); }
   .reading .tools:hover, .reading .tools:focus-within { opacity: 1; }
   .title { flex: 1 1 auto; min-width: 0; font-size: 34px; line-height: 1.2; font-weight: 700; background: none; border: 0; padding: 0 2px; color: var(--text); resize: none; field-sizing: content; overflow: hidden; }
   .title::placeholder { color: var(--text-faint); }
   .title:focus-visible { outline: none; }
-  .tools { display: flex; flex: none; padding-top: 6px; }
+  .tools { margin-top: 6px; }
+  .path { font-size: var(--fs-small); padding-top: 8px; }
+  .broken { color: var(--rose); }
   .side { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); flex: none; }
   /* Where the pane leaves room (a container query: the note may stand beside the Atlas), the margin is the page's own, beside the text and level with the title, 8 px down
      (Study-Fit), and the text starts under the title as in any note. */
-  .tools .btn { height: 28px; font-size: 12px; }
-  .tools .btn[aria-pressed="true"] { color: var(--ground-0); --fill: var(--lattice); }
   /* The quiet icon buttons: the timeline's, and with a version shown, restore and back to now. Faint until pointed at. */
   .icon { width: 28px; height: 28px; display: inline-grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; }
   .icon:hover:not(:disabled), .icon:focus-visible { color: var(--text); }
@@ -332,12 +318,12 @@
   .glyph.question { color: var(--rose); }
   .glyph.problem { color: var(--text-soft); }
   .glyph.problem.solved { color: var(--malachite); }
-  .attached { list-style: none; margin: 32px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; }
+  .attached { list-style: none; margin: 32px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line-faint); display: flex; flex-direction: column; }
   .attached a { display: grid; grid-template-columns: 18px minmax(0, 1fr) 14px; gap: 10px; align-items: center; padding: 6px 0; font: 15px var(--font-text); color: var(--text); text-decoration: none; }
   .attached a:hover span { color: var(--lattice); }
   .attached a.done span { color: var(--text-faint); }
   .attached .ok { color: var(--malachite); }
-  .atbar { display: flex; align-items: center; gap: 6px; min-height: 28px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+  .atbar { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 2px 4px 2px 10px; background: var(--fill-hover); }
   /* The timeline sits in the page's left margin, level with the title (Desktop-Editor); where there is no margin,
      it is a narrow column at the note's left (Mobile-Timeline). */
   .tl-col { position: absolute; z-index: 4; }
@@ -355,9 +341,6 @@
   .choice { position: sticky; top: var(--space-3); z-index: 5; filter: var(--lift-drop); animation: appear var(--t-change) var(--ease-out); padding: var(--space-6) var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); --edge: var(--rose); }
   .row { display: flex; gap: var(--space-2); }
   .bad { color: var(--rose); }
-  .changes { position: sticky; bottom: 28px; z-index: 8; display: flex; align-items: center; gap: 12px; padding: 10px 2px; background: var(--ground-0); border-top: 1px solid var(--line); }
-  .changes .dia { margin: 0 3px; }
-  .link { background: none; border: 0; padding: 4px 0; color: var(--lattice); white-space: nowrap; }
   /* A narrow pane (M10) lays the head out as a phone does: the title under the tools, the whole width. */
   @container page (max-width: 600px) {
     .head { flex-direction: column-reverse; gap: var(--space-1); }
@@ -369,8 +352,7 @@
     .note { padding: 20px 20px 30vh; }
     .note.timed { padding-left: 56px; }
     .tl-col { top: 20px; left: 8px; bottom: 0; z-index: 1; padding-right: 2px; border-right: 1px solid var(--line); background: var(--ground-1); }
-    .changes { bottom: 156px; flex-wrap: wrap; }
-    .head { flex-direction: column-reverse; gap: var(--space-1); }
+      .head { flex-direction: column-reverse; gap: var(--space-1); }
     .tools { align-self: flex-end; padding-top: 0; }
     .side { align-self: stretch; flex-direction: row-reverse; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; }
     .title { font-size: 30px; width: 100%; }

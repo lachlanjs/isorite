@@ -1,10 +1,10 @@
 // A note pointed at in one pane and shown in another (M17). From elsewhere to the Atlas: a link under the pointer
-// in the Note pane or in Iso's, or a moment of the session's timeline, outlines its note on the map (Atlas-Timeline)
+// in the Note pane or in the agent's, or a moment of the session's timeline, outlines its note on the map (Atlas-Timeline)
 // and lights the link from the open note to it. From the Atlas to the note: the note pointed at on the map
 // underlines the open note's links to it.
 
-/** What points: the Note pane's text, Iso's pane, or the timeline; and whose the pointing is (the outline's colour). */
-export interface Elsewhere { id: string; folder: boolean; from: "note" | "iso" | "timeline" | "finder"; who: "you" | "iso" }
+/** What points: the Note pane's text, the Agent pane, or the timeline; and whose the pointing is (the outline's colour). */
+export interface Elsewhere { id: string; folder: boolean; from: "note" | "agent" | "timeline" | "finder"; who: "you" | "agent" }
 
 class Pointing {
   /** A note (or folder) pointed at outside the Atlas. */

@@ -7,8 +7,8 @@
 //   isorite migrate <study base>           move a study base (format 1) into its notes' .isorite/
 //   isorite example <folder>               write the example base, partway built, into a folder
 //   isorite mcp [<notes>]                  the knowledge base's tools over MCP, on stdio, for your agent
-//   isorite acp --agent "<command>"        your ACP agent, behind your ACP front end or the Iso pane
 //   isorite guide [<folder>]               the guide: a knowledge base about isorite, to read in isorite
+//   isorite setup [--yes ...]              a short guided setup (also the first run); flags for scripts and agents
 //   isorite doctor [<notes>] [--report]    whether isorite can work here, a step at a time
 
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
@@ -18,7 +18,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { StudyError, citeKind, repairFrontmatter } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
 import { doctor } from "./doctor.ts";
-import { knownCommand } from "./detect.ts";
 import { configPath, rememberBase } from "./config.ts";
 import { repoOf } from "./git.ts";
 import { askWhereFilesLive } from "./own-repo.ts";
@@ -27,7 +26,6 @@ import { single } from "./self.ts";
 import { newBase, serve } from "./serve.ts";
 import { migrate } from "./migrate.ts";
 import { mcp } from "./mcp.ts";
-import { acp } from "./acp-wrap.ts";
 import { guide } from "./guide.ts";
 import { writeExample, writeGeometry } from "@isorite/example/node";
 import { bases, memory } from "./memory.ts";
@@ -36,12 +34,14 @@ import { findBase, freePort, offerModel, start } from "./start.ts";
 import { cacheDir } from "./embedder.ts";
 import { modelCommand, modelDir } from "./model.ts";
 import { openBrowser } from "./running.ts";
+import { SETUP_USAGE, firstRun, setupCommand } from "./setup/index.ts";
 import { bold, dim, green, helpText, red, yellow } from "./term.ts";
 
 
 const SHORT = `isorite: an agentic harness for understanding
 
   isorite                 open the base here, or choose one
+  isorite setup           a short guided setup: your notes, your agent, a check of this machine
   isorite doctor          can isorite work here, and what to change if not
   isorite help            this; help all lists every command
   isorite --version
@@ -51,7 +51,7 @@ Notes are plain Markdown in a folder of your project. Your agent reads and write
 
 const USAGE = `isorite: an agentic harness for understanding
 
-  isorite new <folder>                   a new base: an empty folder with .isorite/
+${SETUP_USAGE}  isorite new <folder>                   a new base: an empty folder with .isorite/
   isorite check <notes> [--unused] [--fix]
                                          lint: frontmatter, links, cycles; --unused: pictures no note
                                          shows; --fix: quote a colon in frontmatter
@@ -62,9 +62,6 @@ const USAGE = `isorite: an agentic harness for understanding
   isorite mcp [<notes>] [--port <n>] [--agent <name>]
                                          the base's tools over MCP, on stdio:
                                          claude mcp add isorite -- isorite mcp <base>
-  isorite acp --agent "<command>" [<notes>] [--port <n>] [--pane]
-                                         an ACP agent behind your ACP front end, its sessions in Iso's
-                                         pane; --pane: the pane alone
   isorite model [--from <folder|.tgz>] [--url <url>]
                                          the model for search by meaning: which, and where; else fetch it
                                          (53 MB, once)
@@ -117,6 +114,14 @@ export function check(notes: string, out: (line: string) => void = console.log, 
   return errors ? 1 : 0;
 }
 
+/** Start the server on a base on the first free port and open the page (the end of `isorite setup`). Runs until stopped. */
+async function startOn(notes: string, port: number | undefined, noOpen: boolean): Promise<number> {
+  const use = port ?? await freePort();
+  await serve(notes, { port: use });
+  if (!noOpen && !process.env.SSH_CONNECTION && process.env.ISORITE_NO_BROWSER !== "1") openBrowser(`http://localhost:${use}/`);
+  return new Promise<number>(() => undefined);
+}
+
 /** `isorite` at a terminal: asks on stdin, starts a server on the first free port (4767 up) and opens the page. */
 async function terminalStart({ port, noOpen }: { port: number | undefined; noOpen: boolean }): Promise<number> {
   const { createInterface } = await import("node:readline/promises");
@@ -155,8 +160,11 @@ export function main(argv: string[]): number | Promise<number> {
     if ((!command || command === "--no-open" || command === "--port") && process.stdin.isTTY && process.stdout.isTTY) {
       const args = command ? [command, ...rest] : rest, at = args.indexOf("--port"), asked = at < 0 ? undefined : Number(args[at + 1]);
       if (asked !== undefined && !(Number.isInteger(asked) && asked > 0 && asked < 65536)) { console.error("--port takes a number"); return 2; }
+      // The very first run (no config, no base known): the guided setup, once; it starts isorite itself at the end.
+      if (firstRun() && process.env.ISORITE_NO_SETUP !== "1") return setupCommand([], { start: (notes) => startOn(notes, asked, args.includes("--no-open")) });
       return terminalStart({ port: asked, noOpen: args.includes("--no-open") });
     }
+    if (command === "setup") return setupCommand(rest, { start: (notes) => startOn(notes, undefined, rest.includes("--no-open")) });
     if (command === "check" && rest.find((r) => !r.startsWith("--"))) return check(rest.find((r) => !r.startsWith("--"))!, console.log, rest.includes("--unused"), rest.includes("--fix"));
     if (command === "new" && rest[0]) {
       const made = newBase(rest[0]);
@@ -193,8 +201,8 @@ export function main(argv: string[]): number | Promise<number> {
       const folder = args.find((a, i, all) => !a.startsWith("--") && all[i - 1] !== "--port");
       return guide(folder, port === undefined ? {} : { port }).then(() => new Promise<number>(() => undefined), (e: Error) => { console.error(e.message); return 2; });
     }
-    // OpenCode behind isorite (M11) is retired (M25): it is an ACP agent as any other.
-    if (command === "term" || command === "opencode") { console.error('isorite term and isorite opencode are retired: attach OpenCode as any agent, from the Agent pane or with isorite acp --agent "opencode acp", or give it isorite\'s MCP (isorite doctor offers the project\'s config)'); return 2; }
+    // OpenCode behind isorite (M11) and the ACP routes (M25) are retired: an outside agent is given isorite's MCP (isorite setup).
+    if (command === "term" || command === "opencode" || command === "acp") { console.error(`isorite ${command} is retired: an outside agent connects over MCP (isorite setup writes its config), and isorite's own agent is in the Agent pane`); return 2; }
     if (command === "mcp") {
       const flag = (name: string) => { const at = rest.indexOf(name); return at < 0 ? undefined : rest[at + 1]; };
       const port = flag("--port") === undefined ? undefined : Number(flag("--port")), agent = flag("--agent");
@@ -203,20 +211,6 @@ export function main(argv: string[]): number | Promise<number> {
       if (agent !== undefined && !/^[a-z0-9][a-z0-9-]{0,39}$/.test(agent)) { console.error("--agent takes a name in small letters, digits and dashes"); return 2; }
       const path = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--port" && rest[i - 1] !== "--agent" && rest[i - 1] !== "--session");
       return mcp(path, { ...(port === undefined ? {} : { port }), ...(agent ? { agent } : {}), ...(session && /^[\w-]{1,200}$/.test(session) ? { session } : {}) }).catch((e: Error) => { console.error(e.message); return 2; });
-    }
-    if (command === "acp") {
-      const flag = (name: string) => { const at = rest.indexOf(name); return at < 0 ? undefined : rest[at + 1]; };
-      const positional = rest.filter((a, i) => !a.startsWith("--") && !["--port", "--agent", "--url"].includes(rest[i - 1] ?? ""));
-      // An agent by name (`isorite acp omp`), unless that is a folder here; else its command, `--agent "omp acp"`.
-      const named = !flag("--agent") && positional[0] && !existsSync(positional[0]) ? knownCommand(positional[0]) : null;
-      const agent = flag("--agent") ?? named ?? undefined, port = flag("--port") === undefined ? undefined : Number(flag("--port"));
-      if (!agent) { console.error('isorite acp <omp|opencode|claude|codex|hermes> [<notes>] [--port <n>]\nisorite acp --agent "<the agent\'s ACP command>" [<notes>] [--port <n>] [--pane]'); return 2; }
-      if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) { console.error("--port takes a number"); return 2; }
-      // --pane: no front end, the Iso pane alone; --url: the base on the server that started this for it.
-      const url = flag("--url"), pane = rest.includes("--pane");
-      if (url !== undefined && !/^http:\/\/(127\.0\.0\.1|localhost|\[::1\]):\d+(\/b\/[a-z0-9-]+)?$/.test(url)) { console.error("--url takes a base's address on this machine"); return 2; }
-      const path = named ? positional[1] : positional[0];
-      return acp(path, { agent, pane, ...(port === undefined ? {} : { port }), ...(url ? { url } : {}) }).catch((e: Error) => { console.error(e.message); return 2; });
     }
     if (command === "model") {
       const from = rest[rest.indexOf("--from") + 1], url = rest[rest.indexOf("--url") + 1];
@@ -278,7 +272,7 @@ export function main(argv: string[]): number | Promise<number> {
 /** The commands that start something, which say so at once (M21): a subprocess that stalls after this is then
  *  seen to stall. To stderr, as `mcp` speaks on stdout; once, not again when the command runs itself again with
  *  the proxy on (ISORITE_STARTING). */
-const STARTS = new Set(["serve", "mcp", "acp", "guide", "tutorial", "--tutorial"]);
+const STARTS = new Set(["serve", "mcp", "guide", "tutorial", "--tutorial"]);
 export function starting(argv: string[], env: NodeJS.ProcessEnv = process.env, write = (s: string) => process.stderr.write(s)): boolean {
   if (!STARTS.has(argv[0] ?? "") || env.ISORITE_STARTING) return false;
   write("isorite: starting…\n");

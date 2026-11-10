@@ -1,52 +1,46 @@
-// A scripted ACP agent attached to the test server's base (M25), as the browser tests attach one: `isorite acp`
-// between a front end (the test, as Toad would be) and the scripted agent (no model). What it does is a line each in
-// the prompt (packages/server/test/fixtures/scripted-acp.ts); asked from the front end, or from the pane.
+// Helpers for the tests of the Agent pane. The test server offers a scripted model for isorite's own agent
+// (ISORITE_SCRIPTED=1, packages/server/src/pi/scripted.ts): `attach()` puts it in the pane, with a new session, and
+// `detach()` takes it out again, so the pane is as it was (no agent) for the tests that want none. A prompt to it is a
+// script, a line each: `read <note>`, `edit <note> <old> => <new>`, `wait <ms>`, `fail <why>`, `draw`, `cite <link>`…
 
-import { spawn, type ChildProcess } from "node:child_process";
-import { createInterface } from "node:readline";
-import { fileURLToPath } from "node:url";
-import { expect, type Page } from "@playwright/test";
-import { NOTES, PORT } from "./serve.ts";
+import { expect, request, type Page } from "@playwright/test";
+import { PORT } from "./serve.ts";
 
-const MAIN = fileURLToPath(new URL("../../packages/server/src/main.ts", import.meta.url));
-const SCRIPTED = fileURLToPath(new URL("../../packages/server/test/fixtures/scripted-acp.ts", import.meta.url));
-const URL_ = `http://localhost:${PORT}`;
+const BASE = `http://localhost:${PORT}/`;
+
+async function scripted(on: boolean): Promise<void> {
+  const api = await request.newContext({ baseURL: BASE });
+  try {
+    const { token } = (await (await api.get("api/session")).json()) as { token: string };
+    const res = await api.post("api/terminal/scripted", { data: { on }, headers: { "x-isorite-token": token, origin: new URL(BASE).origin } });
+    expect(res.ok(), `the scripted model ${on ? "in" : "out"}: ${await res.text()}`).toBe(true);
+  } finally { await api.dispose(); }
+}
 
 export interface Attached {
-  /** A request from the front end, and its answer once it comes. */
-  ask(method: string, params: object): Promise<{ result?: { sessionId?: string } }>;
-  /** The session the front end opened. */
-  session: string;
-  detach(): void;
+  detach(): Promise<void>;
 }
 
-/** Attach the scripted agent, a session open from its front end, shown in the pane. */
+/** The scripted model in the pane, in a new session. */
 export async function attach(): Promise<Attached> {
-  const wrapper: ChildProcess = spawn(process.execPath, [MAIN, "acp", "--agent", `"${process.execPath}" "${SCRIPTED}"`, NOTES, "--port", String(PORT)], { stdio: ["pipe", "pipe", "inherit"] });
-  const answers = new Map<number, { result?: { sessionId?: string } }>();
-  let id = 0;
-  void (async () => {
-    for await (const line of createInterface({ input: wrapper.stdout! })) {
-      const m = JSON.parse(line) as { id?: number; method?: string; result?: { sessionId?: string } };
-      if (typeof m.id === "number" && !m.method) answers.set(m.id, m);
-    }
-  })();
-  const ask = async (method: string, params: object) => {
-    const mine = ++id;
-    wrapper.stdin!.write(JSON.stringify({ jsonrpc: "2.0", id: mine, method, params }) + "\n");
-    await expect.poll(() => answers.has(mine), { timeout: 30_000 }).toBe(true);
-    return answers.get(mine)!;
-  };
-  await ask("initialize", { protocolVersion: 1, clientCapabilities: {} });
-  const session = (await ask("session/new", { cwd: NOTES, mcpServers: [] })).result!.sessionId!;
-  await expect.poll(async () => ((await (await fetch(`${URL_}/api/terminal`)).json()) as { session: string | null }).session, { timeout: 30_000 }).toBe(session);
-  return { ask, session, detach: () => { wrapper.stdin?.end(); wrapper.kill(); } };
+  await scripted(true);
+  return { detach: () => scripted(false) };
 }
 
-/** The pane's box, and Iso's pane brought forward on a phone. */
+/** The pane's box, and the Agent pane brought forward on a phone. */
 export const box = (page: Page) => page.getByRole("textbox", { name: "Message the agent" });
-export async function toIso(page: Page): Promise<void> {
+export async function toAgent(page: Page): Promise<void> {
   if ((page.viewportSize()?.width ?? 1280) <= 760) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Agent/ }).click();
 }
 /** The session shown in the pane. */
 export const log = (page: Page) => page.getByRole("log", { name: "The agent's session" });
+/** Ask in the box, and the turn it makes (by a word only it has). */
+export async function ask(page: Page, text: string, mark: string) {
+  // Not while the last turn runs: then it would be queued into that turn.
+  await expect(page.getByRole("button", { name: "Stop the agent" })).toHaveCount(0, { timeout: 15_000 });
+  await box(page).fill(text);
+  await box(page).press("Enter");
+  const turn = log(page).locator(".turn").filter({ hasText: mark });
+  await expect(turn).toHaveCount(1);
+  return turn;
+}

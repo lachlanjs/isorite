@@ -19,10 +19,10 @@
   let moments = $state.raw<SessionMoment[]>([]);
   let pointed = $state.raw<SessionMoment | null>(null);
   const titleOf = (id: string): string => app.listing.notes.find((n) => n.id === id)?.title ?? id.split("/").at(-1)!;
-  const isos = (m: SessionMoment) => m.who.startsWith("iso:") || m.who.startsWith("agent:");
+  const byAgent = (m: SessionMoment) => m.who.startsWith("iso:") || m.who.startsWith("agent:");
 
   async function read() {
-    // Iso's drafts, from before M25, are not on the map.
+    // The agent's drafts, from before M25, are not on the map.
     try { moments = (await app.api.timeline()).filter((m) => !m.note.startsWith("@")); } catch { /* the next entry asks again */ }
   }
   $effect(() => {
@@ -37,7 +37,7 @@
     void goto(`${noteHref(m.note)}?at=${encodeURIComponent(momentKey(m))}`);
   }
   // The moment pointed at outlines its note on the map, as a link pointed at elsewhere does (M17).
-  $effect(() => { const m = pointed; pointing.set("timeline", m ? { id: m.note, folder: false, who: isos(m) ? "iso" : "you" } : null); });
+  $effect(() => { const m = pointed; pointing.set("timeline", m ? { id: m.note, folder: false, who: byAgent(m) ? "agent" : "you" } : null); });
   function toggle() {
     timeline = !timeline; pointed = null;
     try { localStorage.setItem("isorite.timeline", timeline ? "1" : "0"); } catch { /* not kept */ }

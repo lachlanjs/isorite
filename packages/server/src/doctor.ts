@@ -21,6 +21,8 @@ import { serving } from "./running.ts";
 import { findBrowser } from "./render.ts";
 import { proposal, writeProposal } from "./connect.ts";
 import { ownRepoInfo } from "./own-repo.ts";
+import { writable } from "./setup/checks.ts";
+import { dataDir } from "./pi/credentials.ts";
 
 export type Outcome = "ok" | "fail" | "warn" | "skip";
 export interface Check { step: string; outcome: Outcome; said: string }
@@ -32,7 +34,7 @@ export interface DoctorOptions {
   report?: boolean;
   /** Nothing fetched: whether the model for search by meaning can be reached is not asked. */
   offline?: boolean;
-  /** isorite's server's port, where isorite acp and isorite mcp look for it. */
+  /** isorite's server's port, where isorite mcp looks for it. */
   port?: number;
   /** Asks a yes or no on the terminal (M25: whether to write the project's MCP config); none, nothing is asked. */
   ask?: (question: string) => Promise<boolean>;
@@ -45,7 +47,7 @@ const MARK: Record<Outcome, string> = { ok: "✓", fail: "✗", warn: "!", skip:
 const PAINT: Record<Outcome, (s: string) => string> = { ok: green, fail: red, warn: yellow, skip: dim };
 
 /** The environment variables isorite and Node read for it; the secret ones are shown only by length. */
-const READ = ["XDG_CONFIG_HOME", "ISORITE_ACP_REGISTRY", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "NODE_TLS_REJECT_UNAUTHORIZED", "ISORITE_NODE_DEFAULTS", "SSH_CONNECTION", "ISORITE_EMBED", "ISORITE_EMBED_DIR", "ISORITE_MODEL_BASE_URL", "XDG_DATA_HOME", "XDG_CACHE_HOME"];
+const READ = ["XDG_CONFIG_HOME", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "NODE_TLS_REJECT_UNAUTHORIZED", "ISORITE_NODE_DEFAULTS", "SSH_CONNECTION", "ISORITE_EMBED", "ISORITE_EMBED_DIR", "ISORITE_MODEL_BASE_URL", "XDG_DATA_HOME", "XDG_CACHE_HOME"];
 export const SECRET = /key|token|secret|pass|auth|cookie/i;
 
 const hidden = (v: string) => `<${v.length} characters>`;
@@ -66,11 +68,11 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
   const say = (step: string, outcome: Outcome, said: string) => { checks.push({ step, outcome, said }); if (!o.report) out(`${PAINT[outcome](MARK[outcome])} ${bold(step)}: ${outcome === "skip" ? dim(said) : said}`); };
   const path = configPath(env), execArgv = o.execArgv ?? process.execArgv;
 
-  // The configuration: the device's id, and (until M25) Iso's provider, now left as written and not read.
+  // The configuration: the device's id, and (until M25) the agent's provider, now left as written and not read.
   if (!existsSync(path)) say("config", "ok", `there is no ${path} yet: it is made when a base is first opened`);
   else try {
     const config = readConfig(path);
-    say("config", "ok", config.provider || config.tiers ? `${path}: its [provider] and [tiers] were Iso's, and are no longer read; your agent's model is its own` : path);
+    say("config", "ok", config.provider || config.tiers ? `${path}: its [provider] and [tiers] were the agent's, and are no longer read; your agent's model is its own` : path);
   } catch (e) {
     say("config", "fail", (e as Error).message);
   }
@@ -86,7 +88,9 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
   if (env.NODE_TLS_REJECT_UNAUTHORIZED === "0") say("authorities", "warn", "NODE_TLS_REJECT_UNAUTHORIZED=0 turns off checking certificates for everything, and isorite doesn't need it: unset it, and if a certificate is then refused, name the company's authority (NODE_EXTRA_CA_CERTS)");
 
   const port = o.port ?? 4767, url = `http://127.0.0.1:${port}`, served = await serving(url);
-  say("port", "ok", served === null ? `${port} is free: isorite acp and isorite mcp start a server there` : `${port} is isorite's, serving ${served}`);
+  say("port", "ok", served === null ? `${port} is free: isorite mcp starts a server there` : `${port} is isorite's, serving ${served}`);
+  const data = dataDir(env);
+  say("write access", writable(data) ? "ok" : "fail", writable(data) ? `${data} (keys and the search model) can be written` : `cannot write to ${data}, where isorite keeps its keys and model: set XDG_DATA_HOME to a folder you can write to`);
   if (env.SSH_CONNECTION) say("browser", "ok", `over SSH: on your own machine, ssh -L ${port}:localhost:${port} <this host>, then http://localhost:${port}/`);
 
   // A browser to run artifacts unseen (M23, Q117): what an agent writes is checked by running it; without one, only

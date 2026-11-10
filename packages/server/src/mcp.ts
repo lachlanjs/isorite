@@ -19,7 +19,7 @@ export interface McpOptions {
   /** The agent's name, as the Atlas shows it: claude-code, pi. Without it, the name the harness gives itself. */
   agent?: string;
   quiet?: number;
-  /** The session its look-ups are kept under: `isorite acp`'s, so they join the prompt's turn. */
+  /** The session its look-ups are kept under: a name of the caller's choosing. */
   session?: string;
   input?: NodeJS.ReadableStream;
   output?: NodeJS.WritableStream;

@@ -46,31 +46,55 @@ export interface SearchOptions {
 /** Rounded as Python's round(x, 3) prints it (they differ only on exact ties). */
 export const round3 = (x: number): number => Number(x.toFixed(3));
 
+/** What indexing one note gave, kept by the caller between indexes: a note whose indexed fields are the same
+ *  is not tokenised again. */
+export interface Indexed { fields: string[]; tf: Map<string, number>; length: number }
+export class IndexCache extends Map<string, Indexed> {
+  /** How many of the cached notes each token is in, kept in step with them. */
+  df = new Map<string, number>();
+}
+
 export class SearchIndex {
   private readonly bundle: Bundle;
   private readonly docs = new Map<string, Map<string, number>>();
   private readonly lengths = new Map<string, number>();
-  private readonly df = new Map<string, number>();
+  private readonly df: Map<string, number>;
   private readonly avgLen: number;
 
-  constructor(bundle: Bundle) {
+  constructor(bundle: Bundle, cache?: IndexCache) {
     this.bundle = bundle;
+    // With a cache, the counts are the cache's, adjusted for the notes that changed; else they are counted here.
+    const df = (this.df = cache ? new Map(cache.df) : new Map<string, number>());
+    const count = (tf: Map<string, number>, by: number) => { for (const token of tf.keys()) df.set(token, (df.get(token) ?? 0) + by); };
     for (const [cid, c] of bundle.concepts) {
-      const tf = new Map<string, number>();
-      const fields: Record<keyof typeof FIELD_WEIGHTS, string> = {
-        title: c.title,
-        tags: c.tags.join(" "),
-        description: c.description,
-        headings: headings(c.body).map((h) => h.text).join(" "),
-        type: c.type,
-        body: c.body,
-      };
-      for (const [name, text] of Object.entries(fields) as [keyof typeof FIELD_WEIGHTS, string][]) {
-        for (const token of tokenize(text)) tf.set(token, (tf.get(token) ?? 0) + FIELD_WEIGHTS[name]);
+      const have = [c.title, c.tags.join(" "), c.description, c.type, c.body];
+      let done = cache?.get(cid);
+      if (!done || done.fields.some((f, k) => f !== have[k])) {
+        const tf = new Map<string, number>();
+        const fields: Record<keyof typeof FIELD_WEIGHTS, string> = {
+          title: have[0]!,
+          tags: have[1]!,
+          description: have[2]!,
+          headings: headings(c.body).map((h) => h.text).join(" "),
+          type: have[3]!,
+          body: have[4]!,
+        };
+        for (const [name, text] of Object.entries(fields) as [keyof typeof FIELD_WEIGHTS, string][]) {
+          for (const token of tokenize(text)) tf.set(token, (tf.get(token) ?? 0) + FIELD_WEIGHTS[name]);
+        }
+        if (done) count(done.tf, -1);
+        done = { fields: have, tf, length: [...tf.values()].reduce((s, v) => s + v, 0) };
+        count(tf, 1);
+        cache?.set(cid, done);
       }
+      const tf = done.tf;
       this.docs.set(cid, tf);
-      this.lengths.set(cid, [...tf.values()].reduce((s, v) => s + v, 0));
-      for (const token of tf.keys()) this.df.set(token, (this.df.get(token) ?? 0) + 1);
+      this.lengths.set(cid, done.length);
+    }
+    if (cache) {
+      for (const [cid, done] of [...cache]) if (!bundle.concepts.has(cid)) { count(done.tf, -1); cache.delete(cid); }
+      for (const [token, n] of df) if (n <= 0) df.delete(token);
+      cache.df = df;
     }
     const total = [...this.lengths.values()].reduce((s, v) => s + v, 0);
     this.avgLen = this.lengths.size ? total / this.lengths.size : 0;
@@ -84,7 +108,7 @@ export class SearchIndex {
   search(query: string, { limit = 8, type, tags, trust, status, under }: SearchOptions = {}): Hit[] {
     const terms = tokenize(query);
     const wanted = new Set([...(tags ?? [])].map((t) => t.toLowerCase()));
-    const hits: Hit[] = [];
+    const hits: { concept: Concept; score: number }[] = [];
     for (const [cid, tf] of this.docs) {
       const c = this.bundle.concepts.get(cid)!;
       if (type && c.type.toLowerCase() !== type.toLowerCase()) continue;
@@ -102,10 +126,11 @@ export class SearchIndex {
         if (f) score += (this.idf(term) * f * (K1 + 1)) / (f + norm);
       }
       if (terms.length && score <= 0) continue;
-      hits.push({ concept: c, score, snippet: snippet(c, terms) });
+      hits.push({ concept: c, score });
     }
     hits.sort((a, b) => b.score - a.score || cmp(a.concept.id, b.concept.id));
-    return hits.slice(0, limit);
+    // A snippet is cut only for the hits that are returned.
+    return hits.slice(0, limit).map((h) => ({ ...h, snippet: snippet(h.concept, terms) }));
   }
 }
 

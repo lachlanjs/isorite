@@ -1,5 +1,5 @@
 // A terminal agent's edit to a note, as the passages it changes: what it becomes in the journal, a rewrite
-// proposal, kept or removed a passage at a time as Iso's are. Nothing here writes the note.
+// proposal, kept or removed a passage at a time as the agent's are. Nothing here writes the note.
 
 import { diffLines, type Passage } from "@isorite/core";
 import { EngineError } from "./api.ts";

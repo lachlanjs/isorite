@@ -67,7 +67,7 @@ test("the project's agent looks and writes in its memory; the memory's own page 
   expect((await agent.tool("read_note", { id: "memory:tools/opencode" })).ok()).toBe(true);
   // Drawn on the memory's Atlas, where it read.
   await expect(page.locator('[data-note="tools/opencode"]')).toHaveClass(/\bp-used\b/);
-  await expect(page.getByText("OpenCode is reading OpenCode's config in its own terminal")).toBeAttached();
+  await expect(page.getByTitle("OpenCode, in its own terminal")).toHaveText(/OpenCode's config/);
   const wrote = await agent.tool("write_note", { base: "memory", note: id, content: "---\ntype: Concept\ntitle: Short answers\n---\n\nThey like short answers.\n" }, "remember that I like short answers");
   expect(wrote.ok()).toBe(true);
   await agent.status(false);

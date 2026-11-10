@@ -15,38 +15,3 @@ class GroundChoice {
 
 export const ground = new GroundChoice();
 export const GROUNDS: [Ground, string][] = [["", "the system's"], ["lapis", "lapis"], ["quartz", "quartz"]];
-
-/** Code in colour (the default) or in ink, as on the boards (M19). Kept in this browser, set on the root before first
- *  paint as the ground is. */
-export type CodeLook = "" | "ink";
-
-class CodeChoice {
-  chosen = $state<CodeLook>((typeof document === "undefined" ? "" : document.documentElement.dataset.code ?? "") as CodeLook);
-
-  choose(look: CodeLook): void {
-    this.chosen = look;
-    if (look) document.documentElement.dataset.code = look; else delete document.documentElement.dataset.code;
-    try { if (look) localStorage.setItem("isorite.code", look); else localStorage.removeItem("isorite.code"); } catch { /* not kept */ }
-  }
-}
-
-export const codeLook = new CodeChoice();
-
-/** The notes' face: Charter, the serif (the default), or IBM Plex Sans, a sans whose squared curves are kin to the
- *  interface's mono and which sets a line to nearly the same length. Kept in this browser, set on the root before
- *  first paint as the ground is. Maths keeps its serif italic either way. */
-export type Face = "" | "sans";
-
-class FaceChoice {
-  chosen = $state<Face>((typeof document === "undefined" ? "" : document.documentElement.dataset.face ?? "") as Face);
-
-  choose(face: Face): void {
-    this.chosen = face;
-    if (face) document.documentElement.dataset.face = face; else delete document.documentElement.dataset.face;
-    try { if (face) localStorage.setItem("isorite.face", face); else localStorage.removeItem("isorite.face"); } catch { /* not kept */ }
-  }
-}
-
-export const face = new FaceChoice();
-export const FACES: [Face, string][] = [["", "serif"], ["sans", "sans"]];
-export const CODE_LOOKS: [CodeLook, string][] = [["", "in colour"], ["ink", "in ink"]];

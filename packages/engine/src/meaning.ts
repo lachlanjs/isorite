@@ -41,10 +41,18 @@ export interface Piece {
 
 const fingerprint = (text: string) => sha256(text).slice(0, 20);
 
+// A bundle is cut once, and a note whose title, description and text are as they were is not cut or hashed again.
+const ofBundle = new WeakMap<Bundle, Piece[]>();
+const ofNote = new Map<string, { head: string; body: string; pieces: Piece[] }>();
+
 /** Every note cut into pieces: at its first- and second-level headings (not inside a code fence), and a long section at its paragraphs. */
 export function pieces(b: Bundle): Piece[] {
+  const have = ofBundle.get(b);
+  if (have) return have;
   const out: Piece[] = [];
   for (const c of b.concepts.values()) {
+    const key = `${c.title}\u0000${c.description ?? ""}`, was = ofNote.get(c.id);
+    if (was && was.head === key && was.body === c.body) { out.push(...was.pieces); continue; }
     const lead = `${c.title}. ${c.description ?? ""}`.trim();
     const mine: Piece[] = [];
     const add = (heading: string, body: string) => {
@@ -70,8 +78,11 @@ export function pieces(b: Bundle): Piece[] {
     }
     flush(heading, lines);
     if (!mine.length) add("", c.body.trim()); // a note too short to cut still has its title and description
+    ofNote.set(c.id, { head: key, body: c.body, pieces: mine });
     out.push(...mine);
   }
+  for (const id of ofNote.keys()) if (!b.concepts.has(id)) ofNote.delete(id);
+  ofBundle.set(b, out);
   return out;
 }
 

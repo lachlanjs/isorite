@@ -1,4 +1,4 @@
-// What an agent can look up in a base, through isorite's MCP (Iso's, until M25): the notes, by their words, by
+// What an agent can look up in a base, through isorite's MCP (the agent's, until M25): the notes, by their words, by
 // their meaning (where a search by meaning is given), by their outline, a section at a time, and along their
 // links. Read only: there is no tool here that writes. Carried over from rdstudio's lookup.ts, without the code
 // tools.
@@ -103,7 +103,9 @@ export class Lookup {
   private readonly similar: Similar | null;
   private readonly away: Away | null;
 
-  constructor(b: Bundle, note: string, similar: Similar | null = null, away: Away | null = null) { this.b = b; this.held = [note]; this.similar = similar; this.away = away; }
+  private readonly shared: ((b: Bundle) => SearchIndex) | null;
+
+  constructor(b: Bundle, note: string, similar: Similar | null = null, away: Away | null = null, shared: ((b: Bundle) => SearchIndex) | null = null) { this.shared = shared; this.b = b; this.held = [note]; this.similar = similar; this.away = away; }
 
   defs(): ToolDef[] { return withBase(this.similar ? [TOOLS[0]!, FIND_SIMILAR, ...TOOLS.slice(1)] : TOOLS, this.away?.lent().map((l) => l.name) ?? []); }
 
@@ -151,7 +153,7 @@ export class Lookup {
     const query = String(a.query ?? "").trim();
     if (!query) return this.fail(step, "search_notes needs a query.");
     step.query = query;
-    this.index ??= new SearchIndex(this.b);
+    this.index ??= this.shared ? this.shared(this.b) : new SearchIndex(this.b);
     const limit = Math.max(1, Math.min(Number(a.limit) || 8, 15));
     const hits = this.index.search(query, { limit, ...(typeof a.under === "string" && a.under ? { under: a.under.replace(/^\/+|\/+$/g, "") } : {}) });
     step.notes = hits.map((h) => h.concept.id);

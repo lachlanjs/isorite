@@ -28,7 +28,7 @@
 </script>
 
 <div class="find frame" role="search" aria-label="Find a note">
-  <input bind:this={input} type="search" class="field" placeholder="find a note: words, or what it means" autocomplete="off" aria-label="Find a note on the map" value={finder.query} oninput={(e) => finder.ask(e.currentTarget.value)} onkeydown={key} />
+  <input bind:this={input} type="search" class="field" placeholder="Find a note" autocomplete="off" aria-label="Find a note on the map" value={finder.query} oninput={(e) => finder.ask(e.currentTarget.value)} onkeydown={key} />
   {#if rows.length}
     <ul role="listbox" aria-label="Notes found">
       {#each rows as r, i (r.id)}
@@ -38,14 +38,14 @@
             <span class="t">{r.title}</span>
             {#if r.snippet}<span class="s">{r.snippet.replace(/\s+/g, " ")}</span>{/if}
           </button>
-          {#if r.hidden}<button type="button" class="show" aria-label="Show {r.title} again" title="It is hidden from the map: show it again" onclick={() => void show(r.id)}>hidden · show</button>{/if}
+          {#if r.hidden}<button type="button" class="show" aria-label="Show {r.title} again" title="Hidden: show it again" onclick={() => void show(r.id)}>hidden · show</button>{/if}
         </li>
       {/each}
     </ul>
   {:else if finder.query.trim()}
     <p class="none">Nothing found.</p>
   {/if}
-  {#if finder.query.trim() && finder.meaning === "pending"}<p class="none">Search by meaning is still being made; words only for now.</p>{/if}
+  {#if finder.query.trim() && finder.meaning === "pending"}<p class="none">Words only for now: meaning is still being indexed.</p>{/if}
 </div>
 
 <style>
@@ -54,7 +54,7 @@
   ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: grid; gap: 1px; }
   li { display: flex; align-items: center; }
   .row { all: unset; box-sizing: border-box; flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; padding: 5px 6px; cursor: pointer; font: 13px var(--font-ui); color: var(--text); }
-  .row.on { background: var(--ground-3); }
+  .row.on { background: var(--fill-chosen); }
   li.hidden .row { color: var(--text-faint); }
   .t { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .s { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--text-faint); }

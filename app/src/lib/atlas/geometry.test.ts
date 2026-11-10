@@ -54,7 +54,7 @@ describe("routes", () => {
     const open = openAt(L, 1);
     for (const [from, to] of [["basics/b", "basics/a"], ["coding/c", "basics/b"]] as const) {
       const along = litRoutes(L, idx, open, [{ a: at(from), b: at(to), kind: "requires" }]);
-      const against = litRoutes(L, idx, open, [{ a: at(to), b: at(from), kind: "iso" }]);
+      const against = litRoutes(L, idx, open, [{ a: at(to), b: at(from), kind: "agent" }]);
       expect(against.asks).toHaveLength(along.asks.length);
       if (along.fixed.length) expect(against.fixed[0]!.pts).toEqual([...along.fixed[0]!.pts].reverse());
     }

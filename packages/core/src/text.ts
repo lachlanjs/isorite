@@ -128,6 +128,19 @@ export function normpath(p: string): string {
 
 /** SHA-256 as hex, synchronous and dependency-free, so the core runs anywhere: of text (as UTF-8), or of bytes. */
 export function sha256(message: string | Uint8Array): string {
+  return hasher ? hasher(message) : sha256Pure(message);
+}
+
+let hasher: ((message: string | Uint8Array) => string) | null = null;
+
+/** Let the shell supply a faster SHA-256 (Node's `crypto` is about 30 times quicker than the pure version below).
+ *  It must give the same hex digest; pass null to go back to the pure one. The core stays free of `node:`. */
+export function setSha256(fn: ((message: string | Uint8Array) => string) | null): void {
+  hasher = fn;
+}
+
+/** The dependency-free SHA-256 that `sha256` uses unless the shell has set a faster one. */
+export function sha256Pure(message: string | Uint8Array): string {
   const K = new Uint32Array([
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
     0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,

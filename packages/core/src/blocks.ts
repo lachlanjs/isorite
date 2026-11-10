@@ -1,4 +1,4 @@
-// A note's blocks: what a handle in the margin holds, and what Iso's text is
+// A note's blocks: what a handle in the margin holds, and what the agent's text is
 // placed against. A block is a run of lines with a blank line above and below;
 // a fenced code block or a displayed equation is one block even with blank
 // lines inside it. Frontmatter is not a block.

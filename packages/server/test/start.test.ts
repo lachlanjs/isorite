@@ -70,8 +70,8 @@ test.skipIf(process.platform === "win32")("git init that hangs is given up on, a
 test("the commands that start something say so at once, and once only when run again with the proxy on", () => {
   const said: string[] = [];
   const write = (s: string) => { said.push(s); return true; };
-  for (const command of ["serve", "acp", "mcp", "guide"]) expect(starting([command, "notes"], {}, write)).toBe(true);
+  for (const command of ["serve", "mcp", "guide"]) expect(starting([command, "notes"], {}, write)).toBe(true);
   expect(starting(["check", "notes"], {}, write)).toBe(false);
   expect(starting(["mcp"], { ISORITE_STARTING: "1" }, write)).toBe(false);
-  expect(said).toEqual(Array(4).fill("isorite: starting…\n"));
+  expect(said).toEqual(Array(3).fill("isorite: starting…\n"));
 });

@@ -3,6 +3,7 @@
 // given, JSON only), then the engine's own answer. Carried over from rdstudio.
 
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { brotliCompressSync, constants as zc, gzipSync } from "node:zlib";
 import { pictureType } from "@isorite/core";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Hono, type Context } from "hono";
@@ -10,15 +11,12 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { Conflict, EngineError, MAX_FILE_BYTES, MAX_NOTE_BYTES, type Api, type Given as GivenPart } from "@isorite/engine";
 import type { BasesPort } from "./bases.ts";
-import { given as withGiven, givenEmbedded, type AcpFollower, type Rpc } from "./acp.ts";
+import { given as withGiven } from "./given.ts";
 import type { PaneSessions } from "./sessions.ts";
 import { McpEndpoint, agentName, clientName, type Rpc as McpRpc } from "./mcp-http.ts";
 import { VERSION } from "./version.ts";
-import { proposal, writeProposal } from "./connect.ts";
 import type { PiControl } from "./pi/index.ts";
-import { registryAgents, type AgentRunner } from "./agents.ts";
 import { configPath } from "./config.ts";
-import { listAgents } from "./detect.ts";
 import { historyChoice, ownRepoInfo, setHistoryChoice } from "./own-repo.ts";
 
 export const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -35,15 +33,12 @@ export interface ServerOptions {
   allowHosts?: Iterable<string>;
   /** Where the knowledge base is on disk, for an agent's harness to tell its notes from code. */
   notes?: string;
-  /** The agents' sessions, through `isorite acp` (M25): what passed between a front end and its agent, and the pane's
-   *  view of one. */
-  acp?: AcpFollower;
-  /** What serves the pane's sessions (M35), where it is not the ACP follower's: the pages read and ask through this. */
+  /** What serves the pane's sessions: the pages read and ask through this. */
   terminal?: PaneSessions;
   /** The model and keys of the native agent (M36), set from this machine only. */
   pi?: PiControl;
-  /** The agent chosen in the base's settings, started for the pane (M25). */
-  agents?: AgentRunner;
+  /** The tests' scripted model, put in the pane and taken out (ISORITE_SCRIPTED=1 only). */
+  scripted?: { on(): Promise<void>; off(): Promise<void> };
   /** The other bases the server holds (M20), and this one's name among them. */
   bases?: BasesPort;
   base?: string;
@@ -57,6 +52,16 @@ const TYPES: Record<string, string> = {
   ".wasm": "application/wasm", ".map": "application/json", ".txt": "text/plain; charset=utf-8",
 };
 
+/** The bytes as the asker accepts them: brotli, else gzip, else as they are (and which). Quality 4 keeps brotli quick
+ *  enough to do for each reply. */
+function encoded(c: Context, bytes: Buffer, quality = 4): { body: Uint8Array; encoding: string | null } {
+  const accept = c.req.header("accept-encoding") ?? "";
+  if (bytes.length < 1024) return { body: new Uint8Array(bytes), encoding: null };
+  if (/\bbr\b/.test(accept)) return { body: brotliCompressSync(bytes, { params: { [zc.BROTLI_PARAM_QUALITY]: quality } }), encoding: "br" };
+  if (/\bgzip\b/.test(accept)) return { body: gzipSync(bytes), encoding: "gzip" };
+  return { body: new Uint8Array(bytes), encoding: null };
+}
+
 /** What a picture may do when opened on its own: be drawn, and nothing else (no script, no fetch, no form). */
 export const PICTURE_CSP = "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'";
 
@@ -67,8 +72,6 @@ const Given = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("folder"), id: z.string().max(400) }).strict(),
   z.object({ kind: z.literal("passage"), id: z.string().max(400), text: z.string().max(20_000) }).strict(),
 ]);
-const Named = z.object({ proposal: z.string().max(64), region: z.number().int().min(0).max(40).optional() }).strict();
-const Revised = z.object({ proposal: z.string().max(64), text: z.union([z.string(), z.array(z.string()).max(40)]) }).strict();
 const AgentName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/);
 const AgentLook = z.object({ agent: AgentName, session: z.string().min(1).max(200), tool: z.string().max(64), args: z.record(z.string(), z.unknown()), asked: z.string().max(4000).optional() }).strict();
 const AgentEdit = z.union([
@@ -81,8 +84,8 @@ const AgentStatus = z.object({ agent: AgentName, session: z.string().min(1).max(
 /** How often, at most, a page is sent the pane's view while it changes (ms): about two frames. */
 const VIEW_EVERY = 32;
 
-export function createApp({ api, token, loopback, web, allowHosts = [], notes, acp, terminal, bases, base, agents, config, pi }: ServerOptions): Hono {
-  const pane: PaneSessions | undefined = terminal ?? acp;
+export function createApp({ api, token, loopback, web, allowHosts = [], notes, terminal, bases, base, config, pi, scripted }: ServerOptions): Hono {
+  const pane: PaneSessions | undefined = terminal;
   const app = new Hono();
   const allowed = new Set([...allowHosts].map((h) => h.toLowerCase()));
   const reply = (c: Context, status: number, value: unknown) =>
@@ -136,11 +139,22 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
 
   // The token is given to the page that asks from this origin. Another site's page cannot read the reply.
   app.get("/api/session", (c) => answer(c, async () => ({ ...(await api.session()), token })));
-  app.get("/api/notes", (c) => answer(c, () => api.notes()));
+  /** A reply that names the state it was made from (an ETag), answers 304 when the asker has that state, and is
+   *  compressed: the list and the map are the two replies the page asks for after every save. */
+  const tagged = async (c: Context, act: () => Promise<unknown>): Promise<Response> => {
+    let tag: string | null = null;
+    try { tag = api.revision ? `W/"${await api.revision()}"` : null; } catch { /* sent without one */ }
+    if (tag && (c.req.header("if-none-match") ?? "").split(",").some((t) => t.trim() === tag)) return c.body(null, 304, { ETag: tag, "Cache-Control": "no-cache" });
+    const res = await answer(c, act);
+    if (res.status !== 200) return res;
+    const { body, encoding } = encoded(c, Buffer.from(await res.arrayBuffer()));
+    return c.body(body as Uint8Array<ArrayBuffer>, 200, { "Content-Type": "application/json", "Cache-Control": "no-cache", Vary: "Accept-Encoding", ...(tag ? { ETag: tag } : {}), ...(encoding ? { "Content-Encoding": encoding } : {}) });
+  };
+  app.get("/api/notes", (c) => tagged(c, () => api.notes()));
   app.get("/api/note", (c) => answer(c, () => api.readNote(id(c))));
   app.get("/api/journal", (c) => answer(c, () => api.journal(id(c))));
   app.get("/api/version", (c) => answer(c, async () => ({ text: await api.version(id(c), c.req.query("entry") ?? "") })));
-  app.get("/api/map", (c) => answer(c, () => api.map()));
+  app.get("/api/map", (c) => tagged(c, () => api.map()));
   app.get("/api/timeline", (c) => answer(c, () => api.timeline()));
   app.get("/api/search", (c) => answer(c, () => api.search(c.req.query("q") ?? "")));
   app.get("/api/find", (c) => answer(c, () => api.find((c.req.query("q") ?? "").slice(0, 300))));
@@ -219,9 +233,6 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   post("/api/folder/move", z.object({ from: z.string().max(400), to: z.string().max(400) }).strict(), (_c, b) => api.moveFolder(b.from, b.to));
   post("/api/note/delete", z.object({ base: z.string().max(64) }).strict(), (c, b) => api.deleteNote(id(c), b.base));
   post("/api/note/done", z.object({ done: z.boolean(), base: z.string().max(64) }).strict(), (c, b) => api.setDone(id(c), b.done, b.base));
-  post("/api/proposal/keep", Named, (c, b) => api.keep(id(c), b.proposal, b.region));
-  post("/api/proposal/revise", Revised, (c, b) => api.revise(id(c), b.proposal, b.text));
-  post("/api/proposal/discard", Named, (c, b) => api.discard(id(c), b.proposal, b.region));
   // The bases this server holds (M20): listed for the switcher; lent, opened by folder and held open only from this
   // machine.
   if (bases) {
@@ -242,7 +253,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
       if (!isAbsolute(b.path) || !existsSync(b.path) || !statSync(b.path).isDirectory()) throw new EngineError(`no folder at ${b.path}`, 404);
       return bases.open(b.path);
     });
-    // Held open while the stream is: isorite acp and mcp hold a server they started until they are done with it.
+    // Held open while the stream is: isorite mcp holds a server it started until they are done with it.
     app.get("/api/server/hold", (c) => {
       if (!local(c)) return refuse(c, 403, "held only from this machine");
       return streamSSE(c, async (stream) => {
@@ -278,29 +289,6 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
       return ownRepoInfo(join(notes, ".isorite"), b.choice);
     });
   }
-  // The project's MCP config (M25): shown, then written on a yes, from this machine only.
-  if (notes) {
-    app.get("/api/connect", (c) => answer(c, async () => proposal(notes)));
-    post("/api/connect", z.object({ files: z.array(z.string().max(200)).max(10).optional() }).strict(), async (c, b) => {
-      if (!local(c)) throw new EngineError("the project's files are written only from this machine", 403);
-      return { written: writeProposal(notes, b.files) };
-    });
-  }
-
-  // The agent chosen for the pane (M25): from the ACP registry, or a command of your own. Choosing one runs a
-  // program, so it is done from this machine only.
-  if (agents) {
-    app.get("/api/acp/agent", (c) => answer(c, async () => agents.state()));
-    // Which known agents are installed here, and whether their keys are set, by name only; from this machine only.
-    app.get("/api/acp/detected", (c) => answer(c, async () => { if (!local(c)) throw new EngineError("agents are looked for only from this machine", 403); return listAgents(); }));
-    app.get("/api/acp/registry", (c) => answer(c, async () => registryAgents().catch((e: Error) => { throw new EngineError(e.message, 502); })));
-    const Choice = z.union([z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/) }).strict(), z.object({ command: z.string().min(1).max(1000) }).strict(), z.null()]);
-    post("/api/acp/choose", z.object({ choice: Choice }).strict(), async (c, b) => {
-      if (!local(c)) throw new EngineError("an agent is chosen only from this machine", 403);
-      return agents.choose(b.choice);
-    });
-  }
-
   // The native agent's model and keys (M36 step 8). A key is taken here and never given back: the pages are told
   // where it comes from. Only from this machine, and never logged.
   if (pi) {
@@ -317,7 +305,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
     post("/api/pi/check", z.object({ provider: Provider, model: z.string().min(1).max(200) }).strict(), async (c, b) => { mine(c); let r: { ms: number; said: string } | undefined; await invalid(async () => { r = await pi.check(b.provider, b.model); }); return r; });
   }
 
-  // The pane's agent session (M11, on ACP since M25): pages read it, ask in it, stop it and answer what it asks,
+  // The pane's agent session: pages read it, ask in it, stop it and answer what it asks,
   // and never reach the agent themselves.
   if (pane) {
     app.get("/api/terminal", (c) => answer(c, async () => pane.view()));
@@ -328,18 +316,19 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
       const news = broken.length ? `\n\n(isorite: code links in the notes that no longer resolve: ${broken.map((x) => `${x.href} in /${x.id}.md`).join("; ")}.)` : "";
       const title = (id: string) => titles.get(id) ?? id;
       // What was given goes apart, once a session (M25).
-      await pane.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim(), (parts) => givenEmbedded(parts, title, base ?? "notes")).catch(failed);
+      await pane.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim()).catch(failed);
       await pane.prompt(b.asked.trim() + news).catch(failed);
     });
     post("/api/terminal/steer", z.object({ asked: z.string().min(1).max(8000), given: z.array(Given).max(40) }).strict(), async (_c, b) => {
       if (!pane.steer) throw new EngineError("this agent cannot be steered while it works: stop it and ask again", 409);
       const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
       const title = (id: string) => titles.get(id) ?? id;
-      await pane.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim(), (parts) => givenEmbedded(parts, title, base ?? "notes")).catch(failed);
+      await pane.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim()).catch(failed);
       await pane.steer(b.asked.trim()).catch(failed);
     });
     post("/api/terminal/withdraw", z.object({ given: Given }).strict(), async (_c, b) => ({ withdrawn: pane.withdraw ? await pane.withdraw(b.given as GivenPart) : false }));
     post("/api/terminal/stop", z.object({}).strict(), async () => { await pane.interrupt().catch(failed); });
+    if (scripted) post("/api/terminal/scripted", z.object({ on: z.boolean() }).strict(), async (_c, b) => { await (b.on ? scripted.on() : scripted.off()); });
     post("/api/terminal/permission", z.object({ id: z.string().max(200), decision: z.enum(["once", "always", "reject"]) }).strict(), async (_c, b) => { await pane.reply(b.id, b.decision).catch(failed); });
   }
 
@@ -366,38 +355,19 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   });
   app.on(["GET", "DELETE"], "/mcp", (c) => c.body(null, 405, { Allow: "POST" }));
 
-  // Agents' sessions (M25): `isorite acp`, on this machine, tells what passed between its front end and the agent,
-  // and listens for what the pane asks. Asked as the page asks: the Origin and the token.
-  if (acp) {
-    const render = async () => {
-      const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
-      const title = (id: string) => titles.get(id) ?? id;
-      return { text: (parts: GivenPart[]) => withGiven("", parts, title).trim(), embed: (parts: GivenPart[]) => givenEmbedded(parts, title, base ?? "notes") };
-    };
-    const host: PaneSessions = pane ?? acp;
+  // What is in the pane's tray, and the pane's sessions: shown, carried on, forked, removed. Asked as the page asks.
+  if (pane) {
     const refused = (e: Error) => { throw new EngineError(e.message, 409); };
-    // What is in the pane's tray: what the session shown has not been given yet goes before its next prompt.
-    post("/api/acp/give", z.object({ given: z.array(Given).max(40) }).strict(), async (_c, b) => { const r = await render(); await host.give(b.given as GivenPart[], r.text, r.embed).catch(refused); });
-    post("/api/acp/follow", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await host.follow(b.agent, b.session).catch(refused); });
-    post("/api/acp/fork", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { if (!host.fork) throw new EngineError("this agent's sessions cannot be forked here", 409); await host.fork(b.agent, b.session).catch(refused); });
-    post("/api/acp/forget", z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict(), async (_c, b) => { await host.forget(b.agent, b.session).catch(refused); });
-    post("/api/acp/set", z.object({ kind: z.enum(["mode", "config"]), id: z.string().max(100), value: z.string().max(200) }).strict(), async (_c, b) => { try { host.set(b.kind, b.id, b.value); } catch (e) { throw new EngineError((e as Error).message, 409); } });
-    post("/api/acp/new", z.object({ agent: z.string().max(40) }).strict(), async (_c, b) => { await host.fresh(b.agent).catch(refused); });
-    post("/api/acp/list", z.object({}).strict(), async () => { host.refresh(); });
-    post("/api/acp/tap", z.object({ link: z.string().min(1).max(100), messages: z.array(z.object({ way: z.enum(["in", "out", "ours"]), message: z.record(z.string(), z.unknown()) }).strict()).max(1000) }).strict(), async (_c, b) => { acp.tap(b.link, b.messages as { way: "in" | "out" | "ours"; message: Rpc }[]); });
-    app.get("/api/acp/commands", (c) => {
-      if (!local(c) || c.req.header(TOKEN_HEADER) !== token) return refuse(c, 403, "bad token");
-      const link = c.req.query("link") ?? "";
-      if (!/^[\w-]{1,100}$/.test(link)) return refuse(c, 400, "a wrapper names itself");
-      return streamSSE(c, async (stream) => {
-        const hangUp = acp.connect(link, (command) => { void stream.writeSSE({ event: "command", data: JSON.stringify(command) }).catch(() => undefined); }, { pane: c.req.query("pane") === "1" });
-        const beat = setInterval(() => { void stream.write(": still here\n\n"); }, 25_000);
-        await stream.writeSSE({ event: "open", data: "{}" });
-        await new Promise<void>((done) => stream.onAbort(done));
-        clearInterval(beat);
-        hangUp();
-      });
+    const Session = z.object({ agent: z.string().max(40), session: z.string().min(1).max(200) }).strict();
+    post("/api/terminal/give", z.object({ given: z.array(Given).max(40) }).strict(), async (_c, b) => {
+      const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
+      await pane.give(b.given as GivenPart[], (parts) => withGiven("", parts, (id) => titles.get(id) ?? id).trim()).catch(refused);
     });
+    post("/api/terminal/follow", Session, async (_c, b) => { await pane.follow(b.agent, b.session).catch(refused); });
+    post("/api/terminal/fork", Session, async (_c, b) => { if (!pane.fork) throw new EngineError("this agent's sessions cannot be forked here", 409); await pane.fork(b.agent, b.session).catch(refused); });
+    post("/api/terminal/forget", Session, async (_c, b) => { await pane.forget(b.agent, b.session).catch(refused); });
+    post("/api/terminal/new", z.object({ agent: z.string().max(40) }).strict(), async (_c, b) => { await pane.fresh(b.agent).catch(refused); });
+    post("/api/terminal/list", z.object({}).strict(), async () => { pane.refresh(); });
   }
   app.get("/api/agent/records", (c) => answer(c, () => api.agentRecords()));
   app.get("/api/agent/record", (c) => answer(c, async () => {
@@ -453,6 +423,9 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, a
   return app;
 }
 
+const COMPRESSED = /^\.(html|js|css|json|webmanifest|svg|wasm|map|txt)$/;
+const packed = new Map<string, { tag: string; body: Uint8Array }>();
+
 function staticFile(c: Context, web: string): Response {
   let rel: string;
   try { rel = decodeURIComponent(new URL(c.req.url).pathname); } catch { return c.text("Bad request", 400); }
@@ -461,9 +434,22 @@ function staticFile(c: Context, web: string): Response {
   if (file !== root && !file.startsWith(root + sep)) return c.text("Not found", 404);
   if (existsSync(file) && statSync(file).isDirectory()) file = join(file, "index.html");
   if (!existsSync(file)) return c.text("Not found", 404);
-  // Built files carry a hash in their names and never change; the page itself is asked for again each time.
-  const cache = rel.includes("/_app/immutable/") ? "public, max-age=31536000, immutable" : "no-cache";
-  return c.body(new Uint8Array(readFileSync(file)), 200, {
-    "Content-Type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream", "Cache-Control": cache, "X-Content-Type-Options": "nosniff",
-  });
+  // Built files carry a hash in their names and never change, nor do the fonts; the page itself is asked for again each
+  // time, but answered 304 while it is as it was.
+  const forever = rel.includes("/_app/immutable/") || rel.startsWith("/fonts/");
+  const stat = statSync(file), tag = `"${stat.size.toString(36)}-${Math.floor(stat.mtimeMs).toString(36)}"`;
+  const headers = { "Cache-Control": forever ? "public, max-age=31536000, immutable" : "no-cache", ETag: tag, "X-Content-Type-Options": "nosniff", Vary: "Accept-Encoding" };
+  if ((c.req.header("if-none-match") ?? "").split(",").some((t) => t.trim() === tag)) return c.body(null, 304, headers);
+  const type = TYPES[extname(file).toLowerCase()] ?? "application/octet-stream";
+  if (!COMPRESSED.test(extname(file).toLowerCase())) return c.body(new Uint8Array(readFileSync(file)), 200, { ...headers, "Content-Type": type });
+  // Text is sent compressed, each file compressed once (at its best) while it is as it is.
+  const accept = c.req.header("accept-encoding") ?? "", how = /\bbr\b/.test(accept) ? "br" : /\bgzip\b/.test(accept) ? "gzip" : null;
+  if (!how) return c.body(new Uint8Array(readFileSync(file)), 200, { ...headers, "Content-Type": type });
+  const key = `${how} ${file}`;
+  let kept = packed.get(key);
+  if (!kept || kept.tag !== tag) {
+    const raw = readFileSync(file);
+    packed.set(key, (kept = { tag, body: how === "br" ? brotliCompressSync(raw) : gzipSync(raw, { level: 9 }) }));
+  }
+  return c.body(kept.body as Uint8Array<ArrayBuffer>, 200, { ...headers, "Content-Type": type, "Content-Encoding": how });
 }

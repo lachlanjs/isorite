@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A conversation's crystal (M24, I): grown outward segment by segment, in gold, while Iso works in it; at rest, it
+  // A conversation's crystal (M24, I): grown outward segment by segment, in gold, while the agent works in it; at rest, it
   // marks the conversation. Grown in whole frames (24 a second, as the lustre is), it stands a moment when whole and
   // grows again from its centre, for as long as the work goes on.
   import { CRYSTALS, crystalOf, lines } from "$lib/crystal.ts";

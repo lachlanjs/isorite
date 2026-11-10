@@ -1,5 +1,5 @@
-// The Iso pane's routes serve any host of sessions (M35), not only the ACP follower: a host that is not ACP at all,
-// held to the same interface, is asked through the pages' own routes and told to their event stream.
+// The Agent pane's routes serve any host of sessions held to the PaneSessions interface: it is asked through the
+// pages' own routes and told to their event stream.
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
@@ -35,7 +35,6 @@ class Fake implements PaneSessions {
   async reply(id: string, decision: string) { this.calls.push(`reply:${id}:${decision}`); }
   async follow(agent: string, session: string) { this.calls.push(`follow:${agent}:${session}`); }
   async fresh(agent: string) { this.calls.push(`fresh:${agent}`); }
-  set(kind: string, id: string, value: string) { this.calls.push(`set:${kind}:${id}:${value}`); }
   async forget(agent: string, session: string) { this.calls.push(`forget:${agent}:${session}`); }
   refresh() { this.calls.push("refresh"); }
 }
@@ -55,7 +54,7 @@ afterAll(() => { server.close(); rmSync(root, { recursive: true, force: true });
 
 const post = (path: string, body: unknown) => fetch(url + path, { method: "POST", headers: { Origin: url, "Content-Type": "application/json", [TOKEN_HEADER]: TOKEN }, body: JSON.stringify(body) });
 
-test("the pane reads, asks, gives, stops and answers through a host that is not ACP", async () => {
+test("the pane reads, asks, gives, stops and answers through its host", async () => {
   expect(await (await fetch(url + "/api/terminal")).json()).toMatchObject({ connected: true, agent: "Scripted", session: "s1" });
   expect((await post("/api/terminal/prompt", { asked: "What is entropy?", given: [{ kind: "passage", id: "basics/entropy", text: "The average surprise." }] })).status).toBe(200);
   expect(host.calls[0]).toContain("give:");
@@ -65,6 +64,16 @@ test("the pane reads, asks, gives, stops and answers through a host that is not 
   expect((await post("/api/terminal/stop", {})).status).toBe(200);
   expect((await post("/api/terminal/permission", { id: "p1", decision: "once" })).status).toBe(200);
   expect(host.calls.slice(2)).toEqual(["interrupt", "reply:p1:once"]);
+});
+
+test("the tray, a new session, one followed and one forgotten reach the host through the terminal routes", async () => {
+  host.calls.length = 0;
+  expect((await post("/api/terminal/give", { given: [{ kind: "note", id: "basics/entropy" }] })).status).toBe(200);
+  expect((await post("/api/terminal/new", { agent: "scripted" })).status).toBe(200);
+  expect((await post("/api/terminal/follow", { agent: "scripted", session: "s2" })).status).toBe(200);
+  expect((await post("/api/terminal/forget", { agent: "scripted", session: "s2" })).status).toBe(200);
+  expect((await post("/api/terminal/fork", { agent: "scripted", session: "s2" })).status).toBe(409);
+  expect(host.calls).toEqual(["give:From my knowledge base (read them with read_note, or outline_note first):\n- Entropy (basics/entropy)", "fresh:scripted", "follow:scripted:s2", "forget:scripted:s2"]);
 });
 
 test("the pane's view reaches the page's event stream from the host, as it changes", async () => {

@@ -1,19 +1,17 @@
 import { expect, test } from "vitest";
-import { authors, change, insertAt, stamp, wordAuthors, type Entry, type Insert, type Stamp } from "../src/index.ts";
+import { authors, change, stamp, wordAuthors, type Entry, type Stamp } from "../src/index.ts";
 
 let clock = Date.parse("2026-10-18T09:00:00Z");
 const at = (who: string): Stamp => stamp(who, "laptop1", null, (clock += 1000));
 
-test("each line is whoever last wrote it; text kept from a proposal is its proposer's", () => {
+test("each line is whoever last wrote it", () => {
   const entries: Entry[] = [];
   const write = (text: string, who: string, why: "start" | "edit" | "keep" | "external", extra = {}) => { const e = change(entries, text, at(who), why, extra); if (e) entries.push(e); };
   const v1 = "# Loop\n\nGuess the self-energy.\n";
   write(v1, "external", "external");
   const v2 = "# Loop\n\nGuess the self-energy, say zero.\n";
   write(v2, "you", "edit");
-  const p: Insert = { ...at("agent:opencode"), kind: "proposal", asked: "say how to mix", ...insertAt(v2, 3), text: "Mix half the old one." };
-  entries.push(p);
-  write(v2 + "\nMix half the old one.\n", "you", "keep", { proposal: p.id });
+  write(v2 + "\nMix half the old one.\n", "agent:opencode", "edit");
   const text = (v2 + "\nMix half the old one.\n").split("\n"), owners = authors(entries)!;
   expect(owners).toHaveLength(text.length);
   // Blank lines go with whichever side the difference puts them; the lines with text are what is asked.
@@ -28,7 +26,7 @@ test("nothing is said of a journal whose chain is broken, or of none", () => {
   expect(authors([e, { ...change([e], "b\n", at("you"), "edit")!, before: "0000000000000000" }])).toBeNull();
 });
 
-test("word by word: Iso's words in a line it changed are its own, the words it kept stay yours, and a word retyped is yours again", () => {
+test("word by word: the agent's words in a line it changed are its own, the words it kept stay yours, and a word retyped is yours again", () => {
   const entries: Entry[] = [];
   const write = (text: string, who: string) => { const e = change(entries, text, at(who), entries.length ? "edit" : "start"); if (e) entries.push(e); };
   write("# Cost\n\nA step costs N log N.\nThe end.\n", "you");
@@ -49,7 +47,7 @@ test("word by word: Iso's words in a line it changed are its own, the words it k
   expect(wordAuthors([])).toEqual([]);
 });
 
-test("a passage Iso rewrote is its own, though a few of its words were in what it replaced", () => {
+test("a passage the agent rewrote is its own, though a few of its words were in what it replaced", () => {
   const entries: Entry[] = [];
   const write = (text: string, who: string) => { const e = change(entries, text, at(who), entries.length ? "edit" : "start"); if (e) entries.push(e); };
   write("TODO: how big an error does θ give, and why does the cost grow only as N log N?\n", "you");

@@ -1,5 +1,5 @@
 /* isorite: the one style. Two grounds (lapis, the dark one, and quartz), and four accents: lattice blue for
-   structure and for you, growth gold for Iso, malachite for what is done, rose for what is open or failed. Nothing
+   structure and for you, growth gold for the agent, malachite for what is done, rose for what is open or failed. Nothing
    else has a hue. Nothing is rounded and nothing casts a shadow. */
 
 @font-face { font-family: "Lyth Mono"; font-style: normal; font-weight: 100 550; font-display: swap; src: url(/fonts/lyth-mono-latin-regular.woff2) format("woff2"); }
@@ -23,9 +23,20 @@
 /* ------------------------------------------------------------ tokens */
 
 /* Scrollbars: thin, no arrows, a thumb in the line's colour on no track, so they sit in the page as its rules do
-   (the browser's own is a wide grey bar with arrow buttons). Lit when the thing scrolled is pointed at. */
-* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--line-strong) 45%, transparent) transparent; }
-*:hover { scrollbar-color: color-mix(in srgb, var(--line-strong) 80%, transparent) transparent; }
+   (the browser's own is a wide grey bar with arrow buttons). Lit when the thing scrolled is pointed at.
+   Chromium ignores its ::-webkit-scrollbar rules wherever the standard properties are set, and with them alone it still
+   draws arrow buttons on Windows (screenshots/scrollbar.png): so where the pseudo-elements are known they draw the bar,
+   and only elsewhere (Firefox) the standard properties do. */
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--line-strong) 45%, transparent) transparent; }
+  *:hover { scrollbar-color: color-mix(in srgb, var(--line-strong) 80%, transparent) transparent; }
+}
+::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--line-strong) 40%, transparent); border: 3px solid transparent; border-radius: 5px; background-clip: padding-box; min-height: 32px; }
+:hover::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--line-strong) 70%, transparent); }
+::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active { background-color: var(--line-strong); }
 
 :root {
   color-scheme: dark;
@@ -55,9 +66,34 @@
 
   /* Light on a face (the lustre, M24): its colour, and how strong it is on this ground. */
   --sheen: 255 248 225; --sheen-k: 1;
-  /* Motion (M24): acknowledge, change, a result worth noticing; ease-out to arrive, ease-in to leave. */
-  --t-ack: 120ms; --t-change: 260ms; --t-result: 600ms;
-  --ease-out: cubic-bezier(.2, .7, .2, 1); --ease-in: cubic-bezier(.6, 0, .8, .3);
+  /* Motion (M24; design audit 2026-11): one scale. Acknowledge (press, hover, focus), change (open, close, swap), a
+     result worth noticing; ease-out to arrive, ease-in to leave. The --t-* names are the same three, kept. */
+  --dur-1: 120ms; --dur-2: 260ms; --dur-3: 600ms;
+  --t-ack: var(--dur-1); --t-change: var(--dur-2); --t-result: var(--dur-3);
+  --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-in: cubic-bezier(.6, 0, .8, .3);
+  /* A list arriving: each item a little after the one before, never all of it later than --stagger-max. */
+  --stagger: 24ms; --stagger-max: 160ms;
+
+  /* Text: three greys with jobs (--text to read, --text-soft secondary, --text-faint for meta only: times, counts,
+     paths, never a sentence), and a fourth for what is unavailable or a placeholder. */
+  --text-mute: #6A7A92;
+  /* Surfaces: tone, not lines, separates things. The page, what is raised a step from it, what floats over it. */
+  --surface: var(--ground-0); --surface-raised: var(--ground-1); --surface-float: var(--ground-2);
+  /* The few rules that stay (pane edges, a box you type in) are hairlines, fainter than --line. */
+  --line-faint: color-mix(in srgb, var(--line) 60%, transparent);
+  /* States as ink mixed into the ground, so they follow both grounds: pointed at, chosen (quiet). */
+  --fill-hover: color-mix(in srgb, var(--text) 5%, transparent);
+  --fill-chosen: color-mix(in srgb, var(--text) 9%, transparent);
+  /* A coloured thing that is on: its colour at this strength over the ground (.is-on). */
+  --tint: 18%;
+  /* Type: one scale for the interface (prose keeps --text-size); weight and brightness do the hierarchy, not size. */
+  --fs-meta: 11px; --fs-small: 12px; --fs-ui: 13px; --fs-lead: 15px; --fs-title: 34px;
+  --fw-regular: 400; --fw-medium: 500; --fw-strong: 650;
+  --lh-ui: 1.45;
+  /* Rows and controls: one height each. */
+  --row: 32px; --row-dense: 26px; --control: 28px;
+  /* The focused pane: the one lit edge. */
+  --pane-lit: color-mix(in srgb, var(--lattice) 70%, transparent);
   /* What floats over the page (a menu, a button over a scrolling session) is lifted; nothing in the flow is. */
   --lift: 0 8px 24px rgb(0 0 0 / .38), 0 2px 6px rgb(0 0 0 / .25);
   --lift-drop: drop-shadow(0 8px 18px rgb(0 0 0 / .4)) drop-shadow(0 2px 4px rgb(0 0 0 / .25));
@@ -91,6 +127,7 @@
   --requires: #6A3FC0; --builds: #B5521B;
   --soft: 10%;
   --sheen: 14 23 38; --sheen-k: .55;
+  --text-mute: #8A93A0; --tint: 12%;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-ground="lapis"]) {
@@ -107,6 +144,7 @@
     --requires: #6A3FC0; --builds: #B5521B;
     --soft: 10%;
     --sheen: 14 23 38; --sheen-k: .55;
+    --text-mute: #8A93A0; --tint: 12%;
   }
 }
 
@@ -133,7 +171,6 @@ button { cursor: pointer; }
     linear-gradient(var(--b), var(--b)) bottom right / var(--l) var(--w) no-repeat, linear-gradient(var(--b), var(--b)) bottom right / var(--w) var(--l) no-repeat;
 }
 /* Chosen (P): solid, in its own colour (--c) or the lattice, cut at two corners as a chip is. Open: a bar. */
-:root[data-face="sans"] { --font-text: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; }
 :root { --chosen-cut: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); }
 /* Where the browser can draw curves in a clip, every vertex is eased a little: the cuts by --round-cut, the square
    corners by --round. (A cut vertex is eased along the cut by r times cos 45.) */
@@ -179,13 +216,52 @@ canvas.lustre { position: fixed; z-index: 999; pointer-events: none; }
    transform of its own. Reduced motion: it is simply there. */
 @keyframes appear { from { opacity: 0; translate: 0 4px; } }
 @media (prefers-reduced-motion: reduce) { @keyframes appear { from { opacity: 1; } } }
+/* An error or a status said comes in as other things that appear do, rather than blinking on. Zero specificity, so
+   anything with an animation of its own keeps it. */
+:where([role="alert"], [role="status"]) { animation: appear var(--dur-1) var(--ease-out); }
+/* What folds open (a <details>) grows to its height, then shows (Chromium's ::details-content; elsewhere it opens at once). */
+details { interpolate-size: allow-keywords; }
+@supports selector(::details-content) {
+  details::details-content { block-size: 0; overflow: clip; transition: block-size var(--dur-2) var(--ease-out), content-visibility var(--dur-2) allow-discrete; }
+  details[open]::details-content { block-size: auto; }
+}
+/* A note opened from the list or a link: its title moves from where it was to the heading, and the rest crossfades
+   (motion.ts, with the View Transitions API where there is one). */
+::view-transition-group(*) { animation-duration: var(--dur-2); animation-timing-function: var(--ease-out); }
+::view-transition-old(root) { animation-duration: var(--dur-1); animation-timing-function: var(--ease-in); }
+::view-transition-new(root) { animation-duration: var(--dur-2); animation-timing-function: var(--ease-out); }
+::view-transition { pointer-events: none; } /* never in the way of a click while it plays */
+::view-transition-old(note-title), ::view-transition-new(note-title) { height: 100%; width: auto; }
+:root[data-carrying] .note .title { view-transition-name: note-title; }
+:root[data-carrying] .note.ready { animation: none; }
+/* Reduced motion: the information stays, the movement goes. Every transition and animation ends at once (so what waits
+   for its end still hears of it), the durations are nothing for what reads them, and nothing scrolls smoothly. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-1: 0ms; --dur-2: 0ms; --dur-3: 0ms; --stagger: 0ms; --stagger-max: 0ms; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
 ::selection { background: color-mix(in srgb, var(--lattice) 40%, transparent); }
 .soft { color: var(--text-soft); }
 .faint { color: var(--text-faint); }
 .grow { flex: 1 1 0; min-width: 0; }
 .pixel { font-family: var(--font-pixel); font-weight: 400; line-height: 1; }
 .serif { font-family: var(--font-text); }
-.label { font-size: 12px; color: var(--text-faint); }
+/* A label names a thing; it is not a sentence. Weight and brightness set it apart, not size. */
+.label { font: var(--fw-medium) var(--fs-meta)/1.4 var(--font-ui); letter-spacing: .04em; color: var(--text-faint); }
+/* A coloured thing that is on, quietly: its colour as a tint, and its colour on what it says (design audit, P0). */
+.is-on { background: color-mix(in srgb, var(--c, var(--lattice)) var(--tint), transparent); color: var(--c, var(--lattice)); }
+/* A segmented control: modes of one thing as one control, the chosen one a quiet filled chip, cut as a chosen thing is. */
+.segs { display: inline-flex; align-items: center; gap: 2px; padding: 2px; background: var(--fill-hover); border-radius: var(--round); flex: none; }
+.segs > button { height: 24px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--text-faint); font: var(--fs-small)/1 var(--font-ui); white-space: nowrap; cursor: pointer;
+  clip-path: var(--chosen-cut); transition: color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out); }
+.segs > button:hover:not(:disabled) { color: var(--text); }
+.segs > button:disabled { color: var(--text-mute); cursor: default; }
+.segs > button:is([aria-pressed="true"], [aria-checked="true"]) { background: var(--fill-chosen); color: var(--text); }
+/* Where a row says what its control chooses: the name at the left, the control after it. */
+.setting { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); align-items: center; gap: var(--space-2) var(--space-3); }
+.setting > .label { margin: 0; }
+.setting > .segs { justify-self: start; }
 .hidden-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* ------------------------------------------------------------ the shell */
@@ -195,7 +271,6 @@ canvas.lustre { position: fixed; z-index: 999; pointer-events: none; }
 
 .logo { display: block; flex: none; overflow: visible; }
 .logo path { fill: none; stroke: var(--text); stroke-width: .7; stroke-linecap: round; stroke-linejoin: round; }
-.logo .iso { fill: var(--growth); stroke: none; }
 .logo .right { fill: var(--malachite); stroke: none; }
 
 /* ------------------------------------------------------------ parts */
@@ -206,7 +281,7 @@ canvas.lustre { position: fixed; z-index: 999; pointer-events: none; }
 
 /* A filled part with no edge: cut at the top left and the bottom right. */
 .btn, .chip {
-  --cut: 6px; --c: calc(var(--cut) * .7071); --fill: var(--ground-3);
+  --cut: 6px; --c: calc(var(--cut) * .7071); --fill: color-mix(in srgb, var(--text) 7%, transparent);
   border: 0; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; color: var(--text);
   background:
     linear-gradient(var(--fill), var(--fill)) center / calc(100% - 2 * var(--cut)) 100% no-repeat,
@@ -233,18 +308,15 @@ canvas.lustre { position: fixed; z-index: 999; pointer-events: none; }
   }
 }
 a.btn:hover { text-decoration: none; color: var(--text); }
-.btn:hover:not(:disabled) { --fill: var(--line); }
+.btn:hover:not(:disabled) { --fill: color-mix(in srgb, var(--text) 11%, transparent); }
 .btn:disabled { color: var(--text-faint); cursor: default; }
 .btn.tall { height: 44px; padding: 0 18px; }
 .btn.primary { --fill: var(--lattice); color: var(--ground-0); font-weight: 700; }
 .btn.primary:hover:not(:disabled) { --fill: var(--lattice-deep); }
 .btn.danger { --fill: var(--rose); color: var(--ground-0); font-weight: 700; }
-/* Keep, edit, remove: the same three fills on both grounds, with the lapis ground's ink. */
-.btn.keep, .btn.edit, .btn.remove { color: #07101C; font-weight: 700; }
-.btn.keep { --fill: #7DDDB5; } .btn.edit { --fill: #F2C968; } .btn.remove { --fill: #F7A8BA; }
 .btn.quiet { --fill: transparent; color: var(--text-soft); padding: 0 8px; }
-.btn.quiet:hover:not(:disabled) { --fill: var(--ground-2); color: var(--text); }
-.chip { --cut: 4px; height: 22px; padding: 0 8px; font-size: 12px; color: var(--text-soft); }
+.btn.quiet:hover:not(:disabled) { --fill: var(--fill-hover); color: var(--text); }
+.chip { --fill: var(--ground-3); --cut: 4px; height: 22px; padding: 0 8px; font-size: 12px; color: var(--text-soft); }
 .chip.lattice { --fill: var(--lattice-soft); color: var(--lattice); }
 .chip.growth { --fill: var(--growth-soft); color: var(--growth); }
 .chip.malachite { --fill: var(--malachite-soft); color: var(--malachite); }
@@ -287,7 +359,7 @@ a.btn:hover { text-decoration: none; color: var(--text); }
 .field::placeholder { color: var(--text-faint); }
 .field:focus-visible { outline: none; border-bottom-color: var(--lattice); box-shadow: 0 1px 0 var(--lattice); }
 
-/* Marks: a square is you, a diamond is Iso. */
+/* Marks: a square is you, a diamond is the agent. */
 .sq { display: inline-block; width: 8px; height: 8px; background: var(--lattice); flex: none; }
 .sq.empty { background: transparent; border: 1px solid var(--line-strong); }
 .dia { display: inline-block; width: 8px; height: 8px; background: var(--growth); transform: rotate(45deg); flex: none; }
@@ -310,9 +382,8 @@ a.btn:hover { text-decoration: none; color: var(--text); }
 .prose section.eqno > eqn { flex: 1; }
 /* ------------------------------------------------------------ code (M19: code.ts) */
 
-/* In colour from the four accents, or in ink as on the boards (the Note pane's setting, data-code="ink"). */
+/* Code in colour from the four accents. */
 :root { --tok-k: var(--lattice); --tok-k-weight: 400; --tok-s: var(--malachite); --tok-n: var(--growth); --tok-t: var(--requires); --tok-c: var(--text-faint); }
-:root[data-code="ink"] { --tok-k: var(--text); --tok-k-weight: 700; --tok-s: var(--text-soft); --tok-n: var(--text); --tok-t: var(--text); }
 .tok-k { color: var(--tok-k); font-weight: var(--tok-k-weight); }
 .tok-s { color: var(--tok-s); }
 .tok-n { color: var(--tok-n); }

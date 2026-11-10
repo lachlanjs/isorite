@@ -101,12 +101,26 @@ export function highwayTrunks(layout, cells = buildCells(layout), o = {}) {
   // cell another highway already takes costs less.
   const dist = new Float32Array(N + 1), prev = new Int32Array(N + 1), dirIn = new Uint8Array(N + 1), seen = new Uint32Array(N + 1);
   let gen = 0;
-  const heap = [];
-  const push = (f, s) => { heap.push([f, s]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= f) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
-  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { let m = 2 * i + 1; if (m >= heap.length) break; if (m + 1 < heap.length && heap[m + 1][0] < heap[m][0]) m++; if (heap[m][0] >= heap[i][0]) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+  // A binary heap of [estimate, cell] in typed arrays (as the feeders' below): the same order as one of pairs, without
+  // a pair made for every step (on a base of 225 notes, a third of the time went to making and collecting them).
+  let hf = new Float64Array(4096), hs = new Int32Array(4096), hn = 0, topF = 0, topS = 0;
+  const push = (f, s) => {
+    if (hn === hf.length) { const a = new Float64Array(hn * 2), b = new Int32Array(hn * 2); a.set(hf); b.set(hs); hf = a; hs = b; }
+    let i = hn++;
+    while (i > 0) { const p = (i - 1) >> 1; if (hf[p] <= f) break; hf[i] = hf[p]; hs[i] = hs[p]; i = p; }
+    hf[i] = f; hs[i] = s;
+  };
+  const pop = () => {
+    topF = hf[0]; topS = hs[0];
+    const f = hf[--hn], s = hs[hn];
+    if (!hn) return;
+    let i = 0;
+    for (;;) { let m = 2 * i + 1; if (m >= hn) break; if (m + 1 < hn && hf[m + 1] < hf[m]) m++; if (hf[m] >= f) break; hf[i] = hf[m]; hs[i] = hs[m]; i = m; }
+    hf[i] = f; hs[i] = s;
+  };
   const turn = (d, k) => { if (d === NONE || d === k) return 0; const t = Math.min((k - d + 8) % 8, (d - k + 8) % 8); return t === 1 ? turn45 : turn90 * (t >= 3 ? 2 : 1); };
   function searched(A, B, region, pa, pb) {
-    gen++; heap.length = 0;
+    gen++; hn = 0;
     const FIN = N, ends = new Map(); // a cell beside A -> [the side's inward direction, its cost, its wall point]
     const through = (pin, k, t) => !pin || (pin.side === k && pin.t === t);
     sides(A).forEach((s, k) => s.cells.forEach(([x, y]) => {
@@ -131,8 +145,9 @@ export function highwayTrunks(layout, cells = buildCells(layout), o = {}) {
       start(y * W + x, centre * Math.abs(t + 0.5 - s.mid), s.dir, s.wall(t));
     }));
     if (!pb) for (const c of corners(B, ch)) if (free(...c.out, region)) start(c.out[1] * W + c.out[0], centre * Math.min(B.w, B.h) / 2, c.dir, c.pt);
-    while (heap.length) {
-      const [f, s] = pop();
+    while (hn) {
+      pop();
+      const f = topF, s = topS;
       if (s === FIN) break;
       const g = dist[s];
       if (f - guess(s % W, (s / W) | 0) > g + 1e-4) continue; // stale
@@ -414,7 +429,14 @@ function sides(n) {
 
 // Each free cell's distance (8-way, to `reach`) from the nearest cell it cannot share a way with: a note, or
 // ground of another folder (a wall).
-function clearance({ W, H, blocked, owner }, reach) {
+const cleared = new WeakMap(); // cells -> reach -> clearance: the highways and the feeders over one layout's cells ask alike
+function clearance(cells, reach) {
+  let byReach = cleared.get(cells);
+  if (!byReach) cleared.set(cells, (byReach = new Map()));
+  if (!byReach.has(reach)) byReach.set(reach, clearanceOf(cells, reach));
+  return byReach.get(reach);
+}
+function clearanceOf({ W, H, blocked, owner }, reach) {
   const N = W * H, d = new Uint8Array(N).fill(reach), queue = new Int32Array(N);
   let head = 0, tail = 0;
   for (let c = 0; c < N; c++) {

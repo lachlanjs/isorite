@@ -1,7 +1,7 @@
-// Iso's crystals (M24, I and K): a hundred, each an L-system. A rule for one arm, mirror-symmetric about the arm's
+// The agent's crystals (M24, I and K): a hundred, each an L-system. A rule for one arm, mirror-symmetric about the arm's
 // own axis, turned at multiples of 180°/n so its branches fall on the crystal's own directions, and drawn n times
 // round the centre. A conversation's crystal is chosen by its id, so it is the same wherever it is drawn: it grows
-// while Iso works in it, and marks it in the drawer of past conversations.
+// while the agent works in it, and marks it in the drawer of past conversations.
 
 /** One segment of an arm, in steps from the centre: [x1, y1, x2, y2, how far out]. */
 export type Segment = [number, number, number, number, number];

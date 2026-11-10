@@ -1,4 +1,4 @@
-// A pi agent serving the Iso pane (M35): its turn is folded into the pane's view, its look-ups are the base's own, and
+// A pi agent serving the Agent pane (M35): its turn is folded into the pane's view, its look-ups are the base's own, and
 // it asks through the pane before a tool it was told to ask about. The model is pi's faux provider, scripted: no network.
 
 import { mkdtempSync, rmSync } from "node:fs";

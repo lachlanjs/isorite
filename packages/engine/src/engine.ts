@@ -3,7 +3,7 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  AGENTS_FILE, STRENGTH, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, HIDDEN_FILE, GITATTRIBUTES, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, pending, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, written, type Entry, type FileEntry, type MapModel, type Proposal, type SessionMoment, type Stamp,
+  AGENTS_FILE, STRENGTH, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, HIDDEN_FILE, GITATTRIBUTES, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, IndexCache, type ParseCache, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, type Entry, type FileEntry, type MapModel, type SessionMoment, type Stamp,
 } from "@isorite/core";
 import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type FindResult, type FindHit } from "./api.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Similar, type ToolDef } from "./lookup.ts";
@@ -59,7 +59,7 @@ export interface Elsewhere {
 /** What is said before an answer from another base, so its ids are not taken for this one's. */
 const fromBase = (base: string, text: string): string => `(From the base ${base}: name its notes ${base}:<id>, or give base "${base}".)\n${text}`;
 
-/** In the knowledge base itself: not one of isorite's own files, whose ids began "@" (Iso's drafts, before M25). */
+/** In the knowledge base itself: not one of isorite's own files, whose ids began "@" (the agent's drafts, before M25). */
 const inBase = (id: string): boolean => !id.startsWith("@");
 
 const BAD_PART = /^\.|[\0\\:*?"<>|]|^\s|\s$/;
@@ -148,6 +148,14 @@ export class Engine implements Api {
   private files = new Map<string, FileEntry>();
   private built: Bundle | null = null;
   private index: SearchIndex | null = null;
+  /** What was read of each note and indexed of it, kept between builds: a save re-reads only the note that changed. */
+  private readonly parsed: ParseCache = new Map();
+  private readonly indexed = new IndexCache();
+  /** Counts the changes to the base, so that what is worked out from the bundle is worked out once per change. */
+  private rev = 0;
+  private brokenRev = 0;
+  private brokenKey = "";
+  private readonly memoised = new Map<string, { rev: string; value: Promise<unknown> }>();
   private readonly listeners = new Set<(event: EngineEvent) => void>();
   /** The newest entry made anywhere among isorite's files: it decides the session. Undefined until looked for. */
   private last: Pick<Stamp, "at" | "session"> | null | undefined;
@@ -164,7 +172,7 @@ export class Engine implements Api {
     this.meaning = opts.embedder && opts.cache ? new Meaning(opts.embedder, opts.cache.files, opts.cache.name) : null;
   }
 
-  /** The search by meaning Iso is offered as a tool, over the base as it is now. */
+  /** The search by meaning the agent is offered as a tool, over the base as it is now. */
   private get similar(): Similar | null {
     const meaning = this.meaning;
     if (!meaning) return this.opts.similar ?? null;
@@ -186,12 +194,43 @@ export class Engine implements Api {
   /** Read the knowledge base again from its files. */
   async reload(): Promise<void> {
     this.files = new Map((await walk(this.opts.notes, "")).map((f) => [f.path, f]));
-    this.built = this.index = null;
+    this.changed();
   }
 
   /** The knowledge base as the core reads it. */
   get bundle(): Bundle {
-    return (this.built ??= Bundle.fromFiles(this.files.values()));
+    return (this.built ??= Bundle.fromFiles(this.files.values(), this.parsed));
+  }
+
+  /** The base's files or notes changed: what is built from them is built again when next asked. */
+  private changed(): void {
+    this.built = this.index = null;
+    this.rev++;
+  }
+
+  /** The search index of a bundle: the engine's own when it is the current one (so it is built once), else a fresh one. */
+  private indexFor(b: Bundle): SearchIndex {
+    if (b !== this.built) return new SearchIndex(b);
+    return (this.index ??= new SearchIndex(b, this.indexed));
+  }
+
+  /** Names the state `notes()` and `map()` answer from: it differs whenever they could answer differently (a change
+   *  to the base, or a code link found broken or mended). For an ETag. */
+  async revision(): Promise<string> {
+    const broken = await this.brokenCode();
+    const key = JSON.stringify([...broken]);
+    if (key !== this.brokenKey) { this.brokenKey = key; this.brokenRev++; }
+    return `${this.rev}.${this.brokenRev}`;
+  }
+
+  /** `make`'s answer for this revision, worked out once however many ask. */
+  private async once<T>(name: string, make: () => Promise<T>): Promise<T> {
+    const rev = await this.revision(), have = this.memoised.get(name);
+    if (have && have.rev === rev) return have.value as Promise<T>;
+    const value = make();
+    this.memoised.set(name, { rev, value });
+    value.catch(() => { if (this.memoised.get(name)?.value === value) this.memoised.delete(name); });
+    return value;
   }
 
   // ------------------------------------------------------------ reading
@@ -200,7 +239,9 @@ export class Engine implements Api {
     return { name: this.opts.name, device: this.opts.device };
   }
 
-  async notes(): Promise<Listing> {
+  notes(): Promise<Listing> { return this.once("notes", () => this.listing()); }
+
+  private async listing(): Promise<Listing> {
     const broken = await this.brokenCode(), conflicted = this.conflicted();
     const notes = [...this.bundle.concepts.values()].map((c) => ({ id: c.id, title: c.title, description: c.description, type: c.type, dir: c.directory, ...(c.kind === "note" ? {} : { kind: c.kind, attached: c.attached }), ...(c.done ? { done: c.done } : {}), ...(broken.has(c.id) ? { broken: broken.get(c.id) } : {}), ...(conflicted.has(c.id) ? { conflicted: true as const } : {}) }));
     notes.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -226,7 +267,9 @@ export class Engine implements Api {
   }
 
   /** The base as the Atlas draws it: the model the layout takes, and what each block says. */
-  async map(): Promise<MapReport> {
+  map(): Promise<MapReport> { return this.once("map", () => this.drawMap()); }
+
+  private async drawMap(): Promise<MapReport> {
     const notes: MapReport["notes"] = {}, broken = await this.brokenCode(), conflicted = this.conflicted();
     for (const c of this.bundle.concepts.values()) {
       const bad = broken.get(c.id) ?? [];
@@ -369,8 +412,7 @@ export class Engine implements Api {
   }
 
   async search(query: string): Promise<SearchHit[]> {
-    this.index ??= new SearchIndex(this.bundle);
-    return this.index.search(query, { limit: 30 }).map((h) => ({ id: h.concept.id, title: h.concept.title, snippet: h.snippet }));
+    return this.indexFor(this.bundle).search(query, { limit: 30 }).map((h) => ({ id: h.concept.id, title: h.concept.title, snippet: h.snippet }));
   }
 
   async find(query: string): Promise<FindResult> {
@@ -459,8 +501,8 @@ export class Engine implements Api {
   }
 
   async agentWrite({ agent, session, note, asked, edit }: AgentChange): Promise<{ text: string }> {
-    // As Iso's Write mode writes (M10): at once, entered in the note's journal under the agent's name, its words
-    // marked in the note's Iso lens, and undone from the browser (agreed for M11, Q20).
+    // As the agent's Write mode writes (M10): at once, entered in the note's journal under the agent's name, its words
+    // marked in the note's agent lens, and undone from the browser (agreed for M11, Q20).
     await this.agentMayWrite();
     const who = `agent:${agent}`;
     void session;
@@ -520,7 +562,7 @@ export class Engine implements Api {
   /** What agents asked back or offered (M25), by id, until kept. In memory: a question not kept is a passing one. */
   private offered = new Map<string, { agent: string; item: Extract<TurnItem, { kind: "question" | "offer" }> }>();
 
-  /** An agent's ask_question or offer_text, checked as Iso's are: a question is made a note at once (where agents may write notes), a passage put to the person to keep or not. */
+  /** An agent's ask_question or offer_text, checked as the agent's are: a question is made a note at once (where agents may write notes), a passage put to the person to keep or not. */
   private async agentOffer(agent: string, session: string, tool: string, args: Record<string, unknown>): Promise<string> {
     const id = newId(this.opts.clock.now());
     let item: Extract<TurnItem, { kind: "question" | "offer" }>;
@@ -570,25 +612,6 @@ export class Engine implements Api {
     return { note };
   }
 
-  async agentChanged({ agent, note, asked }: { agent: string; note: string; asked: string }): Promise<void> {
-    const id = noteId(this.bundle, note) ?? (await this.onDisk(note.replace(/^\/+/, "").replace(/\.md$/i, "")));
-    if (!id) return;
-    const who = `agent:${agent}`;
-    await this.one(async () => {
-      const { files, path } = this.where(id);
-      const now = await files.read(path);
-      if (now === null) return;
-      const entries = await this.journal(id);
-      const entry = change(entries, now, await this.stamp(who), "edit", asked ? { asked } : {});
-      if (!entry) return;
-      await this.enter(id, entries, entry);
-      this.files.set(path, { path, text: now });
-      this.built = this.index = null;
-      this.embedSoon();
-      this.publish({ type: "note-changed", id, version: hashText(now), who });
-    });
-  }
-
   // ------------------------------------------------------------ agents' sessions, as isorite carried them (M25)
 
   async keepAgentRecord(record: AgentRecord): Promise<void> {
@@ -622,9 +645,9 @@ export class Engine implements Api {
     return all.sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : 0));
   }
 
-  /** A turn is looked up in the base as it is when the turn begins, as Iso's requests are. */
+  /** A turn is looked up in the base as it is when the turn begins, as the agent's requests are. */
   private startTurn(agent: string, session: string): { request: string; lookup: Lookup } {
-    const turn = { request: `agent:${agent}:${++this.turnCount}`, lookup: new Lookup(this.bundle, "", this.similar) };
+    const turn = { request: `agent:${agent}:${++this.turnCount}`, lookup: new Lookup(this.bundle, "", this.similar, null, (b) => this.indexFor(b)) };
     this.turns.set(`${agent}/${session}`, turn);
     this.publish({ type: "agent-start", request: turn.request, agent, session });
     return turn;
@@ -670,7 +693,7 @@ export class Engine implements Api {
       await this.opts.notes.mkdir!(path);
       const parts = path.split("/");
       for (let i = 1; i <= parts.length; i++) { const p = parts.slice(0, i).join("/"); if (!this.files.has(p)) this.files.set(p, { path: p, dir: true }); }
-      this.built = this.index = null;
+      this.changed();
     });
   }
 
@@ -694,7 +717,7 @@ export class Engine implements Api {
         await this.opts.notes.rmdir!(d);
         this.files.delete(d);
       }
-      this.built = this.index = null;
+      this.changed();
     });
   }
 
@@ -728,7 +751,7 @@ export class Engine implements Api {
           this.files.set(at(f), { path: at(f) });
         }
         this.pictureCache.clear();
-        this.built = this.index = null;
+        this.changed();
       });
       for (const c of [...this.bundle.concepts.values()]) {
         const source = await this.readNote(c.id);
@@ -740,7 +763,7 @@ export class Engine implements Api {
     await this.dropFolder(from, false);
   }
 
-  /** `who` is you unless Iso moves it, in Write mode. */
+  /** `who` is you unless the agent moves it, in Write mode. */
   async moveNote(id: string, to: string, base: string, who = "you"): Promise<Saved> {
     to = to.trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/, "");
     if (!inBase(id) || !inBase(to)) throw new EngineError("only a note of the base is moved, and only within it");
@@ -765,7 +788,7 @@ export class Engine implements Api {
       await this.enter(to, entries, { ...(await this.stamp(who)), kind: "change", why: "move", before: hash, after: hash, hunks: [], from: id });
       this.files.delete(from);
       this.files.set(path, { path, text: now });
-      this.built = this.index = null;
+      this.changed();
       this.embedSoon();
       this.publish({ type: "note-changed", id, version: null, who });
       this.publish({ type: "note-changed", id: to, version: hashText(now), who });
@@ -804,13 +827,13 @@ export class Engine implements Api {
       if (base !== hashText(now)) throw new Conflict(`${id} was changed since you opened it`, { id, text: now, version: hashText(now) });
       await notes.remove(path);
       this.files.delete(path);
-      this.built = this.index = null;
+      this.changed();
       this.embedSoon();
     });
     this.publish({ type: "note-changed", id, version: null, who });
   }
 
-  /** Resolve a question, or say a problem is solved, today; or open it again (M12). Yours alone: Iso's tools never
+  /** Resolve a question, or say a problem is solved, today; or open it again (M12). Yours alone: the agent's tools never
    *  change it. `base` as for saveNote. */
   async setDone(id: string, done: boolean, base: string): Promise<Saved> {
     const c = this.bundle.concepts.get(checkNoteId(id));
@@ -913,7 +936,7 @@ export class Engine implements Api {
     let changed = false;
     for (const path of seen) if (!this.files.has(path)) { this.files.set(path, { path }); changed = true; }
     for (const path of [...this.files.keys()]) if (pictureType(path) && !seen.has(path)) { this.files.delete(path); changed = true; }
-    if (changed) this.built = this.index = null;
+    if (changed) this.changed();
     return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   }
 
@@ -927,7 +950,7 @@ export class Engine implements Api {
       if ((await this.opts.notes.readBytes(path)) !== null) throw new Conflict(`${path} is there already`, null);
       await this.opts.notes.writeBytes(path, bytes);
       this.files.set(path, { path });
-      this.built = this.index = null;
+      this.changed();
       const px = pictureSize(bytes, type);
       const info: PictureInfo = { path, bytes: bytes.length, width: px?.width ?? null, height: px?.height ?? null, sha256: sha256(bytes) };
       return info;
@@ -936,7 +959,7 @@ export class Engine implements Api {
 
   /** Where a note's file is. */
   private where(id: string): { files: Files; path: string } {
-    // An artifact (M23) is journalled as a note is, by its path: Iso's rewrites of it are marked and undone the same way.
+    // An artifact (M23) is journalled as a note is, by its path: the agent's rewrites of it are marked and undone the same way.
     if (inBase(id) && citeKind(id) === "artifact") return { files: this.opts.notes, path: checkNoteId(id) };
     if (!inBase(id)) throw new EngineError(`there is no note ${id}`);
     return { files: this.opts.notes, path: `${checkNoteId(id)}.md` };
@@ -978,7 +1001,7 @@ export class Engine implements Api {
     await this.enter(id, entries, entry);
     if (inBase(id)) {
       this.files.set(path, { path, text });
-      this.built = this.index = null;
+      this.changed();
       this.embedSoon();
     }
     const version = hashText(text);
@@ -1024,7 +1047,7 @@ export class Engine implements Api {
     return this.last ? sessionMoments(await this.sessionEntries(this.last.session)) : [];
   }
 
-  // ------------------------------------------------------------ conversations with Iso, before M25: kept to read
+  // ------------------------------------------------------------ conversations with the agent, before M25: kept to read
 
   async conversation(id?: string): Promise<Conversation | null> {
     const study = this.opts.own;
@@ -1078,7 +1101,7 @@ export class Engine implements Api {
     await this.one(() => this.opts.notes.write(AGENTS_FILE, text.replace(/\s*$/, "") + (text.trim() ? "\n" : "")));
   }
 
-  /** A note's id as Iso writes one for a new note: folder/name, without a leading slash or `.md`. */
+  /** A note's id as the agent writes one for a new note: folder/name, without a leading slash or `.md`. */
   private newNoteId(raw: unknown): string | null {
     const id = String(raw ?? "").trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/i, "");
     try { checkNoteId(id); } catch { return null; }
@@ -1165,62 +1188,6 @@ export class Engine implements Api {
     const text = `---\ntype: Question\ntitle: ${JSON.stringify(q.title)}\nabout: [${q.about.join(", ")}]\n---\n\n${q.text ? `${q.text}\n` : ""}`;
     const saved = await this.put(id, text, null, "edit", asked ? { asked } : {}, who);
     return { id, text, ...(saved.entry ? { entry: saved.entry } : {}) };
-  }
-
-  /** A proposal still waiting in a note's journal, or a refusal. */
-  private async waiting(id: string, proposal: string): Promise<{ entries: Entry[]; p: Proposal }> {
-    const entries = await this.journal(id);
-    const p = pending(entries).find((x) => x.id === proposal);
-    if (!p) throw new EngineError("that text is no longer waiting: it was kept or removed", 409);
-    return { entries, p };
-  }
-
-  keep(id: string, proposal: string, region?: number): Promise<Saved> {
-    return this.one(async () => {
-      const { files, path } = this.where(id);
-      const now = await files.read(path);
-      if (now === null) throw new Conflict(`${id} is gone`, null);
-      const { entries, p } = await this.waiting(id, proposal);
-      await this.enter(id, entries, reconcile(entries, now, await this.stamp("external")));
-      let text: string | null;
-      if (p.form === "rewrite") {
-        if (region !== undefined && !p.open?.includes(region)) throw new EngineError("that change is no longer waiting: it was kept or removed", 409);
-        text = written(now, p, region);
-        if (text === null) throw new EngineError(region === undefined ? "a passage this would rewrite is no longer in the note as it was. Keep the others one by one." : "the passage this would rewrite is no longer in the note as it was", 409);
-      } else {
-        // New text whose place has gone is kept at the end of the note: shown apart, never lost.
-        text = written(now, p) ?? written(now, { ...p, after: null, before: null });
-        if (text === null) throw new EngineError("there is nowhere in the note to put this", 409);
-      }
-      await files.write(path, text);
-      await this.enter(id, entries, change(entries, text, await this.stamp("you"), "keep", { proposal, ...(p.form === "rewrite" && region !== undefined ? { region } : {}) }));
-      if (inBase(id)) { this.files.set(path, { path, text }); this.built = this.index = null; this.embedSoon(); }
-      const version = hashText(text);
-      this.publish({ type: "note-changed", id, version, who: "you" });
-      return { id, text, version, changed: true };
-    });
-  }
-
-  revise(id: string, proposal: string, text: string | string[]): Promise<void> {
-    return this.one(async () => {
-      const { entries, p } = await this.waiting(id, proposal);
-      if ((typeof text === "string" ? text.length : text.join("").length) > MAX_NOTE_BYTES) throw new EngineError("too large", 413);
-      if (p.form === "insert") {
-        if (typeof text !== "string") throw new EngineError("new text at a point is revised as one text");
-        if (text !== p.text) await this.enter(id, entries, { ...(await this.stamp("you")), kind: "revise", proposal, text });
-      } else {
-        if (typeof text === "string" || text.length !== p.regions.length) throw new EngineError("a rewrite is revised region by region");
-        if (text.some((t, k) => t !== p.regions[k]!.new)) await this.enter(id, entries, { ...(await this.stamp("you")), kind: "revise", proposal, regions: text });
-      }
-    });
-  }
-
-  discard(id: string, proposal: string, region?: number): Promise<void> {
-    return this.one(async () => {
-      const { entries, p } = await this.waiting(id, proposal);
-      if (p.form === "rewrite" && region !== undefined && !p.open?.includes(region)) throw new EngineError("that change is no longer waiting: it was kept or removed", 409);
-      await this.enter(id, entries, { ...(await this.stamp("you")), kind: "discard", proposal, ...(p.form === "rewrite" && region !== undefined ? { region } : {}) });
-    });
   }
 
   private async enter(id: string, entries: Entry[], entry: Entry | null): Promise<void> {

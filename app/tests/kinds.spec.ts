@@ -94,14 +94,14 @@ test("the agent asks a question back: it is made an open question at once; your 
     const offered = log(page).locator(".turn").last();
     await expect(offered).toHaveAttribute("data-state", "done");
     await expect(offered.locator(".offer .yours")).toHaveText("Because it is so, in my words.");
-    await page.screenshot({ path: `test-results/screens/${test.info().project.name}-iso-asks-back.png`, fullPage: true });
+    await page.screenshot({ path: `test-results/screens/${test.info().project.name}-agent-asks-back.png`, fullPage: true });
     await offered.getByRole("button", { name: `Insert into Asked ${name} as yours` }).click();
     await expect(offered.locator(".offer .in")).toHaveText("inserted");
     const after = ((await (await page.request.get(`api/note?id=${n}`)).json()) as { text: string }).text;
     expect(after).toBe(`---\ntype: Concept\ntitle: Asked ${name}\n---\n\nPlain.\n\nBecause it is so, in my words.\n`);
     await remove(page, `channels/why-does-asked-${name}-hold`);
     await remove(page, n);
-  } finally { agent.detach(); }
+  } finally { await agent.detach(); }
 });
 
 test("links out of the base: a code link set as code, struck through where its file is not in the repository; a web link dotted", async ({ page }) => {

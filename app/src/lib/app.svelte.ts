@@ -33,7 +33,7 @@ class AppState {
   atlas = $state.raw<{ chosen: string; chosenId: string; steps: number; here: string; out: () => void; fit: () => void; relayout: () => void } | null>(null);
   /** An agent's latest turn, from any page or tab, as the Atlas draws its path: each step, and how it ended. It
    *  stays until the next turn, or until the Atlas lets it go. */
-  iso = $state.raw<IsoRun | null>(null);
+  agent = $state.raw<AgentRun | null>(null);
   private readonly listeners = new Set<(event: EngineEvent) => void>();
   private relist: ReturnType<typeof setTimeout> | null = null;
 
@@ -77,11 +77,11 @@ class AppState {
 
   private follow(e: EngineEvent): void {
     // A page that opens during a turn learns of it from its next step.
-    if ((e.type === "agent-start" || e.type === "agent-step") && this.iso?.request !== e.request) this.iso = { request: e.request, note: "", agent: e.agent, state: "reading", steps: [], message: "" };
-    const run = this.iso;
+    if ((e.type === "agent-start" || e.type === "agent-step") && this.agent?.request !== e.request) this.agent = { request: e.request, note: "", agent: e.agent, state: "reading", steps: [], message: "" };
+    const run = this.agent;
     if (!run || !("request" in e) || e.request !== run.request) return;
-    if (e.type === "agent-step") this.iso = { ...run, state: "reading", steps: [...run.steps, e.step] };
-    else if (e.type === "agent-done") this.iso = { ...run, state: "done" };
+    if (e.type === "agent-step") this.agent = { ...run, state: "reading", steps: [...run.steps, e.step] };
+    else if (e.type === "agent-done") this.agent = { ...run, state: "done" };
   }
 
   /** Hear the engine's events until the returned function is called. */
@@ -91,9 +91,9 @@ class AppState {
   }
 }
 
-/** An agent's turn as it goes (`agent` names it; `note` is empty, as Iso's own requests had the note asking until
+/** An agent's turn as it goes (`agent` names it; `note` is empty, as the agent's own requests had the note asking until
  *  M25): `reading` until the turn ends. */
-export interface IsoRun {
+export interface AgentRun {
   request: string; note: string; agent: string | null; state: "reading" | "writing" | "done" | "stopped" | "failed"; steps: Step[]; message: string;
 }
 

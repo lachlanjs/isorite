@@ -83,19 +83,18 @@ export interface SearchHit {
 export interface FindHit { id: string; title: string; snippet: string; by: "words" | "meaning" | "both" }
 export interface FindResult { hits: FindHit[]; /** Whether search by meaning took part: `off` where the device has none, `pending` while its vectors are made. */ meaning: "on" | "pending" | "off" }
 
-/** A conversation with Iso from before M25, as the pane draws it, to read. */
+/** A conversation with the agent from before M25, as the pane draws it, to read. */
 export interface Conversation { id: string; turns: Turn[] }
 /** A past conversation, as the drawer of them shows it (M24, K): when it began and was last added to, what was
  *  first asked, and how many turns and notes it has (the notes given, read, pointed to or changed). */
 export interface ConversationSummary { id: string; at: string; last: string; asked: string; turns: number; notes: number }
 
-/** An agent's session (M11, on ACP since M25), as the Iso pane draws it: followed by the isorite server through
- *  `isorite acp`. `connected` is false when no agent is attached. */
+/** An agent's session, as the Agent pane draws it. `connected` is false when no agent is set up. */
 export interface TerminalView {
   connected: boolean; /** The agent, as it names itself: OpenCode, omp. */ agent: string; session: string | null; title: string; busy: boolean; turns: TerminalTurn[]; asking: TerminalPermission[]; cost: number; tokens: { input: number; output: number }; model: string;
   /** The agent's own name for itself, as its changes are signed (`agent:<id>`). */
   agentId?: string;
-  /** The agent's context window, in tokens, and how much of it the session fills (ACP's usage_update). */
+  /** The agent's context window, in tokens, and how much of it the session fills. */
   size?: number;
   /** The agents' sessions on the base (M25): live ones, the agents' own, and those isorite carried and kept. */
   sessions?: AgentSession[];
@@ -109,19 +108,11 @@ export interface TerminalView {
   steer?: boolean;
   /** Whether a kept session can be forked from the pane (M36). */
   fork?: boolean;
-  /** The slash commands the agent offers in this session (ACP's available_commands_update). */
-  commands?: AgentCommand[];
-  /** What the agent lets you set in this session: its modes, and its options such as the model. */
-  settings?: AgentSetting[];
 }
-/** A slash command an agent offers: typed in the box as `/name`, it goes to the agent as the prompt. */
-export interface AgentCommand { name: string; description: string; hint?: string }
-/** One thing to set in an agent's session: a mode, or a config option (the model, say), with what it may be. */
-export interface AgentSetting { kind: "mode" | "config"; id: string; name: string; current: string; options: { value: string; name: string; description?: string }[] }
 /** A prompt and what the agent did with it. `from` says where it was asked: in the terminal, or from a page. `given`:
  *  the notes and passages put before it from the pane (M25). */
-export interface TerminalTurn { id: string; asked: string; from: "terminal" | "here"; items: TerminalItem[]; state: "running" | "done" | "stopped" | "failed"; given?: Given[]; /** Which of `given` were taken out of the conversation afterwards (indexes), M36. */ withdrawn?: number[]; at?: string }
-/** An agent's session as isorite kept it (M25), in its own files beside Iso's conversations: what was asked, from
+export interface TerminalTurn { id: string; asked: string; from: "terminal" | "here"; items: TerminalItem[]; state: "running" | "done" | "stopped" | "failed"; given?: Given[]; /** Which of `given` were taken out of the conversation afterwards (indexes), M36. */ withdrawn?: number[]; at?: string; /** How long it ran, in ms, once it is over. */ took?: number }
+/** An agent's session as isorite kept it (M25), in its own files beside the agent's conversations: what was asked, from
  *  where, what the agent read, changed, asked back and offered. */
 export interface AgentRecord { agent: string; name: string; session: string; title: string; at: string; last: string; turns: TerminalTurn[] }
 /** A session in the drawer (M25): live (a wrapper carries it now), the agent's own (in its `session/list`), kept (a
@@ -130,16 +121,16 @@ export interface AgentSession { agent: string; name: string; session: string; ti
 export type TerminalItem =
   | { kind: "text"; text: string }
   /** A tool call. `title` is what it acted on (a command, a file, a note); `diff` an edit's lines, `-` and `+`. */
-  | { kind: "tool"; id: string; name: string; title: string; status: "running" | "done" | "failed"; output: string; note?: string; diff?: string[]; base?: string }
+  | { kind: "tool"; id: string; name: string; title: string; status: "running" | "done" | "failed"; output: string; note?: string; diff?: string[]; base?: string; /** How long it ran, in ms, once it is over. */ ms?: number }
   /** What the model reasoned before it answered or acted (M36), as the provider streams it. */
   | { kind: "thinking"; text: string }
   /** The earlier conversation shortened to a summary so the session fits the model (M36): the size before and after, in tokens. */
   | { kind: "compaction"; state: "running" | "done" | "failed"; before: number; after?: number; summary?: string; error?: string }
   /** What the person said while the agent worked (M36): a steer goes in after the step now running, a follow-up when
-   *  the agent would otherwise stop. `queued` until the model has it, then `landed` (where it came in); `sent` where
-   *  the agent takes it and does not say when; `dropped` if the turn ended or was stopped first. */
+   *  The agent would otherwise stop. `queued` until the model has it, then `landed` (where it came in); `sent` where
+   *  The agent takes it and does not say when; `dropped` if the turn ended or was stopped first. */
   | { kind: "message"; id: string; text: string; mode: "steer" | "followUp"; state: "queued" | "landed" | "sent" | "dropped" }
-  /** What the agent asked back, or offered, through isorite's MCP (M25): kept as Iso's are, or not. */
+  /** What the agent asked back, or offered, through isorite's MCP (M25): kept as the agent's are, or not. */
   | Extract<TurnItem, { kind: "question" | "offer" }>;
 /** The agent asks before doing: `action` (as `shell`) on `resources` (as the command). */
 export interface TerminalPermission { id: string; action: string; resources: string[]; tool?: string }
@@ -153,7 +144,7 @@ export type EngineEvent =
   | { type: "hidden" }
   /** A terminal agent (`agent` is its name, as `opencode`) began a turn in one of its sessions. Each turn ends in agent-done. */
   | { type: "agent-start"; request: string; agent: string; session: string }
-  /** It looked something up in the base, with Iso's own tools. */
+  /** It looked something up in the base, with the agent's own tools. */
   | { type: "agent-step"; request: string; agent: string; session: string; step: Step }
   | { type: "agent-done"; request: string; agent: string; session: string }
   /** The person sent a note, or a passage of one, to whichever terminal agent is listening; `text` is what it is told. */
@@ -208,6 +199,8 @@ export const MAX_FILE_BYTES = 20_000_000;
 export interface Api {
   session(): Promise<Session>;
   notes(): Promise<Listing>;
+  /** Names the state `notes()` and `map()` answer from, which changes when they could answer differently: for an ETag. */
+  revision?(): Promise<string>;
   readNote(id: string): Promise<NoteSource>;
   /** A file that isn't a note (M23; M22 gave pictures only): in the notes, by its path there, or (`code`) a picture in
    *  the base's repository. Null when there's no such file, or the path is a note's. */
@@ -247,11 +240,11 @@ export interface Api {
   search(query: string): Promise<SearchHit[]>;
   /** The Atlas's map of the base. */
   map(): Promise<MapReport>;
-  /** A conversation with Iso from before M25, or the latest when none is named; null when there is none. */
+  /** A conversation with the agent from before M25, or the latest when none is named; null when there is none. */
   conversation(id?: string): Promise<Conversation | null>;
   /** Every conversation, the newest first (M24, K). */
   conversations(): Promise<ConversationSummary[]>;
-  /** Remove one of Iso's conversations from before M25 (M27). */
+  /** Remove one of the agent's conversations from before M25 (M27). */
   deleteConversation(id: string): Promise<void>;
   /** The base's own instructions, AGENTS.md at the top of the notes (M15): null while there is none. */
   agents(): Promise<{ text: string | null }>;
@@ -268,20 +261,13 @@ export interface Api {
   find(query: string): Promise<FindResult>;
   /** Code links broken since an agent was last told; each is told once (Q27). */
   brokenNews(): Promise<{ id: string; title: string; href: string }[]>;
-  /** Write a proposal of Iso's still waiting in a note's journal (from before M25) into its note. For a rewrite,
-   *  `region` keeps that one passage; without it, every one still waiting. */
-  keep(id: string, proposal: string, region?: number): Promise<Saved>;
-  /** Your edit to a proposal before keeping it: its text, or for a rewrite the text of each of its regions. */
-  revise(id: string, proposal: string, text: string | string[]): Promise<void>;
-  /** Take a proposal away (for a rewrite, one region of it, or all that still wait). It stays in the journal. */
-  discard(id: string, proposal: string, region?: number): Promise<void>;
   /** The tools an agent is offered over the base (isorite's MCP): a brief of it, the look-ups, changing a note,
    *  which is written and marked as the agent's (M11), asking back and offering text, and artifacts (M25). */
   agentTools(): Promise<ToolDef[]>;
   /** Run one of them for an agent. What it looked up is published as an agent-step, for the Atlas; a proposal is
    *  written as agentWrite writes it, and refused as it refuses. */
   agentLook(look: AgentLook): Promise<{ text: string }>;
-  /** Write an agent's change to a note, or a new note, as Iso's Write mode does: entered in its journal under the
+  /** Write an agent's change to a note, or a new note, as the agent's Write mode does: entered in its journal under the
    *  agent's name, its words marked, undone from the browser. What comes back is said to the agent. */
   agentWrite(proposal: AgentChange): Promise<{ text: string }>;
   /** Send a note, or a passage of it, with what the person says of it, to a terminal agent's session. */
@@ -291,11 +277,8 @@ export interface Api {
   /** An agent's session became busy (a turn begins) or idle (it ends). */
   agentStatus(agent: string, session: string, busy: boolean): Promise<void>;
   /** Keep what an agent offered with ask_question or offer_text (M25): the question made a note, or the passage
-   *  inserted at the end of its note, as Iso's are kept. */
+   *  inserted at the end of its note, as the agent's are kept. */
   agentTake(id: string): Promise<{ note: string }>;
-  /** An agent changed a note's file with its own tools, in a turn isorite saw (M25): entered in its journal under the
-   *  agent's name, with what was asked, not as a change made elsewhere. */
-  agentChanged(change: { agent: string; note: string; asked: string }): Promise<void>;
   /** Keep an agent's session as isorite carried it (M25), replacing what was kept of it. */
   keepAgentRecord(record: AgentRecord): Promise<void>;
   /** The sessions kept, newest first, each as the drawer shows it; or one, whole. */
