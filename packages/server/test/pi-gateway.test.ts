@@ -25,7 +25,7 @@ beforeAll(async () => {
     req.on("end", () => {
       const who = String((req.socket as TLSSocket).getPeerCertificate()?.subject?.CN ?? "");
       seen.push({ path: req.url ?? "", headers: req.headers, who, body });
-      if (req.url?.startsWith("/v1/models")) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ data: [{ id: "our-model" }, { id: "our-other-model" }] })); return; }
+      if (req.url?.startsWith("/v1/models")) { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ data: [{ id: "our-model" }, { id: "our-other-model", architecture: { input_modalities: ["text", "image"] } }] })); return; }
       res.writeHead(200, { "Content-Type": "text/event-stream" });
       res.write(chunk({ role: "assistant", content: "Through " }));
       res.write(chunk({ content: "the gateway." }));
@@ -128,5 +128,45 @@ describe("isorite's own agent through a gateway that asks for a client certifica
     expect(() => readGateway(join(setUp(`url = "https://localhost/v1"\npfx = '${nowhere}'`).XDG_CONFIG_HOME!, "isorite", "config.toml"), {})).toThrow(`[provider] pfx: there is no file at ${nowhere}`);
     expect(() => readGateway(join(setUp(`url = "http://localhost/v1"\ncert = '${join(TLS, "person.pem")}'\ncert_key = '${join(TLS, "person.key")}'`).XDG_CONFIG_HOME!, "isorite", "config.toml"), {})).toThrow(/not https/);
     expect(() => readGateway(join(setUp(`url = "https://localhost/v1"\nkey = "$NOT_SET_HERE"`).XDG_CONFIG_HOME!, "isorite", "config.toml"), {})).toThrow(/NOT_SET_HERE is not set/);
+  });
+});
+
+describe("whether a gateway's model takes images", () => {
+  test("the gateway's own description says it, in the shapes gateways use", async () => {
+    const { describedSeeing } = await import("../src/pi/gateway.ts");
+    expect(describedSeeing({ id: "a", architecture: { input_modalities: ["text", "image"] } })).toBe(true);
+    expect(describedSeeing({ id: "a", architecture: { modality: "text->text" } })).toBe(false);
+    expect(describedSeeing({ id: "a", model_info: { supports_vision: true } })).toBe(true);
+    expect(describedSeeing({ id: "a", capabilities: { vision: false } })).toBe(false);
+    expect(describedSeeing({ id: "a" })).toBeUndefined();
+  });
+
+  test("[provider] vision decides first; then the gateway's /models; then the model's name", async () => {
+    const { gatewaySees } = await import("../src/pi/gateway.ts");
+    const g = { url: "https://127.0.0.1:1/v1", name: "g", headers: {}, query: {}, streamUsage: true, models: [], tls: null };
+    expect(await gatewaySees({ ...g, vision: false }, "gpt-4o", undefined)).toBe(false);
+    expect(await gatewaySees({ ...g, vision: true }, "our-model", undefined)).toBe(true);
+    expect(await gatewaySees({ ...g, vision: ["claude-*", "ours"] }, "claude-sonnet-4-6", undefined)).toBe(true);
+    expect(await gatewaySees({ ...g, vision: ["claude-*"] }, "gpt-4o", undefined)).toBe(false);
+    // Nothing answers at that address, so the name is the guide.
+    expect(await gatewaySees(g, "gpt-4.1-mini", undefined)).toBe(true);
+    expect(await gatewaySees(g, "our-model", undefined)).toBe(false);
+  });
+
+  test("a model the configuration says sees is offered with images; one it does not, without", async () => {
+    const env = setUp(full(`vision = ["our-model"]`).replace("PORT", String(port)));
+    expect((await modelFor("gateway", "our-model", env)).chosen.input).toEqual(["text", "image"]);
+    expect((await modelFor("gateway", "our-other-model", env)).chosen.input).toEqual(["text"]);
+  });
+
+  test("without the setting, the gateway's /models says which take images", async () => {
+    const env = setUp(full().replace("PORT", String(port)));
+    expect((await modelFor("gateway", "our-other-model", env)).chosen.input).toEqual(["text", "image"]);
+    expect((await modelFor("gateway", "our-model", env)).chosen.input).toEqual(["text"]);
+  });
+
+  test("a vision setting that is neither true, false nor a list is said", () => {
+    const env = setUp(full(`vision = "yes"`).replace("PORT", String(port)));
+    expect(() => readGateway(join(env.XDG_CONFIG_HOME!, "isorite", "config.toml"), env)).toThrow(/vision is true, false, or a list/);
   });
 });

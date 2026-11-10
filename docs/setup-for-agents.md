@@ -26,7 +26,7 @@ You're helping someone set up isorite: a local web app over a folder of Markdown
 
 | Where | What |
 |---|---|
-| `~/.config/isorite/config.toml` (or `$XDG_CONFIG_HOME/isorite/`) | This machine's `device` id, and `[provider]`: a gateway for isorite's own agent (url, key or `"$NAME"`, key_header, headers, query, pfx + pfx_passphrase or cert + cert_key, ca, models; see setup.md). Mode 600. The model names in `[tiers]` are offered in the settings; nothing else of it is read. |
+| `~/.config/isorite/config.toml` (or `$XDG_CONFIG_HOME/isorite/`) | This machine's `device` id, and `[provider]`: a gateway for isorite's own agent (url, key or `"$NAME"`, key_header, headers, query, pfx + pfx_passphrase or cert + cert_key, ca, models, vision; see setup.md). Mode 600. The model names in `[tiers]` are offered in the settings; nothing else of it is read. |
 | `~/.local/share/isorite/credentials.json` (or `$XDG_DATA_HOME/isorite/`) | isorite's own agent's keys, the provider and model chosen, and what it may reach in the project. Mode 600, in a folder of mode 700. A value is never logged or shown, only whether it is set. |
 | `~/.config/isorite/bases.toml` | The bases this machine knows, a table each: `[<name>] path = "…"`, `lend = true` to lend it to every session. Each base opened is added, under its folder's name. |
 | `<notes>/AGENTS.md` | The base's own instructions (notation, level, how notes are named), given to every agent in `brief_base`. Not a note: not on the Atlas, not linted. |

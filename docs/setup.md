@@ -118,8 +118,11 @@ pfx_passphrase = "$PFX_PASSPHRASE"
 # cert = 'me.pem'  cert_key = 'me.key'     # ...or both as PEM files
 ca = 'company-ca.pem'                      # the authority the gateway's own certificate is signed by
 models = ["gpt-4.1", "claude-sonnet"]      # offered in the settings (the gateway's /models is asked too)
+vision = ["gpt-4.1", "claude-*"]           # the models that take images; true for all, false for none
 ```
 
 Any value may be `"$NAME"`, read from the environment. The certificate goes only to the gateway's own address, and the company's proxy (`HTTPS_PROXY`) is used for it. The settings show the gateway once `url` is set, and *Check* says whether it answers; without the certificate it names the setting to change. `[provider]` is changed by hand in this file; the settings show what it names and check it.
+
+Whether a gateway's model takes images (so a picture given in the Agent pane is sent to it) is, in order: what `vision` says; what the gateway's `/models` says of it, where it describes its models as OpenRouter or LiteLLM do; and, where it says nothing, whether its name is of a family known to see (GPT-4o, GPT-4.1, GPT-5, Claude, Gemini and the like). Set `vision` where the guess is wrong.
 
 Model names in `[tiers]` from before 0.13 are offered in the settings; nothing else of it is read.

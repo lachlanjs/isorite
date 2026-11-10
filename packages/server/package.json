@@ -1,6 +1,6 @@
 {
   "name": "isorite",
-  "version": "0.24.0",
+  "version": "0.24.1",
   "description": "isorite: the command, the server and the agent.",
   "license": "MIT",
   "type": "module",

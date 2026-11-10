@@ -11,7 +11,7 @@ import { fileTools, pathGuard, type Files } from "./files.ts";
 import { FileStore, storeDir } from "./store.ts";
 import { FileImages } from "./images.ts";
 import { Credentials, DEFAULT_REACH, PROVIDERS, dataDir, type Choice, type Reach } from "./credentials.ts";
-import { GATEWAY, gatewayFetch, gatewayFor, gatewayModels, readGateway, type Gateway } from "./gateway.ts";
+import { GATEWAY, gatewayFetch, gatewayFor, gatewayModels, gatewaySees, readGateway, type Gateway } from "./gateway.ts";
 import { unreachable } from "../network.ts";
 import { configPath } from "../config.ts";
 import { SCRIPTED, scriptedModel, scriptedOn } from "./scripted.ts";
@@ -29,7 +29,8 @@ export async function modelFor(provider: string, model: string, env: NodeJS.Proc
   if (provider === GATEWAY) {
     const g = readGateway(configPath(env), env);
     if (!g) throw new Error(`no gateway is set: name one under [provider] in ${configPath(env)} (url, and pfx or cert if it asks for a certificate)`);
-    return gatewayFor(g, model, env) as never;
+    // Whether it takes images decides whether one given in the pane is sent (images.ts).
+    return gatewayFor(g, model, env, await gatewaySees(g, model, g.key ?? env.ISORITE_GATEWAY_KEY, env)) as never;
   }
   let make: unknown;
   try {
