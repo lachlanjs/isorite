@@ -249,10 +249,10 @@
 {#snippet agentSettings()}<AgentSettings />{/snippet}
 
 <style>
-  .says { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 5.5em; font-size: 12px; color: var(--text-soft); flex: 0 1 auto; }
+  .says { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 5.5em; font-size: 0.75rem; color: var(--text-soft); flex: 0 1 auto; }
   @media (max-width: 760px) { .says { flex: none; } }
-  .out { height: 28px; padding: 0 10px; font-size: 12px; flex: none; }
-  .where { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 12px; }
+  .out { height: 28px; padding: 0 10px; font-size: 0.75rem; flex: none; }
+  .where { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 0.75rem; }
   /* Out of a folder is the phone's (Mobile-Atlas): on a desktop a click on open ground steps out. */
   @media (min-width: 761px) { .out, .where { display: none; } }
   .bad { color: var(--rose); }
@@ -303,19 +303,19 @@
     .panes::-webkit-scrollbar { display: none; }
     .pane, .pane[hidden] { display: flex; flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; border-left: 0; }
     .tabs { display: grid; grid-template-columns: repeat(3, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); background: var(--ground-0); }
-    .tabs button { -webkit-tap-highlight-color: transparent; height: 52px; background: none; border: 0; transition: color var(--t-ack) var(--ease-out); font-family: var(--font-pixel); font-size: 14px; color: var(--text-faint); position: relative; display: grid; place-content: center; gap: 2px; cursor: pointer; }
+    .tabs button { -webkit-tap-highlight-color: transparent; height: 52px; background: none; border: 0; transition: color var(--t-ack) var(--ease-out); font-family: var(--font-pixel); font-size: 0.875rem; color: var(--text-faint); position: relative; display: grid; place-content: center; gap: 2px; cursor: pointer; }
     .tabs button.near { color: var(--text); }
     .tabs button:active { background: var(--ground-1); }
     /* The bar under the pane in view: a third of the row wide, its line inset as the label is, moved by the scroll itself. */
     .tabs .bar { position: absolute; top: -1px; left: 0; width: calc(100% / 3); height: 2px; pointer-events: none; }
     .tabs .bar::before { content: ""; position: absolute; inset: 0 20%; background: var(--text); }
-    .tabs .badge { position: absolute; top: 8px; right: calc(50% - 30px); font: 10px var(--font-ui); color: var(--ground-0); background: var(--growth); min-width: 16px; height: 16px; display: grid; place-items: center; padding: 0 3px; }
+    .tabs .badge { position: absolute; top: 8px; right: calc(50% - 30px); font: 0.625rem var(--font-ui); color: var(--ground-0); background: var(--growth); min-width: 16px; height: 16px; display: grid; place-items: center; padding: 0 3px; }
   }
   .icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); flex: none; }
   .icon:hover, .icon:focus-visible { color: var(--text); text-decoration: none; }
   .icon:disabled { opacity: 0.35; cursor: default; }
   .ctx { width: auto; min-width: 28px; padding: 0 5px; display: inline-flex; align-items: center; gap: 4px; }
-  .ctx .n { font: 11px/1 var(--font-ui); color: var(--growth); font-variant-numeric: tabular-nums; }
+  .ctx .n { font: 0.6875rem/1 var(--font-ui); color: var(--growth); font-variant-numeric: tabular-nums; }
   .ctx .n.pulse { animation: pulse 900ms ease-out; }
   @keyframes pulse { 0% { color: var(--text); text-shadow: 0 0 6px var(--growth); } }
   @media (prefers-reduced-motion: reduce) { .ctx .n.pulse { animation: none; } }

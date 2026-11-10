@@ -76,7 +76,7 @@
      and drawn crisp, at 11 px, and larger in steps as the block grows on the screen, taking the lines it has room for. */
   .inner {
     position: absolute; left: 0; top: 0; width: calc(100% * var(--k)); height: calc(100% * var(--k)); transform-origin: 0 0; transform: scale(var(--ik));
-    padding: 0 6px; display: flex; align-items: center; gap: 6px; font: 11px/14px var(--font-ui); container-type: size;
+    padding: 0 6px; display: flex; align-items: center; gap: 6px; font: 0.6875rem/0.875rem var(--font-ui); container-type: size;
   }
   /* Its name shows once it is big enough on the screen to read, and comes in (its opacity, the time of a change) as
      the zoom settles rather than in one frame; it goes at once, as the zoom passes it. Hidden, it takes no pointer
@@ -84,11 +84,11 @@
   .t { display: -webkit-box; visibility: hidden; opacity: 0; overflow: hidden; overflow-wrap: normal; min-width: 0; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; }
   :global(.atlas-world.labels) .t { visibility: visible; opacity: 1; transition: opacity var(--t-change) var(--ease-out); }
   /* Zoomed in, the name grows with its box, in steps, still at the screen's pixels. */
-  @container (min-width: 130px) { .inner > * { font-size: 13px; line-height: 17px; } }
-  @container (min-width: 175px) { .inner > * { font-size: 15px; line-height: 20px; } }
-  @container (min-width: 235px) { .inner > * { font-size: 18px; line-height: 24px; } }
-  @container (min-width: 310px) { .inner > * { font-size: 22px; line-height: 28px; } }
-  @container (max-width: 72px) { .inner > :first-child { margin-left: -2px; } .inner > :last-child { margin-right: -2px; } .inner > * { font-size: 10px; line-height: 12px; } .t { hyphens: auto; overflow-wrap: anywhere; } }
+  @container (min-width: 130px) { .inner > * { font-size: 0.8125rem; line-height: 1.0625rem; } }
+  @container (min-width: 175px) { .inner > * { font-size: 0.9375rem; line-height: 1.25rem; } }
+  @container (min-width: 235px) { .inner > * { font-size: 1.125rem; line-height: 1.5rem; } }
+  @container (min-width: 310px) { .inner > * { font-size: 1.375rem; line-height: 1.75rem; } }
+  @container (max-width: 72px) { .inner > :first-child { margin-left: -2px; } .inner > :last-child { margin-right: -2px; } .inner > * { font-size: 0.625rem; line-height: 0.75rem; } .t { hyphens: auto; overflow-wrap: anywhere; } }
   @container (max-height: 48px) { .t { -webkit-line-clamp: 2; line-clamp: 2; } }
   @container (max-height: 32px) { .t { -webkit-line-clamp: 1; line-clamp: 1; } }
   @container (max-height: 17px) or (max-width: 40px) { :global(.atlas-world.labels) .t { display: none; } }
@@ -141,5 +141,5 @@
   /* What stands out over the corner (the diamond of a change, the order it read in) is not cut off by the block. */
   .changed, .n:has(> .order) { overflow: visible; }
   .dia { position: absolute; top: -5px; right: -5px; width: 9px; height: 9px; background: var(--growth); transform: rotate(45deg); scale: var(--ik); }
-  .order { position: absolute; top: 0; left: 0; transform-origin: 0 0; translate: calc(-12 * var(--px)) calc(-12 * var(--px)); width: 16px; height: 16px; display: grid; place-items: center; background: var(--growth); color: var(--ground-0); font-size: 10px; font-weight: 700; z-index: 1; scale: var(--ik); }
+  .order { position: absolute; top: 0; left: 0; transform-origin: 0 0; translate: calc(-12 * var(--px)) calc(-12 * var(--px)); width: 16px; height: 16px; display: grid; place-items: center; background: var(--growth); color: var(--ground-0); font-size: 0.625rem; font-weight: 700; z-index: 1; scale: var(--ik); }
 </style>

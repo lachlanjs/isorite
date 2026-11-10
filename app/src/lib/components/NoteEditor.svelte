@@ -185,5 +185,5 @@
 
 <style>
   .editor { min-height: 50vh; }
-  .said { position: fixed; z-index: 50; bottom: 24px; left: 50%; transform: translateX(-50%); max-width: min(520px, calc(100vw - 32px)); margin: 0; padding: 10px 14px; background: var(--ground-1); border: 1px solid var(--line-strong); font-family: var(--font-ui); font-size: 13px; }
+  .said { position: fixed; z-index: 50; bottom: 24px; left: 50%; transform: translateX(-50%); max-width: min(520px, calc(100vw - 32px)); margin: 0; padding: 10px 14px; background: var(--ground-1); border: 1px solid var(--line-strong); font-family: var(--font-ui); font-size: 0.8125rem; }
 </style>

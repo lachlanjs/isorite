@@ -57,13 +57,13 @@
 {/if}
 
 <style>
-  .own { grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--line-faint); font-size: 12.5px; color: var(--text-soft); }
+  .own { grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--line-faint); font-size: 0.7812rem; color: var(--text-soft); }
   .own summary { cursor: pointer; margin-bottom: 8px; }
   .body { display: grid; gap: 8px; }
   p { margin: 0; }
   .choices { display: flex; gap: 8px; flex-wrap: wrap; }
-  code { font: 11.5px var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
-  pre { margin: 0; padding: 8px 10px; background: var(--ground-1); border: 1px solid var(--line); font: 11.5px/1.45 var(--font-mono); overflow: auto; max-height: 200px; }
+  code { font: 0.7188rem var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
+  pre { margin: 0; padding: 8px 10px; background: var(--ground-1); border: 1px solid var(--line); font: 0.7188rem/1.45 var(--font-mono); overflow: auto; max-height: 200px; }
   .more { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
   .bad { color: var(--rose); }
 </style>

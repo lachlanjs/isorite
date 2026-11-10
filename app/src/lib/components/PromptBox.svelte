@@ -155,7 +155,7 @@
   :global(.pt) { --c: var(--lattice); display: inline-block; vertical-align: baseline; margin: 0 2px; line-height: 0; cursor: pointer; user-select: none; color: var(--c);
     filter: drop-shadow(0 0 3px color-mix(in srgb, var(--c) 55%, transparent)); transition: filter var(--t-ack) var(--ease-out); }
   :global(.pt:hover) { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--c) 85%, transparent)); }
-  :global(.pt-face) { position: relative; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; font: 11.5px/1 var(--font-ui); color: var(--c); white-space: nowrap; background: var(--c);
+  :global(.pt-face) { position: relative; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; font: 0.7188rem/1 var(--font-ui); color: var(--c); white-space: nowrap; background: var(--c);
     clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
   :global(.pt-face)::before { content: ""; position: absolute; inset: 1px; background: color-mix(in srgb, var(--c) 14%, var(--ground-1)); transition: background-color var(--t-ack) var(--ease-out);
     clip-path: polygon(4.3px 0, 100% 0, 100% calc(100% - 4.3px), calc(100% - 4.3px) 100%, 0 100%, 0 4.3px); }

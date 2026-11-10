@@ -315,7 +315,7 @@
     .acts, li :global(.menu > .more) { opacity: 0; transition: opacity var(--dur-1) var(--ease-out); }
     h2:hover .acts, h2:focus-within .acts, li:hover :global(.menu > .more), li:focus-within :global(.menu > .more), li :global(.menu > .more[aria-expanded="true"]) { opacity: 1; }
   }
-  .conflict { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; font: 700 11px/1 var(--font-ui); color: var(--ground-0); background: var(--rose); clip-path: var(--chosen-cut); }
+  .conflict { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; font: 700 0.6875rem/1 var(--font-ui); color: var(--ground-0); background: var(--rose); clip-path: var(--chosen-cut); }
   .titleline { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
   .file .title { display: inline-flex; align-items: center; gap: 8px; }
   .file :global(.glyph) { color: var(--text-faint); }
@@ -325,7 +325,7 @@
   /* Where it would land: a line between the rows at that place, with its title on it. Drawn over the list, not in its
      flow, so nothing moves under the pointer while it is carried. */
   .landing { position: absolute; z-index: 3; left: 0; right: 0; top: -2px; height: 2px; background: var(--lattice); pointer-events: none; }
-  .landing > span { position: absolute; right: 8px; top: -9px; padding: 0 6px; font-size: 13px; line-height: 18px; color: var(--lattice); background: var(--ground-0); max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .landing > span { position: absolute; right: 8px; top: -9px; padding: 0 6px; font-size: 0.8125rem; line-height: 1.125rem; color: var(--lattice); background: var(--ground-0); max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .landing-end { position: relative; height: 0; }
   .landing-end:not(:first-child) { margin-top: -2px; }
   .landing-end .landing { top: 0; }
@@ -347,6 +347,6 @@
   li a { display: flex; flex-direction: column; gap: 2px; padding: 10px 44px 10px var(--space-4); color: var(--text); transition: background-color var(--dur-1) var(--ease-out); }
   li a:hover { text-decoration: none; background: var(--fill-hover); }
   li a.on { background: var(--fill-chosen); }
-  .title { font-size: 16px; line-height: 1.35; }
-  .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: italic 13px/1.4 var(--font-text); color: var(--text-faint); }
+  .title { font-size: 1rem; line-height: 1.35; }
+  .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: italic 0.8125rem/1.4 var(--font-text); color: var(--text-faint); }
 </style>

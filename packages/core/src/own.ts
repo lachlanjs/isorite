@@ -23,8 +23,9 @@ export const SETTINGS_FILE = "settings.toml";
 /** The base's settings. `repository`: the folder code links resolve against, relative to the notes folder (or
  *  absolute), when it isn't the git repository the notes are in. `agents_write_notes = false`: agents may not change
  *  the notes (they may unless it says so). `hidden`: where it was kept before `hidden.txt`
- *  (one line of a list could not be merged); read still, and moved out when it is next changed. */
-export interface Settings { repository?: string; agents_write_notes?: boolean; hidden?: string[] }
+ *  (one line of a list could not be merged); read still, and moved out when it is next changed. `skills_off`: the names of
+ *  the agent's skills this base has switched off (they are on unless named here). */
+export interface Settings { repository?: string; agents_write_notes?: boolean; hidden?: string[]; skills_off?: string[] }
 
 export function parseSettings(text: string | null): Settings {
   if (!text) return {};
@@ -33,6 +34,7 @@ export function parseSettings(text: string | null): Settings {
   return {
     ...(typeof raw.repository === "string" && raw.repository.trim() ? { repository: raw.repository.trim() } : {}),
     ...(typeof raw.agents_write_notes === "boolean" ? { agents_write_notes: raw.agents_write_notes } : {}),
+    ...(Array.isArray(raw.skills_off) && raw.skills_off.some((x) => typeof x === "string") ? { skills_off: raw.skills_off.filter((x): x is string => typeof x === "string") } : {}),
     ...(Array.isArray(raw.hidden) && raw.hidden.some((x) => typeof x === "string") ? { hidden: raw.hidden.filter((x): x is string => typeof x === "string") } : {}),
   };
 }

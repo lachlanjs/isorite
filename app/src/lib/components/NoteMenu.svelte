@@ -69,11 +69,11 @@
   .more:hover, .more:focus-visible, .more[aria-expanded="true"] { color: var(--text); }
   /* It floats over the list: lifted, coming in as floating things do and going a little down as it leaves. */
   .panel { position: absolute; right: 0; top: 100%; z-index: 40; min-width: 240px; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2); background: var(--surface-float); border: 1px solid var(--line-faint); border-radius: var(--round); box-shadow: var(--lift); animation: appear var(--dur-1) var(--ease-out); }
-  .item { background: none; border: 0; text-align: left; padding: 6px 8px; color: var(--text-soft); font: 13px var(--font-ui); cursor: pointer; border-radius: var(--round); transition: background-color var(--dur-1) var(--ease-out); }
+  .item { background: none; border: 0; text-align: left; padding: 6px 8px; color: var(--text-soft); font: 0.8125rem var(--font-ui); cursor: pointer; border-radius: var(--round); transition: background-color var(--dur-1) var(--ease-out); }
   .item:hover, .item:focus-visible { color: var(--text); background: var(--fill-hover); }
   .danger-text { color: var(--rose); }
   .row { display: flex; gap: var(--space-2); }
-  .path { overflow-wrap: anywhere; font-size: 12px; }
-  .ask { font-size: 13px; line-height: 1.45; color: var(--text-soft); white-space: normal; }
-  .problem { color: var(--rose); font-size: 12px; white-space: normal; }
+  .path { overflow-wrap: anywhere; font-size: 0.75rem; }
+  .ask { font-size: 0.8125rem; line-height: 1.45; color: var(--text-soft); white-space: normal; }
+  .problem { color: var(--rose); font-size: 0.75rem; white-space: normal; }
 </style>

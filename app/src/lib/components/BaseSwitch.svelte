@@ -85,14 +85,14 @@
 {/if}
 
 <style>
-  .base { font: inherit; font-size: 12px; color: var(--text-faint); background: none; border: 0; padding: 4px 0; cursor: pointer; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
+  .base { font: inherit; font-size: 0.75rem; color: var(--text-faint); background: none; border: 0; padding: 4px 0; cursor: pointer; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
   .base:hover, .base:focus-visible, .base[aria-expanded="true"] { color: var(--text); }
-  .slash { color: var(--text-faint); font-size: 12px; margin: 0 -4px; }
+  .slash { color: var(--text-faint); font-size: 0.75rem; margin: 0 -4px; }
   .bases { --inside: var(--ground-2); filter: var(--lift-drop); animation: appear var(--dur-1) var(--ease-out); position: fixed; z-index: 22; width: min(320px, calc(100vw - 16px)); padding: 22px 12px 12px; white-space: nowrap; user-select: none; }
   .bases:focus-visible { outline: none; }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-  li { display: grid; grid-template-columns: 16px 1fr 28px 28px; align-items: center; gap: 6px; font-size: 13px; }
-  .tick { font-style: normal; color: var(--lattice); font-size: 12px; text-align: center; }
+  li { display: grid; grid-template-columns: 16px 1fr 28px 28px; align-items: center; gap: 6px; font-size: 0.8125rem; }
+  .tick { font-style: normal; color: var(--lattice); font-size: 0.75rem; text-align: center; }
   a { color: var(--text-soft); text-decoration: none; padding: 5px 0; overflow: hidden; text-overflow: ellipsis; }
   a:hover, a:focus-visible { color: var(--text); text-decoration: underline; }
   li.here a { color: var(--text); }
@@ -101,6 +101,6 @@
   .lend { clip-path: var(--chosen-cut); transition: color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out); }
   .lend[aria-pressed="true"] { background: color-mix(in srgb, var(--growth) var(--tint), transparent); color: var(--growth); box-shadow: inset 0 -2px 0 var(--growth); }
   .lend:disabled { cursor: default; }
-  .field.name { min-width: 0; font-size: 13px; padding: 3px 6px; }
-  .bad { color: var(--rose); font-size: 12px; margin: 8px 0 0; white-space: normal; }
+  .field.name { min-width: 0; font-size: 0.8125rem; padding: 3px 6px; }
+  .bad { color: var(--rose); font-size: 0.75rem; margin: 8px 0 0; white-space: normal; }
 </style>

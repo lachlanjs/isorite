@@ -78,17 +78,17 @@
 <style>
   .picture-name {
     position: fixed; z-index: 50; display: flex; gap: 12px; padding: 12px; width: min(460px, calc(100vw - 32px));
-    background: var(--ground-1); border: 1px solid var(--line-strong); font-family: var(--font-ui); font-size: 13px;
+    background: var(--ground-1); border: 1px solid var(--line-strong); font-family: var(--font-ui); font-size: 0.8125rem;
     box-shadow: 0 6px 24px color-mix(in srgb, var(--ground-0) 40%, transparent);
   }
   img { width: 72px; height: 72px; object-fit: contain; background: var(--ground-2); flex: none; }
   .fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1; }
   label { display: flex; flex-direction: column; gap: 2px; }
-  label > span:first-child { font-size: 12px; color: var(--text-faint); }
+  label > span:first-child { font-size: 0.75rem; color: var(--text-faint); }
   .name { display: flex; align-items: baseline; gap: 4px; }
   .name input { flex: 1; }
   .ext { color: var(--text-faint); }
-  .path, .same { margin: 0; font-size: 12px; color: var(--text-faint); overflow-wrap: anywhere; }
+  .path, .same { margin: 0; font-size: 0.75rem; color: var(--text-faint); overflow-wrap: anywhere; }
   .path.taken { color: var(--rose); }
   .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 </style>

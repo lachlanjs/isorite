@@ -205,7 +205,7 @@ export const blocksTheme = EditorView.theme({
   ".cm-lp-beneath": { borderLeft: "2px solid var(--line)", paddingLeft: "12px", marginTop: "4px", opacity: ".9" },
   ".cm-lp-block:not(.cm-lp-beneath):hover": { outline: "1px dashed var(--line)", outlineOffset: "2px" },
   // An embedded question (rose) or problem, as a callout (M12): green with a check once resolved or solved.
-  ".cm-lp-embed": { display: "flex", alignItems: "center", gap: "10px", padding: "9px 12px", border: "1px solid var(--rose)", borderLeftWidth: "3px", background: "var(--rose-soft)", fontFamily: "var(--font-text)", fontSize: "16px", lineHeight: "1.45", cursor: "pointer" },
+  ".cm-lp-embed": { display: "flex", alignItems: "center", gap: "10px", padding: "9px 12px", border: "1px solid var(--rose)", borderLeftWidth: "3px", background: "var(--rose-soft)", fontFamily: "var(--font-text)", fontSize: "1rem", lineHeight: "1.45", cursor: "pointer" },
   ".cm-lp-embed svg": { flex: "none", fill: "none", stroke: "var(--rose)", strokeWidth: "1.4" },
   ".cm-lp-embed-problem": { borderColor: "var(--line-strong)", background: "var(--ground-1)" },
   ".cm-lp-embed-problem svg": { stroke: "var(--text-soft)" },

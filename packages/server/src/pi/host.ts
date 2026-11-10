@@ -19,6 +19,7 @@ import type { PaneSessions } from "../sessions.ts";
 import { DEFAULT_COMPACTION_SETTINGS, estimateTokens, generateSummary, shouldCompact } from "@earendil-works/pi-coding-agent";
 import { type PiRecord, type PiStore } from "./store.ts";
 import { isoriteTools, titleOf, type ToolsApi } from "./tools.ts";
+import { invoked, skillText, skillsSection, skillTool, type Skill, type Skills } from "./skills.ts";
 
 type StreamFn = NonNullable<ConstructorParameters<typeof Agent>[0]>["streamFn"];
 type Decision = "once" | "always" | "reject";
@@ -41,6 +42,8 @@ export interface PiHostOptions {
   compaction?: Partial<Compaction>;
   /** Where sessions are kept between runs of the server. With none, a session ends with the server. */
   store?: PiStore;
+  /** The agent's skills (skills.ts): those on are named in the system prompt and fetched with `use_skill`, or by `/name` at the start of a message. */
+  skills?: Pick<Skills, "enabled">;
   /** The key to use for a provider, asked for at each request (so one changed in the settings is used by the next turn). */
   getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
 }
@@ -94,6 +97,7 @@ export class PiHost implements PaneSessions {
   #model: Model<any>;
   #streamFn: StreamFn;
   readonly #getApiKey: PiHostOptions["getApiKey"];
+  readonly #skills: PiHostOptions["skills"];
   readonly #id: string;
   #name: string;
   readonly #ask: (tool: string) => boolean;
@@ -138,8 +142,9 @@ export class PiHost implements PaneSessions {
   #view: TerminalView = EMPTY;
   #listeners = new Set<(v: TerminalView) => void>();
 
-  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now, store, compaction, getApiKey }: PiHostOptions) {
+  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now, store, compaction, getApiKey, skills }: PiHostOptions) {
     this.#getApiKey = getApiKey;
+    this.#skills = skills;
     this.#api = api;
     this.#model = model;
     this.#streamFn = streamFn;
@@ -199,7 +204,11 @@ export class PiHost implements PaneSessions {
     const pending = this.#pending;
     this.#pending = null;
     if (pending) for (const g of pending.parts) this.#given.add(givenKey(g));
-    agent.state.tools = [...(await isoriteTools(this.#api, { agent: this.#id, session: this.#session }, () => this.asked(this.#id))), ...this.#more()];
+    // Read again for each prompt (there is no watcher), so a skill switched on or put in a folder is there at once. One
+    // that fails to read leaves the agent without skills, not without an answer.
+    const skills = await (this.#skills?.enabled() ?? Promise.resolve([] as Skill[])).catch(() => [] as Skill[]);
+    agent.state.tools = [...(await isoriteTools(this.#api, { agent: this.#id, session: this.#session }, () => this.asked(this.#id))), ...(skills.length ? [skillTool(skills)] : []), ...this.#more()];
+    this.#showSkills(agent, skills);
     const turn: TerminalTurn = { id: randomUUID(), asked: text, from: "here", items: [], state: "running", ...(pending ? { given: pending.parts } : {}), at: new Date(this.#now()).toISOString() };
     this.#turns = [...this.#turns, turn];
     if (!this.#title) this.#title = text.slice(0, 80);
@@ -212,14 +221,33 @@ export class PiHost implements PaneSessions {
     this.#tell();
     // What was given goes before the question, in the same message. An earlier conversation that has grown near the
     // model's window is summarised first.
-    const message = this.#message(pending, turn.id.slice(0, 8), text);
+    const message = this.#message(pending, turn.id.slice(0, 8), text, skills);
     void (async () => { await this.#compactIfNeeded(agent); if (this.#stopping) throw new Error("stopped"); await agent.prompt(message); })().then(() => undefined, (e: Error) => { if (this.#stopping) this.#set("stopped"); else this.#fail(e.message); }).then(() => this.#end());
   }
 
   /** The person's message for the model: each block given with it, tagged, then what they asked. */
-  #message(pending: { parts: Given[]; blocks: string[] } | null, turn: string, text: string) {
+  #message(pending: { parts: Given[]; blocks: string[] } | null, turn: string, text: string, skills: Skill[] = []) {
     const blocks = (pending?.parts ?? []).map((g, i) => tagged(givenKey(g), turn, pending!.blocks[i] ?? ""));
-    return { role: "user" as const, content: [...blocks, text].map((t) => ({ type: "text" as const, text: t })), timestamp: this.#now() };
+    // A message that begins with /<skill> loads that skill for this turn: its instructions go before the request, which
+    // is what follows the name (the turn in the pane still shows what was typed).
+    let use = invoked(text, skills);
+    if (use) {
+      // A skill whose folder went between the list and now is asked for as plain text.
+      try { blocks.push(`[The person invoked the skill ${use.skill.name}. Follow it.]\n${skillText(use.skill)}\n[/skill]\n\n`); } catch { use = null; }
+    }
+    return { role: "user" as const, content: [...blocks, use ? use.request || "(They gave no request: begin as the skill says.)" : text].map((t) => ({ type: "text" as const, text: t })), timestamp: this.#now() };
+  }
+
+  /** The skills section of the system prompt, put in where it differs from what the model was last sent: a system message
+   *  patching the section by name (pi's way to change a prompt in a conversation), or taking it out when none are on. */
+  #showSkills(agent: Agent, skills: Skill[]): void {
+    const want = skills.length ? skillsSection(skills) : null;
+    let have: string | null = null;
+    for (const m of agent.state.messages as { role?: string; sections?: Record<string, string | null> }[]) {
+      if (m.role === "system" && m.sections && "skills" in m.sections) have = m.sections.skills ?? null;
+    }
+    if (want === have) return;
+    agent.state.messages = [...agent.state.messages, { role: "system", content: "", sections: { skills: want }, timestamp: this.#now() } as never];
   }
 
   /** What the model is sent: the messages, with each withdrawn block replaced by a line saying so. */

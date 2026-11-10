@@ -114,10 +114,10 @@
 
 <style>
   .file { max-width: 1120px; margin: 0 auto; padding: 40px var(--space-4) var(--space-12); display: flex; flex-direction: column; gap: var(--space-3); }
-  h1 { margin: 0; font-size: 34px; line-height: 1.2; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
-  .stand { margin: 4px 0 0; font: italic 17px/1.5 var(--font-text); color: var(--text-soft); max-width: 72ch; }
-  .label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-top: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--text-faint); }
-  .kind { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--line-strong); color: var(--text-soft); text-transform: uppercase; letter-spacing: .06em; font-size: 11px; }
+  h1 { margin: 0; font-size: 2.125rem; line-height: 1.2; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+  .stand { margin: 4px 0 0; font: italic 1.0625rem/1.5 var(--font-text); color: var(--text-soft); max-width: 72ch; }
+  .label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-top: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid var(--line); font-size: 0.75rem; color: var(--text-faint); }
+  .kind { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--line-strong); color: var(--text-soft); text-transform: uppercase; letter-spacing: .06em; font-size: 0.6875rem; }
   .path { color: var(--text-soft); } .path .sep { color: var(--text-faint); padding: 0 4px; } .path .name { color: var(--text); }
   /* A part in corner brackets (sketch U). */
   .br { color: var(--text-soft); padding: 3px 8px; text-decoration: none; --b: var(--line-strong); background:
@@ -126,18 +126,18 @@
   a.br:hover { color: var(--text); --b: var(--lattice); }
   .tools { margin-left: auto; display: flex; gap: var(--space-2); align-items: center; }
   .seg { display: flex; }
-  .seg button { font: 11px/18px var(--font-ui); color: var(--text-soft); background: none; border: 1px solid var(--line); margin-left: -1px; padding: 3px 9px; cursor: pointer; text-transform: uppercase; letter-spacing: .06em; }
+  .seg button { font: 0.6875rem/1.125rem var(--font-ui); color: var(--text-soft); background: none; border: 1px solid var(--line); margin-left: -1px; padding: 3px 9px; cursor: pointer; text-transform: uppercase; letter-spacing: .06em; }
   .seg button[aria-checked="true"] { background: var(--text); color: var(--ground-0); border-color: var(--text); position: relative; }
-  .tools .btn { height: 26px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
-  .said { margin: 0; font-size: 12px; color: var(--text-faint); }
-  .errors { margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--rose); }
+  .tools .btn { height: 26px; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: .06em; }
+  .said { margin: 0; font-size: 0.75rem; color: var(--text-faint); }
+  .errors { margin: 0; padding: 0; list-style: none; font-size: 0.75rem; color: var(--rose); }
   .problem { color: var(--rose); }
   .picture { max-width: 100%; height: auto; align-self: flex-start; }
   .pdf { width: 100%; height: 80vh; border: 1px solid var(--line); }
-  .shape { margin: 0; font: 12px/18px var(--font-ui); color: var(--text-soft); white-space: pre-wrap; }
+  .shape { margin: 0; font: 0.75rem/1.125rem var(--font-ui); color: var(--text-soft); white-space: pre-wrap; }
   .rows { overflow-x: auto; }
-  table { border-collapse: collapse; font: 12px/18px var(--font-ui); font-variant-numeric: tabular-nums; }
-  th { text-align: left; font-weight: 400; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); padding: 6px 10px; border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
+  table { border-collapse: collapse; font: 0.75rem/1.125rem var(--font-ui); font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-weight: 400; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); padding: 6px 10px; border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
   td { padding: 5px 10px; border-bottom: 1px solid var(--line); color: var(--text-soft); white-space: nowrap; }
   .n { text-align: right; }
 </style>

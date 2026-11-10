@@ -65,7 +65,7 @@
   /* What was asked, beside the mark while it is pointed at: to its left in the page's margin, over the text on a phone. */
   .asked {
     position: absolute; right: calc(100% + 6px); top: 2px; width: max-content; max-width: 200px; z-index: 3;
-    font-size: 12px; line-height: 1.4; color: var(--text); background: var(--ground-1); border: 1px solid var(--line);
+    font-size: 0.75rem; line-height: 1.4; color: var(--text); background: var(--ground-1); border: 1px solid var(--line);
     padding: 3px 7px; text-align: right; pointer-events: none;
     display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   }

@@ -20,7 +20,7 @@
 
 <style>
   .embed { display: block; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 6px 0 2px; }
-  .name { display: inline-flex; align-items: center; gap: 6px; font: 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); text-decoration: none; }
+  .name { display: inline-flex; align-items: center; gap: 6px; font: 0.6875rem var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); text-decoration: none; }
   .name:hover { color: var(--text); }
   .problem { display: block; color: var(--rose); }
 </style>

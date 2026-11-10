@@ -1,7 +1,7 @@
 <script lang="ts">
   // The agent's settings, under its pane's header: AGENTS.md, the base's own instructions, read by every agent attached
   // (M15). An agent's model and key are its own (M25), set up as for its own terminal.
-  import type { PiApi, PiState } from "$lib/api.ts";
+  import type { PiApi, PiSkill, PiState } from "$lib/api.ts";
   import { app } from "$lib/app.svelte.ts";
 
   let problem = $state("");
@@ -46,6 +46,14 @@
     finally { checking = false; }
   }
   $effect(() => { void provider; void name; checked = null; });
+  // The agent's skills for this base: each a name and a line, where it came from, and a switch (they are on unless switched off here).
+  let skills = $state.raw<PiSkill[]>([]);
+  $effect(() => { if (pi && local) void pi.skills().then((s) => { skills = s; }, () => undefined); });
+  async function flip(skill: PiSkill) {
+    problem = "";
+    try { skills = await pi!.setSkill(skill.name, !skill.enabled); } catch (e) { problem = (e as Error).message; }
+  }
+  const FROM = { "built-in": "built in", yours: "yours", base: "this base" } as const;
   const gateway = $derived(model?.gateway && !("problem" in model.gateway) ? model.gateway : null);
   const gatewayProblem = $derived(model?.gateway && "problem" in model.gateway ? model.gateway.problem : "");
 </script>
@@ -101,6 +109,22 @@ ca = 'company-ca.pem'           # if its authority is the company's</pre>
     {#if checked}<p class="note" class:ok={checked.ok} class:bad={!checked.ok} role="status" data-testid="pi-check">{checked.ok ? "✓ " : "✗ "}{checked.text}</p>{/if}
     {#if said}<p class="note" role="status">{said}</p>{/if}
   {/if}
+  {#if skills.length}
+    <h2 class="label">Skills</h2>
+    <ul class="skills" data-testid="skills">
+      {#each skills as sk (sk.name)}
+        <li data-skill={sk.name} class:broken={!!sk.error}>
+          <div class="what">
+            <span class="nm">/{sk.name}</span><span class="from">{FROM[sk.source]}</span>
+            <p class="note">{sk.error ? `Skipped: ${sk.error}` : sk.description}</p>
+          </div>
+          {#if !sk.error}
+            <button type="button" class="on" role="switch" aria-checked={sk.enabled} aria-label="Skill {sk.name}" title={sk.enabled ? "On: the agent may use it" : "Off"} onclick={() => void flip(sk)}>{sk.enabled ? "on" : "off"}</button>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  {/if}
   {#if problem}<p class="bad" role="alert">{problem}</p>{/if}
 </section>
 
@@ -115,14 +139,28 @@ ca = 'company-ca.pem'           # if its authority is the company's</pre>
   .in-use .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--malachite); flex: none; }
   h2 + * { margin-top: -2px; }
   h2:not(:first-child) { margin-top: var(--space-3); }
-  input:not([type="radio"], [type="checkbox"]), select { width: 100%; min-width: 0; font: 12.5px var(--font-mono); }
+  input:not([type="radio"], [type="checkbox"]), select { width: 100%; min-width: 0; font: 0.7812rem var(--font-mono); }
   .in-use { color: var(--text); }
   .ok { color: var(--malachite, var(--growth)); }
-  .gw { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; font-size: 12px; }
+  .gw { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; font-size: 0.75rem; }
   .gw dt { color: var(--text-faint); } .gw dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
-  .snippet { margin: 0; padding: 8px 10px; background: var(--ground-1); border: 1px solid var(--line); font: 11.5px/1.45 var(--font-mono); white-space: pre; overflow-x: auto; }
-  code { font: 11.5px var(--font-mono); }
+  .snippet { margin: 0; padding: 8px 10px; background: var(--ground-1); border: 1px solid var(--line); font: 0.7188rem/1.45 var(--font-mono); white-space: pre; overflow-x: auto; }
+  code { font: 0.7188rem var(--font-mono); }
   .bad { color: var(--rose); }
-  .agents { width: 100%; min-height: 96px; resize: vertical; field-sizing: content; background: var(--surface-raised); border: 1px solid var(--line-faint); border-radius: var(--round); padding: 8px 10px; font: 12.5px/1.55 var(--font-mono); color: var(--text); }
+  .skills { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+  .skills li { display: flex; gap: var(--space-2); align-items: flex-start; }
+  .skills .what { flex: 1 1 auto; min-width: 0; }
+  .skills .nm { font: 0.7812rem var(--font-mono); color: var(--text); }
+  .skills .from { margin-left: 8px; font: var(--fs-meta) var(--font-ui); color: var(--text-faint); }
+  .skills .note { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .skills .broken .note { color: var(--rose); }
+  /* On is the agent's gold, a tint and a bar under it (as the composer's switches). */
+  .on { --c: var(--growth); position: relative; flex: none; height: 24px; padding: 0 9px; background: none; border: 0; border-radius: var(--round); color: var(--text-faint); font: var(--fs-meta)/1 var(--font-ui); cursor: pointer; transition: color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out); }
+  .on::after { content: ""; position: absolute; left: 6px; right: 6px; bottom: 0; height: 2px; background: var(--c); transform: scaleX(0); transition: transform var(--dur-2) var(--ease-out); pointer-events: none; }
+  .on:hover { color: var(--text-soft); background: var(--fill-hover); }
+  .on[aria-checked="true"] { background: color-mix(in srgb, var(--c) var(--tint), transparent); color: var(--c); clip-path: var(--chosen-cut); }
+  .on[aria-checked="true"]::after { transform: scaleX(1); }
+  @media (prefers-reduced-motion: reduce) { .on, .on::after { transition: none; } }
+  .agents { width: 100%; min-height: 96px; resize: vertical; field-sizing: content; background: var(--surface-raised); border: 1px solid var(--line-faint); border-radius: var(--round); padding: 8px 10px; font: 0.7812rem/1.55 var(--font-mono); color: var(--text); }
   .agents:focus { border-color: var(--line-strong); outline: none; }
 </style>

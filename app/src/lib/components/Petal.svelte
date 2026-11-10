@@ -28,12 +28,12 @@
   .face :global(svg) { position: relative; transition: color var(--t-ack) var(--ease-out); }
   .tag:hover .face::before, .tag.on .face::before { background: var(--c); }
   .tag:hover .face :global(svg), .tag.on .face :global(svg) { color: var(--ground-0); }
-  .lbl { position: absolute; left: 50%; top: calc(100% + 6px); translate: -50% -4px; padding: 2px 6px; font: 11px/1.4 var(--font-ui); white-space: nowrap; color: var(--c); background: var(--ground-0); opacity: 0; transition: opacity var(--t-ack) var(--ease-out), translate var(--t-ack) var(--ease-out); pointer-events: none; }
+  .lbl { position: absolute; left: 50%; top: calc(100% + 6px); translate: -50% -4px; padding: 2px 6px; font: 0.6875rem/1.4 var(--font-ui); white-space: nowrap; color: var(--c); background: var(--ground-0); opacity: 0; transition: opacity var(--t-ack) var(--ease-out), translate var(--t-ack) var(--ease-out); pointer-events: none; }
   .tag:not(.below) .lbl { top: auto; bottom: calc(100% + 6px); translate: -50% 4px; }
   .tag:hover .lbl, .tag.on .lbl { opacity: 1; translate: -50% 0; }
   .tag.right .lbl, .tag.left .lbl { top: 50%; bottom: auto; translate: 0 -50%; }
   .tag.right .lbl { left: calc(100% + 6px); } .tag.left .lbl { left: auto; right: calc(100% + 6px); }
   .tag.right:hover .lbl, .tag.right.on .lbl, .tag.left:hover .lbl, .tag.left.on .lbl { translate: 0 -50%; }
-  .lbl :global(kbd) { margin-left: 6px; font: 10px var(--font-mono); color: var(--text-faint); }
+  .lbl :global(kbd) { margin-left: 6px; font: 0.625rem var(--font-mono); color: var(--text-faint); }
   @media (prefers-reduced-motion: reduce) { .tag { animation: none; transition: none; } }
 </style>

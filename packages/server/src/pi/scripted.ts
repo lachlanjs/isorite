@@ -12,6 +12,7 @@
 //   offer <note id> <text>      offer_text for the note
 //   file <path>                 read a file of the project (pi's read)
 //   run <command>               bash (refused by the loop where the pane's Run is off: the tool is not there)
+//   skill <name> [path]         use_skill: a skill's instructions, or a file it holds
 //   wait <ms>                   take that long before the next step (a turn to stop, or to steer)
 //   think <words>               think aloud before the reply
 //   cite <link>                 cite the link in the reply: [cited](<link>)
@@ -49,6 +50,7 @@ export function parse(text: string): Script {
     else if (verb === "offer" && id) step("offer_text", { id, text: tail });
     else if (verb === "file" && arg) step("read", { path: arg });
     else if (verb === "run" && arg) step("bash", { command: arg });
+    else if (verb === "skill" && id) step("use_skill", { name: id, ...(tail ? { path: tail } : {}) });
     else if (verb === "wait") wait += Number(arg) || 500;
     else if (verb === "think" && arg) s.think.push(arg);
     else if (verb === "cite" && arg) s.cite.push(arg);
@@ -77,7 +79,8 @@ const sleep = (ms: number, signal?: AbortSignal): Promise<boolean> => new Promis
 });
 
 type Message = { role?: string; content?: unknown };
-const textOf = (content: unknown): string => (typeof content === "string" ? content : Array.isArray(content) ? content.map((b: { type?: string; text?: string }) => (b?.type === "text" ? b.text ?? "" : "")).join("\n") : "");
+// The person's request is the last block of their message: what is given with it, or a skill invoked, goes before it and is not a script.
+const textOf = (content: unknown): string => (typeof content === "string" ? content : Array.isArray(content) ? content.filter((b: { type?: string }) => b?.type === "text").map((b: { text?: string }) => b.text ?? "").slice(-1).join("") : "");
 
 /** The model and the way to reach it. Each request reads the conversation: the person's last message is the script,
  *  and how many answers have come since it says which step is next. */

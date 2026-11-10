@@ -101,7 +101,7 @@
   .row.on { background: var(--fill-chosen); color: var(--growth); }
   .row:disabled { cursor: default; opacity: .6; }
   .cr { display: grid; place-items: center; }
-  .q { font: 14px/1.35 var(--font-text); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q { font: 0.875rem/1.35 var(--font-text); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .m { display: inline-flex; align-items: center; gap: 6px; font: var(--fs-meta) var(--font-ui); color: var(--text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .live { width: 6px; height: 6px; border-radius: 50%; background: var(--malachite); }
   .live.busy { background: var(--growth); box-shadow: 0 0 6px var(--growth); }

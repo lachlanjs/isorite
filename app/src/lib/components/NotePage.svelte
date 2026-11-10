@@ -293,14 +293,14 @@
   @keyframes arrive { from { opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .note.ready, .opening { animation: none; } }
   /* Room after the end, so the last line can be written somewhere other than the pane's bottom edge. */
-  .note { position: relative; max-width: calc(var(--measure) + 2 * var(--space-4)); margin: 0 auto; padding: 40px var(--space-4) 30vh; display: flex; flex-direction: column; gap: var(--space-2); }
+  .note { position: relative; max-width: calc(var(--measure) + 6rem); margin: 0 auto; padding: 2.5rem clamp(1rem, 5%, 3rem) 30vh; display: flex; flex-direction: column; gap: var(--space-2); }
   .head { display: flex; align-items: flex-start; gap: var(--space-3); }
   /* Read mode (M30): a heading, set larger, with room round it; the tools stay at the corner to leave it. */
-  .reading { --text-size: 20px; padding-top: 64px; }
-  .reading .title.read { margin: 0; font-size: 34px; line-height: 1.2; }
+  .reading { --text-size: 1.25rem; padding-top: 4rem; }
+  .reading .title.read { margin: 0; font-size: 2.125rem; line-height: 1.2; }
   .reading .tools { opacity: .6; transition: opacity var(--dur-1) var(--ease-out); }
   .reading .tools:hover, .reading .tools:focus-within { opacity: 1; }
-  .title { flex: 1 1 auto; min-width: 0; font-size: 34px; line-height: 1.2; font-weight: 700; background: none; border: 0; padding: 0 2px; color: var(--text); resize: none; field-sizing: content; overflow: hidden; }
+  .title { flex: 1 1 auto; min-width: 0; font-size: 2.125rem; line-height: 1.2; font-weight: 700; background: none; border: 0; padding: 0 2px; color: var(--text); resize: none; field-sizing: content; overflow: hidden; }
   .title::placeholder { color: var(--text-faint); }
   .title:focus-visible { outline: none; }
   .tools { margin-top: 6px; }
@@ -319,7 +319,7 @@
   .glyph.problem { color: var(--text-soft); }
   .glyph.problem.solved { color: var(--malachite); }
   .attached { list-style: none; margin: 32px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line-faint); display: flex; flex-direction: column; }
-  .attached a { display: grid; grid-template-columns: 18px minmax(0, 1fr) 14px; gap: 10px; align-items: center; padding: 6px 0; font: 15px var(--font-text); color: var(--text); text-decoration: none; }
+  .attached a { display: grid; grid-template-columns: 18px minmax(0, 1fr) 14px; gap: 10px; align-items: center; padding: 6px 0; font: 0.9375rem var(--font-text); color: var(--text); text-decoration: none; }
   .attached a:hover span { color: var(--lattice); }
   .attached a.done span { color: var(--text-faint); }
   .attached .ok { color: var(--malachite); }
@@ -327,10 +327,10 @@
   /* The timeline sits in the page's left margin, level with the title (Desktop-Editor); where there is no margin,
      it is a narrow column at the note's left (Mobile-Timeline). */
   .tl-col { position: absolute; z-index: 4; }
-  @container page (min-width: 1100px) {
+  @container page (min-width: 68.75rem) {
     .tl-col { top: 52px; right: calc(100% + 14px); }
   }
-  @container page (max-width: 1099px) {
+  @container page (max-width: 68.7rem) {
     .note.timed { padding-left: calc(var(--space-4) + 40px); }
     .tl-col { top: 40px; left: 8px; }
   }
@@ -346,7 +346,7 @@
     .head { flex-direction: column-reverse; gap: var(--space-1); }
     .tools { align-self: flex-end; padding-top: 0; }
     .side { align-self: stretch; flex-direction: row-reverse; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; }
-    .title { font-size: 30px; width: 100%; }
+    .title { font-size: 1.875rem; width: 100%; }
   }
   @media (max-width: 600px) {
     .note { padding: 20px 20px 30vh; }
@@ -355,6 +355,6 @@
       .head { flex-direction: column-reverse; gap: var(--space-1); }
     .tools { align-self: flex-end; padding-top: 0; }
     .side { align-self: stretch; flex-direction: row-reverse; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; }
-    .title { font-size: 30px; width: 100%; }
+    .title { font-size: 1.875rem; width: 100%; }
   }
 </style>

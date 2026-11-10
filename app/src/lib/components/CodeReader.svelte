@@ -88,18 +88,18 @@
 
 <style>
   .reader { max-width: 1120px; margin: 0 auto; padding: 32px var(--space-4) var(--space-12); display: flex; flex-direction: column; gap: var(--space-3); }
-  h1 { margin: 0; font: 600 20px/1.3 var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
+  h1 { margin: 0; font: 600 1.25rem/1.3 var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
   .dir { color: var(--text-faint); font-weight: 400; }
-  .meta { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: center; margin: 0; padding-bottom: var(--space-3); border-bottom: 1px solid var(--line); font: 12px var(--font-ui); color: var(--text-faint); }
+  .meta { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: center; margin: 0; padding-bottom: var(--space-3); border-bottom: 1px solid var(--line); font: 0.75rem var(--font-ui); color: var(--text-faint); }
   .sym { color: var(--lattice); font-family: var(--font-mono); }
   .tools { margin-left: auto; display: flex; gap: var(--space-2); align-items: center; }
-  .link { color: var(--text-soft); font: 12px var(--font-mono); }
-  .pre { border: 1px solid var(--line); background: var(--ground-1); font: 13px/1.55 var(--font-mono); overflow-x: auto; padding: 6px 0; }
+  .link { color: var(--text-soft); font: 0.75rem var(--font-mono); }
+  .pre { border: 1px solid var(--line); background: var(--ground-1); font: 0.8125rem/1.55 var(--font-mono); overflow-x: auto; padding: 6px 0; }
   .row { display: flex; white-space: pre; content-visibility: auto; contain-intrinsic-size: auto 20px; }
   .row.on { background: var(--lattice-soft); box-shadow: inset 3px 0 0 var(--lattice); }
   .num { flex: none; width: 56px; padding: 0 10px 0 0; text-align: right; background: none; border: 0; color: var(--text-faint); font: inherit; cursor: pointer; user-select: none; }
   .num:hover { color: var(--text); }
   .code { padding-right: 16px; }
-  .why { color: var(--text-faint); font: 13px var(--font-ui); }
+  .why { color: var(--text-faint); font: 0.8125rem var(--font-ui); }
   .broken { color: var(--rose); }
 </style>

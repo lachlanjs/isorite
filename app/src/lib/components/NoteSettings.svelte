@@ -141,8 +141,8 @@
   .icon.danger-text { color: var(--text-faint); }
   .name { color: var(--text); }
   .danger-text:hover, .danger-text:focus-visible { color: var(--rose); }
-  .ask { display: flex; flex-direction: column; gap: var(--space-2); color: var(--text-soft); font-size: 13px; }
-  .problem { margin: 0; color: var(--rose); font-size: 12px; }
+  .ask { display: flex; flex-direction: column; gap: var(--space-2); color: var(--text-soft); font-size: 0.8125rem; }
+  .problem { margin: 0; color: var(--rose); font-size: 0.75rem; }
   .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
   .icons { display: flex; align-items: center; gap: 2px; }
   .icon { position: relative; width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-faint); background: none; border: 0; padding: 0; cursor: pointer; clip-path: var(--chosen-cut); transition: color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out); }

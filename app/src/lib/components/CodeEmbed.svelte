@@ -46,8 +46,8 @@
 </span>
 
 <style>
-  .code { display: block; white-space: normal; margin: 6px 0; border: 1px solid var(--line); background: var(--ground-1); font: 13px/1.5 var(--font-mono); overflow: hidden; }
-  .head { display: flex; gap: 10px; align-items: baseline; padding: 3px 10px; border-bottom: 1px solid var(--line); color: var(--text-faint); font: 11px var(--font-ui); letter-spacing: .04em; }
+  .code { display: block; white-space: normal; margin: 6px 0; border: 1px solid var(--line); background: var(--ground-1); font: 0.8125rem/1.5 var(--font-mono); overflow: hidden; }
+  .head { display: flex; gap: 10px; align-items: baseline; padding: 3px 10px; border-bottom: 1px solid var(--line); color: var(--text-faint); font: 0.6875rem var(--font-ui); letter-spacing: .04em; }
   .file { color: var(--text-soft); font-family: var(--font-mono); text-decoration: none; }
   a.file:hover { color: var(--text); text-decoration: underline; }
   .sym { color: var(--lattice); font-family: var(--font-mono); }
@@ -55,7 +55,7 @@
   .pre { display: block; overflow-x: auto; padding: 6px 0; }
   .ln { display: block; white-space: pre; padding: 0 10px 0 52px; position: relative; }
   .ln::before { content: attr(data-n); position: absolute; left: 0; width: 40px; text-align: right; color: var(--text-faint); user-select: none; }
-  .why { display: block; padding: 4px 10px; color: var(--text-faint); font: 12px var(--font-ui); }
+  .why { display: block; padding: 4px 10px; color: var(--text-faint); font: 0.75rem var(--font-ui); }
   .broken .file { text-decoration: line-through; }
   .broken .why { color: var(--rose); }
 </style>

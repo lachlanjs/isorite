@@ -151,7 +151,7 @@ export function tables() {
     provide: (f) => showTooltip.compute([f], (s) => s.field(f).tip),
   });
   return [field, EditorView.baseTheme({
-    ".cm-table-bar": { display: "flex", gap: "2px", padding: "2px", background: "var(--ground-2)", border: "1px solid var(--line-strong)", fontFamily: "var(--font-ui)", fontSize: "12px" },
+    ".cm-table-bar": { display: "flex", gap: "2px", padding: "2px", background: "var(--ground-2)", border: "1px solid var(--line-strong)", fontFamily: "var(--font-ui)", fontSize: "0.75rem" },
     ".cm-table-bar button": { background: "none", border: "0", color: "var(--text-soft)", padding: "3px 6px", cursor: "pointer", font: "inherit" },
     ".cm-table-bar button:hover:not(:disabled)": { color: "var(--text)", background: "var(--line)" },
     ".cm-table-bar button:disabled": { opacity: "0.35", cursor: "default" },

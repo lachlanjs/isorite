@@ -8,6 +8,7 @@ import { Engine, MemoryFiles } from "../../packages/engine/src/index.ts";
 import { NodeFiles } from "../../packages/server/src/nodefiles.ts";
 import { INSTRUCTIONS } from "../../packages/server/src/mcp-http.ts";
 import { slimLook, slimTools } from "../../packages/server/src/pi/slim.ts";
+import { BUILTIN_SKILLS, discover, skillTool, skillsSection } from "../../packages/server/src/pi/skills.ts";
 import { INSTRUCTIONS_0_21_6 } from "./before.ts";
 import { baseline } from "./baselines.ts";
 
@@ -23,6 +24,10 @@ const SYSTEM = MODE === "before" ? INSTRUCTIONS_0_21_6 : INSTRUCTIONS;
 const defs = MODE === "before" ? await engine.agentTools() : slimTools(await engine.agentTools());
 const toolTokens = defs.map((d) => ({ name: d.function.name, tokens: tok(JSON.stringify({ name: d.function.name, description: d.function.description, input_schema: d.function.parameters })) }));
 const fixed = tok(SYSTEM) + toolTokens.reduce((n, t) => n + t.tokens, 0);
+
+// What the skills the build ships add where they are on (none on adds nothing: no section and no use_skill).
+const shipped = (await discover({ builtin: BUILTIN_SKILLS, user: "", base: "" })).skills;
+const skillSection = tok(skillsSection(shipped)), skillToolTokens = tok(JSON.stringify({ name: "use_skill", description: skillTool(shipped).description, input_schema: skillTool(shipped).parameters }));
 
 const raw = (tool: string, args: Record<string, unknown>) => engine.agentLook({ agent: "bench", session: "s", tool, args, asked: "bench" });
 const look = async (tool: string, args: Record<string, unknown>) => (MODE === "before" ? await raw(tool, args) : await slimLook(raw, tool, args)).text;
@@ -53,7 +58,9 @@ if (process.argv.includes("--json")) console.log(JSON.stringify({ mode: MODE, sy
 else {
   console.log(`mode: ${MODE}\nsystem prompt: ${tok(SYSTEM)} tok`);
   for (const t of toolTokens) console.log(`  tool ${t.name.padEnd(16)} ${t.tokens}`);
-  console.log(`fixed prefix (system + ${toolTokens.length} tools): ${fixed} tok\n`);
+  console.log(`fixed prefix (system + ${toolTokens.length} tools): ${fixed} tok`);
+  if (MODE === "after") console.log(`with the built-in skills on (${shipped.map((k) => k.name).join(", ")}): +${skillSection + skillToolTokens} tok (section ${skillSection}, use_skill ${skillToolTokens}) = ${fixed + skillSection + skillToolTokens}; with none on: +0\n`);
+  else console.log("");
   for (const t of out) console.log(`${t.task.padEnd(58)} calls ${String(t.calls).padStart(4)}  results ${String(t.results).padStart(6)}  total ${String(t.total).padStart(6)}`);
   if (process.argv.includes("--baselines")) await baseline(tok);
 }

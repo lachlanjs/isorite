@@ -51,9 +51,9 @@
 
 <style>
   .version { display: flex; flex-direction: column; gap: var(--space-2); }
-  .title { font-size: 34px; line-height: 1.2; font-weight: 700; margin: 0; padding: 0 2px; }
-  .asked { display: flex; align-items: baseline; gap: 10px; margin: 0; font-size: 13px; color: var(--text-soft); }
+  .title { font-size: 2.125rem; line-height: 1.2; font-weight: 700; margin: 0; padding: 0 2px; }
+  .asked { display: flex; align-items: baseline; gap: 10px; margin: 0; font-size: 0.8125rem; color: var(--text-soft); }
   .asked .dia { flex: none; position: relative; top: -1px; }
   .text :global(.cm-content) { padding-bottom: 24px; }
-  @media (max-width: 600px) { .title { font-size: 30px; } }
+  @media (max-width: 600px) { .title { font-size: 1.875rem; } }
 </style>

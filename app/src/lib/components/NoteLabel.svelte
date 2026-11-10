@@ -128,12 +128,12 @@
 <style>
   /* The description: the italic line under the title, written in place; a faint rule holds its place while empty. */
   .stand { display: block; width: 100%; margin: -2px 0 0; padding: 0 2px 2px; border: 0; border-bottom: 1px solid transparent; background: none; resize: none; field-sizing: content; overflow: hidden;
-    font: italic 17px/1.5 var(--font-text); color: var(--text-soft); }
+    font: italic 1.0625rem/1.5 var(--font-text); color: var(--text-soft); }
   .stand.empty { border-bottom-color: var(--line); min-height: 26px; }
   .stand:hover { border-bottom-color: var(--line); }
   .stand:focus-visible { outline: none; border-bottom-color: var(--lattice); color: var(--text); }
   /* The label's strip: no rule under it; space sets it apart from the text (design audit, P1). */
-  .label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: var(--space-2) 0 var(--space-4); font-size: 11px; color: var(--text-faint); }
+  .label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: var(--space-2) 0 var(--space-4); font-size: 0.6875rem; color: var(--text-faint); }
   /* The kind: three borderless slots, the chosen one tinted in its colour (as a switch that is on), its fill easing in. */
   .kinds { display: inline-flex; gap: 2px; }
   .slot { --c: var(--lattice); display: inline-flex; align-items: center; justify-content: center; height: 28px; width: 28px; padding: 0; background: none; border: 0; color: var(--text-faint); cursor: pointer; clip-path: var(--chosen-cut);
@@ -141,31 +141,31 @@
   .slot.question { --c: var(--rose); } .slot.problem { --c: var(--text-soft); }
   .slot:hover { background: var(--fill-hover); color: var(--text); }
   .slot[aria-checked="true"] { background: color-mix(in srgb, var(--c) var(--tint), transparent); color: var(--c); cursor: default; }
-  .path { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+  .path { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; }
   .seg { background: none; border: 0; border-bottom: 1px solid transparent; padding: 2px 0; color: var(--text-soft); font: inherit; cursor: pointer; }
   .seg.name { color: var(--text); }
   .seg:hover, .seg:focus-visible { border-bottom-color: var(--lattice); color: var(--text); outline: none; }
-  input { background: none; border: 0; border-bottom: 1px solid var(--lattice); padding: 2px 0; color: var(--text); font: 12px var(--font-ui); }
+  input { background: none; border: 0; border-bottom: 1px solid var(--lattice); padding: 2px 0; color: var(--text); font: 0.75rem var(--font-ui); }
   input:focus-visible { outline: none; }
   .parts, .extra { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
   /* A part in corner brackets. */
-  .br { font: 11px/16px var(--font-ui); color: var(--text-soft); padding: 3px 8px; background-color: transparent; border: 0; cursor: pointer; text-decoration: none; --b: var(--line-strong); background-image:
+  .br { font: 0.6875rem/1rem var(--font-ui); color: var(--text-soft); padding: 3px 8px; background-color: transparent; border: 0; cursor: pointer; text-decoration: none; --b: var(--line-strong); background-image:
     linear-gradient(var(--b), var(--b)), linear-gradient(var(--b), var(--b)), linear-gradient(var(--b), var(--b)), linear-gradient(var(--b), var(--b));
     background-repeat: no-repeat; background-position: top left, top left, bottom right, bottom right; background-size: 5px 1px, 1px 5px, 5px 1px, 1px 5px; }
   .br:hover, .br:focus-visible { color: var(--text); --b: var(--lattice); outline: none; }
   button.br:hover { text-decoration: line-through; text-decoration-color: var(--rose); }
-  .add, .x { width: 22px; height: 22px; display: inline-grid; place-items: center; background: none; border: 1px solid transparent; color: var(--text-faint); font: 13px var(--font-ui); cursor: pointer; padding: 0; }
+  .add, .x { width: 22px; height: 22px; display: inline-grid; place-items: center; background: none; border: 1px solid transparent; color: var(--text-faint); font: 0.8125rem var(--font-ui); cursor: pointer; padding: 0; }
   .add:hover, .add:focus-visible { border-color: var(--line-strong); color: var(--text); outline: none; }
   .x { width: 16px; margin-left: -6px; opacity: 0; }
   .extra .br:hover + .x, .x:hover, .x:focus-visible { opacity: 1; color: var(--rose); outline: none; }
-  .extra { display: flex; margin-top: var(--space-2); font-size: 11px; color: var(--text-faint); }
+  .extra { display: flex; margin-top: var(--space-2); font-size: 0.6875rem; color: var(--text-faint); }
   .word { font-weight: var(--fw-medium); letter-spacing: .04em; margin-right: 4px; }
   .grow { flex: 1; }
   /* Its mark: a quiet chip in the colour of where it stands (open rose, done malachite). */
-  .mark { --c: var(--rose); height: 26px; padding: 0 10px; border: 0; background: color-mix(in srgb, var(--c) var(--tint), transparent); color: var(--c); font: 12px var(--font-ui); cursor: pointer; clip-path: var(--chosen-cut);
+  .mark { --c: var(--rose); height: 26px; padding: 0 10px; border: 0; background: color-mix(in srgb, var(--c) var(--tint), transparent); color: var(--c); font: 0.75rem var(--font-ui); cursor: pointer; clip-path: var(--chosen-cut);
     transition: color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out); }
   .extra.problem .mark { --c: var(--text-soft); }
   .mark.done, .extra.problem .mark.done { --c: var(--malachite); }
   .mark:disabled { opacity: .6; cursor: default; }
-  p.problem { margin: var(--space-1) 0 0; color: var(--rose); font-size: 12px; }
+  p.problem { margin: var(--space-1) 0 0; color: var(--rose); font-size: 0.75rem; }
 </style>

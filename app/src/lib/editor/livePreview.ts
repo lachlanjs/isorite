@@ -330,19 +330,19 @@ export const livePreview = ViewPlugin.fromClass(
  *  Backgrounds are translucent so a selection (drawn beneath the text) shows through. */
 export const livePreviewTheme = EditorView.theme({
   ".cm-scroller": { fontFamily: "var(--font-text)", fontSize: "var(--text-size)", lineHeight: "1.55" },
-  ".cm-lp-gap": { lineHeight: "20px" },
-  ".cm-lp-gap-rule": { lineHeight: "10px" },
-  ".cm-lp-gap-more": { lineHeight: "4px" },
-  ".cm-lp-ruleline": { lineHeight: "12px" },
+  ".cm-lp-gap": { lineHeight: "1.25rem" },
+  ".cm-lp-gap-rule": { lineHeight: "0.625rem" },
+  ".cm-lp-gap-more": { lineHeight: "0.25rem" },
+  ".cm-lp-ruleline": { lineHeight: "0.75rem" },
   ".cm-content": { fontVariationSettings: '"opsz" 18' },
   ".cm-lp-h1, .cm-lp-h2, .cm-lp-h3, .cm-lp-h4, .cm-lp-h5, .cm-lp-h6": {
     fontWeight: "600", lineHeight: "1.3", fontVariationSettings: '"opsz" 36', paddingTop: ".5em !important",
   },
-  ".cm-lp-h1": { fontSize: "26px" },
-  ".cm-lp-artifact": { display: "block", margin: "8px 0 12px", fontFamily: "var(--font-ui)", fontSize: "12px", lineHeight: "1.4" },
-  ".cm-lp-h2": { fontSize: "22px" },
-  ".cm-lp-h3": { fontSize: "19px" },
-  ".cm-lp-h4": { fontSize: "17px", fontWeight: "700" },
+  ".cm-lp-h1": { fontSize: "1.625rem" },
+  ".cm-lp-artifact": { display: "block", margin: "8px 0 12px", fontFamily: "var(--font-ui)", fontSize: "0.75rem", lineHeight: "1.4" },
+  ".cm-lp-h2": { fontSize: "1.375rem" },
+  ".cm-lp-h3": { fontSize: "1.1875rem" },
+  ".cm-lp-h4": { fontSize: "1.0625rem", fontWeight: "700" },
   ".cm-lp-em": { fontStyle: "italic" },
   ".cm-lp-strong": { fontWeight: "700" },
   ".cm-lp-strike": { textDecoration: "line-through" },
@@ -361,10 +361,10 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-lp-quote": { borderLeft: "3px solid var(--lattice)", paddingLeft: "14px !important", color: "var(--text-soft)" },
   // A code block as on the boards: the interface's face on a raised ground, one line down its left side. The ground
   // is translucent, because the selection is drawn beneath the text and an opaque one would hide it.
-  ".cm-lp-codeblock": { fontFamily: "var(--font-mono)", fontSize: "13px", lineHeight: "20px", background: "color-mix(in srgb, var(--line) 38%, transparent)", borderLeft: "2px solid var(--line-strong)", padding: "0 16px !important" },
+  ".cm-lp-codeblock": { fontFamily: "var(--font-mono)", fontSize: "0.8125rem", lineHeight: "1.25rem", background: "color-mix(in srgb, var(--line) 38%, transparent)", borderLeft: "2px solid var(--line-strong)", padding: "0 16px !important" },
   // The hidden fences are the block's padding, 12px above and below, as on the boards.
-  ".cm-lp-codeblock.cm-lp-fence": { lineHeight: "12px", position: "relative" },
-  ".cm-lp-lang": { position: "absolute", top: "8px", right: "12px", fontFamily: "var(--font-ui)", fontSize: "12px", lineHeight: "16px", color: "var(--text-faint)", pointerEvents: "none" },
+  ".cm-lp-codeblock.cm-lp-fence": { lineHeight: "0.75rem", position: "relative" },
+  ".cm-lp-lang": { position: "absolute", top: "8px", right: "12px", fontFamily: "var(--font-ui)", fontSize: "0.75rem", lineHeight: "1rem", color: "var(--text-faint)", pointerEvents: "none" },
   ".cm-lp-mathsrc": { fontFamily: "var(--font-mono)", fontSize: ".86em", color: "var(--text-soft)" },
   // One box, so a click anywhere on a formula (between its glyphs too) is a click on it.
   ".cm-lp-imaths": { display: "inline-block", cursor: "text" },

@@ -50,6 +50,7 @@ for (const [entry, name] of [["packages/server/src/main.ts", "main"], ["packages
 // What the bundles read at run time.
 cpSync(at("app/build"), join(OUT, "web"), { recursive: true });
 cpSync(at("packages/example/notes"), join(OUT, "notes"), { recursive: true });
+cpSync(at("packages/server/skills"), join(OUT, "skills"), { recursive: true });
 cpSync(at("packages/guide/notes"), join(OUT, "guide"), { recursive: true, filter: (p) => !p.includes(".isorite") && !p.endsWith(".gitignore") });
 const ort = dirname(createRequire(at("packages/server/package.json")).resolve("onnxruntime-web"));
 cpSync(join(ort, "ort-wasm-simd-threaded.wasm"), join(OUT, "dist", "ort-wasm-simd-threaded.wasm"));
@@ -76,7 +77,7 @@ writeFileSync(join(OUT, "package.json"), JSON.stringify({
   repository: { type: "git", url: "git+https://github.com/lachlanjs/isorite.git" },
   homepage: "https://lachlanjs.github.io/isorite/",
   keywords: ["notes", "knowledge-base", "markdown", "study", "agent", "mcp"],
-  files: ["dist", "web", "notes", "guide", "docs", "README.md", "LICENSE"],
+  files: ["dist", "web", "notes", "guide", "skills", "docs", "README.md", "LICENSE"],
   dependencies,
 }, null, 2) + "\n");
 cpSync(at("LICENSE"), join(OUT, "LICENSE"));

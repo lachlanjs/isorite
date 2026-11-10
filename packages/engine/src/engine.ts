@@ -340,6 +340,17 @@ export class Engine implements Api {
       await this.opts.own.write(SETTINGS_FILE, settingsText(may ? rest : { ...rest, agents_write_notes: false }));
     });
   }
+  /** The agent's skills this base has switched off, by name (the rest are on). Kept in the base's settings. */
+  async agentSkillsOff(): Promise<{ off: string[] }> {
+    return { off: (await this.settingsOfBase()).skills_off ?? [] };
+  }
+  async setAgentSkillsOff(off: string[]): Promise<void> {
+    await this.one(async () => {
+      const { skills_off: _, ...rest } = await this.settingsOfBase();
+      const names = [...new Set(off)].sort();
+      await this.opts.own.write(SETTINGS_FILE, settingsText(names.length ? { ...rest, skills_off: names } : rest));
+    });
+  }
   /** What is hidden: one id a line in `.isorite/hidden.txt`, so that two people hiding different things merge in git (the
    *  lines are put together); the list in the settings, where it was first kept, is read too. */
   async hidden(): Promise<{ ids: string[] }> {

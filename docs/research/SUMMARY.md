@@ -23,6 +23,7 @@ The Atlas work is recorded in `docs/atlas-layout.md`, section 7.
 - Tokens: `brief_base` returns the map only, with the rest on request.
 - Setup: `isorite setup` (wizard and `--yes` form), a fuller `isorite doctor`, MCP configs written for detected harnesses.
 - Simplification: spikes, the old eval, the learner record, proposals and `/parts` deleted; appearance cut to the theme switch; plans archived to `docs/archive/` with `docs/history.md`; Iso renamed Agent in code and the guide.
+- Skills: isorite's own agent loads `SKILL.md` skills (built in, `<data>/skills/`, `<base>/.isorite/skills/`), by name in the prompt and `use_skill`, or `/name` in the composer; on/off in the agent settings, kept in the base; Jane Street's socratic-tutor ships built in (+212 tokens on, 0 off).
 - Tests: the two ~1,200-note Atlas cases run only with `ISORITE_SLOW=1`; `npm test` takes about a minute and a half.
 
 ## Unfinished

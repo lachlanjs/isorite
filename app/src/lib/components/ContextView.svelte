@@ -65,7 +65,7 @@
 </div>
 
 <style>
-  .context { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+  .context { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; font-size: 0.75rem; }
   /* The column (O): hatched, isorite's instructions and tools; blue, the notes; ruled, the rest; empty, the room left. */
   /* The figure under the column, so that a layer's name standing in it never moves the layers. */
   .column { display: flex; flex-direction: column; gap: 6px; }

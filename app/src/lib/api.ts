@@ -43,7 +43,11 @@ export interface PiApi {
   /** One short request with the key and model: how long it took, or (thrown) why it did not answer. */
   check(provider: string, model: string): Promise<{ ms: number; said: string }>;
   setReach(files: "off" | "read" | "write", shell: boolean): Promise<void>;
+  /** The agent's skills for this base: where each came from, whether it is on, and (for one that could not be read) why not. */
+  skills(): Promise<PiSkill[]>;
+  setSkill(name: string, enabled: boolean): Promise<PiSkill[]>;
 }
+export interface PiSkill { name: string; description: string; source: "built-in" | "yours" | "base"; enabled: boolean; error?: string }
 
 /** The pane's agent session (isorite's own agent), through the isorite server; on the guide's site, the finder's. */
 export interface TerminalApi {
@@ -144,6 +148,9 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     nameRepository: async () => false,
     agentNotes: () => ask("agents/notes"),
     setAgentNotes: (may) => write("POST", "agents/notes", { may }),
+    // The server's own too: the skills are listed and switched through `pi.skills`.
+    agentSkillsOff: async () => ({ off: [] }),
+    setAgentSkillsOff: async () => undefined,
     hidden: () => ask("hidden"),
     setHidden: (ids) => write("POST", "hidden", { ids }),
     brokenNews: async () => [],
@@ -176,6 +183,8 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       models: async (provider) => (await ask<{ models: string[] }>(`pi/models?provider=${encodeURIComponent(provider)}`)).models,
       check: (provider, model) => write("POST", "pi/check", { provider, model }) as Promise<{ ms: number; said: string }>,
       setReach: async (files, shell) => { await write("POST", "pi/reach", { files, shell }); },
+      skills: async () => (await ask<{ skills: PiSkill[] }>("pi/skills")).skills,
+      setSkill: async (name, enabled) => ((await write("POST", "pi/skills", { name, enabled })) as { skills: PiSkill[] }).skills,
     },
     terminal: {
       view: () => ask<TerminalView>("terminal"),

@@ -62,13 +62,13 @@ export interface EditorOptions {
 }
 
 // Plain source is set in the monospaced face; the live preview in the reading one.
-const sourceTheme = EditorView.theme({ ".cm-scroller": { fontFamily: "var(--font-mono)", fontSize: "14px", lineHeight: "1.6" } });
+const sourceTheme = EditorView.theme({ ".cm-scroller": { fontFamily: "var(--font-mono)", fontSize: "0.875rem", lineHeight: "1.6" } });
 
 const theme = EditorView.theme({
-  "&": { color: "var(--text)", backgroundColor: "transparent", fontSize: "16px" },
+  "&": { color: "var(--text)", backgroundColor: "transparent", fontSize: "1rem" },
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": { overflow: "visible" },
-  ".cm-content": { padding: "12px 0 40vh", caretColor: "var(--lattice)" },
+  ".cm-content": { padding: "12px 0 40vh", caretColor: "var(--lattice)", overflowWrap: "anywhere" },
   ".cm-line": { padding: "0 2px" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--lattice)", borderLeftWidth: "2px" },
   // The selection, clearly visible on both grounds. Dimmer when not focused.
@@ -77,14 +77,14 @@ const theme = EditorView.theme({
     backgroundColor: "color-mix(in srgb, var(--lattice) 40%, transparent) !important",
   },
   ".cm-placeholder": { color: "var(--text-faint)" },
-  ".cm-tooltip-autocomplete": { background: "var(--ground-1)", border: "1px solid var(--line-strong)", fontFamily: "var(--font-ui)", fontSize: "13px" },
+  ".cm-tooltip-autocomplete": { background: "var(--ground-1)", border: "1px solid var(--line-strong)", fontFamily: "var(--font-ui)", fontSize: "0.8125rem" },
   ".cm-tooltip.cm-tooltip-autocomplete > ul": { fontFamily: "var(--font-ui)", maxHeight: "16em" },
   ".cm-tooltip-autocomplete > ul > li": { padding: "6px 10px !important", lineHeight: "1.3" },
   ".cm-picture-thumb": { width: "32px", height: "32px", objectFit: "cover", verticalAlign: "middle", marginRight: "8px", background: "var(--ground-2)" },
   ".cm-tooltip-autocomplete > ul > li:has(.cm-picture-thumb)": { padding: "3px 10px !important" },
   ".cm-picture-preview": { padding: "8px" },
   ".cm-picture-preview img": { display: "block", maxWidth: "240px", maxHeight: "240px" },
-  ".cm-picture-size": { fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--text-faint)", marginTop: "4px" },
+  ".cm-picture-size": { fontFamily: "var(--font-ui)", fontSize: "0.75rem", color: "var(--text-faint)", marginTop: "4px" },
   ".cm-completionInfo": { background: "var(--ground-1)", border: "1px solid var(--line-strong)", padding: "0" },
   ".cm-tooltip-autocomplete > ul > li[aria-selected]": { background: "var(--lattice-soft)", color: "var(--text)" },
   ".cm-completionDetail": { color: "var(--text-faint)", fontStyle: "normal", marginLeft: "10px" },

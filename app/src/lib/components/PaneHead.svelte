@@ -189,7 +189,7 @@
   .sw:hover, .sw:focus-visible { color: var(--text); background: var(--fill-hover); }
   .sw[aria-pressed="true"] { background: color-mix(in srgb, var(--c, var(--lattice)) var(--tint), transparent); color: var(--c, var(--lattice)); }
   .sw[aria-pressed="true"]::after { transform: scaleX(1); }
-  .lbl { display: none; font: 12px/1 var(--font-ui); letter-spacing: .02em; }
+  .lbl { display: none; font: 0.75rem/1 var(--font-ui); letter-spacing: .02em; }
   /* The Atlas's switches take the width the pane has: wider buttons first, then each with its name. Two groups: the
      kinds it shows, then the lens (the agent's context), a little apart. */
   .named .sw[data-switch="context"] { margin-left: 8px; }
@@ -208,13 +208,13 @@
   .tools { display: contents; }
   .phead :global([data-folded]) { display: none !important; }
   .foldmenu { --inside: var(--ground-2); filter: var(--lift-drop); animation: appear var(--t-ack) var(--ease-out); position: absolute; z-index: 21; top: 44px; right: 8px; width: max-content; min-width: 210px; max-width: min(300px, calc(100% - 16px)); padding: 6px 8px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; white-space: nowrap; }
-  .row { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 36px; padding: 0 14px 0 10px; background: none; border: 0; color: var(--text); font: 13px var(--font-ui); text-align: left; cursor: pointer; margin: 0; }
+  .row { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 36px; padding: 0 14px 0 10px; background: none; border: 0; color: var(--text); font: 0.8125rem var(--font-ui); text-align: left; cursor: pointer; margin: 0; }
   button.row:hover, button.row:focus-visible { background: var(--ground-3); outline: none; }
   .row .ic { width: 16px; height: 16px; display: grid; place-items: center; flex: none; color: var(--text-soft); }
   .row .ic :global(svg) { width: 16px; height: 16px; }
   .row .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .row .on { width: 6px; height: 6px; background: var(--lattice); flex: none; }
-  .row.said { color: var(--text-faint); font-size: 12px; cursor: default; white-space: normal; }
+  .row.said { color: var(--text-faint); font-size: 0.75rem; cursor: default; white-space: normal; }
   .more[aria-expanded="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
   /* The Agent's and the Atlas's headers are full on a phone: the base is switched from the Note pane's there, rather than shown
      squeezed to nothing beside a stray slash. */

@@ -53,16 +53,16 @@
   .find input { width: 100%; box-sizing: border-box; }
   ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: grid; gap: 1px; }
   li { display: flex; align-items: center; }
-  .row { all: unset; box-sizing: border-box; flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; padding: 5px 6px; cursor: pointer; font: 13px var(--font-ui); color: var(--text); }
+  .row { all: unset; box-sizing: border-box; flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; padding: 5px 6px; cursor: pointer; font: 0.8125rem var(--font-ui); color: var(--text); }
   .row.on { background: var(--fill-chosen); }
   li.hidden .row { color: var(--text-faint); }
   .t { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .s { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--text-faint); }
+  .s { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.6875rem; color: var(--text-faint); }
   /* How it was found, in the outline the map gives it: dashed, dotted, solid. */
   .by { flex: none; align-self: center; width: 9px; height: 9px; border: 1.5px solid var(--lattice); }
   .by.words { border-style: dashed; } .by.meaning { border-style: dotted; border-width: 2px; } .by.both { border-style: solid; }
   li.hidden .by { border-color: var(--text-faint); }
-  .show { all: unset; cursor: pointer; flex: none; padding: 3px 6px; font: 11px var(--font-ui); color: var(--text-faint); }
+  .show { all: unset; cursor: pointer; flex: none; padding: 3px 6px; font: 0.6875rem var(--font-ui); color: var(--text-faint); }
   .show:hover, .show:focus-visible { color: var(--text); }
-  .none { margin: 2px 6px; font: 12px var(--font-ui); color: var(--text-faint); }
+  .none { margin: 2px 6px; font: 0.75rem var(--font-ui); color: var(--text-faint); }
 </style>

@@ -254,6 +254,8 @@ export interface Api {
   /** Whether agents may change this base's notes, through isorite's tools or by asking to edit its files. */
   agentNotes(): Promise<{ may: boolean }>;
   setAgentNotes(may: boolean): Promise<void>;
+  agentSkillsOff(): Promise<{ off: string[] }>;
+  setAgentSkillsOff(off: string[]): Promise<void>;
   /** The notes and folders kept off the Atlas and the list (by id), shared by everyone with the base. Agents still see them. */
   hidden(): Promise<{ ids: string[] }>;
   setHidden(ids: string[]): Promise<void>;

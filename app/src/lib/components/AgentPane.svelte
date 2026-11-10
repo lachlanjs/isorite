@@ -13,6 +13,7 @@
   import { terminal } from "$lib/terminal.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import { pointers } from "$lib/pointers.svelte.ts";
+  import type { PiApi, PiSkill } from "$lib/api.ts";
   import PromptBox from "./PromptBox.svelte";
   import AgentSessions from "./AgentSessions.svelte";
   import AttachAgent from "./AttachAgent.svelte";
@@ -55,8 +56,27 @@
     text = last;
     return true;
   }
+  // A message that begins with /<skill> loads that skill for the turn: typing the slash offers the skills that are on
+  // (from this machine, where the settings are), and Enter or Tab completes one.
+  const piApi = (app.api as { pi?: PiApi } | undefined)?.pi ?? null;
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+  let skills = $state.raw<PiSkill[]>([]);
+  let chosen = $state(0);
+  /** The text the list was dismissed for with Escape. */
+  let dismissed = $state<string | null>(null);
+  const slashing = $derived(terminal.connected && /^\/[a-z0-9-]*$/.test(text));
+  const offered = $derived(slashing && dismissed !== text ? skills.filter((s) => s.enabled && !s.error && s.name.startsWith(text.slice(1))) : []);
+  $effect(() => { if (slashing && piApi && local) void piApi.skills().then((s) => { skills = s; }, () => undefined); });
+  $effect(() => { void text; chosen = 0; });
+  function complete(skill: PiSkill): void { text = `/${skill.name} `; }
+
   function keys(e: KeyboardEvent): void {
     if (e.isComposing) return;
+    if (offered.length && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); chosen = (chosen + (e.key === "ArrowDown" ? 1 : -1) + offered.length) % offered.length; return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); complete(offered[chosen] ?? offered[0]!); return; }
+      if (e.key === "Escape") { e.preventDefault(); dismissed = text; return; }
+    }
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && terminal.canSteer) { e.preventDefault(); void steer(); }
     else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); }
     else if (e.key === "Escape" && menu) { e.preventDefault(); menu = false; }
@@ -109,6 +129,15 @@
   <div class="composer">
     {#if busy && text.trim()}
       <p class="mid" transition:fade={{ duration: reduced() ? 0 : DUR_1 }}>Enter queues it for when it stops.{#if terminal.canSteer} <button type="button" class="link" onclick={() => void steer()} title="Put it in after the step running now (Ctrl+Enter)">Steer now</button>{/if}</p>
+    {/if}
+    {#if offered.length}
+      <ul class="slash" role="listbox" aria-label="Skills" data-testid="skill-menu">
+        {#each offered as sk, i (sk.name)}
+          <li role="presentation">
+            <button type="button" role="option" tabindex="-1" aria-selected={i === chosen} data-skill={sk.name} onpointerdown={(e) => { e.preventDefault(); complete(sk); }}><span class="nm">/{sk.name}</span><span class="what">{sk.description}</span></button>
+          </li>
+        {/each}
+      </ul>
     {/if}
     <div class="box" class:busy>
       <PromptBox bind:value={text} readonly={terminal.sending} placeholder={terminal.connected ? `Ask ${name}` : "Set up an agent to ask it here"} onkeydown={keys} />
@@ -174,7 +203,14 @@
   .apane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .apane.drop { outline: 2px dashed var(--growth); outline-offset: -4px; }
   .chat { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 18px; }
-  .composer { flex: none; padding: 8px 12px 12px; display: grid; gap: 6px; }
+  .composer { position: relative; flex: none; padding: 8px 12px 12px; display: grid; gap: 6px; }
+  /* The skills a leading slash offers, over the session, just above the box. */
+  .slash { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 4px); z-index: 20; margin: 0; padding: 4px; list-style: none; display: grid; background: var(--surface-float); border: 1px solid var(--line); border-radius: var(--round); box-shadow: var(--lift); animation: appear var(--dur-1) var(--ease-out); }
+  .slash button { width: 100%; display: flex; gap: 10px; align-items: baseline; text-align: left; min-height: var(--control); padding: 6px 10px; background: none; border: 0; border-radius: var(--round); color: var(--text-soft); font: var(--fs-small) var(--font-ui); cursor: pointer; }
+  .slash .nm { flex: none; font: 0.7812rem var(--font-mono); color: var(--text); }
+  .slash .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); }
+  .slash button:hover, .slash button[aria-selected="true"] { background: color-mix(in srgb, var(--lattice) var(--tint), transparent); box-shadow: inset 2px 0 0 var(--lattice); }
+  @media (prefers-reduced-motion: reduce) { .slash { animation: none; } }
   .bad { margin: 0; color: var(--rose); font: var(--fs-small)/1.4 var(--font-ui); padding-left: 2px; overflow-wrap: anywhere; }
   .offline { margin: 0; display: flex; align-items: center; gap: 6px; font: var(--fs-small) var(--font-ui); color: var(--text-faint); }
   .offline .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--rose); }

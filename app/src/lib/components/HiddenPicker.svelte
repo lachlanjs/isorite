@@ -73,10 +73,10 @@
   .hidden-picker { position: absolute; z-index: 20; width: 260px; max-height: 290px; display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--ground-1); }
   .hidden-picker input { width: 100%; box-sizing: border-box; }
   ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: grid; gap: 1px; }
-  li button { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: baseline; gap: 6px; padding: 5px 6px; cursor: pointer; font: 13px var(--font-ui); color: var(--text); }
+  li button { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: baseline; gap: 6px; padding: 5px 6px; cursor: pointer; font: 0.8125rem var(--font-ui); color: var(--text); }
   li button svg { flex: none; align-self: center; color: var(--text-faint); }
   li button.on { background: var(--fill-chosen); }
   .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .p { margin-left: auto; font-size: 11px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
-  .none { margin: 4px 6px; font: 12px var(--font-ui); color: var(--text-faint); }
+  .p { margin-left: auto; font-size: 0.6875rem; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
+  .none { margin: 4px 6px; font: 0.75rem var(--font-ui); color: var(--text-faint); }
 </style>

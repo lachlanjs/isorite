@@ -61,8 +61,8 @@
   --font-ui: "Lyth Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-mono: var(--font-ui);
   --font-pixel: "Lyth Mono", ui-monospace, monospace;
-  --text-size: 18px;
-  --measure: 820px;
+  --text-size: 1.125rem;
+  --measure: 51.25rem;
 
   /* Light on a face (the lustre, M24): its colour, and how strong it is on this ground. */
   --sheen: 255 248 225; --sheen-k: 1;
@@ -87,11 +87,11 @@
   /* A coloured thing that is on: its colour at this strength over the ground (.is-on). */
   --tint: 18%;
   /* Type: one scale for the interface (prose keeps --text-size); weight and brightness do the hierarchy, not size. */
-  --fs-meta: 11px; --fs-small: 12px; --fs-ui: 13px; --fs-lead: 15px; --fs-title: 34px;
+  --fs-meta: 0.6875rem; --fs-small: 0.75rem; --fs-ui: 0.8125rem; --fs-lead: 0.9375rem; --fs-title: 2.125rem;
   --fw-regular: 400; --fw-medium: 500; --fw-strong: 650;
   --lh-ui: 1.45;
   /* Rows and controls: one height each. */
-  --row: 32px; --row-dense: 26px; --control: 28px;
+  --row: 2rem; --row-dense: 1.625rem; --control: 1.75rem;
   /* The focused pane: the one lit edge. */
   --pane-lit: color-mix(in srgb, var(--lattice) 70%, transparent);
   /* What floats over the page (a menu, a button over a scrolling session) is lifted; nothing in the flow is. */
@@ -152,7 +152,7 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; }
-body { margin: 0; background: var(--ground-0); color: var(--text); font: 13px/1.5 var(--font-ui); -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--ground-0); color: var(--text); font: 0.8125rem/1.5 var(--font-ui); -webkit-text-size-adjust: 100%; }
 h1, h2, h3, p { margin: 0; }
 a { color: var(--lattice); text-decoration: none; }
 a:hover { color: var(--lattice-deep); text-decoration: underline; }
@@ -290,7 +290,7 @@ details { interpolate-size: allow-keywords; }
     linear-gradient(var(--fill), var(--fill)) right top / var(--cut) calc(100% - var(--cut)) no-repeat,
     linear-gradient(315deg, transparent var(--c), var(--fill) 0) right bottom / var(--cut) var(--cut) no-repeat;
 }
-.btn { height: 32px; padding: 0 14px; font-size: 13px; }
+.btn { height: 32px; padding: 0 14px; font-size: 0.8125rem; }
 /* Where curves can be clipped, a button's fill is a layer of its own under it, cut by a shape with eased vertices,
    in place of the painted cut (which cannot be eased). Its contents, and anything that opens out of it, are not
    clipped. */
@@ -316,7 +316,7 @@ a.btn:hover { text-decoration: none; color: var(--text); }
 .btn.danger { --fill: var(--rose); color: var(--ground-0); font-weight: 700; }
 .btn.quiet { --fill: transparent; color: var(--text-soft); padding: 0 8px; }
 .btn.quiet:hover:not(:disabled) { --fill: var(--fill-hover); color: var(--text); }
-.chip { --fill: var(--ground-3); --cut: 4px; height: 22px; padding: 0 8px; font-size: 12px; color: var(--text-soft); }
+.chip { --fill: var(--ground-3); --cut: 4px; height: 22px; padding: 0 8px; font-size: 0.75rem; color: var(--text-soft); }
 .chip.lattice { --fill: var(--lattice-soft); color: var(--lattice); }
 .chip.growth { --fill: var(--growth-soft); color: var(--growth); }
 .chip.malachite { --fill: var(--malachite-soft); color: var(--malachite); }
@@ -352,7 +352,7 @@ a.btn:hover { text-decoration: none; color: var(--text); }
 /* --px: a screen pixel, where the frame is in a layer scaled to a zoom (the Atlas, M12); else a pixel. */
 .frame::after { z-index: -1; inset: var(--px, 1px); background: var(--inside); --k: max(0px, calc(var(--cut) - .586 * var(--px, 1px))); }
 /* A frame's title sits in its top edge. */
-.frame > .frame-title { position: absolute; top: -9px; left: 22px; padding: 0 6px; font-size: 12px; line-height: 18px; color: var(--text-faint); background: var(--behind, var(--ground-0)); white-space: nowrap; }
+.frame > .frame-title { position: absolute; top: -9px; left: 22px; padding: 0 6px; font-size: 0.75rem; line-height: 1.125rem; color: var(--text-faint); background: var(--behind, var(--ground-0)); white-space: nowrap; }
 
 /* A field: a fill and one line under it. */
 .field { background: var(--ground-2); border: 0; border-bottom: 1px solid var(--line-strong); border-radius: var(--round) var(--round) 0 0; height: 32px; padding: 0 10px; min-width: 0; transition: border-color var(--t-ack) var(--ease-out), box-shadow var(--t-ack) var(--ease-out); }
@@ -368,11 +368,11 @@ a.btn:hover { text-decoration: none; color: var(--text); }
 
 /* ------------------------------------------------------------ prose (rendered blocks in the editor) */
 
-.prose { font: var(--text-size)/1.6 var(--font-text); }
+.prose { font: var(--text-size)/1.6 var(--font-text); overflow-wrap: anywhere; }
 .prose > :first-child { margin-top: 0; }
 .prose p, .prose table { margin: 0 0 1em; }
 .prose .table-wrap { overflow-x: auto; margin: 0 0 1em; }
-.prose table { border-collapse: collapse; font: 14px/1.45 var(--font-ui); width: max-content; min-width: 60%; margin: 0; }
+.prose table { border-collapse: collapse; font: 0.875rem/1.45 var(--font-ui); width: max-content; min-width: 60%; margin: 0; }
 .prose th, .prose td { min-width: 7em; max-width: 28em; }
 .prose th, .prose td { border-bottom: 1px solid var(--line); padding: 8px 12px 8px 0; text-align: left; vertical-align: top; }
 .prose th { font-weight: 700; border-bottom: 2px solid var(--text-faint); }
@@ -391,10 +391,10 @@ a.btn:hover { text-decoration: none; color: var(--text); }
 .tok-c { color: var(--tok-c); font-style: normal; }
 /* A code block rendered from Markdown: its language at the top right, and a copy icon where a pane offers one. */
 .code-block { position: relative; }
-.code-block > pre { margin: 0; font: 13px/20px var(--font-mono); background: var(--ground-1); border-left: 2px solid var(--line-strong); border-radius: 0 var(--round) var(--round) 0; padding: 12px 16px; overflow-x: auto; }
+.code-block > pre { margin: 0; font: 0.8125rem/1.25rem var(--font-mono); background: var(--ground-1); border-left: 2px solid var(--line-strong); border-radius: 0 var(--round) var(--round) 0; padding: 12px 16px; overflow-x: auto; }
 .code-block > pre > code { font: inherit; }
 .prose > .code-block, .prose > .diagram { margin: 0 0 20px; }
-.code-block > .code-lang { position: absolute; top: 8px; right: 12px; font: 12px/16px var(--font-ui); color: var(--text-faint); pointer-events: none; }
+.code-block > .code-lang { position: absolute; top: 8px; right: 12px; font: 0.75rem/1rem var(--font-ui); color: var(--text-faint); pointer-events: none; }
 .code-block > .code-copy { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 0; background: var(--ground-1); color: var(--text-faint); cursor: pointer; opacity: 0; }
 .code-block > .code-copy svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; }
 .code-block:hover > .code-copy, .code-block > .code-copy:focus-visible { opacity: 1; }
@@ -412,11 +412,11 @@ a.btn:hover { text-decoration: none; color: var(--text); }
   --pele-error: var(--rose); --pele-critical: var(--rose);
   --pele-series-1: var(--lattice); --pele-series-2: var(--growth); --pele-series-3: var(--malachite); --pele-series-4: var(--rose);
   --pele-series-5: var(--requires); --pele-series-6: var(--builds); --pele-series-7: var(--lattice-deep); --pele-series-8: var(--growth-deep);
-  max-width: 100%; overflow-x: auto; overflow-y: hidden; font: 12px/1.4 var(--font-ui);
+  max-width: 100%; overflow-x: auto; overflow-y: hidden; font: 0.75rem/1.4 var(--font-ui);
 }
 .diagram svg { display: block; max-width: none; }
 .prose .diagram { margin: 0 0 1em; }
-.diagram > pre { margin: 0; font: 13px/20px var(--font-mono); white-space: pre-wrap; color: var(--text-soft); }
+.diagram > pre { margin: 0; font: 0.8125rem/1.25rem var(--font-mono); white-space: pre-wrap; color: var(--text-soft); }
 
 .katex { font-size: 1.05em; }
 .katex, .katex .mathit, .katex .mathbf, .katex .mainrm { font-family: "Math Charter", KaTeX_Main, serif; }

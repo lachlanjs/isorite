@@ -981,7 +981,7 @@
   .atlas-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
   .atlas-world.moving { will-change: transform; }
   /* The dot grid, moved with the map by a transform a cell at most, so that a pan paints nothing. */
-  .asking { position: absolute; z-index: 30; left: 50%; top: 24px; transform: translateX(-50%); filter: var(--lift-drop); animation: appear var(--t-change) var(--ease-out); width: min(380px, calc(100% - 24px)); display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); font-size: 13px; line-height: 1.45; user-select: text; }
+  .asking { position: absolute; z-index: 30; left: 50%; top: 24px; transform: translateX(-50%); filter: var(--lift-drop); animation: appear var(--t-change) var(--ease-out); width: min(380px, calc(100% - 24px)); display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); font-size: 0.8125rem; line-height: 1.45; user-select: text; }
   .asking .row { display: flex; gap: var(--space-2); }
   /* What a held item shows (M33), on the map's own elements. */
   :global([data-g="lifted"]) { opacity: .45; transition: opacity var(--t-ack) var(--ease-out); }
@@ -1000,7 +1000,7 @@
   .sat svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
   .sat.web:hover, .sat.web:focus-visible, .sat.picture:hover, .sat.picture:focus-visible { border-color: var(--lattice); }
   .sat.picture { overflow: hidden; }
-  .sat.more { font: 600 12px var(--font-ui); color: var(--text-soft); cursor: pointer; padding: 0; }
+  .sat.more { font: 600 0.75rem var(--font-ui); color: var(--text-soft); cursor: pointer; padding: 0; }
   .sat.more:hover, .sat.more:focus-visible { color: var(--text); border-color: var(--lattice); }
   .sat.picture img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .sat.broken { color: var(--rose); border-color: var(--rose); border-style: dashed; }
@@ -1010,29 +1010,29 @@
   .said { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-4); text-align: center; }
   /* What a hold will make: a note's or a folder's icon where it was held, and what it is (V6). */
   .offer { --inside: var(--ground-2); position: absolute; z-index: 8; min-width: 150px; padding: 6px; display: grid; gap: 2px; }
-  .offer button { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; background: none; border: 0; color: var(--text); font: 13px var(--font-ui); text-align: left; cursor: pointer; }
+  .offer button { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; background: none; border: 0; color: var(--text); font: 0.8125rem var(--font-ui); text-align: left; cursor: pointer; }
   .offer button:hover, .offer button:focus-visible { background: var(--ground-3); }
-  .offer i { font-style: normal; width: 12px; color: var(--growth); font-size: 11px; }
-  .given { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--growth); font-size: 12px; z-index: 2; }
+  .offer i { font-style: normal; width: 12px; color: var(--growth); font-size: 0.6875rem; }
+  .given { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--growth); font-size: 0.75rem; z-index: 2; }
   .given::first-letter { color: var(--growth); }
-  .legend { position: absolute; left: 12px; bottom: 10px; right: 12px; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--text-soft); pointer-events: none; z-index: 2; }
+  .legend { position: absolute; left: 12px; bottom: 10px; right: 12px; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.6875rem; color: var(--text-soft); pointer-events: none; z-index: 2; }
   .legend span { display: inline-flex; align-items: center; gap: 6px; background: var(--ground-0); padding: 0 4px; }
   .legend .k { width: 10px; height: 10px; display: inline-grid; place-items: center; font-style: normal; }
   .legend .g { background: var(--growth-soft); border: 1px solid var(--growth); }
   .legend .h { background: var(--lattice-soft); border: 1px solid var(--lattice); }
   .legend .d { width: 7px; height: 7px; background: var(--growth); transform: rotate(45deg); }
-  .legend .n { width: 14px; height: 14px; background: var(--growth); color: var(--ground-0); font-size: 9px; font-weight: 700; }
+  .legend .n { width: 14px; height: 14px; background: var(--growth); color: var(--ground-0); font-size: 0.5625rem; font-weight: 700; }
   /* A note carried out of the Atlas towards the Agent pane. */
-  .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font: 12px var(--font-ui); color: var(--text); white-space: nowrap; box-shadow: var(--lift); animation: appear var(--t-ack) var(--ease-out); }
+  .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font: 0.75rem var(--font-ui); color: var(--text); white-space: nowrap; box-shadow: var(--lift); animation: appear var(--t-ack) var(--ease-out); }
   .carried.over { border-color: var(--growth); }
-  .notice { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--rose); color: var(--rose); font-size: 12px; z-index: 2; }
+  .notice { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--rose); color: var(--rose); font-size: 0.75rem; z-index: 2; }
   /* A pip at the edge (M17): towards the open note (the text's colour), or what is pointed at elsewhere. */
   .pip { position: absolute; z-index: 4; width: 22px; height: 22px; margin: -11px 0 0 -11px; display: grid; place-items: center; padding: 0; background: var(--ground-1); border: 1px solid var(--line-strong); color: var(--text); cursor: pointer; }
   .pip svg { transform: rotate(var(--a)); fill: currentColor; }
   .pip:hover, .pip:focus-visible { border-color: var(--text); }
   .pip.you { color: var(--lattice); border-color: var(--lattice); }
   .pip.agent { color: var(--growth); border-color: var(--growth); }
-  .count { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); font-size: 12px; line-height: 18px; color: var(--text-faint); pointer-events: none; }
+  .count { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); font-size: 0.75rem; line-height: 1.125rem; color: var(--text-faint); pointer-events: none; }
   .count.right { transform: translate(7px, -50%); }
   .count.above { transform: translate(-50%, calc(-100% - 3px)); }
 </style>

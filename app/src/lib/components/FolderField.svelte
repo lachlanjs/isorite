@@ -64,7 +64,7 @@
   .field-wrap { position: relative; display: block; flex: 1 1 auto; min-width: 0; }
   .field-wrap input { width: 100%; box-sizing: border-box; }
   .mono { font-family: var(--font-mono); }
-  .quiet { background: none; border: 0; border-bottom: 1px solid transparent; padding: 2px 0; color: var(--text-soft); font-size: 12px; }
+  .quiet { background: none; border: 0; border-bottom: 1px solid transparent; padding: 2px 0; color: var(--text-soft); font-size: 0.75rem; }
   .quiet::placeholder { color: var(--text-faint); opacity: .7; }
   .quiet:hover { border-bottom-color: var(--line); }
   .quiet:focus-visible { outline: none; border-bottom-color: var(--lattice); color: var(--text); }
@@ -75,9 +75,9 @@
   }
   .suggest button {
     display: flex; align-items: baseline; gap: 12px; width: 100%; padding: 5px 12px; border: 0; background: none; text-align: left;
-    font: 13px/1.4 var(--font-mono); color: var(--text-soft); cursor: pointer;
+    font: 0.8125rem/1.4 var(--font-mono); color: var(--text-soft); cursor: pointer;
   }
   .suggest .at button { background: var(--fill-chosen); color: var(--text); }
   .dir { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .detail { color: var(--text-faint); font-size: 11px; flex: none; }
+  .detail { color: var(--text-faint); font-size: 0.6875rem; flex: none; }
 </style>

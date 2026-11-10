@@ -16,6 +16,8 @@ import type { PaneSessions } from "./sessions.ts";
 import { McpEndpoint, agentName, clientName, type Rpc as McpRpc } from "./mcp-http.ts";
 import { VERSION } from "./version.ts";
 import type { PiControl } from "./pi/index.ts";
+import { Skills, dirsFor } from "./pi/skills.ts";
+import { dataDir } from "./pi/credentials.ts";
 import { configPath } from "./config.ts";
 import { historyChoice, ownRepoInfo, setHistoryChoice } from "./own-repo.ts";
 
@@ -302,6 +304,20 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     post("/api/pi/choose", z.object({ provider: Provider, model: z.string().min(1).max(200) }).strict(), async (c, b) => { mine(c); await invalid(() => pi.choose(b.provider, b.model)); });
     app.get("/api/pi/models", (c) => answer(c, async () => { mine(c); return { models: await pi.models(c.req.query("provider") ?? "") }; }));
     // One short request, so a key, a model or a gateway is known to work before the first question (it costs a few tokens).
+    // The agent's skills for this base (skills.ts): each with where it came from and whether it is on; a skill that could
+    // not be read with why. Read again at each request. What is off is kept in the base's settings.
+    if (notes) {
+      const skills = new Skills(dirsFor(notes, dataDir()), async () => (await api.agentSkillsOff()).off);
+      app.get("/api/pi/skills", (c) => answer(c, async () => { mine(c); return { skills: await skills.list() }; }));
+      post("/api/pi/skills", z.object({ name: z.string().min(1).max(64), enabled: z.boolean() }).strict(), async (c, b) => {
+        mine(c);
+        if (!(await skills.list()).some((s) => s.name === b.name && !s.error)) throw new EngineError(`there is no skill "${b.name}" to switch`, 404);
+        const off = new Set((await api.agentSkillsOff()).off);
+        if (b.enabled) off.delete(b.name); else off.add(b.name);
+        await api.setAgentSkillsOff([...off]);
+        return { skills: await skills.list() };
+      });
+    }
     post("/api/pi/check", z.object({ provider: Provider, model: z.string().min(1).max(200) }).strict(), async (c, b) => { mine(c); let r: { ms: number; said: string } | undefined; await invalid(async () => { r = await pi.check(b.provider, b.model); }); return r; });
   }
 

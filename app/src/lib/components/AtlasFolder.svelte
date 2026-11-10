@@ -77,7 +77,7 @@
   .frame-title { z-index: 1; border: 0; top: 0; max-width: calc((100% - 44px) * var(--k)); overflow: hidden; text-overflow: ellipsis; cursor: pointer; transform-origin: 0 0; transform: scale(var(--ik)) translateY(-50%); }
   .rename { width: calc(180px * var(--k)); font: inherit; background: var(--ground-2); color: var(--text); border: 1px solid var(--lattice); padding: 1px 6px; }
   .frame-title:hover { color: var(--text); }
-  .closed { --inside: var(--ground-2); padding: 0; text-align: left; font-size: 12px; line-height: 1.5; overflow: hidden; color: var(--text); }
+  .closed { --inside: var(--ground-2); padding: 0; text-align: left; font-size: 0.75rem; line-height: 1.5; overflow: hidden; color: var(--text); }
   /* What a closed folder says, at a screen's size: the block's size at the zoom, scaled back. */
   .closed .inner { position: absolute; left: 0; top: 0; width: calc(100% * var(--k)); height: calc(100% * var(--k)); transform-origin: 0 0; transform: scale(var(--ik)); padding: 9px 12px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; container-type: size; }
   .closed:hover { --inside: var(--ground-3); }

@@ -54,5 +54,5 @@
 
 <style>
   iframe { display: block; width: 100%; border: 0; background: transparent; color-scheme: normal; }
-  .problem { color: var(--rose); font-size: 12px; margin: var(--space-2) 0; }
+  .problem { color: var(--rose); font-size: 0.75rem; margin: var(--space-2) 0; }
 </style>

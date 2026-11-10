@@ -112,14 +112,14 @@
   .petal.on { scale: 1.16; filter: drop-shadow(0 0 10px color-mix(in srgb, var(--c) 70%, transparent)) drop-shadow(0 4px 8px rgb(0 0 0 / .25)); }
   .petal.on .face::before { background: var(--c); }
   .petal.on .face svg { color: var(--ground-0); }
-  .lbl { position: absolute; left: 50%; bottom: calc(100% + 6px); translate: -50% 4px; padding: 2px 6px; font: 11px/1.4 var(--font-ui); white-space: nowrap; color: var(--c); background: var(--ground-0); opacity: 0; transition: opacity var(--t-ack) var(--ease-out), translate var(--t-ack) var(--ease-out); }
+  .lbl { position: absolute; left: 50%; bottom: calc(100% + 6px); translate: -50% 4px; padding: 2px 6px; font: 0.6875rem/1.4 var(--font-ui); white-space: nowrap; color: var(--c); background: var(--ground-0); opacity: 0; transition: opacity var(--t-ack) var(--ease-out), translate var(--t-ack) var(--ease-out); }
   .petal.below .lbl { bottom: auto; top: calc(100% + 6px); translate: -50% -4px; }
   .petal.on .lbl { opacity: 1; translate: -50% 0; }
 
   /* The card carried: lifted, a little turned, with a shadow under it; over a folder it can be put down in, it rights
      itself and settles a little, ready to be placed. */
   .ghost { position: fixed; z-index: 60; pointer-events: none; display: flex; align-items: center; gap: 6px; padding: 6px 10px; max-width: 260px;
-    font: 13px var(--font-ui); color: var(--text); background: var(--ground-2); border: 1px solid var(--lattice); border-radius: var(--round);
+    font: 0.8125rem var(--font-ui); color: var(--text); background: var(--ground-2); border: 1px solid var(--lattice); border-radius: var(--round);
     box-shadow: 0 14px 28px rgb(0 0 0 / .32), 0 3px 8px rgb(0 0 0 / .2); rotate: -1.5deg; scale: 1.04; transition: rotate var(--t-ack) var(--ease-out), scale var(--t-ack) var(--ease-out), box-shadow var(--t-ack) var(--ease-out); }
   .ghost svg { flex: none; color: var(--lattice); }
   .ghost span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

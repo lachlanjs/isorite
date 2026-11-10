@@ -459,7 +459,7 @@
       </div>
     {/if}
     {#if t.state === "running"}
-      <!-- At work: the gold diamond, turning; the step, and the time so far. -->
+      <!-- At work: the gem, turning; the step, and the time so far. -->
       {@const s = step(t)}
       <p class="doing foot" role="status"><i class="gem" aria-hidden="true"></i><span class="what">{s.what}{#if s.to}{" "}<b>{s.to}</b>{/if}</span><span class="time">{took(elapsed(t))}</span></p>
     {:else if t.state === "failed" && fail}
@@ -528,23 +528,22 @@
   .chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
 
   /* What the agent said: its gold diamond in the gutter, at the height of its first line. */
-  .said { padding-left: var(--gut); position: relative; font: 15px/1.6 var(--font-text); overflow-wrap: anywhere; min-width: 0; }
+  .said { padding-left: var(--gut); position: relative; font: 0.9375rem/1.6 var(--font-text); overflow-wrap: anywhere; min-width: 0; }
   .said::before { content: ""; position: absolute; left: 6px; top: calc(.8em - 2.5px); width: 5px; height: 5px; background: var(--growth); transform: rotate(45deg); }
-  /* While it writes, its diamond is lit, and breathes. */
-  .turn[data-state="running"] .it:last-of-type .said::before { box-shadow: 0 0 8px 1px color-mix(in srgb, var(--growth) 70%, transparent); animation: breathe-glow 1.6s ease-in-out infinite alternate; }
-  @keyframes breathe-glow { from { box-shadow: 0 0 3px 0 color-mix(in srgb, var(--growth) 40%, transparent); } }
+  /* The agent's mark is one gold diamond at a time: this one once the turn is over, the footer's gem while it works (so not both), and a running tool's dot is round. */
+  .turn[data-state="running"] .said::before { display: none; }
   .said :global(p + p), .said :global(p + ul), .said :global(ul + p) { margin-top: 8px; }
   .said :global(ul), .said :global(ol) { margin: 0; padding-left: 20px; }
   .said > :global(:last-child), .offer .yours > :global(:last-child) { margin-bottom: 0; }
   .said :global(pre) { overflow-x: auto; }
 
-  .think, .squeeze { margin: 0; padding-left: var(--gut); font-size: 12.5px; color: var(--text-soft); }
+  .think, .squeeze { margin: 0; padding-left: var(--gut); font-size: 0.7812rem; color: var(--text-soft); }
   .think summary, .squeeze summary { position: relative; display: flex; align-items: center; min-height: var(--row-dense); font: var(--fs-small) var(--font-ui); color: var(--text-faint); width: fit-content; }
   .think summary .caret, .squeeze summary .caret { position: absolute; left: calc(-1 * var(--gut) + 7px); }
   .think summary:hover, .squeeze summary:hover { color: var(--text-soft); }
   .think p, .squeeze p { margin: 4px 0 0; padding-left: 10px; border-left: 2px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
   .squeeze[data-state="failed"] summary { color: var(--rose); }
-  .mid { margin: 0 0 0 var(--gut); padding-left: 10px; border-left: 2px solid var(--line-strong); color: var(--text); font-size: 13px; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .mid { margin: 0 0 0 var(--gut); padding-left: 10px; border-left: 2px solid var(--line-strong); color: var(--text); font-size: 0.8125rem; overflow-wrap: anywhere; white-space: pre-wrap; }
   .mid[data-state="queued"], .mid[data-state="dropped"] { color: var(--text-faint); }
   .mid[data-state="dropped"] { text-decoration: line-through; }
   .mid .how { font: var(--fs-meta) var(--font-ui); color: var(--text-soft); margin-right: 4px; }
@@ -567,12 +566,12 @@
   .add { color: var(--malachite); }
   .del { color: var(--rose); }
   /* Running: a small gold point that breathes. */
-  .busy { width: 6px; height: 6px; background: var(--growth); transform: rotate(45deg); animation: breathe 1.2s ease-in-out infinite alternate; }
+  .busy { width: 6px; height: 6px; border-radius: 50%; background: var(--growth); animation: breathe 1.2s ease-in-out infinite alternate; }
   @keyframes breathe { from { opacity: .35; } }
   @media (prefers-reduced-motion: reduce) { .busy { animation: none; } }
   .run .inner { display: grid; gap: 0; margin-left: 10px; padding-left: 4px; border-left: 1px solid var(--line-faint); }
   .run .inner .row .g { left: 4px; }
-  pre { border-radius: var(--round); margin: 4px 0 2px var(--gut); padding: 8px 10px; background: var(--surface-raised); font: 11.5px/1.45 var(--font-mono); color: var(--text-soft); overflow: auto; max-height: 280px; white-space: pre; }
+  pre { border-radius: var(--round); margin: 4px 0 2px var(--gut); padding: 8px 10px; background: var(--surface-raised); font: 0.7188rem/1.45 var(--font-mono); color: var(--text-soft); overflow: auto; max-height: 280px; white-space: pre; }
   .diff span { display: block; }
   .diff span:not(.add):not(.del) { color: var(--text-faint); }
   .why { margin: 0 0 0 var(--gut); font-size: var(--fs-small); color: var(--text-soft); }
@@ -585,26 +584,26 @@
   .note-link:hover, .note-link:focus-visible { color: var(--lattice); }
 
   /* It asks for you: a gold edge, a glow that swells twice as it comes; then it waits, answered by its buttons. */
-  .permit { margin-left: var(--gut); border: 1px solid var(--growth); border-radius: var(--round); padding: 10px 12px; display: grid; gap: 8px; font-size: 12.5px; color: var(--text-soft); background: color-mix(in srgb, var(--growth) 5%, transparent); animation: ask 1.2s var(--ease-out) 2; }
+  .permit { margin-left: var(--gut); border: 1px solid var(--growth); border-radius: var(--round); padding: 10px 12px; display: grid; gap: 8px; font-size: 0.7812rem; color: var(--text-soft); background: color-mix(in srgb, var(--growth) 5%, transparent); animation: ask 1.2s var(--ease-out) 2; }
   .permit.done { border-color: var(--line); background: none; padding: 6px 12px; }
   @keyframes ask { 50% { box-shadow: var(--glow-growth); } }
   .tool .permit { margin-left: var(--gut); }
   .permit p { margin: 0; }
-  .permit code { font: 12px var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
+  .permit code { font: 0.75rem var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
   .acts { display: flex; gap: 8px; flex-wrap: wrap; }
   .acts .btn { height: 28px; padding: 0 12px; font-size: var(--fs-small); }
 
-  .asks { padding-left: var(--gut); display: grid; gap: 2px; font-size: 13px; }
+  .asks { padding-left: var(--gut); display: grid; gap: 2px; font-size: 0.8125rem; }
   .asks p { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0; }
   .asks .qm { margin-left: calc(-1 * var(--gut) + 3px); margin-right: 6px; color: var(--rose); flex: none; }
   .asks .qt { color: var(--text); overflow-wrap: anywhere; }
   .asks .note-link { color: var(--text); }
-  .asks .qb { color: var(--text-soft); font-size: 12.5px; display: block; }
-  .asks .keep { border-radius: var(--round); flex: none; margin-left: 4px; height: 22px; padding: 0 9px; background: none; border: 1px solid var(--rose); color: var(--rose); font: 11px/20px var(--font-ui); cursor: pointer; transition: background-color var(--dur-1) var(--ease-out); }
+  .asks .qb { color: var(--text-soft); font-size: 0.7812rem; display: block; }
+  .asks .keep { border-radius: var(--round); flex: none; margin-left: 4px; height: 22px; padding: 0 9px; background: none; border: 1px solid var(--rose); color: var(--rose); font: 0.6875rem/1.25rem var(--font-ui); cursor: pointer; transition: background-color var(--dur-1) var(--ease-out); }
   .asks .keep:hover { background: var(--rose-soft); }
   .offer { margin-left: var(--gut); border-left: 2px solid var(--line-strong); padding: 2px 0 2px 12px; display: grid; gap: 4px; }
-  .offer .yours { font: 15px/1.6 var(--font-text); color: var(--text); overflow-wrap: anywhere; }
-  .offer .for { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-faint); margin: 0; }
+  .offer .yours { font: 0.9375rem/1.6 var(--font-text); color: var(--text); overflow-wrap: anywhere; }
+  .offer .for { display: flex; align-items: center; gap: 10px; font-size: 0.75rem; color: var(--text-faint); margin: 0; }
   .offer .in { color: var(--malachite); }
   .offer .insert { background: none; border: 0; padding: 0; font: inherit; color: var(--lattice); cursor: pointer; }
 
@@ -645,7 +644,7 @@
     linear-gradient(var(--b), var(--b)) top right / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) top right / 1px var(--l) no-repeat,
     linear-gradient(var(--b), var(--b)) bottom left / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom left / 1px var(--l) no-repeat,
     linear-gradient(var(--b), var(--b)) bottom right / var(--l) 1px no-repeat, linear-gradient(var(--b), var(--b)) bottom right / 1px var(--l) no-repeat; }
-  .part b { font: 13px/18px var(--font-text); font-weight: 400; color: var(--text); overflow-wrap: anywhere; }
+  .part b { font: 0.8125rem/1.125rem var(--font-text); font-weight: 400; color: var(--text); overflow-wrap: anywhere; }
   .part:hover > s, .part.lit > s { --b: var(--lattice); }
   .part:hover, .part.lit { background: var(--lattice-soft); box-shadow: 0 0 12px color-mix(in srgb, var(--lattice) var(--glow-a), transparent); }
 </style>

@@ -9,12 +9,13 @@ import type { Api } from "@isorite/engine";
 import { PiHost, type PiHostOptions } from "./host.ts";
 import { fileTools, pathGuard, type Files } from "./files.ts";
 import { FileStore, storeDir } from "./store.ts";
-import { Credentials, DEFAULT_REACH, PROVIDERS, type Choice, type Reach } from "./credentials.ts";
+import { Credentials, DEFAULT_REACH, PROVIDERS, dataDir, type Choice, type Reach } from "./credentials.ts";
 import { GATEWAY, gatewayFetch, gatewayFor, gatewayModels, readGateway, type Gateway } from "./gateway.ts";
 import { unreachable } from "../network.ts";
 import { configPath } from "../config.ts";
 import { SCRIPTED, scriptedModel, scriptedOn } from "./scripted.ts";
 import { basename } from "node:path";
+import { Skills, dirsFor } from "./skills.ts";
 
 const camel = (s: string): string => s.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 
@@ -161,14 +162,15 @@ export class PiControl {
 }
 
 /** The pi host for `api`, or null where pi is not chosen. Throws (naming what is wrong) where it is chosen and cannot be had. */
-export async function piHostFor(api: PiHostOptions["api"] & Pick<Api, "events">, env: NodeJS.ProcessEnv = process.env, project = process.cwd(), notes = project, control = new PiControl(env)): Promise<PiHost | null> {
+export async function piHostFor(api: PiHostOptions["api"] & Pick<Api, "events"> & Partial<Pick<Api, "agentSkillsOff">>, env: NodeJS.ProcessEnv = process.env, project = process.cwd(), notes = project, control = new PiControl(env)): Promise<PiHost | null> {
   const want = await wanted(env, control.creds);
   if (!want) return null;
   const { provider, model } = want.choice;
   const { chosen, streamFn } = await modelFor(provider, model, env);
   await control.load();
   const asked = new Set((env.ISORITE_PI_ASK ?? "").split(",").map((t) => t.trim()).filter(Boolean));
-  const host = new PiHost({ api, store: new FileStore(storeDir(notes, env)), model: chosen, streamFn, name: `pi (${model})`, getApiKey: async (p) => (await control.creds.key(p)) ?? (p === GATEWAY ? "none" : undefined), ...(asked.size ? { ask: (tool: string) => asked.has(tool) } : {}), more: () => fileTools(project, control.reach), guard: pathGuard(project) });
+  const skills = new Skills(dirsFor(notes, dataDir(env)), async () => (await api.agentSkillsOff?.())?.off ?? []);
+  const host = new PiHost({ api, skills, store: new FileStore(storeDir(notes, env)), model: chosen, streamFn, name: `pi (${model})`, getApiKey: async (p) => (await control.creds.key(p)) ?? (p === GATEWAY ? "none" : undefined), ...(asked.size ? { ask: (tool: string) => asked.has(tool) } : {}), more: () => fileTools(project, control.reach), guard: pathGuard(project) });
   await host.resume();
   control.attach(host);
   return host;
