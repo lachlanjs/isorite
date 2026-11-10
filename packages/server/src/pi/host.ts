@@ -19,6 +19,7 @@ import type { PaneSessions } from "../sessions.ts";
 import { DEFAULT_COMPACTION_SETTINGS, estimateTokens, generateSummary, shouldCompact } from "@earendil-works/pi-coding-agent";
 import { type PiRecord, type PiStore } from "./store.ts";
 import { isoriteTools, titleOf, type ToolsApi } from "./tools.ts";
+import { MemoryImages, type ImageStore, type Kept } from "./images.ts";
 import { invoked, skillText, skillsSection, skillTool, type Skill, type Skills } from "./skills.ts";
 
 type StreamFn = NonNullable<ConstructorParameters<typeof Agent>[0]>["streamFn"];
@@ -45,6 +46,8 @@ export interface PiHostOptions {
   /** The agent's skills (skills.ts): those on are named in the system prompt and fetched with `use_skill`, or by `/name` at the start of a message. */
   skills?: Pick<Skills, "enabled">;
   /** The key to use for a provider, asked for at each request (so one changed in the settings is used by the next turn). */
+  /** Where the images given from the pane are kept (images.ts); in memory where none. */
+  images?: ImageStore;
   getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
 }
 
@@ -57,6 +60,8 @@ const EMPTY: TerminalView = { connected: true, agent: "", session: null, title: 
 /** A block of context given from the tray is tagged with the chip it came from and the turn it came in with, so it can be
  *  taken back out of what the model is sent when the chip is removed (M36, step 10). */
 const TAG = /^\[context (\S+) @(\S+)\]\n/;
+const GONE = "[an image the person attached, no longer kept]";
+const GONE_BLIND = "[an image the person attached, which this model cannot see]";
 const WITHDRAWN = "[Context the person gave earlier here was withdrawn: they took it out of the conversation. Do not rely on it; read the notes again if you need them.]";
 const tagged = (key: string, turn: string, block: string): string => `[context ${encodeURIComponent(key)} @${turn}]\n${block}\n[/context]\n\n`;
 
@@ -105,6 +110,7 @@ export class PiHost implements PaneSessions {
   readonly #guard: NonNullable<PiHostOptions["guard"]>;
   readonly #now: () => number;
   readonly #store: PiStore | null;
+  readonly #images: ImageStore;
   readonly #compaction: Compaction;
   /** The thinking item the assistant message now streaming writes into. */
   #thinkingAt = -1;
@@ -142,7 +148,8 @@ export class PiHost implements PaneSessions {
   #view: TerminalView = EMPTY;
   #listeners = new Set<(v: TerminalView) => void>();
 
-  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now, store, compaction, getApiKey, skills }: PiHostOptions) {
+  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now, store, compaction, getApiKey, skills, images }: PiHostOptions) {
+    this.#images = images ?? new MemoryImages();
     this.#getApiKey = getApiKey;
     this.#skills = skills;
     this.#api = api;
@@ -184,6 +191,12 @@ export class PiHost implements PaneSessions {
     this.#tell();
   }
 
+  /** Whether the model now chosen takes images (what pi says of it). */
+  #sees(): boolean { return Boolean((this.#model.input as readonly string[] | undefined)?.includes("image")); }
+  /** Keep an image given from the box, to be sent with a prompt by its id; and give one back, for the pane to show. */
+  async keepImage(bytes: Uint8Array): Promise<{ id: string; type: string }> { return this.#images.put(bytes); }
+  image(id: string): Promise<Kept | null> { return this.#images.get(id); }
+
   view(): TerminalView { return this.#view; }
   listen(fn: (v: TerminalView) => void): () => void { this.#listeners.add(fn); return () => { this.#listeners.delete(fn); }; }
   asked(agent: string): string {
@@ -196,8 +209,19 @@ export class PiHost implements PaneSessions {
     this.#pending = fresh.length ? { parts: fresh, blocks: fresh.map((g) => render([g])) } : null;
   }
 
-  async prompt(text: string): Promise<void> {
-    if (this.#busy) { await this.#say(text, "followUp"); return; }
+  async prompt(text: string, images: string[] = []): Promise<void> {
+    if (images.length && !this.#sees()) throw new Error("This model does not take images.");
+    if (this.#busy) {
+      if (images.length) throw new Error("Wait for the agent to stop before sending an image.");
+      await this.#say(text, "followUp");
+      return;
+    }
+    const held: { id: string; kept: Kept }[] = [];
+    for (const id of images) {
+      const kept = await this.#images.get(id);
+      if (!kept) throw new Error("An image you attached is no longer there: attach it again.");
+      held.push({ id, kept });
+    }
     this.#problem = "";
     if (!this.#agent) this.#open();
     const agent = this.#agent!;
@@ -209,7 +233,7 @@ export class PiHost implements PaneSessions {
     const skills = await (this.#skills?.enabled() ?? Promise.resolve([] as Skill[])).catch(() => [] as Skill[]);
     agent.state.tools = [...(await isoriteTools(this.#api, { agent: this.#id, session: this.#session }, () => this.asked(this.#id))), ...(skills.length ? [skillTool(skills)] : []), ...this.#more()];
     this.#showSkills(agent, skills);
-    const turn: TerminalTurn = { id: randomUUID(), asked: text, from: "here", items: [], state: "running", ...(pending ? { given: pending.parts } : {}), at: new Date(this.#now()).toISOString() };
+    const turn: TerminalTurn = { id: randomUUID(), asked: text, from: "here", items: [], state: "running", ...(pending ? { given: pending.parts } : {}), ...(images.length ? { images } : {}), at: new Date(this.#now()).toISOString() };
     this.#turns = [...this.#turns, turn];
     if (!this.#title) this.#title = text.slice(0, 80);
     this.#busy = true;
@@ -221,12 +245,12 @@ export class PiHost implements PaneSessions {
     this.#tell();
     // What was given goes before the question, in the same message. An earlier conversation that has grown near the
     // model's window is summarised first.
-    const message = this.#message(pending, turn.id.slice(0, 8), text, skills);
+    const message = this.#message(pending, turn.id.slice(0, 8), text, skills, held);
     void (async () => { await this.#compactIfNeeded(agent); if (this.#stopping) throw new Error("stopped"); await agent.prompt(message); })().then(() => undefined, (e: Error) => { if (this.#stopping) this.#set("stopped"); else this.#fail(e.message); }).then(() => this.#end());
   }
 
   /** The person's message for the model: each block given with it, tagged, then what they asked. */
-  #message(pending: { parts: Given[]; blocks: string[] } | null, turn: string, text: string, skills: Skill[] = []) {
+  #message(pending: { parts: Given[]; blocks: string[] } | null, turn: string, text: string, skills: Skill[] = [], images: { id: string; kept: Kept }[] = []) {
     const blocks = (pending?.parts ?? []).map((g, i) => tagged(givenKey(g), turn, pending!.blocks[i] ?? ""));
     // A message that begins with /<skill> loads that skill for this turn: its instructions go before the request, which
     // is what follows the name (the turn in the pane still shows what was typed).
@@ -235,7 +259,11 @@ export class PiHost implements PaneSessions {
       // A skill whose folder went between the list and now is asked for as plain text.
       try { blocks.push(`[The person invoked the skill ${use.skill.name}. Follow it.]\n${skillText(use.skill)}\n[/skill]\n\n`); } catch { use = null; }
     }
-    return { role: "user" as const, content: [...blocks, use ? use.request || "(They gave no request: begin as the skill says.)" : text].map((t) => ({ type: "text" as const, text: t })), timestamp: this.#now() };
+    const parts = [...blocks, use ? use.request || "(They gave no request: begin as the skill says.)" : text].map((t) => ({ type: "text" as const, text: t }));
+    // The images go before the request, as models read them best; `ref` says which kept image a block is, so a session
+    // is saved without its bytes (see #record).
+    const seen = images.map(({ id, kept }) => ({ type: "image" as const, data: Buffer.from(kept.bytes).toString("base64"), mimeType: kept.type, ref: id }));
+    return { role: "user" as const, content: [...parts.slice(0, -1), ...seen, parts.at(-1)!] as never, timestamp: this.#now() };
   }
 
   /** The skills section of the system prompt, put in where it differs from what the model was last sent: a system message
@@ -248,6 +276,43 @@ export class PiHost implements PaneSessions {
     }
     if (want === have) return;
     agent.state.messages = [...agent.state.messages, { role: "system", content: "", sections: { skills: want }, timestamp: this.#now() } as never];
+  }
+
+  /** What the model is sent of the images: a block saved without its bytes has them read back, one whose file is gone (or
+   *  that this model cannot see, having been changed since) becomes a line saying so. */
+  async #shown(messages: AgentMessage[]): Promise<AgentMessage[]> {
+    const sees = this.#sees();
+    const out: AgentMessage[] = [];
+    for (const m of messages) {
+      const msg = m as { role?: string; content?: unknown };
+      if (msg.role !== "user" || !Array.isArray(msg.content) || !msg.content.some((c: { type?: string }) => c?.type === "image")) { out.push(m); continue; }
+      const content = [];
+      for (const c of msg.content as { type?: string; data?: string; mimeType?: string; ref?: string }[]) {
+        if (c?.type !== "image") { content.push(c); continue; }
+        if (!sees) { content.push({ type: "text", text: GONE_BLIND }); continue; }
+        if (c.data) { content.push(c); continue; }
+        const kept = c.ref ? await this.#images.get(c.ref) : null;
+        content.push(kept ? { ...c, data: Buffer.from(kept.bytes).toString("base64"), mimeType: kept.type } : { type: "text", text: GONE });
+      }
+      out.push({ ...m, content } as AgentMessage);
+    }
+    return out;
+  }
+
+  /** A message as it is saved: an image block is kept by its `ref` with no bytes (they are in the image store); one with no `ref` has nowhere to be read back from, so it is a line. */
+  #unpictured(m: AgentMessage): AgentMessage {
+    const msg = m as { role?: string; content?: unknown };
+    if (msg.role !== "user" || !Array.isArray(msg.content) || !msg.content.some((c: { type?: string }) => c?.type === "image")) return m;
+    return { ...m, content: (msg.content as { type?: string; ref?: string }[]).map((c) => (c?.type !== "image" ? c : c.ref ? { ...c, data: "" } : { type: "text", text: GONE })) } as AgentMessage;
+  }
+
+  /** The messages with each image a line saying there was one: what a summary is written from, which needs no pictures. */
+  #plain(messages: AgentMessage[]): AgentMessage[] {
+    return messages.map((m) => {
+      const msg = m as { role?: string; content?: unknown };
+      if (msg.role !== "user" || !Array.isArray(msg.content) || !msg.content.some((c: { type?: string }) => c?.type === "image")) return m;
+      return { ...m, content: (msg.content as { type?: string }[]).map((c) => (c?.type === "image" ? { type: "text", text: "[an image the person attached]" } : c)) } as AgentMessage;
+    });
   }
 
   /** What the model is sent: the messages, with each withdrawn block replaced by a line saying so. */
@@ -431,7 +496,7 @@ export class PiHost implements PaneSessions {
     return {
       version: 1, session: this.#session, title: this.#title, at: this.#at, last: this.#turns.at(-1)?.at ?? this.#at, cost: this.#cost, used: this.#used,
       given: [...this.#given], withdrawn: [...this.#withdrawn], turns: this.#turns, // The system prompt is the agent's own at every start, so a saved session does not carry an old one.
-      messages: (JSON.parse(JSON.stringify(this.#agent!.state.messages)) as { role?: string }[]).filter((m) => m.role !== "system"),
+      messages: (JSON.parse(JSON.stringify(this.#agent!.state.messages.map((m) => this.#unpictured(m)))) as { role?: string }[]).filter((m) => m.role !== "system"),
     };
   }
 
@@ -449,7 +514,7 @@ export class PiHost implements PaneSessions {
     this.#agent = new Agent({
       initialState: { systemPrompt: INSTRUCTIONS, model: this.#model, ...(kept ? { messages: kept.messages as never } : {}) },
       // Through this host, so a model chosen later (`use`) is the one the next request goes to.
-      transformContext: async (messages) => this.#redact(messages),
+      transformContext: async (messages) => this.#redact(await this.#shown(messages)),
       streamFn: ((...args: Parameters<NonNullable<StreamFn>>) => this.#streamFn!(...args)) as StreamFn,
       ...(this.#getApiKey ? { getApiKey: this.#getApiKey } : {}),
       sessionId: this.#session,
@@ -585,7 +650,7 @@ export class PiHost implements PaneSessions {
       // The summary is asked of the same model by the same key as the turns are (a gateway's is "none" where it
       // knows you by certificate or headers): without it pi refuses before sending anything.
       const key = (await this.#getApiKey?.(this.#model.provider)) ?? undefined;
-      const summary = await generateSummary(this.#redact(messages.slice(from, cut)), this.#model, settings.reserveTokens, key, undefined, this.#summarising.signal, undefined, previous, undefined, this.#streamFn);
+      const summary = await generateSummary(this.#plain(this.#redact(messages.slice(from, cut))), this.#model, settings.reserveTokens, key, undefined, this.#summarising.signal, undefined, previous, undefined, this.#streamFn);
       const stand = { role: "user" as const, content: [{ type: "text" as const, text: SUMMARY + summary }], timestamp: this.#now() };
       // The recent answers' own counts describe the context as it was before: they are not trusted any more, so the
       // size of what stands now is estimated until the model's next answer gives a count.
@@ -639,7 +704,7 @@ export class PiHost implements PaneSessions {
     this.#view = {
       connected: true, agent: this.#name, agentId: this.#id, session: this.#session || null, title: this.#title, busy: this.#busy, turns: this.#turns,
       asking: [...this.#asking.values()].map(({ wait: _, ...p }) => p), cost: this.#cost, tokens: { input: this.#used, output: 0 },
-      model: this.#model.id ?? "", ...(this.#problem ? { problem: this.#problem } : {}), steer: true, ...(this.#model.contextWindow ? { size: this.#model.contextWindow } : {}), fork: Boolean(this.#store), sessions: this.#sessions(entry),
+      model: this.#model.id ?? "", ...(this.#problem ? { problem: this.#problem } : {}), steer: true, images: this.#sees(), ...(this.#model.contextWindow ? { size: this.#model.contextWindow } : {}), fork: Boolean(this.#store), sessions: this.#sessions(entry),
     };
     for (const fn of this.#listeners) fn(this.#view);
   }

@@ -13,8 +13,8 @@ Each pane's header has a row of small icons. Each is a switch: it says what it i
 
 **The Atlas:**
 - Open questions (Alt+Q) and problems (Alt+B), on the map.
-- Links to the web (Alt+W) and to code (Alt+K): see [links out of the base](/out-of-the-base/web-and-code-links.md "see also").
-- Files beside the notes (Alt+I): pictures, [artifacts](/agent/artifacts.md "see also"), data and documents, each in its folder with its kind's mark, joined to the notes that cite them. A note's pasted pictures are one item.
+- Links to the web (Alt+W) and to code (Alt+K): see [links out of the base](/out-of-the-base/web-and-code-links.md "see also"). The code switch also shows the code files that are in the base itself, each in its folder with the code mark; they are off the map and the note list until it is on.
+- Files beside the notes (Alt+I): pictures, [artifacts](/agent/artifacts.md "see also"), data, documents and other files, each in its folder with its kind's mark, joined to the notes that cite them. A picture dropped on a note is a file in its folder like any other; drop one on a note on the map and it is saved beside it and linked at the end of it.
 - The agent's context (Alt+C): what the agent's session was given, what it read and what it changed, marked on the map.
 
 **Agent:**

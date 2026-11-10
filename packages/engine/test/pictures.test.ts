@@ -101,3 +101,35 @@ test("the Atlas's report has the pictures a note shows, each once, and not as co
     { href: "code:assets/p.png", path: "assets/p.png", from: "code", text: "repo" },
   ]);
 });
+
+const PNG8 = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+
+test("an image dropped beside a note is kept in its folder under a safe name, counted up where taken, and journalled", async () => {
+  const { engine, notes } = await open();
+  const one = await engine.addImage("combat", "Screen Shot (1).PNG", PNG8);
+  expect(one).toMatchObject({ path: "combat/screen-shot-1.png", bytes: PNG8.length, sha256: sha256(PNG8) });
+  expect(await notes.readBytes("combat/screen-shot-1.png")).toEqual(PNG8);
+  expect((await engine.addImage("combat", "screen shot 1.png", PNG8)).path).toBe("combat/screen-shot-1-2.png");
+  expect((await engine.addImage("", "../../etc/passwd.png", PNG8)).path).toBe("passwd.png");
+  // It is a file of the base now: listed, and on the map as a file item.
+  expect((await engine.pictures()).map((p) => p.path)).toContain("combat/screen-shot-1.png");
+  expect((await engine.map()).files?.["combat/screen-shot-1.png"]).toMatchObject({ kind: "image" });
+  // Journalled under its path, signed.
+  const entries = await engine.journal("combat/screen-shot-1.png");
+  expect(entries).toMatchObject([{ why: "start", who: "you", before: null }]);
+  // The timeline reads it without trouble.
+  await engine.timeline();
+});
+
+test("an image is read by its bytes: a name that says png does not make a script one; too large, or in a hidden or outside folder, is refused", async () => {
+  const { engine, notes } = await open();
+  await expect(engine.addImage("combat", "x.png", new TextEncoder().encode("<script>alert(1)</script>"))).rejects.toMatchObject({ status: 415 });
+  await expect(engine.addImage("combat", "x.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47]))).rejects.toMatchObject({ status: 415 });
+  const big = new Uint8Array(5_000_001); big.set(PNG8);
+  await expect(engine.addImage("combat", "big.png", big)).rejects.toMatchObject({ status: 413 });
+  for (const dir of ["../x", ".isorite", "a/../b", "a\\b"]) await expect(engine.addImage(dir, "a.png", PNG8)).rejects.toMatchObject({ status: 400 });
+  expect(await notes.readBytes("x.png")).toBeNull();
+  // Each type by its first bytes.
+  const gif = new TextEncoder().encode("GIF89a\x01\x00\x01\x00"), webp = new Uint8Array([...new TextEncoder().encode("RIFF"), 0, 0, 0, 0, ...new TextEncoder().encode("WEBP")]), jpg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+  expect([(await engine.addImage("t", "a", gif)).path, (await engine.addImage("t", "a", webp)).path, (await engine.addImage("t", "a", jpg)).path]).toEqual(["t/a.gif", "t/a.webp", "t/a.jpg"]);
+});

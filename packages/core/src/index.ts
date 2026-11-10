@@ -3,7 +3,8 @@
 // the note reader keeps.
 
 export { AGENTS_FILE, Bundle, hasConflict, Concept, Directory, OKF_VERSION, citeKind, type FileKind } from "./bundle.ts";
-export { fileType, pictureSize, pictureType } from "./picture.ts";
+export { ignoredBy, skippedName, MAX_ITEM_BYTES, MAX_TEXT_BYTES } from "./ignore.ts";
+export { IMAGE_TYPES, fileType, imageExt, imageType, pictureSize, pictureType } from "./picture.ts";
 export type { Cite, FileEntry, Issue, IssueCode, Link, ParseCache, Parsed, Trust } from "./bundle.ts";
 export { FrontmatterError, dumpFrontmatter, frontmatterText, parseYaml, repairFrontmatter, splitFrontmatter } from "./frontmatter.ts";
 export type { Meta } from "./frontmatter.ts";

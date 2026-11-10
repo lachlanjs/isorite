@@ -52,7 +52,11 @@ export interface PiSkill { name: string; description: string; source: "built-in"
 /** The pane's agent session (isorite's own agent), through the isorite server; on the guide's site, the finder's. */
 export interface TerminalApi {
   view(): Promise<TerminalView>;
-  prompt(asked: string, given: Given[]): Promise<void>;
+  prompt(asked: string, given: Given[], images?: string[]): Promise<void>;
+  /** Hand the server an image for the next prompt: its id, to send with it. Absent where the agent cannot be given one. */
+  image?(bytes: Uint8Array): Promise<{ id: string; type: string }>;
+  /** Where an image sent with a turn is shown from. */
+  imageUrl?(id: string): string;
   /** Say something while the agent works, to come in after the step running now (M36). */
   steer(asked: string, given: Given[]): Promise<void>;
   stop(): Promise<void>;
@@ -116,6 +120,10 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     fileUrl,
     pictures: () => ask("pictures"),
     code: (href, full) => ask(`code?href=${encodeURIComponent(href)}${full ? "&full=1" : ""}`),
+    addImage: async (dir, name, bytes) => {
+      token ??= session().then((s) => s.token);
+      return ask(`image?dir=${encodeURIComponent(dir)}&name=${encodeURIComponent(name)}`, { method: "POST", headers: { "Content-Type": "application/octet-stream", "x-isorite-token": await token }, body: bytes as Uint8Array<ArrayBuffer> });
+    },
     savePicture: async (path, bytes) => {
       token ??= session().then((s) => s.token);
       const type = pictureType(path) ?? "application/octet-stream";
@@ -188,7 +196,12 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     },
     terminal: {
       view: () => ask<TerminalView>("terminal"),
-      prompt: async (asked, given) => { await write("POST", "terminal/prompt", { asked, given }); },
+      prompt: async (asked, given, images) => { await write("POST", "terminal/prompt", { asked, given, ...(images?.length ? { images } : {}) }); },
+      image: async (bytes) => {
+        token ??= session().then((s) => s.token);
+        return ask(`terminal/image`, { method: "POST", headers: { "Content-Type": "application/octet-stream", "x-isorite-token": await token }, body: bytes as Uint8Array<ArrayBuffer> });
+      },
+      imageUrl: (id) => `${root}terminal/image?id=${encodeURIComponent(id)}`,
       steer: async (asked, given) => { await write("POST", "terminal/steer", { asked, given }); },
       stop: async () => { await write("POST", "terminal/stop", {}); },
       reply: async (id, decision) => { await write("POST", "terminal/permission", { id, decision }); },

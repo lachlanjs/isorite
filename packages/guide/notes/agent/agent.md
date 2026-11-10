@@ -9,7 +9,7 @@ isorite has an agent of its own, which needs only a model's key; the agent you a
 
 The agent has your knowledge base as tools: it searches the notes, reads them, follows their links, and answers from them, with links to the notes it used. What it reads lights on the Atlas, and once a turn is over, the notes it drew on stand under its reply. How to set one up is in [your own agent](/terminal/your-own-agent.md "uses").
 
-Ask in the box at the foot of the pane. Notes you give it stand in your message as [pointers](/agent/give-it-notes.md "see also"). What it has in hand is in [the Context view](/agent/in-hand.md "see also").
+Ask in the box at the foot of the pane. Notes you give it stand in your message as [pointers](/agent/give-it-notes.md "see also"), and a picture you paste or drop in the box goes with it as [an image](/agent/send-an-image.md "see also"). What it has in hand is in [the Context view](/agent/in-hand.md "see also").
 
 It may change your notes through isorite, and [its words are marked](/agent/agent-writes-marked.md "see also"). It can build [artifacts](/agent/artifacts.md "see also"): pages that work, from your data. How it should work in your base is [AGENTS.md](/agent/agents-md.md "see also"), and what it can do on request is [skills](/agent/skills.md "see also"). What it may do in the project around the base (edit its files, run commands) is set by the pane's [switches](/atlas/the-switches.md "uses").
 

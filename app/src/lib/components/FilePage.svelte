@@ -3,7 +3,7 @@
   // kind, where it is, and for an artifact the data it uses), and the file itself as suits its kind: an artifact
   // working, data as its shape and first rows, a picture, a PDF, a 3D model in the kit's viewer, and anything else
   // as its size and type.
-  import { citeKind, type FileKind } from "@isorite/core";
+  import { citeKind, MAX_TEXT_BYTES, type FileKind } from "@isorite/core";
   import { describeShape, format, parseData, shapeOf, type Row, type Shape } from "@isorite/kit";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { dataOf, documentOf, groundNow, loadArtifact, modelArtifact, within } from "$lib/artifact.ts";
@@ -22,13 +22,15 @@
   let loaded = $state.raw<{ html: string; title: string; description: string; uses: string[] } | null>(null);
   let bytes = $state.raw<{ size: number; type: string; url?: string } | null>(null);
   let table = $state.raw<{ shape: Shape; rows: Row[] } | null>(null);
+  /** A code file's text, when it is small enough to read here. */
+  let source = $state.raw<string | null>(null);
   let errors = $state<string[]>([]);
   let look = $state("isorite");
   let said = $state("");
 
   $effect(() => {
     const p = path, k = kind;
-    problem = ""; loaded = null; bytes = null; table = null; errors = []; said = "";
+    problem = ""; loaded = null; bytes = null; table = null; source = null; errors = []; said = "";
     let url: string | undefined;
     (async () => {
       if (k === "artifact") {
@@ -41,6 +43,7 @@
       if (!got) throw new Error(`no file at ${p}`);
       if (k === "image" || got.type === "application/pdf") url = URL.createObjectURL(new Blob([got.bytes as Uint8Array<ArrayBuffer>], { type: got.type }));
       bytes = { size: got.bytes.length, type: got.type, ...(url ? { url } : {}) };
+      if (k === "code" && got.bytes.length <= MAX_TEXT_BYTES) source = new TextDecoder().decode(got.bytes);
       if (k === "data" && READABLE.test(p)) { const rows = parseData(p, new TextDecoder().decode(got.bytes)); table = { shape: shapeOf(p, rows), rows: rows.slice(0, 50) }; }
     })().catch((e) => { problem = (e as Error).message; });
     return () => { if (url) URL.revokeObjectURL(url); };
@@ -98,6 +101,8 @@
     <img class="picture" src={bytes.url} alt={name} />
   {:else if bytes?.type === "application/pdf" && bytes.url}
     <iframe class="pdf" src={bytes.url} title={name}></iframe>
+  {:else if source !== null}
+    <pre class="source" data-source><code>{source}</code></pre>
   {:else if table}
     <pre class="shape">{describeShape({ ...table.shape, head: [] }).split("\nFirst rows:")[0]}</pre>
     <div class="rows">
@@ -108,7 +113,7 @@
     </div>
     {#if table.shape.rows > table.rows.length}<p class="faint">the first {table.rows.length} of {table.shape.rows} rows</p>{/if}
   {:else if bytes}
-    <p class="faint">{bytes.type}</p>
+    <p class="faint">{kind === "code" ? "too large to show here" : bytes.type}</p>
   {/if}
 </article>
 
@@ -134,6 +139,7 @@
   .problem { color: var(--rose); }
   .picture { max-width: 100%; height: auto; align-self: flex-start; }
   .pdf { width: 100%; height: 80vh; border: 1px solid var(--line); }
+  .source { margin: 0; padding: var(--space-3) var(--space-4); overflow: auto; max-height: 75vh; border: 1px solid var(--line); font: 0.8125rem/1.25rem var(--font-mono); color: var(--text); tab-size: 2; }
   .shape { margin: 0; font: 0.75rem/1.125rem var(--font-ui); color: var(--text-soft); white-space: pre-wrap; }
   .rows { overflow-x: auto; }
   table { border-collapse: collapse; font: 0.75rem/1.125rem var(--font-ui); font-variant-numeric: tabular-nums; }

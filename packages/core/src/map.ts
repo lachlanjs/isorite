@@ -35,9 +35,12 @@ export function mapModel(base: Bundle): MapModel {
   // Files (M23, plan-m23 §2.1 b): each file of the notes that isn't a note is an item in its folder, joined to the
   // notes that cite it. A folder of pictures alone (the pictures pasted into a note, M22) is one item (Q110), its ref
   // the folder's path with a "/".
+  // Indexed by folder once: a base of thousands of files would otherwise be searched whole for each.
+  const byFolder = new Map<string, string[]>();
+  for (const f of base.files) { const p = parentOf(f); (byFolder.get(p) ?? byFolder.set(p, []).get(p)!).push(f); }
   const pictureFolder = (d: string) => {
     const dd = base.directories.get(d);
-    const here = [...base.files].filter((f) => parentOf(f) === d);
+    const here = byFolder.get(d) ?? [];
     return !!d && (!dd || (!dd.concepts.length && !dd.children.length)) && here.length > 0 && here.every((f) => citeKind(f) === "image");
   };
   const refOf = (f: string) => (citeKind(f) === "image" && pictureFolder(parentOf(f)) ? parentOf(f) + "/" : f);
@@ -56,7 +59,7 @@ export function mapModel(base: Bundle): MapModel {
     if (!of || !ref) continue;
     const at = ref.endsWith("/") ? parentOf(ref.slice(0, -1)) : parentOf(f);
     const list = filesIn.get(at) ?? [];
-    if (!list.some((n) => n.ref === ref)) list.push({ kind: "concept", id: "f:" + ref, ref, weight: 1, rank: rankOf.get(ref) ?? 0, of });
+    if (!ref.endsWith("/") || !list.some((n) => n.ref === ref)) list.push({ kind: "concept", id: "f:" + ref, ref, weight: 1, rank: rankOf.get(ref) ?? 0, of });
     filesIn.set(at, list);
   }
   const dir = (id: string): MapDir | null => {

@@ -9,12 +9,13 @@ import type { Api } from "@isorite/engine";
 import { PiHost, type PiHostOptions } from "./host.ts";
 import { fileTools, pathGuard, type Files } from "./files.ts";
 import { FileStore, storeDir } from "./store.ts";
+import { FileImages } from "./images.ts";
 import { Credentials, DEFAULT_REACH, PROVIDERS, dataDir, type Choice, type Reach } from "./credentials.ts";
 import { GATEWAY, gatewayFetch, gatewayFor, gatewayModels, readGateway, type Gateway } from "./gateway.ts";
 import { unreachable } from "../network.ts";
 import { configPath } from "../config.ts";
 import { SCRIPTED, scriptedModel, scriptedOn } from "./scripted.ts";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import { Skills, dirsFor } from "./skills.ts";
 
 const camel = (s: string): string => s.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
@@ -23,7 +24,7 @@ const camel = (s: string): string => s.replace(/-([a-z0-9])/g, (_, c: string) =>
 export async function modelFor(provider: string, model: string, env: NodeJS.ProcessEnv = process.env): Promise<{ chosen: NonNullable<ReturnType<ReturnType<typeof createModels>["getModel"]>>; streamFn: PiHostOptions["streamFn"] }> {
   if (!provider || !model || !/^[a-z0-9-]+$/.test(provider)) throw new Error(`a model is <provider>/<model>, as anthropic/claude-sonnet-4-6; it was "${provider}/${model}"`);
   // The scripted model, for the tests, where the environment offers it (scripted.ts).
-  if (provider === SCRIPTED && scriptedOn(env)) return scriptedModel() as never;
+  if (provider === SCRIPTED && scriptedOn(env)) return scriptedModel(model) as never;
   // A gateway of your own: any model it serves, by the address, headers and certificate config.toml gives it.
   if (provider === GATEWAY) {
     const g = readGateway(configPath(env), env);
@@ -170,7 +171,7 @@ export async function piHostFor(api: PiHostOptions["api"] & Pick<Api, "events"> 
   await control.load();
   const asked = new Set((env.ISORITE_PI_ASK ?? "").split(",").map((t) => t.trim()).filter(Boolean));
   const skills = new Skills(dirsFor(notes, dataDir(env)), async () => (await api.agentSkillsOff?.())?.off ?? []);
-  const host = new PiHost({ api, skills, store: new FileStore(storeDir(notes, env)), model: chosen, streamFn, name: `pi (${model})`, getApiKey: async (p) => (await control.creds.key(p)) ?? (p === GATEWAY ? "none" : undefined), ...(asked.size ? { ask: (tool: string) => asked.has(tool) } : {}), more: () => fileTools(project, control.reach), guard: pathGuard(project) });
+  const host = new PiHost({ api, skills, store: new FileStore(storeDir(notes, env)), images: new FileImages(join(storeDir(notes, env), "images")), model: chosen, streamFn, name: `pi (${model})`, getApiKey: async (p) => (await control.creds.key(p)) ?? (p === GATEWAY ? "none" : undefined), ...(asked.size ? { ask: (tool: string) => asked.has(tool) } : {}), more: () => fileTools(project, control.reach), guard: pathGuard(project) });
   await host.resume();
   control.attach(host);
   return host;

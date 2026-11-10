@@ -20,11 +20,14 @@
 //   long                        reply at length, a few paragraphs
 //   say <words>                 reply with these words
 //   fail <message>              end the turn with the model failing so (a rate limit, a missing key)
-// The reply cites the first note read, in isorite's link form.
+// The reply cites the first note read, in isorite's link form. When the prompt came with images, it says so ("Saw 1 image: image/png, 68 bytes."), which
+// is how a test knows they reached the model. `scripted/scripted-text` is the same model without sight: it takes no images.
 
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxThinking, fauxToolCall, type FauxContentBlock } from "@earendil-works/pi-ai";
 
 export const SCRIPTED = "scripted";
+/** The scripted model that takes no images. */
+export const SCRIPTED_TEXT = "scripted-text";
 /** Offered here: the environment says so. */
 export const scriptedOn = (env: NodeJS.ProcessEnv): boolean => env.ISORITE_SCRIPTED === "1";
 
@@ -32,11 +35,11 @@ const DRAWN = "Here is how they stand:\n\n```mermaid\nflowchart LR\n  s[Surprise
 const LONG = "Surprise is how unexpected one outcome is: an outcome of probability p carries −log p of it, so the rarer the outcome, the more it tells you when it comes.\n\nEntropy is the surprise you expect on average, over every outcome a source can emit. A fair coin has one bit of it; a coin that always lands heads has none, since nothing it does can surprise you.\n\nThe two meet in coding: a code that spends about −log p bits on an outcome of probability p is as short, on average, as any code can be. Huffman's construction gets within a bit of that.";
 
 type Step = { name: string; args: Record<string, unknown>; wait: number };
-interface Script { steps: Step[]; wait: number; think: string[]; cite: string[]; draw: boolean; long: boolean; say: string; fail: string; read: string[] }
+interface Script { steps: Step[]; wait: number; think: string[]; cite: string[]; draw: boolean; long: boolean; say: string; fail: string; read: string[]; seen: string[] }
 
 /** The script a prompt holds. */
 export function parse(text: string): Script {
-  const s: Script = { steps: [], wait: 0, think: [], cite: [], draw: false, long: false, say: "", fail: "", read: [] };
+  const s: Script = { steps: [], wait: 0, think: [], cite: [], draw: false, long: false, say: "", fail: "", read: [], seen: [] };
   let wait = 0;
   const step = (name: string, args: Record<string, unknown>) => { s.steps.push({ name, args, wait }); wait = 0; };
   for (const line of text.split("\n").map((l) => l.trim())) {
@@ -67,7 +70,7 @@ export function parse(text: string): Script {
 export function reply(s: Script): string {
   if (s.say) return s.say;
   const cite = s.read[0] ? `[as the note says](/${s.read[0].replace(/^\/+|\.md$/g, "")}.md)` : "with no note";
-  return `Done, ${cite}${s.cite.map((c) => `, [cited](${c})`).join("")}.${s.long ? `\n\n${LONG}` : ""}${s.draw ? `\n\n${DRAWN}` : ""}`;
+  return `Done, ${cite}${s.cite.map((c) => `, [cited](${c})`).join("")}.${s.seen.length ? ` Saw ${s.seen.length === 1 ? "1 image" : `${s.seen.length} images`}: ${s.seen.join("; ")}.` : ""}${s.long ? `\n\n${LONG}` : ""}${s.draw ? `\n\n${DRAWN}` : ""}`;
 }
 
 const sleep = (ms: number, signal?: AbortSignal): Promise<boolean> => new Promise((done) => {
@@ -84,8 +87,8 @@ const textOf = (content: unknown): string => (typeof content === "string" ? cont
 
 /** The model and the way to reach it. Each request reads the conversation: the person's last message is the script,
  *  and how many answers have come since it says which step is next. */
-export function scriptedModel(): { chosen: ReturnType<ReturnType<typeof fauxProvider>["getModel"]>; streamFn: (...args: never[]) => unknown } {
-  const faux = fauxProvider({ provider: SCRIPTED, models: [{ id: SCRIPTED, name: "Scripted", contextWindow: 200_000, maxTokens: 8000 }], tokensPerSecond: 600, tokenSize: { min: 2, max: 6 } });
+export function scriptedModel(id: string = SCRIPTED): { chosen: ReturnType<ReturnType<typeof fauxProvider>["getModel"]>; streamFn: (...args: never[]) => unknown } {
+  const faux = fauxProvider({ provider: SCRIPTED, models: [{ id: SCRIPTED, name: "Scripted", contextWindow: 200_000, maxTokens: 8000 }, { id: SCRIPTED_TEXT, name: "Scripted, text only", contextWindow: 200_000, maxTokens: 8000, input: ["text"] }], tokensPerSecond: 600, tokenSize: { min: 2, max: 6 } });
   const models = createModels();
   models.setProvider(faux.provider);
   const respond = async (context: { messages: Message[] }, options?: { signal?: AbortSignal }) => {
@@ -98,6 +101,9 @@ export function scriptedModel(): { chosen: ReturnType<ReturnType<typeof fauxProv
     // A summary asked for (compaction): a line will do.
     if (/summar/i.test(said) && /<conversation>|earlier part/i.test(said)) return fauxAssistantMessage([fauxText("Earlier, they asked about the notes.")]);
     const s = parse(said);
+    // The images the person's message came with: what the model was sent of them (a type, and the bytes' size).
+    const sent = at >= 0 && Array.isArray(messages[at]!.content) ? (messages[at]!.content as { type?: string; mimeType?: string; data?: string }[]).filter((b) => b?.type === "image") : [];
+    s.seen = sent.map((b) => `${b.mimeType}, ${Buffer.from(b.data ?? "", "base64").length} bytes`);
     const next = s.steps[k];
     if (!(await sleep(next ? next.wait : s.wait, options?.signal))) return fauxAssistantMessage([], { stopReason: "aborted" });
     if (next) return fauxAssistantMessage([fauxToolCall(next.name, next.args as never, { id: `call-${k}-${Math.random().toString(36).slice(2, 8)}` })], { stopReason: "toolUse" });
@@ -109,5 +115,5 @@ export function scriptedModel(): { chosen: ReturnType<ReturnType<typeof fauxProv
     faux.appendResponses([respond as never]);
     return models.streamSimple(model, context, options);
   }) as (...args: never[]) => unknown;
-  return { chosen: faux.getModel(), streamFn };
+  return { chosen: faux.getModel(id) ?? faux.getModel(), streamFn };
 }

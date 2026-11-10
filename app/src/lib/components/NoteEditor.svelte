@@ -13,10 +13,9 @@
   import { setMarks, setTouched, type Mark, type Touched } from "$lib/editor/overlays.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { pointing } from "$lib/pointing.svelte.ts";
-  import { digest, pastedName, pictureOf, pictureSrc, safeName } from "$lib/pictures.ts";
+  import { pictureOf, pictureSrc } from "$lib/pictures.ts";
+  import { dirOf, keep, linkTo, refused } from "$lib/images.ts";
   import { address, titled } from "$lib/editor/links.ts";
-  import { MAX_FILE_BYTES, type PictureInfo } from "@isorite/engine";
-  import PictureName from "./PictureName.svelte";
   import { setPointedLines, setPointedNote } from "$lib/editor/pointing.ts";
   import { pointers } from "$lib/pointers.svelte.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
@@ -28,56 +27,28 @@
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
 
-  // ------------------------------------------------------------ pictures pasted or dropped (M22)
+  // ------------------------------------------------------------ images pasted or dropped
 
-  const TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml", "image/avif"];
-  type Naming = Omit<import("svelte").ComponentProps<typeof PictureName>, "onDone"> & { onDone: (r: { path: string; alt: string; save: boolean } | null) => void };
-  let naming = $state.raw<Naming | null>(null);
   let said = $state<string | null>(null);
   let sayTimer: ReturnType<typeof setTimeout> | undefined;
   const say = (text: string) => { said = text; clearTimeout(sayTimer); sayTimer = setTimeout(() => (said = null), 8000); };
 
-  /** Each picture named in turn, saved beside the note (or the same one already there linked), and its link put in. */
+  /** Each image saved beside the note (its folder, by the name it came with) and its link put in at the cursor or the drop. */
   async function addPictures(files: File[], at: number, pasted: boolean): Promise<void> {
-    if (!view || naming) return;
-    if (import.meta.env.MODE === "guide") { say("The guide's site has nowhere to keep a picture. In isorite on your own machine, paste or drop one into a note and it's saved beside it."); return; }
-    // A note of the base keeps its pictures in a folder named for it, linked from beside it; a note outside the base
-    // (a draft) in pictures/, linked from the top.
-    const id = note.id, inBase = !id.startsWith("@");
-    const folder = inBase ? id : "pictures";
-    const hrefOf = (path: string) => (inBase && path.startsWith(`${id}/`) ? address(path.slice(id.lastIndexOf("/") + 1)) : `/${address(path)}`);
-    let known: PictureInfo[] = [];
-    try { known = await app.api.pictures(); } catch { /* none known: every name is free, as far as is known */ }
-    const taken = new Set(known.map((p) => p.path));
+    if (!view) return;
+    if (import.meta.env.MODE === "guide") { say("The guide's site has nowhere to keep an image. In isorite on your own machine, paste or drop one into a note and it is saved beside it."); return; }
+    const v = view;
     for (const file of files) {
-      if (!TYPES.includes(file.type)) { say(`${file.name || "That"} isn't a picture isorite keeps: png, jpg, gif, webp, svg and avif are.`); continue; }
-      if (file.size > MAX_FILE_BYTES) { say(`${file.name || "That picture"} is larger than isorite takes (${MAX_FILE_BYTES / 1e6} MB).`); continue; }
-      const bytes = new Uint8Array(await file.arrayBuffer()), hash = await digest(bytes);
-      const same = known.find((p) => p.sha256 === hash)?.path ?? null;
-      const src = URL.createObjectURL(file), v = view;
-      const c = v.coordsAtPos(Math.min(at, v.state.doc.length)), box = host.getBoundingClientRect();
-      const result = await new Promise<{ path: string; alt: string; save: boolean } | null>((onDone) => {
-        naming = {
-          file, src, folder, same, onDone,
-          suggested: pasted || !file.name ? pastedName() : safeName(file.name) || "picture",
-          taken: (p: string) => taken.has(p),
-          at: { left: Math.max(16, Math.min((c?.left ?? box.left), innerWidth - 476)), top: Math.min((c?.bottom ?? box.top) + 6, innerHeight - 220) },
-        };
-      });
-      naming = null;
-      URL.revokeObjectURL(src);
-      if (!result) continue;
-      if (result.save) {
-        try {
-          const info = await app.api.savePicture(result.path, bytes);
-          known.push(info); taken.add(info.path);
-        } catch (e) { say(`It wasn't saved: ${(e as Error).message}`); continue; }
-      }
-      const text = `![${result.alt.replace(/[[\]]/g, "")}](${hrefOf(result.path)})`;
-      v.dispatch({ changes: { from: at, insert: text }, selection: { anchor: at + text.length } });
-      at += text.length;
+      const why = refused(file);
+      if (why) { say(why); continue; }
+      let kept;
+      try { kept = await keep(app.api, dirOf(note.id), file, pasted); } catch (e) { say(`It was not saved: ${(e as Error).message}`); continue; }
+      const text = linkTo(note.id, kept.path), pos = Math.min(at, v.state.doc.length);
+      v.dispatch({ changes: { from: pos, insert: text }, selection: { anchor: pos + text.length } });
+      at = pos + text.length;
     }
-    view.focus();
+    v.focus();
+    void app.refresh();
   }
 
   // The source shows the whole file; the live preview shows the text under the frontmatter. The agent's places are of
@@ -180,7 +151,6 @@
 </script>
 
 <div class="editor" class:source bind:this={host} data-point="note:{note.id}" data-line-offset={head.lines}></div>
-{#if naming}<PictureName {...naming} />{/if}
 {#if said}<p class="said" role="status">{said}</p>{/if}
 
 <style>

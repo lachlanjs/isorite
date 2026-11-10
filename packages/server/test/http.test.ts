@@ -211,6 +211,19 @@ test("a file is given from the notes (M23; pictures in M22), a picture from the 
   writeFileSync(join(notes, "basics", "fig.html"), "<p>fig</p>");
   const fig = await fetch(url + "/api/file?path=basics/fig.html");
   expect([fig.status, fig.headers.get("content-type"), fig.headers.get("content-security-policy")?.startsWith("sandbox"), await fig.text()]).toEqual([200, "text/html", true, "<p>fig</p>"]);
+  // Code in the notes is given as text, sandboxed too, and what is listed leaves out dependencies and the .gitignore's (docs/files.md).
+  mkdirSync(join(notes, "src"), { recursive: true });
+  mkdirSync(join(notes, "node_modules", "x"), { recursive: true });
+  writeFileSync(join(notes, "src", "step.py"), "def step():\n    pass\n");
+  writeFileSync(join(notes, "node_modules", "x", "index.js"), "1");
+  writeFileSync(join(notes, "src", "run.log"), "1");
+  writeFileSync(join(notes, ".gitignore"), "*.log\n");
+  const py = await fetch(url + "/api/file?path=src/step.py");
+  expect([py.status, py.headers.get("content-type"), py.headers.get("content-security-policy")?.startsWith("sandbox"), await py.text()]).toEqual([200, "text/plain", true, "def step():\n    pass\n"]);
+  const fresh = await openEngine(locate(notes), "testdev2", null);
+  const files = Object.keys((await fresh.map()).files ?? {});
+  expect(files).toContain("src/step.py");
+  expect(files.filter((f) => f.startsWith("node_modules") || f.endsWith(".log"))).toEqual([]);
   // A note, in isorite's own folder, out of the notes, or not there: none is given.
   for (const path of ["basics/entropy.md", ".isorite/hidden.png", "../information-theory/basics/entropy/coin.png", "basics/../basics/entropy/coin.png", "basics/gone.png", ".isorite/config.toml"]) {
     expect([path, (await fetch(url + "/api/file?path=" + encodeURIComponent(path))).status]).toEqual([path, 404]);
@@ -312,4 +325,29 @@ test("isorite check says a colon in a field can be mended, and --fix quotes it (
   expect(check(dir, (l) => second.push(l), false, true)).toBe(0);
   expect(second[0]).toBe("fixed   a.md: quoted title");
   expect(readFileSync(path, "utf8")).toBe('---\ntype: Concept\ntitle: "Codes: a survey"\n---\n\nText: kept.\n');
+});
+
+test("an image dropped on a note is saved beside it, by its bytes, from this machine only, through the engine (journalled)", async () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+  const post = (query: string, body: Uint8Array | string, headers: Record<string, string> = {}) =>
+    fetch(url + "/api/image?" + query, { method: "POST", headers: { Origin: url, [TOKEN_HEADER]: TOKEN, "Content-Type": "application/octet-stream", ...headers }, body });
+  const ok = await post("dir=basics&name=Coin%20Toss.PNG", png);
+  expect(ok.status).toBe(200);
+  expect(await ok.json()).toMatchObject({ path: "basics/coin-toss.png", bytes: 12 });
+  expect([...readFileSync(join(notes, "basics", "coin-toss.png"))]).toEqual([...png]);
+  expect(readJournal(readFileSync(join(study, "journal", "basics", "coin-toss.png.jsonl"), "utf8"))).toMatchObject([{ who: "you" }]);
+  // Beside the note again: a name that is taken is counted up.
+  expect((await (await post("dir=basics&name=coin-toss.png", png)).json() as { path: string }).path).toBe("basics/coin-toss-2.png");
+  // Not an image, whatever its name or type says; too large; out of the base; not from this page.
+  expect((await post("dir=basics&name=a.png", new TextEncoder().encode("<svg onload=alert(1)>"), { "Content-Type": "image/png" })).status).toBe(415);
+  expect((await post("dir=basics&name=a.png", new Uint8Array(5_000_001))).status).toBe(413);
+  expect((await post("dir=..&name=a.png", png)).status).toBe(400);
+  expect((await post("dir=.isorite&name=a.png", png)).status).toBe(400);
+  expect((await post("dir=basics&name=a.png", png, { [TOKEN_HEADER]: "wrong" })).status).toBe(403);
+  expect((await post("dir=basics&name=a.png", png, { Origin: "https://evil.example" })).status).toBe(403);
+  expect((await fetch(url + "/api/image?dir=basics&name=a.png", { method: "POST", headers: { [TOKEN_HEADER]: TOKEN }, body: png })).status).toBe(403);
+  expect(() => statSync(join(notes, "basics", "a.png"))).toThrow();
+  // It shows in the list of pictures and is served as a file.
+  expect(((await (await fetch(url + "/api/pictures")).json()) as { path: string }[]).map((p) => p.path)).toContain("basics/coin-toss.png");
+  expect((await fetch(url + "/api/file?path=basics/coin-toss.png")).headers.get("content-type")).toBe("image/png");
 });

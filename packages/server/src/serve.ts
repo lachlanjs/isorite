@@ -130,10 +130,13 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
       const shown = switchable(terminal ?? new NoAgent());
       if (!terminal) pi.whenChosen(async () => { const host = await piHostFor(api, process.env, projectOf(known.path).repo, known.path, pi); if (host) shown.use(host); });
       // The tests' scripted model (ISORITE_SCRIPTED=1): put in the pane and taken out again by a test, as a model chosen would be.
-      let scripted: Awaited<ReturnType<typeof piHostFor>> = null;
+      let scripted: Awaited<ReturnType<typeof piHostFor>> = null, wanted = "";
       const script = process.env.ISORITE_SCRIPTED === "1" ? {
-        async on() {
-          if (!scripted) scripted = await piHostFor(api, { ...process.env, ISORITE_PI: "scripted/scripted" }, projectOf(known.path).repo, known.path, pi);
+        async on(textOnly = false) {
+          const want = textOnly ? "scripted/scripted-text" : "scripted/scripted";
+          if (scripted && wanted !== want) { await scripted.interrupt(); pi.detach(scripted); scripted = null; }
+          wanted = want;
+          if (!scripted) scripted = await piHostFor(api, { ...process.env, ISORITE_PI: want }, projectOf(known.path).repo, known.path, pi);
           if (!scripted) return;
           await scripted.interrupt();
           await scripted.fresh("pi").catch(() => undefined);

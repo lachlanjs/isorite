@@ -106,12 +106,14 @@ export interface TerminalView {
   problem?: string;
   /** Whether the session shown can be steered while it works (M36). */
   steer?: boolean;
+  /** Whether the model takes images: a picture pasted or dropped into the box is sent with the turn only if so. */
+  images?: boolean;
   /** Whether a kept session can be forked from the pane (M36). */
   fork?: boolean;
 }
 /** A prompt and what the agent did with it. `from` says where it was asked: in the terminal, or from a page. `given`:
  *  the notes and passages put before it from the pane (M25). */
-export interface TerminalTurn { id: string; asked: string; from: "terminal" | "here"; items: TerminalItem[]; state: "running" | "done" | "stopped" | "failed"; given?: Given[]; /** Which of `given` were taken out of the conversation afterwards (indexes), M36. */ withdrawn?: number[]; at?: string; /** How long it ran, in ms, once it is over. */ took?: number }
+export interface TerminalTurn { id: string; asked: string; from: "terminal" | "here"; items: TerminalItem[]; state: "running" | "done" | "stopped" | "failed"; given?: Given[]; /** Images sent with it, by the id the pane asks for each by. */ images?: string[]; /** Which of `given` were taken out of the conversation afterwards (indexes), M36. */ withdrawn?: number[]; at?: string; /** How long it ran, in ms, once it is over. */ took?: number }
 /** An agent's session as isorite kept it (M25), in its own files beside the agent's conversations: what was asked, from
  *  where, what the agent read, changed, asked back and offered. */
 export interface AgentRecord { agent: string; name: string; session: string; title: string; at: string; last: string; turns: TerminalTurn[] }
@@ -195,6 +197,8 @@ export interface PictureInfo { path: string; bytes: number; width: number | null
 
 /** The largest picture isorite gives or takes (M22). */
 export const MAX_FILE_BYTES = 20_000_000;
+/** The most an image dropped on a note, or given the agent, may be. */
+export const MAX_IMAGE_BYTES = 5_000_000;
 
 export interface Api {
   session(): Promise<Session>;
@@ -212,6 +216,8 @@ export interface Api {
   pictures(): Promise<PictureInfo[]>;
   /** Put a picture in the notes at `path` (M22), pasted or dropped: never over a file that's there (a Conflict). */
   savePicture(path: string, bytes: Uint8Array): Promise<PictureInfo>;
+  /** Put an image in the base beside a note (in the folder `dir`), by the name it came with, made safe and not taken (`shot-2.png`): png, jpeg, gif or webp by its bytes. Journalled. */
+  addImage(dir: string, name: string, bytes: Uint8Array): Promise<PictureInfo>;
   /** Save a note. `base` is the version the text started from; a note that has moved on refuses with a Conflict. */
   saveNote(id: string, edit: { base: string; text: string }): Promise<Saved>;
   /** Make a note. Refuses when there is one already. */

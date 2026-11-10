@@ -3,9 +3,9 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  AGENTS_FILE, STRENGTH, citeKind, codeTarget, fileType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, HIDDEN_FILE, GITATTRIBUTES, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, IndexCache, type ParseCache, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, type Entry, type FileEntry, type MapModel, type SessionMoment, type Stamp,
+  AGENTS_FILE, STRENGTH, ignoredBy, skippedName, MAX_ITEM_BYTES, citeKind, codeTarget, fileType, imageExt, imageType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, HIDDEN_FILE, GITATTRIBUTES, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, IndexCache, type ParseCache, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, type Entry, type FileEntry, type MapModel, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type FindResult, type FindHit } from "./api.ts";
+import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, MAX_IMAGE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type FindResult, type FindHit } from "./api.ts";
 import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Similar, type ToolDef } from "./lookup.ts";
 import { ARTIFACTS, ARTIFACT_RECIPE, ASK_QUESTION, OFFER_TEXT, CONVERSATIONS_DIR, ISORITE, PRACTICE, READ_ARTIFACT, READ_DATA, WRITE_ARTIFACT, conversationPath, readTurns, type TurnItem } from "./turn.ts";
 import { WRITING } from "./writing.ts";
@@ -100,10 +100,14 @@ const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 async function walk(files: Files, root: string): Promise<FileEntry[]> {
   const out: FileEntry[] = [];
   const at = (path: string): string => (root && path ? `${root}/${path}` : root || path);
+  // Code in the notes (docs/files.md): what the base's top `.gitignore` names is not a file of it, nor is a folder of
+  // dependencies, nor one too large. A note is never left out by the `.gitignore`.
+  const ignored = ignoredBy((await files.read(at(".gitignore"))) ?? "");
   const visit = async (dir: string): Promise<void> => {
     for (const info of await files.list(at(dir))) {
-      if (info.name.startsWith(".")) continue; // .git, and anything else hidden
+      if (skippedName(info.name, info.dir)) continue; // .git, node_modules, and anything else hidden
       const path = dir ? `${dir}/${info.name}` : info.name;
+      if (!info.dir && !info.name.endsWith(".md") && ((info.size ?? 0) > MAX_ITEM_BYTES || ignored(path, false))) continue;
       if (info.dir) {
         out.push({ path, dir: true });
         await visit(path);
@@ -964,6 +968,32 @@ export class Engine implements Api {
       this.changed();
       const px = pictureSize(bytes, type);
       const info: PictureInfo = { path, bytes: bytes.length, width: px?.width ?? null, height: px?.height ?? null, sha256: sha256(bytes) };
+      return info;
+    });
+  }
+
+  /** Put an image in the base beside a note, in its folder `dir` (`""`: the top), as dropped or pasted: a file item, not a
+   *  satellite. The kind is read from the bytes (png, jpeg, gif or webp), never from the name; the name is made safe and,
+   *  where it is taken, counted up (`shot.png`, `shot-2.png`). Journalled under its path, signed `who`. */
+  addImage(dir: string, name: string, bytes: Uint8Array, who = "you"): Promise<PictureInfo> {
+    return this.one(async () => {
+      dir = dir.replace(/^\/+|\/+$/g, "");
+      if (dir.split("/").some((p) => p === "." || p === ".." || p.startsWith(".")) || /[\\\x00-\x1f]/.test(dir) || /\/\//.test(dir)) throw new EngineError(`not a folder: ${dir}`, 400);
+      const type = imageType(bytes);
+      if (!type) throw new EngineError("an image of png, jpeg, gif or webp", 415);
+      if (bytes.length > MAX_IMAGE_BYTES) throw new EngineError(`the image is larger than isorite takes (${MAX_IMAGE_BYTES / 1e6} MB)`, 413);
+      const stem = name.split(/[\\/]/).at(-1)!.replace(/\.[a-z0-9]{1,5}$/i, "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/-{2,}/g, "-").replace(/^[-.]+|[-.]+$/g, "").slice(0, 80) || "image";
+      let path = "";
+      for (let n = 1; ; n++) {
+        path = [dir, `${n === 1 ? stem : `${stem}-${n}`}.${imageExt(type)}`].filter(Boolean).join("/");
+        if (!this.files.has(path) && (await this.opts.notes.readBytes(path)) === null) break;
+      }
+      await this.opts.notes.writeBytes(path, bytes);
+      this.files.set(path, { path });
+      const px = pictureSize(bytes, type), info: PictureInfo = { path, bytes: bytes.length, width: px?.width ?? null, height: px?.height ?? null, sha256: sha256(bytes) };
+      // Its first entry: the file's text is not the journal's to hold, so the entry carries the hash and no hunks.
+      await this.enter(path, [], { ...(await this.stamp(who)), kind: "change", why: "start", before: null, after: info.sha256.slice(0, 16), hunks: [] });
+      this.changed();
       return info;
     });
   }

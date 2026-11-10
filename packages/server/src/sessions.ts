@@ -13,7 +13,10 @@ export interface PaneSessions {
   /** What is being asked of an agent now, for a note it changes: its turn running, else empty. */
   asked(agent: string): string;
   /** Ask in the session shown; with none yet, in a new one. */
-  prompt(text: string): Promise<void>;
+  prompt(text: string, images?: string[]): Promise<void>;
+  /** Keep an image the person gave the box, to send with a prompt by its id, and give one back. A host whose agent takes no images leaves these out. */
+  keepImage?(bytes: Uint8Array): Promise<{ id: string; type: string }>;
+  image?(id: string): Promise<{ bytes: Uint8Array; type: string } | null>;
   /** Say something to the agent while it works, to come in after the step now running (M36). Throws where the agent
    *  cannot take it, or is not working. A host that cannot be steered leaves this out. */
   steer?(text: string): Promise<void>;

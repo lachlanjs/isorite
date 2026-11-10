@@ -5,6 +5,8 @@
 //
 // The agent's own conversations, from before M25, are read here too: drawn as a session kept, with nothing to carry on.
 
+import { IMAGE_TYPES } from "@isorite/core";
+import { MAX_IMAGE_BYTES } from "@isorite/engine";
 import type { ConversationSummary, Decision, EngineEvent, Given, TerminalItem, TerminalTurn, TerminalView, Turn } from "@isorite/engine";
 import type { PiApi, TerminalApi } from "./api.ts";
 import { app } from "./app.svelte.ts";
@@ -12,6 +14,8 @@ import { panes } from "./panes.svelte.ts";
 import { tray, type Part } from "./tray.svelte.ts";
 import { askedParts } from "./pointers.ts";
 
+const MAX_ATTACHED = 6;
+export interface Attached { key: string; name: string; url: string; id?: string; state: "keeping" | "kept" | "bad"; note?: string }
 const givenOf = (): Given[] => tray.sent.map((p) => (p.kind === "passage" ? { kind: p.kind, id: p.id, text: p.text } : { kind: p.kind, id: p.id }));
 
 /** A turn of the agent's, from before M25, as an agent's turn is drawn: what it read and changed as the lines of isorite's
@@ -135,16 +139,60 @@ class TerminalState {
 
   /** `raw`: what the box held (pointers in it), kept for Up to bring back. */
   async send(asked: string, raw = asked): Promise<boolean> {
-    if (!asked.trim() || !this.api || this.sending) return false;
+    if (!asked.trim() || !this.api || this.sending || this.keeping) return false;
     this.problem = "";
     this.old = null;
     this.sending = true;
     try {
-      await this.api.prompt(asked.trim(), givenOf());
+      // The images the model can see go with the turn; any it cannot are left out (their chips said so).
+      const images = this.sees ? this.attached.flatMap((a) => (a.id ? [a.id] : [])) : [];
+      await this.api.prompt(asked.trim(), givenOf(), images);
+      this.clearAttached();
       if (raw.trim() && this.history.at(-1) !== raw) this.history = [...this.history.slice(-49), raw];
       return true;
     } catch (e) { this.problem = (e as Error).message; return false; } finally { this.sending = false; }
   }
+
+  // ------------------------------------------------------------ images given in the box
+
+  /** What is in the box beside the text: images pasted or dropped, each shown as a chip until the turn is sent. `id` is
+   *  the server's name for one it has kept; none yet, or `note` says why it will not be sent. */
+  attached = $state.raw<Attached[]>([]);
+  /** Whether the model takes images (the server says). Where it does not, a chip says so and is not sent. */
+  get sees(): boolean { return !!this.view?.images; }
+  /** Whether images can be given here at all: the pane's agent is isorite's own, through the server. */
+  get canAttach(): boolean { return !!this.api?.image && this.connected; }
+  get keeping(): boolean { return this.attached.some((a) => a.state === "keeping"); }
+  /** Take images pasted or dropped: each checked (type, size), then kept by the server where the model takes it. */
+  async attach(files: File[]): Promise<void> {
+    const api = this.api;
+    if (!api?.image) return;
+    for (const file of files) {
+      if (this.attached.length >= MAX_ATTACHED) { this.problem = `At most ${MAX_ATTACHED} images go with a turn.`; break; }
+      const key = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name = file.name || "pasted image";
+      const bad = !IMAGE_TYPES.includes(file.type as never) ? "Not a png, jpeg, gif or webp." : file.size > MAX_IMAGE_BYTES ? `Over ${MAX_IMAGE_BYTES / 1e6} MB.` : "";
+      this.attached = [...this.attached, { key, name, url: URL.createObjectURL(file), state: bad ? "bad" : this.sees ? "keeping" : "kept", ...(bad ? { note: bad } : {}) }];
+      if (bad || !this.sees) continue;
+      try {
+        const kept = await api.image(new Uint8Array(await file.arrayBuffer()));
+        this.attached = this.attached.map((a) => (a.key === key ? { ...a, id: kept.id, state: "kept" } : a));
+      } catch (e) {
+        this.attached = this.attached.map((a) => (a.key === key ? { ...a, state: "bad", note: (e as Error).message } : a));
+      }
+    }
+  }
+  unattach(key: string): void {
+    const gone = this.attached.find((a) => a.key === key);
+    if (gone) URL.revokeObjectURL(gone.url);
+    this.attached = this.attached.filter((a) => a.key !== key);
+  }
+  clearAttached(): void {
+    for (const a of this.attached) URL.revokeObjectURL(a.url);
+    this.attached = [];
+  }
+  /** Where an image sent with a turn is shown from, or null where there is none. */
+  imageUrl(id: string): string | null { return this.api?.imageUrl?.(id) ?? null; }
+
   /** Said while the agent works: in after the step running now. */
   async steer(asked: string): Promise<boolean> {
     if (!asked.trim() || !this.api || this.sending) return false;

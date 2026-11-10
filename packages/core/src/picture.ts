@@ -8,6 +8,24 @@ export const pictureType = (path: string): string | null => {
   return dot < 0 || path.lastIndexOf("/") > dot ? null : TYPES[path.slice(dot + 1).toLowerCase()] ?? null;
 };
 
+/** The media types a note's picture and an image given the agent may be: what every model that sees images takes. */
+export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+/** What an image's bytes say it is (by their first bytes, not by a name or a type that was claimed), or null where they
+ *  are none of png, jpeg, gif and webp. */
+export function imageType(bytes: Uint8Array): (typeof IMAGE_TYPES)[number] | null {
+  const at = (i: number, s: string) => bytes.length >= i + s.length && [...s].every((c, k) => bytes[i + k] === c.charCodeAt(0));
+  if (bytes.length >= 8 && bytes[0] === 0x89 && at(1, "PNG") && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return "image/png";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (at(0, "GIF87a") || at(0, "GIF89a")) return "image/gif";
+  if (at(0, "RIFF") && at(8, "WEBP")) return "image/webp";
+  return null;
+}
+/** The extension a type is kept under. */
+export const imageExt = (type: string): string => (type === "image/jpeg" ? "jpg" : type.slice(6));
+
+/** Source and configuration: files that are text and are read as code. */
+export const CODE = /\.(tsx?|jsx?|mjs|cjs|py|pyi|rb|go|rs|c|h|cc|cpp|hpp|cs|java|kt|swift|php|lua|sh|bash|zsh|fish|ps1|sql|r|jl|scala|hs|ml|ex|exs|clj|dart|zig|svelte|vue|css|scss|less|toml|ya?ml|ini|cfg|xml|cmake|gradle|proto|graphql)$/i;
+
 const OTHER: Record<string, string> = {
   html: "text/html", htm: "text/html", csv: "text/csv", tsv: "text/tab-separated-values", json: "application/json",
   jsonl: "application/jsonl", ndjson: "application/x-ndjson", txt: "text/plain", tex: "text/plain", pdf: "application/pdf",
@@ -22,7 +40,7 @@ export const fileType = (path: string): string | null => {
   const dot = path.lastIndexOf(".");
   if (dot < 0 || path.lastIndexOf("/") > dot) return null;
   const ext = path.slice(dot + 1).toLowerCase();
-  return ext === "md" ? null : pictureType(path) ?? OTHER[ext] ?? "application/octet-stream";
+  return ext === "md" ? null : pictureType(path) ?? OTHER[ext] ?? (CODE.test(path) ? "text/plain" : "application/octet-stream");
 };
 
 /** Width and height in pixels, or null. */

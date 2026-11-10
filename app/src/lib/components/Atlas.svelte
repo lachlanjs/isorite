@@ -10,6 +10,7 @@
   import { tick, untrack } from "svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { pictureSrc } from "$lib/pictures.ts";
+  import { dirOf, keep, linkTo, refused } from "$lib/images.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
   import { pointers as prompt } from "$lib/pointers.svelte.ts";
@@ -117,10 +118,11 @@
       for (const p of asked) notes[p.ref] = { title: p.title, tokens: 0, kind: "question" };
       const all = { ...got, model: withProspects(got.model, asked), notes };
       // The kinds switched off are not on the map (M12), and a resolved question leaves it.
-      // Files beside the notes (M23: pictures, artifacts, data, documents, others) are on it when its switch is on.
+      // Files beside the notes (M23: pictures, artifacts, data, documents, others) are on it when its switch is on; code files
+      // in the base (docs/files.md) when the code switch is.
       const next = { ...all, model: withoutHidden(withoutNotes(all.model, (ref) => {
         const f = all.files?.[ref];
-        if (f) return f.kind === "artifact" ? !panes.on.artifacts : !panes.on.pictures;
+        if (f) return f.kind === "artifact" ? !panes.on.artifacts : f.kind === "code" ? !panes.on.code : !panes.on.pictures;
         const n = all.notes[ref];
         return n?.kind === "question" ? !panes.on.questions : n?.kind === "problem" ? !panes.on.problems : false;
       }), (id) => !id.startsWith("?") && app.isHidden(id)) };
@@ -171,7 +173,7 @@
   // A kind switched on or off lays the map out again, from where things stood (V5).
   let kindsWere = "";
   $effect(() => {
-    const now = `${panes.on.questions}|${panes.on.problems}|${panes.on.pictures}|${panes.on.artifacts}`;
+    const now = `${panes.on.questions}|${panes.on.problems}|${panes.on.pictures}|${panes.on.artifacts}|${panes.on.code}`;
     if (kindsWere && kindsWere !== now) void load();
     kindsWere = now;
   });
@@ -608,6 +610,39 @@
   let offered = $state.raw<{ ref: string; x: number; y: number } | null>(null);
   /** Why a note or folder could not be made here. */
   let notice = $state("");
+  /** Images dropped on the map (a file of the machine, not a note carried): on a note, saved beside it and linked at the end of
+   *  its text; on a region or its empty ground, saved in that folder alone. Said for a moment, in the map's own plain words. */
+  let said = $state("");
+  let saidTimer: ReturnType<typeof setTimeout> | undefined;
+  const tell = (text: string) => { said = text; clearTimeout(saidTimer); saidTimer = setTimeout(() => (said = ""), 3200); };
+  const filesOver = (e: DragEvent): boolean => !!e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+  function dragOver(e: DragEvent): void { if (filesOver(e)) e.preventDefault(); }
+  async function dropImages(e: DragEvent): Promise<void> {
+    if (!filesOver(e)) return;
+    e.preventDefault();
+    const files = [...(e.dataTransfer?.files ?? [])].filter((f) => f.type.startsWith("image/"));
+    if (!files.length) { notice = "Only images can be dropped here."; return; }
+    const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>(".atlas [data-note]");
+    const onNote = target && !target.classList.contains("file") ? target.dataset.note ?? "" : "";
+    const dir = onNote ? dirOf(onNote) : target?.dataset.note ? dirOf(target.dataset.note) : folderUnder(e.clientX, e.clientY);
+    if (dir === null) return;
+    notice = "";
+    try {
+      const links: string[] = [];
+      for (const file of files) {
+        const why = refused(file);
+        if (why) { notice = why; continue; }
+        const kept = await keep(app.api, dir, file);
+        if (onNote) links.push(linkTo(onNote, kept.path));
+      }
+      if (onNote && links.length) {
+        const now = await app.api.readNote(onNote);
+        await app.api.saveNote(onNote, { base: now.version, text: `${now.text.replace(/\n*$/, "")}\n\n${links.join("\n\n")}\n` });
+        tell(links.length === 1 ? `Added to ${title(onNote)}` : `${links.length} images added to ${title(onNote)}`);
+      } else if (!onNote && files.length) tell(files.length === 1 ? `Saved in ${dir || "the top of the base"}` : `${files.length} images saved in ${dir || "the top of the base"}`);
+      void app.refresh();
+    } catch (err) { notice = (err as Error).message; }
+  }
   /** A note given to the agent: into the tray, said on the map for a moment. */
   let given = $state("");
   let givenTimer: ReturnType<typeof setTimeout> | undefined;
@@ -887,7 +922,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div class="atlas" class:lit={!!lit} bind:this={viewport} role="application" aria-label="The atlas: the map of the base" tabindex="0"
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onclick={ground} onkeydown={key}
-  ondragstart={(e) => e.preventDefault()}
+  ondragstart={(e) => e.preventDefault()} ondragover={dragOver} ondrop={(e) => void dropImages(e)}
   oncontextmenu={(e) => { if (spot || holdDone !== undefined || offered) e.preventDefault(); }}>
   <div class="ground dots" aria-hidden="true" style="background-size: {dot}px {dot}px; transform: translate({(((view.x + 56 + dot / 2) % dot) + dot) % dot}px, {(((view.y + 56 + dot / 2) % dot) + dot) % dot}px)"></div>
   {#if failed}
@@ -945,6 +980,7 @@
     {#if notice}
       <p class="notice" role="alert">{notice}</p>
     {/if}
+    {#if said}<p class="saved" role="status">{said}</p>{/if}
     {#if given}<p class="given" role="status">◆ {given}</p>{/if}
     <HoldTags {g} mode="point" bounds={viewport?.getBoundingClientRect() ?? null} />
     <HoldTags {g} mode="ghost" />
@@ -1013,6 +1049,8 @@
   .offer button { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; background: none; border: 0; color: var(--text); font: 0.8125rem var(--font-ui); text-align: left; cursor: pointer; }
   .offer button:hover, .offer button:focus-visible { background: var(--ground-3); }
   .offer i { font-style: normal; width: 12px; color: var(--growth); font-size: 0.6875rem; }
+  .saved { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--lattice); font-size: 0.75rem; z-index: 2; animation: appear var(--dur-1) var(--ease-out); }
+  @media (prefers-reduced-motion: reduce) { .saved { animation: none; } }
   .given { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--growth); font-size: 0.75rem; z-index: 2; }
   .given::first-letter { color: var(--growth); }
   .legend { position: absolute; left: 12px; bottom: 10px; right: 12px; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.6875rem; color: var(--text-soft); pointer-events: none; z-index: 2; }

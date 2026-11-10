@@ -9,7 +9,7 @@ import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { Conflict, EngineError, MAX_FILE_BYTES, MAX_NOTE_BYTES, type Api, type Given as GivenPart } from "@isorite/engine";
+import { Conflict, EngineError, MAX_FILE_BYTES, MAX_IMAGE_BYTES, MAX_NOTE_BYTES, type Api, type Given as GivenPart } from "@isorite/engine";
 import type { BasesPort } from "./bases.ts";
 import { given as withGiven } from "./given.ts";
 import type { PaneSessions } from "./sessions.ts";
@@ -40,7 +40,7 @@ export interface ServerOptions {
   /** The model and keys of the native agent (M36), set from this machine only. */
   pi?: PiControl;
   /** The tests' scripted model, put in the pane and taken out (ISORITE_SCRIPTED=1 only). */
-  scripted?: { on(): Promise<void>; off(): Promise<void> };
+  scripted?: { on(textOnly?: boolean): Promise<void>; off(): Promise<void> };
   /** The other bases the server holds (M20), and this one's name among them. */
   bases?: BasesPort;
   base?: string;
@@ -174,6 +174,19 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     const bytes = new Uint8Array(await c.req.arrayBuffer());
     if (bytes.length > MAX_FILE_BYTES) return refuse(c, 413, "picture too large");
     return answer(c, () => api.savePicture(path, bytes));
+  });
+  // An image dropped or pasted onto a note or the Atlas: its bytes as the body, saved beside the note (`dir`) under the
+  // name it came with (`name`), made safe and not taken. Only from this machine; the kind is read from the bytes.
+  app.post("/api/image", async (c) => {
+    if (!local(c)) return refuse(c, 403, "an image is saved only from this machine");
+    let origin = "";
+    try { origin = new URL(c.req.header("origin") ?? "").host; } catch { /* no origin */ }
+    if (!c.req.header("origin") || origin !== c.req.header("host")) return refuse(c, 403, "cross-origin request refused");
+    if (c.req.header(TOKEN_HEADER) !== token) return refuse(c, 403, "bad token");
+    if (Number(c.req.header("content-length") ?? 0) > MAX_IMAGE_BYTES) return refuse(c, 413, "image too large");
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    if (bytes.length > MAX_IMAGE_BYTES) return refuse(c, 413, "image too large");
+    return answer(c, () => api.addImage(c.req.query("dir") ?? "", (c.req.query("name") ?? "").slice(0, 200), bytes));
   });
   // A file (M22, M23): any but a note by `path` in the notes, or a picture by `code` in the repository. An SVG or an
   // artifact opened here on its own would run its scripts beside the token, so every answer is sandboxed; the app
@@ -326,14 +339,32 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   if (pane) {
     app.get("/api/terminal", (c) => answer(c, async () => pane.view()));
     const failed = (e: Error) => { throw new EngineError(e.message, 409); };
-    post("/api/terminal/prompt", z.object({ asked: z.string().min(1).max(8000), given: z.array(Given).max(40) }).strict(), async (_c, b) => {
+    // An image from the pane's box: its bytes as the body, kept by the agent's host and named by id for the prompt that
+    // sends it; and read back by that id, to show in the session. Only from this machine.
+    app.post("/api/terminal/image", async (c) => {
+      if (!local(c)) return refuse(c, 403, "an image is given to the agent only from this machine");
+      let origin = "";
+      try { origin = new URL(c.req.header("origin") ?? "").host; } catch { /* no origin */ }
+      if (!c.req.header("origin") || origin !== c.req.header("host")) return refuse(c, 403, "cross-origin request refused");
+      if (c.req.header(TOKEN_HEADER) !== token) return refuse(c, 403, "bad token");
+      if (!pane.keepImage) return refuse(c, 409, "this agent takes no images");
+      if (Number(c.req.header("content-length") ?? 0) > MAX_IMAGE_BYTES) return refuse(c, 413, "image too large");
+      const bytes = new Uint8Array(await c.req.arrayBuffer());
+      try { return reply(c, 200, await pane.keepImage(bytes)); } catch (e) { return refuse(c, (e as Error).message.includes("MB") ? 413 : 415, (e as Error).message); }
+    });
+    app.get("/api/terminal/image", async (c) => {
+      const found = await pane.image?.(c.req.query("id") ?? "");
+      if (!found) return refuse(c, 404, "no such image");
+      return c.body(found.bytes as Uint8Array<ArrayBuffer>, 200, { "Content-Type": found.type, "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": PICTURE_CSP });
+    });
+    post("/api/terminal/prompt", z.object({ asked: z.string().min(1).max(8000), given: z.array(Given).max(40), images: z.array(z.string().regex(/^[0-9a-f]{24}\.(png|jpg|gif|webp)$/)).max(6).optional() }).strict(), async (_c, b) => {
       const titles = new Map((await api.notes()).notes.map((n) => [n.id, n.title]));
       const broken = await api.brokenNews();
       const news = broken.length ? `\n\n(isorite: code links in the notes that no longer resolve: ${broken.map((x) => `${x.href} in /${x.id}.md`).join("; ")}.)` : "";
       const title = (id: string) => titles.get(id) ?? id;
       // What was given goes apart, once a session (M25).
       await pane.give(b.given as GivenPart[], (parts) => withGiven("", parts, title).trim()).catch(failed);
-      await pane.prompt(b.asked.trim() + news).catch(failed);
+      await pane.prompt(b.asked.trim() + news, b.images).catch(failed);
     });
     post("/api/terminal/steer", z.object({ asked: z.string().min(1).max(8000), given: z.array(Given).max(40) }).strict(), async (_c, b) => {
       if (!pane.steer) throw new EngineError("this agent cannot be steered while it works: stop it and ask again", 409);
@@ -344,7 +375,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     });
     post("/api/terminal/withdraw", z.object({ given: Given }).strict(), async (_c, b) => ({ withdrawn: pane.withdraw ? await pane.withdraw(b.given as GivenPart) : false }));
     post("/api/terminal/stop", z.object({}).strict(), async () => { await pane.interrupt().catch(failed); });
-    if (scripted) post("/api/terminal/scripted", z.object({ on: z.boolean() }).strict(), async (_c, b) => { await (b.on ? scripted.on() : scripted.off()); });
+    if (scripted) post("/api/terminal/scripted", z.object({ on: z.boolean(), textOnly: z.boolean().optional() }).strict(), async (_c, b) => { await (b.on ? scripted.on(b.textOnly) : scripted.off()); });
     post("/api/terminal/permission", z.object({ id: z.string().max(200), decision: z.enum(["once", "always", "reject"]) }).strict(), async (_c, b) => { await pane.reply(b.id, b.decision).catch(failed); });
   }
 

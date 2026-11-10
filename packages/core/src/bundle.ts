@@ -7,6 +7,7 @@
 import { FrontmatterError, splitFrontmatter, type Meta } from "./frontmatter.ts";
 import { citeRefs, headings, linkRefs, rating, type Rating } from "./markdown.ts";
 import { ABOUT, doneOf, embedRefs, idsOf, kindOf, outwardLinks, type Kind, type Outward } from "./kinds.ts";
+import { CODE } from "./picture.ts";
 import { basename, cmp, cmpTuple, dirname, join, normpath, strip, text, toTime, unquote } from "./text.ts";
 
 /** The base's own instructions, for the agent and any other agent, at the top of the notes (M15). Not a note. */
@@ -30,8 +31,9 @@ export interface Link {
 }
 
 /** What a file in the bundle that is not a note is (M23): an artifact (an HTML document isorite shows), a picture,
- *  data (what an artifact draws from, or evidence), a document to read, or anything else. */
-export type FileKind = "artifact" | "image" | "data" | "document" | "misc";
+ *  data (what an artifact draws from, or evidence), a document to read, code (source and configuration, read as
+ *  text), or anything else. */
+export type FileKind = "artifact" | "image" | "data" | "document" | "code" | "misc";
 
 /** A file in the bundle that a note cites and that is not a note (T76): any kind, linked or shown in place. What an
  *  artifact links to in turn is never read. */
@@ -49,6 +51,7 @@ const KINDS: [FileKind, RegExp][] = [
   ["image", /\.(png|jpe?g|gif|svg|webp|avif)$/i],
   ["data", /\.(csv|tsv|json|jsonl|ndjson|parquet|arrow|feather|npy|npz|xlsx|xls|h5|hdf5|nc)$/i],
   ["document", /\.(pdf|docx?|odt|rtf|epub|pptx?|odp|txt|tex)$/i],
+  ["code", CODE],
 ];
 /** What kind of file a path is: null for a note, or a path with no extension (a note or a folder named without one);
  *  anything not listed is misc rather than dropped. */

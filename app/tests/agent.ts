@@ -8,11 +8,11 @@ import { PORT } from "./serve.ts";
 
 const BASE = `http://localhost:${PORT}/`;
 
-async function scripted(on: boolean): Promise<void> {
+async function scripted(on: boolean, textOnly = false): Promise<void> {
   const api = await request.newContext({ baseURL: BASE });
   try {
     const { token } = (await (await api.get("api/session")).json()) as { token: string };
-    const res = await api.post("api/terminal/scripted", { data: { on }, headers: { "x-isorite-token": token, origin: new URL(BASE).origin } });
+    const res = await api.post("api/terminal/scripted", { data: { on, ...(textOnly ? { textOnly } : {}) }, headers: { "x-isorite-token": token, origin: new URL(BASE).origin } });
     expect(res.ok(), `the scripted model ${on ? "in" : "out"}: ${await res.text()}`).toBe(true);
   } finally { await api.dispose(); }
 }
@@ -21,9 +21,9 @@ export interface Attached {
   detach(): Promise<void>;
 }
 
-/** The scripted model in the pane, in a new session. */
-export async function attach(): Promise<Attached> {
-  await scripted(true);
+/** The scripted model in the pane, in a new session. With `textOnly`, the one that takes no images. */
+export async function attach(textOnly = false): Promise<Attached> {
+  await scripted(true, textOnly);
   return { detach: () => scripted(false) };
 }
 

@@ -432,6 +432,9 @@
   <article class="turn" data-state={t.state}>
     <div class="you"><i class="rule" aria-hidden="true"></i>
       <p class="asked">{#each pieces(t.asked) as p, k (k)}{#if "text" in p}{p.text}{:else}<button type="button" class="pt ref" data-to={p.id ?? undefined} title="{p.where}{p.quote ? `\n${p.quote}` : ''}" onclick={() => { if (p.id) void panes.open(p.id, true); }}><span class="pt-face"><svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 6h6.5M6 3l3 3-3 3" /></svg><span class="pt-text">{p.chip}</span></span></button>{/if}{/each}</p>
+      {#if t.images?.length}
+        <span class="shots">{#each t.images as id (id)}{@const src = terminal.imageUrl(id)}{#if src}<a class="shot" href={src} target="_blank" rel="noopener" title="Open the image"><img {src} alt="Sent with this turn" loading="lazy" /></a>{/if}{/each}</span>
+      {/if}
       {#if t.given?.length}
         <span class="gave">{#each t.given as g, k (k)}<span class="chip" class:out={t.withdrawn?.includes(k)} title={t.withdrawn?.includes(k) ? "Taken out of the conversation afterwards: the agent is no longer sent it" : undefined} data-to={g.kind === "note" ? g.id : undefined}><span class="k" aria-hidden="true">{SYM[g.kind]}</span><span class="t">{g.kind === "passage" ? g.text : g.kind === "folder" ? g.id || "the base" : titleOf(g.id)}</span></span>{/each}</span>
       {/if}
@@ -521,6 +524,9 @@
   .asked { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); font: var(--fs-ui)/1.55 var(--font-ui); }
   .asked .ref { background: none; border: 0; padding: 0; font: inherit; }
   .from { position: absolute; top: 8px; right: 10px; color: var(--text-faint); display: inline-flex; }
+  .shots { display: flex; flex-wrap: wrap; gap: 6px; }
+  .shot { display: block; width: 64px; height: 64px; border-radius: var(--round); overflow: hidden; background: var(--ground-2); outline-offset: 2px; }
+  .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .gave { display: flex; flex-wrap: wrap; gap: 4px; }
   .chip { border-radius: var(--round); display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px; background: var(--fill-hover); font-size: var(--fs-meta); color: var(--text-soft); max-width: 100%; }
   .chip.out { text-decoration: line-through; opacity: 0.6; }

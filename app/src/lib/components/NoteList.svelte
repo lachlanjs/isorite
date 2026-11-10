@@ -61,7 +61,9 @@
   });
 
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
-  const seenBesides = $derived(words.length ? besides.filter((f) => words.every((w) => `${f.title}\n${f.ref}`.toLowerCase().includes(w))) : besides);
+  // Code files are listed when the code switch is on, as on the Atlas.
+  const shownBesides = $derived(panes.on.code ? besides : besides.filter((f) => f.kind !== "code"));
+  const seenBesides = $derived(words.length ? shownBesides.filter((f) => words.every((w) => `${f.title}\n${f.ref}`.toLowerCase().includes(w))) : shownBesides);
   const besideIn = (dir: string): Beside[] => seenBesides.filter((f) => f.dir === dir);
   const matches = (n: NoteSummary) => words.every((w) => `${n.title}\n${n.id}\n${n.description}`.toLowerCase().includes(w));
   const seen = $derived(app.hidden.length ? app.listing.notes.filter((n) => !app.isHidden(n.id)) : app.listing.notes);

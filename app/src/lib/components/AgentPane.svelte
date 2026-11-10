@@ -70,6 +70,32 @@
   $effect(() => { void text; chosen = 0; });
   function complete(skill: PiSkill): void { text = `/${skill.name} `; }
 
+  // ------------------------------------------------------------ images pasted or dropped
+
+  /** An image dragged over the pane: it can be dropped. */
+  let over = $state(false);
+  const images = (list: FileList | null | undefined): File[] => [...(list ?? [])].filter((f) => f.type.startsWith("image/"));
+  const dragging = (e: DragEvent): boolean => terminal.canAttach && !!e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+  function dragOver(e: DragEvent): void { if (dragging(e)) { e.preventDefault(); over = true; } }
+  function dragLeave(e: DragEvent): void { if (!(e.relatedTarget instanceof Node && (e.currentTarget as HTMLElement).contains(e.relatedTarget))) over = false; }
+  function dropped(e: DragEvent): void {
+    over = false;
+    const files = images(e.dataTransfer?.files);
+    if (!dragging(e) || !files.length) return;
+    e.preventDefault();
+    void terminal.attach(files);
+  }
+  function pasted(e: ClipboardEvent): void {
+    const files = images(e.clipboardData?.files);
+    if (!files.length || !terminal.canAttach) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void terminal.attach(files);
+  }
+  function chipKeys(e: KeyboardEvent, key: string): void {
+    if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); terminal.unattach(key); document.getElementById("agent-box")?.focus(); }
+  }
+
   function keys(e: KeyboardEvent): void {
     if (e.isComposing) return;
     if (offered.length && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
@@ -116,7 +142,7 @@
 
 <svelte:window onpointerdown={outside} />
 
-<div class="apane" class:drop={tray.carrying?.over}>
+<div class="apane" class:drop={tray.carrying?.over} class:filing={over} role="presentation" ondragover={dragOver} ondragleave={dragLeave} ondrop={dropped}>
   {#if terminal.shown === "context"}
     <ContextView />
   {:else if terminal.shown === "past"}
@@ -139,7 +165,20 @@
         {/each}
       </ul>
     {/if}
-    <div class="box" class:busy>
+    <div class="box" class:busy onpastecapture={pasted} role="presentation">
+      {#if terminal.attached.length}
+        <ul class="chips" aria-label="Images to send">
+          {#each terminal.attached as a (a.key)}
+            {@const blind = !terminal.sees && !a.id}
+            {@const note = a.note ?? (blind ? "This model does not take images. Not sent." : "")}
+            <li class="achip" class:bad={a.state === "bad" || blind} class:keeping={a.state === "keeping"} data-state={a.state}>
+              <img src={a.url} alt={a.name} />
+              {#if note}<span class="why">{note}</span>{/if}
+              <button type="button" class="x" aria-label="Remove image {a.name}" title="Remove" onkeydown={(e) => chipKeys(e, a.key)} onclick={() => terminal.unattach(a.key)}><svg viewBox="0 0 10 10" width="8" height="8" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 2l6 6M8 2l-6 6" /></svg></button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
       <PromptBox bind:value={text} readonly={terminal.sending} placeholder={terminal.connected ? `Ask ${name}` : "Set up an agent to ask it here"} onkeydown={keys} />
       <div class="foot">
         {#if terminal.connected}
@@ -202,6 +241,7 @@
   @media (prefers-reduced-motion: reduce) { .apane > :global(:first-child) { animation: none; } }
   .apane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .apane.drop { outline: 2px dashed var(--growth); outline-offset: -4px; }
+  .apane.filing { outline: 2px dashed var(--lattice); outline-offset: -4px; }
   .chat { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 18px; }
   .composer { position: relative; flex: none; padding: 8px 12px 12px; display: grid; gap: 6px; }
   /* The skills a leading slash offers, over the session, just above the box. */
@@ -220,6 +260,17 @@
   /* One framed unit: what you write, and under it a footer with what it talks to, what it may do, and the button. */
   .box { display: flex; flex-direction: column; background: var(--surface-raised); border: 1px solid var(--line-faint); border-radius: calc(var(--round) + 1px); transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
   .box:focus-within { border-color: color-mix(in srgb, var(--lattice) 55%, var(--line-strong)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--lattice) 12%, transparent); }
+  /* Images waiting to be sent: a thumbnail each, its word if it will not go, and a way to take it out. */
+  .chips { margin: 0; padding: 8px 8px 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+  .achip { position: relative; display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 40px; padding: 3px 28px 3px 3px; background: var(--fill-hover); border-radius: var(--round); transition: opacity var(--dur-1) var(--ease-out); animation: appear var(--dur-1) var(--ease-out); }
+  .achip img { width: 36px; height: 36px; object-fit: cover; border-radius: calc(var(--round) - 1px); display: block; background: var(--ground-2); }
+  .achip.keeping { opacity: .6; }
+  .achip .why { font: var(--fs-meta)/1.3 var(--font-ui); color: var(--text-faint); min-width: 0; }
+  .achip.bad { box-shadow: inset 2px 0 0 var(--rose); }
+  .achip.bad .why { color: var(--rose); }
+  .achip .x { position: absolute; top: 2px; right: 2px; width: 22px; height: 22px; display: grid; place-items: center; background: none; border: 0; border-radius: var(--round); color: var(--text-faint); cursor: pointer; }
+  .achip .x:hover, .achip .x:focus-visible { color: var(--text); background: var(--fill-hover); }
+  @media (prefers-reduced-motion: reduce) { .achip { animation: none; transition: none; } }
   /* While the agent works, its edge is gold and breathes, slowly: the box is still yours to write in. */
   .box.busy:not(:focus-within) { border-color: color-mix(in srgb, var(--growth) 45%, var(--line)); animation: working 2.4s ease-in-out infinite alternate; }
   @keyframes working { to { box-shadow: 0 0 16px color-mix(in srgb, var(--growth) calc(var(--glow-a) * .6), transparent); border-color: color-mix(in srgb, var(--growth) 70%, var(--line)); } }
