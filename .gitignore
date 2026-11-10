@@ -26,7 +26,6 @@ packages/model/*.tgz
 
 # The npm package, built by npm run package
 /.npm/
-.eval/
 .sea/
 
 # Inspiration: the images are for reference, not to ship (inspiration/README.md says where each came from)
@@ -39,9 +38,14 @@ inspiration/combinations/sketches.html
 inspiration/**/generated-*.svg
 # A personal screenshot of testing notes, not part of the project
 testing-notes.png
-# Built: node inspiration/artifacts/build.mjs
-inspiration/artifacts/kit/isorite.css
 # A personal API key (OpenRouter), read into an environment variable for the eval; never committed
 .key
 # The artifact kit, built from packages/kit by the app's build (and dev)
 app/static/kit/
+
+# Not for git: recordings, a one-off comparison PDF and a gif (kept elsewhere)
+tern-recordings/
+Isorite agent integration three routes compared.pdf
+thom-pool-mtv.gif
+# Local eval output, never committed
+.eval/
