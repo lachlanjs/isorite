@@ -1,44 +1,35 @@
 # isorite: architecture
 
-How the parts fit, including the parts that are not built yet. Written in milestone 0 (2026-10-13) so that the first slice is built against the interfaces the later parts need.
-
-Each section is labelled:
-
-- **Built:** in the repository, with tests.
-- **Slice:** to be built in milestones 1 to 5, as designed here.
-- **Later:** designed far enough to keep the door open. Not in the first slice.
-- **Open:** undecided.
-
-`docs/format.md` says exactly what is on disk. `docs/decisions.md` says what was decided and by whom.
-
-**Since M36** (`docs/plan-m36.md`) isorite also has its own agent again, native (pi) behind the pane's seam, with a provider's key or a gateway; the rest of this paragraph is M25's change, which still holds for the agents of your own. **Since M25** (`docs/plan-m25.md`) the M13 loop was gone and isorite called no model: Iso's loop, the provider and its gateway, `isorite term` and `packages/opencode` were retired, and the agent the person already uses is attached instead, over MCP (the agent reaches isorite, `mcp-http.ts`) and ACP (isorite reaches the agent, `acp-wrap.ts` and `acp.ts`). What follows about Iso's loop, its provider, OpenCode's plugin and the `Http` and `Secrets` ports is the design as it was, kept for its record; the notes, the journal, the Atlas, search by meaning and the core stand as described.
+How the parts fit, as built. `docs/format.md` says exactly what is on disk, `docs/decisions.md` what was decided and by whom, `docs/history.md` how it came to be. Designs that were retired (the built-in agent's own loop and its providers, study and the learner record, proposals to keep or remove, the OpenCode terminal) are in `docs/archive/`; nothing below depends on them.
 
 ## 1. The shape
 
 ```
-                     ┌────────────── the person's devices ──────────────┐
- knowledge base      │  app (SvelteKit SPA)      terminal agent (later) │
- (git, shared)  ◄──► │        │  Api                    │  MCP          │
-                     │        ▼                         ▼               │
- study base          │  engine: notes, journal, Iso, search, study      │
- (git, private) ◄──► │        │ ports: Files, Http, Clock, Secrets      │
-                     │        ▼                                         │
-                     │  core: pure functions over text                  │
-                     └──────────────────────────────────────────────────┘
-                              │ Http
+                     ┌──────────────── the person's device ────────────────┐
+ the notes           │  app (SvelteKit SPA)         the agent's own terminal │
+ (a folder, git) ◄──►│        │ Api                       │ MCP             │
+                     │        ▼                           ▼                 │
+                     │  engine: notes, journal, search, the agent's tools   │
+                     │        │ ports: Files, Clock, Embedder               │
+                     │        ▼                                             │
+                     │  core: pure functions over text                      │
+                     └──────────────────────────────────────────────────────┘
+                              │ the agent's model calls (its provider's API)
                               ▼
-                     model provider (OpenRouter, a compatible endpoint, a gateway)
+                     isorite's own agent (pi), or the agent you already use
 ```
 
 Three layers, each allowed to know only the one below it.
 
 | Layer | Package | What it is | Runs in |
 |---|---|---|---|
-| core | `@isorite/core` | Parsing, the link graph, keyword search, the journal, placing Iso's text, understanding, the Atlas layout. Text in, data out. No file system, no clock, no network. **Built.** | anywhere |
-| engine | `@isorite/engine` | Everything that has state or talks to the outside: the note store, the journal's writer, Iso's loop, providers, search by meaning, the study record. Written against five small ports, never against Node. **Built** in milestones 1 and 2: the note store, the journal's writer, sessions, events, Iso's loop, the provider, search by meaning. The study record's exercises are **slice**. | Node now; a Tauri webview later |
-| shells | `isorite` (server and command), `@isorite/app`, later the terminal plugin and the Tauri app | Adapters. The server gives the engine Node's files and exposes it over HTTP. The app draws. **Slice.** | |
+| core | `@isorite/core` | Parsing, the link graph, keyword search, the journal, the Atlas layout. Text in, data out. No file system, no clock, no network. | anywhere |
+| engine | `@isorite/engine` | Everything with state: the note store, the journal's writer, sessions, events, search by meaning, the agent's tools. Written against small ports, never against Node. | Node now; a webview later |
+| shells | `isorite` (server and command), `@isorite/app`, `@isorite/guide` | Adapters. The server gives the engine Node's files and exposes it over HTTP, MCP and the agent routes. The app draws. | |
 
-**Why an engine separate from the server** (a change from rdstudio, where all of it was in the command-line package). On a phone there is no local server to run. If the note store and Iso's loop are written against `node:fs` and Hono, mobile means writing them a second time, and the lesson recorded from rdstudio is that two implementations drift within days. Written against ports, the same engine runs in the Tauri webview with Tauri's file API behind `Files`. The cost now is one interface and the discipline of not importing `node:` in the engine, which a test enforces (the core already has that test).
+Beside them: `@isorite/kit` (the kit an artifact is built on), `@isorite/example` (an example base) and `@isorite/model` (the embedding model's files, published apart).
+
+**Why an engine separate from the server.** On a phone there is no local server to run. Written against ports, the same engine runs in a webview, and the app runs in a page over files kept in IndexedDB (the guide's public site does this today). The cost is one interface and the discipline of not importing `node:` in the engine or the core, which a test enforces.
 
 ### The ports
 
@@ -46,42 +37,27 @@ Three layers, each allowed to know only the one below it.
 interface Files {                       // one per base: rooted at the base's folder
   read(path): Promise<string | null>
   write(path, text): Promise<void>      // atomic: write beside, then rename
-  append(path, text): Promise<void>     // the journal and the record
-  list(dir): Promise<Entry[]>
-  remove(path): Promise<void>
-  watch?(onChange): Unsubscribe         // optional; without it, changes are found on read
+  append(path, text): Promise<void>     // the journal
+  list(dir): Promise<FileInfo[]>
+  remove(path): Promise<void>           // and bytes, mkdir and rmdir
 }
-interface Http    { fetch: typeof fetch }               // providers; a webview has it already
-interface Clock   { now(): number }                     // so sessions and the recall curve are testable
-interface Secrets { get(name): Promise<string | null>; set(name, value): Promise<void> }
+interface Clock { now(): number }       // so sessions are testable
 interface Embedder { model: string; dim: number; embed(text): Promise<Float32Array> }   // search by meaning
 ```
 
-All five are built. The server's `Embedder` runs the model in a worker thread; a webview can run the same model.
+The server's `Embedder` runs the model in a worker thread.
 
 ### The Api
 
-The app never calls the engine directly. It calls an `Api` object with one method per operation (`readNote`, `saveNote`, `ask`, `keep`, `layoutModel`, `events`, ...). There are two implementations:
+The app never calls the engine directly. It calls an `Api` object with one method per operation (`readNote`, `saveNote`, `layoutModel`, `events`, ...). There are two implementations: **HTTP**, a small client written by hand in the app (`app/src/lib/api.ts`), typed by the `Api` interface itself so the compiler holds both ends together; and **in process**, the same methods calling the engine in the page (the guide's site, and the tests). The server checks what it is sent with zod.
 
-- **HTTP** (**built**): a small client written by hand in the app (`app/src/lib/api.ts`), typed by the `Api` interface itself. rdstudio generated its client from an OpenAPI description; here the interface is shared code, so the compiler already holds the two ends together and a generated copy would be a second source of the same types. The server checks what it is sent with zod. An OpenAPI description can be added when something that is not TypeScript needs one.
-- **In process** (later, for Tauri): the same methods calling the engine in the webview.
+## 2. One base
 
-Every screen is written against `Api`, so nothing in the app knows which it has.
-
-## 2. The two bases
-
-| | Knowledge base | Study base |
-|---|---|---|
-| Holds | notes in OKF, artifacts, pictures | the journal of every note, the study record, exercises, later Iso's teaching notes |
-| Whose | everyone's who has the repository | one person's |
-| isorite writes into it | only a note's own text, only when the person saves or keeps | everything else |
-| Git | the project's own repository | a private repository, `merge=union` on `*.jsonl` |
-
-- **Milestone 12 replaced the two bases with one (format 2).** isorite's own files (the journals, Iso's conversations, the Understanding notes, drafts, a record of usage per device) are in the notes' own `.isorite/`, committed with them; the engine is given it as its `own` folder. The table above is how it stood until then. `isorite migrate` moves a study base in (`docs/format.md` §2).
+The notes are a folder of Markdown. isorite's own files for them are in a hidden `.isorite/` inside it, committed with them by default (the person may keep it in a repository of its own). The journals merge by union of lines. Nothing personal is written into a note's file. What is where: `docs/format.md`.
 
 ## 3. A note's life: one writer
 
-All writes to a note go through one place, the engine's **note store**. This is what keeps the journal true.
+All writes to a note go through the engine's **note store**. This is what keeps the journal true.
 
 ```
 save(note, text, who)
@@ -91,210 +67,85 @@ save(note, text, who)
   4. publish `note-changed` on the event stream
 ```
 
-- **Your typing.** The editor sends the note's whole text a moment after you stop typing. Each save is an entry; the timeline folds a run of yours into one moment. (The document says "the person's saves in a row are one entry". The file is only ever added to, so this is done when reading, not when writing.)
-- **Edits made outside isorite** (another editor, `git pull`, a terminal agent writing the file directly) are found in step 1 the next time the note is read or saved, and entered as `external`. With `Files.watch` they are found at once.
-- **Two tabs or two devices at once.** A save carries the hash of the text it started from. If the file has moved on, the save is refused and the editor is given the newer text to merge. **Slice:** refuse and reload. **Later:** a three-way merge by block.
-- **Journal entries from two devices** merge as a union of lines. A device that is missing an entry cannot replay past it; the next change it writes carries the whole text, which mends the chain. **Built** and tested.
+- **Your typing.** The editor sends the note's whole text a moment after you stop typing. Each save is an entry; the timeline folds a run of yours into one moment.
+- **An agent's edit** is written at once, under its name, with what it was asked, and the person sees the words marked as the agent's and can undo them from the timeline. An agent's edit to a note is refused while the notes switch is off.
+- **Edits made outside isorite** (another editor, `git pull`, an agent writing the file directly) are found in step 1 the next time the note is read or saved, and entered as `external`.
+- **Two tabs or two devices at once.** A save carries the hash of the text it started from. If the file has moved on, the save is refused and the editor is given the newer text to merge by paragraph (`app/src/lib/merge.ts`). A note git left in conflict is marked and goes on being a note.
+- **Journal entries from two devices** merge as a union of lines. A device missing an entry cannot replay past it; the next change it writes carries the whole text, which mends the chain.
 
-### The timeline (milestone 5)
+### The timeline
 
-- **Worked out from the journal, never stored.** `moments()` folds a note's entries into moments (your edits in a row within a session are one; a proposal is one, whatever became of it; a marking is one, with its result). `touched()` carries the lines a moment put in forward through every later change's hunks, so pointing at a moment marks those lines in today's text. A line deleted since drops out, and a moment whose lines are all gone says so.
-- **A version is replayed in the browser,** from the journal the note page already holds (`textAt`), with no request. **A restore** is the engine's: a `change` with `why: restore` and `to`, refused if the note has moved on, so it is undone the same way.
-- **The Atlas's timeline** is the last session's moments across notes (`Api.timeline`, from the session's entries the engine already keeps for Iso's context): the session going on, or the one most recently ended.
-- **Shown as marks only** (Lachlan's choice, 2026-10-18): what was asked, or a note's title on the Atlas, shows beside a mark only while it is pointed at.
+- **Worked out from the journal, never stored.** `moments()` folds a note's entries into moments (your edits in a row within a session are one). `touched()` carries the lines a moment put in forward through every later change, so pointing at a moment marks those lines in today's text.
+- **A version is replayed in the browser** from the journal the page already holds (`textAt`). **A restore** is the engine's: a `change` with `why: restore`, undone the same way.
+- **The Atlas's timeline** is the last session's moments across notes.
 
-## 4. Asking Iso
+## 4. The agent
 
-One request, the same from the editor and the Atlas.
+isorite does not own the person's agent. There are two routes, and the app shows both the same way.
 
-```
-ask { note | draft, form: insert | rewrite | note, place, asked, tier }
-  │
-  ├─ context is assembled (section 5)
-  ├─ the loop runs: model → tool calls → model …  (rounds by tier: 3, 6, 8)
-  │      each step is published as it happens:
-  │        iso-step { how: keyword | meaning | link | read, note, section }   → the Atlas draws the path
-  │        iso-text { delta }                                                  → the editor shows it arriving
-  ├─ the reply is checked against the form (below)
-  ├─ a `proposal` entry is appended to the note's journal   ← from here it survives closing the browser
-  └─ iso-done { proposal id, cost }
-```
+- **isorite's own agent** (`packages/server/src/pi/`, built on pi): runs inside isorite with a provider's key or a company gateway. What the person selects in a note goes straight into its prompt as a pointer, and what it may do is set by three switches (notes, project files, commands). Its sessions are kept in `.isorite/conversations/`.
+- **The agent you already use**, in its own terminal, reaches the notes over MCP (`mcp.ts`, `mcp-http.ts`): a brief of the base, search by words and by meaning, the outline and text of a note, changing a note, asking a question back (made a note at once), offering text, and artifacts. `connect.ts` writes the project's MCP config.
 
-- **The limit is enforced by the form, not by the prompt.** For `insert` the reply is text and its place was fixed before Iso was asked. For `rewrite` the passages the person chose are sent between numbered marks, and only what comes back between the same marks is used, each set exactly where its passage was; anything else in the reply is dropped and the person is told. What Iso says of its changes comes back between marks of its own and is offered as ordinary text. Iso has no tool that writes.
-- **Unkept text never enters the note's file.** The editor reads the note and the journal's pending proposals and lays the proposals over the text at the place the core finds for them. If the place cannot be found the proposal is shown at the note's foot.
-- **Keep** writes the proposal into the note through the note store (one `change` entry with `why: keep`). **Edit** appends a `revise` entry, so a half-edited proposal also survives a restart. **Remove** appends `discard`.
-- **A note for Iso** (the draft started by holding on the Atlas) is the third form, `note`. The draft is a file in the study base (`drafts/<id>.md`) with its own journal, so it is "not in your base yet" in fact. Iso's reply is a proposal on the draft. "Keep as a note in `<folder>`" writes it into the knowledge base through the note store and removes the draft.
-- **Stopping.** The request holds an abort signal. `[ stop ]` aborts the provider call; nothing is entered.
-- **A streamed state a test can wait on:** every request has an id and ends in exactly one of `iso-done`, `iso-stopped`, `iso-failed`.
+Both use the same tools (`Engine.agentTools`, `agentLook`), so a look-up is published as an `agent-step` and the Atlas draws the path the same way whoever the agent is: a note found by keyword (dashed frame), by meaning (dotted), or reached along a link (solid, with a line along the route). A reading is shown, not hidden: what the agent read lights on the map.
 
-### What Iso can look at
+These are the only two routes (decided 2026-11-09). The in-pane route to an outside agent over ACP (`acp.ts`, `acp-wrap.ts`, `isorite acp`) is retired. The pane talks to its host through `PaneSessions` (`sessions.ts`): `PiHost` is the host once a model is chosen, `NoAgent` until then, and `switchable` swaps one for the other with no restart.
 
-Carried over from rdstudio: Iso is given the note and the place, and finds the rest with read-only tools.
+**The limit is enforced by the switches, not by the prompt.** With the notes switch off the server refuses writes to notes and artifacts; project files and commands are off until switched on. Text from a note is data to the agent, not instructions.
 
-| Tool | From |
-|---|---|
-| keyword search | core (`SearchIndex`) |
-| search by meaning | engine (section 6) |
-| outline of a note, one section of a note | core |
-| a note's links, and what links to it | core |
+## 5. Search
 
-Each note in an answer's sources carries a sentence quoted from it, checked against the note's text. A quotation that is not found is never shown as one.
+- **Keyword** (core): BM25 over notes, headings weighted.
+- **By meaning** (engine): IBM's granite-embedding-small-english-r2, 8-bit, run by onnxruntime in a worker, fetched once as `isorite-model-granite` from npm (`isorite model`). Without it, search is by words. Notes are cut at first- and second-level headings; each piece is embedded with its note's title and description.
+- **The vectors are a cache, not data.** Kept outside the notes (`~/.cache/isorite/`), keyed by a fingerprint of the text, so an edit re-embeds one section and nothing is committed.
+- **The two searches are two tools,** not one merged list: offering both finds more than either or their merge.
 
-## 5. Context, and what the header shows
-
-The header shows the context's size in tokens and the session's cost. The count opens a breakdown.
-
-The context of a request is assembled from five parts, and the breakdown is exactly these:
-
-| Part | From |
-|---|---|
-| instructions and tools | the engine's prompt for the form and mode, and the tool descriptions |
-| study record | a digest of the study record: what was practised, what is due, each tested note's level |
-| your prompts and Iso's answers | this session's proposals in the journals, in order, as asked and as answered |
-| this note | the note's text, with pending proposals marked as not yet the person's |
-| linked notes | what the loop read with its tools during this request |
-
-- **There is no separate conversation store.** The conversation is the session's journal entries. This is what makes "the prompt stays in the note's history" and "what was I asking about" the same data.
-- **Clear the conversation** appends a `context-cleared` event to the study record. Earlier moments of the session are then left out of later requests. Nothing is deleted.
-- **What is sent is bounded.** The conversation has a budget of 6,000 tokens: the last three exchanges go whole, older ones with Iso's text cut to 400 characters, and the oldest are left out with a line saying how many. A note has a budget of 12,000: past that, the lines round the place asked about are sent with every heading and the frontmatter, and each stretch left out is marked. Notes linked from a note for Iso share 8,000. Iso is always told what was left out, and can read the rest with its tools. **Built.**
-- **A note is asked one thing at a time.** A second request while one is running is refused, so a prompt sent twice is one request.
-- **Counting.** Before a request, the count is an estimate (characters over four, which is good to about 10%). After it, the provider's own figures replace the estimate for the parts it reports.
-- **Cost** comes from the provider's usage figures and a price table, as in rdstudio. Per request it is on the proposal entry; per session and per base are sums over the journal.
-
-## 6. Search
-
-- **Keyword** (core, **built**): BM25 over notes, headings weighted.
-- **By meaning** (engine, **slice**, carried over): `bge-small-en-v1.5`, 8-bit, 34 MB, run by `onnxruntime-web`'s WebAssembly build, so no native binary. Notes are cut at first- and second-level headings; each piece is embedded with its note's title and description.
-- **The vectors are a cache, not data.** They are kept outside both repositories (`~/.cache/isorite/` on a desktop), keyed by a fingerprint of the text, so an edit re-embeds one section and nothing is ever committed.
-- **The two searches are two tools,** not one merged list. rdstudio measured that offering both finds more than either or their merge.
-- **Later, on a phone:** the model has to run on the phone in any case, because every query is embedded before it is compared, and a query is one short text. What is slow is the first pass over a whole base: about ten minutes in a phone's browser in rdstudio's measurement. **Decided (2026-10-13):** one full pass when a base is first opened on the phone, in the background and resumable, then only the sections whose text changed. This is how the cache already works (it is keyed by a fingerprint of each section's text), so the phone needs no design of its own. Keyword search and links work while the pass runs. Optional shortcut, not needed for correctness: copy the cache file from a desktop to skip the first pass. Nothing is embedded on anyone else's machine.
-
-## 7. The Atlas
+## 6. The Atlas
 
 ```
-knowledge base bundle ─┐
-study base bundle ─────┴─► mapModel (core) ─► gridLayout (core, in a worker) ─► drawing (components)
-                                                                                   ▲
-                 overlays, each a plain map from note id to a mark ────────────────┘
-                   understanding step   (study record)
-                   Iso's path           (event stream)
-                   the session's moments (journals)
-                   selection: what it requires, what builds on it (core graph)
+the notes ─► mapModel (core) ─► layout (core, in a worker) ─► drawing (components)
+                                                                   ▲
+         overlays, each a plain map from note id to a mark ────────┘
+           the agent's path (event stream), the session's moments (journals),
+           selection: what a note requires, what builds on it (core graph)
 ```
 
-- **The layout lives in the core** so the browser, the server and a terminal read the same layout data. Folders of notes are laid out in layers, as rdstudio did; folders holding folders are placed as blocks by a floorplan; every line is a highway between siblings or a feeder inside a folder. How it works and what was learned building it: `atlas-layout.md`. **Built** (milestone 3).
-- **Study folders are ordinary folders** in the model, flagged, placed beside the folder they study. There is no second layout. **Built.**
+- **The layout lives in the core** so the browser, the server and any other reader get the same layout. How it works: `atlas-layout.md`.
 - **A layout is kept by a key** made from a version number, the direction and the model. Bump the version when the layout's output changes.
-- **Drawing (slice):** Svelte components over SVG, one component per kind of thing (folder, block, trunk). Only pan and zoom are imperative. Overlays never touch the layout: they are looked up by note id while drawing.
-- **Iso's path** is followed for the whole app (`app.iso`, from the `iso-*` events), so the map draws a request sent from any page or tab: the notes opened by how they were reached, the steps along links lit as links are. **Built** (milestone 3). A page connecting mid-request does not yet learn of it.
-- **Measured before changed.** If SVG is slow at 225 notes, the trunk layer alone moves to a canvas under the SVG. (Measured in milestone 3: 60 frames a second panning and zooming 230 notes, so it stays SVG.) Blocks and folders stay as elements so they keep focus, hit-testing and text.
-- **Later:** stability under small edits (the layout is recomputed whole, which is accepted for now); only the open folder laid out in detail, for bases over a thousand notes.
+- **Drawing:** Svelte components over SVG, one per kind of thing (folder, block, trunk). Only pan and zoom are imperative. Overlays never touch the layout: they are looked up by note id while drawing.
+- **The agent's path** is followed for the whole app (`app.agent`, from the `agent-*` events), so the map draws a request sent from any page or tab.
 
-## 8. Study
+## 7. Events
 
-Exercises, their marking, the study record's levels and the six squares were built in milestone 4 and removed in milestone 12 (`docs/plan-m12.md`). Understanding is shown by the notes themselves: whose words they are, the open questions and problems beside them. Each note's Understanding note, Iso's reading of you (M10), was removed in milestone 24: Iso reads where you stand from the notes, and offers where it stops as a question or a problem.
-
-## 9. Events
-
-One stream from the engine to every open view (server-sent events over HTTP; a plain callback in process).
+One stream from the engine to every open view (server-sent events; a plain callback in process).
 
 | Event | Sent when | Who listens |
 |---|---|---|
 | `note-changed` | the note store wrote a note, or found it changed | editor, Atlas, notes list |
-| `journal` | an entry was appended | editor (proposals), timeline |
-| `iso-step`, `iso-text`, `iso-done`, `iso-stopped`, `iso-failed` | during a request | editor, Atlas (the path), header (cost) |
-| `record` | a study event was appended | header squares, Atlas edges |
-| `agent-start`, `agent-step`, `agent-done` | a terminal agent's turn, and each look-up in it | Atlas (the same path drawing), status line |
+| `journal` | an entry was appended | editor, timeline |
+| `hidden` | the hidden list changed | Atlas, notes list |
+| `agent-start`, `agent-step`, `agent-done` | an agent's turn, and each look-up in it | Atlas (the path), status line |
+| `agent-sent`, `agent-received`, `agent-item`, `agent-taken` | something passed between a note and the agent's prompt, and what it asked back or offered | the agent pane |
+| `terminal` | the agent's session changed | the agent pane |
 
-The interface plays sound (later) by listening to this same stream and to its own interactions. The sound engine is a subscriber and nothing depends on it.
+## 8. Security
 
-## 10. Providers and keys
+- The server binds to localhost. Writes are accepted only from its own pages: the Origin must match, the body is JSON, and the request carries a token the page was given.
+- Note ids are checked before they become paths (core): no `..`, no absolute paths.
+- Rendered Markdown is sanitised. Artifacts are shown in a sandboxed frame that reaches nothing but the files their manifest names.
+- Keys are never in the notes and never sent to the browser: `~/.config/isorite/config.toml`, readable by the user only.
 
-- **One interface from the first line:** `complete(request, signal) → stream of text, tool calls and usage`. Adapters: OpenRouter, any OpenAI-compatible endpoint (which covers Ollama, vLLM, LM Studio and LiteLLM), an organisation's gateway. Carried over from rdstudio.
-- **Three tiers** (low, mid, max), chosen by the person per request. Tier to model is configuration.
-- **Keys are never in either repository and never sent to the browser.** Desktop: `~/.config/isorite/config.toml`, readable by the user only. Tauri: the system keychain behind the `Secrets` port.
-- **A key is pasted, or made by signing in** at a provider that offers it (OpenRouter's OAuth with PKCE; `auth` in `ProviderConfig`, `[provider] auth` for another). The engine makes the verifier and keeps it, by the sign-in's state, for ten minutes; the page is sent to the provider and comes back with a code, which the engine exchanges for the key and holds as a pasted one. The page never holds the key. **Built** (2026-10-17).
-- **On a phone** Iso goes through OpenRouter or a self-hosted gateway (decided). With the engine in the webview this is the same code with a different base URL.
-
-## 11. Later parts, and what the slice must not break
-
-### Sync
-
-- The notes and their `.isorite/` sync by plain git, as one repository.
-- The knowledge base can conflict like any text in git. isorite shows a conflicted note as conflicted and does not resolve it silently.
-- `.isorite/` cannot conflict in its `.jsonl` files (union merge, ids). Its drafts are notes and can.
-- **What the slice must hold to:** every entry and event has a ULID and a device; nothing personal is written to the knowledge base; caches stay outside both repositories.
-
-### The terminal
-
-- **The agent's tools are Iso's** (`Lookup`), offered by the server (`GET /api/agent/tools`, `POST /api/agent/look`), with `brief_base` before them: `search_notes`, `find_similar` where there is a search by meaning, `outline_note`, `read_note`. `links` is in `outline_note`. A turn (`POST /api/agent/status`, or begun by a look-up) has a `Lookup` of its own, so a step is told as found by keyword or by meaning or reached along a link from a note already in hand, as Iso's are. **Built** (M6 step 2). `record` is not built.
-- **Retired in M25** (`docs/plan-m25.md`): the two ways in through `isorite term` and its OpenCode plugin, agent edits as proposals to keep or remove, the OpenCode session panel and the one-note Atlas drawn in terminal cells. Your own agent is reached over MCP and ACP now; `docs/terminal.md` says how, and `git log` has the M6 work.
-- **What the slice must hold to:** proposals carry `who`; the engine has no notion of "the browser" as the only client.
-
-### Mobile and desktop application
-
-- Tauri, with the engine in the webview behind the in-process `Api`.
-- **The engine has run in a page** (milestone 5): the tutorial was the app with an `Engine` over `MemoryFiles`, a `MemorySecrets` and a scripted `Http`, handed to the app as its `Api`. No adapter was needed; the app had only ever talked to `Api`. Since M16 the guide's site is the same, over files kept in IndexedDB (`app/src/lib/guide/`), with the guide's finder as its `Http`.
-- The named risk is git inside Tauri on Android. One day's test before any mobile work.
-- **What the slice must hold to:** no `node:` import in the engine or the core; every screen checked at 390 px as well as 1280; nothing that needs a hover to be reachable.
-
-### Sound, automata
-
-- Web Audio, started from the first interaction, off until chosen. A subscriber to the event stream.
-- **What the slice must hold to:** interface events have names (a small list in the app), so sound can be attached without touching the screens.
-
-### Building a base by research
-
-- An Iso request of a form that may create many notes, each a proposal on a draft, with every claim sourced. Uses the `note` form's machinery (section 4) many times over. Needs web tools the slice does not have.
-
-## 12. Security
-
-- The server binds to localhost. Writes are accepted only from its own pages: the Origin must match, the body is JSON, and the request carries a token the page was given. Carried over from rdstudio.
-- Note ids are checked before they become paths (**built**, in the core): no `..`, no absolute paths.
-- Rendered Markdown is sanitised. Artifacts, when they arrive, are shown in a sandboxed frame.
-- Text from a note is data to Iso, not instructions. Iso has no tool that writes, so the worst a hostile note can do is a bad proposal the person declines.
-
-## 13. Testing
+## 9. Testing
 
 | What | How |
 |---|---|
-| core | vitest; conformance fixtures for the note reader; the layout's own tests and its benchmark against a baseline |
-| engine | vitest with an in-memory `Files`, a fixed `Clock` and a scripted provider, so Iso's loop and the journal's writer are tested without a model or a disk |
-| server | vitest against the real HTTP routes on a temporary folder |
-| app | `@playwright/test`, selecting by text and role; each streamed state has a name a test can wait on; every screen at 1280 and 390 px on both grounds |
-| example | vitest: the example (nbody-notes) replays to the notes as written, every hash holds, each note's understanding is spread over the Atlas's four steps |
-| guide | vitest: the guide loads as a base with no issues, every note reached from Start here, its advice agreeing with Iso's prompt; the finder's turns through the engine. Playwright (`npm run test:site`): the built site, as Pages serves it |
-| tutorial | Retired in M15: the walks, which did what each step asked at a desktop's width and a phone's, cost more than they caught. M16 replaced the tutorial with the guide, a knowledge base about isorite |
+| core | vitest; conformance fixtures for the note reader (`fixtures/`); the layout's own tests and its benchmark against a baseline |
+| engine | vitest with an in-memory `Files` and a fixed `Clock`, so the journal's writer and the tools are tested without a disk |
+| server | vitest against the real HTTP routes and a scripted agent on a temporary folder |
+| app | vitest for pure code; `@playwright/test` for the screens, selecting by text and role, at 1280 and 390 px on both grounds |
+| example, guide | vitest: the example base and the guide load with no issues and every note is reached; Playwright (`npm run test:site`) drives the built site as Pages serves it |
 
-## 14. Questions
+## 10. Later
 
-Answered by Lachlan on 2026-10-13:
-
-| Question | Answer |
-|---|---|
-| Does project mode keep a journal? | Yes, attached to the notes in the knowledge base (section 2). |
-| How the marked answer line of an exercise is recorded | As proposed: in the `attempt` event, as the working at that moment and the answer's block. The exercise's file stays plain Markdown. |
-| Is a suggestion that was never kept recorded? | A suggested link (on a new note from the Atlas) is not recorded once it disappears. Text from Iso stays pending until the person keeps or discards it. |
-| A "mentions" link kind | Not added. "see also" covers it. |
-| How far back a journal is kept | Nothing is trimmed. See below for what to watch. |
-| Vectors for search by meaning on a phone | One full pass, then only what changed (section 6). |
-
-**What never trimming a journal costs.**
-
-- *Size.* Each save is a line, and every 40th carries the whole note. A model run in milestone 1 (not a person: prose typed steadily at 40 words a minute for an hour into one note, in 400-character paragraphs) gives, per hour of writing:
-
-  | A save every | Entries | Journal |
-  |---|---|---|
-  | 3 seconds | 1,200 | about 1.0 MB |
-  | 10 seconds | 360 | about 0.3 MB |
-  | 30 seconds | 120 | about 0.1 MB |
-
-  The editor saves 1.5 seconds after the typing stops, so real writing falls somewhere in this range depending on how often you pause. Most of each entry is the paragraph being typed, written out twice (the line removed and the line added). If the week of use shows this is too much, the first remedy is to record a change within a line as the characters changed, not the whole line; the second is fewer whole-note copies. Neither changes what an entry means.
-- *Reading.* The timeline replays from the nearest whole text, so opening a late version is cheap however long the file is. Listing every moment of a long-lived note reads the whole file.
-- *Deleted text is not gone.* Anything typed or pasted into a note and then removed stays in its journal, and in git once committed. This is the one that matters: a pasted key or a private remark survives deletion.
-- *If it becomes a problem:* old sessions can be folded to one entry each, because a `change` entry may carry the whole text and restart the chain. That rewrites a file that is otherwise only added to, so it must be done on one device and synced. A "forget this" command for one note's history is the same operation. Neither is built.
-
-Still open:
-
-1. Whether the project-mode journal folder is committed or ignored (section 2).
-2. Whether to add a command that removes text from a journal for good.
+- **Sync** is plain git: the notes and `.isorite/` as one repository. What it must hold to: every entry has a ULID and a device, nothing personal in the notes' files, caches outside the repository. Ideas for a merge view are in `ideas.md`.
+- **A phone or desktop app** (Tauri) would put the engine in the webview behind the in-process `Api`. The risk to test first is git inside Tauri on Android. Every screen is already checked at 390 px.
+- **Sound and cellular automata** would listen to the event stream; nothing depends on them.

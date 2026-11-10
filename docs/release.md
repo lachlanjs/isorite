@@ -70,4 +70,4 @@ A version with a suffix, as `0.2.0-trial.1`, is published under a dist-tag named
 
 ## The model package
 
-`isorite-model-granite` (`packages/model`) holds the files for search by meaning, and is published apart from isorite, by hand: `npm run model`, then `npm publish` in `packages/model`. See `docs/plan-embed.md`.
+`isorite-model-granite` (`packages/model`) holds the files for search by meaning, and is published apart from isorite, by hand: `npm run model`, then `npm publish` in `packages/model`. See `docs/archive/plan-embed.md`.

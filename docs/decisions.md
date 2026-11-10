@@ -2,11 +2,13 @@
 
 Transcribed on 2026-10-13 from the two decisions boards in the design artifact (https://claude.ai/artifact/Bh1SFQUWZGy1RBUFK4BSJC), with Lachlan's answers of the same day applied. The boards have the drawings; this file is what the code is held to.
 
+These records keep the names of their day: "Iso" is the earlier name of the Agent pane and isorite's built-in agent.
+
 - **decided:** Lachlan said so.
 - **my call:** the agent's recommendation, not yet confirmed. Treat as a proposal.
 - **open:** undecided.
 
-`ISORITE_DOC.md` is older than some of these. Where they differ, this file is followed; `plan-first-slice.md` section 7 lists the places.
+`ISORITE_DOC.md` is older than some of these. Where they differ, this file is followed; `archive/plan-first-slice.md` section 7 lists the places.
 
 ## Design
 
@@ -182,7 +184,7 @@ The Atlas's layout and routing, rebuilt after Lachlan found rdstudio's router's 
 
 ## Decided on 2026-10-15, for milestone 4
 
-Lachlan's answers to `plan-m4.md`. They replace the fixed steps in the rows on the squares above and the "my call" row on squares on Atlas blocks.
+Lachlan's answers to `archive/plan-m4.md`. They replace the fixed steps in the rows on the squares above and the "my call" row on squares on Atlas blocks.
 
 | What | Decision |
 |---|---|
@@ -192,3 +194,9 @@ Lachlan's answers to `plan-m4.md`. They replace the fixed steps in the rows on t
 | the answer | Any selection of the working, a general highlighted selection. Held in the browser until sent; then in the `attempt` event. The file stays plain Markdown. |
 | `next` | A link in an exercise's frontmatter to the exercise that follows it in teaching order. Many have none. On a phone, a swipe, built when phones are. |
 | marking it yourself | Later: for working offline or without spending on the API. |
+
+## Decided on 2026-11-09, by the owner
+
+| What | Decision |
+|---|---|
+| ways to use an agent | Exactly two: isorite's own agent in the Agent pane (pi, with a provider's key or a gateway), and MCP for an agent in its own terminal (`isorite setup` writes the config). ACP is retired: the in-pane route that drove an outside agent over ACP, and `isorite acp`, where isorite presented itself as an ACP agent to other front ends. |

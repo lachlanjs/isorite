@@ -1,6 +1,6 @@
 # isorite beside your agent
 
-How to use isorite with the agent you already use (Claude, Codex, OpenCode, omp, Hermes, or any that speaks ACP) on a project of your own. isorite gives the agent your notes over MCP, and reaches the agent over ACP: the agent gets the notes, the Atlas sees the agent, and Iso's pane shows the session. The agent's key and model are its own, set up as for its own terminal. (isorite's own agent, built in, is the other way: [setup.md](setup.md).)
+How to use isorite with an agent on a project of your own. There are two ways, and no others: **isorite's own agent**, in the Agent pane (a model's key or your company's gateway, nothing else to install: [setup.md](setup.md)), and **an agent you already use** (Claude Code, Codex, Gemini CLI, Cursor, VS Code, OpenCode, omp), in its own terminal, given your notes over MCP. The agent's key and model are its own, set up as for its own terminal; the Atlas sees what it reads.
 
 Setting isorite up the first time is in [setup.md](setup.md).
 
@@ -12,35 +12,22 @@ Keep the project's notes in a folder of their own, often inside the project's re
 isorite          # in the project: finds its base, opens the browser (isorite serve <notes> names one yourself)
 ```
 
-## Three ways in
+## Two ways in
 
-### In Iso's pane
+### isorite's own agent, in the pane
 
-With no agent attached, Iso's pane offers a card for each agent isorite knows (Claude Code, OpenCode, omp, Codex, Hermes), saying whether it is found on this machine's PATH and, for those that read a key, whether it is set where isorite was started (by name; no key is read or kept). *Use in this pane* starts it for the base; *in my terminal* gives isorite's MCP address and, to share the session live with the pane, the `isorite acp <agent>` line to run in an ACP front end such as Toad. *Another agent* takes one of the [ACP registry](https://agentclientprotocol.com/get-started/registry), or the command of one it doesn't list (`hermes acp`). The drawer's *change agent* is the same choice later. isorite starts it for the base, behind `isorite acp --pane`, in the repository the base is in, with the server's environment, and starts it again when the base is next opened. It runs a program, so it is chosen from this machine only; the choice is kept in `~/.config/isorite/bases.toml` (`agent`, or `agent_command`). The drawer's *stop it* stops it. A session isorite kept can be removed from the drawer (*remove*): that deletes isorite's copy only, never the agent's own history, and a live session is not removed.
+With no agent set up, the Agent pane offers one action, *Use isorite's agent*, which opens the pane's settings at the provider: choose a provider (or your company's gateway), paste a key, choose a model, *Check*, *Use this model*. Beneath it is one quiet line for the other way: an agent of your own connects over MCP with `isorite setup`. The model's key is kept in isorite's data folder, never in the notes. A session isorite kept can be removed from the pane's drawer (*remove*); a live one is not removed.
 
-A registry agent is run as the registry says: its program for this platform, fetched once into `~/.local/share/isorite/agents/<id>/<version>/` and checked against its SHA-256; else with `npx -y` or `uvx`. `ISORITE_ACP_REGISTRY` names another registry, an address or a file.
-
-### From an ACP front end
-
-Toad in the terminal, Zed, or JetBrains: give it isorite as its agent, with the real agent's command:
-
-```sh
-isorite acp --agent "npx -y @agentclientprotocol/claude-agent-acp" ~/code/my-project/notes
-```
-
-For an agent isorite knows by name there is a shorter form: `isorite acp omp`, `opencode`, `claude`, `codex` or `hermes` (the pane's cards show the line for each). A folder of that name here is taken as the notes instead.
-
-Run in a folder with a base in it or under it, the notes can be left out. This starts the isorite server for the notes, unless one is running on port 4767 (`--port <n>` for another), and the agent behind it. Every message passes through: the session is live in the front end and in the pane at once, asked from either. isorite's MCP is added to each session the agent opens, so the agent needs no config of its own for it.
-
-### In the agent's own terminal
+### An agent of your own, in its own terminal
 
 Give the agent isorite's MCP in the project's config, and run it as you always do:
 
 ```sh
-isorite doctor ~/code/my-project/notes
+isorite setup                              # finds your agents, writes the project's MCP config
+isorite doctor ~/code/my-project/notes     # or: shows the lines it would add, and writes them on a yes
 ```
 
-shows the lines it would add to the project's `.mcp.json` (Claude Code's, read by several others) and `opencode.json` (OpenCode's), and writes them on a yes; Iso's pane offers the same. They name `isorite mcp <the base's folder>`, a bridge over stdio to the server, so they hold on every machine whatever the port. Commit them with the project. Only what the agent does through isorite's tools is seen this way: a file it reads with its own tools isn't.
+They name `isorite mcp <the base's folder>`, a bridge over stdio to the server, so they hold on every machine whatever the port. Commit them with the project. isorite sees what the agent does through isorite's tools; a file it reads with its own tools isn't seen. The agent's own conversation stays in its terminal: the pane shows isorite's own agent's sessions only.
 
 ## What the agent gets
 
@@ -53,33 +40,28 @@ isorite's MCP, at each base's address on the server (`http://localhost:4767/b/<n
 - `read_data`, `artifact_recipe`, `write_artifact`, `read_artifact`: artifacts on isorite's kit, checked and run (in a browser found on this machine) before they are written.
 - Notes as resources (`isorite://<base>/<note>`), for agents that offer `@` mentions of them.
 
-Through `isorite acp`, isorite sees more: a Markdown file of the base the agent reads with its own tools is a step on the Atlas, as the note read, and one it changes is journalled under its name, with what was asked. The notes it read or cited stand under its reply; its links to notes are put in isorite's form however it wrote them.
-
 ## In the browser
 
-Iso's pane is the agent's session: each prompt (asked in its front end, or from here), what the agent says, a line for each thing it does (a command opens on its output, a file on its diff, a look-up in your notes on the note), and what it asks before doing. Answered in either place, a question is gone from both.
+The Agent pane is isorite's own agent's session: each prompt, what the agent says, a line for each thing it does (a command opens on its output, a file on its diff, a look-up in your notes on the note), and what it asks before doing. 
 
-- **The tray:** hold a note on the Atlas and it goes before the next prompt, from either place, once a session.
+- **The tray:** hold a note on the Atlas and it goes before the next prompt, once a session.
 - **Pointers:** select text in a note, a file of the repository or the agent's answer, and two tags stand out by it. Ctrl+[ (or picking up the first tag and letting it go in the box) puts a pointer in your message, a small blue chip naming its note (or file) and line, which you can move about the box and hover to light where it is from; Ctrl+] copies the same. On send each pointer is replaced by its place (the file and lines) and its words, so the agent can read the text around it. Several can be in one message ("what does [1] mean next to [2]").
-- **The switches:** *agents may edit the notes* (Alt+N), on unless you switch it off, is kept in the base's `.isorite/settings.toml` and enforced by the server: `edit_note`, `write_note` and `write_artifact` are refused, and through `isorite acp` so is an agent's request to edit a note's file, with no page open too. An agent whose own tools change a file without asking can't be stopped; the change is journalled under its name, to put back. *The agent may edit the project's files* (Alt+F) and *may run commands* (Alt+R) are this browser's: what it asks to do that is switched off is refused while the page is open.
-- **The drawer:** the agents' sessions, live, the agents' own (their `session/list`), and those isorite carried, kept in `.isorite/conversations/agents/`. One the agent can carry on is carried on in the pane; one whose agent isn't attached is read. Iso's own conversations, from before M25, are listed under them, to read.
-- **The Context view** (the gauge, or ≡): what the agent has in hand, as far as isorite sees: isorite's part, the notes given and read, the rest, and the room left, from what the agent says it fills.
+- **The switches:** *agents may edit the notes* (Alt+N), on unless you switch it off, is kept in the base's `.isorite/settings.toml` and enforced by the server: `edit_note`, `write_note` and `write_artifact` are refused with no page open too. An agent whose own tools change a file without asking can't be stopped; the change is found and journalled under its name, to put back. *The agent may edit the project's files* (Alt+F) and *may run commands* (Alt+R) are this browser's: what it asks to do that is switched off is refused while the page is open.
+- **The drawer:** the agent's sessions, kept in `.isorite/conversations/agents/`: one is carried on in the pane, or forked. Iso's own conversations, from before M25, are listed under them, to read.
+- **The Context view** (the gauge, or ≡): what the agent has in hand: isorite's part, the notes given and read, the rest, and the room left.
 - **Notes the agent changes** are written at once. Turn on provenance in the Note pane's header to see its words marked, and the timeline to put a note back.
 
 ## How each agent differs
 
-Checked with Claude Agent 0.99.1, Codex 2.5.0 and Hermes 0.15.2 (M25 step 5), and OpenCode 2.2 and omp 18.14 (the spike).
-
-- **Claude** (`@agentclientprotocol/claude-agent-acp`): looks through isorite's tools, and cites in isorite's form. It asks before each of isorite's tools until you answer *always*, or allow `mcp__isorite` in its settings.
-- **Codex** (`@agentclientprotocol/codex-acp`): asks to be signed in first; started from the pane, isorite signs it in with its API key (`CODEX_API_KEY` or `OPENAI_API_KEY`). A provider of your own goes in `~/.codex/config.toml`.
-- **OpenCode** (`opencode acp`) and **omp** (`omp acp`): mostly read the Markdown with their own tools, which isorite counts as reading the notes.
-- **Hermes** (`hermes acp`, not in the registry): reads with its own tools too, and is not told how to cite, so it seldom links a note.
+- **Claude Code** looks through isorite's tools and cites in isorite's form. It asks before each of isorite's tools until you answer *always*, or allow `mcp__isorite` in its settings.
+- **Codex** is given the MCP server by one command, which `isorite setup` prints; a provider of your own goes in `~/.codex/config.toml`.
+- **OpenCode** and **omp** mostly read the Markdown with their own tools, which isorite does not see; ask them to use isorite's tools.
 
 ## The agent's memory, and other bases
 
 `isorite memory` makes a base for the agent's memory, lent to every session (see [setup.md](setup.md)). Every tool takes an optional `base`: one of the bases lent, named by `brief_base`; a note in another base can also be named `memory:tools/opencode`. The memory's `AGENTS.md` says what to keep, and how.
 
-A second `isorite acp` or `isorite mcp`, for another project, on the same port, adds its base to the server that is running rather than starting another; a server one of them started stops when the last using it is done.
+A second `isorite mcp`, for another project, on the same port, adds its base to the server that is running rather than starting another; a server one of them started stops when the last using it is done.
 
 To watch the memory learn, open it beside the project: choose `memory` from the base's name at the left of the first pane's header (Ctrl-click for a tab of its own).
 
@@ -95,4 +77,4 @@ Over SSH, `isorite serve` prints this command too.
 
 ## Who can reach it
 
-The isorite server listens on this machine only (127.0.0.1), unless you put it on your tailnet (`tailscale serve`). Then anyone on your tailnet who opens the page can ask the attached agent to act in your project, as they could already edit your notes. MCP, `isorite acp`'s link, and choosing the pane's agent are answered on this machine only.
+The isorite server listens on this machine only (127.0.0.1), unless you put it on your tailnet (`tailscale serve`). Then anyone on your tailnet who opens the page can ask the pane's agent to act in your project, as they could already edit your notes. MCP and the pane's model and keys are answered on this machine only.

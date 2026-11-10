@@ -10,7 +10,7 @@ plainModel ─► nestedLayout ─► highwayTrunks ─► gutters ─► nested
                                linked siblings) busy gaps)  wider gaps)                              folder, to gates)  cut corner)
 ```
 
-All of it is `gridLayout` in `layout.js`, run in the app's worker and kept under `layoutKey`. **Bump `LAYOUT_VERSION` whenever the output changes** (it is 11 now).
+All of it is `gridLayout` in `layout.js`, run in the app's worker and kept under `layoutKey`. **Bump `LAYOUT_VERSION` whenever the output changes** (it is 15 now).
 
 | Part | File | Does |
 |---|---|---|
@@ -88,3 +88,56 @@ Each was built, measured over several seeds on both bases, and removed from the 
 - dg has slightly more crossings than under layers, and more links run backwards.
 - Crossings that meet at cut corners crowd there.
 - Highway counts show only when zoomed in.
+
+## 7. The screen's shape, and a refinement pass (2026-11-09)
+
+What was looked at: the guide and a 225-note base made from `bench/fixtures/atlas/this-base.json`, served and captured at the whole map, two zooms in, and hovering, at a desktop of 1280 by 800 (where the Atlas is the middle pane, 388 by 760, taller than wide) and a phone of 390 by 844.
+
+### What it found
+
+- **The map did not take the shape of the screen it is framed in.** The top level aimed to be square (`PLAN_COSTS.shape` 1) whatever the screen, and the way it ran came from the window, not the Atlas's pane. On a phone the guide filled a third of the screen when framed, a band across the middle with empty ground above and below; in the desktop's middle pane, two thirds by luck. Everything framed smaller than it needed to be, so names showed only further in.
+- **Nothing came onto the map; it was there or not.** A folder opening as the zoom passes it swapped its block for its frame and its notes in one frame; note names appeared and went in one frame at the zoom they became readable.
+- **The layout is slow on a large base.** About a second for 225 notes on an idle machine (6 to 11 s while other work loaded it), most of it in the highways' and feeders' searches (A* over every cell of a folder) and the floorplan's annealing. The highways' search kept its heap as an array of pairs, a third of its time making and collecting them.
+- **Slow cases are opt-in.** `ISORITE_SLOW=1 npm test -w @isorite/core` also runs the two cases that lay out and route about 1,200 notes (minutes); `npm run bench:atlas` measures the same.
+- **The old benchmark measured a layout the app no longer draws** (layers, not blocks and highways).
+- Folder names are cut off where a folder is one note wide ("out…", "ter…"), and at the whole-map zoom of a large base notes are blank blocks. Both are the level of detail working as meant; see the ideas below.
+
+### What changed
+
+| Where | What |
+|---|---|
+| `nested.js`, `layout.js` | `gridLayout(model, { aspect })`: the shape the whole map aims for, wide to tall. The top level's floorplan aims for it, with its shape counting `PLAN_COSTS.fit` (6) times as much as a folder's; a top level of notes only (layers) takes it as its rows' shape. Taken in steps of a quarter of a doubling, a quarter to four (`aspectOf`), so a pane dragged a little wider is the same map; part of `layoutKey`. `LAYOUT_VERSION` 15. |
+| `Atlas.svelte` | The pane's own shape is asked for when the map is laid out afresh (first drawn, a new grid, the relayout button) and kept until then: a note opened beside the Atlas narrows it, and must not reshuffle the map. The way the top level runs is still the window's: running it the pane's way measured worse (more crossings on the guide in the desktop's pane, 9 → 27). |
+| `highways.js` | The highways' search keeps its heap in typed arrays, as the feeders' already did; the clearance of a layout's cells is worked out once for the highways and feeders, not once each. The output is the same to the bit (checked on the guide and nanosim, three option sets). Highways and feeders on the 225-note base: 760–920 ms → 600–810 ms. |
+| `AtlasBlock.svelte`, `AtlasFolder.svelte` | What comes onto the map grows in: a note (from nothing) and a folder's frame (from a third, so a folder opening does not blink) take their opacity over `--t-change`, by `@starting-style`, so the map first drawn, a folder opened by the zoom and a note made all come in. A note's name fades in over `--t-change` as the zoom settles past where it reads, and goes at once. The dimming of the notes not lit is `--t-change` too (it was 150 ms, off the three durations). With reduced motion, none of it. |
+| `bench/atlas_layout.mjs` | `--app`: the app's own layout (blocks and highways) for each fixture, framed in a phone, the desktop's middle pane and the Atlas alone on the desktop: how much of the screen the whole map fills, the line drawn at rest (merged), crossings, straight highways between folders, back links, time. `--no-aspect` lays out as before. The guide is a fixture now, read from `packages/guide/notes` (it changes with the guide). Results in `bench/baselines/atlas-app-2026-11-09-aspect-{before,after}.json`. |
+
+### What it measured
+
+`node bench/atlas_layout.mjs --app` before (`--no-aspect`) and after, one seed. Fill is the share of the screen the map's frame covers when the whole map is framed.
+
+| Fixture | Fill: phone / pane / wide | Line drawn | Crossings |
+|---|---|---|---|
+| guide | 0.34 / 0.64 / 0.41 → 0.70 / 0.90 / 0.75 | 12.8k → 14.2k | 58 → 63 |
+| this-base (225 notes) | 0.40 / 0.82 / 0.31 → 0.42 / 0.89 / 0.61 | 119k → 123k | 376 → 368 |
+| nanosim | 0.44 / 0.46 / 0.56 → 0.80 / 0.86 / 0.81 | 5.0k → 5.8k | 15 → 10 |
+| mockup | 0.37 / 0.58 / 0.44 → 0.87 / 0.90 / 0.71 | 4.9k → 5.4k | 7 → 7 |
+| synth-6x9 | 0.50 / 0.44 / 0.59 → 0.81 / 0.92 / 0.89 | 15.2k → 16.0k | 49 → 42 |
+| synth-12x12 | 0.47 / 0.36 / 0.73 → 0.76 / 0.88 / 0.85 | 56.5k → 60.2k | 127 → 145 |
+
+Over the eighteen cases fill goes from 0.49 to 0.80 on average: the framed map is about 28% larger across on the screen, so names show sooner. The line drawn grows 5%, crossings are level (632 → 635), straight highways and back links move both ways by fixture. The weight was chosen over four seeds on the guide and nanosim: at `fit` 1 (the plain aspect cost) the guide filled 0.60 of the screen, at 4 0.73, at 6 0.77, at 16 0.82 with straight highways falling; 6 kept line and crossings within a tenth of 1. this-base's phone barely moves: its `tasks` folder (138 notes) is most of the map, and a folder's own shape is not the screen's.
+
+The core's timing test ("is the same for the same bundle…", under 60 s for 1,177 notes twice) failed once at 73 s while the machine's load was 14 on two cores; it is a guard against a layout gone badly wrong, and the layout of that test (layers) did not change.
+
+### Ideas judged too risky or too large for now
+
+| Idea | Why not yet | Effort |
+|---|---|---|
+| Inner folders taking the screen's shape too (the square root of theirs and the screen's) | Tried: the guide's phone filled 0.70 against 0.66, but the folders' layered diagrams changed shape everywhere, which the doc's lesson 3 says to judge on dg first. | half a day with dg |
+| The top level running the pane's way, not the window's | Measured worse on the guide in the desktop pane (crossings 9 → 27); the alternation of ways with depth makes the top level's way set every folder's. Worth a sweep on dg. | half a day |
+| Relaying out when the pane changes shape a lot (a phone turned) | A note opened beside the Atlas changes its shape too; telling the two apart needs a rule (turned, or more than a doubling) and the reshuffle is jarring. The relayout button does it now. | 2 hours |
+| Semantic zoom at the whole map of a large base: folder names large and faint across their region (Alien: Isolation's map), notes as blocks | A new layer of drawing with collisions to settle between nested names; the inspiration README lists it as liked. | 1 day |
+| A folder's full name where its frame cuts it off | A title on hover is cheap but is directive-ish text; widening a one-note folder for its name costs area at every zoom since the name is at screen size. | 1 hour (hover), unknown (layout) |
+| Faster feeders on large bases: a search per subfolder region on a cropped grid, or the A* in one typed state space shared across searches | The feeders' search is now the largest cost (about half of a large layout). Must stay output-identical or be re-judged. | 1 day |
+| Flights whose length follows the distance (van Wijk and Nuij's smooth zoom) | `fly` is 320 ms however far; a long zoom out reads as a jump. Touches the taste doc's three durations. | half a day |
+| Routes that fade in as a folder opens | The rest lines are redrawn wholesale at the end of a new layout's draw beat, and a fade there would blink every line. Needs the beats to keep their elements. | half a day |

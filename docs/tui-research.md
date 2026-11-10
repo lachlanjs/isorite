@@ -1,6 +1,6 @@
 # The terminal: what to build it on (research, 2026-10-30)
 
-Done before the install milestone (now M26, `plan-m26.md`) at Lachlan's request: whether OpenCode 2 stays isorite's terminal, and if not, the best thing to build an agentic terminal on. Facts from the projects' own pages and npm on 2026-10-30; where only secondary sources said something, it is marked.
+Done before the install milestone (now M26, `archive/plan-m26.md`) at Lachlan's request: whether OpenCode 2 stays isorite's terminal, and if not, the best thing to build an agentic terminal on. Facts from the projects' own pages and npm on 2026-10-30; where only secondary sources said something, it is marked.
 
 **Superseded the same day.** After looking at omp and Tern (below), the direction changed: isorite builds no terminal and no agent of its own, and attaches to the agent you already use over MCP and ACP (`plan-m25.md`). Recommendation D below is not being pursued. The library comparison stands, as a record.
 

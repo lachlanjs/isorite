@@ -1,8 +1,8 @@
 # Setting isorite up
 
-From nothing to your notes in the browser, with the agent you already use attached to them. If anything fails on the way, run `isorite doctor`: it checks each step and says what to change.
+From nothing to your notes in the browser, with an agent attached to them. Quickest: install, then `isorite`, which guides you. If anything fails on the way, run `isorite doctor`: it checks each step and says what to change.
 
-isorite is the notes, the Atlas and the record of how your understanding changed, beside an agent. The agent is either **isorite's own** (built in; you give it a model's key, or your company's gateway) or **your own**: Claude, Codex, OpenCode, omp, Hermes, or any that speaks ACP, whose key and model are its own, set up as for its own terminal.
+isorite is the notes, the Atlas and the record of how your understanding changed, beside an agent. The agent is either **isorite's own** (built in; you give it a model's key, or your company's gateway) or **your own**: Claude Code, Codex, Gemini CLI, Cursor, VS Code, OpenCode, omp, whose key and model are its own, set up as for its own terminal.
 
 ## 1. Install
 
@@ -14,7 +14,7 @@ Either one file, with Node inside it:
   ```
   It goes in `~/.local/bin` (`--dir` for another folder). Each address it fetches is printed, so a machine that can't reach GitHub can fetch the same files another way, or from a mirror with `--url <the executable's address>`. It unpacks itself into `~/.cache/isorite/<version>/` the first time it runs. Run the installer again to update.
 
-  On Windows, in PowerShell:
+  On Windows, in PowerShell (no administrator needed):
   ```powershell
   irm https://github.com/lachlanjs/isorite/releases/latest/download/install.ps1 | iex
   ```
@@ -25,35 +25,43 @@ Or from npm:
 - **Node 24** or later (`node --version`).
 - **isorite**: `npm i -g isorite`.
 
-`isorite guide` now opens the guide, a knowledge base about isorite with things to do in it.
-
 ### Proxies and the company's certificates
 
 The `isorite` command uses `HTTPS_PROXY` (and `NO_PROXY`) when they're set, and trusts the system's certificate authorities as well as Node's own, so a company's authority installed on the machine is trusted. Node does neither by itself. Set `ISORITE_NODE_DEFAULTS=0` to leave Node as it is.
 
 If the company's authority isn't installed on the machine, name its certificate in `NODE_EXTRA_CA_CERTS`.
 
-## 2. Your notes
+## 2. The guided setup
 
-A folder of Markdown files. In your project's folder:
+```sh
+isorite setup
+```
+
+Run by itself the first time you type `isorite` at a terminal (nothing is asked again after; `ISORITE_NO_SETUP=1` skips it). Four steps, each with a default on Enter and each skippable:
+
+1. **Your notes.** The base already here, else an Obsidian vault (opened as it is; isorite adds only `.isorite/`), a folder of Markdown you have, or a new `notes/` in the project.
+2. **Your agent.** Your own harness, found on PATH or by its config folder (Claude Code, Codex, Gemini CLI, OpenCode, Cursor, VS Code, omp): isorite's MCP is written into the project's config (`.mcp.json`, `.gemini/settings.json`, `opencode.json`, `.cursor/mcp.json`, `.vscode/mcp.json`; what else the file holds is kept), or for Codex the command `codex mcp add isorite -- isorite mcp "<base>"` is printed. Or **isorite's own agent**: a provider (a key found in the environment is offered first), the key typed with nothing shown, a model (the provider's newest mid-sized one is offered), and, if you agree, one tiny request to test them. Or a company gateway (an OpenAI-compatible address, written as `[provider]` in `config.toml`, its key named as `$NAME` so it stays in the environment).
+3. **Checks.** Node 24+, that the notes folder and isorite's data folder can be written, the port, the proxy, `NODE_EXTRA_CA_CERTS`, and whether the 53 MB search model can be fetched from here (else search is by words, and the way to fetch it by hand is said).
+4. **Start.** isorite opens in the browser.
+
+With no questions, for scripts, CI and AIs: `isorite setup --yes --base . --agent claude-code`; `isorite setup --help` lists the flags (`--agent own --provider anthropic --key-env ANTHROPIC_API_KEY --test`, `--gateway-url`, `--offline`, `--fetch-model`, `--start`). It is idempotent: run again, it changes only what is not already right, and exits 1 with the problems listed when something could not be done.
+
+Afterwards, in the project's folder:
 
 ```sh
 isorite
 ```
 
-It opens the base it finds there (a folder with `.isorite/` in it, the project's top folder or its `notes/`); with none it offers to make `notes/`; from any other folder it lists the bases this machine knows, last used first, with a new base here and the guide. It opens your browser, and prints the link too: `http://localhost:4767/` (the next free port if that one is taken; `--port <n>` to choose, `--no-open` to leave the browser alone). To name a folder yourself: `isorite new ~/notes/my-project`, then `isorite serve ~/notes/my-project`. A folder of notes you have already is opened as it is. isorite keeps what it needs in the folder's `.isorite/`.
+It opens the base it finds there (a folder with `.isorite/` in it, the project's top folder or its `notes/`); with none it offers to make `notes/`; from any other folder it lists the bases this machine knows, last used first. It opens your browser, and prints the link too: `http://localhost:4767/` (the next free port if that one is taken; `--port <n>` to choose, `--no-open` to leave the browser alone). Over SSH the browser isn't opened: forward the port (`ssh -L 4767:localhost:4767 <host>`). To name a folder yourself: `isorite new ~/notes/my-project`, then `isorite serve ~/notes/my-project`.
 
-How you want the base kept (your notation, the level, the language, how notes are named) goes in `AGENTS.md` at the top of the notes, which every agent you attach is given. Edit it in Iso's settings, the icon at the right of its pane's header, or in any editor. An agent may offer a line for it when you say how you want things done.
+How you want the base kept (your notation, the level, the language, how notes are named) goes in `AGENTS.md` at the top of the notes, which every agent you attach is given. Edit it in the Agent pane's settings or in any editor.
 
 ## 3. Your agent
 
-Four ways in; [terminal.md](terminal.md) has each in full.
+Two ways in, and no others; [terminal.md](terminal.md) has each in full.
 
-- **isorite's own agent.** The quickest with no agent of your own: nothing to install, only a key. With no agent attached, the pane offers it; its settings (the icon at the right of the pane's header) take a provider (OpenRouter, Anthropic, OpenAI, Google, Mistral, Groq, xAI, DeepSeek, Together, Fireworks, Cerebras, or your gateway), the key and a model. *Check* sends one short request and says what to change if it fails; *Use* puts it in the pane, with no restart. The key is kept in `~/.local/share/isorite/credentials.json` (mode 600), or read from the provider's usual variable (`OPENROUTER_API_KEY`, …). Its tools for the notes are always on; the project's files are read-only by default; changing them and running commands are off until you switch them on. No Claude or ChatGPT subscription sign-in is offered (their terms don't allow a product like this to use it): to use a subscription, attach Claude Code or Codex. See [isorite's own agent](#isorites-own-agent) below for a company gateway.
-
-- **In Iso's pane.** With no agent attached, the pane offers one: an agent of the [ACP registry](https://agentclientprotocol.com/get-started/registry) (fetched and run as the registry says: its program checked against its SHA-256, else `npx` or `uvx`), or the command of one it doesn't list (`hermes acp`). isorite starts it for the base, in the base's repository, with the server's environment. Chosen from this machine only, and kept in `bases.toml`.
-- **From an ACP front end** (Toad, Zed, JetBrains): give it `isorite acp --agent "<the agent's command>"` as its agent. The session is live in the front end and in the pane at once.
-- **In the agent's own terminal**: give it isorite's MCP in the project's config. `isorite doctor ~/notes/my-project` shows the lines it would add (`.mcp.json` for Claude Code and others, `opencode.json` for OpenCode) and writes them on a yes; the pane offers the same. Commit them with the project.
+- **isorite's own agent.** The quickest with no agent of your own: nothing to install, only a key. Set up by `isorite setup`, or in the pane's settings (the icon at the right of the pane's header): a provider (OpenRouter, Anthropic, OpenAI, Google, Mistral, Groq, xAI, DeepSeek, Together, Fireworks, Cerebras, or your gateway), the key and a model. *Check* sends one short request and says what to change if it fails; *Use* puts it in the pane, with no restart. The key is kept in `~/.local/share/isorite/credentials.json` (mode 600), or read from the provider's usual variable (`OPENROUTER_API_KEY`, …). Its tools for the notes are always on; the project's files are read-only by default; changing them and running commands are off until you switch them on. No Claude or ChatGPT subscription sign-in is offered (their terms don't allow a product like this to use it): to use a subscription, connect Claude Code or Codex. See [isorite's own agent](#isorites-own-agent) below for a company gateway.
+- **Your own agent, in its own terminal, over MCP.** Give it isorite's MCP in the project's config: `isorite setup` writes it, or `isorite doctor ~/notes/my-project` shows the lines it would add and writes them on a yes (`.mcp.json`; `opencode.json`; `.cursor/mcp.json` and `.vscode/mcp.json` where the project or you use Cursor or VS Code). Commit them with the project. Its key and model stay its own.
 
 ## 4. Several bases, and the agent's memory (optional)
 
@@ -91,7 +99,7 @@ It checks, in turn: the configuration, how Node reaches the network (the proxy, 
 
 `isorite doctor --report` gives all of it as one block, with the configuration and the environment it read, any secret shown only by its length. Paste it to whoever is helping, or to an AI helping you: [setup-for-agents.md](setup-for-agents.md) is written for it, and `isorite help setup` prints it.
 
-Your agent's own failures (its key, its model, its gateway) are its own: its front end, or the pane, says what it said. A refusal is shown in the pane; an agent that asks to be signed in with its API key (Codex) is signed in with it when isorite starts it.
+The failures of an agent of your own (its key, its model, its gateway) are its own: its terminal says what it said. isorite's own agent shows a refusal in the pane.
 
 ## isorite's own agent
 
