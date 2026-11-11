@@ -19,6 +19,7 @@ import { LENSES_DIR, OWN_DIR, StudyError, citeKind, lensNotes, parseLens, rename
 import { gitRenames } from "./git.ts";
 import { loadBundle } from "@isorite/core/node";
 import { doctor } from "./doctor.ts";
+import { dataDir } from "./pi/credentials.ts";
 import { configPath, rememberBase } from "./config.ts";
 import { repoOf } from "./git.ts";
 import { askWhereFilesLive } from "./own-repo.ts";
@@ -77,7 +78,7 @@ ${SETUP_USAGE}  isorite new <folder>                   a new base: an empty fold
   isorite guide [<folder>] [--port <n>]  the guide: a base about isorite, to do things in (--tutorial)
 `;
 
-export function check(notes: string, out: (line: string) => void = console.log, unused = false, fix = false, strict = false): number {
+export function check(notes: string, out: (line: string) => void = console.log, unused = false, fix = false, strict = false, globalDir = join(dataDir(), "global")): number {
   const root = resolve(notes);
   if (!existsSync(root) || !statSync(root).isDirectory()) { out(`no folder at ${root}`); return 2; }
   let bundle = loadBundle(root), issues = bundle.lint();
@@ -92,6 +93,16 @@ export function check(notes: string, out: (line: string) => void = console.log, 
   const level = (l: string) => (l === "error" ? red(l) : yellow(l)) + " ".repeat(Math.max(0, 7 - l.length));
   for (const i of issues) out(`${level(i.level)} ${bold(i.path)}: ${i.message}${i.code === "frontmatter-invalid" && !fix && mendable.some((m) => m.path === i.path) ? " (isorite check --fix quotes it)" : ""}`);
   for (const c of cycles) out(`${level("warning")} requires cycle: ${c.join(" -> ")}`);
+  // Links to the global base (docs/format.md): its notes are in this machine's data folder, not in the base, so a
+  // link to one that is not there is found here, not by the bundle.
+  let brokenGlobal = 0;
+  for (const c of [...bundle.concepts.values()].sort((a, b) => (a.path < b.path ? -1 : 1))) {
+    for (const o of c.outward) {
+      if (o.kind !== "global" || existsSync(join(globalDir, `${o.id}.md`))) continue;
+      out(`${level("warning")} ${bold(c.path)}: broken link to the global base: ${o.id}`);
+      brokenGlobal++;
+    }
+  }
   // Artifacts on the kit (M23): the rules write_artifact keeps, checked of each, with the files beside it.
   let artifactErrors = 0, artifactWarnings = 0;
   for (const f of [...bundle.files].filter((x) => citeKind(x) === "artifact").sort()) {
@@ -106,7 +117,7 @@ export function check(notes: string, out: (line: string) => void = console.log, 
   }
   const lenses = checkLenses(root, bundle, out, level, fix, strict);
   const errors = issues.filter((i) => i.level === "error").length + artifactErrors + lenses.errors;
-  const warnings = issues.length - issues.filter((i) => i.level === "error").length + artifactWarnings + lenses.warnings;
+  const warnings = issues.length - issues.filter((i) => i.level === "error").length + artifactWarnings + lenses.warnings + brokenGlobal;
   out(`${dim(`${bundle.concepts.size} notes in ${bundle.directories.size} folders;`)} ${(errors ? red : green)(`${errors} errors`)}, ${(warnings ? yellow : green)(`${warnings} warnings`)}, ${cycles.length} requires cycles`);
   // The pictures no note shows or links to (M22): yours to keep or delete, so information, never a warning.
   if (unused) {

@@ -179,7 +179,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
           // A note, or since M23 a file of the notes (an artifact, data, …), shown in place or linked.
           const id = !link ? null : link.embed ? fileOf(link.url) : noteOf(link.url) ?? fileOf(link.url);
           if (id === null) {
-            if (!link || !opts.onCode || !link.url.trim().startsWith("code:")) return false;
+            if (!link || !opts.onCode || !/^(code|global):/.test(link.url.trim())) return false;
             event.preventDefault();
             opts.onCode(link.url.trim());
             return true;
@@ -204,7 +204,7 @@ function codeLinkAt(state: EditorState, pos: number): string | null {
     for (let n: ReturnType<typeof tree.resolveInner> | null = tree.resolveInner(pos, side); n; n = n.parent) {
       if (n.name !== "Link" && n.name !== "Image") continue;
       const u = n.getChild("URL"), url = u ? state.sliceDoc(u.from, u.to).trim() : "";
-      return url.startsWith("code:") ? url : null;
+      return /^(code|global):/.test(url) ? url : null;
     }
   }
   return null;

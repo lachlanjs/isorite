@@ -23,3 +23,7 @@ export async function makeKind(kind: "question" | "problem", about: string): Pro
   await panes.open(id, true);
   return id;
 }
+
+/** A new skill's SKILL.md (the skills base, docs/format.md): its name is its folder's, its description the sentence the agent matches requests against. */
+export const skillText = (name: string): string =>
+  `---\nname: ${name}\ndescription: Say when to use this skill, in a sentence the agent can match a request against.\n---\n\nWhat the agent is to do, in Markdown. Scripts and other files it needs go in this folder.\n`;

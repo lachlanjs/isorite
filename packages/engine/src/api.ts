@@ -12,6 +12,8 @@ export interface Session {
   /** The knowledge base's name, for the header's path. */
   name: string;
   device: string;
+  /** One of the two bases isorite keeps beside a person's own: the global base (notes that hold across bases) or the skills base (the agent's skills). */
+  special?: "global" | "skills";
 }
 
 export interface NoteSummary {
@@ -67,7 +69,7 @@ export interface MapReport {
     /** A question resolved or a problem solved (M12): when, as written. */
     done?: string;
     /** Its links out of the base, to the web and to code (M12): drawn beside it on the Atlas. */
-    links?: { kind: "web" | "code"; href: string; text: string; broken?: true }[];
+    links?: { kind: "web" | "code" | "global"; href: string; text: string; broken?: true }[];
     /** The pictures it shows (M22), from the notes or the repository (`code`): drawn beside it on the Atlas. */
     pictures?: { href: string; path: string; from: "notes" | "code"; text: string; broken?: true }[];
   }>;

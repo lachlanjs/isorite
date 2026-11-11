@@ -9,6 +9,7 @@
   import { goto } from "$app/navigation";
   import type { EditorView } from "@codemirror/view";
   import { app, codeHref, findEmbed, noteHref, slug } from "$lib/app.svelte.ts";
+  import { globalPage } from "$lib/here.ts";
   import { createEditor, setText, type Where } from "$lib/editor/codemirror.ts";
   import { setMarks, setTouched, type Mark, type Touched } from "$lib/editor/overlays.ts";
   import { panes } from "$lib/panes.svelte.ts";
@@ -88,7 +89,8 @@
       onChange: (text) => (source ? note.setText(text) : note.setBody(text)),
       onSave: () => { void note.save(); },
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
-      onCode: (href) => { void goto(codeHref(href)); },
+      // A link to the global base (`global:conventions/naming.md`) opens that base's page at the note; one to code, the code reader.
+      onCode: (href) => { if (href.startsWith("global:")) location.assign(globalPage(href)); else void goto(codeHref(href)); },
       onFollow: (id) => { void goto(noteHref(id)); },
       // An embedded question or problem (M12) opens in the Note pane.
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves

@@ -166,7 +166,7 @@ async function hold(page: Page, x: number, y: number, which: "note" | "folder" |
   } else await page.mouse.move(x + 3, y + 3);
   await page.mouse.up();
 }
-const asked = (page: Page, what: "note" | "folder") => page.getByLabel(what === "note" ? "the new note's title" : "the new folder's name");
+const asked = (page: Page, what: "note" | "folder") => page.getByLabel(what === "note" ? "the new note's title" : "the new island's name");
 const session = async (page: Page) => ({ "x-isorite-token": ((await (await page.request.get("api/session")).json()) as { token: string }).token, origin: new URL(page.url()).origin });
 
 test("holding on open ground offers a new note or a new folder: let go on one and it is made, its title chosen to type over; let go elsewhere, nothing; a press that moves is a drag", async ({ page }) => {

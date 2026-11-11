@@ -14,7 +14,7 @@ export function handoffText(parts: readonly Part[], question = ""): string {
   const passages = parts.filter((p): p is Extract<Part, { kind: "passage" }> => p.kind === "passage");
   const out = ["From my isorite knowledge base. Read what I name with the isorite tools (read_note, outline_note, search_notes), not from this message alone: the notes may have changed since I chose them."];
   if (notes.length) out.push(`Notes (read_note by id; outline_note first for a long one):\n${notes.map((p) => `- ${p.title} (${p.id})`).join("\n")}`);
-  if (folders.length) out.push(`Folders (search_notes with "under" set to the folder, or brief_base for the whole base):\n${folders.map((p) => `- ${p.title} (${p.id})`).join("\n")}`);
+  if (folders.length) out.push(`Islands (search_notes with "under" set to the island's path, or brief_base for the whole base):\n${folders.map((p) => `- ${p.title} (${p.id})`).join("\n")}`);
   if (passages.length) {
     out.push(`Passages I selected, quoted as they were when I chose them. Read the note for the current text before relying on a quote:\n\n${passages.map((p) => `From ${p.title} (${p.id}):\n${quote(p.text)}`).join("\n\n")}`);
   }

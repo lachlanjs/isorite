@@ -26,8 +26,10 @@ test("a leading slash offers the skills that are on, and Enter completes one", a
   await box(page).fill("/");
   const menu = page.getByRole("listbox", { name: "Skills" });
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole("option")).toHaveCount(1);
-  await expect(menu.getByRole("option", { name: new RegExp(`/${NAME}`) })).toHaveAttribute("aria-selected", "true");
+  // The built-in skill and the person's own (the skills base's release-notes, which the test server seeds).
+  await expect(menu.getByRole("option")).toHaveCount(2);
+  await expect(menu.getByRole("option").first()).toHaveAttribute("aria-selected", "true");
+  await expect(menu.getByRole("option", { name: new RegExp(`/${NAME}`) })).toBeVisible();
   // Narrowed as it is typed; nothing that does not match.
   await box(page).fill("/zz");
   await expect(menu).toHaveCount(0);
@@ -75,7 +77,7 @@ test("the settings list the skill with where it is from, and its switch takes it
     await toAgent(page);
     await box(page).click();
     await box(page).fill("/");
-    await expect(page.getByRole("listbox", { name: "Skills" })).toHaveCount(0);
+    await expect(page.getByRole("listbox", { name: "Skills" }).getByRole("option", { name: new RegExp(`/${NAME}`) })).toHaveCount(0);
     // And the other way.
     await page.getByRole("button", { name: /^Agent:/ }).click();
     await page.getByRole("menuitem", { name: "Model and key…" }).click();

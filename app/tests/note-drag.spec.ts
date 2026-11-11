@@ -16,8 +16,8 @@ async function seed(page: Page, p: string, notes: Array<[string, string]>) {
   await page.reload();
 }
 async function folder(page: Page, name: string) {
-  await page.getByRole("button", { name: "new folder" }).click();
-  await page.getByRole("textbox", { name: "The new folder's path" }).fill(name);
+  await page.getByRole("button", { name: "new island" }).click();
+  await page.getByRole("textbox", { name: "The new island's path" }).fill(name);
   await page.getByRole("button", { name: "Create" }).click();
   await expect.poll(() => existsSync(join(NOTES, name))).toBe(true);
 }
@@ -106,10 +106,10 @@ test("a folder is held and moved under another, and an empty one is deleted", as
   await expect.poll(() => existsSync(join(NOTES, `fold-${p}-zone`, `fold-${p}`, `kept-${p}.md`))).toBe(true);
   await expect.poll(() => existsSync(join(NOTES, `fold-${p}`, `kept-${p}.md`))).toBe(false);
   // Empty: asked first.
-  await page.getByRole("button", { name: `Delete the empty folder gone-${p}` }).click();
+  await page.getByRole("button", { name: `Delete the empty island gone-${p}` }).click();
   await page.getByRole("button", { name: "keep it" }).click();
   expect(existsSync(join(NOTES, `gone-${p}`))).toBe(true);
-  await page.getByRole("button", { name: `Delete the empty folder gone-${p}` }).click();
+  await page.getByRole("button", { name: `Delete the empty island gone-${p}` }).click();
   await page.getByRole("button", { name: `delete gone-${p}` }).click();
   await expect.poll(() => existsSync(join(NOTES, `gone-${p}`))).toBe(false);
 });
@@ -117,8 +117,8 @@ test("a folder is held and moved under another, and an empty one is deleted", as
 test("a folder is renamed from its heading in the list", async ({ page }) => {
   const p = test.info().project.name;
   await seed(page, p, [[`rn-${p}/inside-${p}`, `Inside ${p}`]]);
-  await page.getByRole("button", { name: `Rename the folder rn-${p}` }).click();
-  const field = page.getByRole("textbox", { name: `Rename the folder rn-${p}` });
+  await page.getByRole("button", { name: `Rename the island rn-${p}` }).click();
+  const field = page.getByRole("textbox", { name: `Rename the island rn-${p}` });
   await field.fill(`renamed-${p}`);
   await field.press("Enter");
   await expect.poll(() => existsSync(join(NOTES, `renamed-${p}`, `inside-${p}.md`))).toBe(true);

@@ -2,6 +2,8 @@
 
 How the map is placed and its lines found, written down on 2026-10-15 after milestone 3 replaced most of what came from rdstudio. Read this before changing anything in `packages/core/src/atlas/`: the second half is what was tried, what it measured, and why it was dropped. Most of these ideas look right on paper. Several made the map worse.
 
+This note uses "folder" and "region" as technical terms; on screen, and in everything a person reads, a folder on the Atlas is an island.
+
 ## 1. What runs, in order
 
 ```

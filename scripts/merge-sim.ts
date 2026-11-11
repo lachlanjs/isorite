@@ -166,12 +166,12 @@ const SCENARIOS: Scenario[] = [
   },
   {
     name: "4 · one moves a note, the other edits it",
-    alice: async (p) => { await p.engine.moveNote("notes/folders", "atlas/folders", (await p.engine.readNote("notes/folders")).version); },
-    bob: (p) => edit(p, "notes/folders", para(0, (s) => `${s} Bob's addition.`)),
-    check: (m) => [...(m.notes.has("notes/folders") && m.notes.has("atlas/folders") ? ["the note is in both places"] : []),
-      ...both(m, m.notes.has("atlas/folders") ? "atlas/folders" : "notes/folders", "Bob's addition."),
-      ...(m.journals.has("notes/folders") && m.journals.has("atlas/folders") ? ["its journal is in both places"] : []),
-      ...(!m.notes.has("notes/folders") && m.journals.has("notes/folders") ? ["a journal is left at the old place"] : [])],
+    alice: async (p) => { await p.engine.moveNote("notes/islands", "atlas/islands", (await p.engine.readNote("notes/islands")).version); },
+    bob: (p) => edit(p, "notes/islands", para(0, (s) => `${s} Bob's addition.`)),
+    check: (m) => [...(m.notes.has("notes/islands") && m.notes.has("atlas/islands") ? ["the note is in both places"] : []),
+      ...both(m, m.notes.has("atlas/islands") ? "atlas/islands" : "notes/islands", "Bob's addition."),
+      ...(m.journals.has("notes/islands") && m.journals.has("atlas/islands") ? ["its journal is in both places"] : []),
+      ...(!m.notes.has("notes/islands") && m.journals.has("notes/islands") ? ["a journal is left at the old place"] : [])],
   },
   {
     name: "5 · one moves a folder, the other works in it",
@@ -204,8 +204,8 @@ const SCENARIOS: Scenario[] = [
   {
     name: "9 · both hide notes",
     alice: async (p) => { await p.engine.setHidden(["atlas", "agent/artifacts"]); },
-    bob: async (p) => { await p.engine.setHidden(["notes/folders", "terminal"]); },
-    check: (m) => [...(m.settingsMarked ? ["settings.toml holds conflict markers"] : []), ...["atlas", "agent/artifacts", "notes/folders", "terminal"].filter((h) => !m.hidden.includes(h)).map((h) => `${h} is no longer hidden`)],
+    bob: async (p) => { await p.engine.setHidden(["notes/islands", "terminal"]); },
+    check: (m) => [...(m.settingsMarked ? ["settings.toml holds conflict markers"] : []), ...["atlas", "agent/artifacts", "notes/islands", "terminal"].filter((h) => !m.hidden.includes(h)).map((h) => `${h} is no longer hidden`)],
   },
   {
     name: "10 · both have an agent edit the same note, and keep the conversation",
@@ -308,7 +308,7 @@ async function main(): Promise<void> {
 
 /** What git said about the files a scenario touches. */
 const TOUCH: Record<string, string[]> = {
-  "1": ["notes/a-note-is-markdown"], "2": ["start-here"], "3": ["atlas/the-atlas"], "4": ["notes/folders", "atlas/folders"], "5": ["agent/", "the-agent/"],
+  "1": ["notes/a-note-is-markdown"], "2": ["start-here"], "3": ["atlas/the-atlas"], "4": ["notes/islands", "atlas/islands"], "5": ["agent/", "the-agent/"],
   "6": ["notes/go-back-a-version"], "7": ["notes/glossary"], "8": ["notes/write-in-your-notes", "notes/bobs-practice"], "9": ["settings.toml"],
   "10": ["your-own-base/starting-a-base", "agents/claude"], "11": ["notes/make-move-delete", "notes/make-and-move", "notes/create-move-delete"], "12": ["terminal/", "agents/terminal", "advanced/"],
 };

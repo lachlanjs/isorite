@@ -33,7 +33,7 @@ They name `isorite mcp <the base's folder>`, a bridge over stdio to the server, 
 
 isorite's MCP, at each base's address on the server (`http://localhost:4767/b/<name>/mcp`, on this machine only), or through `isorite mcp`:
 
-- `brief_base`, the first look: the base's folders, how it is kept, how to cite a note, how to make an artifact, and the base's `AGENTS.md`.
+- `brief_base`, the first look: the base's islands (its folders), how it is kept, how to cite a note, how to make an artifact, and the base's `AGENTS.md`.
 - `search_notes`, `find_similar` (by meaning, where the model is installed), `outline_note`, `read_note`: each look is a step on the Atlas.
 - `edit_note`, `write_note`: written at once, under the agent's name, with what was asked, its words marked as its own.
 - `ask_question`, `offer_text`: a question back, standing dotted on the Atlas until you keep it as a question note; words offered for a note, inserted as yours, or not.

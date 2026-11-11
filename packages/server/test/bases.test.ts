@@ -38,7 +38,7 @@ beforeAll(async () => {
   writeFileSync(join(other, "a.md"), note("A", "a"));
   rememberBase(other, { path: config });
   held = [];
-  server = await openServer(project, { config, model: null, idle: () => held.push("idle") });
+  server = await openServer(project, { config, model: null, data: join(root, "data"), idle: () => held.push("idle") });
 });
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 

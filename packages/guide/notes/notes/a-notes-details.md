@@ -21,4 +21,4 @@ tags: [integrators]
 - **description** says the idea in a line. An agent reads it first, when it looks through the base, so a good one helps it find the note.
 - **tags**, if you want them.
 
-The Note pane shows them in its label, under the title, and changes them there: the description is the italic line, the kind is one of three, the tags are in brackets, and pressing the folder or the name moves or renames the file. Deleting a note is in the Note pane's menu.
+The Note pane shows them in its label, under the title, and changes them there: the description is the italic line, the kind is one of three, the tags are in brackets, and pressing the island or the name moves or renames the file. Deleting a note is in the Note pane's menu.

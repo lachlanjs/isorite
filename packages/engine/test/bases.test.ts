@@ -66,3 +66,26 @@ test("a base not lent is refused, in words the agent can act on; its own name is
   const own = await project.agentLook({ agent: "opencode", session: "s1", tool: "read_note", args: { id: "basics/entropy", base: "isorite" } });
   expect(own.text).toContain("The average surprise");
 });
+
+test("a link to the global base is on the map, broken where the global base has no such note; the skills base says what it is", async () => {
+  const clock = { t: Date.parse("2026-11-11T09:00:00Z"), now() { return this.t; } };
+  const engines = new Map<string, Engine>();
+  const elsewhere = { lent: () => [], base: (name: string) => engines.get(name) ?? null };
+  const global = await Engine.open({ notes: new MemoryFiles({ "conventions/naming.md": note("Naming", "Name things.") }), own: new MemoryFiles(), clock, device: "laptop1", name: "global", special: "global", elsewhere });
+  const skills = await Engine.open({ notes: new MemoryFiles(), own: new MemoryFiles(), clock, device: "laptop1", name: "skills", special: "skills", elsewhere });
+  const project = await Engine.open({ notes: new MemoryFiles({ "a.md": note("A", "[n](global:conventions/naming.md) and [g](global:nothing.md).") }), own: new MemoryFiles(), clock, device: "laptop1", name: "isorite", elsewhere });
+  engines.set("global", global).set("skills", skills).set("isorite", project);
+  expect((await global.session()).special).toBe("global");
+  expect((await project.session()).special).toBeUndefined();
+  expect(await skills.about()).toMatch(/^The skills you can load/);
+  const links = (await project.map()).notes.a!.links!;
+  expect(links).toEqual([
+    { kind: "global", href: "global:conventions/naming.md", text: "n" },
+    { kind: "global", href: "global:nothing.md", text: "g", broken: true },
+  ]);
+  // Renaming a note of the global base changes links to it in the global base only: a base's own note is left as it is.
+  await global.createNote("conventions/uses", note("Uses", "[naming](/conventions/naming.md)"));
+  await global.moveNote("conventions/naming", "conventions/names", (await global.readNote("conventions/naming")).version);
+  expect((await global.readNote("conventions/uses")).text).toContain("(/conventions/names.md)");
+  expect((await project.readNote("a")).text).toContain("global:conventions/naming.md");
+});

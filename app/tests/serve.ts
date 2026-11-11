@@ -47,6 +47,12 @@ if (process.argv[1] === import.meta.filename) {
   process.env.ISORITE_EMBED = "off"; // the browser tests are about the pages; the model has its own tests
   process.env.ISORITE_SCRIPTED = "1"; // the scripted model for isorite's own agent, put in the pane by tests/agent.ts
   mkdirSync(join(ROOT, "config", "isorite"), { recursive: true });
+  // The global base and the skills base live in the data folder (docs/format.md): a note in one, and a skill with a script in the other.
+  mkdirSync(join(DATA, "global", "conventions"), { recursive: true });
+  writeFileSync(join(DATA, "global", "conventions", "naming.md"), "---\ntype: Concept\ntitle: Naming conventions\n---\n\nName a thing for what it does, not for what it is made of.\n");
+  mkdirSync(join(DATA, "skills", "release-notes"), { recursive: true });
+  writeFileSync(join(DATA, "skills", "release-notes", "SKILL.md"), "---\nname: release-notes\ndescription: Write release notes from the merged pull requests.\n---\n\nList what changed, newest first.\n");
+  writeFileSync(join(DATA, "skills", "release-notes", "collect.sh"), "#!/bin/sh\ngh pr list --state merged\n");
   writeFileSync(join(ROOT, "config", "isorite", "config.toml"), `device = "browser01"\n`);
   // The agent's memory, lent to every session, and a base known but not lent.
   mkdirSync(join(MEMORY, "tools"), { recursive: true });

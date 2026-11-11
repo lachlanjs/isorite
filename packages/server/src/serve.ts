@@ -19,6 +19,8 @@ import { NoAgent, switchable } from "./sessions.ts";
 import { projectOf } from "./connect.ts";
 import { NodeFiles } from "./nodefiles.ts";
 import { defaultStudyPath, openStudyBase } from "./studybase.ts";
+import { SkillsFiles, prepareGlobal } from "./special.ts";
+import { dataDir } from "./pi/credentials.ts";
 import { KIT_FILES, assemble, manifestOf, type KitFiles } from "@isorite/kit";
 import { findBrowser, renderArtifact, type Reader } from "./render.ts";
 
@@ -67,13 +69,17 @@ export interface EngineExtras {
   elsewhere?: Elsewhere;
   /** One embedder for every base a server holds: the model is loaded once. */
   embedder?: Embedder | null;
+  /** The global base or the skills base (docs/format.md): the skills base reads its notes through `SkillsFiles`. */
+  special?: "global" | "skills";
 }
 
 export async function openEngine({ notes }: Opened, device = deviceId(), model: string | null = modelDir(), extras: EngineExtras = {}): Promise<Engine> {
+  if (extras.special === "global") prepareGlobal(notes);
   const own = makeOwn(notes), found = repoOf(notes);
   const embedder = extras.embedder !== undefined ? extras.embedder : model ? nodeEmbedder(model) : null;
   return Engine.open({
-    notes: new NodeFiles(notes), own: new NodeFiles(own), clock: systemClock, device, name: extras.name ?? basename(notes),
+    notes: extras.special === "skills" ? new SkillsFiles(notes) : new NodeFiles(notes), own: new NodeFiles(own), clock: systemClock, device, name: extras.name ?? basename(notes),
+    ...(extras.special ? { special: extras.special } : {}),
     // The repository code links point into (M12): named in .isorite/settings.toml, from the notes folder, else the
     // one the notes are in.
     ...(found !== null ? { foundRepository: relative(notes, found) || "." } : {}),
@@ -108,7 +114,7 @@ export const link = (url: string, tty = Boolean(process.stdout.isTTY)): string =
 /** The server's bases, opened: the one named (remembered in bases.toml, M20) and every lent one, each with its
  *  engine and app, and the server's answer to a request for any of them. `idle`: what to do once the last of those
  *  holding the server lets it go. */
-export async function openServer(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], idle, config = configPath(), model = modelDir() }: { host?: string; port?: number; allowHosts?: string[]; idle?: () => void; config?: string; model?: string | null } = {}): Promise<{ notes: string; bases: Bases; embedder: boolean; fetch: (req: Request, env?: unknown) => Promise<Response> }> {
+export async function openServer(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], idle, config = configPath(), model = modelDir(), data = dataDir() }: { host?: string; port?: number; allowHosts?: string[]; idle?: () => void; config?: string; model?: string | null; data?: string } = {}): Promise<{ notes: string; bases: Bases; embedder: boolean; fetch: (req: Request, env?: unknown) => Promise<Response> }> {
   const opened = locate(path);
   const device = deviceId(config);
   const first = rememberBase(opened.notes, { path: config });
@@ -120,9 +126,9 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
   const { PiControl, piHostFor } = await import("./pi/index.ts");
   const pi = new PiControl();
   const bases: Bases = new Bases({
-    config, first, ...(idle ? { idle } : {}),
+    config, first, data, ...(idle ? { idle } : {}),
     make: async (known) => {
-      const api = await openEngine({ notes: known.path }, device, model, { name: known.name, elsewhere: bases, embedder });
+      const api = await openEngine({ notes: known.path }, device, model, { name: known.name, elsewhere: bases, embedder, ...(known.special ? { special: known.special } : {}) });
       // isorite's own agent in the pane, where a model is chosen (ISORITE_PI, or the settings'); until then, no agent.
       const terminal = await piHostFor(api, process.env, projectOf(known.path).repo, known.path, pi);
       // The pane's host can change while isorite runs: choosing a model in the settings starts the agent here at once,

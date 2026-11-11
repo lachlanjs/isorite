@@ -22,7 +22,7 @@ const ALWAYS = [/^The person has switched off agents' changes/, /^Other knowledg
 export const MAX_NOTE_CHARS = 24_000;
 
 const SHORTER: Record<string, string> = {
-  brief_base: "The base's folders, and the person's instructions for it. Call it first, once. part=writing before writing or teaching; part=artifacts before making a page.",
+  brief_base: "The base's islands (folders), and the person's instructions for it. Call it first, once. part=writing before writing or teaching; part=artifacts before making a page.",
   edit_note: "Replace oldString with newString in a note, as the edit tool does. Written at once under your name, marked for the person, who can undo it. Use this, never a file edit, for notes.",
   write_note: "Write a whole note at folder/name (lower case, hyphens), frontmatter (type, title) included: a new one, or one written anew. Written at once under your name, as edit_note.",
 };

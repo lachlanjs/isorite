@@ -44,7 +44,18 @@ export function deviceId(path = configPath()): string {
 /** A knowledge base this device knows, by name (M20): `[<name>]` in bases.toml, beside config.toml, with its `path`,
  *  and `lend` when it is lent to every agent's session as well as the base the session is for (the agent's
  *  memory is). A file of its own, so that config.toml, written by hand, is left as it is. */
-export interface KnownBase { name: string; path: string; lend: boolean; used?: string; title?: string }
+export interface KnownBase { name: string; path: string; lend: boolean; used?: string; title?: string; special?: "global" | "skills" }
+
+/** The two bases isorite keeps beside a person's own, in its data folder: the global base, notes that hold across
+ *  bases, and the skills base, the skills the agent loads. They are always known and never written to bases.toml; their
+ *  names are taken, so an ordinary base is never given them. */
+export const SPECIAL_NAMES = ["global", "skills"] as const;
+export function specialBases(data: string): KnownBase[] {
+  return [
+    { name: "global", title: "Global", path: join(data, "global"), lend: true, special: "global" },
+    { name: "skills", title: "Skills", path: join(data, "skills"), lend: true, special: "skills" },
+  ];
+}
 
 const BASE_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const expand = (p: string): string => (p === "~" ? homedir() : p.startsWith("~/") ? join(homedir(), p.slice(2)) : resolve(p));
@@ -85,7 +96,7 @@ export function rememberBase(folder: string, { path = configPath(), as, lend }: 
   const bases = readConfig(basesPath(path));
   let name = had?.name;
   if (!name) {
-    const stem = as && BASE_NAME.test(as) ? as : baseName(at), taken = new Set(Object.keys(bases));
+    const stem = as && BASE_NAME.test(as) ? as : baseName(at), taken = new Set([...Object.keys(bases), ...SPECIAL_NAMES]);
     name = stem;
     for (let n = 2; taken.has(name); n++) name = `${stem.slice(0, 36)}-${n}`;
   }

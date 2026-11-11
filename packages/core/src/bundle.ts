@@ -104,13 +104,17 @@ export class Concept {
 
   get directory(): string { return dirname(this.id); }
 
+  /** A skill's SKILL.md (a skill folder, as Claude Code, pi and isorite's agent read them) names itself by `name` and
+   *  has no `type`: it is read as a note of the type Skill, so that the skills base has no errors in it. */
+  private get skill(): boolean { return basename(this.id) === "SKILL" && Boolean(this.meta.name); }
+
   get type(): string {
     const t = this.meta.type;
-    return t === null || t === undefined || t === "" ? "" : text(t);
+    return t === null || t === undefined || t === "" ? (this.skill ? "Skill" : "") : text(t);
   }
 
   get title(): string {
-    const t = this.meta.title;
+    const t = this.meta.title || (this.skill ? this.meta.name : "");
     if (t) return text(t);
     const stem = basename(this.id);
     const words = strip(stem.replaceAll("-", " ").replaceAll("_", " "));

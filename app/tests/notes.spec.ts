@@ -25,7 +25,7 @@ test("a note with maths and a typed link is written, saved, and there when reope
 
   await page.getByRole("button", { name: "New note", exact: true }).click();
   await page.getByPlaceholder("Entropy").fill(`Entropy ${name}`);
-  await page.getByLabel("folder", { exact: true }).fill("basics");
+  await page.getByLabel("island", { exact: true }).fill("basics");
   await expect(page.getByText(`${id}.md`)).toBeVisible();
   await page.getByRole("button", { name: "Create" }).click();
 

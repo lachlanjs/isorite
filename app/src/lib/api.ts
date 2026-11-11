@@ -83,7 +83,7 @@ export interface TerminalApi {
 export interface OwnRepoInfo { state: "own" | "tracked" | "shared" | "none" | "unavailable"; path: string; project: string | null; remotes: string[]; choice: "project" | "separate" | null; ask: boolean; commands: string[]; problem: string }
 
 /** The bases the server holds (M20), as the switcher lists them. */
-export interface BaseRow { name: string; path: string; lend: boolean; open: boolean; title: string }
+export interface BaseRow { name: string; path: string; lend: boolean; open: boolean; title: string; /** The global base or the skills base: always listed, first, not renamed or lent by hand. */ special?: "global" | "skills" }
 export interface BasesApi {
   list(): Promise<{ here: string; local: boolean; bases: BaseRow[] }>;
   /** Lend a base to every session, or stop (from this machine only). */

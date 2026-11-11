@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { STUDY } from "./serve.ts";
 
-test("a lens is picked: its islands are drawn, a note held twice is a ghost, the list follows the file's order, and Folders brings the folders back", async ({ page }, info) => {
+test("a lens is picked: its islands are drawn, a note held twice is a ghost, the list follows the file's order, and Islands brings the folders back", async ({ page }, info) => {
   const name = `path-${info.project.name}`, file = join(STUDY, "lenses", `${name}.toml`);
   mkdirSync(join(STUDY, "lenses"), { recursive: true });
   writeFileSync(file, `title = "Path ${info.project.name}"

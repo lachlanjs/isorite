@@ -14,3 +14,9 @@ export const kept = (key: string): string => (baseHere() ? `${key}@${baseHere()}
 export function basePage(name: string, hash = ""): string {
   return `${location.origin}${location.pathname}?base=${encodeURIComponent(name)}${hash}`;
 }
+
+/** The page of a note in the global base, from a link to it (`global:conventions/naming.md`): the global base's page, at that note. */
+export function globalPage(href: string): string {
+  const id = href.trim().replace(/^global:\/?/, "").replace(/[#?].*$/, "").replace(/\.md$/i, "");
+  return basePage("global", `#/n/${id.split("/").map(encodeURIComponent).join("/")}`);
+}

@@ -27,6 +27,7 @@ The Atlas work is recorded in `docs/atlas-layout.md`, section 7.
 - Skills: isorite's own agent loads `SKILL.md` skills (built in, `<data>/skills/`, `<base>/.isorite/skills/`), by name in the prompt and `use_skill`, or `/name` in the composer; on/off in the agent settings, kept in the base; Jane Street's socratic-tutor ships built in (+212 tokens on, 0 off).
 - Tests: the two ~1,200-note Atlas cases run only with `ISORITE_SLOW=1`; `npm test` takes about a minute and a half.
 - Lenses, first slice: `.isorite/lenses/<name>.toml` (islands, `notes` and `match` rules, order, titles), resolved in core and served by the engine per revision; a lens picker in the Atlas header; ghosts and Elsewhere; moves rewrite lens entries; `isorite check` reads lenses (`--strict`, `--fix` from git renames); `read_lens` and a lens filter on search; the guide's first-hour lens.
+- The global base and the skills base: two bases kept in the data folder, always in the switcher above a person's own. Links to the global base are `global:<id>.md` (a scheme, as `code:` is; no id holds a colon), drawn as marks on the Atlas that open the global base's page, checked by `isorite check`; the skills base opens the per-user skills as islands and notes, scripts as items, built-in skills read only; both lent to the agent through the memory's route while they have notes, with writes journalled in their own journals. See `docs/format.md` §6.
 
 ## Unfinished
 
@@ -37,3 +38,4 @@ The Atlas work is recorded in `docs/atlas-layout.md`, section 7.
 - A truly incremental bundle and a file watcher (see `performance.md`).
 - The full browser suite was not rerun end to end after the last test fixes; `note-drag` "gold one sends it" is flaky on the phone project.
 - Lenses, for the next slice: editing a lens in the app; `linked-from:` and `type:` rules; files and code as items in a lens; a lens file's own journal; the 1,200-note benchmark with a lens; agent writes to lens files through the notes' route; a note-list filter by lens and island in the API.
+- The global and skills bases, for the next slice: a global link is not followed by a rename made in the global base, and its broken mark on the Atlas is as of the linking note's last revision; `isorite bases` does not list the two; `skills:` links; a `Built in` title for the `built-in` island; the agent's tools see the skills base only once the person has a skill of their own.

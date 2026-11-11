@@ -19,6 +19,6 @@ export type Glyph = keyof typeof GLYPHS;
 
 /** What a kind is called where it's named. */
 export const KIND_NAMES: Record<Glyph, string> = {
-  concept: "concept", question: "question", problem: "problem", folder: "folder", image: "picture", artifact: "artifact",
+  concept: "concept", question: "question", problem: "problem", folder: "island", image: "picture", artifact: "artifact",
   data: "data", document: "document", misc: "file", web: "web", code: "code",
 };

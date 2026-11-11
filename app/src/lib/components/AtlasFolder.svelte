@@ -53,7 +53,7 @@
 
 {#if open}
   <div bind:this={face} class="folder frame {tone} {moment ? `mo-${moment}` : ''}" class:given data-folder={item.ref} style="{place};--inside:{inside};--behind:{behind};--ground-here:{inside}">
-    {#if titled && editing}<input class="frame-title rename" aria-label="Rename the folder {name}" bind:value={draft} use:focus onpointerdown={(e) => e.stopPropagation()} onclick={(e) => e.stopPropagation()} onkeydown={(e) => { e.stopPropagation(); if (e.key === "Enter") done(true); else if (e.key === "Escape") done(false); }} onblur={() => done(false)} />
+    {#if titled && editing}<input class="frame-title rename" aria-label="Rename the island {name}" bind:value={draft} use:focus onpointerdown={(e) => e.stopPropagation()} onclick={(e) => e.stopPropagation()} onkeydown={(e) => { e.stopPropagation(); if (e.key === "Enter") done(true); else if (e.key === "Escape") done(false); }} onblur={() => done(false)} />
     {:else if titled}<button class="frame-title" type="button" title={given ? "In the agent's context: shift+click takes it back. Double click renames it." : onrename ? "Double click renames it" : undefined} onclick={onpick} ondblclick={edit}>{name}</button>{/if}
     {#if says}<span class="frame-title held">{says}</span>{/if}
     {#if bare}<span class="bare" aria-hidden="true"><i></i><i></i><i></i></span>{/if}

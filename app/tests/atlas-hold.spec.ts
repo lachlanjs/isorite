@@ -70,7 +70,7 @@ test("held on a folder, a fifth tag renames it: its name is typed over", async (
   const t = (await tag.boundingBox())!;
   await page.mouse.move(t.x + t.width / 2, t.y + t.height / 2, { steps: 4 });
   await page.mouse.up();
-  const field = page.getByRole("textbox", { name: `Rename the folder ${dir}` });
+  const field = page.getByRole("textbox", { name: `Rename the island ${dir}` });
   await expect(field).toBeVisible();
   await field.fill(`${dir}-renamed`);
   await field.press("Enter");

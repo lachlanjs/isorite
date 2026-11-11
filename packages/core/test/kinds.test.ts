@@ -1,7 +1,7 @@
 // Open questions and problems (M12): their kind, what they are about, when they are done, and embeds.
 
 import { expect, test } from "vitest";
-import { Bundle, codeTarget, embedFor, embedRefs, idsOf, mapModel, outwardLinks, parseSettings, settingsText } from "../src/index.ts";
+import { Bundle, codeTarget, globalHref, globalTarget, embedFor, embedRefs, idsOf, mapModel, outwardLinks, parseSettings, settingsText } from "../src/index.ts";
 
 const file = (path: string, meta: string, body = "") => ({ path, text: `---\n${meta}\n---\n\n${body}\n` });
 const base = Bundle.fromFiles([
@@ -69,4 +69,33 @@ test("AGENTS.md at the top of a base is the base's instructions, a file, not a n
   expect([...b.concepts.keys()]).toEqual(["basics/AGENTS"]);
   expect(b.files.has("AGENTS.md")).toBe(true);
   expect(b.issues.filter((i) => i.path === "AGENTS.md")).toEqual([]);
+});
+
+test("a link to the global base is global:<id>.md: not a note's link, a link out of the base, and no id can be mistaken for it", () => {
+  expect(globalTarget("global:conventions/naming.md")).toBe("conventions/naming");
+  expect(globalTarget("global:/conventions/naming.md#terms")).toBe("conventions/naming");
+  expect(globalTarget("global:../x.md")).toBeNull();
+  expect(globalTarget("global:a//b.md")).toBeNull();
+  expect(globalTarget("global:.hidden/x.md")).toBeNull();
+  expect(globalTarget("global:naming")).toBeNull();
+  expect(globalTarget("/global/naming.md")).toBeNull();
+  expect(globalHref("a/b")).toBe("global:a/b.md");
+  const b = Bundle.fromFiles([file("a/x.md", "type: Concept", "See [naming](global:conventions/naming.md \"see also\"), [web](https://example.org) and [y](/a/y.md).\n"), file("a/y.md", "type: Concept")]);
+  const x = b.concepts.get("a/x")!;
+  expect(x.outward.map((o) => o.kind)).toEqual(["global", "web"]);
+  expect(x.outward[0]).toMatchObject({ id: "conventions/naming", text: "naming" });
+  // It is not a link to a note of this base, so it is never broken here: the global base is asked.
+  expect(x.links.map((l) => [l.target, l.broken])).toEqual([["a/y", false]]);
+  expect(b.issues).toEqual([]);
+});
+
+test("a skill's SKILL.md is a note of the type Skill, titled by its name, with its description", () => {
+  const b = Bundle.fromFiles([{ path: "release-notes/SKILL.md", text: "---\nname: release-notes\ndescription: Write release notes.\n---\n\nList what changed.\n" }, { path: "release-notes/collect.sh", text: "gh pr list\n" }]);
+  const c = b.concepts.get("release-notes/SKILL")!;
+  expect([c.title, c.type, c.description]).toEqual(["release-notes", "Skill", "Write release notes."]);
+  expect(b.issues).toEqual([]);
+  expect(b.files.has("release-notes/collect.sh")).toBe(true);
+  // A title of its own wins, and another note called SKILL.md without a name is as it was.
+  const t = Bundle.fromFiles([{ path: "a/SKILL.md", text: "---\nname: a\ntitle: Alpha\ntype: Concept\n---\n\nx\n" }, { path: "b/SKILL.md", text: "---\ntype: Concept\n---\n\nx\n" }]);
+  expect([t.concepts.get("a/SKILL")!.title, t.concepts.get("b/SKILL")!.title]).toEqual(["Alpha", "Skill"]);
 });

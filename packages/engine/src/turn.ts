@@ -119,7 +119,7 @@ export const ISORITE = `# Their knowledge base
   \`resolved\` or \`solved\`, with the day. \`[[!name]]\` alone on a line
   embeds one in a note.
 - A problem of several steps is several problem notes, each linked to the one
-  before it as "requires", in a folder of their own when they belong
+  before it as "requires", in an island of their own when they belong
   together. A problem has no steps inside it.
 - Files beside the notes that are not notes (data, documents, pictures,
   artifacts) are linked as any note is: [runs](/simulation/runs.csv).

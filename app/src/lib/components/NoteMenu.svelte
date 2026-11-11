@@ -47,11 +47,11 @@
   {#if open}
     <span class="panel" role="group" aria-label="{title}" out:flyOut>
       {#if mode === "menu"}
-        <button class="item" type="button" onclick={() => (mode = "move")}>Move to a folder…</button>
+        <button class="item" type="button" onclick={() => (mode = "move")}>Move to an island…</button>
         <button class="item danger-text" type="button" onclick={() => void askDelete()}>Delete…</button>
       {:else if mode === "move"}
         <label class="label" for="move-{id}">move to</label>
-        <FolderField id="move-{id}" label="Folder to move {title} to" bind:value={folder} placeholder="(top level)" onpick={() => void move()} onkeydown={(e) => { if (e.key === "Enter") { e.preventDefault(); void move(); } }} />
+        <FolderField id="move-{id}" label="Island to move {title} to" bind:value={folder} placeholder="(top level)" onpick={() => void move()} onkeydown={(e) => { if (e.key === "Enter") { e.preventDefault(); void move(); } }} />
         <span class="faint path">{target}.md</span>
         <span class="row"><button class="btn primary" type="button" onclick={() => void move()}>move</button><button class="btn quiet" type="button" onclick={() => (open = false)}>cancel</button></span>
       {:else}

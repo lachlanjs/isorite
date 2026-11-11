@@ -5,7 +5,7 @@ tags: [atlas, interface]
 description: A lens groups the notes into islands of its own, without moving a file, and the Atlas and the list can show the base through it.
 ---
 
-The Atlas draws your folders, and that stays the default: pick Folders in its header and you are back. A lens is another way to group the same notes, kept in a file, so that a note can sit in "Open questions" on one map and in "Combat" on another while it stays in its folder.
+The Atlas draws your folders as islands, and that stays the default: pick Islands in its header and you are back. A lens is another way to group the same notes, kept in a file, so that a note can sit in "Open questions" on one map and in "Combat" on another while it stays in its folder on disk.
 
 A lens is a short TOML file in `.isorite/lenses/`, one file a lens, committed with the notes. This is the one that comes with this guide, `first-hour.toml`:
 
@@ -27,4 +27,4 @@ Hidden notes stay hidden in every lens. A lens never moves a file: moving a note
 
 Your agent can read a lens with `read_lens` and search within one island. A lens is yours to write by hand, or to ask the agent to write. Editing lenses on the map is not built yet.
 
-The folders are still where notes live: [the Atlas](/atlas/the-atlas.md "requires") draws them, and [folders](/notes/folders.md "see also") says how they are made.
+The folders are still where notes live: [the Atlas](/atlas/the-atlas.md "requires") draws them as islands, and [islands](/notes/islands.md "see also") says how they are made.

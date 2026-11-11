@@ -28,6 +28,8 @@ export interface EngineOptions {
   clock: Clock;
   device: string;
   name: string;
+  /** Set for the global base and the skills base, which isorite keeps beside a person's own (docs/format.md). */
+  special?: "global" | "skills";
   /** Search by meaning, where the device can run the model: the model, and a folder outside both repositories
    *  for its vectors, with the name of this base's file in it. */
   embedder?: Embedder;
@@ -144,7 +146,7 @@ const allIslandsOf = (islands: { islands: unknown[] }[]): number => islands.redu
 const withLensArgs = (d: ToolDef): ToolDef => ({ ...d, function: { ...d.function, parameters: { ...d.function.parameters, properties: { ...(d.function.parameters.properties as Record<string, unknown>), ...LENS_ARGS } } } });
 
 /** The brief of the base, an agent's first look. */
-const BRIEF: ToolDef = { type: "function", function: { name: "brief_base", description: "What this knowledge base holds: its folders, how many notes each, and how to look things up in it. Call it first, once.", parameters: { type: "object", properties: {}, additionalProperties: false } } };
+const BRIEF: ToolDef = { type: "function", function: { name: "brief_base", description: "What this knowledge base holds: its islands (folders), how many notes each, and how to look things up in it. Call it first, once.", parameters: { type: "object", properties: {}, additionalProperties: false } } };
 
 const NOTE_ARG = { type: "string", description: "The note's id or path in the knowledge base: physics/softening or /physics/softening.md." };
 const MARKED = "The change is written at once, under your name: the person sees your words marked in the note, and can undo it from the browser. Use this, never edit or write, for any note of the knowledge base.";
@@ -294,7 +296,7 @@ export class Engine implements Api {
   // ------------------------------------------------------------ reading
 
   async session(): Promise<Session> {
-    return { name: this.opts.name, device: this.opts.device };
+    return { name: this.opts.name, device: this.opts.device, ...(this.opts.special ? { special: this.opts.special } : {}) };
   }
 
   notes(): Promise<Listing> { return this.once("notes", () => this.listing()); }
@@ -328,9 +330,9 @@ export class Engine implements Api {
   map(): Promise<MapReport> { return this.once("map", () => this.drawMap()); }
 
   private async drawMap(): Promise<MapReport> {
-    const notes: MapReport["notes"] = {}, broken = await this.brokenCode(), conflicted = this.conflicted();
+    const notes: MapReport["notes"] = {}, broken = await this.brokenCode(), conflicted = this.conflicted(), gone = await this.brokenGlobal();
     for (const c of this.bundle.concepts.values()) {
-      const bad = broken.get(c.id) ?? [];
+      const bad = [...(broken.get(c.id) ?? []), ...(gone.get(c.id) ?? [])];
       const links = c.outward.filter((o) => !(o.kind === "code" && o.picture)).map((o) => ({ kind: o.kind, href: o.href, text: o.text, ...(bad.includes(o.href) ? { broken: true as const } : {}) }));
       // The pictures it shows (M22): its own, then the repository's, each once.
       const pictures: NonNullable<MapReport["notes"][string]["pictures"]> = [], shown = new Set<string>();
@@ -461,6 +463,18 @@ export class Engine implements Api {
     return broken;
   }
 
+  /** The links to the global base whose note is not there, by note. Where this server has no global base open, none are known to be. */
+  private async brokenGlobal(): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    let ids: Set<string> | null = null;
+    for (const c of this.bundle.concepts.values()) for (const o of c.outward) {
+      if (o.kind !== "global") continue;
+      if (!ids) { const g = this.opts.elsewhere?.base("global"); if (!g) return out; ids = new Set((await g.notes()).notes.map((n) => n.id)); }
+      if (!ids.has(o.id)) out.set(c.id, [...(out.get(c.id) ?? []), o.href]);
+    }
+    return out;
+  }
+
   /** Code links broken since an agent was last told: each is told once (Q27). */
   private toldBroken = new Set<string>();
   async brokenNews(): Promise<{ id: string; title: string; href: string }[]> {
@@ -534,7 +548,7 @@ export class Engine implements Api {
   /** What this base is, in a line: its AGENTS.md's first line of text, else its name and size. */
   async about(): Promise<string> {
     const first = ((await this.agents()).text ?? "").split("\n").map((l) => l.replace(/^#+\s*/, "").trim()).find((l) => l && !l.startsWith("---"));
-    return first ?? `${this.bundle.concepts.size} notes`;
+    return first ?? (this.opts.special === "skills" ? "The skills you can load with use_skill, a folder each (SKILL.md is the skill)" : `${this.bundle.concepts.size} notes`);
   }
 
   async agentLook({ agent, session, tool, args, asked = "" }: AgentLook): Promise<{ text: string }> {
@@ -759,9 +773,9 @@ export class Engine implements Api {
     const dirs = [...b.directories.keys()].sort();
     const lines = dirs.slice(0, 60).map((d) => `${"  ".repeat(d ? d.split("/").length - 1 : 0)}- ${d ? d.split("/").at(-1) : "(the top)"} (${counts.get(d) ?? 0})`);
     return [
-      `# ${this.opts.name}: a knowledge base of ${b.concepts.size} notes in ${dirs.filter(Boolean).length} folders`,
-      `Folders, with the notes directly in each:\n${lines.join("\n")}${dirs.length > 60 ? `\n(and ${dirs.length - 60} more)` : ""}`,
-      ...(this.lensFiles.size ? [`Lenses (other ways of grouping these notes into islands; the folders above are the default): ${[...this.lensFiles].map(([n, t]) => { const title = parseLens(n, t).title; return title === n ? n : `${n} (${title})`; }).join(", ")}. read_lens lists one; search_notes takes lens and island.`] : []),
+      `# ${this.opts.name}: a knowledge base of ${b.concepts.size} notes in ${dirs.filter(Boolean).length} islands`,
+      `Islands (folders), with the notes directly in each:\n${lines.join("\n")}${dirs.length > 60 ? `\n(and ${dirs.length - 60} more)` : ""}`,
+      ...(this.lensFiles.size ? [`Lenses (other ways of grouping these notes into islands; the islands above are the default): ${[...this.lensFiles].map(([n, t]) => { const title = parseLens(n, t).title; return title === n ? n : `${n} (${title})`; }).join(", ")}. read_lens lists one; search_notes takes lens and island.`] : []),
       `To look: search_notes by the words a note would use${this.similar ? ", find_similar by meaning when the words are unknown" : ""}; outline_note to see a note's headings and links; read_note for one section. Follow a note's links to what it rests on before searching again. Cite a note by its title and section.`,
       // How the base is kept, so what the agent writes in it matches (M15), and how an artifact is made (M23).
       `${ISORITE}\n\n${PRACTICE}\n\n${WRITING}\n\n${ARTIFACTS}`,
@@ -785,9 +799,9 @@ export class Engine implements Api {
 
   async makeFolder(path: string): Promise<void> {
     path = path.trim().replace(/^\/+|\/+$/g, "");
-    if (!inBase(path)) throw new EngineError("only a folder of the base is made here");
+    if (!inBase(path)) throw new EngineError("only an island of the base is made here");
     checkNoteId(path);
-    if (!this.opts.notes.mkdir) throw new EngineError("an empty folder can't be made here");
+    if (!this.opts.notes.mkdir) throw new EngineError("an empty island can't be made here");
     if (this.files.has(`${path}.md`)) throw new EngineError(`there is a note at ${path} already`, 409);
     await this.one(async () => {
       await this.opts.notes.mkdir!(path);
@@ -799,7 +813,7 @@ export class Engine implements Api {
 
   async deleteFolder(path: string): Promise<void> {
     path = path.trim().replace(/^\/+|\/+$/g, "");
-    if (!path || !inBase(path)) throw new EngineError("only a folder of the base is deleted here");
+    if (!path || !inBase(path)) throw new EngineError("only an island of the base is deleted here");
     checkNoteId(path);
     await this.dropFolder(path, true);
   }
@@ -807,11 +821,11 @@ export class Engine implements Api {
   /** Take away an empty folder, and the empty ones inside it. A folder made by putting a note in it is not among the
    *  listing's entries, so `strict` (a folder asked for by name) is what says it was not there. */
   private async dropFolder(path: string, strict: boolean): Promise<void> {
-    if (!this.opts.notes.rmdir) throw new EngineError("a folder can't be deleted here");
+    if (!this.opts.notes.rmdir) throw new EngineError("an island can't be deleted here");
     await this.one(async () => {
       const inside = [...this.files.values()].filter((f) => f.path.startsWith(`${path}/`));
       const held = inside.filter((f) => !("dir" in f && f.dir)).length;
-      if (strict && !this.files.has(path) && !inside.length) throw new EngineError(`there is no folder ${path}`, 404);
+      if (strict && !this.files.has(path) && !inside.length) throw new EngineError(`there is no island ${path}`, 404);
       if (held) throw new EngineError(`${path} still holds ${held} ${held === 1 ? "file" : "files"}; move or delete them first`, 409);
       for (const d of [...inside.map((f) => f.path), path].sort((a, b) => b.length - a.length)) {
         await this.opts.notes.rmdir!(d);
@@ -824,15 +838,15 @@ export class Engine implements Api {
   async moveFolder(from: string, to: string): Promise<void> {
     const clean = (p: string) => p.trim().replace(/^\/+|\/+$/g, "");
     from = clean(from); to = clean(to);
-    if (!from || !to || !inBase(from) || !inBase(to)) throw new EngineError("only a folder of the base is moved, and only within it");
+    if (!from || !to || !inBase(from) || !inBase(to)) throw new EngineError("only an island of the base is moved, and only within it");
     checkNoteId(from); checkNoteId(to);
-    if (to === from) throw new EngineError("the folder is there already");
-    if (to.startsWith(`${from}/`)) throw new EngineError("a folder can't be moved into itself");
+    if (to === from) throw new EngineError("the island is there already");
+    if (to.startsWith(`${from}/`)) throw new EngineError("an island can't be moved into itself");
     const inside = [...this.files.values()].filter((f) => f.path.startsWith(`${from}/`));
     const dirs = inside.filter((f) => "dir" in f && f.dir).map((f) => f.path);
     const notes = inside.filter((f) => !("dir" in f && f.dir) && f.path.endsWith(".md")).map((f) => f.path.slice(0, -3));
     const others = inside.filter((f) => !("dir" in f && f.dir) && !f.path.endsWith(".md")).map((f) => f.path);
-    if (!this.files.has(from) && !inside.length) throw new EngineError(`there is no folder ${from}`, 404);
+    if (!this.files.has(from) && !inside.length) throw new EngineError(`there is no island ${from}`, 404);
     const at = (p: string) => `${to}${p.slice(from.length)}`;
     if (this.files.has(`${to}.md`)) throw new EngineError(`there is a note at ${to} already`, 409);
     for (const id of notes) if (this.files.has(`${at(id)}.md`)) throw new EngineError(`there is already a note at ${at(id)}`, 409);
@@ -1066,7 +1080,7 @@ export class Engine implements Api {
   addImage(dir: string, name: string, bytes: Uint8Array, who = "you"): Promise<PictureInfo> {
     return this.one(async () => {
       dir = dir.replace(/^\/+|\/+$/g, "");
-      if (dir.split("/").some((p) => p === "." || p === ".." || p.startsWith(".")) || /[\\\x00-\x1f]/.test(dir) || /\/\//.test(dir)) throw new EngineError(`not a folder: ${dir}`, 400);
+      if (dir.split("/").some((p) => p === "." || p === ".." || p.startsWith(".")) || /[\\\x00-\x1f]/.test(dir) || /\/\//.test(dir)) throw new EngineError(`not an island: ${dir}`, 400);
       const type = imageType(bytes);
       if (!type) throw new EngineError("an image of png, jpeg, gif or webp", 415);
       if (bytes.length > MAX_IMAGE_BYTES) throw new EngineError(`the image is larger than isorite takes (${MAX_IMAGE_BYTES / 1e6} MB)`, 413);

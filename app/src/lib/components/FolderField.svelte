@@ -48,11 +48,11 @@
     onfocus={() => { open = true; at = 0; }} oninput={() => { open = true; at = 0; }}
     onblur={() => setTimeout(() => (open = false), 120)} onkeydown={key} />
   {#if open && options.length}
-    <ul class="suggest" id="{id}-list" role="listbox" aria-label="folders">
+    <ul class="suggest" id="{id}-list" role="listbox" aria-label="islands">
       {#each options as o, k (o.dir + o.made)}
         <li id="{id}-opt-{k}" role="option" aria-selected={k === at} class:at={k === at}>
           <button type="button" tabindex="-1" onmousedown={(e) => e.preventDefault()} onclick={() => pick(o.dir)} onmouseenter={() => (at = k)}>
-            <span class="dir">{o.dir}</span><span class="detail">{o.made ? "new folder" : `${count(o.dir)} ${count(o.dir) === 1 ? "note" : "notes"}`}</span>
+            <span class="dir">{o.dir}</span><span class="detail">{o.made ? "new island" : `${count(o.dir)} ${count(o.dir) === 1 ? "note" : "notes"}`}</span>
           </button>
         </li>
       {/each}

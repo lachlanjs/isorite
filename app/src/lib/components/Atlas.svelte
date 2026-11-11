@@ -6,10 +6,11 @@
   import { ghostOf, isIslandRef, islandTitles, lensModel, reach, STRENGTH } from "@isorite/core";
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
   import type { How, MapReport } from "@isorite/engine";
-  import { untitled } from "$lib/make.ts";
+  import { skillText, untitled } from "$lib/make.ts";
   import { tick, untrack } from "svelte";
   import { app, noteHref } from "$lib/app.svelte.ts";
   import { pictureSrc } from "$lib/pictures.ts";
+  import { globalPage } from "$lib/here.ts";
   import { dirOf, keep, linkTo, refused } from "$lib/images.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { tray, type Part } from "$lib/tray.svelte.ts";
@@ -550,7 +551,7 @@
       if (item.kind === "folder") {
         const n = app.listing.notes.filter((x) => x.dir === item.id || x.dir.startsWith(`${item.id}/`)).length;
         if (n) { notice = `${item.id} holds ${n} ${n === 1 ? "note" : "notes"}: move or delete ${n === 1 ? "it" : "them"} first.`; return; }
-        asking = { item, text: `Delete the empty folder ${item.id}?` };
+        asking = { item, text: `Delete the empty island ${item.id}?` };
         return;
       }
       const map = await app.api.map();
@@ -703,6 +704,19 @@
   async function make(g: Place): Promise<void> {
     making = true;
     const ids = app.listing.notes.map((n) => n.id);
+    // In the skills base an island is a skill: made with its SKILL.md, at the top.
+    if (g.folder && app.session?.special === "skills") {
+      const t = untitled("", "new-skill", (d) => !ids.some((id) => id.startsWith(`${d}/`)));
+      const id = `${t.slug}/SKILL`;
+      try {
+        await app.api.createNote(id, skillText(t.slug));
+        await app.refresh();
+        panes.fresh = id;
+        await panes.open(id);
+      } catch (err) { notice = (err as Error).message; }
+      finally { making = false; spot = null; }
+      return;
+    }
     let dir = g.dir;
     if (g.folder) {
       const f = untitled(g.dir, "untitled-folder", (d) => !ids.some((id) => id.startsWith(`${d}/`)));
@@ -981,6 +995,10 @@
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- an address on the web, not in the app -->
           <a class="sat web" href={s.href} target="_blank" rel="noopener noreferrer" title={`${s.text} · ${s.href}`} aria-label={s.text} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}" onclick={(e) => { if (dragged) e.preventDefault(); e.stopPropagation(); }}>
             <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" /><path d="M2.5 8h11M8 2.5c-2 2.8-2 8.2 0 11M8 2.5c2 2.8 2 8.2 0 11" /></svg></a>
+        {:else if s.kind === "global"}
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- another base's page, not in this app -->
+          <a class="sat global" class:broken={s.broken} href={globalPage(s.href)} data-sveltekit-reload title={`${s.text} · ${s.href}${s.broken ? " · not in the global base" : " · opens the global base"}`} aria-label={`${s.text}${s.broken ? ", not in the global base" : ", in the global base"}`} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}" onclick={(e) => { if (dragged) e.preventDefault(); e.stopPropagation(); }}>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M8 8l5-5M9.5 3H13v3.5" /></svg></a>
         {:else if s.kind === "more"}
           <button class="sat more" type="button" data-sat={s.key} style="--x:{s.gx};--y:{s.gy}" title={s.text === "fewer" ? "Fold them again" : `${s.text}: show them all`} aria-label={s.text} aria-expanded={s.text === "fewer"} onclick={() => { const next = new Set(spread); if (!next.delete(s.note)) next.add(s.note); spread = next; }}>{s.text === "fewer" ? "−" : `+${s.text.split(" ")[0]}`}</button>
         {:else if s.kind === "picture"}
@@ -1064,7 +1082,7 @@
   /* A link out of the base (M12): a small block beside its note, in the map's units. */
   .sat { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(3 * var(--u)); height: calc(3 * var(--u)); display: grid; place-items: center; background: var(--ground-1); border: var(--px) solid var(--line-strong); color: var(--lattice); }
   .sat svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
-  .sat.web:hover, .sat.web:focus-visible, .sat.picture:hover, .sat.picture:focus-visible { border-color: var(--lattice); }
+  .sat.web:hover, .sat.web:focus-visible, .sat.global:hover, .sat.global:focus-visible, .sat.picture:hover, .sat.picture:focus-visible { border-color: var(--lattice); }
   .sat.picture { overflow: hidden; }
   .sat.more { font: 600 0.75rem var(--font-ui); color: var(--text-soft); cursor: pointer; padding: 0; }
   .sat.more:hover, .sat.more:focus-visible { color: var(--text); border-color: var(--lattice); }

@@ -8,7 +8,7 @@
 
   let { x, y, w, h, choice, px, py, hidden = false }: { x: number; y: number; w: number; h: number; choice: "note" | "folder" | "hidden" | null; px: number; py: number; /** Something is hidden: a tag to find it. */ hidden?: boolean } = $props();
 
-  const NOTE = { which: "note" as const, deg: -128, label: "new note" }, FOLDER = { which: "folder" as const, deg: -52, label: "new folder" };
+  const NOTE = { which: "note" as const, deg: -128, label: "new note" }, FOLDER = { which: "folder" as const, deg: -52, label: "new island" };
   const WAYS = $derived(hidden ? [{ ...NOTE, deg: -150 }, { which: "hidden" as const, deg: -90, label: "find hidden" }, { ...FOLDER, deg: -30 }] : [NOTE, FOLDER]);
   const R = 58, EDGE = 18;
   const tags = $derived.by(() => {

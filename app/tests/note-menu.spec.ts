@@ -21,10 +21,10 @@ test("a note is moved to a new folder, and deleted after asking who links to it"
   // Move.
   await page.getByRole("button", { name: `Do something with Mover ${p}` }).click();
   await page.screenshot({ path: `test-results/screens/${p}-note-menu.png` });
-  await page.getByRole("button", { name: "Move to a folder…" }).click();
-  const field = page.getByRole("combobox", { name: `Folder to move Mover ${p} to` });
+  await page.getByRole("button", { name: "Move to an island…" }).click();
+  const field = page.getByRole("combobox", { name: `Island to move Mover ${p} to` });
   await field.fill(`moved-${p}`);
-  await expect(page.getByRole("group", { name: `Mover ${p}` }).getByText("new folder")).toBeVisible();
+  await expect(page.getByRole("group", { name: `Mover ${p}` }).getByText("new island")).toBeVisible();
   await page.getByRole("button", { name: "move", exact: true }).click();
   await expect.poll(() => existsSync(join(NOTES, `moved-${p}`, `mover-${p}.md`))).toBe(true);
   expect(existsSync(join(NOTES, "menu", `mover-${p}.md`))).toBe(false);

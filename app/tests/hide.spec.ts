@@ -44,7 +44,7 @@ test("a note hidden by the grey tag leaves the Atlas and the list, and is found 
   await page.mouse.move(f.x + f.width / 2, f.y + f.height / 2, { steps: 4 });
   await expect(found).toHaveClass(/\bon\b/);
   await page.mouse.up();
-  const finder = page.getByRole("dialog", { name: "Hidden notes and folders" });
+  const finder = page.getByRole("dialog", { name: "Hidden notes and islands" });
   await expect(finder).toBeVisible();
   await page.screenshot({ path: `test-results/screens/${p}-atlas-hidden.png` });
   await page.keyboard.type(`hid ${p}`);

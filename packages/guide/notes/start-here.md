@@ -12,7 +12,7 @@ This guide is a knowledge base like any other, and its subject is isorite. Read 
 ## The three panes
 
 - **The note**, open to read and write. This one is open there now.
-- **The Atlas**, the map of the notes: each folder a frame, each note a block, each line a link. It starts from [the Atlas](/atlas/the-atlas.md "uses").
+- **The Atlas**, the map of the notes: each island a frame, each note a block, each line a link. It starts from [the Atlas](/atlas/the-atlas.md "uses").
 - **Agent**, your agent's session: [Agent](/agent/agent.md "uses").
 
 Each pane's header has its switches: [the switches](/atlas/the-switches.md "uses") says what they are.

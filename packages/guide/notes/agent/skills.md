@@ -17,4 +17,4 @@ Skills come from three places, and a later one replaces an earlier one of the sa
 
 A skill that is missing its description, or is not readable, is skipped and listed with the reason. The Agent pane's settings list every skill with where it is from and a switch; one you switch off is not offered and not loaded. What is off is kept in the base.
 
-The agent reads a skill's other files through the skill, never from the disk: it can read what is in that folder and nothing outside it. Skills are for isorite's own agent; an agent you attach over MCP has its own.
+The agent reads a skill's other files through the skill, never from the disk: it can read what is in that folder and nothing outside it. You can read and edit your own skills as notes in [the skills base](/agent/the-skills-base.md "see also"). Skills are for isorite's own agent; an agent you attach over MCP has its own.

@@ -7,7 +7,7 @@ description: One isorite holds several bases at once; one lent to every session 
 
 A server can hold several bases at once. Each one you open (`isorite serve` or `mcp`) is listed, and the base's name before the first pane's name switches between them: one base to a tab, so two tabs show two side by side.
 
-A base can be **lent** to every session: [your agent](/terminal/your-own-agent.md "uses") may look in it as well as in the base the session is for, by naming it (`base: "memory"`, or a note as `memory:tools/opencode`), and write in it, its words [marked as its own](/agent/agent-writes-marked.md "uses"). Notes don't link from one base to another.
+A base can be **lent** to every session: [your agent](/terminal/your-own-agent.md "uses") may look in it as well as in the base the session is for, by naming it (`base: "memory"`, or a note as `memory:tools/opencode`), and write in it, its words [marked as its own](/agent/agent-writes-marked.md "uses"). A note links to another base's notes only through [the global base](/terminal/the-global-base.md "see also").
 
 `isorite memory` makes one such base: `~/isorite-memory`, a private git repository, lent to every session. It is the agent's memory across projects: how you like to work, your tools and how they are set up, what went wrong before. Its [AGENTS.md](/agent/agents-md.md "uses") says what to keep and how, and is yours to change.
 

@@ -5,15 +5,17 @@
 
 import { resolve } from "node:path";
 import type { Engine, Elsewhere } from "@isorite/engine";
-import { knownBases, lendBase, rememberBase, titleBase, type KnownBase } from "./config.ts";
+import { knownBases, lendBase, rememberBase, specialBases, titleBase, type KnownBase } from "./config.ts";
 
 /** A base as the switcher lists it. */
-export interface BaseView { name: string; path: string; lend: boolean; open: boolean; title: string }
+export interface BaseView { name: string; path: string; lend: boolean; open: boolean; title: string; /** The global base or the skills base: always listed, first. */ special?: "global" | "skills" }
 
 /** What a base's app is told of the others: the list, and, from this machine only, lending one, opening one by its
  *  folder (isorite mcp, for a server that holds another), and holding the server open. */
 export interface BasesPort {
   list(): BaseView[];
+  /** The bases lent to every session now: the lent ones, and the global and skills bases while they have notes. */
+  lent(): { name: string; about: string }[];
   lend(name: string, on: boolean): Promise<boolean>;
   /** Show a base by a title of its own (empty: by its name again). False where none has that name. */
   title(name: string, title: string): boolean;
@@ -33,34 +35,49 @@ export class Bases implements Elsewhere, BasesPort {
   readonly #open = new Map<string, Promise<Opened>>();
   readonly #ready = new Map<string, Opened>();
   readonly #about = new Map<string, string>();
+  /** How many notes each special base has of its own (the skills base's built-in ones are not counted): it is lent to the agent only when there are some. */
+  readonly #count = new Map<string, number>();
+  readonly #data: string;
   #holds = 0;
   readonly #idle: (() => void) | undefined;
 
   /** `make` opens a base; `idle` is called when the last hold is let go (a server isorite mcp started). */
-  constructor({ config, first, make, idle }: { config: string; first: string; make: (base: KnownBase) => Promise<Opened>; idle?: () => void }) {
+  constructor({ config, first, make, idle, data }: { config: string; first: string; make: (base: KnownBase) => Promise<Opened>; idle?: () => void; data: string }) {
     this.#config = config;
+    this.#data = data;
     this.first = first;
     this.#make = make;
     this.#idle = idle;
   }
 
-  /** The first base, and every lent one. */
+  /** The bases this server knows: the global base and the skills base first, then the ones in bases.toml (one that
+   *  has a special base's name or folder is left out: the special one stands). */
+  #known(): KnownBase[] {
+    const special = specialBases(this.#data);
+    return [...special, ...knownBases(this.#config).filter((b) => !special.some((s) => s.name === b.name || s.path === b.path))];
+  }
+
+  /** The first base, every special one, and every lent one. */
   async start(): Promise<void> {
     await this.get(this.first);
-    await Promise.all(knownBases(this.#config).filter((b) => b.lend).map((b) => this.get(b.name)?.catch((e: Error) => console.error(`isorite: ${b.name} (${b.path}) could not be opened: ${e.message}`))));
+    await Promise.all(this.#known().filter((b) => b.lend).map((b) => this.get(b.name)?.catch((e: Error) => console.error(`isorite: ${b.name} (${b.path}) could not be opened: ${e.message}`))));
   }
 
   /** A known base, opened if it is not yet; null where none has that name. */
   get(name: string): Promise<Opened> | null {
     const had = this.#open.get(name);
     if (had) return had;
-    const known = NAME.test(name) ? knownBases(this.#config).find((b) => b.name === name) : undefined;
+    const known = NAME.test(name) ? this.#known().find((b) => b.name === name) : undefined;
     if (!known) return null;
     const opening = this.#make(known).then(async (opened) => {
       this.#ready.set(name, opened);
-      this.#about.set(name, await opened.engine.about());
+      const keep = async (): Promise<void> => {
+        this.#about.set(name, await opened.engine.about());
+        if (known.special) this.#count.set(name, (await opened.engine.notes()).notes.filter((n) => !n.id.startsWith("built-in/")).length);
+      };
+      await keep();
       // What a base's AGENTS.md says of it is kept current for the others' briefs.
-      opened.engine.events((e) => { if (e.type === "note-changed") void opened.engine.about().then((a) => this.#about.set(name, a)); });
+      opened.engine.events((e) => { if (e.type === "note-changed") void keep(); });
       return opened;
     });
     opening.catch(() => this.#open.delete(name));
@@ -74,7 +91,8 @@ export class Bases implements Elsewhere, BasesPort {
   // ---------------------------------------------------------------- Elsewhere, for the engines
 
   lent(): { name: string; about: string }[] {
-    return knownBases(this.#config).filter((b) => b.lend && this.#ready.has(b.name)).map((b) => ({ name: b.name, about: this.#about.get(b.name) ?? "" }));
+    // A special base is lent while it has notes of its own: with none, the agent is told nothing of it and its tools take no more words.
+    return this.#known().filter((b) => b.lend && this.#ready.has(b.name) && (!b.special || (this.#count.get(b.name) ?? 0) > 0)).map((b) => ({ name: b.name, about: this.#about.get(b.name) ?? "" }));
   }
 
   base(name: string): Engine | null { return this.#ready.get(name)?.engine ?? null; }
@@ -82,10 +100,11 @@ export class Bases implements Elsewhere, BasesPort {
   // ---------------------------------------------------------------- BasesPort, for the apps
 
   list(): BaseView[] {
-    return knownBases(this.#config).map((b) => ({ name: b.name, path: b.path, lend: b.lend, open: this.#ready.has(b.name), title: b.title ?? b.name }));
+    return this.#known().map((b) => ({ name: b.name, path: b.path, lend: b.lend, open: this.#ready.has(b.name), title: b.title ?? b.name, ...(b.special ? { special: b.special } : {}) }));
   }
 
   async lend(name: string, on: boolean): Promise<boolean> {
+    if (specialBases(this.#data).some((b) => b.name === name)) return true; // always lent, while it has notes
     if (!lendBase(name, on, this.#config)) return false;
     if (on) await this.get(name);
     return true;
@@ -94,7 +113,8 @@ export class Bases implements Elsewhere, BasesPort {
   title(name: string, title: string): boolean { return titleBase(name, title, this.#config); }
 
   async open(path: string): Promise<{ name: string; first: boolean }> {
-    const name = rememberBase(resolve(path), { path: this.#config });
+    const special = specialBases(this.#data).find((b) => b.path === resolve(path));
+    const name = special?.name ?? rememberBase(resolve(path), { path: this.#config });
     await this.get(name);
     return { name, first: name === this.first };
   }

@@ -28,7 +28,7 @@ test("the switcher lists the bases; choosing one opens its page, with its own no
   await expect(switcher(page)).toHaveText("information-theory");
   await switcher(page).click();
   const list = page.getByRole("dialog", { name: "Knowledge bases" });
-  await expect(list.getByRole("link")).toHaveText(["memory", "elsewhere", "information-theory"]);
+  await expect(list.getByRole("link")).toHaveText(["Global", "Skills", "memory", "elsewhere", "information-theory"]);
   await expect(list.getByRole("link", { name: "information-theory" })).toHaveAttribute("aria-current", "page");
   await expect(list.getByRole("button", { name: "Lent to every session" }).first()).toHaveAttribute("aria-pressed", "true");
   await look(page, "bases-open");
@@ -48,7 +48,7 @@ test("the lent switch is kept, from this machine", async ({ page, request }) => 
   await expect(lend).toHaveAttribute("aria-pressed", "false");
   await lend.click();
   await expect(lend).toHaveAttribute("aria-pressed", "true");
-  expect(((await (await request.get("api/agent/base")).json()) as { lent: string[] }).lent).toEqual(["memory", "elsewhere"]);
+  expect(((await (await request.get("api/agent/base")).json()) as { lent: string[] }).lent).toEqual(["global", "skills", "memory", "elsewhere"]);
   await lend.click();
   await expect(lend).toHaveAttribute("aria-pressed", "false");
 });
@@ -86,7 +86,7 @@ test("a base is shown by a title of its own, and by its name again when the titl
   await list.getByRole("button", { name: "Rename elsewhere" }).click();
   await list.getByRole("textbox", { name: "A title for elsewhere" }).fill("Over there");
   await page.keyboard.press("Enter");
-  await expect(list.getByRole("link")).toHaveText(["memory", "Over there", "information-theory"]);
+  await expect(list.getByRole("link")).toHaveText(["Global", "Skills", "memory", "Over there", "information-theory"]);
   await page.reload();
   await switcher(page).click();
   await expect(page.getByRole("dialog", { name: "Knowledge bases" }).getByRole("link", { name: "Over there" })).toBeVisible();
@@ -94,5 +94,5 @@ test("a base is shown by a title of its own, and by its name again when the titl
   await page.getByRole("dialog", { name: "Knowledge bases" }).getByRole("button", { name: "Rename Over there" }).click();
   await page.getByRole("textbox", { name: "A title for elsewhere" }).fill("");
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("dialog", { name: "Knowledge bases" }).getByRole("link")).toHaveText(["memory", "elsewhere", "information-theory"]);
+  await expect(page.getByRole("dialog", { name: "Knowledge bases" }).getByRole("link")).toHaveText(["Global", "Skills", "memory", "elsewhere", "information-theory"]);
 });

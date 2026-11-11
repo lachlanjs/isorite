@@ -5,6 +5,7 @@
   import { ELSEWHERE, ELSEWHERE_TITLE, type ResolvedIsland } from "@isorite/core";
   import type { NoteSummary, SearchHit } from "@isorite/engine";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
+  import { skillText } from "$lib/make.ts";
   import FolderField from "$lib/components/FolderField.svelte";
   import { resolve } from "$app/paths";
   import { Gesture, type Item } from "$lib/gesture.svelte.ts";
@@ -152,7 +153,7 @@
       if (item.kind === "folder") {
         const n = app.listing.notes.filter((x) => x.dir === item.id || x.dir.startsWith(`${item.id}/`)).length;
         if (n) { said = `${item.id} holds ${n} ${n === 1 ? "note" : "notes"}: move or delete ${n === 1 ? "it" : "them"} first.`; return; }
-        asking = { item, empty: true, text: `Delete the empty folder ${item.id}?` };
+        asking = { item, empty: true, text: `Delete the empty island ${item.id}?` };
         return;
       }
       const map = await app.api.map();
@@ -192,7 +193,10 @@
   async function makeFolder(event: SubmitEvent) {
     event.preventDefault();
     try {
-      await app.api.makeFolder(path.trim().replace(/^\/+|\/+$/g, ""));
+      const made = path.trim().replace(/^\/+|\/+$/g, "");
+      // In the skills base an island is a skill: made with its SKILL.md.
+      if (app.session?.special === "skills") await app.api.createNote(`${made}/SKILL`, skillText(made.split("/").at(-1)!));
+      else await app.api.makeFolder(made);
       folding = false;
       path = "";
       said = "";
@@ -221,7 +225,7 @@
     <label class="hidden-label" for="filter">Find a note</label>
     <!-- svelte-ignore a11y_autofocus -->
     <input id="filter" class="field grow" type="search" placeholder="Find" bind:value={query} oninput={() => (typedAt = performance.now())} autocomplete="off" autofocus />
-    <button class="btn quiet icon-btn" type="button" onclick={() => (folding = !folding)} aria-expanded={folding} aria-label="New folder" title="New folder">
+    <button class="btn quiet icon-btn" type="button" onclick={() => (folding = !folding)} aria-expanded={folding} aria-label="New island" title="New island">
       <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M1.5 3.5h4.5l1.5 1.8h7v8.2h-13z" /><path d="M8 7.5v4M6 9.5h4" /></svg>
     </button>
     <button class="btn primary" type="button" data-tour="new-note" onclick={() => start()}>New note</button>
@@ -230,9 +234,9 @@
   {#if folding}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <form class="frame new" onsubmit={makeFolder} transition:growOpen onkeydown={(e) => { if (e.key === "Escape") folding = false; }}>
-      <span class="frame-title">new folder</span>
+      <span class="frame-title">new island</span>
       <!-- svelte-ignore a11y_autofocus -->
-      <input id="new-folder-path" class="field" bind:value={path} placeholder="geometry/surfaces" aria-label="The new folder's path" autocomplete="off" autofocus />
+      <input id="new-folder-path" class="field" bind:value={path} placeholder="geometry/surfaces" aria-label="The new island's path" autocomplete="off" autofocus />
       <div class="row"><button class="btn primary" type="submit" disabled={!path.trim()}>Create</button><button class="btn quiet" type="button" title="Esc" onclick={() => (folding = false)}>Cancel</button></div>
     </form>
   {/if}
@@ -245,8 +249,8 @@
       <label><span class="label">title</span>
         <!-- svelte-ignore a11y_autofocus -->
         <input class="field" bind:value={title} placeholder="Entropy" autocomplete="off" autofocus /></label>
-      <label for="new-folder"><span class="label">folder</span></label>
-      <FolderField id="new-folder" label="folder" bind:value={folder} placeholder="(top level)" />
+      <label for="new-folder"><span class="label">island</span></label>
+      <FolderField id="new-folder" label="island" bind:value={folder} placeholder="(top level)" />
       <p class="faint path">{id ? `${id}.md` : " "}</p>
       {#if problem}<p class="problem" role="alert">{problem}</p>{/if}
       <div class="row"><button class="btn primary" type="submit">Create</button><button class="btn quiet" type="button" title="Esc" onclick={() => (making = false)}>Cancel</button></div>
@@ -286,7 +290,7 @@
   {#each folders as [dir, notes] (dir)}
     {@const lands = landing(dir, notes)}
     <section data-dir={dir} style:margin-left="{dir ? (dir.split("/").length - 1) * 14 : 0}px" class:over={over === dir && dragged !== null} class:toplevel={!dir} animate:glide={{ duration: still() ? 0 : DUR_2 }}>
-      <h2 class="head" class:lifted={dragged === dir && dir !== ""} class:doomed={tagged("delete", dir)} class:sending={tagged("send", dir)} use:g.press={() => ({ kind: "folder", id: dir, title: dir })}>{#if renaming === dir && dir}<input class="field rename" aria-label="Rename the folder {dir}" bind:value={draft} use:focus onkeydown={(e) => { if (e.key === "Enter") void rename(dir); else if (e.key === "Escape") renaming = null; }} onblur={() => (renaming = null)} />{:else}<span class="label" ondblclick={() => { if (dir) { draft = last(dir); renaming = dir; } }} role="presentation">{dir || "top level"}</span>{/if}<span class="acts"><button class="act" type="button" onclick={() => start(dir)} aria-label={`New note in ${dir || "the top level"}`} title="New note here"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3v10M3 8h10" /></svg></button>{#if dir}<button class="act" type="button" onclick={() => { draft = last(dir); renaming = dir; }} aria-label={`Rename the folder ${dir}`} title="Rename"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M3 13l.6-2.8L11 2.8l2.2 2.2-7.4 7.4z" /></svg></button>{/if}{#if dir && !notes.length && !besides.some((f) => f.dir === dir || f.dir.startsWith(`${dir}/`))}<button class="act danger-text" type="button" onclick={() => void askRemove({ kind: "folder", id: dir, title: dir })} aria-label={`Delete the empty folder ${dir}`} title="Delete"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M7 7v4M9 7v4" /></svg></button>{/if}</span>{@render tags("folder", dir)}</h2>
+      <h2 class="head" class:lifted={dragged === dir && dir !== ""} class:doomed={tagged("delete", dir)} class:sending={tagged("send", dir)} use:g.press={() => ({ kind: "folder", id: dir, title: dir })}>{#if renaming === dir && dir}<input class="field rename" aria-label="Rename the island {dir}" bind:value={draft} use:focus onkeydown={(e) => { if (e.key === "Enter") void rename(dir); else if (e.key === "Escape") renaming = null; }} onblur={() => (renaming = null)} />{:else}<span class="label" ondblclick={() => { if (dir) { draft = last(dir); renaming = dir; } }} role="presentation">{dir || "top level"}</span>{/if}<span class="acts"><button class="act" type="button" onclick={() => start(dir)} aria-label={`New note in ${dir || "the top level"}`} title="New note here"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3v10M3 8h10" /></svg></button>{#if dir}<button class="act" type="button" onclick={() => { draft = last(dir); renaming = dir; }} aria-label={`Rename the island ${dir}`} title="Rename"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M3 13l.6-2.8L11 2.8l2.2 2.2-7.4 7.4z" /></svg></button>{/if}{#if dir && !notes.length && !besides.some((f) => f.dir === dir || f.dir.startsWith(`${dir}/`))}<button class="act danger-text" type="button" onclick={() => void askRemove({ kind: "folder", id: dir, title: dir })} aria-label={`Delete the empty island ${dir}`} title="Delete"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M7 7v4M9 7v4" /></svg></button>{/if}</span>{@render tags("folder", dir)}</h2>
       <ul>
         {#each notes as n, k (n.id)}
           <li data-row={n.id} class:lifted={dragged === n.id} class:doomed={tagged("delete", n.id)} class:sending={tagged("send", n.id)} use:g.press={() => ({ kind: "note", id: n.id, title: n.title })} animate:glide={{ duration: still() ? 0 : DUR_2 }} in:fadeIn={{ delay: 130, duration: still() ? 0 : DUR_2 }} out:foldAway={{ duration: still() ? 0 : DUR_2 }}>{#if lands?.at === k}<span class="landing" aria-hidden="true" transition:fadeIn={{ duration: 120 }}><span class="serif">{lands.title}</span></span>{/if}<a class="vein-row" class:on={n.id === panes.last} data-lustre draggable="false" href={noteHref(n.id)}><span class="titleline"><span class="serif title">{n.title}</span>{#if n.conflicted}<span class="conflict" role="img" aria-label="Merge conflict" title="Merge conflict">!</span>{/if}</span>{#if n.description}<span class="desc">{n.description}</span>{/if}</a><NoteMenu id={n.id} title={n.title} />{@render tags("note", n.id)}</li>

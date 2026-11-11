@@ -22,7 +22,7 @@ A file is not on the Atlas until a switch shows it: the Files switch for picture
 
 ## On the Atlas
 
-A file sits in its folder's region, as a note does, with its kind's glyph (code is the angle brackets). A link from a note to a file in the base joins them by a route. A link to a file outside the base is still a satellite.
+A file sits on its folder's island, as a note does, with its kind's glyph (code is the angle brackets). A link from a note to a file in the base joins them by a route. A link to a file outside the base is still a satellite.
 
 An image dropped on a note, or on the Atlas, is saved as a file item beside the note (`Engine.addImage`, `POST /api/image`): the kind is read from the bytes, the name is made safe and not taken, and it is journalled under its own path. See `docs/format.md`.
 

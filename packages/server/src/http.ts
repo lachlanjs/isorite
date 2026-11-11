@@ -288,7 +288,7 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   // draws its steps. It is a process on this machine, and asks as the page does: the Origin and the token.
   app.get("/api/agent/tools", (c) => answer(c, () => api.agentTools()));
   post("/api/agent/look", AgentLook, (_c, b) => api.agentLook(b));
-  app.get("/api/agent/base", (c) => answer(c, async () => ({ notes: notes ?? null, name: base ?? null, lent: (bases?.list() ?? []).filter((b) => b.lend && b.name !== base).map((b) => b.name) })));
+  app.get("/api/agent/base", (c) => answer(c, async () => ({ notes: notes ?? null, name: base ?? null, lent: (bases?.lent() ?? []).filter((b) => b.name !== base).map((b) => b.name) })));
   post("/api/agent/write", AgentChange, (_c, b) => api.agentWrite(b));
   post("/api/agent/send", z.object({ note: z.string().max(400), passage: z.string().max(10_000).optional(), said: z.string().max(4000) }).strict(), (_c, b) => api.agentSend(b));
   post("/api/agent/received", z.object({ id: z.string().max(64), agent: AgentName }).strict(), (_c, b) => api.agentReceived(b.id, b.agent));

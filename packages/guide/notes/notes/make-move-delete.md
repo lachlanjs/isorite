@@ -1,10 +1,10 @@
 ---
 type: Problem
 title: Make, move and delete a note
-tags: [notes, folders, practice]
-uses: [notes/folders]
+tags: [notes, islands, practice]
+uses: [notes/islands]
 ---
 
-On the Atlas, make a note, and give it a title. Move it into a folder of its own. Then delete it.
+On the Atlas, make a note, and give it a title. Move it into an island of its own. Then delete it.
 
-[Every change is kept](/notes/every-change-is-kept.md), so it can be found again in its folder's history.
+[Every change is kept](/notes/every-change-is-kept.md), so it can be found again in its island's history.

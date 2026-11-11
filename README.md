@@ -8,7 +8,7 @@ Your project's notes as a map, beside the agent you already use, which reads and
 ---
 
 - **Notes:** plain Markdown files in a folder you own. Every change is kept, with who made it, yours or an agent's.
-- **The Atlas:** your notes laid out as a map, with folders as regions and links as routes. What your agent reads lights up on it.
+- **The Atlas:** your notes laid out as a map, with folders as islands and links as routes. What your agent reads lights up on it.
 - **Agent:** the pane where isorite's own agent works, beside the notes and the Atlas: set it up with a model's key and ask it there. An agent you already use connects over MCP instead, in its own terminal. Either way it cites your notes in the sentence, asks questions back, and its words in your notes stay marked as its own.
 - **Your agent:** isorite's own agent, built in: with a model's key (OpenRouter, Anthropic, OpenAI and others) or your company's gateway, and nothing else to install. Or the agent you already use (Claude Code, Codex, Gemini CLI, Cursor, VS Code, OpenCode, omp): isorite gives it your notes over MCP.
 

@@ -63,6 +63,7 @@ export function embedFor(id: string, ids: Iterable<string>): string {
  *  (`#L40-L52` for lines), resolved against `repository` in `.isorite/settings.toml`. */
 export type Outward =
   | { kind: "web"; href: string; text: string }
+  | { kind: "global"; href: string; text: string; id: string }
   | { kind: "code"; href: string; text: string; path: string; line?: number; end?: number; symbol?: string; picture?: true };
 
 /** A code link's file and, after `#`, its lines (`L40-L52`) or the symbol it names (`leapfrog`, `Body.step`: a
@@ -76,12 +77,26 @@ export function codeTarget(href: string): { path: string; line?: number; end?: n
   return { path, ...(m[2] ? { line: Number(m[2]) } : {}), ...(m[3] ? { end: Number(m[3]) } : {}), ...(m[4] ? { symbol: m[4] } : {}) };
 }
 
+/** The note of the global base a link names, `global:conventions/naming.md` (an id is never written with a colon, so a
+ *  link in this form cannot be taken for a note of the base; docs/format.md): its id, or null when the link is not one,
+ *  or names a path with `..`, an empty part or a hidden one. */
+export function globalTarget(href: string): string | null {
+  const m = /^global:\/?([^#?]+)\.md(?:[#?].*)?$/i.exec(href.trim());
+  if (!m) return null;
+  const id = decodeURI(m[1]!);
+  return id.split("/").some((p) => !p || p.startsWith(".") || p.includes("\\")) ? null : id;
+}
+
+/** A link to a note of the global base, as it is written. */
+export const globalHref = (id: string): string => `global:${id}.md`;
+
 /** A note's links out of the base, in order, each once. */
 export function outwardLinks(body: string): Outward[] {
   const out: Outward[] = [], seen = new Set<string>();
   for (const { href, text: words } of linkTexts(body)) {
     if (seen.has(href)) continue;
     if (/^https?:\/\//i.test(href)) out.push({ kind: "web", href, text: words || href.replace(/^https?:\/\/(www\.)?/i, "") });
+    else if (globalTarget(href) !== null) { const id = globalTarget(href)!; out.push({ kind: "global", href, text: words || id.split("/").at(-1)!, id }); }
     else { const c = codeTarget(href); if (!c) continue; out.push({ kind: "code", href, text: words || c.path.split("/").at(-1)!, ...c }); }
     seen.add(href);
   }

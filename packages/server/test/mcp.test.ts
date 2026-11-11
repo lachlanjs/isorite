@@ -21,7 +21,7 @@ async function freePort(): Promise<number> {
 test("isorite mcp: the base's tools over stdio, each look-up a step on the Atlas, the turn ended when quiet", async () => {
   const base = await writeExample(join(root, "base"));
   const port = await freePort(), input = new PassThrough(), output = new PassThrough();
-  const env = { ...process.env, XDG_CONFIG_HOME: join(root, "config"), XDG_CACHE_HOME: join(root, "cache"), ISORITE_EMBED: "off" };
+  const env = { ...process.env, XDG_CONFIG_HOME: join(root, "config"), XDG_CACHE_HOME: join(root, "cache"), XDG_DATA_HOME: join(root, "data"), ISORITE_EMBED: "off" };
   const done = mcp(base.notes, { port, agent: "claude-code", quiet: 300, input, output, env });
 
   type Reply = { id: number; result?: Record<string, unknown>; error?: { code: number } };

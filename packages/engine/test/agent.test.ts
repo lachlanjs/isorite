@@ -79,7 +79,7 @@ test("an agent builds an artifact (M23, an agent's since M25): a recipe, the dat
 test("the brief names the base, its folders and how many notes each holds, and is no step on the map", async () => {
   const { engine, events } = await open();
   const { text } = await engine.agentLook({ agent: "opencode", session: "s1", tool: "brief_base", args: {} });
-  expect(text).toContain("information-theory: a knowledge base of 3 notes in 2 folders");
+  expect(text).toContain("information-theory: a knowledge base of 3 notes in 2 islands");
   expect(text).toContain("- basics (2)");
   expect(text).toContain("- codes (1)");
   expect(events).toEqual([]);

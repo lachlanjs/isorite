@@ -11,6 +11,7 @@ import katex from "katex";
 import DOMPurify from "dompurify";
 import { rating } from "@isorite/core";
 import { highlighted } from "./code.ts";
+import { globalPage } from "./here.ts";
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true })
   .use(texmath, { engine: katex, delimiters: ["dollars", "brackets"], katexOptions: { throwOnError: false } });
@@ -40,6 +41,8 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const web = /^https?:/i.test(href), kind = rating(token.attrGet("title"));
   token.attrSet("class", `vein ${web ? "web" : kind === "requires" ? "requires" : kind === "see also" ? "also" : "uses"}`);
   if (web) { token.attrSet("target", "_blank"); token.attrSet("rel", "noopener"); }
+  // A link to the global base opens that base's page at the note.
+  else if (/^global:/i.test(href)) token.attrSet("href", globalPage(href));
   else if (href.startsWith("/") && /\.md(#.*)?$/.test(href)) token.attrSet("href", "#/n" + href.replace(/\.md(#.*)?$/, ""));
   return linkOpen(tokens, idx, options, env, self);
 };

@@ -27,7 +27,7 @@ export { GITATTRIBUTES, HIDDEN_FILE, OWN_DIR, OWN_FORMAT, SETTINGS_FILE, journal
 export type { Settings as BaseSettings } from "./own.ts";
 export { CONFIG_FILE, STUDY_DIR, STUDY_FORMAT, StudyError, parseStudyConfig } from "./study.ts";
 export { isFileRef, mapModel, reach } from "./map.ts";
-export { ABOUT, DONE, codeTarget, doneOf, embedFor, embedRefs, idsOf, kindOf, outwardLinks } from "./kinds.ts";
+export { ABOUT, DONE, codeTarget, doneOf, globalHref, globalTarget, embedFor, embedRefs, idsOf, kindOf, outwardLinks } from "./kinds.ts";
 export type { Kind, Outward } from "./kinds.ts";
 export { findSymbol, hasSymbols } from "./symbol.ts";
 export type { SymbolSpan } from "./symbol.ts";

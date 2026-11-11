@@ -111,7 +111,26 @@ The proof never says.
 | What | Where (desktop) | Why not in a repository |
 |---|---|---|
 | this device's id, the bases it knows | `~/.config/isorite/config.toml`, `bases.toml` beside it | one per device |
+| the global base, the skills base | `~/.local/share/isorite/global/`, `~/.local/share/isorite/skills/` | they belong to the person, not to one base |
 | vectors for search by meaning | `~/.cache/isorite/vectors-<hash of the notes' folder>.json` | a cache, rebuilt from the notes |
 | the embedding model | `packages/server/models/`, fetched by `npm run model` and checked against its SHA-256 | 34 MB |
 
 `config.toml` holds the device's id (`device = "91d4235f"`) and, for isorite's own agent, its provider and key (readable by the user only); see `docs/setup.md`.
+
+## 6. The global base and the skills base
+
+Two bases isorite keeps beside a person's own, in its data folder (`$XDG_DATA_HOME/isorite/`, `~/.local/share/isorite/` by default). They are always known, listed first in the switcher, named `global` and `skills` (an ordinary base is never given those names), and never written to `bases.toml`. Each is an ordinary base on disk, with its own `.isorite/` and journal.
+
+**The global base** is `global/`, made with an `AGENTS.md` on the first run: knowledge that holds across bases (conventions, a glossary, people). A person's own `AGENTS.md` there is never overwritten.
+
+A note in any base links to its notes as `[naming](global:conventions/naming.md "see also")`: the scheme `global:`, then the note's id with `.md`. A leading `/` is allowed, a `#anchor` is kept, `..`, an empty part and a hidden part are refused. The form was chosen for three reasons.
+
+- It is plain Markdown, and a link to a place outside the base, as `code:` already is (§1): another reader sees a link with an address it cannot follow, and nothing is lost. A path such as `/@global/x.md` would read as a note of this base that is missing.
+- It cannot collide. A note's id never holds a colon (`checkNoteId`), so `global:x.md` is never a note of the base; and the Atlas's refs that begin with `@` (a draft, a prospect) are untouched. It is also how an agent already names a note of another base, `global:conventions/naming`.
+- It is checkable without the base's own files: `isorite check` reads the global folder on this machine and warns `broken link to the global base: <id>` for each link whose note is not there. The check never makes the folder.
+
+A link of this form is not a link between notes of the base: the reader gives it no route and no broken-link issue, the engine reports it among a note's links out (kind `global`), and the Atlas draws it as a mark beside the note whatever the switches say, dashed and rose when the global base has no such note. Pressed, it opens the global base's page at that note, in the same tab (a base is a page of its own, so there is no second view to keep in step). Renaming or moving a global note rewrites links to it in the global base only; links from other bases are left, and `check` finds the ones that no longer reach a note.
+
+**The skills base** is `skills/`, the per-user skills folder (the guide's note on skills), opened as notes. A skill is a folder and so an island; its `SKILL.md` is a note. It has `name` and `description` in its frontmatter and no `type`, so a file named `SKILL.md` with a `name` is read as a note of the type `Skill`, titled by its `name` (a `title` of its own wins), with its `description` as the note's description, in any base. Scripts and other files are file items (`docs/files.md`); the app shows code and files in this base from the first. The skills isorite ships appear in a folder `built-in/`, read only: a write there is refused with a 403. Skills are read again at each prompt, so editing a `SKILL.md` changes what the agent loads. A new skill made from the Atlas or the note list is a folder with a `SKILL.md` template.
+
+**The agent** sees both through the lending the memory already uses: `brief_base` names a lent base in one line (the first line of its `AGENTS.md`) and every tool takes `base: "global"` or `base: "skills"`, or a note named `global:<id>`. A special base is lent only while it has notes of its own (the built-in skills do not count), so with nothing in it the brief and the tools say nothing more than before. Writes go through the same route as any base's, signed `agent:<name>` with what was asked, into the journal of the base written to.

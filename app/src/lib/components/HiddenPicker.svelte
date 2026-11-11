@@ -50,7 +50,7 @@
 
 <svelte:window onpointerdown={(e) => { if (!(e.target instanceof Element && e.target.closest(".hidden-picker"))) onclose(); }} />
 
-<div class="hidden-picker frame" role="dialog" aria-label="Hidden notes and folders" style="left:{left}px;top:{top}px" onkeydown={key} tabindex="-1">
+<div class="hidden-picker frame" role="dialog" aria-label="Hidden notes and islands" style="left:{left}px;top:{top}px" onkeydown={key} tabindex="-1">
   <input bind:this={input} bind:value={query} type="search" class="field" placeholder="find something hidden" autocomplete="off" aria-label="Find something hidden" />
   {#if rows.length}
     <ul role="listbox" aria-label="Hidden">

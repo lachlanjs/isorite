@@ -33,6 +33,9 @@
   $effect(() => { if (page.route.id === "/n/[...id]" && page.params.id) { const id = page.params.id; panes.setLast(id); untrack(() => panes.visit(id)); } });
   // The notes open over a note close when a note is chosen from them.
   $effect(() => { void page.url.href; panes.tree = false; });
+  // The skills base shows its scripts and other files from the first (they are what a skill is made of): switched on
+  // for this page only, as the person's own choice of switches is kept for their bases.
+  $effect(() => { if (app.session?.special === "skills") untrack(() => { panes.on.code = true; panes.on.pictures = true; }); });
   onMount(states);
   onMount(() => {
     const media = matchMedia("(max-width: 760px)");
@@ -197,7 +200,7 @@
                 {/if}
                 {#if app.lenses.length}
                   <select class="lens" class:on={app.lensName !== "folders"} data-lens-picker aria-label="Lens" title="Lens: how the map groups the notes" value={app.lensName} onchange={(e) => void app.setLens(e.currentTarget.value)}>
-                    <option value="folders">Folders</option>
+                    <option value="folders">Islands</option>
                     {#each app.lenses as l (l.name)}<option value={l.name}>{l.title}</option>{/each}
                   </select>
                 {/if}
@@ -257,7 +260,7 @@
 <style>
   .says { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 5.5em; font-size: 0.75rem; color: var(--text-soft); flex: 0 1 auto; }
   @media (max-width: 760px) { .says { flex: none; } }
-  /* The lens picker: quiet while the folders are shown; on, a tint and a 2px bar (docs/taste.md). */
+  /* The lens picker: quiet while the islands are shown; on, a tint and a 2px bar (docs/taste.md). */
   .lens { height: 28px; max-width: 11em; min-width: 0; padding: 0 8px; font: inherit; font-size: 0.75rem; color: var(--text-soft); background: transparent; border: 0; box-shadow: inset 2px 0 0 transparent; cursor: pointer; flex: 0 1 auto; transition: background var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
   .lens:hover, .lens:focus-visible { color: var(--text); }
   .lens.on { color: var(--text); background: color-mix(in srgb, var(--lattice) 14%, transparent); box-shadow: inset 2px 0 0 var(--lattice); }
