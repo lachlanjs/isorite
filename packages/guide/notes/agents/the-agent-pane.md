@@ -13,6 +13,8 @@ Ask in the box at the foot of the pane. Notes you give it stand in your message 
 
 **What it has in hand.** The gauge in the header shows how full its context is. Click it for the Context view, a column in layers: isorite's instructions and tools, the notes, the conversation, and the room left. On the Atlas, the context switch marks what the session gave, read and changed.
 
+**Making room.** When the session nears the model's window, the agent summarises the earlier turns before the next prompt and keeps the recent ones as they were. Type `/compact` to do it now; words after it say what the summary should keep (`/compact keep the decisions about units`). The session then has a line saying it was compacted and how many tokens it freed, with the summary folded under it, and the gauge drops. It is a command of the pane, so it wins over a skill named compact. An agent of your own, over MCP, keeps its own context.
+
 **What it does.** It may change your notes, and [its words are marked](/editing/every-change-is-kept.md "see also"). It builds [artifacts](/agents/artifacts.md "see also"). How it should work in your base is [AGENTS.md](/agents/agents-md.md "see also"); what it does on request is [skills](/agents/skills.md "see also"). What it may do in the project around the base is set by the [switches](/general/the-switches.md "see also").
 
 **How it reads you.** isorite keeps no score of you apart from your notes. The agent reads where you stand from your words, your [questions and problems](/atlas/questions-and-problems.md "see also") open and solved, and asks before it explains. Where your understanding stops, it offers a question to keep or a problem to try. It checks a problem's solution rather than solving it.

@@ -18,7 +18,7 @@
 //   cite <link>                 cite the link in the reply: [cited](<link>)
 //   draw                        reply with a diagram and a code block
 //   long                        reply at length, a few paragraphs
-//   say <words>                 reply with these words
+//   say <words>                 reply with these words (a written \n in them is a newline)
 //   fail <message>              end the turn with the model failing so (a rate limit, a missing key)
 // The reply cites the first note read, in isorite's link form. When the prompt came with images, it says so ("Saw 1 image: image/png, 68 bytes."), which
 // is how a test knows they reached the model. `scripted/scripted-text` is the same model without sight: it takes no images.
@@ -68,7 +68,7 @@ export function parse(text: string): Script {
 
 /** The reply once every step is made. */
 export function reply(s: Script): string {
-  if (s.say) return s.say;
+  if (s.say) return s.say.replaceAll("\\n", "\n");
   const cite = s.read[0] ? `[as the note says](/${s.read[0].replace(/^\/+|\.md$/g, "")}.md)` : "with no note";
   return `Done, ${cite}${s.cite.map((c) => `, [cited](${c})`).join("")}.${s.seen.length ? ` Saw ${s.seen.length === 1 ? "1 image" : `${s.seen.length} images`}: ${s.seen.join("; ")}.` : ""}${s.long ? `\n\n${LONG}` : ""}${s.draw ? `\n\n${DRAWN}` : ""}`;
 }
@@ -98,8 +98,11 @@ export function scriptedModel(id: string = SCRIPTED): { chosen: ReturnType<Retur
     while (at >= 0 && messages[at]!.role !== "user") at--;
     const said = at >= 0 ? textOf(messages[at]!.content) : "";
     const k = messages.slice(at + 1).filter((m) => m.role === "assistant").length;
-    // A summary asked for (compaction): a line will do.
-    if (/summar/i.test(said) && /<conversation>|earlier part/i.test(said)) return fauxAssistantMessage([fauxText("Earlier, they asked about the notes.")]);
+    // A summary asked for (compaction): a line will do, with the focus the person gave (`/compact <words>`) after it.
+    if (/summar/i.test(said) && /<conversation>|earlier part/i.test(said)) {
+      const focus = /\n\nAdditional focus: ([^]*)$/.exec(said)?.[1]?.trim();
+      return fauxAssistantMessage([fauxText(`Earlier, they asked about the notes.${focus ? ` Kept: ${focus}` : ""}`)]);
+    }
     const s = parse(said);
     // The images the person's message came with: what the model was sent of them (a type, and the bytes' size).
     const sent = at >= 0 && Array.isArray(messages[at]!.content) ? (messages[at]!.content as { type?: string; mimeType?: string; data?: string }[]).filter((b) => b?.type === "image") : [];

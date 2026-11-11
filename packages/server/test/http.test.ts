@@ -211,6 +211,11 @@ test("a file is given from the notes (M23; pictures in M22), a picture from the 
   writeFileSync(join(notes, "basics", "fig.html"), "<p>fig</p>");
   const fig = await fetch(url + "/api/file?path=basics/fig.html");
   expect([fig.status, fig.headers.get("content-type"), fig.headers.get("content-security-policy")?.startsWith("sandbox"), await fig.text()]).toEqual([200, "text/html", true, "<p>fig</p>"]);
+  // A PDF is given inline and unsandboxed, so the Note pane can frame it in the browser's own viewer.
+  writeFileSync(join(notes, "basics", "paper.pdf"), "%PDF-1.4\n%%EOF\n");
+  const pdf = await fetch(url + "/api/file?path=basics/paper.pdf");
+  expect([pdf.status, pdf.headers.get("content-type"), pdf.headers.get("content-disposition"), pdf.headers.get("content-security-policy"), pdf.headers.get("x-content-type-options")])
+    .toEqual([200, "application/pdf", `inline; filename="paper.pdf"; filename*=UTF-8''paper.pdf`, null, "nosniff"]);
   // Code in the notes is given as text, sandboxed too, and what is listed leaves out dependencies and the .gitignore's (docs/files.md).
   mkdirSync(join(notes, "src"), { recursive: true });
   mkdirSync(join(notes, "node_modules", "x"), { recursive: true });

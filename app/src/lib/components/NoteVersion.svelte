@@ -46,7 +46,8 @@
 <div class="version">
   {#if parts.title && parts.title !== now}<h1 class="serif title">{parts.title}</h1>{/if}
   {#if asked !== undefined}<p class="asked"><i class="dia" aria-hidden="true"></i><span>{asked}</span></p>{/if}
-  <div class="text" bind:this={host}></div>
+  <!-- Its words can be chosen and pointed to as the note's own are: where they are now, they are found again when sent. -->
+  <div class="text" bind:this={host} data-point="note:{id}" data-line-offset={parts.lines}></div>
 </div>
 
 <style>

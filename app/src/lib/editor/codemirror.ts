@@ -68,7 +68,10 @@ const theme = EditorView.theme({
   "&": { color: "var(--text)", backgroundColor: "transparent", fontSize: "1rem" },
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": { overflow: "visible" },
-  ".cm-content": { padding: "12px 0 40vh", caretColor: "var(--lattice)", overflowWrap: "anywhere" },
+  // `minWidth: 0`: the content is a flex item of the scroller, and by default no narrower than its widest unbreakable
+  // block (a wide table, an equation, a diagram), which pushed the whole note wider than its pane and stopped its text
+  // wrapping. At the pane's width, those blocks scroll inside their own boxes instead (blocks.ts, app.css).
+  ".cm-content": { padding: "12px 0 40vh", caretColor: "var(--lattice)", overflowWrap: "anywhere", minWidth: "0" },
   ".cm-line": { padding: "0 2px" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--lattice)", borderLeftWidth: "2px" },
   // The selection, clearly visible on both grounds. Dimmer when not focused.

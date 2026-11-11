@@ -117,7 +117,8 @@
   }
   // While a version is shown: ← and → step through the moments, Escape goes back to now.
   function keys(e: KeyboardEvent) {
-    if (!at || e.altKey || e.ctrlKey || e.metaKey) return;
+    // With Shift the arrows extend a selection of the old text, which its tags can point to.
+    if (!at || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) return;
     if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); step(-1); }
     else if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); step(1); }

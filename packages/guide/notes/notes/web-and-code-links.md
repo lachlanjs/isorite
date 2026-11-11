@@ -11,6 +11,6 @@ A code link can name a function, method or class instead of lines, `[the step](c
 
 Code links are read against the project's folder, set in the base's `.isorite/settings.toml` (`repository = "../code"`). A link to a file or symbol no longer there is struck through, and the agent is told once.
 
-On the Atlas, the web and code switches show them beside the notes that hold them. A code file in the base itself is not a link out but an item in its island: see [the switches](/general/the-switches.md "see also").
+On the Atlas, the web and code switches show them beside the notes that hold them; click a code link there to read its file in the Note pane. A code file in the base itself is not a link out but an item in its island: one click opens its source in the Note pane, read only, its lines numbered and coloured. Select some of it and its tags point to it or copy it, as in a note. See [the switches](/general/the-switches.md "see also").
 
 They are [links](/notes/links-and-their-kinds.md "requires") with no kind: they say where to look, not what rests on what.

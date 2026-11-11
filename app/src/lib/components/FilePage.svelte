@@ -6,9 +6,12 @@
   import { citeKind, MAX_TEXT_BYTES, type FileKind } from "@isorite/core";
   import { describeShape, format, parseData, shapeOf, type Row, type Shape } from "@isorite/kit";
   import { app, noteHref } from "$lib/app.svelte.ts";
+  import type { Api } from "@isorite/engine";
+  import type { FileUrls } from "$lib/api.ts";
   import { dataOf, documentOf, groundNow, loadArtifact, modelArtifact, within } from "$lib/artifact.ts";
   import { KIND_NAMES } from "$lib/glyphs.ts";
   import ArtifactFrame from "./ArtifactFrame.svelte";
+  import CodeLines from "./CodeLines.svelte";
   import Glyph from "./Glyph.svelte";
 
   let { path }: { path: string } = $props();
@@ -16,7 +19,7 @@
   const kind = $derived<FileKind>(citeKind(path) ?? "misc");
   const name = $derived(path.split("/").at(-1) ?? path);
   const folder = $derived(path.split("/").slice(0, -1));
-  const MODEL = /\.(glb|gltf|stl|obj)$/i, READABLE = /\.(csv|tsv|json|jsonl|ndjson)$/i;
+  const MODEL = /\.(glb|gltf|stl|obj)$/i, PDF = /\.pdf$/i, READABLE = /\.(csv|tsv|json|jsonl|ndjson)$/i;
 
   let problem = $state("");
   let loaded = $state.raw<{ html: string; title: string; description: string; uses: string[] } | null>(null);
@@ -39,6 +42,10 @@
         return;
       }
       if (MODEL.test(p)) { loaded = { html: modelArtifact(p.split("/").at(-1)!), title: p.split("/").at(-1)!, description: "", uses: [p.split("/").at(-1)!] }; return; }
+      // A PDF is framed from the server's file route, for the browser's own viewer: not fetched into a blob first,
+      // which some browsers will not show in a frame (they download it or open a tab instead). The guide's site has no
+      // server, so there it is the bytes.
+      if (PDF.test(p) && "fileUrl" in app.api) { bytes = { size: -1, type: "application/pdf", url: (app.api as Api & FileUrls).fileUrl(p) }; return; }
       const got = await app.api.file(p);
       if (!got) throw new Error(`no file at ${p}`);
       if (k === "image" || got.type === "application/pdf") url = URL.createObjectURL(new Blob([got.bytes as Uint8Array<ArrayBuffer>], { type: got.type }));
@@ -80,7 +87,8 @@
       {#if kind === "artifact" && loaded?.uses.length}
         <span class="uses">uses {#each loaded.uses as u (u)}{@const href = dataHref(u)}{#if href}<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves --><a class="br" {href}>{u}</a>{:else}<span class="br">{u}</span>{/if} {/each}</span>
       {/if}
-      {#if bytes}<span class="faint">{size(bytes.size)}</span>{/if}
+      {#if bytes && bytes.size >= 0}<span class="faint">{size(bytes.size)}</span>{/if}
+      {#if bytes?.type === "application/pdf" && bytes.url}<a class="tab" href={bytes.url} target="_blank" rel="noopener">open in a new tab</a>{/if}
       {#if kind === "artifact"}
         <span class="tools">
           <span class="seg" role="radiogroup" aria-label="look">
@@ -102,7 +110,9 @@
   {:else if bytes?.type === "application/pdf" && bytes.url}
     <iframe class="pdf" src={bytes.url} title={name}></iframe>
   {:else if source !== null}
-    <pre class="source" data-source><code>{source}</code></pre>
+    <!-- Its lines numbered and coloured, as the code reader shows a file of the repository; a selection's tags point to
+         it by its path in the base, as the agent's tools name it. -->
+    <CodeLines text={source} {path} point="code:/{path}" />
   {:else if table}
     <pre class="shape">{describeShape({ ...table.shape, head: [] }).split("\nFirst rows:")[0]}</pre>
     <div class="rows">
@@ -138,8 +148,9 @@
   .errors { margin: 0; padding: 0; list-style: none; font-size: 0.75rem; color: var(--rose); }
   .problem { color: var(--rose); }
   .picture { max-width: 100%; height: auto; align-self: flex-start; }
-  .pdf { width: 100%; height: 80vh; border: 1px solid var(--line); }
-  .source { margin: 0; padding: var(--space-3) var(--space-4); overflow: auto; max-height: 75vh; border: 1px solid var(--line); font: 0.8125rem/1.25rem var(--font-mono); color: var(--text); tab-size: 2; }
+  .pdf { display: block; width: 100%; height: 80vh; border: 1px solid var(--line); background: var(--ground-1); }
+  .tab { margin-left: auto; color: var(--text-soft); text-decoration: none; border-bottom: 1px solid var(--line-strong); }
+  .tab:hover, .tab:focus-visible { color: var(--text); border-bottom-color: var(--lattice); }
   .shape { margin: 0; font: 0.75rem/1.125rem var(--font-ui); color: var(--text-soft); white-space: pre-wrap; }
   .rows { overflow-x: auto; }
   table { border-collapse: collapse; font: 0.75rem/1.125rem var(--font-ui); font-variant-numeric: tabular-nums; }

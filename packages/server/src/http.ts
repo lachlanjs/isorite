@@ -202,7 +202,12 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     }
     if (!found) return refuse(c, 404, `no file at ${path}`);
     const etag = `"${found.version}"`;
-    const headers = { "Content-Type": found.type, "Cache-Control": "no-cache", ETag: etag, "X-Content-Type-Options": "nosniff", "Content-Security-Policy": PICTURE_CSP };
+    // A PDF is shown in the Note pane by the browser's own viewer, framed from here, which a sandbox (or object-src
+    // 'none') stops in Chrome; given as application/pdf with nosniff, it cannot run as a page of this origin anyway.
+    const pdf = found.type === "application/pdf";
+    const name = (path.split("/").at(-1) ?? "file.pdf").replace(/["\\\r\n]/g, "_");
+    const headers: Record<string, string> = { "Content-Type": found.type, "Cache-Control": "no-cache", ETag: etag, "X-Content-Type-Options": "nosniff",
+      ...(pdf ? { "Content-Disposition": `inline; filename="${name.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(name)}` } : { "Content-Security-Policy": PICTURE_CSP }) };
     if (c.req.header("if-none-match") === etag) return c.body(null, 304, headers);
     return c.body(found.bytes as Uint8Array<ArrayBuffer>, 200, headers);
   });

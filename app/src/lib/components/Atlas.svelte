@@ -8,7 +8,7 @@
   import type { How, MapReport } from "@isorite/engine";
   import { skillText, untitled } from "$lib/make.ts";
   import { tick, untrack } from "svelte";
-  import { app, noteHref } from "$lib/app.svelte.ts";
+  import { app, codeHref, noteHref } from "$lib/app.svelte.ts";
   import { pictureSrc } from "$lib/pictures.ts";
   import { globalPage } from "$lib/here.ts";
   import { dirOf, keep, linkTo, refused } from "$lib/images.ts";
@@ -874,8 +874,8 @@
     if (ref.startsWith("?")) { panes.to("agent"); return; }
     // Shift+click gives a note to the agent, or takes it back, with the agent's context shown or not (M14).
     if (e.shiftKey) { if (!ref.startsWith("@")) giveOrTake(ref); return; }
-    // Chosen already: open it, beside the Atlas on a desktop (V1).
-    if (chosen === ref) { void panes.open(opens(ref)); return; }
+    // Chosen already: open it, beside the Atlas on a desktop (V1). A code file has no routes to light: it opens at once.
+    if (chosen === ref || report?.files?.[ref]?.kind === "code") { void panes.open(opens(ref)); return; }
     const back: string[] = [];
     if (lit && at === chosen && lit.depth[ref]) for (let r: string | undefined = ref; r && r !== chosen; r = lit.via[r]) back.unshift(r);
     walk = walk.includes(ref) ? walk.slice(0, walk.indexOf(ref) + 1) : back.length ? [...walk, ...back] : [ref];
@@ -1006,8 +1006,14 @@
           <a class="sat picture" class:broken={s.broken} href={noteHref(s.note)} title={`${s.text} · ${s.picture!.from === "code" ? "code:" : ""}${s.picture!.path}${s.broken ? (s.picture!.from === "code" ? " · not in the repository" : " · not in the notes") : ""}`} aria-label={`${s.text}${s.broken ? ", missing" : ""}`} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}" onclick={(e) => { if (dragged) e.preventDefault(); e.stopPropagation(); }}>
             {#if s.broken}<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="10" /><path d="M2.5 11l3.5-3.5 3 3 1.5-1.5 3 3" /></svg>{:else}<img alt="" loading="lazy" draggable="false" use:thumb={s.picture!} />{/if}</a>
         {:else}
-          <span class="sat code" class:broken={s.broken} role="img" title={`${s.text} · ${s.href.slice(5)}${s.broken ? " · not in the repository" : ""}`} aria-label={`${s.text}${s.broken ? ", not in the repository" : ""}`} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5M9 3l-2 10" /></svg></span>
+          {#snippet brackets()}<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5M9 3l-2 10" /></svg>{/snippet}
+          <!-- A code link into the repository (M12) opens its file in the code reader, in the Note pane; one not there only says so. -->
+          {#if s.broken}
+            <span class="sat code broken" role="img" title={`${s.text} · ${s.href.slice(5)} · not in the repository`} aria-label={`${s.text}, not in the repository`} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}">{@render brackets()}</span>
+          {:else}
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- codeHref resolves -->
+            <a class="sat code" href={codeHref(s.href)} title={`${s.text} · ${s.href.slice(5)}`} aria-label={`${s.text}, in the repository`} data-sat={s.key} style="--x:{s.gx};--y:{s.gy}" onclick={(e) => { e.stopPropagation(); if (dragged) { e.preventDefault(); return; } panes.to("note"); }}>{@render brackets()}</a>
+          {/if}
         {/if}
       {/each}
       </div>
@@ -1082,7 +1088,7 @@
   /* A link out of the base (M12): a small block beside its note, in the map's units. */
   .sat { position: absolute; left: calc(var(--x) * var(--u)); top: calc(var(--y) * var(--u)); width: calc(3 * var(--u)); height: calc(3 * var(--u)); display: grid; place-items: center; background: var(--ground-1); border: var(--px) solid var(--line-strong); color: var(--lattice); }
   .sat svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
-  .sat.web:hover, .sat.web:focus-visible, .sat.global:hover, .sat.global:focus-visible, .sat.picture:hover, .sat.picture:focus-visible { border-color: var(--lattice); }
+  .sat.web:hover, .sat.web:focus-visible, .sat.global:hover, .sat.global:focus-visible, .sat.picture:hover, .sat.picture:focus-visible, .sat.code:hover, .sat.code:focus-visible { border-color: var(--lattice); }
   .sat.picture { overflow: hidden; }
   .sat.more { font: 600 0.75rem var(--font-ui); color: var(--text-soft); cursor: pointer; padding: 0; }
   .sat.more:hover, .sat.more:focus-visible { color: var(--text); border-color: var(--lattice); }

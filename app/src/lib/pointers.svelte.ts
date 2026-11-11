@@ -38,6 +38,8 @@ class Pointers {
   /** Pressed, not carried: what it points to is shown (a note opens where the pointer was taken, the Atlas follows it). */
   async open(p: Pointer): Promise<void> {
     if (p.kind === "note") await panes.open(p.ref, true);
+    // A code file of the base is named by its path in the base ("/src/a.py"), one of the repository without the slash.
+    else if (p.kind === "code" && p.ref.startsWith("/")) await panes.open(p.ref.slice(1), true);
     else if (p.kind === "code") { await goto(codeHref(p.ref)); if (panes.narrow) panes.to("note"); }
     else if (p.kind === "folder") pointing.set("agent", { id: p.ref, folder: true, who: "you" });
   }
@@ -55,6 +57,7 @@ class Pointers {
       try {
         let file = "";
         if (p.kind === "note") file = (await app.api.readNote(p.ref)).text;
+        else if (p.kind === "code" && p.ref.startsWith("/")) { const got = await app.api.file(p.ref.slice(1)); if (got) file = new TextDecoder().decode(got.bytes); }
         else if (p.kind === "code") { const slice = await app.api.code(`code:${p.ref}`, true); if (slice.state === "ok") file = slice.text; }
         this.#all.set(p.id, relocate(file, p));
       } catch { /* the file is not to be read now: its lines are as they were */ }

@@ -386,9 +386,10 @@
     <!-- What the model reasoned (M36): folded, since it is its working and not its answer. -->
     <details class="think"><summary><span class="caret" aria-hidden="true"></span>{live ? "Thinking…" : "Thought"}</summary><p>{i.text}</p></details>
   {:else if i.kind === "compaction"}
-    <!-- The earlier conversation shortened so the session fits the model (M36). -->
-    <details class="squeeze" data-state={i.state}>
-      <summary><span class="caret" aria-hidden="true"></span>{#if i.state === "running"}Compacting…{:else if i.state === "failed"}Could not compact{i.error ? ` (${i.error})` : ""}; carrying on with all of it{:else}Compacted {tokens(i.before)} → {tokens(i.after ?? 0)}{/if}</summary>
+    <!-- The earlier conversation shortened so the session fits the model (M36), or because the person asked (/compact). -->
+    {@const freed = Math.max(0, i.before - (i.after ?? i.before))}
+    <details class="squeeze" data-state={i.state} data-asked={i.asked ? "" : undefined}>
+      <summary><span class="caret" aria-hidden="true"></span>{#if i.state === "running"}Compacting…{:else if i.state === "failed"}Could not compact{i.error ? ` (${i.error})` : ""}; carrying on with all of it{:else}Compacted {tokens(i.before)} → {tokens(i.after ?? 0)} tokens{freed ? `, ${tokens(freed)} freed` : ""}{/if}</summary>
       {#if i.summary}<p>{i.summary}</p>{/if}
     </details>
   {:else if i.kind === "message"}

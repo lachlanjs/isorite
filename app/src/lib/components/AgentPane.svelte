@@ -56,8 +56,9 @@
     text = last;
     return true;
   }
-  // A message that begins with /<skill> loads that skill for the turn: typing the slash offers the skills that are on
-  // (from this machine, where the settings are), and Enter or Tab completes one.
+  // A message that begins with /<skill> loads that skill for the turn: typing the slash offers the pane's own commands
+  // and the skills that are on (from this machine, where the settings are), and Enter or Tab completes one. A command
+  // goes before a skill of the same name, which the slash then does not offer (the model can still use that skill).
   const piApi = (app.api as { pi?: PiApi } | undefined)?.pi ?? null;
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
   let skills = $state.raw<PiSkill[]>([]);
@@ -65,10 +66,16 @@
   /** The text the list was dismissed for with Escape. */
   let dismissed = $state<string | null>(null);
   const slashing = $derived(terminal.connected && /^\/[a-z0-9-]*$/.test(text));
-  const offered = $derived(slashing && dismissed !== text ? skills.filter((s) => s.enabled && !s.error && s.name.startsWith(text.slice(1))) : []);
+  const COMMANDS: { name: string; description: string; command: true }[] = [
+    { name: "compact", description: "Summarise the earlier turns to free context; words after it say what to keep", command: true },
+  ];
+  const offered = $derived(slashing && dismissed !== text ? [
+    ...COMMANDS.filter((c) => c.name.startsWith(text.slice(1))),
+    ...skills.filter((s) => s.enabled && !s.error && s.name.startsWith(text.slice(1)) && !COMMANDS.some((c) => c.name === s.name)),
+  ] : []);
   $effect(() => { if (slashing && piApi && local) void piApi.skills().then((s) => { skills = s; }, () => undefined); });
   $effect(() => { void text; chosen = 0; });
-  function complete(skill: PiSkill): void { text = `/${skill.name} `; }
+  function complete(item: { name: string }): void { text = `/${item.name} `; }
 
   // ------------------------------------------------------------ images pasted or dropped
 
@@ -157,10 +164,10 @@
       <p class="mid" transition:fade={{ duration: reduced() ? 0 : DUR_1 }}>Enter queues it for when it stops.{#if terminal.canSteer} <button type="button" class="link" onclick={() => void steer()} title="Put it in after the step running now (Ctrl+Enter)">Steer now</button>{/if}</p>
     {/if}
     {#if offered.length}
-      <ul class="slash" role="listbox" aria-label="Skills" data-testid="skill-menu">
+      <ul class="slash" role="listbox" aria-label="Commands and skills" data-testid="skill-menu">
         {#each offered as sk, i (sk.name)}
           <li role="presentation">
-            <button type="button" role="option" tabindex="-1" aria-selected={i === chosen} data-skill={sk.name} onpointerdown={(e) => { e.preventDefault(); complete(sk); }}><span class="nm">/{sk.name}</span><span class="what">{sk.description}</span></button>
+            <button type="button" role="option" tabindex="-1" aria-selected={i === chosen} data-skill={"command" in sk ? undefined : sk.name} data-command={"command" in sk ? sk.name : undefined} onpointerdown={(e) => { e.preventDefault(); complete(sk); }}><span class="nm">/{sk.name}</span><span class="what">{sk.description}</span></button>
           </li>
         {/each}
       </ul>

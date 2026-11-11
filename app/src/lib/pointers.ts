@@ -9,7 +9,7 @@ export interface Pointer {
   /** Its number, and so its character in the prompt. */
   id: number;
   kind: PointerKind;
-  /** A note's id, a file's path in the repository, or "" for an answer of the agent's. */
+  /** A note's id, a file's path in the repository (or, from "/", a code file's in the base), or "" for an answer of the agent's. */
   ref: string;
   title: string;
   /** The file's lines it covers, from 1 (0 for an answer, which is not in a file). */

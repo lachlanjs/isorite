@@ -130,3 +130,71 @@ test("the Atlas's timeline: this session's moments as marks; pointing outlines t
   await expect(page.locator(".atbar")).toContainText("you edited");
   await expect(page.getByRole("textbox", { name: "The note as it was" })).toContainText("Measured in bits.");
 });
+
+/** The mean colour of a part of the screen, as drawn (the editor's layers are under and over the text). */
+async function meanColour(page: Page, r: { x: number; y: number; width: number; height: number }): Promise<[number, number, number]> {
+  const png = (await page.screenshot({ clip: r })).toString("base64");
+  return page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${b64}`;
+    await img.decode();
+    const c = document.createElement("canvas");
+    c.width = img.width; c.height = img.height;
+    const g = c.getContext("2d")!;
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data, sum = [0, 0, 0];
+    for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) sum[k]! += d[i + k]!;
+    const n = d.length / 4;
+    return [sum[0]! / n, sum[1]! / n, sum[2]! / n] as [number, number, number];
+  }, png);
+}
+
+test("with the timeline on, a selection over the lines a moment changed shows over their ground, and its tags work, in the note and in a version", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const id = `agent/chosen-${test.info().project.name}`;
+  writeFileSync(join(NOTES, `${id}.md`), "---\ntype: Concept\ntitle: Chosen on a timeline\n---\n\nThe average surprise of a source.\n\nPlain text.\n");
+  await page.goto(`#/n/${id}`);
+  await expect(editor(page)).toContainText("Plain text.");
+  await agentEdits(page, id);
+  await expect(editor(page)).toContainText("Plain text, and the agent's words.");
+  const button = page.locator('.sw[data-switch="timeline"]');
+  if ((await button.getAttribute("aria-pressed")) !== "true") await button.click();
+  const touched = page.locator(".cm-line.cm-touched-agent");
+  await expect(touched).toHaveCount(1);
+
+  // The ground is under the line, not its background, which would hide the selection drawn behind the text.
+  expect(await touched.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  expect(await touched.evaluate((el) => getComputedStyle(el, "::before").backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+
+  // The first half of the agent's line chosen: it is coloured as chosen, unlike the half left.
+  await touched.getByText("Plain text").click();
+  await page.keyboard.press("Home");
+  for (let i = 0; i < 16; i++) await page.keyboard.press("Shift+ArrowRight");
+  const sel = page.locator(".cm-selectionBackground");
+  await expect(sel).toHaveCount(1);
+  const s = (await sel.boundingBox())!, line = (await touched.boundingBox())!;
+  expect(line.x + line.width - (s.x + s.width)).toBeGreaterThan(s.width);
+  const chosen = await meanColour(page, { x: s.x + 1, y: s.y + 1, width: s.width - 2, height: s.height - 2 });
+  const rest = await meanColour(page, { x: s.x + s.width + 4, y: s.y + 1, width: s.width - 2, height: s.height - 2 });
+  expect(Math.abs(chosen[2] - rest[2]) + Math.abs(chosen[0] - rest[0]), "the selection shows over the moment's ground").toBeGreaterThan(20);
+  await look(page, "timeline-selection");
+
+  // Its tags: copied, it is where it is and the words.
+  await expect(page.locator('.tag[data-tag="agent"]')).toBeVisible();
+  await page.locator('.tag[data-tag="copy"]').click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(`/${id}.md, line 8:\n> Plain text, and`);
+
+  // In the note as it was, its words can be chosen and pointed to too; Shift and an arrow change the choice, not the moment.
+  await page.locator('[data-pane="note"] .timeline .moment').last().click();
+  const was = page.getByRole("textbox", { name: "The note as it was" });
+  await expect(was).toContainText("Plain text.");
+  await was.getByText("The average surprise").click({ clickCount: 3 });
+  await page.keyboard.press("Shift+ArrowLeft");
+  await expect(page.locator(".atbar")).toContainText("found as it was");
+  await expect(page.locator('.tag[data-tag="copy"]')).toBeVisible();
+  await expect(page.locator('.tag[data-tag="delete"]')).toHaveCount(0);
+  await page.locator('.tag[data-tag="copy"]').click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(`/${id}.md, line 6:\n> The average surprise of a source.`);
+  await page.getByRole("button", { name: "back to now" }).click();
+  await button.click();
+});

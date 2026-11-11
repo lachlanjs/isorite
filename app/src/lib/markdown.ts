@@ -13,7 +13,9 @@ import { rating } from "@isorite/core";
 import { highlighted } from "./code.ts";
 import { globalPage, tutorialPage } from "./here.ts";
 
-const md = new MarkdownIt({ html: false, linkify: true, typographer: true })
+// `breaks`: a single newline is a line break, as in the note pane's editor (a line of the file is a line) and as Obsidian
+// reads it; the text on disk is untouched.
+const md = new MarkdownIt({ html: false, breaks: true, linkify: true, typographer: true })
   .use(texmath, { engine: katex, delimiters: ["dollars", "brackets"], katexOptions: { throwOnError: false } });
 
 // Wrap tables so wide ones scroll on phones.

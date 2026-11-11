@@ -97,6 +97,13 @@ function diffOf(args: unknown): string[] | undefined {
 
 const userText = (content: unknown): string => (typeof content === "string" ? content : textOf(content));
 
+/** `/compact`, with what the summary should keep after it: those words ("" for none), or null for any other message. It
+ *  is the pane's own command, so a skill named compact is not invoked by it (the model can still use that skill). */
+export function compactAsked(text: string): string | null {
+  const m = /^\/compact(?:\s+([\s\S]*))?$/.exec(text.trim());
+  return m ? (m[1] ?? "").trim() : null;
+}
+
 export class PiHost implements PaneSessions {
   readonly #api: PiHostOptions["api"];
   #model: Model<any>;
@@ -210,6 +217,8 @@ export class PiHost implements PaneSessions {
   }
 
   async prompt(text: string, images: string[] = []): Promise<void> {
+    const focus = compactAsked(text);
+    if (focus !== null) return this.#compactNow(text, focus, images);
     if (images.length && !this.#sees()) throw new Error("This model does not take images.");
     if (this.#busy) {
       if (images.length) throw new Error("Wait for the agent to stop before sending an image.");
@@ -623,34 +632,77 @@ export class PiHost implements PaneSessions {
   }
 
   /** Before a prompt: if what the model would be sent nears its window, summarise the earlier part of the conversation
-   *  and keep the recent part as it was (cut at a message of the person's, so a tool call and its result stay together).
-   *  The turn shows it. If the summary cannot be made the conversation goes on as it was and the turn says so. */
+   *  and keep the recent part as it was. */
   async #compactIfNeeded(agent: Agent): Promise<void> {
     const window = this.#model.contextWindow, settings = this.#compaction;
     if (!settings.enabled || !window) return;
-    const messages = [...agent.state.messages];
-    const before = this.#contextTokens(messages);
+    const before = this.#contextTokens([...agent.state.messages]);
     if (!shouldCompact(before, window, settings)) return;
-    // Leading system messages stay as they are; so does nothing else but the recent part.
+    await this.#compact(agent, false);
+  }
+
+  /** `/compact` from the pane: a turn of its own that only summarises the earlier conversation, whatever its size, with
+   *  the person's words as the summary's focus. Nothing reaches the model as a prompt. */
+  async #compactNow(text: string, focus: string, images: string[]): Promise<void> {
+    if (images.length) throw new Error("/compact takes no images.");
+    if (this.#busy) throw new Error("Wait for the agent to stop, then compact.");
+    const agent = this.#agent;
+    if (!agent || !this.#plan([...agent.state.messages], true)) throw new Error("There is nothing to compact yet.");
+    this.#problem = "";
+    const turn: TerminalTurn = { id: randomUUID(), asked: text, from: "here", items: [], state: "running", at: new Date(this.#now()).toISOString() };
+    this.#turns = [...this.#turns, turn];
+    this.#busy = true;
+    this.#queued = [];
+    void this.#api.agentStatus(this.#id, this.#session, true).catch(() => undefined);
+    this.#tell();
+    void this.#compact(agent, true, focus).then((done) => {
+      const t = this.#turns.at(-1);
+      if (t?.state === "running") this.#turns = [...this.#turns.slice(0, -1), { ...t, state: this.#stopping ? "stopped" : done ? "done" : "failed", took: Math.max(0, this.#now() - Date.parse(turn.at!)) }];
+      this.#end();
+    });
+  }
+
+  /** Where to cut the conversation: leading system messages stay, an earlier summary is carried into the new one, and
+   *  the recent part (about `keepRecentTokens`) stays as it was, cut at a message of the person's so a tool call and its
+   *  result stay together. Asked for (`force`), a conversation smaller than that keeps only its last exchange, or none
+   *  where there is one. Null where there is nothing to summarise. */
+  #plan(messages: AgentMessage[], force: boolean): { head: number; from: number; cut: number; previous?: string } | null {
     const roleOf = (m: AgentMessage | undefined): string | undefined => (m as { role?: string } | undefined)?.role;
     let head = 0;
     while (roleOf(messages[head]) === "system") head++;
-    const earlier = (messages[head] as { content?: unknown } | undefined)?.content;
-    const previous = userText(earlier).startsWith(SUMMARY) ? userText(earlier).slice(SUMMARY.length) : undefined;
+    const earlier = userText((messages[head] as { content?: unknown } | undefined)?.content);
+    const previous = earlier.startsWith(SUMMARY) ? earlier.slice(SUMMARY.length) : undefined;
     const from = head + (previous === undefined ? 0 : 1);
+    if (!messages.slice(from).some((m) => roleOf(m) !== "system")) return null;
     let acc = 0, cut = from;
-    for (let i = messages.length - 1; i >= from; i--) { acc += estimateTokens(messages[i]!); if (acc >= settings.keepRecentTokens) { cut = i; break; } }
+    for (let i = messages.length - 1; i >= from; i--) { acc += estimateTokens(messages[i]!); if (acc >= this.#compaction.keepRecentTokens) { cut = i; break; } }
     while (cut > from && roleOf(messages[cut]) !== "user") cut--;
-    if (cut <= from) return;
+    if (cut <= from && force) {
+      cut = messages.length;
+      for (let i = messages.length - 1; i > from; i--) if (roleOf(messages[i]) === "user") { cut = i; break; }
+    }
+    if (cut <= from) return null;
+    return { head, from, cut, ...(previous === undefined ? {} : { previous }) };
+  }
+
+  /** Summarise the earlier part of the conversation and keep the recent part. The turn shows it. If the summary cannot be
+   *  made the conversation goes on as it was and the turn says so. Whether it was done. */
+  async #compact(agent: Agent, force: boolean, focus = ""): Promise<boolean> {
+    const settings = this.#compaction;
+    const messages = [...agent.state.messages];
+    const before = this.#contextTokens(messages);
+    const plan = this.#plan(messages, force);
+    if (!plan) return false;
+    const { head, from, cut, previous } = plan;
     const id = this.#turns.at(-1)?.items.length ?? 0;
-    this.#edit((items) => [...items, { kind: "compaction", state: "running", before }]);
+    this.#edit((items) => [...items, { kind: "compaction", state: "running", before, ...(force ? { asked: true } : {}) }]);
     this.#tell();
     this.#summarising = new AbortController();
     try {
       // The summary is asked of the same model by the same key as the turns are (a gateway's is "none" where it
       // knows you by certificate or headers): without it pi refuses before sending anything.
       const key = (await this.#getApiKey?.(this.#model.provider)) ?? undefined;
-      const summary = await generateSummary(this.#plain(this.#redact(messages.slice(from, cut))), this.#model, settings.reserveTokens, key, undefined, this.#summarising.signal, undefined, previous, undefined, this.#streamFn);
+      const summary = await generateSummary(this.#plain(this.#redact(messages.slice(from, cut))), this.#model, settings.reserveTokens, key, undefined, this.#summarising.signal, focus || undefined, previous, undefined, this.#streamFn);
       const stand = { role: "user" as const, content: [{ type: "text" as const, text: SUMMARY + summary }], timestamp: this.#now() };
       // The recent answers' own counts describe the context as it was before: they are not trusted any more, so the
       // size of what stands now is estimated until the model's next answer gives a count.
@@ -660,9 +712,11 @@ export class PiHost implements PaneSessions {
       const after = this.#contextTokens(kept);
       this.#used = after;
       this.#edit((items) => items.map((i, k) => (k === id && i.kind === "compaction" ? { ...i, state: "done" as const, after, summary } : i)));
+      return true;
     } catch (e) {
       const error = this.#stopping ? "stopped" : (e as Error).message;
       this.#edit((items) => items.map((i, k) => (k === id && i.kind === "compaction" ? { ...i, state: "failed" as const, error } : i)));
+      return false;
     } finally { this.#summarising = null; this.#tell(); }
   }
 

@@ -132,7 +132,7 @@ export type TerminalItem =
   /** What the model reasoned before it answered or acted (M36), as the provider streams it. */
   | { kind: "thinking"; text: string }
   /** The earlier conversation shortened to a summary so the session fits the model (M36): the size before and after, in tokens. */
-  | { kind: "compaction"; state: "running" | "done" | "failed"; before: number; after?: number; summary?: string; error?: string }
+  | { kind: "compaction"; state: "running" | "done" | "failed"; before: number; after?: number; summary?: string; error?: string; /** Asked for with /compact, not made to fit. */ asked?: boolean }
   /** What the person said while the agent worked (M36): a steer goes in after the step now running, a follow-up when
    *  The agent would otherwise stop. `queued` until the model has it, then `landed` (where it came in); `sent` where
    *  The agent takes it and does not say when; `dropped` if the turn ended or was stopped first. */

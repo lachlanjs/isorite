@@ -73,7 +73,7 @@ test("the skills base shows a skill as an island: SKILL.md a note named for its 
   await expect(page.locator('[data-file="release-notes/collect.sh"]')).toBeVisible();
   // The script opens as text.
   await page.goto("/?base=skills#/n/release-notes/collect.sh");
-  await expect(page.locator("pre[data-source]")).toContainText("gh pr list");
+  await expect(page.locator("[data-source]")).toContainText("gh pr list");
 });
 
 test("a new skill is made from the Atlas's New island, with a SKILL.md to fill in; a built-in skill is read only", async ({ page, request }, info) => {

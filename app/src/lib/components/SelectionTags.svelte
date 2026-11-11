@@ -59,7 +59,9 @@
   }
 
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const settle = (): void => { clearTimeout(timer); timer = setTimeout(() => { if (!drag) armed = read(); }, 140); };
+  /** How many times the selection has changed: what was copied is let go of only if nothing has been chosen since. */
+  let changes = 0;
+  const settle = (): void => { changes++; clearTimeout(timer); timer = setTimeout(() => { if (!drag) armed = read(); }, 140); };
   onMount(() => {
     const keys = (e: KeyboardEvent): void => {
       if (!e.ctrlKey || e.metaKey || e.altKey || (e.code !== "BracketLeft" && e.code !== "BracketRight")) return;
@@ -97,7 +99,9 @@
   async function copy(a: Armed): Promise<void> {
     try { await navigator.clipboard.writeText(full(a.draft as Pointer)); said = "copied"; flash(a.rects, "var(--lattice)"); copyFlight(a.rects.at(-1) ?? null); }
     catch { said = "the browser would not copy"; }
-    setTimeout(() => { said = ""; done(); }, 900);
+    // Let go of once it is said, unless something has been chosen since.
+    const at = changes;
+    setTimeout(() => { said = ""; if (changes === at) done(); }, 900);
   }
 
   function remove(a: Armed): void {

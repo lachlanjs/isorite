@@ -6,12 +6,12 @@
   import { tick } from "svelte";
   import type { CodeSlice } from "@isorite/engine";
   import { app } from "$lib/app.svelte.ts";
-  import { highlightFile } from "$lib/code.ts";
+  import CodeLines from "./CodeLines.svelte";
 
   let { path, at = "" }: { path: string; at?: string } = $props();
   const href = $derived(`code:${path}${at ? `#${at}` : ""}`);
 
-  let got = $state.raw<CodeSlice | null>(null), lines = $state.raw<string[]>([]), problem = $state("");
+  let got = $state.raw<CodeSlice | null>(null), problem = $state("");
   // The lines marked: the link's, or the line last chosen by its number.
   let picked = $state<{ start: number; end: number } | null>(null);
   let copied = $state(false);
@@ -22,18 +22,12 @@
       const slice = await app.api.code(href, true);
       got = slice;
       problem = "";
-      if (slice.state !== "ok") { lines = []; return; }
-      const plain = slice.text.split("\n");
-      lines = plain.map((l) => escape(l));
+      if (slice.state !== "ok") return;
       picked = slice.mark ?? null;
       await tick();
       scrollTo();
-      // Coloured once the language is loaded; the lines are readable before.
-      const html = await highlightFile(slice.text, slice.path);
-      if (html && got === slice) lines = html.split("\n");
     } catch (e) { problem = (e as Error).message; }
   }
-  const escape = (t: string): string => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   $effect(() => { void href; void load(); });
 
   function scrollTo(): void {
@@ -76,11 +70,7 @@
   {#if problem}<p class="why">{problem}</p>
   {:else if got && got.state !== "ok"}<p class="why broken">{path}: {WHY[got.state] ?? got.state}</p>
   {:else if got}
-    <div class="pre" bind:this={box} data-point="code:{path}" aria-label="The file {path}" role="region">
-      {#each lines as html, i (i)}
-        <div class="row" class:on={marked(i + 1)} data-n={i + 1}><button type="button" class="num" aria-label="Line {i + 1}" onclick={(e) => choose(i + 1, e)}>{i + 1}</button><span class="code">{@html html || " "}</span></div>
-      {/each}
-    </div>
+    <CodeLines text={got.text} path={got.path} point="code:{path}" {marked} {choose} bind:box />
   {:else}
     <p class="why">Reading…</p>
   {/if}
@@ -94,12 +84,6 @@
   .sym { color: var(--lattice); font-family: var(--font-mono); }
   .tools { margin-left: auto; display: flex; gap: var(--space-2); align-items: center; }
   .link { color: var(--text-soft); font: 0.75rem var(--font-mono); }
-  .pre { border: 1px solid var(--line); background: var(--ground-1); font: 0.8125rem/1.55 var(--font-mono); overflow-x: auto; padding: 6px 0; }
-  .row { display: flex; white-space: pre; content-visibility: auto; contain-intrinsic-size: auto 20px; }
-  .row.on { background: var(--lattice-soft); box-shadow: inset 3px 0 0 var(--lattice); }
-  .num { flex: none; width: 56px; padding: 0 10px 0 0; text-align: right; background: none; border: 0; color: var(--text-faint); font: inherit; cursor: pointer; user-select: none; }
-  .num:hover { color: var(--text); }
-  .code { padding-right: 16px; }
   .why { color: var(--text-faint); font: 0.8125rem var(--font-ui); }
   .broken { color: var(--rose); }
 </style>

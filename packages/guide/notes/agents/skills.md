@@ -7,7 +7,7 @@ description: A skill is a folder with a SKILL.md that isorite's own agent loads 
 
 A skill is a folder with a file named `SKILL.md`: a name and a description in its header, then instructions. It is the format Claude Code, pi and others share, so a skill written for one works in another.
 
-The agent is told only each skill's name and description. When your request matches one, it fetches the instructions then, so a skill you never use costs a line, not a page. Start a message with `/` and the skills that are on are offered; `/socratic-tutor teach me entropy` loads it for that turn.
+The agent is told only each skill's name and description. When your request matches one, it fetches the instructions then, so a skill you never use costs a line, not a page. Start a message with `/` and the skills that are on are offered, after the pane's own `/compact`; `/socratic-tutor teach me entropy` loads it for that turn.
 
 Skills come from three places, and a later one replaces an earlier one of the same name:
 

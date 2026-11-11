@@ -33,6 +33,8 @@ if (process.argv[1] === import.meta.filename) {
   // Files beside the notes that are not notes: an artifact and a data file (the list of notes holds them; the Atlas shows them only when its switches are on).
   writeFileSync(join(NOTES, "basics", "dashboard.html"), "<!doctype html><title>Coin dashboard</title><p>hello</p>");
   writeFileSync(join(NOTES, "basics", "tosses.csv"), "tosses,bits\n1,1\n2,2\n");
+  // A PDF, shown in the Note pane by the browser's own viewer (note-reading.spec.ts).
+  writeFileSync(join(NOTES, "basics", "paper.pdf"), "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n");
   // Code in the notes (docs/files.md): a file of the base, off the Atlas and the list until the code switch is on.
   writeFileSync(join(NOTES, "basics", "toss.py"), "import random\n\ndef toss():\n    return random.random() < 0.5\n");
   // Code beside the notes (M12): the repository code links point into, named in the base's settings.
