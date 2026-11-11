@@ -5,6 +5,9 @@
   "description": "isorite: an agentic harness for understanding. The packages are npm workspaces.",
   "workspaces": [
     "packages/*",
+    "!packages/example-code",
+    "!packages/example-skills",
+    "!packages/example-global",
     "app"
   ],
   "engines": {

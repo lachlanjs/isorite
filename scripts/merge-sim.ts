@@ -147,16 +147,16 @@ const linksTo = (m: Merged, id: string): string[] => m.bundle.issues.filter((i) 
 const SCENARIOS: Scenario[] = [
   {
     name: "1 · one note, different paragraphs",
-    alice: (p) => edit(p, "notes/a-note-is-markdown", para(0, (s) => `${s} Alice's sentence.`)),
-    bob: (p) => edit(p, "notes/a-note-is-markdown", para(-1, (s) => `${s}\n\nBob's closing paragraph.`)),
-    check: (m) => [...both(m, "notes/a-note-is-markdown", "Alice's sentence.", "Bob's closing paragraph."), ...noMarks(m, "notes/a-note-is-markdown"),
-      ...(new Set((m.journals.get("notes/a-note-is-markdown")?.entries ?? []).map((e) => e.device)).size < 3 ? ["its journal does not show both devices"] : [])],
+    alice: (p) => edit(p, "editing/markdown", para(0, (s) => `${s} Alice's sentence.`)),
+    bob: (p) => edit(p, "editing/markdown", para(-1, (s) => `${s}\n\nBob's closing paragraph.`)),
+    check: (m) => [...both(m, "editing/markdown", "Alice's sentence.", "Bob's closing paragraph."), ...noMarks(m, "editing/markdown"),
+      ...(new Set((m.journals.get("editing/markdown")?.entries ?? []).map((e) => e.device)).size < 3 ? ["its journal does not show both devices"] : [])],
   },
   {
     name: "2 · one note, the same paragraph",
-    alice: (p) => edit(p, "start-here", para(0, (s) => s.replace("is a home for", "is a place for"))),
-    bob: (p) => edit(p, "start-here", para(0, (s) => s.replace("is a home for", "is a workshop for"))),
-    check: (m) => [...noMarks(m, "start-here")],
+    alice: (p) => edit(p, "general/start-here", para(0, (s) => s.replace("is a home for", "is a place for"))),
+    bob: (p) => edit(p, "general/start-here", para(0, (s) => s.replace("is a home for", "is a workshop for"))),
+    check: (m) => [...noMarks(m, "general/start-here")],
   },
   {
     name: "3 · both add a tag to one note",
@@ -166,28 +166,28 @@ const SCENARIOS: Scenario[] = [
   },
   {
     name: "4 · one moves a note, the other edits it",
-    alice: async (p) => { await p.engine.moveNote("notes/islands", "atlas/islands", (await p.engine.readNote("notes/islands")).version); },
-    bob: (p) => edit(p, "notes/islands", para(0, (s) => `${s} Bob's addition.`)),
-    check: (m) => [...(m.notes.has("notes/islands") && m.notes.has("atlas/islands") ? ["the note is in both places"] : []),
-      ...both(m, m.notes.has("atlas/islands") ? "atlas/islands" : "notes/islands", "Bob's addition."),
-      ...(m.journals.has("notes/islands") && m.journals.has("atlas/islands") ? ["its journal is in both places"] : []),
-      ...(!m.notes.has("notes/islands") && m.journals.has("notes/islands") ? ["a journal is left at the old place"] : [])],
+    alice: async (p) => { await p.engine.moveNote("atlas/make-islands-and-notes", "notes/islands", (await p.engine.readNote("atlas/make-islands-and-notes")).version); },
+    bob: (p) => edit(p, "atlas/make-islands-and-notes", para(0, (s) => `${s} Bob's addition.`)),
+    check: (m) => [...(m.notes.has("atlas/make-islands-and-notes") && m.notes.has("notes/islands") ? ["the note is in both places"] : []),
+      ...both(m, m.notes.has("notes/islands") ? "notes/islands" : "atlas/make-islands-and-notes", "Bob's addition."),
+      ...(m.journals.has("atlas/make-islands-and-notes") && m.journals.has("notes/islands") ? ["its journal is in both places"] : []),
+      ...(!m.notes.has("atlas/make-islands-and-notes") && m.journals.has("atlas/make-islands-and-notes") ? ["a journal is left at the old place"] : [])],
   },
   {
     name: "5 · one moves a folder, the other works in it",
-    alice: (p) => p.engine.moveFolder("agent", "the-agent"),
+    alice: (p) => p.engine.moveFolder("agents", "the-agents"),
     bob: async (p) => {
-      await edit(p, "agent/agent", para(0, (s) => `${s} Bob's note on the agent.`));
-      await p.engine.createNote("agent/bobs-new-note", "---\ntype: Concept\ntitle: Bob's new note\ntags: [bob]\ndescription: Made while the folder moved.\n---\n\nWritten in agent/.\n");
+      await edit(p, "agents/the-agent-pane", para(0, (s) => `${s} Bob's note on the agent.`));
+      await p.engine.createNote("agents/bobs-new-note", "---\ntype: Concept\ntitle: Bob's new note\ntags: [bob]\ndescription: Made while the folder moved.\n---\n\nWritten in agents/.\n");
     },
-    check: (m) => [...(m.notes.has("agent/agent") ? ["agent/ still holds notes after the move"] : []), ...(m.notes.has("agent/bobs-new-note") ? ["bob's new note is left in agent/, which alice moved"] : []),
-      ...both(m, m.notes.has("the-agent/agent") ? "the-agent/agent" : "agent/agent", "Bob's note on the agent.")],
+    check: (m) => [...(m.notes.has("agents/the-agent-pane") ? ["agents/ still holds notes after the move"] : []), ...(m.notes.has("agents/bobs-new-note") ? ["bob's new note is left in agents/, which alice moved"] : []),
+      ...both(m, m.notes.has("the-agents/the-agent-pane") ? "the-agents/the-agent-pane" : "agents/the-agent-pane", "Bob's note on the agent.")],
   },
   {
     name: "6 · one deletes a note, the other edits it",
-    alice: async (p) => { await p.engine.deleteNote("notes/go-back-a-version", (await p.engine.readNote("notes/go-back-a-version")).version); },
-    bob: (p) => edit(p, "notes/go-back-a-version", para(-1, (s) => `${s} Bob's last word.`)),
-    check: (m) => [...(m.notes.has("notes/go-back-a-version") && m.conflicted.length === 0 ? ["the note is back and git did not say so"] : [])],
+    alice: async (p) => { await p.engine.deleteNote("editing/go-back-a-version", (await p.engine.readNote("editing/go-back-a-version")).version); },
+    bob: (p) => edit(p, "editing/go-back-a-version", para(-1, (s) => `${s} Bob's last word.`)),
+    check: (m) => [...(m.notes.has("editing/go-back-a-version") && m.conflicted.length === 0 ? ["the note is back and git did not say so"] : [])],
   },
   {
     name: "7 · both make a note with the same name",
@@ -197,42 +197,42 @@ const SCENARIOS: Scenario[] = [
   },
   {
     name: "8 · one deletes a note the other's new note links to",
-    alice: async (p) => { await p.engine.deleteNote("notes/write-in-your-notes", (await p.engine.readNote("notes/write-in-your-notes")).version); },
-    bob: (p) => p.engine.createNote("notes/bobs-practice", "---\ntype: Problem\ntitle: Bob's practice\ntags: [bob, practice]\n---\n\nIt rests on [writing](/notes/write-in-your-notes.md \"requires\").\n").then(() => undefined),
+    alice: async (p) => { await p.engine.deleteNote("editing/write-in-your-notes", (await p.engine.readNote("editing/write-in-your-notes")).version); },
+    bob: (p) => p.engine.createNote("notes/bobs-practice", "---\ntype: Problem\ntitle: Bob's practice\ntags: [bob, practice]\n---\n\nIt rests on [writing](/editing/write-in-your-notes.md \"requires\").\n").then(() => undefined),
     check: (m) => [...linksTo(m, "notes/bobs-practice")],
   },
   {
     name: "9 · both hide notes",
-    alice: async (p) => { await p.engine.setHidden(["atlas", "agent/artifacts"]); },
-    bob: async (p) => { await p.engine.setHidden(["notes/islands", "terminal"]); },
-    check: (m) => [...(m.settingsMarked ? ["settings.toml holds conflict markers"] : []), ...["atlas", "agent/artifacts", "notes/islands", "terminal"].filter((h) => !m.hidden.includes(h)).map((h) => `${h} is no longer hidden`)],
+    alice: async (p) => { await p.engine.setHidden(["atlas", "agents/artifacts"]); },
+    bob: async (p) => { await p.engine.setHidden(["atlas/make-islands-and-notes", "bases"]); },
+    check: (m) => [...(m.settingsMarked ? ["settings.toml holds conflict markers"] : []), ...["atlas", "agents/artifacts", "atlas/make-islands-and-notes", "bases"].filter((h) => !m.hidden.includes(h)).map((h) => `${h} is no longer hidden`)],
   },
   {
     name: "10 · both have an agent edit the same note, and keep the conversation",
     alice: async (p) => {
-      const first = paras((await p.engine.readNote("your-own-base/starting-a-base")).text.split("\n---\n").slice(1).join("\n---\n"))[1]!;
-      await agentEdits(p, "a1", "your-own-base/starting-a-base", first, `${first} [alice's agent]`);
+      const first = paras((await p.engine.readNote("bases/starting-a-base")).text.split("\n---\n").slice(1).join("\n---\n"))[1]!;
+      await agentEdits(p, "a1", "bases/starting-a-base", first, `${first} [alice's agent]`);
       await record(p, "a1", "tidy the start");
     },
     bob: async (p) => {
-      const last = paras((await p.engine.readNote("your-own-base/starting-a-base")).text.trimEnd()).at(-1)!;
-      await agentEdits(p, "b1", "your-own-base/starting-a-base", last, `${last} [bob's agent]`);
+      const last = paras((await p.engine.readNote("bases/starting-a-base")).text.trimEnd()).at(-1)!;
+      await agentEdits(p, "b1", "bases/starting-a-base", last, `${last} [bob's agent]`);
       await record(p, "b1", "check the end");
     },
-    check: (m) => [...both(m, "your-own-base/starting-a-base", "[alice's agent]", "[bob's agent]"), ...noMarks(m, "your-own-base/starting-a-base"),
+    check: (m) => [...both(m, "bases/starting-a-base", "[alice's agent]", "[bob's agent]"), ...noMarks(m, "bases/starting-a-base"),
       ...(m.records.length < 2 ? [`kept conversations: ${m.records.length} of 2`] : [])],
   },
   {
     name: "11 · both rename the same note, differently",
-    alice: async (p) => { await p.engine.moveNote("notes/make-move-delete", "notes/make-and-move", (await p.engine.readNote("notes/make-move-delete")).version); },
-    bob: async (p) => { await p.engine.moveNote("notes/make-move-delete", "notes/create-move-delete", (await p.engine.readNote("notes/make-move-delete")).version); },
-    check: (m) => [...(["notes/make-move-delete", "notes/make-and-move", "notes/create-move-delete"].filter((i) => m.notes.has(i)).length > 1 ? ["the note is now in more than one place"] : [])],
+    alice: async (p) => { await p.engine.moveNote("atlas/make-move-delete", "atlas/make-and-move", (await p.engine.readNote("atlas/make-move-delete")).version); },
+    bob: async (p) => { await p.engine.moveNote("atlas/make-move-delete", "atlas/create-move-delete", (await p.engine.readNote("atlas/make-move-delete")).version); },
+    check: (m) => [...(["atlas/make-move-delete", "atlas/make-and-move", "atlas/create-move-delete"].filter((i) => m.notes.has(i)).length > 1 ? ["the note is now in more than one place"] : [])],
   },
   {
     name: "12 · both move a folder, to different places",
-    alice: (p) => p.engine.moveFolder("terminal", "agents/terminal"),
-    bob: (p) => p.engine.moveFolder("terminal", "advanced"),
-    check: (m) => [...(["terminal", "agents/terminal", "advanced"].filter((d) => [...m.notes.keys()].some((id) => id.startsWith(`${d}/`))).length > 1 ? ["its notes are in more than one folder"] : [])],
+    alice: (p) => p.engine.moveFolder("bases", "agents/terminal"),
+    bob: (p) => p.engine.moveFolder("bases", "advanced"),
+    check: (m) => [...(["bases", "agents/terminal", "advanced"].filter((d) => [...m.notes.keys()].some((id) => id.startsWith(`${d}/`))).length > 1 ? ["its notes are in more than one folder"] : [])],
   },
 ];
 
@@ -308,9 +308,9 @@ async function main(): Promise<void> {
 
 /** What git said about the files a scenario touches. */
 const TOUCH: Record<string, string[]> = {
-  "1": ["notes/a-note-is-markdown"], "2": ["start-here"], "3": ["atlas/the-atlas"], "4": ["notes/islands", "atlas/islands"], "5": ["agent/", "the-agent/"],
-  "6": ["notes/go-back-a-version"], "7": ["notes/glossary"], "8": ["notes/write-in-your-notes", "notes/bobs-practice"], "9": ["settings.toml"],
-  "10": ["your-own-base/starting-a-base", "agents/claude"], "11": ["notes/make-move-delete", "notes/make-and-move", "notes/create-move-delete"], "12": ["terminal/", "agents/terminal", "advanced/"],
+  "1": ["editing/markdown"], "2": ["general/start-here"], "3": ["atlas/the-atlas"], "4": ["atlas/make-islands-and-notes", "notes/islands"], "5": ["agents/", "the-agents/"],
+  "6": ["editing/go-back-a-version"], "7": ["notes/glossary"], "8": ["editing/write-in-your-notes", "notes/bobs-practice"], "9": ["settings.toml"],
+  "10": ["bases/starting-a-base", "agents/claude"], "11": ["atlas/make-move-delete", "atlas/make-and-move", "atlas/create-move-delete"], "12": ["bases/", "agents/terminal", "advanced/"],
 };
 function gitWord(name: string, m: Merged): string {
   const keys = TOUCH[name.split(" ")[0]!] ?? [];

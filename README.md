@@ -60,7 +60,7 @@ isorite setup --yes --base . --agent claude-code      # or --agent own --provide
 
 If something doesn't work, `isorite doctor --report` gives it all as one block to paste to whoever (or whichever AI) is helping, with your secrets hidden. At work (a proxy, a company's certificate authority, a gateway): [docs/setup.md](docs/setup.md). Written for an AI helping you: [docs/setup-for-agents.md](docs/setup-for-agents.md).
 
-The first run of the installed executable takes a few seconds longer, while it unpacks itself. The same guide is also on the [public site](https://lachlanjs.github.io/isorite/), kept in your browser, with nothing to install; there the guide's finder stands in for an agent.
+The first run of the installed executable takes a few seconds longer, while it unpacks itself. The same guide is also on the [public site](https://lachlanjs.github.io/isorite/), kept in your browser, with nothing to install, beside example global, skills and code bases to switch to; there the guide's finder stands in for an agent.
 
 ### The agent, in more detail
 

@@ -85,7 +85,8 @@ export interface OwnRepoInfo { state: "own" | "tracked" | "shared" | "none" | "u
 /** The bases the server holds (M20), as the switcher lists them. */
 export interface BaseRow { name: string; path: string; lend: boolean; open: boolean; title: string; /** The global base or the skills base: always listed, first, not renamed or lent by hand. */ special?: "global" | "skills" }
 export interface BasesApi {
-  list(): Promise<{ here: string; local: boolean; bases: BaseRow[] }>;
+  /** `fixed`: the set is not the person's to change (the site's), so nothing is renamed or lent. */
+  list(): Promise<{ here: string; local: boolean; fixed?: boolean; bases: BaseRow[] }>;
   /** Lend a base to every session, or stop (from this machine only). */
   lend(name: string, lend: boolean): Promise<BaseRow[]>;
   /** Show a base by a title of its own; empty, by its name again. */

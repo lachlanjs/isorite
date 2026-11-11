@@ -7,7 +7,9 @@
   import "katex/dist/katex.min.css";
   import type { Snippet } from "svelte";
   import { page } from "$app/state";
-  import { onNavigate } from "$app/navigation";
+  import { afterNavigate, onNavigate } from "$app/navigation";
+  import { baseHere } from "$lib/here.ts";
+  import { keepAddress } from "$lib/guide/site.ts";
   import { carryTitle } from "$lib/motion.ts";
   import { app } from "$lib/app.svelte.ts";
   import { onMount, untrack } from "svelte";
@@ -36,6 +38,11 @@
   // The skills base shows its scripts and other files from the first (they are what a skill is made of): switched on
   // for this page only, as the person's own choice of switches is kept for their bases.
   $effect(() => { if (app.session?.special === "skills") untrack(() => { panes.on.code = true; panes.on.pictures = true; }); });
+  // So does the site's Code base: code is what its notes are about. A base's address on the site is kept in the address bar
+  // as the person moves about it (the routes know nothing of bases, so the prefix is put back after each navigation).
+  const site = import.meta.env.MODE === "guide";
+  $effect(() => { if (site && baseHere() === "code") untrack(() => { panes.on.code = true; }); });
+  afterNavigate(() => { if (site) keepAddress(); });
   onMount(states);
   onMount(() => {
     const media = matchMedia("(max-width: 760px)");

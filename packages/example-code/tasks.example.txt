@@ -1,0 +1,3 @@
+[ ] write the tutorial +docs due:2026-12-01
+[ ] call the plumber +home
+[x] buy stamps +home

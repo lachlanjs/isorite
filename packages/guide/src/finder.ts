@@ -5,7 +5,7 @@
 
 import type { Api } from "@isorite/engine";
 
-export const NOT_A_MODEL = "I'm the guide's finder, not a model: I answer with the notes that match what you ask. With your own agent attached, it answers anything: see [Your own agent](/terminal/your-own-agent.md).";
+export const NOT_A_MODEL = "I'm the guide's finder, not a model: I answer with the notes that match what you ask. With your own agent attached, it answers anything: see [Your own agent](tutorial:agents/your-own-agent.md).";
 
 /** A hit of search_notes, as the engine writes it: `- Title (/id.md), Type: description`. */
 interface Hit { id: string; title: string; type: string; description: string }
@@ -32,7 +32,7 @@ export async function finderTurn(api: Pick<Api, "agentLook" | "agentStatus">, se
     const found = await api.agentLook({ agent, session, tool: "search_notes", args: { query: asked } });
     calls.push({ tool: "search_notes", title: asked });
     const hits = hitsOf(found.text).filter((h) => !given.includes(h.id));
-    if (!hits.length) return { calls, reply: said(["Nothing in the guide matches that. Try other words, or start from [Start here](/start-here.md)."]) };
+    if (!hits.length) return { calls, reply: said(["Nothing in the guide matches that. Try other words, or start from [Start here](tutorial:general/start-here.md)."]) };
     // A concept answers; a problem is what to try, named after it.
     const concepts = hits.filter((h) => h.type !== "problem"), problem = hits.find((h) => h.type === "problem");
     const best = concepts[0] ?? hits[0]!;

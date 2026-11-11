@@ -1,0 +1,27 @@
+title = "By area"
+
+[[islands]]
+name = "storage"
+title = "Storage"
+notes = ["/notes/store.md", "/notes/file-format.md", "/notes/parse.md", "/notes/task.md"]
+match = ["path:/notes/decisions/**", "-path:/notes/decisions/no-dependencies.md"]
+
+[[islands]]
+name = "commands"
+title = "Commands"
+notes = ["/notes/main.md", "/notes/args.md", "/notes/commands.md", "/notes/decisions/no-dependencies.md"]
+
+[[islands]]
+name = "output"
+title = "Output"
+notes = ["/notes/render.md"]
+
+[[islands]]
+name = "tests"
+title = "Tests"
+notes = ["/notes/tests.md"]
+
+[[islands]]
+name = "practice"
+title = "To practise"
+match = ["path:/notes/practice/**"]

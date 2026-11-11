@@ -11,7 +11,7 @@ import katex from "katex";
 import DOMPurify from "dompurify";
 import { rating } from "@isorite/core";
 import { highlighted } from "./code.ts";
-import { globalPage } from "./here.ts";
+import { globalPage, tutorialPage } from "./here.ts";
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true })
   .use(texmath, { engine: katex, delimiters: ["dollars", "brackets"], katexOptions: { throwOnError: false } });
@@ -42,7 +42,9 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   token.attrSet("class", `vein ${web ? "web" : kind === "requires" ? "requires" : kind === "see also" ? "also" : "uses"}`);
   if (web) { token.attrSet("target", "_blank"); token.attrSet("rel", "noopener"); }
   // A link to the global base opens that base's page at the note.
-  else if (/^global:/i.test(href)) token.attrSet("href", globalPage(href));
+  else if (/^global:/i.test(href)) { token.attrSet("href", globalPage(href)); token.attrSet("data-sveltekit-reload", ""); }
+  // So does one to the Tutorial, which the site's finder uses where it points at the guide from another base.
+  else if (/^tutorial:/i.test(href)) { token.attrSet("href", tutorialPage(href)); token.attrSet("data-sveltekit-reload", ""); }
   else if (href.startsWith("/") && /\.md(#.*)?$/.test(href)) token.attrSet("href", "#/n" + href.replace(/\.md(#.*)?$/, ""));
   return linkOpen(tokens, idx, options, env, self);
 };

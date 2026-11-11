@@ -187,10 +187,13 @@
   function scrolled(): void {
     if (!list) return;
     top = list.scrollTop;
-    pinned = atEnd(list.scrollHeight);
+    // On its way to the newest (the button): not yet there is not scrolled away.
+    pinned = heading || atEnd(list.scrollHeight);
     if (pinned) behind = false;
   }
-  function latest(): void { pinned = true; behind = false; toEnd(!still()); }
+  /** Scrolling smoothly to the newest after the button: the session may grow on the way, and the scroll then goes on to the new end. */
+  let heading = false;
+  function latest(): void { pinned = true; behind = false; heading = !still(); toEnd(heading); }
   onMount(() => {
     if (!flow || !list) return;
     height = list.scrollHeight;
@@ -198,15 +201,24 @@
       if (!list) return;
       const was = height;
       height = list.scrollHeight;
-      if (pinned && atEnd(was)) toEnd();
+      if (heading) toEnd(false);
+      else if (pinned && atEnd(was)) toEnd();
       else if (height > was) { pinned = false; behind = true; }
     });
     grew.observe(flow);
+    // The way ends where the scroll does, or where a hand takes it.
+    const arrived = () => { heading = false; };
+    list.addEventListener("scrollend", arrived);
+    list.addEventListener("wheel", arrived, { passive: true });
+    list.addEventListener("touchstart", arrived, { passive: true });
     // The pane itself made shorter (the box grown by a few lines, a line said under it): still at the end if you were.
     const shrank = new ResizeObserver(() => { if (pinned) toEnd(); });
     shrank.observe(list);
     return () => {
       grew.disconnect();
+      list?.removeEventListener("scrollend", arrived);
+      list?.removeEventListener("wheel", arrived);
+      list?.removeEventListener("touchstart", arrived);
       shrank.disconnect();
       const s = untrack(() => view?.session);
       if (s) { if (pinned) kept.delete(s); else kept.set(s, top); }

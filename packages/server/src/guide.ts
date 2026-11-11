@@ -12,13 +12,15 @@ import { serve } from "./serve.ts";
 import { openBrowser } from "./running.ts";
 
 export const GUIDE_FOLDER = join(homedir(), "isorite-guide");
+/** Where the guide's first note was before its notes were put in islands: a folder written then is still the guide, and keeps its notes where they are. */
+const OLD_START = "start-here";
 
 /** Write the guide into `folder`, unless it is there already. Returns whether it was written now. A folder that
  *  holds other files is refused: the guide is not written over anything. */
 export function writeGuide(folder: string): { notes: string; fresh: boolean } {
   const at = resolve(folder);
   if (existsSync(at) && !statSync(at).isDirectory()) throw new StudyError(`${at} is a file`);
-  if (existsSync(join(at, `${START}.md`))) { lenses(at); return { notes: at, fresh: false }; }
+  if (existsSync(join(at, `${START}.md`)) || existsSync(join(at, `${OLD_START}.md`))) { lenses(at); return { notes: at, fresh: false }; }
   if (existsSync(at) && readdirSync(at).some((f) => f !== OWN_DIR)) throw new StudyError(`${at} has files in it that are not the guide: name another folder, isorite guide <folder>`);
   for (const [path, text] of [...Object.entries(loadGuide()), ...Object.entries(loadGuidePictures())]) {
     mkdirSync(dirname(join(at, path)), { recursive: true });
@@ -40,8 +42,9 @@ function lenses(at: string): void {
 
 export async function guide(folder = GUIDE_FOLDER, { port = 4767, out = console.log }: { port?: number; out?: (line: string) => void } = {}): Promise<void> {
   const { notes, fresh } = writeGuide(folder);
+  const start = existsSync(join(notes, `${START}.md`)) ? START : OLD_START;
   out(fresh ? `isorite guide: written to ${notes}; it is yours to change, and run again it opens as you left it` : `isorite guide: ${notes}, as you left it`);
-  out(`  start at http://localhost:${port}/#/n/${START}`);
+  out(`  start at http://localhost:${port}/#/n/${start}`);
   await serve(notes, { port });
-  if (process.env.ISORITE_NO_BROWSER !== "1") openBrowser(`http://localhost:${port}/#/n/${START}`);
+  if (process.env.ISORITE_NO_BROWSER !== "1") openBrowser(`http://localhost:${port}/#/n/${start}`);
 }

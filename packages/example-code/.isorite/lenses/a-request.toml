@@ -1,0 +1,28 @@
+title = "A request"
+
+# Follow `tally done 2` from the words typed to the line printed: each island is a step, in the order the program takes it.
+
+[[islands]]
+name = "typed"
+title = "1. Typed"
+notes = ["/notes/how-a-command-flows.md", "/notes/main.md"]
+
+[[islands]]
+name = "read"
+title = "2. Read"
+notes = ["/notes/args.md"]
+
+[[islands]]
+name = "run"
+title = "3. Run"
+notes = ["/notes/commands.md", "/notes/task.md"]
+
+[[islands]]
+name = "kept"
+title = "4. Kept"
+notes = ["/notes/store.md", "/notes/parse.md", "/notes/file-format.md"]
+
+[[islands]]
+name = "printed"
+title = "5. Printed"
+notes = ["/notes/render.md"]

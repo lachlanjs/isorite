@@ -583,8 +583,9 @@ export class Engine implements Api {
     const key = `${agent}/${session}`, turn = this.turns.get(key);
     if (busy && !turn) this.startTurn(agent, session);
     if (!busy && turn) { this.turns.delete(key); this.publish({ type: "agent-done", request: turn.request, agent, session }); }
-    // Its looks in other bases were turns there: they end with this one.
-    if (!busy) for (const l of this.lent()) await this.opts.elsewhere?.base(l.name)?.agentStatus(agent, session, false);
+    // Its looks in other bases were turns there: they end with this one. Only a turn that ended passes it on, or two bases
+    // lending to each other would tell each other forever.
+    if (!busy && turn) for (const l of this.lent()) await this.opts.elsewhere?.base(l.name)?.agentStatus(agent, session, false);
   }
 
   async agentWrite({ agent, session, note, asked, edit }: AgentChange): Promise<{ text: string }> {

@@ -142,7 +142,7 @@ One stream from the engine to every open view (server-sent events; a plain callb
 | engine | vitest with an in-memory `Files` and a fixed `Clock`, so the journal's writer and the tools are tested without a disk |
 | server | vitest against the real HTTP routes and a scripted agent on a temporary folder |
 | app | vitest for pure code; `@playwright/test` for the screens, selecting by text and role, at 1280 and 390 px on both grounds |
-| example, guide | vitest: the example base and the guide load with no issues and every note is reached; Playwright (`npm run test:site`) drives the built site as Pages serves it |
+| example, guide | vitest: the example base, the guide and the site's example bases (global, skills, code) load with no issues and every note is reached; Playwright (`npm run test:site`) drives the built site as Pages serves it |
 
 ## 10. Later
 

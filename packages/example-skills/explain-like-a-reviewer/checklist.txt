@@ -1,0 +1,8 @@
+Where a change is most likely to be wrong:
+
+- A boundary: an off-by-one, an empty input, a value that is missing.
+- Something that was done in one place and is now done in two.
+- A side effect that moved: a write, a network call, the clock.
+- An error that is caught and then ignored.
+- A test that was changed in the same commit as the code it tests.
+- A name that now means something it did not.

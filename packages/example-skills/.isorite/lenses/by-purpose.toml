@@ -1,0 +1,16 @@
+title = "By purpose"
+
+[[islands]]
+name = "writing"
+title = "Writing"
+match = ["path:/commit-message/**"]
+
+[[islands]]
+name = "reading"
+title = "Reading"
+match = ["path:/explain-like-a-reviewer/**"]
+
+[[islands]]
+name = "shipped"
+title = "Shipped with isorite"
+match = ["path:/built-in/**"]

@@ -28,6 +28,8 @@ test("a code file in the base is hidden until the code switch is on, then sits i
   await expect(page.locator(".file .kind")).toContainText("code");
   await page.screenshot({ path: `test-results/screens/${test.info().project.name}-code-file-page.png` });
   await page.goto("#/atlas");
+  await expect(page.locator('[data-note="basics/surprise"]')).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1280) <= 760) await expect.poll(() => page.locator('[data-pane="atlas"]').evaluate((el) => Math.round(el.getBoundingClientRect().left))).toBe(0);
   await setSwitch(page, "code", false);
 });
 

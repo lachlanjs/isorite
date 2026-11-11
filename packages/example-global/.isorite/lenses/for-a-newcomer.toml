@@ -1,0 +1,16 @@
+title = "For a newcomer"
+
+[[islands]]
+name = "words"
+title = "The words"
+notes = ["/glossary/base.md", "/glossary/island.md", "/glossary/lens.md"]
+
+[[islands]]
+name = "habits"
+title = "The habits"
+notes = ["/conventions/naming.md", "/conventions/writing-notes.md", "/conventions/commit-messages.md"]
+
+[[islands]]
+name = "people"
+title = "Who to ask"
+match = ["path:/people/**"]

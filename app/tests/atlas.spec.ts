@@ -454,28 +454,36 @@ test("the kinds by their switches (M12): links out of the base beside their note
   const { token } = (await (await page.request.get("api/session")).json()) as { token: string };
   const headers = { "x-isorite-token": token, Origin: new URL(test.info().project.use.baseURL!).origin };
   await page.request.post(`api/note?id=${q}`, { data: { text: `---\ntype: Question\ntitle: Why ${name}?\nabout: [coding/source-coding]\n---\n` }, headers });
-  await atlas(page);
-  await expect(note(page, q)).toBeVisible();
-  await expect(note(page, q).locator(".notch")).toBeVisible();
-  await expect(note(page, q)).toHaveAttribute("aria-label", `Question: Why ${name}?`);
-  // Links out of the base, beside their note: code, one of them not in the repository; then the web.
-  await setSwitch(page, "code", true);
-  await expect(page.locator(".sat.code")).toHaveCount(2);
-  await expect(page.locator(".sat.code.broken")).toHaveAttribute("aria-label", "decode, not in the repository");
-  await setSwitch(page, "web", true);
-  await expect(page.locator(".sat.web")).toHaveAttribute("href", "https://en.wikipedia.org/wiki/Huffman_coding");
-  await look(page, "atlas-kinds");
-  await setSwitch(page, "web", false);
-  await setSwitch(page, "code", false);
-  await expect(page.locator(".sat")).toHaveCount(0);
-  // Questions switched off leave the map, and come back.
-  await setSwitch(page, "questions", false);
-  await expect(note(page, q)).toHaveCount(0);
-  await expect(note(page, "coding/source-coding")).toBeVisible();
-  await setSwitch(page, "questions", true);
-  await expect(note(page, q)).toBeVisible();
-  const { version } = (await (await page.request.get(`api/note?id=${q}`)).json()) as { version: string };
-  await page.request.post(`api/note/delete?id=${q}`, { data: { base: version }, headers });
+  try {
+    await atlas(page);
+    await expect(note(page, q)).toBeVisible();
+    await expect(note(page, q).locator(".notch")).toBeVisible();
+    await expect(note(page, q)).toHaveAttribute("aria-label", `Question: Why ${name}?`);
+    // Links out of the base, beside their note: code, one of them not in the repository; then the web.
+    await setSwitch(page, "code", true);
+    await expect(page.locator(".sat.code")).toHaveCount(2);
+    await expect(page.locator(".sat.code.broken")).toHaveAttribute("aria-label", "decode, not in the repository");
+    await setSwitch(page, "web", true);
+    await expect(page.locator(".sat.web")).toHaveAttribute("href", "https://en.wikipedia.org/wiki/Huffman_coding");
+    await look(page, "atlas-kinds");
+    await setSwitch(page, "web", false);
+    await setSwitch(page, "code", false);
+    // Links to the global base and pictures are drawn whatever these switches say, and other specs seed them.
+    await expect(page.locator(".sat.web, .sat.code")).toHaveCount(0);
+    // Questions switched off leave the map, and come back.
+    await setSwitch(page, "questions", false);
+    await expect(note(page, q)).toHaveCount(0);
+    await expect(note(page, "coding/source-coding")).toBeVisible();
+    await setSwitch(page, "questions", true);
+    await expect(note(page, q)).toBeVisible();
+  } finally {
+    // Whatever happens above, the question is taken away: it would grow every folder for the specs after.
+    const got = await page.request.get(`api/note?id=${q}`);
+    if (got.ok()) {
+      const { version } = (await got.json()) as { version: string };
+      await page.request.post(`api/note/delete?id=${q}`, { data: { base: version }, headers });
+    }
+  }
 });
 
 test("the wheel zooms smoothly: the map goes to the zoom the wheel asks for over several frames, about the pointer", async ({ page }) => {

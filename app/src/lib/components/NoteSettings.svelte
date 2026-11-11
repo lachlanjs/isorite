@@ -9,6 +9,7 @@
   import { LAYOUTS, PANES, panes, type Pane } from "$lib/panes.svelte.ts";
   import { makeKind } from "$lib/make.ts";
   import { kept } from "$lib/here.ts";
+  import { SITE_HERE } from "$lib/guide/site.ts";
   import Glyph from "./Glyph.svelte";
   import { growOpen } from "$lib/motion.ts";
 
@@ -31,9 +32,9 @@
   async function startAgain(): Promise<void> {
     if (!sure) { sure = true; return; }
     const { forgetKept } = await import("$lib/guide/kept.ts");
-    await forgetKept();
+    await forgetKept(SITE_HERE);
     try { localStorage.removeItem(kept("isorite.last")); } catch { /* not kept */ }
-    location.hash = "";
+    location.hash = SITE_HERE === "tutorial" ? "" : `#/b/${SITE_HERE}`;
     location.reload();
   }
   // Deleting the open note (M23: from the menu, away from its name in the label). Asked first, saying who links here.
@@ -91,7 +92,7 @@
       <span class="label">base</span>
       <div class="row">
         <span class="name">{app.session.name}</span>
-        {#if site}<button class="btn quiet" class:danger={sure} type="button" title="The guide as it was first, here in this browser" onclick={() => void startAgain()} onblur={() => (sure = false)}>{sure ? "Reset? Your changes go" : "Reset guide"}</button>{/if}
+        {#if site}<button class="btn quiet" class:danger={sure} type="button" title="This base as it was first, here in this browser; the others are left as they are" onclick={() => void startAgain()} onblur={() => (sure = false)}>{sure ? "Reset? Your changes go" : "Reset this base"}</button>{/if}
       </div>
     </div>
   </section>

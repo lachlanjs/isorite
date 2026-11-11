@@ -59,7 +59,7 @@ export class FinderTerminal implements TerminalApi {
 
 /** The engine in the page, with the finder as its pane's agent: the engine's own calls, and its events with the
  *  finder's session told among them, as the server tells an agent's. */
-export function withFinder(engine: Engine): Api & { terminal: TerminalApi } {
+export function withFinder<E extends object = Record<never, never>>(engine: Engine, extra?: E): Api & { terminal: TerminalApi } & E {
   const listeners = new Set<(e: EngineEvent) => void>();
   const terminal = new FinderTerminal(engine, (view) => { for (const l of listeners) l({ type: "terminal", terminal: view }); });
   const events = (listener: (e: EngineEvent) => void): (() => void) => {
@@ -70,9 +70,10 @@ export function withFinder(engine: Engine): Api & { terminal: TerminalApi } {
   return new Proxy(engine, {
     get(target, key) {
       if (key === "terminal") return terminal;
+      if (extra && key in extra) return (extra as Record<PropertyKey, unknown>)[key];
       if (key === "events") return events;
       const v = Reflect.get(target, key, target) as unknown;
       return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(target) : v;
     },
-  }) as unknown as Api & { terminal: TerminalApi };
+  }) as unknown as Api & { terminal: TerminalApi } & E;
 }

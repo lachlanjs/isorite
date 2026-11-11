@@ -43,7 +43,7 @@ jobs:
         run: |
           tar -tzf npm-dist/isorite-*.tgz | grep -q "package/web/index.html"
           tar -tzf npm-dist/isorite-*.tgz | grep -q "package/notes/physics/softening.md"
-          tar -tzf npm-dist/isorite-*.tgz | grep -q "package/guide/start-here.md"
+          tar -tzf npm-dist/isorite-*.tgz | grep -q "package/guide/general/start-here.md"
           npm install -g ./npm-dist/isorite-*.tgz
           test "$(isorite --version)" = "${GITHUB_REF_NAME#v}"
           isorite example "$RUNNER_TEMP/example" && isorite check "$RUNNER_TEMP/example/nbody-notes"
