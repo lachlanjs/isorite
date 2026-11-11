@@ -3,10 +3,10 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  AGENTS_FILE, STRENGTH, ignoredBy, skippedName, MAX_ITEM_BYTES, citeKind, codeTarget, fileType, imageExt, imageType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, HIDDEN_FILE, GITATTRIBUTES, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, IndexCache, type ParseCache, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, type Entry, type FileEntry, type MapModel, type SessionMoment, type Stamp,
+  AGENTS_FILE, STRENGTH, ignoredBy, skippedName, MAX_ITEM_BYTES, citeKind, codeTarget, fileType, imageExt, imageType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, HIDDEN_FILE, GITATTRIBUTES, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, IndexCache, type ParseCache, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, LENSES_DIR, parseLens, resolveLens, lensNotes, renameInLens, islandNotes, allIslands, ELSEWHERE_TITLE, type ResolvedLens, type ResolvedIsland, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, type Entry, type FileEntry, type MapModel, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, MAX_IMAGE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type SearchHit, type Session, type FindResult, type FindHit } from "./api.ts";
-import { FIND_SIMILAR, Lookup, TOOLS, baseOf, noteId, withBase, type Similar, type ToolDef } from "./lookup.ts";
+import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, MAX_IMAGE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type LensSummary, type SearchHit, type Session, type FindResult, type FindHit } from "./api.ts";
+import { FIND_SIMILAR, LENS_ARGS, READ_LENS, Lookup, TOOLS, baseOf, noteId, withBase, type Similar, type ToolDef } from "./lookup.ts";
 import { ARTIFACTS, ARTIFACT_RECIPE, ASK_QUESTION, OFFER_TEXT, CONVERSATIONS_DIR, ISORITE, PRACTICE, READ_ARTIFACT, READ_DATA, WRITE_ARTIFACT, conversationPath, readTurns, type TurnItem } from "./turn.ts";
 import { WRITING } from "./writing.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
@@ -138,6 +138,11 @@ const MAX_SENT = 8000;
 /** The tools that make artifacts (M23). */
 const ARTIFACT_TOOLS = new Set([READ_DATA, ARTIFACT_RECIPE, READ_ARTIFACT, WRITE_ARTIFACT].map((t) => t.function.name));
 
+const allIslandsOf = (islands: { islands: unknown[] }[]): number => islands.reduce((n, i) => n + 1 + allIslandsOf(i.islands as { islands: unknown[] }[]), 0);
+
+/** search_notes with the two arguments a base with lenses offers. */
+const withLensArgs = (d: ToolDef): ToolDef => ({ ...d, function: { ...d.function, parameters: { ...d.function.parameters, properties: { ...(d.function.parameters.properties as Record<string, unknown>), ...LENS_ARGS } } } });
+
 /** The brief of the base, an agent's first look. */
 const BRIEF: ToolDef = { type: "function", function: { name: "brief_base", description: "What this knowledge base holds: its folders, how many notes each, and how to look things up in it. Call it first, once.", parameters: { type: "object", properties: {}, additionalProperties: false } } };
 
@@ -159,6 +164,10 @@ export class Engine implements Api {
   private rev = 0;
   private brokenRev = 0;
   private brokenKey = "";
+  /** The lens files (`.isorite/lenses/<name>.toml`) as last read, by name, and a count that moves when they change. */
+  private lensFiles = new Map<string, string>();
+  private lensKey = "";
+  private lensRev = 0;
   private readonly memoised = new Map<string, { rev: string; value: Promise<unknown> }>();
   private readonly listeners = new Set<(event: EngineEvent) => void>();
   /** The newest entry made anywhere among isorite's files: it decides the session. Undefined until looked for. */
@@ -224,7 +233,52 @@ export class Engine implements Api {
     const broken = await this.brokenCode();
     const key = JSON.stringify([...broken]);
     if (key !== this.brokenKey) { this.brokenKey = key; this.brokenRev++; }
-    return `${this.rev}.${this.brokenRev}`;
+    await this.readLenses();
+    return `${this.rev}.${this.brokenRev}.${this.lensRev}`;
+  }
+
+  /** Read the lens files again, and move the revision if one changed (an edit made outside isorite counts). */
+  private async readLenses(): Promise<void> {
+    const own = this.opts.own, names = (await own.list(LENSES_DIR)).filter((f) => !f.dir && f.name.endsWith(".toml")).map((f) => f.name.slice(0, -5)).sort();
+    const found = new Map<string, string>();
+    for (const n of names) found.set(n, (await own.read(`${LENSES_DIR}/${n}.toml`)) ?? "");
+    const key = JSON.stringify([...found]);
+    if (key === this.lensKey) return;
+    this.lensKey = key; this.lensFiles = found; this.lensRev++;
+  }
+
+  /** The lenses the base has: name and title, with how many islands and how many problems the file has. */
+  async lenses(): Promise<LensSummary[]> {
+    await this.revision();
+    return [...this.lensFiles].map(([name, text]) => { const l = parseLens(name, text); return { name, title: l.title, islands: allIslandsOf(l.islands), problems: l.problems.filter((p) => p.level === "error").length }; });
+  }
+
+  /** One lens over the notes as they are: its islands with their notes in order, the ghosts, what is in no island. */
+  lens(name: string): Promise<ResolvedLens> {
+    return this.once(`lens:${name}`, async () => {
+      const text = this.lensFiles.get(name);
+      if (text === undefined) throw new EngineError(`there is no lens ${name}`, 404);
+      return resolveLens(parseLens(name, text), lensNotes(this.bundle));
+    });
+  }
+
+  /** A lens as agents ask for it, sync: for the revision the engine has read (`revision()` first). */
+  private lensNow(name: string): ResolvedLens | null {
+    const text = this.lensFiles.get(name);
+    return text === undefined ? null : resolveLens(parseLens(name, text), lensNotes(this.bundle));
+  }
+
+  /** A note or folder was moved: the lens files that name it follow, so a lens does not lose it. Written as the notes are, one at a time. */
+  private async followInLenses(from: string, to: string, folder: boolean): Promise<void> {
+    await this.readLenses();
+    let any = false;
+    for (const [name, text] of [...this.lensFiles]) {
+      const r = renameInLens(text, from, to, folder);
+      if (!r.changed) continue;
+      await this.opts.own.write(`${LENSES_DIR}/${name}.toml`, r.text);
+      any = true;
+    }
+    if (any) { await this.readLenses(); this.publish({ type: "lenses" }); }
   }
 
   /** `make`'s answer for this revision, worked out once however many ask. */
@@ -457,7 +511,9 @@ export class Engine implements Api {
   // ------------------------------------------------------------ terminal agents
 
   async agentTools(): Promise<ToolDef[]> {
-    const tools = [BRIEF, TOOLS[0]!, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1), EDIT_NOTE, WRITE_NOTE, ASK_QUESTION, OFFER_TEXT, READ_DATA, ARTIFACT_RECIPE, WRITE_ARTIFACT, READ_ARTIFACT];
+    await this.revision();
+    const lensed = this.lensFiles.size > 0, search = lensed ? withLensArgs(TOOLS[0]!) : TOOLS[0]!;
+    const tools = [BRIEF, search, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1), ...(lensed ? [READ_LENS] : []), EDIT_NOTE, WRITE_NOTE, ASK_QUESTION, OFFER_TEXT, READ_DATA, ARTIFACT_RECIPE, WRITE_ARTIFACT, READ_ARTIFACT];
     // While a server holds other bases, every tool takes one (M20); which are lent is asked at each call.
     return this.opts.elsewhere ? withBase(tools, this.lent().map((l) => l.name), true) : tools;
   }
@@ -488,6 +544,8 @@ export class Engine implements Api {
       return { text: fromBase(there.base, done.text) };
     }
     args = there.args;
+    await this.revision();
+    if (tool === READ_LENS.function.name) return { text: this.readLens(args) };
     if (tool === BRIEF.function.name) {
       const lent = this.lent();
       const agents = (await this.agentsFile())?.trim();
@@ -662,13 +720,39 @@ export class Engine implements Api {
 
   /** A turn is looked up in the base as it is when the turn begins, as the agent's requests are. */
   private startTurn(agent: string, session: string): { request: string; lookup: Lookup } {
-    const turn = { request: `agent:${agent}:${++this.turnCount}`, lookup: new Lookup(this.bundle, "", this.similar, null, (b) => this.indexFor(b)) };
+    const turn = { request: `agent:${agent}:${++this.turnCount}`, lookup: new Lookup(this.bundle, "", this.similar, null, (b) => this.indexFor(b), (n) => this.lensNow(n)) };
     this.turns.set(`${agent}/${session}`, turn);
     this.publish({ type: "agent-start", request: turn.request, agent, session });
     return turn;
   }
 
   /** The base in brief, for an agent that has not seen it: its folders, how many notes each, and how to look. */
+  /** read_lens: the lenses, or one lens's islands with their notes in the order the person gave. */
+  private readLens(args: Record<string, unknown>): string {
+    const name = typeof args.name === "string" ? args.name.trim() : "";
+    if (!name) return [...this.lensFiles].map(([n, t]) => { const l = parseLens(n, t); return `- ${n}${l.title === n ? "" : ` (${l.title})`}: ${allIslandsOf(l.islands)} islands`; }).join("\n") || "This base has no lenses.";
+    const lens = this.lensNow(name);
+    if (!lens) return `There is no lens ${name}. ${[...this.lensFiles.keys()].join(", ") || "This base has none"}.`;
+    const only = typeof args.island === "string" && args.island ? islandNotes(lens, args.island) : null;
+    if (typeof args.island === "string" && args.island && !only) return `There is no island ${args.island} in ${name}.`;
+    const line = (id: string) => `- ${this.bundle.concepts.get(id)?.title ?? id} (/${id}.md)`;
+    const out: string[] = [`# ${lens.title} (lens ${lens.name}): the notes in the order the lens gives them`];
+    const titleOf = (ref: string) => (ref === ":" ? ELSEWHERE_TITLE : allIslands(lens).find((i) => i.ref === ref)?.title ?? ref);
+    const walk = (i: ResolvedIsland, depth: number) => {
+      const mine = [...i.notes, ...i.ghosts].filter((id) => !only || only.has(id));
+      const kids = i.islands.length;
+      if (only && !mine.length && !kids) return;
+      out.push(`${"#".repeat(Math.min(depth + 1, 6))} ${i.title}`);
+      for (const id of i.notes) if (!only || only.has(id)) out.push(line(id));
+      for (const id of i.ghosts) if (!only || only.has(id)) out.push(`${line(id)} (at home in ${titleOf(lens.home[id]!)})`);
+      for (const id of i.gone) out.push(`- ${id} (not in the base)`);
+      for (const k of i.islands) walk(k, depth + 1);
+    };
+    for (const i of lens.islands) walk(i, 2);
+    if (lens.elsewhere.length && (!only || lens.elsewhere.some((id) => only.has(id)))) { out.push(`## ${ELSEWHERE_TITLE}`); for (const id of lens.elsewhere) if (!only || only.has(id)) out.push(line(id)); }
+    return out.join("\n");
+  }
+
   private brief(): string {
     const b = this.bundle, counts = new Map<string, number>();
     for (const c of b.concepts.values()) counts.set(c.directory, (counts.get(c.directory) ?? 0) + 1);
@@ -677,6 +761,7 @@ export class Engine implements Api {
     return [
       `# ${this.opts.name}: a knowledge base of ${b.concepts.size} notes in ${dirs.filter(Boolean).length} folders`,
       `Folders, with the notes directly in each:\n${lines.join("\n")}${dirs.length > 60 ? `\n(and ${dirs.length - 60} more)` : ""}`,
+      ...(this.lensFiles.size ? [`Lenses (other ways of grouping these notes into islands; the folders above are the default): ${[...this.lensFiles].map(([n, t]) => { const title = parseLens(n, t).title; return title === n ? n : `${n} (${title})`; }).join(", ")}. read_lens lists one; search_notes takes lens and island.`] : []),
       `To look: search_notes by the words a note would use${this.similar ? ", find_similar by meaning when the words are unknown" : ""}; outline_note to see a note's headings and links; read_note for one section. Follow a note's links to what it rests on before searching again. Cite a note by its title and section.`,
       // How the base is kept, so what the agent writes in it matches (M15), and how an artifact is made (M23).
       `${ISORITE}\n\n${PRACTICE}\n\n${WRITING}\n\n${ARTIFACTS}`,
@@ -775,6 +860,7 @@ export class Engine implements Api {
         if (changed !== source.text) await this.one(() => this.put(c.id, changed, source.version, "edit", {}, "you"));
       }
     }
+    await this.one(() => this.followInLenses(from, to, true));
     await this.dropFolder(from, false);
   }
 
@@ -809,6 +895,8 @@ export class Engine implements Api {
       this.publish({ type: "note-changed", id: to, version: hashText(now), who });
       return now;
     });
+    // The lenses that name it follow it.
+    await this.one(() => this.followInLenses(id, to, false));
     // Links to it, in the form the base writes them (absolute, `/folder/note.md`), and its own links to itself.
     const old = new RegExp(`\\]\\(/${escapeRe(id)}\\.md(?=[#\\s)])`, "g");
     for (const c of linking) {

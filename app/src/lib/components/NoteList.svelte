@@ -2,6 +2,7 @@
   // Every note in the base, by folder, narrowed by typing. Typing matches titles, paths and descriptions at
   // once, and the text of the notes a moment later.
   import { goto } from "$app/navigation";
+  import { ELSEWHERE, ELSEWHERE_TITLE, type ResolvedIsland } from "@isorite/core";
   import type { NoteSummary, SearchHit } from "@isorite/engine";
   import { app, noteHref, slug } from "$lib/app.svelte.ts";
   import FolderField from "$lib/components/FolderField.svelte";
@@ -78,6 +79,22 @@
     // The top of the base is somewhere to drop a note too, though nothing be there: at the end, so nothing moves under the pointer.
     if (dragged !== null && !by.has("")) sorted.push(["", []]);
     return sorted;
+  });
+  // A lens chosen (docs/lenses.md): the list is its islands, in its order, each with the notes at home there in the order
+  // the lens gives them, and Elsewhere last. Islands are not folders: nothing here moves, makes or renames.
+  type Group = { ref: string; title: string; depth: number; notes: NoteSummary[] };
+  const groups = $derived.by((): Group[] | null => {
+    const lens = app.lens;
+    if (!lens) return null;
+    const byId = new Map(shown.map((n) => [n.id, n]));
+    const out: Group[] = [];
+    const take = (ids: string[]): NoteSummary[] => ids.flatMap((id) => byId.get(id) ?? []);
+    const walk = (list: ResolvedIsland[], depth: number): void => {
+      for (const i of list) { out.push({ ref: i.ref, title: i.title, depth, notes: take(i.notes) }); walk(i.islands, depth + 1); }
+    };
+    walk(lens.islands, 0);
+    out.push({ ref: ELSEWHERE, title: ELSEWHERE_TITLE, depth: 0, notes: take(lens.elsewhere) });
+    return words.length ? out.filter((g) => g.notes.length) : out.filter((g) => g.notes.length || g.ref !== ELSEWHERE);
   });
   // Moving a note (M33), where it would land is shown before it is let go: in the folder it is over, a gap opens at the
   // place it would take there (the list is by path), with its title in it.
@@ -254,6 +271,18 @@
   {/if}
   <HoldTags {g} mode="ghost" />
 
+  {#if groups}
+    {#each groups as grp (grp.ref)}
+      <section data-island={grp.ref} style:margin-left="{grp.depth * 14}px">
+        <h2 class="head"><span class="label">{grp.title}</span></h2>
+        <ul>
+          {#each grp.notes as n (n.id)}
+            <li data-row={n.id}><a class="vein-row" class:on={n.id === panes.last} data-lustre draggable="false" href={noteHref(n.id)}><span class="titleline"><span class="serif title">{n.title}</span>{#if n.conflicted}<span class="conflict" role="img" aria-label="Merge conflict" title="Merge conflict">!</span>{/if}</span>{#if n.description}<span class="desc">{n.description}</span>{/if}</a><NoteMenu id={n.id} title={n.title} /></li>
+          {/each}
+        </ul>
+      </section>
+    {/each}
+  {:else}
   {#each folders as [dir, notes] (dir)}
     {@const lands = landing(dir, notes)}
     <section data-dir={dir} style:margin-left="{dir ? (dir.split("/").length - 1) * 14 : 0}px" class:over={over === dir && dragged !== null} class:toplevel={!dir} animate:glide={{ duration: still() ? 0 : DUR_2 }}>
@@ -269,6 +298,7 @@
       </ul>
     </section>
   {/each}
+  {/if}
 
   {#if inText.length}
     <section>

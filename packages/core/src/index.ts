@@ -35,3 +35,5 @@ export type { MapDir, MapModel, MapNote, Reach, ReachLink } from "./map.ts";
 export type { StudyConfig } from "./study.ts";
 export { agentName } from "./agents.ts";
 export { ago, describe, momentKey } from "./timeline.ts";
+export { ELSEWHERE, ELSEWHERE_TITLE, FOLDERS_LENS, LENSES_DIR, allIslands, ghostOf, ghostRef, globRe, islandNotes, islandTitles, isIslandRef, lensModel, lensNotes, parseLens, renameInLens, resolveLens } from "./lens.ts";
+export type { Island, Lens, LensNote, LensProblem, ResolvedIsland, ResolvedLens } from "./lens.ts";

@@ -31,3 +31,18 @@ export function gitInit(folder: string, { env = process.env, timeout = 10_000 }:
     return false;
   }
 }
+
+/** The exact renames (100% alike) git has recorded for the files under `folder`, newest first, as paths relative to it:
+ *  what `isorite check --fix` follows a lens's entries by. Empty where the folder is in no repository or `git` fails. */
+export function gitRenames(folder: string, { env = process.env, timeout = 20_000 }: { env?: NodeJS.ProcessEnv; timeout?: number } = {}): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!repoOf(folder)) return out;
+  try {
+    const text = execFileSync("git", ["log", "--no-color", "--diff-filter=R", "--name-status", "-M100%", "--relative", "--pretty=format:", "--", "."], { cwd: folder, env: plainGitEnv(env), timeout, killSignal: "SIGKILL", encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    for (const line of text.split("\n")) {
+      const [status, from, to] = line.split("\t");
+      if (status?.startsWith("R") && from && to && !out.has(from)) out.set(from, to);
+    }
+  } catch { /* no history to follow */ }
+  return out;
+}

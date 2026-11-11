@@ -10,6 +10,7 @@
 - `agentic-development.md`: tactics for faster, cheaper agentic development.
 - `agentic-drafts/`: a draft `CLAUDE.md`, settings, two subagents and a release skill. Not installed.
 - `new-ideas.md`: 28 ideas not in `docs/ideas.md`.
+- `../lenses.md`: the design of lenses (decided 2026-11-11), built in its first slice: a lens file, `check`, one lens drawn, `read_lens`.
 
 The Atlas work is recorded in `docs/atlas-layout.md`, section 7.
 
@@ -25,6 +26,7 @@ The Atlas work is recorded in `docs/atlas-layout.md`, section 7.
 - Simplification: spikes, the old eval, the learner record, proposals and `/parts` deleted; appearance cut to the theme switch; plans archived to `docs/archive/` with `docs/history.md`; Iso renamed Agent in code and the guide.
 - Skills: isorite's own agent loads `SKILL.md` skills (built in, `<data>/skills/`, `<base>/.isorite/skills/`), by name in the prompt and `use_skill`, or `/name` in the composer; on/off in the agent settings, kept in the base; Jane Street's socratic-tutor ships built in (+212 tokens on, 0 off).
 - Tests: the two ~1,200-note Atlas cases run only with `ISORITE_SLOW=1`; `npm test` takes about a minute and a half.
+- Lenses, first slice: `.isorite/lenses/<name>.toml` (islands, `notes` and `match` rules, order, titles), resolved in core and served by the engine per revision; a lens picker in the Atlas header; ghosts and Elsewhere; moves rewrite lens entries; `isorite check` reads lenses (`--strict`, `--fix` from git renames); `read_lens` and a lens filter on search; the guide's first-hour lens.
 
 ## Unfinished
 
@@ -34,3 +36,4 @@ The Atlas work is recorded in `docs/atlas-layout.md`, section 7.
 - "Iso" remains in the kit's element names (`<iso-*>`) and in `docs/tui-research.md`.
 - A truly incremental bundle and a file watcher (see `performance.md`).
 - The full browser suite was not rerun end to end after the last test fixes; `note-drag` "gold one sends it" is flaky on the phone project.
+- Lenses, for the next slice: editing a lens in the app; `linked-from:` and `type:` rules; files and code as items in a lens; a lens file's own journal; the 1,200-note benchmark with a lens; agent writes to lens files through the notes' route; a note-list filter by lens and island in the API.

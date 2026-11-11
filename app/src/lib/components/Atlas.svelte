@@ -3,7 +3,7 @@
   // zoom, what is open at this zoom) and what is chosen, and hands each folder, block and route its place and
   // its marks. The marks are plain maps from a note to a mark, looked up while drawing.
   import { page } from "$app/state";
-  import { reach, STRENGTH } from "@isorite/core";
+  import { ghostOf, isIslandRef, islandTitles, lensModel, reach, STRENGTH } from "@isorite/core";
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
   import type { How, MapReport } from "@isorite/engine";
   import { untitled } from "$lib/make.ts";
@@ -110,27 +110,36 @@
     for (const t of terminal.session?.turns ?? []) for (const i of t.items) if (i.kind === "question" && !i.made) out.push({ ref: `?${i.id}`, title: i.title, about: i.about });
     return out;
   });
+  /** The lens the map in view is of, null for the folders. */
+  let lensIn = $state.raw<import("@isorite/core").ResolvedLens | null>(null);
+  const titles = $derived(lensIn ? islandTitles(lensIn) : new Map<string, string>());
   let fresh = false; // the next layout is worked out from nothing, not from where things stood (M37)
   async function load(): Promise<void> {
     try {
       const got = await app.api.map(), asked = untrack(() => prospects);
+      // A lens other than the folders (docs/lenses.md): its islands are the map's folders, each note drawn at its home.
+      const lens = await app.loadLens();
+      lensIn = lens;
+      const base = lens ? lensModel(got.model, lens) : got.model;
       const notes: MapReport["notes"] = { ...got.notes };
       for (const p of asked) notes[p.ref] = { title: p.title, tokens: 0, kind: "question" };
-      const all = { ...got, model: withProspects(got.model, asked), notes };
+      const all = { ...got, model: withProspects(base, asked), notes };
       // The kinds switched off are not on the map (M12), and a resolved question leaves it.
       // Files beside the notes (M23: pictures, artifacts, data, documents, others) are on it when its switch is on; code files
       // in the base (docs/files.md) when the code switch is.
       const next = { ...all, model: withoutHidden(withoutNotes(all.model, (ref) => {
+        // A ghost goes with the note it stands for.
+        if (ghostOf(ref)) { const n = all.notes[ghostOf(ref)!]; return n?.kind === "question" ? !panes.on.questions : n?.kind === "problem" ? !panes.on.problems : false; }
         const f = all.files?.[ref];
         if (f) return f.kind === "artifact" ? !panes.on.artifacts : f.kind === "code" ? !panes.on.code : !panes.on.pictures;
         const n = all.notes[ref];
         return n?.kind === "question" ? !panes.on.questions : n?.kind === "problem" ? !panes.on.problems : false;
-      }), (id) => !id.startsWith("?") && app.isHidden(id)) };
+      }), (id) => { const h = ghostOf(id) ?? id; return !h.startsWith("?") && app.isHidden(h); }) };
       // A changed base is laid out from where things stood (V5), on the same grid and the same way.
-      const on = `${flow}|${grain}`, from = laid && laidOn === on && !fresh ? laid.layout.orders ?? null : null;
+      const on = `${flow}|${grain}|${lens?.name ?? ""}`, from = laid && laidOn === on && !fresh ? laid.layout.orders ?? null : null;
       if (!shapeFor || fresh || !laid) shapeFor = shapeNow();
       fresh = false;
-      const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from, aspect: shapeFor });
+      const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from, aspect: shapeFor, ...(lens ? { lens: lens.name } : {}) });
       laidOn = on;
       const changed = !!laid && laid.key !== next_laid.key;
       const was = laid && L ? { refs: new Set(L.items.map((n) => n.ref)), edges: new Set(report!.model.edges.map(([a, b]) => `${a}>${b}`)) } : null;
@@ -177,6 +186,16 @@
     if (kindsWere && kindsWere !== now) void load();
     kindsWere = now;
   });
+  // Another lens chosen is a new map: laid out on its own and framed afresh. A lens file that changed, or a note moved, comes
+  // by the events and the refresh that follow them.
+  let lensWere = app.lensName;
+  $effect(() => {
+    const now = app.lensName;
+    if (now === lensWere) return;
+    lensWere = now;
+    untrack(() => { moved = false; shapeFor = 0; fresh = true; void load(); });
+  });
+  $effect(() => { const now = app.lens; untrack(() => { if (now && lensIn && now !== lensIn && JSON.stringify(now) !== JSON.stringify(lensIn)) void load(); }); });
   // Hiding or showing a note or a folder lays the map out again, from where things stood.
   let hiddenWere = "";
   $effect(() => {
@@ -439,6 +458,14 @@
     for (const i of terminal.session?.turns.at(-1)?.items ?? []) if (i.kind === "tool" && i.note && !i.base && i.status !== "failed" && !CHANGES.test(i.name) && !out.has(i.note)) out.set(i.note, out.size + 1);
     return out;
   });
+  /** A ghost's dotted line to its home, drawn while either is lit (the note chosen or pointed at is the home). */
+  const ghostLines = $derived.by(() => {
+    if (!L || !idx || !at || !lensIn) return [];
+    const home = idx.at.get(at);
+    if (home === undefined || open[home] !== "s") return [];
+    const mid = (i: number): Point => { const n = L.items[i]!; return [(n.gx + n.w / 2) * L.cell, (n.gy + n.h / 2) * L.cell]; };
+    return L.items.flatMap((n, i) => (ghostOf(n.ref) === at && open[i] === "s" ? [{ key: `ghost:${i}`, d: `M${mid(i)[0]} ${mid(i)[1]}L${mid(home)[0]} ${mid(home)[1]}` }] : []));
+  });
   /** The note it is reading now. */
   const reading = $derived(running ? (run!.steps.findLast((s) => s.opened && !s.failed)?.opened ?? "") : "");
   // Its steps along links, drawn as the map draws a link: from the note in hand to the one it led to.
@@ -500,13 +527,13 @@
     const carried = g.item?.kind === "folder" ? g.item.id : null;
     let best: { ref: string; depth: number } | null = null;
     L.items.forEach((n, i) => {
-      if (n.kind !== "folder" || open[i] === "-" || !n.ref || n.ref.startsWith("@") || gx < n.gx || gx >= n.gx + n.w || gy < n.gy || gy >= n.gy + n.h) return;
+      if (n.kind !== "folder" || open[i] === "-" || !n.ref || n.ref.startsWith("@") || isIslandRef(n.ref) || gx < n.gx || gx >= n.gx + n.w || gy < n.gy || gy >= n.gy + n.h) return;
       const ref = n.ref.replace(/\/$/, "");
       if (carried !== null && (ref === carried || ref.startsWith(`${carried}/`))) return;
       if (!best || n.depth > best.depth) best = { ref, depth: n.depth };
     });
     // On the map but in no folder: the top of the base (M37), where a note could not be put before.
-    return (best as { ref: string } | null)?.ref ?? (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom ? "" : null);
+    return (best as { ref: string } | null)?.ref ?? (!app.lens && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom ? "" : null);
   }
   async function moveHeld(item: Item, dir: string): Promise<void> {
     const from = item.id.replace(/\/$/, ""), name = from.split("/").at(-1)!, to = dir ? `${dir}/${name}` : name;
@@ -574,7 +601,7 @@
   /** The deepest folder of the base holding a place on the map (in cells): "" for the top. */
   function folderAt(gx: number, gy: number): string {
     let best: { ref: string; depth: number } | null = null;
-    for (const n of L!.items) if (n.kind === "folder" && !n.ref.startsWith("@") && gx >= n.gx && gx < n.gx + n.w && gy >= n.gy && gy < n.gy + n.h && (!best || n.depth > best.depth)) best = { ref: n.ref, depth: n.depth };
+    for (const n of L!.items) if (n.kind === "folder" && !n.ref.startsWith("@") && !isIslandRef(n.ref) && gx >= n.gx && gx < n.gx + n.w && gy >= n.gy && gy < n.gy + n.h && (!best || n.depth > best.depth)) best = { ref: n.ref, depth: n.depth };
     return best?.ref ?? "";
   }
   function holding(e: PointerEvent, at: { x: number; y: number }): void {
@@ -596,6 +623,7 @@
       holdDone = setTimeout(() => { holdDone = undefined; dragged = true; if (touch) offered = { ref: on, x: at.x, y: at.y }; else give(on); }, HOLD);
       return;
     }
+    if (app.lens) return; // a lens's islands are not folders: nothing is made, or moved, on its map
     const u = L.cell * view.k, gx = Math.round((at.x - view.x) / u), gy = Math.round((at.y - view.y) / u);
     const what: Place = { dir: folderAt(gx, gy), gx, gy, folder: false };
     holdDone = setTimeout(() => { holdDone = undefined; dragged = true; gripped = at; spot = { x: at.x, y: at.y, px: at.x, py: at.y, choice: null, what }; viewport?.setPointerCapture(e.pointerId); }, SPOT_HOLD);
@@ -693,14 +721,14 @@
 
   /** What an item opens: a note, a file, or for a folder of pictures, the note they were pasted into (M22). */
   const opens = (ref: string): string => (ref.endsWith("/") ? ref.slice(0, -1) : ref);
-  const title = (ref: string): string => report?.notes[ref]?.title ?? report?.files?.[ref]?.title ?? ref.split("/").at(-1) ?? ref;
+  const title = (ref: string): string => report?.notes[ghostOf(ref) ?? ref]?.title ?? report?.files?.[ref]?.title ?? ref.split("/").at(-1) ?? ref;
   /** A folder renamed where it is: its place in the one it is in, under the new name. */
   async function rename(ref: string, name: string): Promise<void> {
     const from = ref.replace(/\/$/, ""), parent = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "";
     const to = [parent, name.replace(/^\/+|\/+$/g, "")].filter(Boolean).join("/");
     try { await app.api.moveFolder(from, to); await app.refresh(); void load(); } catch (e) { given = (e as Error).message; }
   }
-  const folderName = (ref: string): string => ref.split("/").at(-1) || app.session?.name || "the base";
+  const folderName = (ref: string): string => (isIslandRef(ref) ? titles.get(ref) ?? ref : ref.split("/").at(-1) || app.session?.name || "the base");
 
   // ------------------------------------------------------------ moving about
 
@@ -746,7 +774,7 @@
     if (n) return n.startsWith("@") ? null : { kind: "note", id: n, title: title(n) };
     // An open folder by its title; a closed one is a block, picked up anywhere on it.
     const f = (e.target.closest(".frame-title")?.closest<HTMLElement>("[data-folder]") ?? e.target.closest<HTMLElement>("button[data-folder]"))?.dataset.folder;
-    return f && !f.startsWith("@") ? { kind: "folder", id: f, title: folderName(f) } : null;
+    return f && !f.startsWith("@") && !isIslandRef(f) ? { kind: "folder", id: f, title: folderName(f) } : null;
   }
   function carry(e: PointerEvent): void {
     if (!press || e.pointerType !== "mouse") return;
@@ -934,17 +962,19 @@
     <div class="atlas-world" class:labels class:shifting class:moving data-open={open} style="transform: translate({moving ? view.x : Math.round(view.x)}px, {moving ? view.y : Math.round(view.y)}px) scale({view.k / drawnK}); --u: {(L?.cell ?? 7) * drawnK}px; --k: {drawnK}">
       <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each folders as f (f.item.id)}
-          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} bare={f.open && !L.items.some((x) => x.parent === f.i)} dim={(!!lit && !f.open && !held.has(f.i)) || (finder.lit.size > 0 && !f.open && !foundIn(f.item.ref))} given={agentLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} renaming={renamingRef === f.item.ref} onstop={() => { if (renamingRef === f.item.ref) renamingRef = ""; }} onrename={f.item.ref.startsWith("@") || !f.item.ref ? undefined : (name) => void rename(f.item.ref, name)} />
+          <AtlasFolder item={f.item} name={folderName(f.item.ref)} count={idx!.noteCount[f.i]!} open={f.open} titled={f.item.parent < 0 || (f.item.gy - L.items[f.item.parent]!.gy) * L.cell * drawnK >= 18} held={holds(f.i, f.open)} bare={f.open && !L.items.some((x) => x.parent === f.i)} dim={(!!lit && !f.open && !held.has(f.i)) || (finder.lit.size > 0 && !f.open && !foundIn(f.item.ref))} given={agentLens && givenFolders.has(f.item.ref)} here={!f.open && hereAt === f.i} moment={thereAt === f.i ? there!.who : ""} onpick={(e) => enter(f.i, e)} renaming={renamingRef === f.item.ref} onstop={() => { if (renamingRef === f.item.ref) renamingRef = ""; }} onrename={f.item.ref.startsWith("@") || !f.item.ref || isIslandRef(f.item.ref) ? undefined : (name) => void rename(f.item.ref, name)} />
       {/each}
       </div>
-      <AtlasRoutes k={drawnK} {rest} pointed={!chosen && !!pointed} hot={[...(agentLens ? agentHot : []), ...hot, ...thereHot]} {pulses} counts={litCount} {grown} {beat} {retracting} />
+      <AtlasRoutes k={drawnK} ghosts={ghostLines} {rest} pointed={!chosen && !!pointed} hot={[...(agentLens ? agentHot : []), ...hot, ...thereHot]} {pulses} counts={litCount} {grown} {beat} {retracting} />
       <!-- The count of a merged route is not drawn (M37): the width of the line says enough. -->
       <div class="scaled" style="transform: scale({drawnK}); --u: {L.cell}px; --px: {1 / drawnK}px; --ik: {1 / drawnK}">
       {#each notes as n (n.item.id)}
-        {@const m = marks.get(n.item.ref)}
+        <!-- A ghost (a lens's note at home in another island) stands for that note: it is lit, chosen and opened as it is. -->
+        {@const ref = ghostOf(n.item.ref) ?? n.item.ref}
+        {@const m = marks.get(ref)}
         {@const mark = m?.mark ?? ""}
-          <AtlasBlock item={n.item} conflicted={!!report.notes[n.item.ref]?.conflicted} title={title(n.item.ref)} kind={report.notes[n.item.ref]?.kind ?? ""} done={!!report.notes[n.item.ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} agent={agentMark(n.item.ref)} file={report.files?.[n.item.ref]?.kind ?? ""} prospect={n.item.ref.startsWith("?")} given={agentLens && givenNotes.has(n.item.ref)} held={agentLens && !givenNotes.has(n.item.ref) && readNotes.has(n.item.ref) ? "on" : ""} changed={agentLens && changedByAgent.has(n.item.ref)} order={agentLens ? (readOrder.get(n.item.ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={(!!lit && !mark) || (finder.lit.size > 0 && !finder.lit.has(n.item.ref))} found={finder.lit.get(n.item.ref) ?? ""} href={noteHref(opens(n.item.ref))}
-            onpick={(e) => choose(e, n.item.ref)} onpoint={(on) => { if ((on && dragged) || g.phase !== "idle") return; pointed = on ? n.item.ref : pointed === n.item.ref ? "" : pointed; pointing.onAtlas = pointed; }} />
+          <AtlasBlock item={n.item} ghost={ref !== n.item.ref} conflicted={!!report.notes[ref]?.conflicted} title={title(ref)} kind={report.notes[ref]?.kind ?? ""} done={!!report.notes[ref]?.done} behind={behind(n.item.parent)} {mark} far={m?.far ?? 0} agent={agentMark(ref)} file={report.files?.[ref]?.kind ?? ""} prospect={ref.startsWith("?")} given={agentLens && givenNotes.has(ref)} held={agentLens && !givenNotes.has(ref) && readNotes.has(ref) ? "on" : ""} changed={agentLens && changedByAgent.has(ref)} order={agentLens ? (readOrder.get(ref) ?? 0) : 0} moment={thereAt === n.i ? there!.who : ""} here={hereAt === n.i} dim={(!!lit && !mark) || (finder.lit.size > 0 && !finder.lit.has(ref))} found={finder.lit.get(ref) ?? ""} href={noteHref(opens(ref))}
+            onpick={(e) => choose(e, ref)} onpoint={(on) => { if ((on && dragged) || g.phase !== "idle") return; pointed = on ? ref : pointed === ref ? "" : pointed; pointing.onAtlas = pointed; }} />
       {/each}
       {#each sats as s (s.key)}
         {#if s.kind === "web"}

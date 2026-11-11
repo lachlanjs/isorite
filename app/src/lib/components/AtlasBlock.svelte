@@ -7,8 +7,10 @@
   import type { FileKind } from "@isorite/core";
   import Glyph from "./Glyph.svelte";
 
-  let { item, title, kind = "", file = "", prospect = false, done = false, behind = "var(--ground-0)", mark = "", far = 0, agent = "", conflicted = false, found = "", dim = false, moment = "", given = false, held = "", changed = false, order = 0, here = false, href, onpick, onpoint }: {
+  let { item, ghost = false, title, kind = "", file = "", prospect = false, done = false, behind = "var(--ground-0)", mark = "", far = 0, agent = "", conflicted = false, found = "", dim = false, moment = "", given = false, held = "", changed = false, order = 0, here = false, href, onpick, onpoint }: {
     item: LayoutItem;
+    /** A lens's note drawn again in an island that holds it but is not its home: faint and dashed, standing for the note. */
+    ghost?: boolean;
     title: string;
     /** A question or a problem (M12), and whether it is solved. */
     kind?: "" | "question" | "problem";
@@ -48,7 +50,7 @@
 </script>
 
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the address given is resolved (noteHref) -->
-<a data-lustre class="n {moment ? `mo-${moment}` : ''} {agent ? `p-${agent}` : ''} {mark} {kind}" class:done class:dim={dim && !agent && !given} class:conflicted class:f-key={found === "words"} class:f-sem={found === "meaning"} class:f-both={found === "both"} class:far={far > 1} class:given class:held={held === "on"} class:changed class:here class:file={!!file} class:prospect aria-current={here ? "page" : undefined} {href} aria-label={`${prospect ? "Asked back, not kept: " : kind === "question" ? `Question${done ? ", resolved" : ""}: ` : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in the agent's context" : held === "on" ? ": read by the agent" : ""}${changed ? ", changed by the agent" : ""}`} title={given ? "In the agent's context: shift+click takes it back" : undefined} data-note={item.ref} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
+<a data-lustre class="n {moment ? `mo-${moment}` : ''} {agent ? `p-${agent}` : ''} {mark} {kind}" class:done class:dim={dim && !agent && !given} class:conflicted class:f-key={found === "words"} class:f-sem={found === "meaning"} class:f-both={found === "both"} class:far={far > 1} class:given class:held={held === "on"} class:changed class:here class:file={!!file} class:ghost class:prospect aria-current={here ? "page" : undefined} {href} aria-label={`${ghost ? "Also here: " : ""}${prospect ? "Asked back, not kept: " : kind === "question" ? `Question${done ? ", resolved" : ""}: ` : kind === "problem" ? `Problem${done ? ", solved" : ""}: ` : ""}${title}${given ? ": in the agent's context" : held === "on" ? ": read by the agent" : ""}${changed ? ", changed by the agent" : ""}`} title={given ? "In the agent's context: shift+click takes it back" : undefined} data-note={ghost ? undefined : item.ref} data-ghost={ghost ? item.ref : undefined} style="--x:{item.gx};--y:{item.gy};--w:{item.w};--h:{item.h};--lit:{Math.max(34, 100 - (far - 1) * 20)}%;--behind:{behind}"
   onclick={onpick}
   onpointerenter={(e) => { if (e.pointerType === "mouse") onpoint(true); }}
   onpointerleave={(e) => { if (e.pointerType === "mouse") onpoint(false); }}
@@ -70,6 +72,8 @@
      its opacity, the time of a change. Without motion it is simply there. */
   @media (prefers-reduced-motion: no-preference) { @starting-style { .n { opacity: 0; } } }
   /* A file (M23): its glyph, its name in the faint ink, a lighter edge, and no fill of its own. */
+  /* A ghost (docs/lenses.md): the note's name in a dashed, fill-less outline, a tag and not a block. */
+  .n.ghost { color: var(--text-faint); background: transparent; border-style: dashed; }
   .n.file { gap: 6px; color: var(--text-faint); background: var(--ground-0); border-style: dashed; border-color: var(--line-strong); }
   .n.file :global(.glyph) { color: var(--text-soft); }
   /* Its name at the screen's own pixels (M24): the block's size at the zoom, scaled back, so the text is laid out

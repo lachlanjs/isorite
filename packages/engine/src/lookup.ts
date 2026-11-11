@@ -3,7 +3,7 @@
 // links. Read only: there is no tool here that writes. Carried over from rdstudio's lookup.ts, without the code
 // tools.
 
-import { SearchIndex, headings, section, type Bundle } from "@isorite/core";
+import { SearchIndex, headings, islandNotes, section, type Bundle, type ResolvedLens } from "@isorite/core";
 
 /** A tool as an agent is offered it: its name, what it does, and its arguments' JSON Schema. */
 export interface ToolDef { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } }
@@ -49,6 +49,11 @@ export const TOOLS: ToolDef[] = [
   fn("outline_note", "A note's description, its headings, the notes it links to and the notes that link to it, without its body. Use it to choose a section to read.", { id: { ...str, description: "The note's id or path: basics/entropy or /basics/entropy.md." } }, ["id"]),
   fn("read_note", "Read one section of a note, by its heading, or the whole note when no section is named. Prefer a section. A picture in it is ![what it shows](path): you have its words, not the picture.", { id: str, section: { ...str, description: "A heading's text, as outline_note gives it." } }, ["id"]),
 ];
+/** Offered only where the base has lenses. */
+export const READ_LENS: ToolDef = fn("read_lens", "A lens of this knowledge base: its notes grouped into islands, in the order the person gave (a lens can be a path to follow), each note with its title, and notes at home in another island marked. Without a name, lists the lenses. search_notes takes lens and island to look in one.",
+  { name: { ...str, description: "The lens's name, as the brief gives it." }, island: { ...str, description: "Only this island (and the ones in it), by its name or `Parent > Child`." } }, []);
+/** The two arguments search_notes takes where there are lenses. */
+export const LENS_ARGS = { lens: { ...str, description: "Only notes in this lens (see read_lens)." }, island: { ...str, description: "With lens: only this island of it." } };
 export const FIND_SIMILAR: ToolDef = fn("find_similar", "Find notes by meaning: notes that say something like the text you give, even in quite other words. Slower and vaguer than search_notes: use it after search_notes and the links of the notes in hand have not found what you need, or when you cannot guess the words a note would use. Give a question or a sentence, not keywords. Returns each note's nearest section, with how alike it is (0 to 1).",
   { text: { ...str, description: "A question, or a sentence saying what you are looking for." }, under: { ...str, description: "Only notes in this folder." }, limit: { type: "integer", description: "How many, 6 unless said, 15 at most." } }, ["text"]);
 
@@ -104,8 +109,9 @@ export class Lookup {
   private readonly away: Away | null;
 
   private readonly shared: ((b: Bundle) => SearchIndex) | null;
+  private readonly lenses: ((name: string) => ResolvedLens | null) | null;
 
-  constructor(b: Bundle, note: string, similar: Similar | null = null, away: Away | null = null, shared: ((b: Bundle) => SearchIndex) | null = null) { this.shared = shared; this.b = b; this.held = [note]; this.similar = similar; this.away = away; }
+  constructor(b: Bundle, note: string, similar: Similar | null = null, away: Away | null = null, shared: ((b: Bundle) => SearchIndex) | null = null, lenses: ((name: string) => ResolvedLens | null) | null = null) { this.shared = shared; this.b = b; this.held = [note]; this.similar = similar; this.away = away; this.lenses = lenses; }
 
   defs(): ToolDef[] { return withBase(this.similar ? [TOOLS[0]!, FIND_SIMILAR, ...TOOLS.slice(1)] : TOOLS, this.away?.lent().map((l) => l.name) ?? []); }
 
@@ -155,7 +161,15 @@ export class Lookup {
     step.query = query;
     this.index ??= this.shared ? this.shared(this.b) : new SearchIndex(this.b);
     const limit = Math.max(1, Math.min(Number(a.limit) || 8, 15));
-    const hits = this.index.search(query, { limit, ...(typeof a.under === "string" && a.under ? { under: a.under.replace(/^\/+|\/+$/g, "") } : {}) });
+    let only: ReadonlySet<string> | undefined;
+    if (typeof a.lens === "string" && a.lens) {
+      const lens = this.lenses?.(a.lens.trim()) ?? null;
+      if (!lens) return this.fail(step, `There is no lens ${a.lens}. read_lens lists them.`);
+      const named = islandNotes(lens, typeof a.island === "string" ? a.island : undefined);
+      if (!named) return this.fail(step, `There is no island ${String(a.island)} in the lens ${lens.name}. read_lens ${lens.name} lists them.`);
+      only = named;
+    }
+    const hits = this.index.search(query, { limit, ...(only ? { only } : {}), ...(typeof a.under === "string" && a.under ? { under: a.under.replace(/^\/+|\/+$/g, "") } : {}) });
     step.notes = hits.map((h) => h.concept.id);
     for (const id of step.notes) if (!this.named.has(id)) this.named.set(id, "keyword");
     step.said = `Searched the notes for "${query}": ${hits.length ? `${hits.length} found` : "nothing found"}`;

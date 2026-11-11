@@ -41,6 +41,8 @@ export interface SearchOptions {
   trust?: Trust;
   status?: string;
   under?: string;
+  /** Only these notes (a lens's, or one of its islands'). */
+  only?: ReadonlySet<string>;
 }
 
 /** Rounded as Python's round(x, 3) prints it (they differ only on exact ties). */
@@ -105,7 +107,7 @@ export class SearchIndex {
     return Math.log(1 + (n - df + 0.5) / (df + 0.5));
   }
 
-  search(query: string, { limit = 8, type, tags, trust, status, under }: SearchOptions = {}): Hit[] {
+  search(query: string, { limit = 8, type, tags, trust, status, under, only }: SearchOptions = {}): Hit[] {
     const terms = tokenize(query);
     const wanted = new Set([...(tags ?? [])].map((t) => t.toLowerCase()));
     const hits: { concept: Concept; score: number }[] = [];
@@ -118,6 +120,7 @@ export class SearchIndex {
       }
       if (trust && c.trust !== trust) continue;
       if (status && c.status !== status) continue;
+      if (only && !only.has(cid)) continue;
       if (under && !(cid + "/").startsWith(under.replace(/^\/+|\/+$/g, "") + "/")) continue;
       let score = 0;
       const norm = this.avgLen ? K1 * (1 - B + (B * this.lengths.get(cid)!) / this.avgLen) : K1;

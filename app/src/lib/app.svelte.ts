@@ -2,9 +2,12 @@
 // kept current from the engine's events.
 
 import { resolve } from "$app/paths";
-import type { Api, EngineEvent, Listing, Session, Step } from "@isorite/engine";
+import { FOLDERS_LENS, type ResolvedLens } from "@isorite/core";
+import type { Api, EngineEvent, LensSummary, Listing, Session, Step } from "@isorite/engine";
 import { httpApi } from "./api.ts";
 import type { Embedded } from "./editor/blocks.ts";
+
+const storedLens = (): string => { try { return localStorage.getItem("isorite.lens") || FOLDERS_LENS; } catch { return FOLDERS_LENS; } };
 
 class AppState {
   api!: Api;
@@ -20,6 +23,23 @@ class AppState {
     const was = this.hidden;
     this.hidden = [...new Set(ids)].sort();
     try { await this.api.setHidden(this.hidden); } catch (e) { this.hidden = was; throw e; }
+  }
+  /** The lenses the base has (`.isorite/lenses/`), the one the Atlas and the list show ("folders" is the real folders), and
+   *  that one read over the notes (null for the folders). The choice is the person's, kept in this browser. */
+  lenses = $state.raw<LensSummary[]>([]);
+  lensName = $state(storedLens());
+  lens = $state.raw<ResolvedLens | null>(null);
+  /** Read the lenses and the chosen one again: after a change to the notes, which may have moved a note between islands. */
+  async loadLens(): Promise<ResolvedLens | null> {
+    try { this.lenses = await this.api.lenses(); } catch { this.lenses = []; }
+    if (this.lensName !== FOLDERS_LENS && !this.lenses.some((l) => l.name === this.lensName)) this.lensName = FOLDERS_LENS;
+    this.lens = this.lensName === FOLDERS_LENS ? null : await this.api.lens(this.lensName).catch(() => null);
+    return this.lens;
+  }
+  async setLens(name: string): Promise<void> {
+    this.lensName = name;
+    try { localStorage.setItem("isorite.lens", name); } catch { /* not kept */ }
+    await this.loadLens();
   }
   /** Why nothing could be loaded, when nothing could. */
   error = $state("");
@@ -46,8 +66,10 @@ class AppState {
       return;
     }
     void api.hidden().then((h) => { this.hidden = h.ids; }, () => undefined);
+    void this.loadLens();
     api.events((event) => {
       if (event.type === "hidden") void api.hidden().then((h) => { this.hidden = h.ids; }, () => undefined);
+      if (event.type === "lenses") void this.loadLens();
       this.follow(event);
       for (const listener of this.listeners) listener(event);
       if (event.type !== "note-changed") return;
@@ -73,6 +95,7 @@ class AppState {
 
   async refresh(): Promise<void> {
     try { this.listing = await this.api.notes(); } catch { /* the next event asks again */ }
+    void this.loadLens();
   }
 
   private follow(e: EngineEvent): void {

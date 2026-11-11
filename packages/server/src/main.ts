@@ -2,7 +2,7 @@
 // isorite's command line.
 //
 //   isorite [--no-open] [--port <n>]       at a terminal: open the base here, or choose one; else this help
-//   isorite check <notes> [--unused]       lint a folder of notes; --unused lists pictures no note shows
+//   isorite check <notes> [--unused]       lint a folder of notes and its lenses; --unused lists pictures no note shows
 //   isorite serve <notes>                  open it in the browser
 //   isorite migrate <study base>           move a study base (format 1) into its notes' .isorite/
 //   isorite example <folder>               write the example base, partway built, into a folder
@@ -11,11 +11,12 @@
 //   isorite setup [--yes ...]              a short guided setup (also the first run); flags for scripts and agents
 //   isorite doctor [<notes>] [--report]    whether isorite can work here, a step at a time
 
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { checkArtifact, columnsOf, manifestOf, parseData } from "@isorite/kit";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { StudyError, citeKind, repairFrontmatter } from "@isorite/core";
+import { LENSES_DIR, OWN_DIR, StudyError, citeKind, lensNotes, parseLens, renameInLens, repairFrontmatter, resolveLens } from "@isorite/core";
+import { gitRenames } from "./git.ts";
 import { loadBundle } from "@isorite/core/node";
 import { doctor } from "./doctor.ts";
 import { configPath, rememberBase } from "./config.ts";
@@ -52,9 +53,11 @@ Notes are plain Markdown in a folder of your project. Your agent reads and write
 const USAGE = `isorite: an agentic harness for understanding
 
 ${SETUP_USAGE}  isorite new <folder>                   a new base: an empty folder with .isorite/
-  isorite check <notes> [--unused] [--fix]
-                                         lint: frontmatter, links, cycles; --unused: pictures no note
-                                         shows; --fix: quote a colon in frontmatter
+  isorite check <notes> [--unused] [--fix] [--strict]
+                                         lint: frontmatter, links, cycles, and the lenses in .isorite/lenses/;
+                                         --unused: pictures no note shows; --fix: quote a colon in
+                                         frontmatter, and follow a lens's notes git renamed; --strict: a
+                                         lens's warnings (notes in no island) fail too
   isorite serve <notes> [--port <n>] [--allow-host <name>]
                                          open it in the browser, on this machine only
   isorite migrate <study base> [--merge] a study base (format 1) into its notes' .isorite/
@@ -74,7 +77,7 @@ ${SETUP_USAGE}  isorite new <folder>                   a new base: an empty fold
   isorite guide [<folder>] [--port <n>]  the guide: a base about isorite, to do things in (--tutorial)
 `;
 
-export function check(notes: string, out: (line: string) => void = console.log, unused = false, fix = false): number {
+export function check(notes: string, out: (line: string) => void = console.log, unused = false, fix = false, strict = false): number {
   const root = resolve(notes);
   if (!existsSync(root) || !statSync(root).isDirectory()) { out(`no folder at ${root}`); return 2; }
   let bundle = loadBundle(root), issues = bundle.lint();
@@ -101,8 +104,9 @@ export function check(notes: string, out: (line: string) => void = console.log, 
       if (b.level === "error") artifactErrors++; else artifactWarnings++;
     }
   }
-  const errors = issues.filter((i) => i.level === "error").length + artifactErrors;
-  const warnings = issues.length - issues.filter((i) => i.level === "error").length + artifactWarnings;
+  const lenses = checkLenses(root, bundle, out, level, fix, strict);
+  const errors = issues.filter((i) => i.level === "error").length + artifactErrors + lenses.errors;
+  const warnings = issues.length - issues.filter((i) => i.level === "error").length + artifactWarnings + lenses.warnings;
   out(`${dim(`${bundle.concepts.size} notes in ${bundle.directories.size} folders;`)} ${(errors ? red : green)(`${errors} errors`)}, ${(warnings ? yellow : green)(`${warnings} warnings`)}, ${cycles.length} requires cycles`);
   // The pictures no note shows or links to (M22): yours to keep or delete, so information, never a warning.
   if (unused) {
@@ -112,6 +116,42 @@ export function check(notes: string, out: (line: string) => void = console.log, 
     out(idle.length ? `${idle.length} ${idle.length === 1 ? "picture" : "pictures"} no note shows` : "every picture is shown by a note");
   }
   return errors ? 1 : 0;
+}
+
+/** The lenses of a base (docs/lenses.md): each file read and laid over the notes. A dangling entry is an error, and with
+ *  `fix` is rewritten where git recorded an exact rename; a rule that matches nothing, an empty or doubled island, and
+ *  notes in no island are warnings, which `strict` makes errors. */
+function checkLenses(root: string, bundle: ReturnType<typeof loadBundle>, out: (line: string) => void, level: (l: string) => string, fix: boolean, strict: boolean): { errors: number; warnings: number } {
+  const dir = join(root, OWN_DIR, LENSES_DIR);
+  if (!existsSync(dir)) return { errors: 0, warnings: 0 };
+  let errors = 0, warnings = 0;
+  const renames = fix ? gitRenames(root) : new Map<string, string>();
+  const now = (id: string): string | null => { let at = `${id}.md`; for (let k = 0; k < 50 && renames.has(at); k++) { at = renames.get(at)!; if (bundle.concepts.has(at.replace(/\.md$/, ""))) return at.replace(/\.md$/, ""); } return null; };
+  for (const file of readdirSync(dir).filter((f) => f.endsWith(".toml")).sort()) {
+    const name = file.slice(0, -5), at = join(dir, file), shown = `${OWN_DIR}/${LENSES_DIR}/${file}`;
+    let text = readFileSync(at, "utf8"), resolved = resolveLens(parseLens(name, text), lensNotes(bundle));
+    if (fix) {
+      const gone = resolved.islands.flatMap(function walk(i): string[] { return [...i.gone, ...i.islands.flatMap(walk)]; });
+      for (const id of new Set(gone)) {
+        const to = now(id);
+        if (!to) continue;
+        const r = renameInLens(text, id, to);
+        if (r.changed) { text = r.text; out(`fixed   ${bold(shown)}: /${id}.md is /${to}.md now`); }
+      }
+      if (text !== readFileSync(at, "utf8")) { writeFileSync(at, text); resolved = resolveLens(parseLens(name, text), lensNotes(bundle)); }
+    }
+    for (const p of resolved.problems) {
+      const l = p.level === "warning" && strict ? "error" : p.level;
+      out(`${level(l)} ${bold(shown)}: ${p.message}`);
+      if (l === "error") errors++; else warnings++;
+    }
+    if (resolved.elsewhere.length) {
+      const l = strict ? "error" : "warning", list = resolved.elsewhere.slice(0, 5).map((id) => `/${id}.md`).join(", ");
+      out(`${level(l)} ${bold(shown)}: ${resolved.elsewhere.length} ${resolved.elsewhere.length === 1 ? "note is" : "notes are"} in no island: ${list}${resolved.elsewhere.length > 5 ? ", …" : ""}`);
+      if (strict) errors++; else warnings++;
+    }
+  }
+  return { errors, warnings };
 }
 
 /** Start the server on a base on the first free port and open the page (the end of `isorite setup`). Runs until stopped. */
@@ -165,7 +205,7 @@ export function main(argv: string[]): number | Promise<number> {
       return terminalStart({ port: asked, noOpen: args.includes("--no-open") });
     }
     if (command === "setup") return setupCommand(rest, { start: (notes) => startOn(notes, undefined, rest.includes("--no-open")) });
-    if (command === "check" && rest.find((r) => !r.startsWith("--"))) return check(rest.find((r) => !r.startsWith("--"))!, console.log, rest.includes("--unused"), rest.includes("--fix"));
+    if (command === "check" && rest.find((r) => !r.startsWith("--"))) return check(rest.find((r) => !r.startsWith("--"))!, console.log, rest.includes("--unused"), rest.includes("--fix"), rest.includes("--strict"));
     if (command === "new" && rest[0]) {
       const made = newBase(rest[0]);
       // The commands that come next, with the whole path.

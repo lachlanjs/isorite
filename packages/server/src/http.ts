@@ -157,6 +157,8 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
   app.get("/api/journal", (c) => answer(c, () => api.journal(id(c))));
   app.get("/api/version", (c) => answer(c, async () => ({ text: await api.version(id(c), c.req.query("entry") ?? "") })));
   app.get("/api/map", (c) => tagged(c, () => api.map()));
+  app.get("/api/lenses", (c) => tagged(c, () => api.lenses()));
+  app.get("/api/lens", (c) => tagged(c, () => api.lens(c.req.query("name") ?? "")));
   app.get("/api/timeline", (c) => answer(c, () => api.timeline()));
   app.get("/api/search", (c) => answer(c, () => api.search(c.req.query("q") ?? "")));
   app.get("/api/find", (c) => answer(c, () => api.find((c.req.query("q") ?? "").slice(0, 300))));

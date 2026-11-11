@@ -35,7 +35,7 @@ export interface Index {
 export function indexLayout(L: Layout): Index {
   const up = L.items.map((n) => { const out: number[] = []; for (let p = n.parent; p >= 0; p = L.items[p]!.parent) out.push(p); return out; });
   const noteCount = L.items.map(() => 0);
-  L.items.forEach((n, i) => { if (n.kind === "note") for (const p of up[i]!) noteCount[p]!++; });
+  L.items.forEach((n, i) => { if (n.kind === "note" && !n.ref.startsWith("ghost:")) for (const p of up[i]!) noteCount[p]!++; });
   // The trunk a link runs along joins the two items that hold its ends in the lowest folder holding both.
   const under = (i: number, level: number): number => { while (L.items[i]!.parent !== level) i = L.items[i]!.parent; return i; };
   const trunkAt = new Map(L.trunks.map((t, k) => [`${t.a}|${t.b}`, k]));

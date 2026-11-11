@@ -28,9 +28,12 @@ In a project shared with people who may not use isorite, it can be kept apart fr
   conversations/<id>.jsonl        agent sessions as isorite kept them (and conversations from before M25, read only)
   settings.toml                   the base's settings: its repository
   hidden.txt                      the notes and folders kept off the Atlas and the list, one id a line (merged by lines)
+  lenses/<name>.toml              a lens: the notes grouped into islands of its own (docs/lenses.md)
 ```
 
 - **`settings.toml`** has one setting so far: `repository = "../code"`, the folder code links point into, relative to the notes folder (or absolute). isorite writes it, from the folder an agent is first attached in beside the base; after that it is yours to change.
+
+- **`lenses/<name>.toml`** is a lens (`docs/lenses.md`): a grouping of the notes into nested islands that the Atlas and the note list can show in place of the folders. A file each, so two people's lenses merge in git. `title` names it; each `[[islands]]` table has a `name` (its key), an optional `title` (what is shown), `notes` (ids as links write them, `"/combat/hitboxes.md"`) and `match` rules, and may hold `[[islands.islands]]`. A rule is `kind:` (note, question or problem), `tag:`, `path:` (a glob: `**` crosses folders, `*` and `?` do not), `links-to:` (the notes that link to one), and a leading `-` takes notes out of what the island's other rules select. An island's members are its `notes` and what its rules select. Islands and the notes an island lists keep the file's order; rule-selected notes follow, by id. A note is drawn at its home, the first island in the file that holds it (a deeper island over the one that holds it); in the others it is a ghost; a note in no island is in "Elsewhere". The reader of the notes never sees these files; hidden notes stay hidden in every lens.
 
 - **Older files.** A base may still hold `drafts/`, `understanding/` and `record/` from earlier versions. isorite no longer reads or writes them; they can be deleted. A study base of format 1 (a separate repository beside the notes) is no longer opened.
 

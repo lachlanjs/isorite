@@ -2,7 +2,7 @@
 // interface and nothing else, so it does not know whether the engine is
 // behind HTTP (the server) or in the same process (a webview, later).
 
-import type { Anchor, Cost, Entry, FileKind, MapModel, Passage, SessionMoment } from "@isorite/core";
+import type { Anchor, Cost, Entry, FileKind, MapModel, Passage, ResolvedLens, SessionMoment } from "@isorite/core";
 import type { AgentEdit } from "./agent.ts";
 import type { Step, ToolDef } from "./lookup.ts";
 import type { Given, Turn, TurnItem } from "./turn.ts";
@@ -49,6 +49,9 @@ export interface Saved extends NoteSource {
   /** False when the text sent was what the file already held: nothing was written or entered. */
   changed: boolean;
 }
+
+/** A lens as the list of them shows it: its file's name, title, how many islands, and how many errors the file has. */
+export interface LensSummary { name: string; title: string; islands: number; problems: number }
 
 /** The base as the Atlas draws it: what the layout takes, and what each block says, by the note's id. */
 export interface MapReport {
@@ -144,6 +147,8 @@ export type EngineEvent =
   | { type: "journal"; id: string; entry: Entry }
   /** What is hidden from the Atlas and the list changed. */
   | { type: "hidden" }
+  /** A lens file was rewritten by isorite (a note it names moved). */
+  | { type: "lenses" }
   /** A terminal agent (`agent` is its name, as `opencode`) began a turn in one of its sessions. Each turn ends in agent-done. */
   | { type: "agent-start"; request: string; agent: string; session: string }
   /** It looked something up in the base, with the agent's own tools. */
@@ -246,6 +251,9 @@ export interface Api {
   search(query: string): Promise<SearchHit[]>;
   /** The Atlas's map of the base. */
   map(): Promise<MapReport>;
+  /** The lenses the base has (`.isorite/lenses/`), and one of them over the notes as they are: its islands, notes in order. */
+  lenses(): Promise<LensSummary[]>;
+  lens(name: string): Promise<ResolvedLens>;
   /** A conversation with the agent from before M25, or the latest when none is named; null when there is none. */
   conversation(id?: string): Promise<Conversation | null>;
   /** Every conversation, the newest first (M24, K). */

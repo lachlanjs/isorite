@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
-import { AGENTS_FILE, Bundle } from "@isorite/core";
+import { AGENTS_FILE, Bundle, lensNotes, parseLens, resolveLens } from "@isorite/core";
 import { LEARNING, PRACTICE } from "@isorite/engine";
-import { START, YOURS } from "../src/index.ts";
+import { GUIDE_LENSES, START, YOURS } from "../src/index.ts";
 import { loadGuide, loadGuidePictures } from "../src/node.ts";
 
 // The guide is a base like any other: it is checked as one.
@@ -52,4 +52,12 @@ test("what the guide says of keeping a base is what the agent is told", () => {
     ["in your own words", "in their words"], ["check, do not solve", "never solve it"], ["yours to split or merge", "theirs to split"],
   ];
   for (const [guide, prompt] of AGREE) { expect(well, guide).toContain(guide); expect(told, prompt).toContain(prompt); }
+});
+
+test("the guide's lenses name notes that are there, and cover the path they are a path of", () => {
+  for (const [file, text] of Object.entries(GUIDE_LENSES)) {
+    const r = resolveLens(parseLens(file.replace(/\.toml$/, ""), text), lensNotes(b));
+    expect(r.problems.filter((p) => p.level === "error"), file).toEqual([]);
+    expect(r.order.slice(0, 3)).toEqual(["start-here", "atlas/the-atlas", "atlas/find-what-it-rests-on"]);
+  }
 });

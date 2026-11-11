@@ -6,7 +6,7 @@
   // carries: the count says how many. A lit line is 3 px however many links run along it, as on the boards; one
   // whose links run both ways stands still. The agent's steps along links are gold, as its lines on Desktop-Think, and a
   // note for the agent has a blue line to each note it links to.
-  let { k, rest, hot, pulses = [], counts, pointed = false, grown = [], beat = "", retracting = [] }: {
+  let { k, rest, hot, ghosts = [], pulses = [], counts, pointed = false, grown = [], beat = "", retracting = [] }: {
     /** The zoom: paths are given at zoom 1. */
     k: number;
     /** `strong`: a "requires" runs along it. A route of weaker links only is drawn lighter. `trunk`: between two folders. */
@@ -14,6 +14,8 @@
     /** One pulse for each lit link, along its own way (see Atlas). */
     pulses?: { key: string; d: string; kind: "requires" | "builds" | "uses" | "agent" }[];
     hot: { key: string; d: string; kind: "requires" | "builds" | "uses" | "agent"; count: number; still: boolean }[];
+    /** A lens's ghost joined to its home by a dotted line, while either is lit. */
+    ghosts?: { key: string; d: string }[];
     /** The note's links are lit because it is pointed at, not chosen (M24): they draw out along their length in
      *  blue, and stand. Chosen, they run in their kinds' colours. */
     pointed?: boolean;
@@ -42,6 +44,7 @@
       {#each rest as r (r.key)}<path class="along draw {r.strong ? 'base' : 'base weak'}" class:trunk={r.trunk} pathLength="1" d={r.d} style:stroke-width={width(r)} />{/each}
     {:else if beat === ""}
       {#each rest as r (r.key)}<path class={r.strong ? "base" : "base weak"} class:trunk={r.trunk} d={r.d} />{/each}
+      {#each ghosts as r (r.key)}<path class="ghostline" d={r.d} />{/each}
       {#each hot as r (r.key)}
         {#if pointed && r.kind !== "agent"}<path class="along touch" pathLength="1" d={r.d} style:stroke-width="{2 / k}px" />
         {:else}<path class="lit {r.kind}" class:still={r.still} d={r.d} />
@@ -59,6 +62,8 @@
 <style>
   .routes { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
   path { fill: none; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+  /* A ghost's line to its home: dotted, not running, and drawn only while lit. */
+  .ghostline { stroke: var(--text-soft); stroke-width: 1.5px; stroke-dasharray: 2 4; opacity: .8; }
   .base { stroke: var(--line-strong); stroke-width: 1.5px; opacity: .6; } /* as the boards' .base */
   .base.trunk { stroke-width: 3px; opacity: .8; }
   .weak { stroke-width: 1px; opacity: .3; }

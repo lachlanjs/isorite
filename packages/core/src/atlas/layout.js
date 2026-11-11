@@ -31,7 +31,7 @@ export function plainModel(model, flat = false) {
 // is the top level's direction, "up" or "right"; `grain`, the cell's size ("fine", "coarse" or "coarser");
 // `blocks`, a folder holding folders placed as blocks (floorplan.js) and not in layers.
 export function gridLayout(model, o) {
-  const opts = { flow: o.gridFlow === "right" ? "right" : "up", grain: grainOf(o), plan: !!o.blocks, from: o.from ?? null, aspect: aspectOf(o) };
+  const opts = { flow: o.gridFlow === "right" ? "right" : "up", grain: grainOf(o), plan: !!o.blocks, from: o.from ?? null, aspect: aspectOf(o), ...(typeof o.lens === "string" && o.lens ? { planCosts: { seed: saltOf(o.lens) } } : {}) };
   let layout = nestedLayout(model, opts);
   // Blocks: laid out once, the highways found, and packed again as they were with each busy gutter widened.
   if (o.blocks) {
@@ -159,6 +159,13 @@ export function gridRouter(layout) {
   return (asks) => gridRouteAll(router, asks, cells.W, cells.H);
 }
 
+// A lens's name as the floorplan's salt: each lens is placed from a seed of its own.
+function saltOf(name) {
+  let s = 2166136261;
+  for (let i = 0; i < name.length; i++) { s ^= name.charCodeAt(i); s = Math.imul(s, 16777619); }
+  return s | 0;
+}
+
 // cyrb53: a fast 53-bit string hash, plenty to tell layouts apart.
 function hash(str) {
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
@@ -173,7 +180,7 @@ function hash(str) {
 }
 
 // Bump whenever the layout changes what it returns, so nothing keeps an old one.
-export const LAYOUT_VERSION = 15;
+export const LAYOUT_VERSION = 16; // 16: a map may be a lens's islands, and `lens` names it
 const grainOf = (o) => (o.grain === "coarse" || o.grain === "coarser" ? o.grain : "fine");
 /** The shape the whole map aims for, wide to tall (the viewport's), in steps of a quarter of a doubling (1, 1.19,
  *  1.41, 1.68, 2…) from a quarter to four: a pane dragged a little wider is the same map. Null where none is given. */
@@ -182,7 +189,7 @@ export function aspectOf(o = {}) {
   if (!(a > 0) || !Number.isFinite(a)) return null;
   return 2 ** (Math.round(Math.log2(Math.min(4, Math.max(0.25, a))) * 4) / 4);
 }
-/** What a kept layout is filed under: the version, the direction, the grid, the shape, and what the map contains. */
+/** What a kept layout is filed under: the version, the direction, the grid, the shape, the lens (its name: each lens is laid out on its own) and what the map contains. */
 export function layoutKey(plain, o = {}) {
-  return hash(JSON.stringify([LAYOUT_VERSION, o.gridFlow === "right" ? "right" : "up", grainOf(o), !!o.blocks, aspectOf(o), plain]));
+  return hash(JSON.stringify([LAYOUT_VERSION, o.gridFlow === "right" ? "right" : "up", grainOf(o), !!o.blocks, aspectOf(o), typeof o.lens === "string" ? o.lens : "", plain]));
 }

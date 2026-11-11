@@ -147,6 +147,8 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     deleteNote: async (id, base) => { await write("POST", "note/delete" + q(id), { base }); },
     restore: (id, entry, base) => write("POST", "note/restore" + q(id), { entry, base }),
     map: () => ask("map"),
+    lenses: () => ask("lenses"),
+    lens: (name) => ask(`lens?name=${encodeURIComponent(name)}`),
     timeline: () => ask("timeline"),
     search: (query) => ask(`search?q=${encodeURIComponent(query)}`),
     find: (query) => ask(`find?q=${encodeURIComponent(query)}`),
@@ -221,7 +223,7 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
       source.addEventListener("open", () => { if (down) { down = false; live?.(true); } });
       source.addEventListener("error", () => { if (!down) { down = true; live?.(false); } });
       const on = (e: MessageEvent<string>) => { try { listener(JSON.parse(e.data) as EngineEvent); } catch { /* not ours */ } };
-      const types = ["note-changed", "hidden", "journal", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "agent-item", "agent-taken", "terminal"] satisfies EngineEvent["type"][];
+      const types = ["note-changed", "hidden", "lenses", "journal", "agent-start", "agent-step", "agent-done", "agent-sent", "agent-received", "agent-item", "agent-taken", "terminal"] satisfies EngineEvent["type"][];
       for (const type of types) source.addEventListener(type, on);
       return () => source.close();
     },

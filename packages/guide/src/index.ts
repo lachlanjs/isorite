@@ -13,3 +13,4 @@ export const YOURS = "your-notes";
 export type GuideFiles = Record<string, string>;
 
 export { finderTurn, NOT_A_MODEL, type FinderCall } from "./finder.ts";
+export { GUIDE_LENSES } from "./lenses.ts";

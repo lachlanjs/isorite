@@ -21,4 +21,4 @@ The layout changes as the base does, but starts from where it was, so the map yo
 
 Open [questions](/questions-and-problems/questions.md "see also") and [problems](/questions-and-problems/problems.md "see also") are on the map too, each beside the notes it is about, and a solved problem shows it.
 
-What it shows besides is chosen by [the switches](/atlas/the-switches.md "see also").
+What it shows besides is chosen by [the switches](/atlas/the-switches.md "see also"). It can draw the same notes grouped another way, by a [lens](/atlas/lenses.md "see also").

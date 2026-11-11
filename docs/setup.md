@@ -79,6 +79,37 @@ path = "~/isorite-memory"
 lend = true
 ```
 
+## Checking a base in a pipeline (optional)
+
+`isorite check <notes>` lints the notes (frontmatter, links, requires cycles, artifacts) and the lenses in `.isorite/lenses/`: a note a lens names that is not there is an error, a rule that matches nothing, an empty island and notes in no island are warnings, and `--strict` makes the warnings fail. `--fix` quotes a colon in frontmatter, and rewrites a lens's entries where git recorded an exact rename (it needs the history: a full checkout). It exits 1 on an error, so it can gate a pull request.
+
+```yaml
+# .github/workflows/base.yml
+name: base
+on:
+  pull_request:
+    paths: ["notes/**"]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npx isorite check notes
+```
+
+```yaml
+# .gitlab-ci.yml
+base:
+  image: node:24
+  variables: { GIT_DEPTH: "0" }
+  rules:
+    - changes: ["notes/**/*"]
+  script: npx isorite check notes
+```
+
 ## Search by meaning (optional)
 
 The first start without the model offers it, once; a no is remembered. Later, or by hand:

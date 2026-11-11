@@ -10,7 +10,7 @@ plainModel ─► nestedLayout ─► highwayTrunks ─► gutters ─► nested
                                linked siblings) busy gaps)  wider gaps)                              folder, to gates)  cut corner)
 ```
 
-All of it is `gridLayout` in `layout.js`, run in the app's worker and kept under `layoutKey`. **Bump `LAYOUT_VERSION` whenever the output changes** (it is 15 now).
+All of it is `gridLayout` in `layout.js`, run in the app's worker and kept under `layoutKey`. **Bump `LAYOUT_VERSION` whenever the output changes** (it is 16 now).
 
 | Part | File | Does |
 |---|---|---|
@@ -141,3 +141,15 @@ The core's timing test ("is the same for the same bundle…", under 60 s for 1,1
 | Faster feeders on large bases: a search per subfolder region on a cropped grid, or the A* in one typed state space shared across searches | The feeders' search is now the largest cost (about half of a large layout). Must stay output-identical or be re-judged. | 1 day |
 | Flights whose length follows the distance (van Wijk and Nuij's smooth zoom) | `fly` is 320 ms however far; a long zoom out reads as a jump. Touches the taste doc's three durations. | half a day |
 | Routes that fade in as a folder opens | The rest lines are redrawn wholesale at the end of a new layout's draw beat, and a fade there would blink every line. Needs the beats to keep their elements. | half a day |
+
+## 8. Lenses (2026-11-11)
+
+A lens (`docs/lenses.md`) gives the layout a different tree and changes nothing else in it. Core's `lensModel` takes the model of the folders and returns one whose folders are the lens's islands: an island's ref starts with a colon (`:Combat/Weapons`, `:` for the implicit last island, Elsewhere), which no note's or folder's id can hold, so an island is never taken for a folder. Each note is the folders' item for it, placed once at its home. A ghost, a note a second island holds, is an item of its own in that island, with the ref `ghost:<note id>:<island ref>` and no links, so it takes room and takes no part in routing; the app draws it as a dashed block standing for the note, and a dotted line to its home while either is lit.
+
+| Where | What |
+|---|---|
+| `layout.js` | `LAYOUT_VERSION` 16. `lens` (a name) is in `layoutKey`, and seeds the floorplan's salt (`planCosts.seed`), so each lens is laid out on its own and a lens does not inherit the folders' arrangement (`from`). |
+| `Atlas.svelte` | Chosen in the Atlas header; a lens map takes the same worker, key and beats as the folders. A new lens is a new map, framed afresh. Files and the code switch's items are not in a lens (a lens has notes only until it has `type:` rules). A lens map makes, moves, renames and hides nothing: islands are not folders. |
+
+Not measured on the 1,200-note case yet.
+

@@ -2,7 +2,8 @@
 // them (kept.ts), with the finder standing in for an agent (finder.ts). Nothing is sent anywhere.
 
 import { Engine, systemClock, type Api } from "@isorite/engine";
-import { GUIDE_NAME } from "@isorite/guide";
+import { LENSES_DIR } from "@isorite/core";
+import { GUIDE_LENSES, GUIDE_NAME } from "@isorite/guide";
 import { KeptFiles } from "./kept.ts";
 import { withFinder } from "./finder.ts";
 
@@ -23,6 +24,8 @@ export function guideEngine(): Promise<Api> { return (made ??= open()); }
 async function open(): Promise<Api> {
   const notes = await KeptFiles.open("notes", seed), own = await KeptFiles.open("own", {});
   kept.lasting = notes.lasting;
+  // Its lenses are beside the notes' own files, put there where they are not (a lens you changed here stays changed).
+  for (const [name, text] of Object.entries(GUIDE_LENSES)) if ((await own.read(`${LENSES_DIR}/${name}`)) === null) await own.write(`${LENSES_DIR}/${name}`, text);
   await Promise.all(Object.entries(pictures).map(async ([path, url]) => {
     const res = await fetch(url).catch(() => null);
     if (res?.ok) await notes.writeBytes(path.split("/guide/notes/").at(-1)!, new Uint8Array(await res.arrayBuffer()));
