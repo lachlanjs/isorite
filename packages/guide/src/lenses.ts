@@ -40,7 +40,7 @@ notes = ["/atlas/lenses.md", "/atlas/use-a-lens.md"]
 [[islands]]
 name = "ask-the-agent"
 title = "Ask the agent"
-notes = ["/agents/the-agent-pane.md", "/agents/artifacts.md", "/agents/ask-the-agent.md", "/agents/give-it-notes.md"]
+notes = ["/agents/the-agent-pane.md", "/agents/artifacts.md", "/agents/ask-the-agent.md", "/agents/give-it-notes.md", "/agents/what-a-pointer-sends.md"]
 
 [[islands]]
 name = "set-up-your-own"

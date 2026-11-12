@@ -1,7 +1,8 @@
 <script lang="ts">
   // How full the agent's context is, in the composer's footer (design audit (f) 10): a short bar and the share used, in
   // figures, faint, gold, then the warning colour past 100k tokens or half the window if that is less (long contexts
-  // drift), rose past 85% and over. The tokens and the cost are in the tooltip; a click opens the Context view.
+  // drift), rose past 85% and over. Beside it, quieter, what the session has cost so far, where the model has a price (a
+  // model or gateway that gives none says 0, and nothing is shown). The tokens are in the tooltip; a click opens the Context view.
   import { terminal } from "$lib/terminal.svelte.ts";
 
   const short = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n));
@@ -18,7 +19,7 @@
 
 {#if used && used.tokens > 0}
 <button type="button" class="gauge" class:long class:full aria-label="{context}: open the context" title={context} aria-pressed={terminal.shown === "context"} onclick={() => (terminal.shown = terminal.shown === "context" ? "session" : "context")}>
-  <i class="bar" style:--fill={fill}></i><span class="pct">{pct < 1 && used.tokens > 0 ? "<1" : pct}%</span>
+  <i class="bar" style:--fill={fill}></i><span class="pct">{pct < 1 && used.tokens > 0 ? "<1" : pct}%</span>{#if view?.cost && view.cost > 0}<span class="cost" data-testid="agent-cost">{money(view.cost)}</span>{/if}
 </button>
 {/if}
 
@@ -30,4 +31,5 @@
   .long .bar::after { background: var(--builds); }
   .full .bar::after { background: var(--rose); }
   .full .pct { color: var(--rose); }
+  .cost { color: var(--text-mute); }
 </style>

@@ -54,22 +54,36 @@ export class Gesture {
   constructor(private done: Done, private opts: { dropAt?: (x: number, y: number) => string | null; drift?: "carry" | "cancel"; scroll?: boolean; targetOf?: (dir: string) => Element | null } = {}) {}
   private dropAt = (x: number, y: number): string | null => (this.opts.dropAt ?? dirAt)(x, y);
 
+  /** Whether the last press on a held thing was a finger or a pen, for a browser whose menu event does not say. */
+  private touched = false;
+  /** The browser's own menu (copy link, open in a new tab, select) is kept off what is held here, since the hold is ours:
+   *  a long press by touch or pen, or anything while a hold is under way. A right click with a mouse, nothing held, keeps it. */
+  menu = (e: MouseEvent): void => {
+    const by = (e as PointerEvent).pointerType;
+    if ((by ? by !== "mouse" : this.touched) || this.phase !== "idle" || this.timer) e.preventDefault();
+  };
+
   /** An action for a row or heading: `use:g.press={() => item}`. */
   press = (node: HTMLElement, item: () => Item) => {
+    const menu = (e: MouseEvent): void => {
+      if (!(e.target as HTMLElement).closest("input, textarea")) this.menu(e);
+    };
     const down = (e: PointerEvent): void => {
+      this.touched = e.pointerType !== "mouse";
       if ((e.target as HTMLElement).closest("button, input, .menu")) return;
       const it = item();
       if (it.kind === "folder" && !it.id) return; // the top of the base is not a folder to hold
       this.begin(it, e, node);
     };
     node.addEventListener("pointerdown", down);
-    return { destroy: () => node.removeEventListener("pointerdown", down) };
+    node.addEventListener("contextmenu", menu);
+    return { destroy: () => { node.removeEventListener("pointerdown", down); node.removeEventListener("contextmenu", menu); } };
   };
 
   /** A press on `node` (the item's face) has begun: held still, the tags appear. */
   begin(it: Item, e: PointerEvent, node: HTMLElement): void {
     if (this.phase !== "idle" || this.timer || (e.pointerType === "mouse" && e.button !== 0)) return;
-    this.touch = e.pointerType !== "mouse";
+    this.touch = this.touched = e.pointerType !== "mouse";
     this.from = { x: e.clientX, y: e.clientY };
     this.x = e.clientX; this.y = e.clientY;
     this.origin = { x: e.clientX, y: e.clientY };

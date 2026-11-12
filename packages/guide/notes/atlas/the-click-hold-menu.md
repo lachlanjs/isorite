@@ -16,6 +16,6 @@ Press and hold. What you hold on decides the tags that stand out; slide to one a
 
 An island has a fifth, a pencil, to rename it.
 
-**On open ground**, two: a new note, or a new island with its first note: see [making islands and notes](/atlas/make-islands-and-notes.md "see also"). Once something is hidden, a third finds it.
+**On open ground**, two: a new note, or a new empty island: see [making islands and notes](/atlas/make-islands-and-notes.md "see also"). Once something is hidden, a third finds it.
 
-On a phone, a long press does the same.
+On a phone, a long press does the same, and the browser's own menu and text selection stay out of the way.

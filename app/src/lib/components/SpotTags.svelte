@@ -1,6 +1,6 @@
 <script lang="ts">
   // What a hold on open ground offers: two tags stand out from the spot held, up and to either side of it: a new note,
-  // and a new folder (with its first note), and, when something is hidden, a third between them that finds it again.
+  // and a new island (an empty folder), and, when something is hidden, a third between them that finds it again.
   // Let go on one and it is made; let go anywhere else and nothing is.
   // `choice` is the one the pointer is on (the caller finds it by `data-spot`); `px`, `py` is the pointer, so the
   // tags lean towards it as it comes near. Coordinates are the surface's own.

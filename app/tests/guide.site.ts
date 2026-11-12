@@ -55,7 +55,9 @@ test("the finder answers what is asked with the notes that match, and says it is
   if (phone(page)) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Agent/ }).click();
   const box = page.getByRole("textbox", { name: "Message the agent" });
   await box.fill("what is the Atlas?");
-  await box.press("Enter");
+  // Ctrl+Enter sends on a desktop (Enter is a new line); on a phone, the Send button.
+  if (phone(page)) await page.locator('[data-pane="agent"]').getByRole("button", { name: "Send", exact: true }).click();
+  else await box.press("ControlOrMeta+Enter");
   const said = page.locator('[data-pane="agent"] .said').last();
   await expect(said).toContainText("not a model", { timeout: 15_000 });
   await expect(said.locator("a", { hasText: "The Atlas" })).toBeVisible();

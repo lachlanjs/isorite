@@ -46,6 +46,28 @@ test("scrolled up while the agent works, the session stays where you are, and a 
   await expect(newest).toBeHidden();
 });
 
+test("at the end while a reply streams in, the session follows it to its end; scrolled up, it stays where you are", async ({ page }) => {
+  await page.goto("#/n/basics/bit");
+  await toAgent(page);
+  const log = logOf(page);
+  const from = () => log.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight);
+  // A reply long enough to overflow any window, written as it comes (a written \n is a line).
+  const lines = Array.from({ length: 120 }, (_, i) => `Line ${i + 1} of a long reply.`).join("\\n");
+  const turn = await ask(page, `say ${lines}\n${name()} follows`, `${name()} follows`);
+  await expect(turn).toHaveAttribute("data-state", "done", { timeout: 15_000 });
+  await expect(turn.locator(".said")).toContainText("Line 120 of a long reply.");
+  expect(await log.evaluate((el) => el.scrollHeight - el.clientHeight), "the reply overflows the pane").toBeGreaterThan(400);
+  await expect.poll(from).toBeLessThan(4);
+  await expect(page.getByRole("button", { name: "Newest" })).toBeHidden();
+  // Scrolled up while the next one comes: it stays.
+  const next = await ask(page, `wait 1200\nsay ${lines}\n${name()} stays`, `${name()} stays`);
+  await expect(next.locator(".doing")).toBeVisible();
+  await log.evaluate((el) => { el.scrollTop = 0; });
+  await expect(next).toHaveAttribute("data-state", "done", { timeout: 15_000 });
+  expect(await log.evaluate((el) => el.scrollTop)).toBeLessThan(40);
+  await expect(page.getByRole("button", { name: "Newest" })).toBeVisible();
+});
+
 test("a diagram in an earlier turn stays drawn as later turns come, and the reply ends in view", async ({ page }) => {
   await page.goto("#/n/basics/bit");
   await toAgent(page);

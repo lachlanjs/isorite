@@ -22,6 +22,8 @@ export interface PiRecord {
   given: string[];
   /** The blocks of context taken back out, as `<key>@<turn>` (M36, step 10). */
   withdrawn?: string[];
+  /** What the model has seen of each note in its live context (seen.ts), by id. */
+  seen?: Record<string, { text: string; at: number }>;
   /** The pane's turns, and the model's messages (pi's, kept as they are). */
   turns: TerminalTurn[];
   messages: unknown[];

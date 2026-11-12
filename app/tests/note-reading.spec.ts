@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { NOTES } from "./serve.ts";
-import { attach, box, log, toAgent } from "./agent.ts";
+import { attach, box, log, toAgent, submit } from "./agent.ts";
 import { pressHead } from "./switches.ts";
 
 const editor = (page: Page) => page.getByRole("textbox", { name: "The note", exact: true });
@@ -31,7 +31,7 @@ test("a single newline is a line break, in the note and in the Agent pane", asyn
     await toAgent(page);
     // The scripted model's `say` reads a written \n as a newline.
     await box(page).fill(`say Heard, ${project()}.\\nOn a line of its own.`);
-    await box(page).press("Enter");
+    await submit(page);
     const said = log(page).locator(".said").filter({ hasText: `Heard, ${project()}.` });
     await expect(said).toContainText("On a line of its own.");
     await expect(said.locator("br")).toHaveCount(1);

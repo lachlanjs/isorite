@@ -727,7 +727,7 @@ export class Engine implements Api {
         let r: AgentRecord;
         try { r = JSON.parse((await own.read(`${AGENTS_DIR}/${a.name}/${f.name}`)) ?? "") as AgentRecord; } catch { continue; }
         if (!r?.turns?.length || r.agent !== a.name) continue;
-        all.push({ agent: r.agent, name: r.name, session: r.session, title: r.title, asked: r.turns[0]!.asked, last: r.last, turns: r.turns.length, notes: notesOfTurns(r.turns), live: false, busy: false, kept: true, open: false });
+        all.push({ agent: r.agent, name: r.name, session: r.session, title: r.title, asked: r.turns[0]!.asked, at: r.at, last: r.last, turns: r.turns.length, notes: notesOfTurns(r.turns), live: false, busy: false, kept: true, open: false });
       }
     }
     return all.sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : 0));

@@ -22,8 +22,9 @@
 //   fail <message>              end the turn with the model failing so (a rate limit, a missing key)
 // The reply cites the first note read, in isorite's link form. When the prompt came with images, it says so ("Saw 1 image: image/png, 68 bytes."), which
 // is how a test knows they reached the model. `scripted/scripted-text` is the same model without sight: it takes no images.
+// `scripted` is priced as a mid-sized model is (per million tokens), so the pane has a cost to show; `scripted-text` is free.
 
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxThinking, fauxToolCall, type FauxContentBlock } from "@earendil-works/pi-ai";
+import { calculateCost, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxThinking, fauxToolCall, type FauxContentBlock } from "@earendil-works/pi-ai";
 
 export const SCRIPTED = "scripted";
 /** The scripted model that takes no images. */
@@ -86,9 +87,10 @@ type Message = { role?: string; content?: unknown };
 const textOf = (content: unknown): string => (typeof content === "string" ? content : Array.isArray(content) ? content.filter((b: { type?: string }) => b?.type === "text").map((b: { text?: string }) => b.text ?? "").slice(-1).join("") : "");
 
 /** The model and the way to reach it. Each request reads the conversation: the person's last message is the script,
- *  and how many answers have come since it says which step is next. */
-export function scriptedModel(id: string = SCRIPTED): { chosen: ReturnType<ReturnType<typeof fauxProvider>["getModel"]>; streamFn: (...args: never[]) => unknown } {
-  const faux = fauxProvider({ provider: SCRIPTED, models: [{ id: SCRIPTED, name: "Scripted", contextWindow: 200_000, maxTokens: 8000 }, { id: SCRIPTED_TEXT, name: "Scripted, text only", contextWindow: 200_000, maxTokens: 8000, input: ["text"] }], tokensPerSecond: 600, tokenSize: { min: 2, max: 6 } });
+ *  and how many answers have come since it says which step is next. `tokensPerSecond` paces the reply (0: at once, as
+ *  the session bench has it). */
+export function scriptedModel(id: string = SCRIPTED, { tokensPerSecond = 600 }: { tokensPerSecond?: number } = {}): { chosen: ReturnType<ReturnType<typeof fauxProvider>["getModel"]>; streamFn: (...args: never[]) => unknown } {
+  const faux = fauxProvider({ provider: SCRIPTED, models: [{ id: SCRIPTED, name: "Scripted", cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 }, contextWindow: 200_000, maxTokens: 8000 }, { id: SCRIPTED_TEXT, name: "Scripted, text only", contextWindow: 200_000, maxTokens: 8000, input: ["text"] }], tokensPerSecond, tokenSize: { min: 2, max: 6 } });
   const models = createModels();
   models.setProvider(faux.provider);
   const respond = async (context: { messages: Message[] }, options?: { signal?: AbortSignal }) => {
@@ -116,7 +118,14 @@ export function scriptedModel(id: string = SCRIPTED): { chosen: ReturnType<Retur
   };
   const streamFn = ((model: never, context: never, options: never) => {
     faux.appendResponses([respond as never]);
-    return models.streamSimple(model, context, options);
+    const stream = models.streamSimple(model, context, options);
+    // The faux provider counts the tokens but prices none: the answer is priced here, as a provider's would be, before it is told.
+    const push = stream.push.bind(stream);
+    stream.push = (e) => {
+      if (e.type === "done" && e.message.usage) calculateCost(model as Parameters<typeof calculateCost>[0], e.message.usage);
+      push(e);
+    };
+    return stream;
   }) as (...args: never[]) => unknown;
   return { chosen: faux.getModel(id) ?? faux.getModel(), streamFn };
 }

@@ -1,7 +1,7 @@
 // Press and hold on a note or a folder's heading (M33): pull it to a folder, or hold for the tags (move, delete, send).
 // And the empty folder made to move a note into (M31), and deleted (M31).
 
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { NOTES } from "./serve.ts";
@@ -44,6 +44,9 @@ test("a note pulled to an empty folder moves there", async ({ page }) => {
   const p = test.info().project.name;
   await seed(page, p, [[`drag/dragged-${p}`, `Dragged ${p}`]]);
   await folder(page, `drag/to-${p}`);
+  // Made empty: a real folder with nothing in it, there still when the page is loaded again.
+  expect(readdirSync(join(NOTES, "drag", `to-${p}`))).toEqual([]);
+  await page.reload();
   const row = page.locator("li", { hasText: `Dragged ${p}` });
   const heading = page.getByRole("heading", { name: `drag/to-${p} New note in drag/to-${p}` });
   await expect(heading).toBeVisible();

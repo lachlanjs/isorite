@@ -124,7 +124,7 @@ export interface TerminalTurn { id: string; asked: string; from: "terminal" | "h
 export interface AgentRecord { agent: string; name: string; session: string; title: string; at: string; last: string; turns: TerminalTurn[] }
 /** A session in the drawer (M25): live (a wrapper carries it now), the agent's own (in its `session/list`), kept (a
  *  record here), or several of these. `open`: an agent that can carry it on is attached. */
-export interface AgentSession { agent: string; name: string; session: string; title: string; asked: string; last: string; turns: number; notes: number; live: boolean; busy: boolean; kept: boolean; open: boolean }
+export interface AgentSession { agent: string; name: string; session: string; title: string; asked: string; /** When it began (ISO), for the drawer. */ at?: string; last: string; turns: number; notes: number; live: boolean; busy: boolean; kept: boolean; open: boolean }
 export type TerminalItem =
   | { kind: "text"; text: string }
   /** A tool call. `title` is what it acted on (a command, a file, a note); `diff` an edit's lines, `-` and `+`. */

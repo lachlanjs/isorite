@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { attach, box, log } from "./agent.ts";
+import { attach, box, log, submit } from "./agent.ts";
 
 // Open questions and problems (M12): a question embedded in a note is a callout there and opens; its title row
 // resolves it, yours alone; the note it is about lists it at its foot; a problem is made from the note's settings.
@@ -76,7 +76,7 @@ test("the agent asks a question back: it is made an open question at once; your 
     if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Agent/ }).click();
     const q = `Why does asked-${name} hold?`;
     await box(page).fill(`ask ${n} ${q}`);
-    await box(page).press("Enter");
+    await submit(page);
     const asked = log(page).locator(".turn").last();
     await expect(asked).toHaveAttribute("data-state", "done");
     await expect(asked.locator(".asks")).toContainText(q);
@@ -90,7 +90,7 @@ test("the agent asks a question back: it is made an open question at once; your 
     expect(file).toContain(`type: Question\ntitle: "${q}"\nabout: [${n}]\n`);
 
     await box(page).fill(`offer ${n} Because it is so, in my words.`);
-    await box(page).press("Enter");
+    await submit(page);
     const offered = log(page).locator(".turn").last();
     await expect(offered).toHaveAttribute("data-state", "done");
     await expect(offered.locator(".offer .yours")).toHaveText("Because it is so, in my words.");

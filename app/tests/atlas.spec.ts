@@ -1,4 +1,7 @@
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import { NOTES } from "./serve.ts";
 import { setSwitch } from "./switches.ts";
 
 const note = (page: Page, id: string) => page.locator(`[data-note="${id}"]`);
@@ -169,7 +172,7 @@ async function hold(page: Page, x: number, y: number, which: "note" | "folder" |
 const asked = (page: Page, what: "note" | "folder") => page.getByLabel(what === "note" ? "the new note's title" : "the new island's name");
 const session = async (page: Page) => ({ "x-isorite-token": ((await (await page.request.get("api/session")).json()) as { token: string }).token, origin: new URL(page.url()).origin });
 
-test("holding on open ground offers a new note or a new folder: let go on one and it is made, its title chosen to type over; let go elsewhere, nothing; a press that moves is a drag", async ({ page }) => {
+test("holding on open ground offers a new note or a new island: let go on one and it is made, its name chosen to type over; let go elsewhere, nothing; a press that moves is a drag", async ({ page }) => {
   await atlas(page);
   const name = test.info().project.name, box = (await page.locator(".atlas").boundingBox())!;
   const title = page.getByLabel("Title", { exact: true });
@@ -206,7 +209,7 @@ test("holding on open ground offers a new note or a new folder: let go on one an
   await expect(page.locator(".atlas [data-spot]")).toHaveCount(0);
   expect(page.url()).toBe(here);
 
-  // Held on open ground and let go on the folder tag: an untitled folder, made with its first note, which opens.
+  // Held on open ground and let go on the island tag: an empty island, framed on the map, its name chosen to type over.
   await atlas(page);
   await page.mouse.move(box.x + 10, box.y + 10);
   await page.mouse.down();
@@ -219,12 +222,27 @@ test("holding on open ground offers a new note or a new folder: let go on one an
   expect(Math.min(a.x, b.x) >= box.x - 1 && Math.min(a.y, b.y) >= box.y - 1, "inside the map").toBe(true);
   await page.mouse.up();
   await hold(page, box.x + 10, box.y + 10, "folder");
-  await expect(page).toHaveURL(/#\/n\/untitled-folder(-\d+)?\/untitled-note$/);
-  made.push(decodeURIComponent(page.url().split("#/n/")[1]!));
-  await expect(title).toHaveValue("Untitled note");
+  const naming = page.getByRole("textbox", { name: /^Rename the island untitled-island(-\d+)?$/ });
+  await expect(naming).toBeFocused();
+  const untitledAt = (await naming.inputValue());
+  expect(untitledAt).toMatch(/^untitled-island(-\d+)?$/);
+  expect(readdirSync(join(NOTES, untitledAt))).toEqual([]);
+  await look(page, "atlas-hold-island");
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type(`held-island-${name}`);
+  await page.keyboard.press("Enter");
+  await expect(folder(page, `held-island-${name}`)).toBeVisible();
+  await expect.poll(() => existsSync(join(NOTES, untitledAt))).toBe(false);
+  expect(readdirSync(join(NOTES, `held-island-${name}`))).toEqual([]);
+  // Empty, it is there still when the page is loaded again, on the map and in the list.
+  await page.reload();
+  await expect(folder(page, `held-island-${name}`)).toBeAttached();
+  await page.goto("#/notes");
+  await expect(page.getByRole("heading", { name: new RegExp(`^held-island-${name}`) })).toBeVisible();
 
   // Gone again, so the rest of the tests find the base as they expect.
   const headers = await session(page);
+  expect((await page.request.post("api/folder/delete", { headers, data: { path: `held-island-${name}` } })).ok()).toBe(true);
   for (const id of made) {
     await expect.poll(async () => (await page.request.get(`api/note?id=${id}`)).ok()).toBe(true);
     const { version } = (await (await page.request.get(`api/note?id=${id}`)).json()) as { version: string };

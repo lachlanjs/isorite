@@ -375,7 +375,9 @@
   .ask-at { position: sticky; top: 8px; height: 0; z-index: 40; }
   .ask { position: absolute; left: 0; right: 0; top: 0; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); filter: var(--lift-drop); animation: appear var(--t-change) var(--ease-out); }
   :global(body:has(.ring, .ghost)) .notes { user-select: none; -webkit-user-select: none; }
-  li, .head { touch-action: pan-y; -webkit-touch-callout: none; }
+  /* A row or heading is held for its tags: no callout of the browser's own, and no text chosen by the hold. Its fields still take text. */
+  li, .head { touch-action: pan-y; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+  li :global(input), .head input { user-select: text; -webkit-user-select: text; }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
   /* Rows with a vein (M24, D), no rule between them: space and the raised ground of the one pointed at or chosen. */
   li { position: relative; }

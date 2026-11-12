@@ -21,12 +21,13 @@ import { type PiRecord, type PiStore } from "./store.ts";
 import { isoriteTools, titleOf, type ToolsApi } from "./tools.ts";
 import { MemoryImages, type ImageStore, type Kept } from "./images.ts";
 import { invoked, skillText, skillsSection, skillTool, type Skill, type Skills } from "./skills.ts";
+import { AROUND, point, POINTERS, Seen, type SeenNote } from "./seen.ts";
 
 type StreamFn = NonNullable<ConstructorParameters<typeof Agent>[0]>["streamFn"];
 type Decision = "once" | "always" | "reject";
 
 export interface PiHostOptions {
-  api: ToolsApi & Pick<Api, "agentStatus"> & Partial<Pick<Api, "keepAgentRecord" | "events">>;
+  api: ToolsApi & Pick<Api, "agentStatus"> & Partial<Pick<Api, "keepAgentRecord" | "events" | "readNote">>;
   model: Model<any>;
   streamFn: StreamFn;
   /** How the agent is known on the base: its changes are signed `agent:<id>`. */
@@ -49,6 +50,12 @@ export interface PiHostOptions {
   /** Where the images given from the pane are kept (images.ts); in memory where none. */
   images?: ImageStore;
   getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
+  /** Remember which version of each note the model has seen in its live context (seen.ts): a pointer to a note it has
+   *  is sent as a reference or a diff, and reading it again unchanged is answered in a line. On by default; off sends
+   *  the pointers as the pane wrote them (the session bench measures the two). Needs `api.readNote`. */
+  remember?: boolean;
+  /** Lines either side of a passage pointed at in a note the model has not seen (default `AROUND`; 0 for none). */
+  around?: number;
 }
 
 const OUTPUT = 4000;
@@ -119,6 +126,10 @@ export class PiHost implements PaneSessions {
   readonly #store: PiStore | null;
   readonly #images: ImageStore;
   readonly #compaction: Compaction;
+  readonly #remember: boolean;
+  readonly #around: number;
+  /** What the model has seen of each note in its live context (seen.ts). */
+  #seen = new Seen();
   /** The thinking item the assistant message now streaming writes into. */
   #thinkingAt = -1;
   /** Cancels a summary being written. */
@@ -155,7 +166,9 @@ export class PiHost implements PaneSessions {
   #view: TerminalView = EMPTY;
   #listeners = new Set<(v: TerminalView) => void>();
 
-  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now, store, compaction, getApiKey, skills, images }: PiHostOptions) {
+  constructor({ api, model, streamFn, id = "pi", name = "pi", ask = () => false, more = () => [], guard = () => undefined, clock = Date.now, store, compaction, getApiKey, skills, images, remember = true, around = AROUND }: PiHostOptions) {
+    this.#remember = remember && Boolean(api.readNote);
+    this.#around = around;
     this.#images = images ?? new MemoryImages();
     this.#getApiKey = getApiKey;
     this.#skills = skills;
@@ -240,7 +253,7 @@ export class PiHost implements PaneSessions {
     // Read again for each prompt (there is no watcher), so a skill switched on or put in a folder is there at once. One
     // that fails to read leaves the agent without skills, not without an answer.
     const skills = await (this.#skills?.enabled() ?? Promise.resolve([] as Skill[])).catch(() => [] as Skill[]);
-    agent.state.tools = [...(await isoriteTools(this.#api, { agent: this.#id, session: this.#session }, () => this.asked(this.#id))), ...(skills.length ? [skillTool(skills)] : []), ...this.#more()];
+    agent.state.tools = [...(await isoriteTools(this.#api, { agent: this.#id, session: this.#session }, () => this.asked(this.#id))).map((t) => this.#watched(t)), ...(skills.length ? [skillTool(skills)] : []), ...this.#more()];
     this.#showSkills(agent, skills);
     const turn: TerminalTurn = { id: randomUUID(), asked: text, from: "here", items: [], state: "running", ...(pending ? { given: pending.parts } : {}), ...(images.length ? { images } : {}), at: new Date(this.#now()).toISOString() };
     this.#turns = [...this.#turns, turn];
@@ -254,8 +267,15 @@ export class PiHost implements PaneSessions {
     this.#tell();
     // What was given goes before the question, in the same message. An earlier conversation that has grown near the
     // model's window is summarised first.
-    const message = this.#message(pending, turn.id.slice(0, 8), text, skills, held);
-    void (async () => { await this.#compactIfNeeded(agent); if (this.#stopping) throw new Error("stopped"); await agent.prompt(message); })().then(() => undefined, (e: Error) => { if (this.#stopping) this.#set("stopped"); else this.#fail(e.message); }).then(() => this.#end());
+    // The pointers are read against what the model has seen after any compaction, which can make it forget some.
+    void (async () => {
+      await this.#compactIfNeeded(agent);
+      const pointed = await this.#point(text);
+      if (this.#stopping) throw new Error("stopped");
+      const message = this.#message(pending, turn.id.slice(0, 8), pointed.text, skills, held);
+      pointed.commit(agent.state.messages.length);
+      await agent.prompt(message);
+    })().then(() => undefined, (e: Error) => { if (this.#stopping) this.#set("stopped"); else this.#fail(e.message); }).then(() => this.#end());
   }
 
   /** The person's message for the model: each block given with it, tagged, then what they asked. */
@@ -273,6 +293,52 @@ export class PiHost implements PaneSessions {
     // is saved without its bytes (see #record).
     const seen = images.map(({ id, kept }) => ({ type: "image" as const, data: Buffer.from(kept.bytes).toString("base64"), mimeType: kept.type, ref: id }));
     return { role: "user" as const, content: [...parts.slice(0, -1), ...seen, parts.at(-1)!] as never, timestamp: this.#now() };
+  }
+
+  /** The person's words with their pointers rewritten against what the model has seen (seen.ts), and how to record what
+   *  it is given, once the message is on its way at `at`. Untouched where nothing is remembered. */
+  async #point(text: string): Promise<{ text: string; commit: (at: number) => void }> {
+    const read = this.#api.readNote;
+    if (!this.#remember || !read) return { text, commit: () => undefined };
+    const { text: out, gives } = await point(text, { read: async (id) => (await read.call(this.#api, id)).text, seen: this.#seen, around: this.#around });
+    return { text: out, commit: (at) => { for (const [id, t] of gives) this.#seen.set(id, t, at); } };
+  }
+
+  /** A tool of the base's, watched for what the model is given of a note: a note read whole is recorded as seen, and
+   *  one read again unchanged is answered in a line, its text being earlier in the conversation; an edit of a note the
+   *  model had as it was keeps the record in step. A lent base's notes, and sections, are left alone. */
+  #watched(tool: AgentTool): AgentTool {
+    const read = this.#api.readNote;
+    if (!this.#remember || !read || !["read_note", "edit_note", "write_note"].includes(tool.name)) return tool;
+    const now = async (id: string): Promise<string | null> => { try { return (await read.call(this.#api, id)).text; } catch { return null; } };
+    const at = () => this.#agent?.state.messages.length ?? 0;
+    return {
+      ...tool,
+      execute: async (callId, params, ...rest) => {
+        const p = (params ?? {}) as Record<string, unknown>, id = noteOf(tool.name, p);
+        if (!id || p.base) return tool.execute(callId, params, ...rest);
+        const before = await now(id);
+        if (tool.name === "read_note") {
+          if (p.section) return tool.execute(callId, params, ...rest);
+          const had = this.#seen.get(id);
+          if (before !== null && had?.text === before) {
+            const n = before.replace(/\n$/, "").split("\n").length;
+            return { content: [{ type: "text", text: `/${id}.md is unchanged since you last saw it in this conversation (${n} lines): its text is there. read_note with section= reads a part of it again.` }], details: undefined };
+          }
+          const result = await tool.execute(callId, params, ...rest);
+          const said = textOf((result as { content?: unknown }).content);
+          // A note cut to fit is not had whole.
+          if (before !== null && !/\[(?:…cut|Cut here)/.test(said)) this.#seen.set(id, before, at());
+          return result;
+        }
+        const had = this.#seen.get(id);
+        const result = await tool.execute(callId, params, ...rest);
+        const after = await now(id);
+        // The model knows the note as it now is if it had it as it was (an edit), or wrote all of it (a whole note written).
+        if (after !== null && ((had && had.text === before) || (typeof p.content === "string" && p.content === after))) this.#seen.set(id, after, at());
+        return result;
+      },
+    };
   }
 
   /** The skills section of the system prompt, put in where it differs from what the model was last sent: a system message
@@ -458,7 +524,7 @@ export class PiHost implements PaneSessions {
   }
 
   #summary(r: PiRecord): Omit<AgentSession, "agent" | "name"> {
-    return { session: r.session, title: r.title, asked: r.turns[0]?.asked ?? "", last: r.last, turns: r.turns.length, notes: 0, live: false, busy: false, kept: true, open: true };
+    return { session: r.session, title: r.title, asked: r.turns[0]?.asked ?? "", at: r.at, last: r.last, turns: r.turns.length, notes: 0, live: false, busy: false, kept: true, open: true };
   }
 
   async #fetch(session: string): Promise<PiRecord> {
@@ -472,7 +538,7 @@ export class PiHost implements PaneSessions {
   /** No session shown: the next question begins a new one. Everything of the last is let go (it stays kept). */
   #blank(): void {
     this.#agent = null; this.#session = ""; this.#at = ""; this.#turns = []; this.#title = ""; this.#cost = 0; this.#used = 0;
-    this.#given = new Set(); this.#withdrawn = new Set(); this.#pending = null; this.#queued = []; this.#problem = "";
+    this.#given = new Set(); this.#withdrawn = new Set(); this.#pending = null; this.#queued = []; this.#problem = ""; this.#seen = new Seen();
     this.#writing = -1; this.#thinkingAt = -1; this.#primed = false; this.#stopping = false;
   }
 
@@ -487,6 +553,7 @@ export class PiHost implements PaneSessions {
     this.#used = kept.used;
     this.#given = new Set(kept.given);
     this.#withdrawn = new Set(kept.withdrawn ?? []);
+    this.#seen = new Seen(kept.seen);
     this.#tell();
   }
 
@@ -504,7 +571,7 @@ export class PiHost implements PaneSessions {
   #record(): PiRecord {
     return {
       version: 1, session: this.#session, title: this.#title, at: this.#at, last: this.#turns.at(-1)?.at ?? this.#at, cost: this.#cost, used: this.#used,
-      given: [...this.#given], withdrawn: [...this.#withdrawn], turns: this.#turns, // The system prompt is the agent's own at every start, so a saved session does not carry an old one.
+      given: [...this.#given], withdrawn: [...this.#withdrawn], ...(this.#seen.size ? { seen: this.#seen.toJSON() as Record<string, SeenNote> } : {}), turns: this.#turns, // The system prompt is the agent's own at every start, so a saved session does not carry an old one.
       messages: (JSON.parse(JSON.stringify(this.#agent!.state.messages.map((m) => this.#unpictured(m)))) as { role?: string }[]).filter((m) => m.role !== "system"),
     };
   }
@@ -521,7 +588,7 @@ export class PiHost implements PaneSessions {
     this.#session = kept?.session ?? randomUUID();
     this.#at = kept?.at ?? new Date(this.#now()).toISOString();
     this.#agent = new Agent({
-      initialState: { systemPrompt: INSTRUCTIONS, model: this.#model, ...(kept ? { messages: kept.messages as never } : {}) },
+      initialState: { systemPrompt: this.#remember ? `${INSTRUCTIONS}\n\n${POINTERS}` : INSTRUCTIONS, model: this.#model, ...(kept ? { messages: kept.messages as never } : {}) },
       // Through this host, so a model chosen later (`use`) is the one the next request goes to.
       transformContext: async (messages) => this.#redact(await this.#shown(messages)),
       streamFn: ((...args: Parameters<NonNullable<StreamFn>>) => this.#streamFn!(...args)) as StreamFn,
@@ -709,6 +776,8 @@ export class PiHost implements PaneSessions {
       const recent = messages.slice(cut).map((m) => ((m as { role?: string }).role === "assistant" ? ({ ...m, usage: { ...(m as { usage?: object }).usage, totalTokens: 0 } } as AgentMessage) : m));
       const kept: AgentMessage[] = [...messages.slice(0, head), stand, ...recent];
       agent.state.messages = kept;
+      // What the model was given of a note before the cut is in the summary at most: it is to be given again.
+      this.#seen.compacted(head, cut);
       const after = this.#contextTokens(kept);
       this.#used = after;
       this.#edit((items) => items.map((i, k) => (k === id && i.kind === "compaction" ? { ...i, state: "done" as const, after, summary } : i)));
@@ -754,7 +823,7 @@ export class PiHost implements PaneSessions {
 
   #tell(): void {
     const last = this.#turns.at(-1)?.at ?? this.#at;
-    const entry: AgentSession | null = this.#session ? { agent: this.#id, name: this.#name, session: this.#session, title: this.#title, asked: this.#turns[0]?.asked ?? "", last, turns: this.#turns.length, notes: 0, live: true, busy: this.#busy, kept: Boolean(this.#store), open: true } : null;
+    const entry: AgentSession | null = this.#session ? { agent: this.#id, name: this.#name, session: this.#session, title: this.#title, asked: this.#turns[0]?.asked ?? "", at: this.#at, last, turns: this.#turns.length, notes: 0, live: true, busy: this.#busy, kept: Boolean(this.#store), open: true } : null;
     this.#view = {
       connected: true, agent: this.#name, agentId: this.#id, session: this.#session || null, title: this.#title, busy: this.#busy, turns: this.#turns,
       asking: [...this.#asking.values()].map(({ wait: _, ...p }) => p), cost: this.#cost, tokens: { input: this.#used, output: 0 },

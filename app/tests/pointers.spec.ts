@@ -62,7 +62,7 @@ test("a selection offers two tags; Ctrl+[ puts a pointer in the box, which is se
   await expect(page.locator(".tag")).toHaveCount(0);
   await page.keyboard.type("is that so?");
   await page.screenshot({ path: `test-results/screens/${test.info().project.name}-pointer-box.png` });
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+Enter");
   // The agent is sent where it is and the words.
   await expect.poll(() => sent(page)).toContain(`/basics/surprise.md L${line}`);
   expect(await sent(page)).toContain("An outcome of probability");
@@ -113,7 +113,7 @@ test("pointers from two notes stand in one question, in the order they are in th
   await page.keyboard.press("Control+[");
   await expect(pointers(page)).toHaveCount(2);
   await page.keyboard.type("have to do with the other?");
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+Enter");
   await expect(log(page).locator(".asked").last().locator(".pt")).toHaveText([/^Surprise · \d+$/, /^The bit · \d+$/]);
   await expect.poll(() => sent(page)).toMatch(/\[\^1\][^]*\[\^2\]/);
   const text = await sent(page);
@@ -207,7 +207,7 @@ test("a line of a file of the repository is pointed to by its path and line; the
   await page.keyboard.press("Control+[");
   await expect(pointers(page)).toHaveCount(1);
   await page.keyboard.type("is this needed?");
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+Enter");
   await expect.poll(() => sent(page)).toContain(`${file} L2`);
   expect(await sent(page)).toContain("heap = list(freqs)");
   await expect(log(page).locator(".asked").last().locator(".pt")).toHaveAttribute("title", new RegExp(`^${file.replace(/[.]/g, "\\.")} L2`));
@@ -218,7 +218,7 @@ test("a line of a file of the repository is pointed to by its path and line; the
   await page.keyboard.press("Control+[");
   await expect(pointers(page)).toHaveCount(1);
   await page.keyboard.type("say that again");
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+Enter");
   await expect.poll(() => sent(page)).toContain("the agent's earlier answer");
   await expect(log(page).locator(".asked").last().locator(".pt")).toHaveText("the answer");
 });

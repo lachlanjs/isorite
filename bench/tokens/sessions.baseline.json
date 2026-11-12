@@ -1,0 +1,22 @@
+{
+ "append-one-note": {
+  "input": 256298,
+  "fresh": 10381
+ },
+ "three-notes": {
+  "input": 167999,
+  "fresh": 8162
+ },
+ "selections-read": {
+  "input": 150050,
+  "fresh": 8536
+ },
+ "selections-trust": {
+  "input": 65359,
+  "fresh": 7522
+ },
+ "append-compacting": {
+  "input": 184699,
+  "fresh": 31771
+ }
+}

@@ -67,7 +67,7 @@ class TerminalState {
   past = $state.raw<ConversationSummary[]>([]);
   /** Why the last message could not be sent, or an answer not given. */
   problem = $state("");
-  /** A prompt or steer on its way to the server: the box waits, so one Enter sends one message. */
+  /** A prompt or steer on its way to the server: the box waits, so one Ctrl+Enter (or press of Send) sends one message. */
   sending = $state(false);
   /** Permissions answered here, until the server's view no longer asks them: their buttons stand down at once. */
   answered = $state.raw<ReadonlySet<string>>(new Set());

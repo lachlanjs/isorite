@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { NOTES } from "./serve.ts";
-import { attach, box } from "./agent.ts";
+import { attach, box, submit } from "./agent.ts";
 
 const editor = (page: Page) => page.getByRole("textbox", { name: "The note", exact: true });
 const phone = () => test.info().project.name.startsWith("phone");
@@ -62,7 +62,7 @@ test("an agent's answer with a diagram and code is drawn in the Agent pane, and 
     await open(page, "agent");
     if (phone()) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Agent/ }).click();
     await box(page).fill(`draw\nhow surprise and entropy stand, ${test.info().project.name}`);
-    await box(page).press("Enter");
+    await submit(page);
     const said = page.locator('[data-pane="agent"] .said').last();
     await expect(said.locator(".diagram svg").first()).toBeVisible();
     await expect(said.locator(".diagram")).toContainText("Entropy");

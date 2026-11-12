@@ -485,9 +485,9 @@
   // ------------------------------------------------------------ holding, to make a note or a folder (V6)
   //
   // Hold still on open ground, and a new note is marked where you hold; let go, and it is made, "Untitled note", and
-  // opens in the Note pane with its title chosen, to type over. Hold, then drag a little way, and it is a new folder
-  // instead, "Untitled folder", made with a first note in it, since a folder is made when a note is put in it. Either
-  // goes in the folder gripped in, numbered if the name is taken. Nothing is asked for on the map: the name was asked
+  // opens in the Note pane with its title chosen, to type over. Let go on the other tag, and it is a new island instead,
+  // "untitled-island", an empty folder framed on the map with its name to type over. Either goes in the folder gripped
+  // in, numbered if the name is taken. Nothing is asked for on the map: the name was asked
   // for away from where you held (Lachlan, on V6). What is marked is a note's or a folder's icon, not an area. Held on a note, the note is given to the agent
   // (M10): it goes into what the agent is sent.
 
@@ -520,6 +520,15 @@
   }, { drift: "cancel", scroll: false, dropAt: (x, y) => folderUnder(x, y), targetOf: (dir) => viewport?.querySelector(`[data-folder="${CSS.escape(dir)}"]`) ?? null });
   /** The folder whose name is being typed over, asked for by its hold tag. */
   let renamingRef = $state("");
+  /** An island just made from the hold tags: once it is on the map it is framed, and its name taken to type over. */
+  let madeIsland = $state("");
+  $effect(() => {
+    if (!madeIsland || !L) return;
+    const i = L.items.findIndex((n) => n.kind === "folder" && n.ref === madeIsland);
+    if (i < 0) return;
+    const ref = madeIsland;
+    untrack(() => { madeIsland = ""; moved = true; fly(fit(L.items[i]!, size.w, size.h, 1.5, L.cell)); renamingRef = ref; });
+  });
   let asking = $state.raw<{ item: Item; text: string } | null>(null);
   /** The folder of the map under a point of the screen: the deepest one shown, not the one carried nor inside it. */
   function folderUnder(x: number, y: number): string | null {
@@ -717,10 +726,20 @@
       finally { making = false; spot = null; }
       return;
     }
-    let dir = g.dir;
+    const dir = g.dir;
+    // A new island is an empty folder on disk, nothing put in it: it comes onto the map, framed, its name to type over.
     if (g.folder) {
-      const f = untitled(g.dir, "untitled-folder", (d) => !ids.some((id) => id.startsWith(`${d}/`)));
-      dir = [g.dir, f.slug].filter(Boolean).join("/");
+      const dirs = new Set(app.listing.dirs);
+      const f = untitled(g.dir, "untitled-island", (d) => !dirs.has(d) && !ids.includes(d) && !ids.some((id) => id.startsWith(`${d}/`)));
+      const made = [g.dir, f.slug].filter(Boolean).join("/");
+      try {
+        await app.api.makeFolder(made);
+        await app.refresh();
+        madeIsland = made;
+        void load();
+      } catch (err) { notice = (err as Error).message; }
+      finally { making = false; spot = null; }
+      return;
     }
     const t = untitled(dir, "untitled-note", (id) => !ids.includes(id));
     const id = [dir, t.slug].filter(Boolean).join("/"), name = t.n === 1 ? "Untitled note" : `Untitled note ${t.n}`;
@@ -965,7 +984,7 @@
 <div class="atlas" class:lit={!!lit} bind:this={viewport} role="application" aria-label="The atlas: the map of the base" tabindex="0"
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onclick={ground} onkeydown={key}
   ondragstart={(e) => e.preventDefault()} ondragover={dragOver} ondrop={(e) => void dropImages(e)}
-  oncontextmenu={(e) => { if (spot || holdDone !== undefined || offered) e.preventDefault(); }}>
+  oncontextmenu={(e) => { if (spot || holdDone !== undefined || offered) e.preventDefault(); else if (!(e.target instanceof Element && e.target.closest("input"))) g.menu(e); }}>
   <div class="ground dots" aria-hidden="true" style="background-size: {dot}px {dot}px; transform: translate({(((view.x + 56 + dot / 2) % dot) + dot) % dot}px, {(((view.y + 56 + dot / 2) % dot) + dot) % dot}px)"></div>
   {#if failed}
     <p class="said">The map could not be drawn: {failed}</p>

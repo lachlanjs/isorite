@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { attach, box } from "./agent.ts";
+import { attach, box, submit } from "./agent.ts";
 
 // The Atlas follows the note (M17): the note open is marked on the map, off screen a pip points to it, the note
 // chosen follows the links you take, a link under the mouse in the Note pane or in an agent's answer is lit on the map, and the
@@ -90,7 +90,7 @@ test("a note named in the agent's answer, under the mouse, is outlined on the ma
   try {
     await open(page, "coding/huffman-codes");
     await box(page).fill(`cite /basics/surprise.md\nwhat is it measured in, ${test.info().project.name}`);
-    await box(page).press("Enter");
+    await submit(page);
     const said = page.locator('[data-pane="agent"] .said a', { hasText: "cited" }).last();
     await expect(said).toBeVisible();
     await said.hover();

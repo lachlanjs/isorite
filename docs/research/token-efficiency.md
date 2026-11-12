@@ -65,3 +65,21 @@ Capability risk: a model that writes a note without fetching `part=writing` lose
 | Ask for a one-hour cache (`cacheRetention: "long"`) on Anthropic for sessions that pause between turns. | cost, not tokens: reads at 0.1 times, writes at 2 times | low |
 | Validate the estimate against a real tokenizer or the provider's usage field (the host already records `usage`). | accuracy | low |
 | `find_similar` and `search_notes` could take a `budget` and return paths and titles only on a big base. | large on big bases | medium |
+
+## Sessions: pointers and what the agent has seen (2026-11-12)
+
+`node bench/tokens/sessions.ts` runs whole sessions through `PiHost` on the scripted model and measures every request as a provider receives it: input tokens per turn, the session's total, and the share of each request that repeats the start of the one before (a proxy for prompt-cache hits). `--check` compares the harness with `bench/tokens/sessions.baseline.json` (`pi-seen.test.ts` does the same), `--write` records a new baseline. Prices per tier are in one table at the top of the file; DeepSeek V4 Flash's and Gemma 4 31B's are assumptions there.
+
+The harness now remembers which version of each note the model was given whole (`packages/server/src/pi/seen.ts`): a pointer to an unchanged note is a line, a changed one a diff, a passage of a note not seen comes with three lines either side, a whole read of an unchanged note is answered in a line, and compaction forgets what it summarised. Earlier messages are never rewritten.
+
+| Scenario (input tokens, whole session) | before | after |
+| --- | --- | --- |
+| 20 turns appending to one note, pointing at it | 576k | 256k |
+| 18 turns across three notes | 201k | 168k |
+| 16 selections, the agent reads the note each time | 224k | 150k |
+| 16 selections, the agent reads nothing | 45k | 65k |
+| 20 appending turns with a small window and /compact | 221k (fresh 97k) | 185k (fresh 32k) |
+
+The passage's lines around it cost about 20k tokens over 16 turns when the agent reads nothing else; they are kept because they are what lets it not read the note (224k when it does).
+
+Shortening old long `read_note` results (proposal 4) was measured in the bench, not built: on the old harness it cuts input (576k to 267k) but breaks the cache prefix each turn, so fresh input doubles (31k to 59k) and Claude Sonnet's cost rises (0.159 to 0.195 dollars); with the record of what was seen the results it would shorten are already a line, and it changes nothing. Not worth doing.

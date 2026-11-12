@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -126,6 +126,17 @@ test("the app's files are served, and nothing outside its folder", async () => {
   expect(await (await fetch(url + "/")).text()).toContain("<title>isorite</title>");
   expect((await fetch(url + "/%2e%2e/information-theory/basics/entropy.md")).status).toBe(404);
   expect((await fetch(url + "/missing.js")).status).toBe(404);
+});
+
+test("an empty island is a real empty folder: listed, on the map, and still there when the base is opened again", async () => {
+  expect((await write("/api/folder", { path: "drafts/empty" }, { method: "POST" })).status).toBe(200);
+  expect(statSync(join(notes, "drafts", "empty")).isDirectory()).toBe(true);
+  expect(readdirSync(join(notes, "drafts", "empty"))).toEqual([]);
+  expect(await (await fetch(url + "/api/notes")).json()).toMatchObject({ dirs: expect.arrayContaining(["drafts", "drafts/empty"]) });
+  const again = await openEngine(locate(notes), "testdev1", null);
+  expect((await again.notes()).dirs).toEqual(expect.arrayContaining(["drafts", "drafts/empty"]));
+  const islands = (d: { kind: string; ref: string; children?: unknown[] }): string[] => d.kind === "dir" ? [d.ref, ...(d.children ?? []).flatMap((c) => islands(c as typeof d))] : [];
+  expect(islands((await again.map()).model.root as { kind: string; ref: string })).toEqual(expect.arrayContaining(["drafts", "drafts/empty"]));
 });
 
 test("the file port keeps to its folder and replaces a file whole", async () => {

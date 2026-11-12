@@ -187,8 +187,10 @@
   function scrolled(): void {
     if (!list) return;
     top = list.scrollTop;
-    // On its way to the newest (the button): not yet there is not scrolled away.
-    pinned = heading || atEnd(list.scrollHeight);
+    // On its way to the newest (the button): not yet there is not scrolled away. Judged against the height last
+    // measured, not the height now: the reply may have grown since the scroll that brought you to its end, and that
+    // growth, not yet followed, is not you scrolling away (it was, and the pane stopped following a reply as it came).
+    pinned = heading || atEnd(Math.min(height, list.scrollHeight));
     if (pinned) behind = false;
   }
   /** Scrolling smoothly to the newest after the button: the session may grow on the way, and the scroll then goes on to the new end. */
@@ -304,6 +306,42 @@
 
   /** What was asked, for showing: the handoff's preamble gone, and each footnote mark a pointer chip where it stood. */
   type Piece = { text: string } | { n: number; where: string; quote: string; id: string | null; chip: string };
+  /** What was asked, as Markdown: rendered as the agent's replies are (maths, code, lists, links), by render(), whose
+   *  markdown-it takes no HTML and whose output is sanitised, so nothing typed is ever read as markup. Each pointer
+   *  stands in it as a private-use mark while it is rendered, and chipsIn puts its chip back in that place. */
+  const markedAsked = (ps: Piece[]): string => ps.map((p, k) => ("text" in p ? p.text : `\uE000${k}\uE001`)).join("");
+  function chipsIn(node: HTMLElement, ps: Piece[]) {
+    const put = (list: Piece[]): void => {
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT), found: Text[] = [];
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) if (/\uE000\d+\uE001/.test(n.nodeValue ?? "")) found.push(n as Text);
+      for (const text of found) {
+        const parts = (text.nodeValue ?? "").split(/\uE000(\d+)\uE001/);
+        const out = parts.map((part, i) => {
+          if (i % 2 === 0) return document.createTextNode(part);
+          const p = list[Number(part)];
+          return p && !("text" in p) ? chipEl(p) : document.createTextNode("");
+        });
+        text.replaceWith(...out);
+      }
+    };
+    put(ps);
+    return { update: put };
+  }
+  /** A pointer's chip in what was asked: where it points, said on it; pressed, its note opens. */
+  function chipEl(p: Exclude<Piece, { text: string }>): HTMLElement {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pt ref";
+    if (p.id) b.dataset.to = p.id;
+    b.title = `${p.where}${p.quote ? `\n${p.quote}` : ""}`;
+    b.innerHTML = '<span class="pt-face"><svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 6h6.5M6 3l3 3-3 3" /></svg><span class="pt-text"></span></span>';
+    b.querySelector(".pt-text")!.textContent = p.chip;
+    return b;
+  }
+  function chipClicked(e: MouseEvent): void {
+    const to = e.target instanceof Element ? e.target.closest<HTMLElement>(".pt.ref")?.dataset.to : undefined;
+    if (to) void panes.open(to, true);
+  }
   function pieces(asked: string): Piece[] {
     const a = askedOf(asked);
     const body = a.body.replace(/^From my isorite knowledge base\.[^\n]*(\n+|$)/i, "");
@@ -441,10 +479,15 @@
 
 {#snippet turn(t: TerminalTurn)}
   {@const changed = changedIn(t)}
+  {@const ps = pieces(t.asked)}
+  {@const md = markedAsked(ps)}
   {@const fail = t.state === "failed" ? failure([...t.items].reverse().find((i): i is Extract<TerminalItem, { kind: "text" }> => i.kind === "text" && /^\(.*\)$/s.test(i.text))?.text ?? "") : null}
   <article class="turn" data-state={t.state}>
     <div class="you"><i class="rule" aria-hidden="true"></i>
-      <p class="asked">{#each pieces(t.asked) as p, k (k)}{#if "text" in p}{p.text}{:else}<button type="button" class="pt ref" data-to={p.id ?? undefined} title="{p.where}{p.quote ? `\n${p.quote}` : ''}" onclick={() => { if (p.id) void panes.open(p.id, true); }}><span class="pt-face"><svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 6h6.5M6 3l3 3-3 3" /></svg><span class="pt-text">{p.chip}</span></span></button>{/if}{/each}</p>
+      <!-- The chips in it are buttons: this only hears their clicks. -->
+      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render(), whose markdown takes no HTML -->
+      <div class="asked prose" use:drawn={md} use:chipsIn={ps} onclick={chipClicked}>{@html render(md)}</div>
       {#if t.images?.length}
         <span class="shots">{#each t.images as id (id)}{@const src = terminal.imageUrl(id)}{#if src}<a class="shot" href={src} target="_blank" rel="noopener" title="Open the image"><img {src} alt="Sent with this turn" loading="lazy" /></a>{/if}{/each}</span>
       {/if}
@@ -534,8 +577,13 @@
   /* What you asked: set apart as yours, a block on the ground with a blue rule that draws down its edge as it comes. */
   .you { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 8px 14px; background: var(--surface-raised); border-radius: 0 var(--round) var(--round) 0; }
   .you .rule { position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--lattice); transform-origin: top; }
-  .asked { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); font: var(--fs-ui)/1.55 var(--font-ui); }
-  .asked .ref { background: none; border: 0; padding: 0; font: inherit; }
+  .asked { margin: 0; overflow-wrap: anywhere; color: var(--text); font: var(--fs-ui)/1.55 var(--font-ui); min-width: 0; }
+  .asked :global(p) { margin: 0; }
+  .asked > :global(* + *) { margin-top: 8px; }
+  .asked > :global(:last-child) { margin-bottom: 0; }
+  .asked :global(ul), .asked :global(ol) { margin-bottom: 0; padding-left: 20px; }
+  .asked :global(pre) { overflow-x: auto; }
+  .asked :global(.ref) { background: none; border: 0; padding: 0; font: inherit; }
   .from { position: absolute; top: 8px; right: 10px; color: var(--text-faint); display: inline-flex; }
   .shots { display: flex; flex-wrap: wrap; gap: 6px; }
   .shot { display: block; width: 64px; height: 64px; border-radius: var(--round); overflow: hidden; background: var(--ground-2); outline-offset: 2px; }

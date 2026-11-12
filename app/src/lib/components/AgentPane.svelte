@@ -2,9 +2,11 @@
   // The Agent pane: the session of isorite's own agent, or what it has in hand (the Context view, M10b), or the drawer
   // of sessions; and the box, which asks in the session shown. Under the box, in its footer, what the box talks to and
   // what it may do: the agent (its model, with a menu: settings, a new session, the sessions), what it may reach (notes,
-  // the project's files, commands), how full its context is, and the button that sends or stops. Enter sends;
-  // Shift+Enter is a new line; Escape stops; Up in an empty box brings back what was last sent. With no agent set up,
-  // the pane says how to set one up.
+  // the project's files, commands), how full its context is (and what the session has cost), and the button that sends
+  // or stops. Enter is a new line, on every device; Ctrl+Enter (Cmd+Enter on a Mac) sends, and on a phone the button
+  // does; Escape stops; Up in an empty box brings back what was last sent. The box's top edge is a handle that makes it
+  // taller; while the draft holds maths or code, a strip under it shows it rendered. With no agent set up, the pane
+  // says how to set one up.
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
   import { app } from "$lib/app.svelte.ts";
@@ -13,6 +15,9 @@
   import { terminal } from "$lib/terminal.svelte.ts";
   import { tray } from "$lib/tray.svelte.ts";
   import { pointers } from "$lib/pointers.svelte.ts";
+  import { MARKS } from "$lib/pointers.ts";
+  import { render } from "$lib/markdown.ts";
+  import { drawn } from "$lib/drawn.ts";
   import type { PiApi, PiSkill } from "$lib/api.ts";
   import PromptBox from "./PromptBox.svelte";
   import AgentSessions from "./AgentSessions.svelte";
@@ -41,7 +46,12 @@
 
   onMount(() => { terminal.start(); });
 
-  /** While the agent works: Enter queues what is typed for when it would stop; this puts it in after the step running now. */
+  /** The key that sends, as this machine names it; on a touch screen there is none, and the button sends. */
+  const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  const SEND_KEY = mac ? "⌘↵" : "Ctrl+↵";
+  const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+
+  /** While the agent works: sending queues what is typed for when it would stop; this puts it in after the step running now. */
   async function steer(): Promise<void> {
     if (await terminal.steer(await pointers.expand(text))) text = "";
   }
@@ -110,8 +120,10 @@
       if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); complete(offered[chosen] ?? offered[0]!); return; }
       if (e.key === "Escape") { e.preventDefault(); dismissed = text; return; }
     }
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && terminal.canSteer) { e.preventDefault(); void steer(); }
-    else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); }
+    // Enter alone is the editor's: a new line. With Ctrl (Cmd on a Mac) it sends; with Shift too, while the agent
+    // works, it steers.
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && e.shiftKey && terminal.canSteer) { e.preventDefault(); void steer(); }
+    else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send(); }
     else if (e.key === "Escape" && menu) { e.preventDefault(); menu = false; }
     else if (e.key === "Escape" && busy) { e.preventDefault(); void terminal.stop(); }
     else if (e.key === "ArrowUp" && !text && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) { if (recall()) e.preventDefault(); }
@@ -142,6 +154,47 @@
   ] as const;
   const reach = $derived(REACH.filter((r) => r.k === "notes" || panes.attached));
 
+  // ------------------------------------------------------------ the box's height
+
+  // The box grows with what is written, to a few lines; its top edge, dragged (or focused and moved with the arrows),
+  // sets a height of its own, kept in this browser. Never so tall that the session above has no room.
+  const HEIGHT_KEY = "isorite.composer-height";
+  const MIN_H = 44, STEP = 24;
+  let paneEl = $state<HTMLElement>();
+  let boxH = $state<number | null>(null);
+  try { const h = Number(localStorage.getItem(HEIGHT_KEY)); if (h >= MIN_H) boxH = h; } catch { /* no storage: the box sizes itself */ }
+  const maxH = (): number => Math.max(MIN_H * 2, Math.round((paneEl?.clientHeight ?? 600) * 0.6));
+  const scroller = (): HTMLElement | null => paneEl?.querySelector<HTMLElement>(".cm-scroller") ?? null;
+  function setH(h: number | null): void {
+    boxH = h === null ? null : Math.round(Math.min(maxH(), Math.max(MIN_H, h)));
+    try { if (boxH === null) localStorage.removeItem(HEIGHT_KEY); else localStorage.setItem(HEIGHT_KEY, String(boxH)); } catch { /* kept for now only */ }
+  }
+  function grab(e: PointerEvent): void {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const handle = e.currentTarget as HTMLElement, y0 = e.clientY, h0 = scroller()?.clientHeight ?? boxH ?? MIN_H;
+    handle.setPointerCapture(e.pointerId);
+    const move = (m: PointerEvent): void => setH(h0 + (y0 - m.clientY));
+    const up = (): void => { handle.removeEventListener("pointermove", move); handle.removeEventListener("pointerup", up); handle.removeEventListener("pointercancel", up); };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
+  }
+  function handleKeys(e: KeyboardEvent): void {
+    const now = boxH ?? scroller()?.clientHeight ?? MIN_H;
+    if (e.key === "ArrowUp") { e.preventDefault(); setH(now + STEP); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); setH(now - STEP); }
+    else if (e.key === "End") { e.preventDefault(); setH(maxH()); }
+    else if (e.key === "Home") { e.preventDefault(); setH(null); }
+  }
+
+  // ------------------------------------------------------------ the draft, rendered
+
+  /** Maths ($…$, $$…$$, \(…\), \[…\]) or a code fence in the draft: then a strip under the box shows it as it will read. */
+  const RENDERS = /\$\$[^]*?\$\$|(?<![\\$])\$(?![\s\d])[^$\n]*?[^\s\\]\$|\\\([^]*?\\\)|\\\[[^]*?\\\]|^\s*(```|~~~)/m;
+  const draft = $derived(text.replace(MARKS, ""));
+  const previewing = $derived(RENDERS.test(draft));
+
   /** What went wrong, short, with the one thing to do about it. */
   const problem = $derived(terminal.problem || terminal.view?.problem || copyProblem);
   const noAgent = $derived(/no agent is set up/i.test(problem));
@@ -149,7 +202,7 @@
 
 <svelte:window onpointerdown={outside} />
 
-<div class="apane" class:drop={tray.carrying?.over} class:filing={over} role="presentation" ondragover={dragOver} ondragleave={dragLeave} ondrop={dropped}>
+<div class="apane" bind:this={paneEl} class:drop={tray.carrying?.over} class:filing={over} role="presentation" ondragover={dragOver} ondragleave={dragLeave} ondrop={dropped}>
   {#if terminal.shown === "context"}
     <ContextView />
   {:else if terminal.shown === "past"}
@@ -161,7 +214,7 @@
   {/if}
   <div class="composer">
     {#if busy && text.trim()}
-      <p class="mid" transition:fade={{ duration: reduced() ? 0 : DUR_1 }}>Enter queues it for when it stops.{#if terminal.canSteer} <button type="button" class="link" onclick={() => void steer()} title="Put it in after the step running now (Ctrl+Enter)">Steer now</button>{/if}</p>
+      <p class="mid" transition:fade={{ duration: reduced() ? 0 : DUR_1 }}>{touch ? "Send" : SEND_KEY} queues it for when it stops.{#if terminal.canSteer} <button type="button" class="link" onclick={() => void steer()} title="Put it in after the step running now{touch ? "" : ` (${mac ? "⌘⇧↵" : "Ctrl+Shift+↵"})`}">Steer now</button>{/if}</p>
     {/if}
     {#if offered.length}
       <ul class="slash" role="listbox" aria-label="Commands and skills" data-testid="skill-menu">
@@ -173,6 +226,9 @@
       </ul>
     {/if}
     <div class="box" class:busy onpastecapture={pasted} role="presentation">
+      <!-- A focusable separator is a splitter: the arrows move it. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+      <div class="grip" role="separator" tabindex="0" aria-orientation="horizontal" aria-label="Height of the message box" aria-valuemin={MIN_H} aria-valuenow={boxH ?? undefined} title="Drag to make the box taller; double-click to let it size itself" onpointerdown={grab} onkeydown={handleKeys} ondblclick={() => setH(null)}></div>
       {#if terminal.attached.length}
         <ul class="chips" aria-label="Images to send">
           {#each terminal.attached as a (a.key)}
@@ -186,7 +242,7 @@
           {/each}
         </ul>
       {/if}
-      <PromptBox bind:value={text} readonly={terminal.sending} placeholder={terminal.connected ? `Ask ${name}` : "Set up an agent to ask it here"} onkeydown={keys} />
+      <PromptBox bind:value={text} readonly={terminal.sending} placeholder={terminal.connected ? `Ask ${name}` : "Set up an agent to ask it here"} height={boxH} {touch} onkeydown={keys} />
       <div class="foot">
         {#if terminal.connected}
           <div class="agent-wrap">
@@ -227,12 +283,16 @@
               <span class="corner sending" role="status" aria-label="Sending"><span class="dot"></span></span>
             {:else}
               <!-- Always there, so the bar does not move as you start to type; ready once there is something to send. -->
-              <button class="corner send" type="button" aria-label="Send" title="Send  ↵" disabled={!text.trim()} onclick={() => void send()} transition:fade={{ duration: reduced() ? 0 : DUR_1 }}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10M9 4l4 4-4 4" /></svg></button>
+              <button class="corner send" type="button" aria-label="Send" title={touch ? "Send" : `Send  ${SEND_KEY}`} disabled={!text.trim()} onclick={() => void send()} transition:fade={{ duration: reduced() ? 0 : DUR_1 }}><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10M9 4l4 4-4 4" /></svg></button>
             {/if}
           </span>
         {/if}
       </div>
     </div>
+    {#if previewing}
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by render(), whose markdown takes no HTML -->
+      <div class="preview prose" role="region" aria-label="The message, rendered" use:drawn={draft} transition:fade={{ duration: reduced() ? 0 : DUR_1 }}>{@html render(draft)}</div>
+    {/if}
     {#if app.offline}<p class="offline" role="status"><span class="dot"></span>Reconnecting…</p>{/if}
     {#if problem}
       <p class="bad" role="alert">{#if noAgent}No agent yet. <button type="button" class="link" onclick={() => void terminal.settings()}>Set up</button>{:else}{problem}{/if}</p>
@@ -282,6 +342,19 @@
   .box.busy:not(:focus-within) { border-color: color-mix(in srgb, var(--growth) 45%, var(--line)); animation: working 2.4s ease-in-out infinite alternate; }
   @keyframes working { to { box-shadow: 0 0 16px color-mix(in srgb, var(--growth) calc(var(--glow-a) * .6), transparent); border-color: color-mix(in srgb, var(--growth) 70%, var(--line)); } }
   @media (prefers-reduced-motion: reduce) { .box.busy { animation: none; } }
+  /* The box's top edge: a thin handle, seen as a short bar when the pointer or the keys are on it. */
+  .grip { position: relative; height: 8px; margin: 0 0 -8px; z-index: 1; cursor: ns-resize; touch-action: none; outline: none; }
+  .grip::after { content: ""; position: absolute; left: 50%; top: 2px; width: 28px; height: 2px; translate: -50% 0; border-radius: 1px; background: var(--line-strong); opacity: 0; transition: opacity var(--dur-1) var(--ease-out); }
+  .grip:hover::after, .grip:focus-visible::after, .grip:active::after { opacity: 1; }
+  .grip:focus-visible::after { background: var(--lattice); }
+  @media (pointer: coarse) { .grip { height: 14px; margin-bottom: -14px; } .grip::after { opacity: .6; top: 4px; } }
+  @media (prefers-reduced-motion: reduce) { .grip::after { transition: none; } }
+  /* The draft as it will read, while it holds maths or code: small, under the box, scrolled in itself. */
+  .preview { max-height: 140px; overflow: auto; padding: 6px 10px; font-size: var(--fs-small); color: var(--text-soft); border-left: 2px solid var(--line); }
+  .preview > :global(:last-child) { margin-bottom: 0; }
+  .preview :global(p) { margin: 0 0 .5em; }
+  .preview :global(.code-block) { margin: 0 0 .5em; }
+  .preview :global(pre) { font-size: 0.75rem; padding: 6px 10px; }
   .foot { display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 2px 4px 4px 6px; min-width: 0; }
   .grow { flex: 1 1 auto; }
 
@@ -319,5 +392,7 @@
   @keyframes pulse { from { opacity: .3; } }
   .copy { flex: none; width: 28px; height: 28px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--text-faint); cursor: pointer; border-radius: var(--round); }
   .copy:hover, .copy:focus-visible { color: var(--text); background: var(--fill-hover); }
+  /* On a touch screen the button is how a message is sent: a size a finger finds. */
+  @media (pointer: coarse) { .corner { width: 36px; height: 36px; } }
   @media (max-width: 420px) { .agent .nm { max-width: 6.5em; } .sw { padding: 0 5px; } }
 </style>

@@ -32,6 +32,12 @@ export const box = (page: Page) => page.getByRole("textbox", { name: "Message th
 export async function toAgent(page: Page): Promise<void> {
   if ((page.viewportSize()?.width ?? 1280) <= 760) await page.getByRole("navigation", { name: "Panes" }).getByRole("button", { name: /^Agent/ }).click();
 }
+/** Send what is in the box as a person would: Ctrl+Enter on a desktop (Enter alone is a new line), the Send button
+ *  on a phone. */
+export async function submit(page: Page): Promise<void> {
+  if ((page.viewportSize()?.width ?? 1280) <= 760) await page.locator('[data-pane="agent"]').getByRole("button", { name: "Send", exact: true }).click();
+  else await box(page).press("ControlOrMeta+Enter");
+}
 /** The session shown in the pane. */
 export const log = (page: Page) => page.getByRole("log", { name: "The agent's session" });
 /** Ask in the box, and the turn it makes (by a word only it has). */
@@ -39,7 +45,7 @@ export async function ask(page: Page, text: string, mark: string) {
   // Not while the last turn runs: then it would be queued into that turn.
   await expect(page.getByRole("button", { name: "Stop the agent" })).toHaveCount(0, { timeout: 15_000 });
   await box(page).fill(text);
-  await box(page).press("Enter");
+  await submit(page);
   const turn = log(page).locator(".turn").filter({ hasText: mark });
   await expect(turn).toHaveCount(1);
   return turn;

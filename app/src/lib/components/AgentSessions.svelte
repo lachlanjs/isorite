@@ -1,6 +1,6 @@
 <script lang="ts">
   // The agent's sessions, in the drawer where the agent's conversations were (M24, K): a list, a row each with its crystal,
-  // what was first asked, and when it was last added to; a live one has a dot, gold while it works. Fork and remove
+  // what was first asked and when it began, and when it was last added to; a live one has a dot, gold while it works. Fork and remove
   // come on the row under the pointer. One chosen is shown: a live one followed, another carried on, else read as it
   // was kept. Under them, the agent's own conversations from before M25, to read.
   import type { AgentSession } from "@isorite/engine";
@@ -18,6 +18,13 @@
     if (d.getTime() >= midnight - DAY) return "yesterday";
     if (d.getTime() >= midnight - 6 * DAY) return d.toLocaleDateString(undefined, { weekday: "short" });
     return d.toLocaleDateString(undefined, { day: "numeric", month: "short", ...(d.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }) });
+  }
+  /** When a session began: "11 Nov, 14:05" (with the year, if not this one). */
+  function began(at: string | undefined): string {
+    const d = new Date(at ?? "");
+    if (Number.isNaN(d.getTime())) return "";
+    const day = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }) });
+    return `${day}, ${d.toTimeString().slice(0, 5)}`;
   }
   const many = (n: number, one: string): string => `${n} ${one}${n === 1 ? "" : "s"}`;
   // Live first, then by when last used.
@@ -46,7 +53,7 @@
       <div role="listitem" animate:glide in:fadeIn>
         <button type="button" class="row" class:on={shown(s)} data-lustre aria-current={shown(s) ? "true" : undefined} disabled={!s.open && !s.kept} title={!s.open && !s.kept ? `${s.name} isn't set up to carry it on` : `${s.name}${s.turns ? ` · ${many(s.turns, "turn")}` : ""}`} onclick={() => void choose(s)}>
           <span class="cr"><Crystal id={s.session} size={28} growing={s.busy} /></span>
-          <span class="q">{titleOf(s)}</span>
+          <span class="q"><span class="t">{titleOf(s)}</span>{#if began(s.at)}<span class="at" data-testid="session-began">{began(s.at)}</span>{/if}</span>
           <span class="m">{#if s.live}<i class="live" class:busy={s.busy} aria-label={s.busy ? "at work" : "live"}></i>{/if}{when(s.last)}</span>
         </button>
         {#if removing === idOf(s)}
@@ -72,7 +79,7 @@
         <div role="listitem">
           <button type="button" class="row" class:on={terminal.old?.session === c.id} data-lustre aria-current={terminal.old?.session === c.id ? "true" : undefined} title="{many(c.notes, 'note')} · {many(c.turns, 'turn')}" onclick={() => void terminal.read(c.id)}>
             <span class="cr"><Crystal id={c.id} size={28} /></span>
-            <span class="q">{c.asked}</span>
+            <span class="q"><span class="t">{c.asked}</span></span>
             <span class="m">{when(c.last)}</span>
           </button>
           {#if removing === `legacy/${c.id}`}
@@ -101,7 +108,10 @@
   .row.on { background: var(--fill-chosen); color: var(--growth); }
   .row:disabled { cursor: default; opacity: .6; }
   .cr { display: grid; place-items: center; }
-  .q { font: 0.875rem/1.35 var(--font-text); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q { display: flex; align-items: baseline; gap: 8px; min-width: 0; font: 0.875rem/1.35 var(--font-text); color: var(--text); white-space: nowrap; }
+  .q .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  /* When it began: beside the title, quiet, never cut (the title gives way first). */
+  .q .at { flex: none; font: var(--fs-meta) var(--font-ui); color: var(--text-faint); font-variant-numeric: tabular-nums; }
   .m { display: inline-flex; align-items: center; gap: 6px; font: var(--fs-meta) var(--font-ui); color: var(--text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .live { width: 6px; height: 6px; border-radius: 50%; background: var(--malachite); }
   .live.busy { background: var(--growth); box-shadow: 0 0 6px var(--growth); }

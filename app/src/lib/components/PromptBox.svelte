@@ -1,7 +1,8 @@
 <script lang="ts">
   // The box the agent is asked in (it was a textarea; it is CodeMirror so that a pointer can stand in the text, as one
   // glowing character that moves and goes like any other). `value` is the text with each pointer as its private
-  // character (pointers.ts). Keys are AgentPane's (`onkeydown`): Enter sends, and a key it handles it marks as handled.
+  // character (pointers.ts). Keys are AgentPane's (`onkeydown`): Ctrl+Enter sends, and a key it handles it marks as handled;
+  // Enter is a new line. `height`, where set, is the box's own height (its top edge dragged), else it grows to a few lines.
   import { onMount } from "svelte";
   import { Compartment, EditorState, type Range } from "@codemirror/state";
   import { Decoration, EditorView, ViewPlugin, WidgetType, drawSelection, keymap, placeholder as hint, type DecorationSet, type ViewUpdate } from "@codemirror/view";
@@ -10,7 +11,7 @@
   import { pointers } from "$lib/pointers.svelte.ts";
   import { tokenEl } from "$lib/pointerToken.ts";
 
-  let { value = $bindable(""), readonly = false, placeholder = "", onkeydown }: { value?: string; readonly?: boolean; placeholder?: string; onkeydown?: (e: KeyboardEvent) => void } = $props();
+  let { value = $bindable(""), readonly = false, placeholder = "", height = null, touch = false, onkeydown }: { value?: string; readonly?: boolean; placeholder?: string; height?: number | null; touch?: boolean; onkeydown?: (e: KeyboardEvent) => void } = $props();
 
   let host: HTMLDivElement;
   let view = $state.raw<EditorView>();
@@ -86,7 +87,7 @@
   const look = EditorView.theme({
     "&": { background: "none", fontSize: "13px" },
     "&.cm-focused": { outline: "none" },
-    ".cm-scroller": { maxHeight: "200px", overflow: "auto", fontFamily: "var(--font-ui)", lineHeight: "1.5" },
+    ".cm-scroller": { maxHeight: "var(--box-h, 200px)", minHeight: "var(--box-h, 0px)", overflow: "auto", fontFamily: "var(--font-ui)", lineHeight: "1.5" },
     ".cm-content": { padding: "10px 12px 4px", minHeight: "44px", caretColor: "var(--text)", color: "var(--text)" },
     ".cm-line": { padding: "0" },
     ".cm-placeholder": { color: "var(--text-faint)" },
@@ -107,11 +108,13 @@
         extensions: [
           history(), drawSelection(), EditorView.lineWrapping, shown, look, hinted.of(hint(placeholder)),
           lock.of(EditorState.readOnly.of(readonly)),
-          EditorView.contentAttributes.of({ role: "textbox", "aria-label": "Message the agent", "aria-multiline": "true", id: "agent-box", spellcheck: "true" }),
-          // AgentPane's keys first (Enter sends, a slash command is chosen); what it leaves, the editor does.
+          EditorView.contentAttributes.of({ role: "textbox", "aria-label": "Message the agent", "aria-multiline": "true", id: "agent-box", spellcheck: "true",
+            // A phone's keyboard begins each sentence with a capital, and corrects as it does elsewhere; a desktop's does not correct.
+            autocapitalize: "sentences", autocorrect: touch ? "on" : "off", enterkeyhint: "enter" }),
+          // AgentPane's keys first (Ctrl+Enter sends, a slash command is chosen); what it leaves, the editor does.
           EditorView.domEventHandlers({ keydown: (e) => { onkeydown?.(e); return e.defaultPrevented; } }),
           // A word at a time is the editor's own, not the browser's, which stops at each pointer (it is not text).
-          keymap.of([{ key: "Shift-Enter", run: insertNewline }, ...historyKeymap,
+          keymap.of([{ key: "Enter", run: insertNewline }, { key: "Shift-Enter", run: insertNewline }, ...historyKeymap,
             { key: "Mod-ArrowLeft", mac: "Alt-ArrowLeft", run: cursorGroupLeft, shift: selectGroupLeft },
             { key: "Mod-ArrowRight", mac: "Alt-ArrowRight", run: cursorGroupRight, shift: selectGroupRight },
             { key: "Mod-Backspace", mac: "Alt-Backspace", run: deleteGroupBackward },
@@ -147,7 +150,7 @@
   $effect(() => { const p = placeholder; view?.dispatch({ effects: hinted.reconfigure(hint(p)) }); });
 </script>
 
-<div class="prompt" data-prompt bind:this={host}></div>
+<div class="prompt" data-prompt bind:this={host} style:--box-h={height ? `${height}px` : undefined}></div>
 
 <style>
   .prompt { flex: 1 1 auto; min-width: 0; }
