@@ -10,7 +10,7 @@ import { writeExample } from "@isorite/example/node";
 import type { TerminalView } from "@isorite/engine";
 import { PiHost } from "../src/pi/host.ts";
 import { scriptedModel } from "../src/pi/scripted.ts";
-import { BUILTIN_SKILLS, Skills, discover, skillTool } from "../src/pi/skills.ts";
+import { BUILTIN_SKILLS, Skills, discover, filesOf, readSkillFile, skillTool } from "../src/pi/skills.ts";
 import { locate, openEngine } from "../src/serve.ts";
 
 const root = mkdtempSync(join(tmpdir(), "isorite-skills-"));
@@ -29,6 +29,17 @@ test("the skill isorite ships is found, with its licence beside it", async () =>
   const tutor = skills.find((s) => s.name === "socratic-tutor")!;
   expect(tutor.source).toBe("built-in");
   expect(tutor.description).toMatch(/Socratic tutoring/);
+});
+
+test("the learn skill is found, names its method, and its reference files are readable by use_skill", async () => {
+  const { skills, broken } = await discover({ builtin: BUILTIN_SKILLS, user: join(root, "none"), base: join(root, "none") });
+  expect(broken).toEqual([]);
+  const learn = skills.find((s) => s.name === "learn")!;
+  expect(learn.source).toBe("built-in");
+  expect(learn.description).toMatch(/evidence ledger/);
+  expect(filesOf(learn)).toEqual(["ledger.md", "techniques.md"]);
+  expect(readSkillFile(learn, "techniques.md")).toMatch(/Worked example with fading/);
+  expect(readSkillFile(learn, "ledger.md")).toMatch(/Review schedule/);
 });
 
 test("a later source wins by name, and each says where it is from", async () => {

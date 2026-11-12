@@ -26,9 +26,9 @@ test("a leading slash offers the skills that are on, and Enter completes one", a
   await box(page).fill("/");
   const menu = page.getByRole("listbox", { name: "Skills" });
   await expect(menu).toBeVisible();
-  // The pane's own command, the built-in skill and the person's own (the skills base's release-notes, which the test
-  // server seeds).
-  await expect(menu.getByRole("option")).toHaveCount(3);
+  // The pane's own command, the built-in skills (learn and socratic-tutor) and the person's own (the skills base's
+  // release-notes, which the test server seeds).
+  await expect(menu.getByRole("option")).toHaveCount(4);
   await expect(menu.getByRole("option", { name: /\/compact/ })).toBeVisible();
   await expect(menu.getByRole("option").first()).toHaveAttribute("aria-selected", "true");
   await expect(menu.getByRole("option", { name: new RegExp(`/${NAME}`) })).toBeVisible();
