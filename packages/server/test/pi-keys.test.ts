@@ -93,7 +93,7 @@ test("the settings' routes take a key and never give it back; it is not in the b
   const api = await openEngine(locate(base.notes), "testdev1", null);
   const env = { XDG_DATA_HOME: join(root, "data-d") } as NodeJS.ProcessEnv;
   const pi = new PiControl(env);
-  const app = createApp({ api, token: "t", loopback: true, web: null, pi });
+  const app = createApp({ api, token: "t", loopback: true, web: null, pi, notes: base.notes });
   const logged: string[] = [];
   const spies = (["log", "error", "warn", "info", "debug"] as const).map((m) => vi.spyOn(console, m).mockImplementation((...a: unknown[]) => { logged.push(a.map(String).join(" ")); }));
   const call = (path: string, body?: unknown) => app.fetch(new Request(`http://localhost:4767${path}`, body === undefined ? { headers: { Host: "localhost:4767" } } : { method: "POST", headers: { Host: "localhost:4767", Origin: "http://localhost:4767", "Content-Type": "application/json", "x-isorite-token": "t" }, body: JSON.stringify(body) }));
@@ -123,6 +123,13 @@ test("the settings' routes take a key and never give it back; it is not in the b
   const far = await app.fetch(new Request("http://box.example/api/pi", { headers: { Host: "box.example" } }));
   expect(far.status).toBeGreaterThanOrEqual(400);
   expect(existsSync(join(root, "data-d", "isorite", "credentials.json"))).toBe(true);
+  // The skills are listed wherever the pane is open (here a tailnet's name: the slash menu on a phone), but switched
+  // only from this machine.
+  const skills = await app.fetch(new Request("http://box.tail1.ts.net/api/pi/skills", { headers: { Host: "box.tail1.ts.net" } }));
+  expect(skills.status).toBe(200);
+  expect(((await skills.json()) as { skills: { name: string }[] }).skills.map((s) => s.name)).toEqual(expect.arrayContaining(["learn", "socratic-tutor"]));
+  const flip = await app.fetch(new Request("http://box.tail1.ts.net/api/pi/skills", { method: "POST", headers: { Host: "box.tail1.ts.net", Origin: "http://box.tail1.ts.net", "Content-Type": "application/json", "x-isorite-token": "t" }, body: JSON.stringify({ name: "learn", enabled: false }) }));
+  expect(flip.status).toBeGreaterThanOrEqual(400);
 });
 
 test("a model chosen in the settings is the pane's at the next start, and the environment, if it names one, wins", async () => {

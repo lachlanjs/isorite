@@ -329,7 +329,9 @@ export function createApp({ api, token, loopback, web, allowHosts = [], notes, t
     // not be read with why. Read again at each request. What is off is kept in the base's settings.
     if (notes) {
       const skills = new Skills(dirsFor(notes, dataDir()), async () => (await api.agentSkillsOff()).off);
-      app.get("/api/pi/skills", (c) => answer(c, async () => { mine(c); return { skills: await skills.list() }; }));
+      // Listing them is open to whoever can use the pane (a slash menu on a phone, or through a forwarded port): names and
+      // descriptions only. Switching one stays with this machine.
+      app.get("/api/pi/skills", (c) => answer(c, async () => ({ skills: await skills.list() })));
       post("/api/pi/skills", z.object({ name: z.string().min(1).max(64), enabled: z.boolean() }).strict(), async (c, b) => {
         mine(c);
         if (!(await skills.list()).some((s) => s.name === b.name && !s.error)) throw new EngineError(`there is no skill "${b.name}" to switch`, 404);

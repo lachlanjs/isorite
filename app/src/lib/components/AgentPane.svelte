@@ -70,7 +70,6 @@
   // and the skills that are on (from this machine, where the settings are), and Enter or Tab completes one. A command
   // goes before a skill of the same name, which the slash then does not offer (the model can still use that skill).
   const piApi = (app.api as { pi?: PiApi } | undefined)?.pi ?? null;
-  const local = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
   let skills = $state.raw<PiSkill[]>([]);
   let chosen = $state(0);
   /** The text the list was dismissed for with Escape. */
@@ -83,7 +82,7 @@
     ...COMMANDS.filter((c) => c.name.startsWith(text.slice(1))),
     ...skills.filter((s) => s.enabled && !s.error && s.name.startsWith(text.slice(1)) && !COMMANDS.some((c) => c.name === s.name)),
   ] : []);
-  $effect(() => { if (slashing && piApi && local) void piApi.skills().then((s) => { skills = s; }, () => undefined); });
+  $effect(() => { if (slashing && piApi) void piApi.skills().then((s) => { skills = s; }, () => undefined); });
   $effect(() => { void text; chosen = 0; });
   function complete(item: { name: string }): void { text = `/${item.name} `; }
 
