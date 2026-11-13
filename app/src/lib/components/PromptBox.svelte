@@ -2,7 +2,7 @@
   // The box the agent is asked in (it was a textarea; it is CodeMirror so that a pointer can stand in the text, as one
   // glowing character that moves and goes like any other). `value` is the text with each pointer as its private
   // character (pointers.ts). Keys are AgentPane's (`onkeydown`): Ctrl+Enter sends, and a key it handles it marks as handled;
-  // Enter is a new line. `height`, where set, is the box's own height (its top edge dragged), else it grows to a few lines.
+  // Enter is a new line (except an input method's, which picks what it composes). `height`, where set, is the box's own height (its top edge dragged), else it grows to a few lines.
   import { onMount } from "svelte";
   import { Compartment, EditorState, type Range } from "@codemirror/state";
   import { Decoration, EditorView, ViewPlugin, WidgetType, drawSelection, keymap, placeholder as hint, type DecorationSet, type ViewUpdate } from "@codemirror/view";
@@ -97,6 +97,11 @@
     "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": { background: "color-mix(in srgb, var(--lattice) 38%, transparent) !important" },
   });
 
+  /** Whether the key being handled is an input method's (isComposing, or Safari's keyCode 229 just after compositionend). */
+  let composing = false;
+  /** Enter is a new line, unless an input method is composing with it: then it is the input method's, to pick the characters. */
+  const newline = (v: EditorView): boolean => !composing && insertNewline(v);
+
   const lock = new Compartment();
   /** What the empty box says: who it asks, which changes once an agent is set up. */
   const hinted = new Compartment();
@@ -112,9 +117,9 @@
             // A phone's keyboard begins each sentence with a capital, and corrects as it does elsewhere; a desktop's does not correct.
             autocapitalize: "sentences", autocorrect: touch ? "on" : "off", enterkeyhint: "enter" }),
           // AgentPane's keys first (Ctrl+Enter sends, a slash command is chosen); what it leaves, the editor does.
-          EditorView.domEventHandlers({ keydown: (e) => { onkeydown?.(e); return e.defaultPrevented; } }),
+          EditorView.domEventHandlers({ keydown: (e) => { composing = e.isComposing || e.keyCode === 229; onkeydown?.(e); return e.defaultPrevented; } }),
           // A word at a time is the editor's own, not the browser's, which stops at each pointer (it is not text).
-          keymap.of([{ key: "Enter", run: insertNewline }, { key: "Shift-Enter", run: insertNewline }, ...historyKeymap,
+          keymap.of([{ key: "Enter", run: newline }, { key: "Shift-Enter", run: newline }, ...historyKeymap,
             { key: "Mod-ArrowLeft", mac: "Alt-ArrowLeft", run: cursorGroupLeft, shift: selectGroupLeft },
             { key: "Mod-ArrowRight", mac: "Alt-ArrowRight", run: cursorGroupRight, shift: selectGroupRight },
             { key: "Mod-Backspace", mac: "Alt-Backspace", run: deleteGroupBackward },

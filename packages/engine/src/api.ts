@@ -78,6 +78,10 @@ export interface MapReport {
   files?: Record<string, { title: string; kind: FileKind; count?: number }>;
 }
 
+/** Where the note an id names is now (`resolveNote`), from the journals' record of moves. `id` is where it is (here,
+ *  moved) or was last (deleted); `like` are notes elsewhere with the same file name. */
+export interface Whereabouts { asked: string; state: "here" | "moved" | "deleted" | "unknown"; id?: string; like: string[] }
+
 export interface SearchHit {
   id: string;
   title: string;
@@ -244,6 +248,8 @@ export interface Api {
   deleteNote(id: string, base: string): Promise<void>;
   /** The note's journal, oldest first. */
   journal(id: string): Promise<Entry[]>;
+  /** Where the note an id names is now: an old link, from before a move, still finds it. */
+  resolveNote(id: string): Promise<Whereabouts>;
   /** The note's text just after one of its journal's entries. */
   version(id: string, entry: string): Promise<string>;
   /** Write the note back as it was just after an entry, as a new entry of its own. `base` as for saveNote. */

@@ -45,7 +45,7 @@ notes = ["/agents/the-agent-pane.md", "/agents/artifacts.md", "/agents/ask-the-a
 [[islands]]
 name = "set-up-your-own"
 title = "Set up your own"
-notes = ["/bases/starting-a-base.md", "/agents/your-own-agent.md", "/agents/agents-md.md", "/bases/keeping-a-base-well.md", "/agents/let-it-write.md"]
+notes = ["/bases/starting-a-base.md", "/agents/your-own-agent.md", "/agents/herdr.md", "/agents/agents-md.md", "/bases/keeping-a-base-well.md", "/agents/let-it-write.md"]
 
 [[islands]]
 name = "work-across-bases"

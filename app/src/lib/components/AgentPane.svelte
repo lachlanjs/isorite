@@ -114,7 +114,10 @@
   }
 
   function keys(e: KeyboardEvent): void {
-    if (e.isComposing) return;
+    // A key that an input method (Japanese, Chinese, Korean) is composing with is the input method's: its Enter picks
+    // the characters, and must not complete a slash command or send. Safari can deliver that Enter after
+    // compositionend, with isComposing already false; its keyCode is still 229 (the input method's), so both are asked.
+    if (e.isComposing || e.keyCode === 229) return;
     if (offered.length && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); chosen = (chosen + (e.key === "ArrowDown" ? 1 : -1) + offered.length) % offered.length; return; }
       if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); complete(offered[chosen] ?? offered[0]!); return; }

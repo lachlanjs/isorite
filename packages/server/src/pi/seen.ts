@@ -31,6 +31,13 @@ export class Seen {
   get(id: string): SeenNote | undefined { return this.#notes.get(id); }
   set(id: string, text: string, at: number): void { this.#notes.set(id, { text, at }); }
   forget(id: string): void { this.#notes.delete(id); }
+  /** The note moved: what was seen of it is the same text at its new id, so a pointer to it there is "unchanged". */
+  rename(from: string, to: string): void {
+    const s = this.#notes.get(from);
+    if (!s) return;
+    this.#notes.delete(from);
+    if (!this.#notes.has(to)) this.#notes.set(to, s);
+  }
   clear(): void { this.#notes.clear(); }
   get size(): number { return this.#notes.size; }
   ids(): string[] { return [...this.#notes.keys()]; }
@@ -146,3 +153,48 @@ export async function point(text: string, { read, seen, around = AROUND }: Point
 
 /** What isorite's own agent is told of the pointers, besides what any agent is (mcp-http.ts's instructions). */
 export const POINTERS = "In this pane a footnote may bring the note it points to: whole, as a diff since you last saw it, or with the lines around the passage; or it says the note is unchanged since you saw it, its text earlier in the conversation. Use what it gives before reading the note again.";
+
+// ------------------------------------------------------------ moves
+
+/** The notes a text links to in the base, by id: Markdown links (`](/a/b.md`) and footnotes (`[^1]: /a/b.md`). */
+export function linkedIn(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/(?:\]\(|\]: )\/([^\s()#\]]+?)\.md(?=[#\s)]|$)/gm)) out.add(m[1]!);
+  return [...out];
+}
+
+/** The most places named in the line about moves; the rest are counted. */
+const MOVES_SHOWN = 8;
+
+/** The line appended to the person's next message when notes the session knows moved or were deleted since the last
+ *  turn, or "" when none did. Notes that went from one folder to another together are said as the folder. */
+export function movesLine(moved: [string, string][], deleted: string[]): string {
+  if (!moved.length && !deleted.length) return "";
+  // Each move as the folder it came from and went to, where the note's own path below the folder stayed the same.
+  const folders = new Map<string, { from: string; to: string; n: number }>();
+  const folderOf = ([a, b]: [string, string]): { from: string; to: string } | null => {
+    const x = a.split("/"), y = b.split("/");
+    let k = 0;
+    while (k < x.length - 1 && k < y.length && x[x.length - 1 - k] === y[y.length - 1 - k]) k++;
+    if (k === 0 || x.length - k < 1 || x[x.length - 1] !== y[y.length - 1]) return null;
+    return { from: x.slice(0, x.length - k).join("/"), to: y.slice(0, y.length - k).join("/") };
+  };
+  for (const m of moved) {
+    const f = folderOf(m);
+    if (!f) continue;
+    const key = `${f.from}\n${f.to}`, had = folders.get(key);
+    folders.set(key, { ...f, n: (had?.n ?? 0) + 1 });
+  }
+  const parts: string[] = [], told = new Set<string>();
+  for (const f of folders.values()) if (f.n > 1) { parts.push(`/${f.from}/ → /${f.to}/ (${f.n} notes)`); told.add(`${f.from}\n${f.to}`); }
+  for (const m of moved) {
+    const f = folderOf(m);
+    if (!f || !told.has(`${f.from}\n${f.to}`)) parts.push(`/${m[0]}.md → /${m[1]}.md`);
+  }
+  const list = (xs: string[]) => (xs.length > MOVES_SHOWN ? `${xs.slice(0, MOVES_SHOWN).join(", ")} and ${xs.length - MOVES_SHOWN} more` : xs.join(", "));
+  const said = [
+    ...(parts.length ? [`Moved since your last turn: ${list(parts)}`] : []),
+    ...(deleted.length ? [`${parts.length ? "deleted" : "Deleted since your last turn"}: ${list(deleted.map((d) => `/${d}.md`))}`] : []),
+  ];
+  return `[${said.join("; ")}.]`;
+}

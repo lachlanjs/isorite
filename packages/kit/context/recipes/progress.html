@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stream processing: where I stand</title>
+<meta name="description" content="Each part of stream processing at its level, from the learning ledger as it is now, and what comes back for review when.">
+<meta name="isorite:kit" content="1">
+<meta name="isorite:uses" content="streams-learning-ledger.md">
+</head>
+<body>
+<!-- Recipe 6: progress, drawn from a learning ledger note's table (the learn skill's ledger.md format), never from a copy
+     of it. Change: the ledger's file name (beside this page, everywhere it appears), the title and the captions. Keep
+     the columns: Subskill, Level, Passes, Checked, Due. -->
+<iso-page>
+  <header>
+    <h1>Stream processing: where I stand</h1>
+    <p>Read from the ledger each time this opens: a level changed there is changed here.</p>
+  </header>
+  <iso-grid>
+    <iso-panel class="wide">
+      <h2>In numbers</h2>
+      <iso-stats>
+        <iso-stat data="streams-learning-ledger.md" column="Subskill" of="count" label="subskills"></iso-stat>
+        <iso-stat data="streams-learning-ledger.md" column="Level" of="mean" label="mean level (of 5)" tone="blue" digits="1"></iso-stat>
+        <iso-stat id="due" label="due for review today" tone="gold"></iso-stat>
+      </iso-stats>
+    </iso-panel>
+    <iso-panel class="wide">
+      <h2>Levels <span>0 unaware to 5 can teach it</span></h2>
+      <iso-chart data="streams-learning-ledger.md" type="bar" x="Subskill" y="Level" y-label="level" height="220"></iso-chart>
+      <p>A subskill with no check yet has no bar.</p>
+    </iso-panel>
+    <iso-panel class="wide">
+      <h2>When each comes back</h2>
+      <iso-table data="streams-learning-ledger.md" columns="Subskill Level Passes Checked Due"></iso-table>
+    </iso-panel>
+  </iso-grid>
+</iso-page>
+<script>
+  // Due today or before: counted against this device's date, so the number is right on the day it is opened.
+  iso.data("streams-learning-ledger.md").then((rows) => {
+    const today = new Date().toISOString().slice(0, 10);
+    document.getElementById("due").value = rows.filter((r) => r.Due && String(r.Due) <= today).length;
+  });
+</script>
+</body>
+</html>

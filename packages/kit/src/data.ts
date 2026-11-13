@@ -1,6 +1,6 @@
 // Data files as rows, the same in the kit (in the artifact) and in read_data (for Iso): CSV and TSV with quoted fields,
-// JSON (an array of objects, or an object holding one), and JSON lines. A field that reads as a number is one; an empty
-// one is null.
+// JSON (an array of objects, or an object holding one), JSON lines, and the first table of a note (Markdown), so a page
+// can draw a table kept in a note with no second copy of it. A field that reads as a number is one; an empty one is null.
 
 export type Value = string | number | boolean | null;
 export type Row = Record<string, Value>;
@@ -38,6 +38,26 @@ export function parseDelimited(text: string, sep = ","): Row[] {
   return out;
 }
 
+/** A note's first Markdown table: its header row names the columns. In a cell a link is its text, emphasis and code
+ *  marks go, and a lone dash (no value yet) is null. */
+export function parseMarkdownTable(text: string): Row[] | null {
+  const lines = text.split(/\r?\n/);
+  const cells = (l: string) => l.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
+  for (let i = 0; i + 1 < lines.length; i++) {
+    if (!/^\s*\|/.test(lines[i]!) || !/^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(lines[i + 1]!)) continue;
+    const cols = cells(lines[i]!), out: Row[] = [];
+    for (let k = i + 2; k < lines.length && /^\s*\|/.test(lines[k]!); k++) {
+      const row = cells(lines[k]!);
+      out.push(Object.fromEntries(cols.map((c, j) => {
+        const raw = (row[j] ?? "").replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\*\*|__|`/g, "").trim();
+        return [c, /^[-–—]$/.test(raw) ? null : value(raw)];
+      })));
+    }
+    return out;
+  }
+  return null;
+}
+
 export function parseData(path: string, text: string): Row[] {
   const ext = path.toLowerCase().split(".").pop();
   if (ext === "json") {
@@ -50,7 +70,12 @@ export function parseData(path: string, text: string): Row[] {
   if (ext === "jsonl" || ext === "ndjson") return text.split(/\r?\n/).filter((l) => l.trim()).map((l) => JSON.parse(l));
   if (ext === "tsv") return parseDelimited(text, "\t");
   if (ext === "csv") return parseDelimited(text, ",");
-  throw new Error(`${path}: the kit reads CSV, TSV, JSON and JSON lines`);
+  if (ext === "md") {
+    const rows = parseMarkdownTable(text);
+    if (!rows) throw new Error(`${path}: there is no table in it`);
+    return rows;
+  }
+  throw new Error(`${path}: the kit reads CSV, TSV, JSON, JSON lines and a note's first table`);
 }
 
 /** Every column any row has, in the order they first appear. */

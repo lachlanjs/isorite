@@ -45,6 +45,9 @@ class AppState {
   error = $state("");
   /** The note that is open: its id, or "". */
   open = $state("");
+  /** A note opened by where it was before it moved (an old link): where it was asked for, and where it is, so the page
+   *  it opens on can say so. Taken by that page. */
+  moved = $state.raw<{ from: string; to: string } | null>(null);
   /** What the header's path ends in: the open note's title. */
   here = $state("");
   /** How the open note's saving stands, for the Note pane's header. */

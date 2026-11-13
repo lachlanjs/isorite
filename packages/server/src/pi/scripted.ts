@@ -102,7 +102,8 @@ export function scriptedModel(id: string = SCRIPTED, { tokensPerSecond = 600 }: 
     const k = messages.slice(at + 1).filter((m) => m.role === "assistant").length;
     // A summary asked for (compaction): a line will do, with the focus the person gave (`/compact <words>`) after it.
     if (/summar/i.test(said) && /<conversation>|earlier part/i.test(said)) {
-      const focus = /\n\nAdditional focus: ([^]*)$/.exec(said)?.[1]?.trim();
+      // The words every summary is asked to keep (host.ts, KEEP_WORDS) come first; what the person asked for follows.
+      const focus = /\n\nAdditional focus: ([^]*)$/.exec(said)?.[1]?.replace(/^Quote the person's own words[^\n]*\n?/, "").trim();
       return fauxAssistantMessage([fauxText(`Earlier, they asked about the notes.${focus ? ` Kept: ${focus}` : ""}`)]);
     }
     const s = parse(said);

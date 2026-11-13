@@ -40,11 +40,20 @@ export async function loadArtifact(api: Api, path: string): Promise<Loaded> {
 export async function dataOf(api: Api, path: string, uses: string[]): Promise<Record<string, string | Uint8Array>> {
   const out: Record<string, string | Uint8Array> = {};
   for (const rel of uses) {
-    const at = within(path, rel), got = at === null ? null : await api.file(at);
+    const at = within(path, rel), note = at === null ? null : await noteText(api, at);
+    if (note !== null) { out[rel] = note; continue; }
+    const got = at === null ? null : await api.file(at);
     if (!got) continue;
     out[rel] = /^(text\/|application\/(json|jsonl|x-ndjson))/.test(got.type) ? new TextDecoder().decode(got.bytes) : got.bytes;
   }
   return out;
+}
+
+/** A note an artifact reads (its first table is its data, as the kit reads it): its text, or null where `at` is not a
+ *  note's path or there is no such note. */
+async function noteText(api: Api, at: string): Promise<string | null> {
+  if (!/\.md$/i.test(at)) return null;
+  try { return (await api.readNote(at.slice(0, -3))).text; } catch { return null; }
 }
 
 /** One artifact's document for its frame, or a standalone export with its data inside. */
@@ -74,6 +83,8 @@ export function bridge(frame: HTMLIFrameElement, api: Api, path: string, uses: (
       if (!uses().includes(rel)) { tell({ type: "reply", id: m.id, error: `${rel} is not in the artifact's manifest (isorite:uses)` }); return; }
       const at = within(path, rel);
       try {
+        const note = at === null || m.type !== "file" ? null : await noteText(api, at);
+        if (note !== null) { tell({ type: "reply", id: m.id, text: note }); return; }
         const got = at === null ? null : await api.file(at);
         if (!got) tell({ type: "reply", id: m.id, error: `${rel}: no such file beside the artifact` });
         else if (m.type === "bytes") { const buf = got.bytes.slice().buffer; tell({ type: "reply", id: m.id, bytes: buf }, [buf]); }

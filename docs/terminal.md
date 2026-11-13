@@ -66,6 +66,12 @@ A second `isorite mcp`, for another project, on the same port, adds its base to 
 
 To watch the memory learn, open it beside the project: choose `memory` from the base's name at the left of the first pane's header (Ctrl-click for a tab of its own).
 
+## In herdr
+
+[herdr](https://herdr.dev) runs agents in terminals that outlive its window and lists them by the status each reports through OSC 7501 (the Program Status Protocol). An agent of your own runs there as in any terminal, with isorite's MCP from `isorite setup`; start Codex as `codex --no-daemon`, as herdr asks.
+
+`isorite serve` in a herdr terminal reports isorite's own agent as `app=isorite`: `working` while a turn runs, `blocked` (`kind=permission`) while it waits for an approval, `done` when the turn ends, `idle` when it is stopped, `error` when it fails. It reports only when herdr-core started the terminal (`HC_TERMINAL_ID` is set) and isorite's output is that terminal, never into a pipe or another terminal; `ISORITE_HERDR=0` turns it off. `integrations/herdr/` has a script that opens a herdr space with the agent and `isorite serve` side by side.
+
 ## Over SSH
 
 `localhost` is the machine isorite runs on. To open it from your own, forward the port:

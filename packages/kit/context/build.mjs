@@ -10,6 +10,7 @@ export const ABOUT = {
   simulation: "a simulation with parameters, play and reset, drawn on a canvas, with a live chart (a script)",
   explorable: "an explorable explanation: inputs, numbers derived from them, and linked views (a script)",
   viewer: "a 3D model's viewer (glTF, GLB, STL, OBJ), with what it is beside it",
+  progress: "a learner's progress, drawn from the table of a learning ledger note: levels, and when each comes back",
 };
 export function generated() {
   const recipes = Object.fromEntries(Object.keys(ABOUT).map((name) => [name, { about: ABOUT[name], html: readFileSync(new URL(`recipes/${name}.html`, here), "utf8") }]));

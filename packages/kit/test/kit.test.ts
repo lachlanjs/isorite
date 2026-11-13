@@ -93,7 +93,7 @@ test("Iso's context is generated from the reference and recipes as they are, and
   const { generated } = await import("../context/build.mjs");
   expect(readFileSync(new URL("../src/context.gen.ts", import.meta.url), "utf8")).toBe(generated());
   const data = new URL("../context/data/", import.meta.url), files = readdirSync(data);
-  const columns = Object.fromEntries(files.filter((f) => f.endsWith(".csv")).map((f) => [f, Object.keys(parseData(f, readFileSync(new URL(f, data), "utf8"))[0]!)]));
+  const columns = Object.fromEntries(files.filter((f) => /\.(csv|md)$/.test(f)).map((f) => [f, Object.keys(parseData(f, readFileSync(new URL(f, data), "utf8"))[0]!)]));
   const { RECIPES } = await import("../src/index.ts");
   for (const [name, r] of Object.entries(RECIPES)) expect([name, checkArtifact(r.html, { files, columns })]).toEqual([name, []]);
 });
@@ -109,4 +109,10 @@ test("the manifest written as given, whatever the file said or left out", async 
   expect(bare).toMatch(/^<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">/);
   expect(bare).toContain("<body>\n<iso-panel><h2>x</h2></iso-panel>\n</body>");
   expect(manifestOf(bare).uses).toEqual(["a.csv", "b.csv"]);
+});
+
+test("a note is read as its first table: links as their text, a lone dash as empty", () => {
+  const note = "---\ntitle: L\n---\n\nLevels: - unassessed.\n\n| Subskill | Level | Due |\n|---|---|---|\n| [Keyed state](/learning/keyed-state.md \"requires\") | 3 | 2026-11-13 |\n| **Windows** | - | |\n\nOpen: none.\n";
+  expect(parseData("learning/ledger.md", note)).toEqual([{ Subskill: "Keyed state", Level: 3, Due: "2026-11-13" }, { Subskill: "Windows", Level: null, Due: null }]);
+  expect(() => parseData("a.md", "no table here")).toThrow(/no table/);
 });

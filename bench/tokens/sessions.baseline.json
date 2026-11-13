@@ -18,5 +18,9 @@
  "append-compacting": {
   "input": 184699,
   "fresh": 31771
+ },
+ "moves": {
+  "input": 77676,
+  "fresh": 5390
  }
 }

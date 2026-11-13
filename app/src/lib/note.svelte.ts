@@ -84,7 +84,8 @@ export class NoteSession {
       this.loaded = "ready";
       this.stop = app.on((e) => this.hear(e));
     } catch (e) {
-      this.loaded = e instanceof ApiError && e.status === 404 ? "missing" : "error";
+      // The guide's engine, in the page, refuses as the server does, with a status of its own.
+      this.loaded = (e instanceof ApiError || e instanceof Error) && (e as { status?: number }).status === 404 ? "missing" : "error";
       this.message = (e as Error).message;
     }
   }

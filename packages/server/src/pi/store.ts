@@ -24,6 +24,8 @@ export interface PiRecord {
   withdrawn?: string[];
   /** What the model has seen of each note in its live context (seen.ts), by id. */
   seen?: Record<string, { text: string; at: number }>;
+  /** The notes the session has had to do with, to say which moved or went (host.ts). */
+  known?: string[];
   /** The pane's turns, and the model's messages (pi's, kept as they are). */
   turns: TerminalTurn[];
   messages: unknown[];

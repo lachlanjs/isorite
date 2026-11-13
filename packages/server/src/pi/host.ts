@@ -21,13 +21,13 @@ import { type PiRecord, type PiStore } from "./store.ts";
 import { isoriteTools, titleOf, type ToolsApi } from "./tools.ts";
 import { MemoryImages, type ImageStore, type Kept } from "./images.ts";
 import { invoked, skillText, skillsSection, skillTool, type Skill, type Skills } from "./skills.ts";
-import { AROUND, point, POINTERS, Seen, type SeenNote } from "./seen.ts";
+import { AROUND, linkedIn, movesLine, point, POINTERS, Seen, type SeenNote } from "./seen.ts";
 
 type StreamFn = NonNullable<ConstructorParameters<typeof Agent>[0]>["streamFn"];
 type Decision = "once" | "always" | "reject";
 
 export interface PiHostOptions {
-  api: ToolsApi & Pick<Api, "agentStatus"> & Partial<Pick<Api, "keepAgentRecord" | "events" | "readNote">>;
+  api: ToolsApi & Pick<Api, "agentStatus"> & Partial<Pick<Api, "keepAgentRecord" | "events" | "readNote" | "resolveNote">>;
   model: Model<any>;
   streamFn: StreamFn;
   /** How the agent is known on the base: its changes are signed `agent:<id>`. */
@@ -62,6 +62,11 @@ const OUTPUT = 4000;
 interface Compaction { enabled: boolean; reserveTokens: number; keepRecentTokens: number }
 /** What the summary of an earlier conversation begins with, in the message that stands for it. */
 const SUMMARY = "[The earlier part of this conversation, summarised to make room]\n";
+/** Said to every summary, before any focus the person gives: the person's words survive it, and nothing in it points
+ *  at what is gone (a footnote's number, a call's id). */
+export const KEEP_WORDS = "Quote the person's own words for what they asked and said, not a paraphrase. Refer to earlier parts by what was said, never by labels such as footnote numbers or call ids.";
+/** The most notes a session keeps track of, for telling the agent where they went. */
+const KNOWN = 400;
 const EMPTY: TerminalView = { connected: true, agent: "", session: null, title: "", busy: false, turns: [], asking: [], cost: 0, tokens: { input: 0, output: 0 }, model: "", sessions: [] };
 
 /** A block of context given from the tray is tagged with the chip it came from and the turn it came in with, so it can be
@@ -130,6 +135,9 @@ export class PiHost implements PaneSessions {
   readonly #around: number;
   /** What the model has seen of each note in its live context (seen.ts). */
   #seen = new Seen();
+  /** The notes this session has had to do with (read, written, pointed at, linked in a reply), to tell the agent at its
+   *  next turn of any that moved or went meanwhile. */
+  #known = new Set<string>();
   /** The thinking item the assistant message now streaming writes into. */
   #thinkingAt = -1;
   /** Cancels a summary being written. */
@@ -270,9 +278,15 @@ export class PiHost implements PaneSessions {
     // The pointers are read against what the model has seen after any compaction, which can make it forget some.
     void (async () => {
       await this.#compactIfNeeded(agent);
+      // Notes moved or deleted since the last turn (by the person, or another agent) are said in a line at the end of the
+      // message, and the record follows them, before the pointers are read against it.
+      const moves = await this.#moves();
+      this.#showDate(agent);
       const pointed = await this.#point(text);
+      for (const id of linkedIn(text)) this.#know(id);
       if (this.#stopping) throw new Error("stopped");
       const message = this.#message(pending, turn.id.slice(0, 8), pointed.text, skills, held);
+      if (moves) { const parts = message.content as { type: string; text?: string }[], last = parts.at(-1)!; last.text = `${last.text ?? ""}\n\n${moves}`; }
       pointed.commit(agent.state.messages.length);
       await agent.prompt(message);
     })().then(() => undefined, (e: Error) => { if (this.#stopping) this.#set("stopped"); else this.#fail(e.message); }).then(() => this.#end());
@@ -295,6 +309,41 @@ export class PiHost implements PaneSessions {
     return { role: "user" as const, content: [...parts.slice(0, -1), ...seen, parts.at(-1)!] as never, timestamp: this.#now() };
   }
 
+  #know(id: string): void {
+    if (!id || this.#known.has(id)) return;
+    if (this.#known.size >= KNOWN) this.#known.delete(this.#known.values().next().value!);
+    this.#known.add(id);
+  }
+
+  /** The notes this session knows that are not where they were: the line that tells the agent ("" where none), with
+   *  the record and the seen record moved to where they are now. */
+  async #moves(): Promise<string> {
+    const resolve = this.#api.resolveNote;
+    if (!resolve) return "";
+    const moved: [string, string][] = [], gone: string[] = [];
+    for (const id of new Set([...this.#known, ...this.#seen.ids()])) {
+      let w: Awaited<ReturnType<NonNullable<typeof resolve>>>;
+      try { w = await resolve.call(this.#api, id); } catch { continue; }
+      if (w.state === "here") continue;
+      this.#known.delete(id);
+      if (w.state === "moved" && w.id) { moved.push([id, w.id]); this.#know(w.id); this.#seen.rename(id, w.id); }
+      else { this.#seen.forget(id); if (w.state === "deleted") gone.push(w.id ?? id); }
+    }
+    return movesLine(moved, [...new Set(gone)]);
+  }
+
+  /** Today's date, as a section of the system prompt: patched in where the day differs from the one the model was last
+   *  told, so it changes at most once a day and never rewrites what was sent before it. */
+  #showDate(agent: Agent): void {
+    const today = `Today is ${new Date(this.#now()).toISOString().slice(0, 10)}.`;
+    let have: string | null = null;
+    for (const m of agent.state.messages as { role?: string; sections?: Record<string, string | null> }[]) {
+      if (m.role === "system" && m.sections && "date" in m.sections) have = m.sections.date ?? null;
+    }
+    if (have === today) return;
+    agent.state.messages = [...agent.state.messages, { role: "system", content: "", sections: { date: today }, timestamp: this.#now() } as never];
+  }
+
   /** The person's words with their pointers rewritten against what the model has seen (seen.ts), and how to record what
    *  it is given, once the message is on its way at `at`. Untouched where nothing is remembered. */
   async #point(text: string): Promise<{ text: string; commit: (at: number) => void }> {
@@ -315,15 +364,21 @@ export class PiHost implements PaneSessions {
     return {
       ...tool,
       execute: async (callId, params, ...rest) => {
-        const p = (params ?? {}) as Record<string, unknown>, id = noteOf(tool.name, p);
-        if (!id || p.base) return tool.execute(callId, params, ...rest);
-        const before = await now(id);
+        const p = (params ?? {}) as Record<string, unknown>, named = noteOf(tool.name, p);
+        if (!named || p.base) return tool.execute(callId, params, ...rest);
+        // A note named where it was before a move is the note where it is now (the engine says so in its answer).
+        let id = named, before = await now(id);
+        if (before === null && this.#api.resolveNote) {
+          const w = await this.#api.resolveNote(id).catch(() => null);
+          if (w?.state === "moved" && w.id) { id = w.id; before = await now(id); }
+        }
+        const was = id === named ? "" : `(/${named}.md moved to /${id}.md) `;
         if (tool.name === "read_note") {
           if (p.section) return tool.execute(callId, params, ...rest);
           const had = this.#seen.get(id);
           if (before !== null && had?.text === before) {
             const n = before.replace(/\n$/, "").split("\n").length;
-            return { content: [{ type: "text", text: `/${id}.md is unchanged since you last saw it in this conversation (${n} lines): its text is there. read_note with section= reads a part of it again.` }], details: undefined };
+            return { content: [{ type: "text", text: `${was}/${id}.md is unchanged since you last saw it in this conversation (${n} lines): its text is there. read_note with section= reads a part of it again.` }], details: undefined };
           }
           const result = await tool.execute(callId, params, ...rest);
           const said = textOf((result as { content?: unknown }).content);
@@ -538,7 +593,7 @@ export class PiHost implements PaneSessions {
   /** No session shown: the next question begins a new one. Everything of the last is let go (it stays kept). */
   #blank(): void {
     this.#agent = null; this.#session = ""; this.#at = ""; this.#turns = []; this.#title = ""; this.#cost = 0; this.#used = 0;
-    this.#given = new Set(); this.#withdrawn = new Set(); this.#pending = null; this.#queued = []; this.#problem = ""; this.#seen = new Seen();
+    this.#given = new Set(); this.#withdrawn = new Set(); this.#pending = null; this.#queued = []; this.#problem = ""; this.#seen = new Seen(); this.#known = new Set();
     this.#writing = -1; this.#thinkingAt = -1; this.#primed = false; this.#stopping = false;
   }
 
@@ -554,6 +609,7 @@ export class PiHost implements PaneSessions {
     this.#given = new Set(kept.given);
     this.#withdrawn = new Set(kept.withdrawn ?? []);
     this.#seen = new Seen(kept.seen);
+    this.#known = new Set((kept.known ?? []).filter((k) => typeof k === "string"));
     this.#tell();
   }
 
@@ -571,7 +627,7 @@ export class PiHost implements PaneSessions {
   #record(): PiRecord {
     return {
       version: 1, session: this.#session, title: this.#title, at: this.#at, last: this.#turns.at(-1)?.at ?? this.#at, cost: this.#cost, used: this.#used,
-      given: [...this.#given], withdrawn: [...this.#withdrawn], ...(this.#seen.size ? { seen: this.#seen.toJSON() as Record<string, SeenNote> } : {}), turns: this.#turns, // The system prompt is the agent's own at every start, so a saved session does not carry an old one.
+      given: [...this.#given], withdrawn: [...this.#withdrawn], ...(this.#seen.size ? { seen: this.#seen.toJSON() as Record<string, SeenNote> } : {}), ...(this.#known.size ? { known: [...this.#known] } : {}), turns: this.#turns, // The system prompt is the agent's own at every start, so a saved session does not carry an old one.
       messages: (JSON.parse(JSON.stringify(this.#agent!.state.messages.map((m) => this.#unpictured(m)))) as { role?: string }[]).filter((m) => m.role !== "system"),
     };
   }
@@ -651,11 +707,13 @@ export class PiHost implements PaneSessions {
       this.#edit((items) => items.flatMap((i, k) => (k === think ? (thought.trim() ? [{ kind: "thinking", text: thought } as TerminalItem] : []) : k !== at ? [i] : whole ? [{ kind: "text", text: whole } as TerminalItem] : [])));
       this.#writing = -1;
       this.#thinkingAt = -1;
+      for (const id of linkedIn(whole)) this.#know(id);
       this.#cost += m.usage?.cost?.total ?? 0;
       this.#used = m.usage?.totalTokens ?? this.#used;
     } else if (e.type === "tool_execution_start") {
       this.#started.set(e.toolCallId, this.#now());
       const note = noteOf(e.toolName, e.args), diff = diffOf(e.args);
+      if (note && !(e.args as { base?: unknown } | null)?.base) this.#know(note);
       this.#edit((items) => [...items, { kind: "tool", id: e.toolCallId, name: e.toolName, title: titleOf(e.args), status: "running", output: "", ...(note ? { note } : {}), ...(diff ? { diff } : {}) }]);
     } else if (e.type === "tool_execution_end") {
       const out = textOf((e.result as { content?: unknown })?.content).slice(0, OUTPUT);
@@ -769,7 +827,7 @@ export class PiHost implements PaneSessions {
       // The summary is asked of the same model by the same key as the turns are (a gateway's is "none" where it
       // knows you by certificate or headers): without it pi refuses before sending anything.
       const key = (await this.#getApiKey?.(this.#model.provider)) ?? undefined;
-      const summary = await generateSummary(this.#plain(this.#redact(messages.slice(from, cut))), this.#model, settings.reserveTokens, key, undefined, this.#summarising.signal, focus || undefined, previous, undefined, this.#streamFn);
+      const summary = await generateSummary(this.#plain(this.#redact(messages.slice(from, cut))), this.#model, settings.reserveTokens, key, undefined, this.#summarising.signal, focus ? `${KEEP_WORDS}\n${focus}` : KEEP_WORDS, previous, undefined, this.#streamFn);
       const stand = { role: "user" as const, content: [{ type: "text" as const, text: SUMMARY + summary }], timestamp: this.#now() };
       // The recent answers' own counts describe the context as it was before: they are not trusted any more, so the
       // size of what stands now is estimated until the model's next answer gives a count.

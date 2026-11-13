@@ -4,7 +4,8 @@ import { ask, attach, box, log as logOf, submit, toAgent, type Attached } from "
 // The Agent pane's box and what is around it, with the scripted model: Enter is a new line and Ctrl+Enter (or the Send
 // button) sends; the box asks a phone's keyboard for capitals; its top edge makes it taller, kept in the browser; while
 // the draft holds maths or code a strip shows it rendered, and what was sent is rendered as the agent's replies are;
-// the session's cost stands by its context; and each session in the drawer says when it began.
+// the session's cost stands by its context; each session in the drawer says when it began; and an input method's Enter,
+// while it composes, is the input method's.
 
 let agent: Attached;
 test.beforeAll(async () => { agent = await attach(); });
@@ -48,6 +49,46 @@ test("the box asks a phone's keyboard for capitals at each sentence, and correct
   await expect(box(page)).toHaveAttribute("autocapitalize", "sentences");
   const coarse = await page.evaluate(() => matchMedia("(pointer: coarse)").matches);
   await expect(box(page)).toHaveAttribute("autocorrect", coarse ? "on" : "off");
+  // Enter is a new line, so a phone's keyboard labels it as one.
+  await expect(box(page)).toHaveAttribute("enterkeyhint", "enter");
+});
+
+/** An Enter keydown as an input method sends it while it composes: isComposing, or (Safari, after compositionend) only keyCode 229. */
+async function imeEnter(page: Page, how: { isComposing: boolean; ctrl?: boolean }): Promise<void> {
+  await box(page).evaluate((el, h) => {
+    const e = new KeyboardEvent("keydown", { key: "Enter", code: "Enter", isComposing: h.isComposing, ctrlKey: !!h.ctrl, bubbles: true, cancelable: true });
+    Object.defineProperty(e, "keyCode", { get: () => 229 });
+    Object.defineProperty(e, "which", { get: () => 229 });
+    el.dispatchEvent(e);
+  }, how);
+}
+
+test("an input method's Enter, while it composes, neither completes a slash command, nor makes a new line, nor sends", async ({ page }) => {
+  await page.goto("#/n/basics/bit");
+  await toAgent(page);
+  await box(page).click();
+  await box(page).fill("/comp");
+  const menu = page.getByRole("listbox", { name: "Skills" });
+  await expect(menu.getByRole("option", { name: /\/compact/ })).toBeVisible();
+  // Composing (Chrome, Firefox), and just after compositionend with isComposing already false (Safari): no new line either.
+  for (const isComposing of [true, false]) {
+    await imeEnter(page, { isComposing });
+    await imeEnter(page, { isComposing, ctrl: true });
+  }
+  await expect(menu).toBeVisible();
+  await expect(box(page)).toHaveText("/comp");
+  // The person's own Enter completes it.
+  await box(page).press("Enter");
+  await expect(menu).toHaveCount(0);
+  await expect(box(page)).toContainText("/compact");
+  // A draft is not sent by a composing Ctrl+Enter either.
+  await box(page).fill(`say Not yet.\n${name()} composing`);
+  for (const isComposing of [true, false]) { await imeEnter(page, { isComposing }); await imeEnter(page, { isComposing, ctrl: true }); }
+  await page.waitForTimeout(300);
+  await expect(box(page).locator(".cm-line")).toHaveCount(2);
+  await expect(logOf(page).locator(".turn").filter({ hasText: `${name()} composing` })).toHaveCount(0);
+  await expect(box(page)).toContainText(`${name()} composing`);
+  await box(page).fill("");
 });
 
 test("the box's top edge makes it taller and shorter, by drag or by the arrows, within the pane, and is remembered", async ({ page }) => {

@@ -37,7 +37,7 @@ An artifact is one HTML file: markup, perhaps a script, and a manifest in its `<
 
 ## Data, with no script
 
-Every element with `data="file.csv"` reads it itself. Several files are one table: `data="euler.csv leapfrog.csv"` adds a column `file` (`euler`, `leapfrog`) to compare them with `by="file"`. `where="integrator=leapfrog"` keeps some rows; `where="t<=$t"` compares with a control's value. `abs(col)` is a column's size.
+Every element with `data="file.csv"` reads it itself; a note (`data="ledger.md"`) is read as its first table, a link as its text and a lone `-` as empty. Several files are one table: `data="euler.csv leapfrog.csv"` adds a column `file` (`euler`, `leapfrog`) to compare them with `by="file"`. `where="integrator=leapfrog"` keeps some rows; `where="t<=$t"` compares with a control's value. `abs(col)` is a column's size.
 
 - `<iso-chart data="f.csv" x="t" y="energy" by="body">`: a chart.
   - `type`: `line` (default), `dot`, `bar`, `area`, `step`.

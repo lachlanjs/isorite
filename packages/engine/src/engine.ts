@@ -5,7 +5,7 @@
 import {
   AGENTS_FILE, STRENGTH, ignoredBy, skippedName, MAX_ITEM_BYTES, citeKind, codeTarget, fileType, imageExt, imageType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, HIDDEN_FILE, GITATTRIBUTES, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, IndexCache, type ParseCache, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, LENSES_DIR, parseLens, resolveLens, lensNotes, renameInLens, islandNotes, allIslands, ELSEWHERE_TITLE, type ResolvedLens, type ResolvedIsland, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, type Entry, type FileEntry, type MapModel, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, MAX_IMAGE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type LensSummary, type SearchHit, type Session, type FindResult, type FindHit } from "./api.ts";
+import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, MAX_IMAGE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type LensSummary, type SearchHit, type Session, type FindResult, type FindHit, type Whereabouts } from "./api.ts";
 import { FIND_SIMILAR, LENS_ARGS, READ_LENS, Lookup, TOOLS, baseOf, noteId, withBase, type Similar, type ToolDef } from "./lookup.ts";
 import { ARTIFACTS, ARTIFACT_RECIPE, ASK_QUESTION, OFFER_TEXT, CONVERSATIONS_DIR, ISORITE, PRACTICE, READ_ARTIFACT, READ_DATA, WRITE_ARTIFACT, conversationPath, readTurns, type TurnItem } from "./turn.ts";
 import { WRITING } from "./writing.ts";
@@ -178,6 +178,9 @@ export class Engine implements Api {
   /** Terminal agents' turns that are going on, by agent and session: each looks up through a Lookup of its own. */
   private readonly turns = new Map<string, { request: string; lookup: Lookup }>();
   private turnCount = 0;
+  /** Where each note that moved went, by the id it had (from the journals' move entries): read once, then kept up as
+   *  notes move. A note moved twice is found where it went last, since its journal goes with it. */
+  private moves: Map<string, { to: string; entry: string }> | null = null;
 
   /** Search by meaning, when the device has the model. */
   readonly meaning: Meaning | null;
@@ -494,6 +497,56 @@ export class Engine implements Api {
     return readJournal((await this.opts.own.read(journalPath(id))) ?? "");
   }
 
+  /** Where the note an id names is now: here, moved (and where to), deleted, or never known; and the notes with the same
+   *  file name elsewhere. Read from the journals, which keep every move (an old link still finds the note). */
+  async resolveNote(raw: string): Promise<Whereabouts> {
+    const asked = raw.trim().replace(/^\/+/, "").replace(/\.md$/i, "");
+    checkNoteId(asked);
+    const has = (id: string) => this.files.has(`${id}.md`);
+    const name = asked.split("/").at(-1)!;
+    const like = [...this.bundle.concepts.keys()].filter((id) => id !== asked && id.split("/").at(-1) === name).sort().slice(0, 8);
+    if (has(asked)) return { asked, state: "here", id: asked, like };
+    const moves = await this.moveIndex();
+    // Follow the record to its end: a note moved, then the note at its new place moved again.
+    let at = asked;
+    for (let n = 0, next = moves.get(at); next && n < 20; n++, next = moves.get(at)) at = next.to;
+    if (at !== asked && has(at)) return { asked, state: "moved", id: at, like: like.filter((x) => x !== at) };
+    const journal = await this.opts.own.read(journalPath(at)).catch(() => null);
+    if (journal !== null) return { asked, state: "deleted", id: at, like };
+    return { asked, state: "unknown", like };
+  }
+
+  /** The id a note moved from, and where it is now, or null where `raw` is a note (or never was one). */
+  private async movedTo(raw: unknown): Promise<string | null> {
+    if (typeof raw !== "string" || !raw.trim() || /^[a-z0-9-]+:(?!\/\/)/.test(raw.trim())) return null;
+    try {
+      const w = await this.resolveNote(raw);
+      return w.state === "moved" ? w.id! : null;
+    } catch { return null; }
+  }
+
+  private async moveIndex(): Promise<Map<string, { to: string; entry: string }>> {
+    if (this.moves) return this.moves;
+    const moves = new Map<string, { to: string; entry: string }>(), own = this.opts.own;
+    const visit = async (dir: string): Promise<void> => {
+      for (const info of await own.list(dir).catch(() => [])) {
+        const path = `${dir}/${info.name}`;
+        if (info.dir) await visit(path);
+        else if (info.name.endsWith(".jsonl")) {
+          const id = path.slice("journal/".length, -".jsonl".length);
+          for (const e of readJournal((await own.read(path)) ?? "")) if (e.why === "move" && e.from) this.recordMove(moves, e.from, id, e.id);
+        }
+      }
+    };
+    await visit("journal");
+    return (this.moves ??= moves);
+  }
+
+  private recordMove(moves: Map<string, { to: string; entry: string }>, from: string, to: string, entry: string): void {
+    const was = moves.get(from);
+    if (!was || was.entry < entry) moves.set(from, { to, entry });
+  }
+
   async search(query: string): Promise<SearchHit[]> {
     return this.indexFor(this.bundle).search(query, { limit: 30 }).map((h) => ({ id: h.concept.id, title: h.concept.title, snippet: h.snippet }));
   }
@@ -559,6 +612,15 @@ export class Engine implements Api {
     }
     args = there.args;
     await this.revision();
+    // A note named by where it was (an old link, a path from before a move) is found where it is now, and the agent is
+    // told in a line, so it links the new path from then on.
+    const key = tool === "read_note" || tool === "outline_note" ? "id" : tool === EDIT_NOTE.function.name || tool === WRITE_NOTE.function.name ? "note" : null;
+    const moved = key && !there.base ? await this.movedTo(args[key]) : null;
+    if (moved) {
+      const was = String(args[key!]).trim().replace(/^\/+/, "").replace(/\.md$/i, "");
+      const done = await this.agentLook({ agent, session, tool, args: { ...args, [key!]: moved }, asked });
+      return { text: `(/${was}.md moved to /${moved}.md)\n${done.text}` };
+    }
     if (tool === READ_LENS.function.name) return { text: this.readLens(args) };
     if (tool === BRIEF.function.name) {
       const lent = this.lent();
@@ -901,7 +963,9 @@ export class Engine implements Api {
       const journal = await own.read(journalPath(id));
       if (journal !== null) { await own.write(journalPath(to), journal); await own.remove(journalPath(id)); }
       const hash = hashText(now);
-      await this.enter(to, entries, { ...(await this.stamp(who)), kind: "change", why: "move", before: hash, after: hash, hunks: [], from: id });
+      const moved = { ...(await this.stamp(who)), kind: "change" as const, why: "move" as const, before: hash, after: hash, hunks: [], from: id };
+      await this.enter(to, entries, moved);
+      if (this.moves) this.recordMove(this.moves, id, to, moved.id);
       this.files.delete(from);
       this.files.set(path, { path, text: now });
       this.changed();
@@ -1257,9 +1321,9 @@ export class Engine implements Api {
     if (name === READ_DATA.function.name) {
       const path = filePathOf(args.path);
       if (!path) return `${String(args.path ?? "")} is not a file's path in their base.`;
-      const got = await this.file(path).catch(() => null);
-      if (!got) return `There is no file ${path}.${this.nearFiles(path)}`;
-      try { return describeShape(shapeOf(path, parseData(path, new TextDecoder().decode(got.bytes)))); }
+      const got = await this.dataText(path);
+      if (got === null) return `There is no file ${path}.${this.nearFiles(path)}`;
+      try { return describeShape(shapeOf(path, parseData(path, got))); }
       catch (e) { return `${path} could not be read as data: ${(e as Error).message}`; }
     }
     if (name === ARTIFACT_RECIPE.function.name) {
@@ -1274,6 +1338,17 @@ export class Engine implements Api {
       return got === null ? `There is no artifact ${path}.` : got;
     }
     return this.writeArtifact(args, who, asked);
+  }
+
+  /** A file an artifact reads, as text: a data file, or a note (whose first table it reads, so a table kept in a note
+   *  is drawn with no copy of it). Null where there is none. */
+  private async dataText(path: string): Promise<string | null> {
+    if (/\.md$/i.test(path)) {
+      try { checkNoteId(path.slice(0, -3)); } catch { return null; }
+      return inBase(path) ? this.opts.notes.read(path).catch(() => null) : null;
+    }
+    const got = await this.file(path).catch(() => null);
+    return got ? new TextDecoder().decode(got.bytes) : null;
   }
 
   /** Files in the same folder as a path, to say which there are when one isn't. */
@@ -1301,10 +1376,10 @@ export class Engine implements Api {
     const at = (rel: string) => { const parts = [...dir]; for (const p of rel.split("/")) { if (p === "..") parts.pop(); else if (p && p !== ".") parts.push(p); } return parts.join("/"); };
     const files: string[] = [], columns: Record<string, string[]> = {};
     for (const u of uses) {
-      const got = await this.file(at(u)).catch(() => null);
-      if (!got) continue;
+      const got = /\.md$/i.test(u) ? await this.dataText(at(u)) : await this.file(at(u)).catch(() => null);
+      if (got === null) continue;
       files.push(u);
-      if (citeKind(u) === "data") try { columns[u] = columnsOf(parseData(u, new TextDecoder().decode(got.bytes))); } catch { /* not readable as data: its columns aren't checked */ }
+      if (typeof got === "string" || citeKind(u) === "data") try { columns[u] = columnsOf(parseData(u, typeof got === "string" ? got : new TextDecoder().decode(got.bytes))); } catch { /* not readable as data: its columns aren't checked */ }
     }
     const broken = checkArtifact(html, { files, columns }), errors = broken.filter((b) => b.level === "error");
     const list = (bs: { message: string }[]) => bs.map((b) => `- ${b.message}`).join("\n");

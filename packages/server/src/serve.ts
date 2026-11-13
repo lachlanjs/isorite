@@ -23,6 +23,8 @@ import { SkillsFiles, prepareGlobal } from "./special.ts";
 import { dataDir } from "./pi/credentials.ts";
 import { KIT_FILES, assemble, manifestOf, type KitFiles } from "@isorite/kit";
 import { findBrowser, renderArtifact, type Reader } from "./render.ts";
+import { HerdrStatus, inHerdr } from "./herdr.ts";
+import type { PaneSessions } from "./sessions.ts";
 
 /** The built app: in a checkout, where npm run build puts it; installed from npm, in the package's web/. */
 export const WEB_DIR = [join(dirname(fileURLToPath(import.meta.url)), "..", "web"), join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "app", "build")]
@@ -102,7 +104,7 @@ export async function runArtifact(notes: string, path: string, html: string): Pr
   const read: Reader = async (rel) => {
     const at = resolve(dir, rel);
     if (!at.startsWith(resolve(notes) + sep) || !existsSync(at)) return null;
-    return /\.(csv|tsv|json|jsonl|ndjson|txt|gltf|obj)$/i.test(at) ? readFileSync(at, "utf8") : new Uint8Array(readFileSync(at));
+    return /\.(csv|tsv|json|jsonl|ndjson|txt|gltf|obj|md)$/i.test(at) ? readFileSync(at, "utf8") : new Uint8Array(readFileSync(at));
   };
   const got = await renderArtifact(assemble(html, kit), uses, read, { executable });
   return { rendered: got.rendered, errors: got.errors, drawn: got.drawn };
@@ -114,7 +116,7 @@ export const link = (url: string, tty = Boolean(process.stdout.isTTY)): string =
 /** The server's bases, opened: the one named (remembered in bases.toml, M20) and every lent one, each with its
  *  engine and app, and the server's answer to a request for any of them. `idle`: what to do once the last of those
  *  holding the server lets it go. */
-export async function openServer(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], idle, config = configPath(), model = modelDir(), data = dataDir() }: { host?: string; port?: number; allowHosts?: string[]; idle?: () => void; config?: string; model?: string | null; data?: string } = {}): Promise<{ notes: string; bases: Bases; embedder: boolean; fetch: (req: Request, env?: unknown) => Promise<Response> }> {
+export async function openServer(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], idle, config = configPath(), model = modelDir(), data = dataDir(), onPane }: { host?: string; port?: number; allowHosts?: string[]; idle?: () => void; config?: string; model?: string | null; data?: string; /** Told each base's pane as it opens (herdr's status follows them). */ onPane?: (base: string, pane: PaneSessions) => void } = {}): Promise<{ notes: string; bases: Bases; embedder: boolean; fetch: (req: Request, env?: unknown) => Promise<Response> }> {
   const opened = locate(path);
   const device = deviceId(config);
   const first = rememberBase(opened.notes, { path: config });
@@ -150,6 +152,7 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
         },
         async off() { if (scripted) { await scripted.interrupt(); pi.detach(scripted); scripted = null; } shown.use(terminal ?? new NoAgent()); },
       } : undefined;
+      onPane?.(known.name, shown.pane);
       const app = createApp({ api, token, loopback, web, allowHosts, notes: known.path, terminal: shown.pane, ...(loopback ? { pi } : {}), bases, base: known.name, config, ...(script ? { scripted: script } : {}) });
       return { engine: api, fetch: app.fetch };
     },
@@ -161,7 +164,10 @@ export async function openServer(path: string, { host = "127.0.0.1", port = 4767
 /** `held`: started by isorite mcp, it stops once the last of them lets it go. */
 export async function serve(path: string, { host = "127.0.0.1", port = 4767, allowHosts = [] as string[], held = false }: { host?: string; port?: number; allowHosts?: string[]; held?: boolean } = {}): Promise<void> {
   let stop = () => undefined as void;
-  const { notes, bases, embedder, fetch } = await openServer(path, { host, port, allowHosts, ...(held ? { idle: () => stop() } : {}) });
+  // Run in a herdr terminal, the agent's turns are reported to herdr as they go (OSC 7501). Not by a server isorite mcp
+  // started: that one has no terminal of its own.
+  const herdr = !held && inHerdr() ? new HerdrStatus() : null;
+  const { notes, bases, embedder, fetch } = await openServer(path, { host, port, allowHosts, ...(held ? { idle: () => stop() } : {}), ...(herdr ? { onPane: (base: string, pane: PaneSessions) => herdr.watch(base, pane) } : {}) });
   const server = nodeServe({ fetch, hostname: host, port });
   server.on("error", (e: NodeJS.ErrnoException) => {
     console.error(e.code === "EADDRINUSE" ? `port ${port} is in use (isorite serve --port <n>)` : e.message);

@@ -1,7 +1,7 @@
 // @isorite/engine: the public surface.
 
 export { Conflict, EngineError, MAX_FILE_BYTES, MAX_IMAGE_BYTES } from "./api.ts";
-export type { AgentLook, AgentChange, Api, CodeSlice, FileBytes, PictureInfo, Conversation, ConversationSummary, EngineEvent, LensSummary, Listing, MapReport, NoteSource, NoteSummary, Saved, SearchHit, FindHit, FindResult, Session, TerminalItem, TerminalPermission, TerminalTurn, TerminalView, AgentRecord, AgentSession } from "./api.ts";
+export type { AgentLook, AgentChange, Api, CodeSlice, FileBytes, PictureInfo, Conversation, ConversationSummary, EngineEvent, LensSummary, Listing, MapReport, NoteSource, NoteSummary, Saved, SearchHit, FindHit, FindResult, Session, TerminalItem, TerminalPermission, TerminalTurn, TerminalView, AgentRecord, AgentSession, Whereabouts } from "./api.ts";
 export { Engine, MAX_NOTE_BYTES, checkNoteId, notesOfTurns, type ArtifactRun } from "./engine.ts";
 export type { Elsewhere, EngineOptions } from "./engine.ts";
 export { MemoryFiles, systemClock } from "./ports.ts";

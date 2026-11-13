@@ -52,7 +52,7 @@ test("/compact summarises the earlier turns now, keeps the last exchange, and th
   // One request, the summary's: nothing was prompted.
   expect(sent.length).toBe(before + 1);
   expect(sent.at(-1)).toContain("<conversation>");
-  expect(sent.at(-1)).toContain("Additional focus: keep the decisions about bits");
+  expect(sent.at(-1)).toContain("never by labels such as footnote numbers or call ids.\\nkeep the decisions about bits");
   const turn = view.turns.at(-1)!;
   expect(turn).toMatchObject({ asked: "/compact keep the decisions about bits", state: "done" });
   expect(turn.items.map((i) => i.kind)).toEqual(["compaction"]);
@@ -73,8 +73,9 @@ test("/compact summarises the earlier turns now, keeps the last exchange, and th
 test("/compact after a single exchange summarises all of it, and again carries the earlier summary in", async () => {
   const { sent, ask } = await setup();
   await ask("Only question, about channels.");
-  expect(compactionOf(await ask("/compact"))).toMatchObject({ state: "done", asked: true });
-  expect(sent.at(-1)).not.toContain("Additional focus");
+  expect(compactionOf(await ask("/compact"))).toMatchObject({ state: "done", asked: true, summary: "Earlier, they asked about the notes." });
+  // With no focus of theirs, the summary is asked only to keep their words.
+  expect(sent.at(-1)).toMatch(/Additional focus: Quote the person's own words[^\n]*"\}/);
   await ask("Another question, about codes.");
   expect(sent.at(-1)).not.toContain("Only question, about channels.");
   await ask("Yet another, about noise.");

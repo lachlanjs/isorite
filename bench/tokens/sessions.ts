@@ -46,12 +46,12 @@ type Tier = keyof typeof PRICES;
 // ------------------------------------------------------------ measuring what is sent
 
 interface Request { turn: number; input: number; prefix: number; output: number }
-type Context = { systemPrompt?: string; messages: { role?: string; content?: unknown; toolCallId?: string; toolName?: string; isError?: boolean }[]; tools?: { name: string; description: string; parameters: unknown }[] };
+type Context = { systemPrompt?: string; messages: { role?: string; content?: unknown; toolCallId?: string; toolName?: string; isError?: boolean; sections?: Record<string, string | null> }[]; tools?: { name: string; description: string; parameters: unknown }[] };
 
 /** A request as a provider receives it: what the model reads, without pi's bookkeeping (timestamps, usage). */
 function serialise(c: Context): string {
   const tools = JSON.stringify((c.tools ?? []).map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })));
-  const messages = c.messages.map((m) => JSON.stringify({ role: m.role, content: Array.isArray(m.content) ? m.content.map((b: Record<string, unknown>) => (b.type === "toolCall" ? { type: "tool_use", id: b.id, name: b.name, input: b.arguments } : b.type === "image" ? { type: "image", bytes: String(b.data ?? "").length } : b)) : m.content, ...(m.toolCallId ? { tool_use_id: m.toolCallId } : {}), ...(m.isError ? { is_error: true } : {}) }));
+  const messages = c.messages.map((m) => JSON.stringify({ role: m.role, content: Array.isArray(m.content) ? m.content.map((b: Record<string, unknown>) => (b.type === "toolCall" ? { type: "tool_use", id: b.id, name: b.name, input: b.arguments } : b.type === "image" ? { type: "image", bytes: String(b.data ?? "").length } : b)) : m.content, ...(m.toolCallId ? { tool_use_id: m.toolCallId } : {}), ...(m.isError ? { is_error: true } : {}), ...(m.sections ? { sections: m.sections } : {}) }));
   return [c.systemPrompt ?? "", tools, ...messages].join("\n");
 }
 const common = (a: string, b: string): number => { let i = 0; while (i < a.length && i < b.length && a.charCodeAt(i) === b.charCodeAt(i)) i++; return i; };
@@ -74,6 +74,9 @@ interface Env {
   /** Send a message with pointers, as the pane does: each `⟨n⟩` in the text is the n-th pointer. */
   ask(text: string, pointers?: Omit<Pointer, "id">[]): Promise<void>;
   compact(): Promise<void>;
+  /** The person moves a folder, or a note, in the browser (not through the agent). */
+  moveFolder(from: string, to: string): Promise<void>;
+  moveNote(id: string, to: string): Promise<void>;
 }
 interface Scenario { name: string; what: string; compaction?: { reserveTokens: number; keepRecentTokens: number }; run(env: Env): Promise<void> }
 
@@ -130,6 +133,20 @@ export const SCENARIOS: Scenario[] = [
       }
     },
   },
+  {
+    name: "moves",
+    what: "12 turns over two notes, the person moving their folder before turn 5 and renaming one before turn 9; each turn points at a note where it is now, and the agent reads it and answers",
+    async run(env) {
+      let dir = "integrators", one = "leapfrog";
+      const other = "symplectic-integrators";
+      for (let k = 1; k <= 12; k++) {
+        if (k === 5) { await env.moveFolder(dir, "methods/integrators"); dir = "methods/integrators"; }
+        if (k === 9) { await env.moveNote(`${dir}/${one}`, `${dir}/kick-drift-kick`); one = "kick-drift-kick"; }
+        const id = `${dir}/${k % 2 ? one : other}`;
+        await env.ask(`How does this note stand now? ⟨1⟩\n${script(k, id)}`, [wholeNote(id)]);
+      }
+    },
+  },
 ];
 
 async function selections(env: Env, read: boolean): Promise<void> {
@@ -147,11 +164,12 @@ async function selections(env: Env, read: boolean): Promise<void> {
 
 /** A harness to measure: whether it remembers what the model has seen (seen.ts), the lines sent around a passage, and
  *  (an experiment, done here in the bench and not in the harness) old long tool results shortened before sending. */
-export interface Variant { name: string; remember: boolean; around?: number; shorten?: boolean }
+export interface Variant { name: string; remember: boolean; around?: number; shorten?: boolean; /** false: the harness is not told where notes went (as before 0.30). */ moves?: boolean }
 export const VARIANTS: Variant[] = [
   { name: "before", remember: false },
   { name: "before+shorten", remember: false, shorten: true },
   { name: "after-no-around", remember: true, around: 0 },
+  { name: "after-no-moves", remember: true, moves: false },
   { name: "after", remember: true },
   { name: "after+shorten", remember: true, shorten: true },
 ];
@@ -198,7 +216,9 @@ export async function runScenario(s: Scenario, v: Variant): Promise<Result> {
       void stream.result().then((m) => { r.output = tok(JSON.stringify(m.content ?? "").length); }, () => undefined);
       return stream;
     }) as never;
-    const host = new PiHost({ api, model: chosen!, streamFn: watched, remember: v.remember, ...(v.around !== undefined ? { around: v.around } : {}), ...(s.compaction ? { compaction: s.compaction } : {}) });
+    // Without moves, the host is given no way to ask where a note went.
+    const given = v.moves === false ? new Proxy(api, { get: (t, k) => (k === "resolveNote" ? undefined : Reflect.get(t, k)) }) : api;
+    const host = new PiHost({ api: given, model: chosen!, streamFn: watched, remember: v.remember, ...(v.around !== undefined ? { around: v.around } : {}), ...(s.compaction ? { compaction: s.compaction } : {}) });
     const settled = (): Promise<void> => new Promise((done) => { const off = host.listen((view) => { if (!view.busy && view.turns.at(-1)?.state !== "running") { off(); done(); } }); });
     const send = async (text: string) => {
       const done = settled();
@@ -217,6 +237,8 @@ export async function runScenario(s: Scenario, v: Variant): Promise<Result> {
         await send(expand(marked, (id) => all.get(id)));
       },
       async compact() { turn++; await send("/compact"); },
+      async moveFolder(from, to) { await api.moveFolder(from, to); },
+      async moveNote(id, to) { await api.moveNote(id, to, (await api.readNote(id)).version); },
     };
     await s.run(env);
     await new Promise((r) => setTimeout(r, 0));

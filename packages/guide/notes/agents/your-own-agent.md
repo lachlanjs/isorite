@@ -14,3 +14,5 @@ Either reads your notes and cites them; the notes it reads light on the Atlas; w
 - **Claude Code** looks through isorite's tools and cites in isorite's form. It asks before each tool until you answer *always*, or allow `mcp__isorite` in its settings.
 - **Codex** is given the MCP server by one command, which `isorite setup` prints.
 - **OpenCode** and **omp** mostly read the Markdown files with their own tools, which isorite does not see: ask them to use isorite's tools.
+
+In [herdr](/agents/herdr.md "see also"), an agent runs in a terminal that keeps running, and isorite's own agent is listed beside it.

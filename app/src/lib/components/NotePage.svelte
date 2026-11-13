@@ -21,8 +21,27 @@
   import { ago, describe, momentKey } from "@isorite/core";
   import type { Touched } from "$lib/editor/overlays.ts";
   import { swap } from "$lib/motion.ts";
+  import type { Whereabouts } from "@isorite/engine";
 
   let { id }: { id: string } = $props();
+
+  // Opened from an old address, the note says where it was asked for (and only on this opening of it).
+  // svelte-ignore state_referenced_locally
+  const movedFrom = app.moved?.to === id ? app.moved.from : "";
+  app.moved = null;
+  // No note here: where it went, from the journal's record of moves. A note that moved is opened where it is now, in
+  // place of this address; one deleted, or never here, is said so, with the notes of the same name elsewhere.
+  let where = $state.raw<Whereabouts | null>(null);
+  $effect(() => {
+    if (note.loaded !== "missing") return;
+    void app.api.resolveNote(id).then(async (w) => {
+      if (w.state === "moved" && w.id) {
+        app.moved = { from: id, to: w.id };
+        // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
+        await goto(noteHref(w.id), { replaceState: true });
+      } else where = w;
+    }, () => { where = { asked: id, state: "unknown", like: [] }; });
+  });
 
   // One session for the page's life: the route gives each note its own page ({#key}).
   // svelte-ignore state_referenced_locally
@@ -199,6 +218,18 @@
     {#if slow}<p class="faint opening"><Drawing label="opening" /></p>{/if}
   {:else if note.loaded === "missing"}
     <p class="soft">There is no note at <span class="faint">{id}</span>.</p>
+    {#if where}
+      <div class="gone" data-state={where.state}>
+        {#if where.state === "deleted"}<p class="soft">{where.id && where.id !== id ? `It moved to ${where.id}, and was deleted there.` : "It was deleted."}</p>{/if}
+        {#if where.like.length}
+          <p class="faint">the same name</p>
+          <ul class="attached like">
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves -->
+            {#each where.like as l (l)}<li><a href={noteHref(l)}><span>{app.listing.notes.find((n) => n.id === l)?.title ?? l.split("/").at(-1)}</span><span class="faint where">{l}</span></a></li>{/each}
+          </ul>
+        {/if}
+      </div>
+    {/if}
     <p><a href={resolve("/notes")}>all notes</a></p>
   {:else if note.loaded === "error"}
     <p class="bad">{note.message}</p>
@@ -222,6 +253,7 @@
       </div>
     {/if}
 
+    {#if movedFrom}<p class="moved faint">moved from {movedFrom}</p>{/if}
     <div class="head">
       {#if read}
         <div class="titlerow">
@@ -324,6 +356,14 @@
   .attached a:hover span { color: var(--lattice); }
   .attached a.done span { color: var(--text-faint); }
   .attached .ok { color: var(--malachite); }
+  /* Opened by an old address: said once, quietly, over the title; no more than a path. */
+  .moved { margin: 0 0 calc(-1 * var(--space-2)); font-size: var(--fs-small); animation: arrive var(--t-change) var(--ease-out); }
+  .gone { display: flex; flex-direction: column; gap: var(--space-1); }
+  .gone p { margin: 0; }
+  .like { margin-top: 0; border-top: 0; padding-top: 0; }
+  .like a { grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: var(--space-3); }
+  .like .where { font: var(--fs-small) var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (prefers-reduced-motion: reduce) { .moved { animation: none; } }
   .atbar { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 2px 4px 2px 10px; background: var(--fill-hover); }
   /* The timeline sits in the page's left margin, level with the title (Desktop-Editor); where there is no margin,
      it is a narrow column at the note's left (Mobile-Timeline). */

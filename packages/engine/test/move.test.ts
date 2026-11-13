@@ -50,3 +50,38 @@ test("a note deleted is gone from the base; its journal stays, and links to it a
   expect((await engine.notes()).notes.map((n) => n.id)).toEqual(["integrators/leapfrog"]);
   await expect(engine.deleteNote("physics/gravity", hashText(FORCE))).rejects.toBeInstanceOf(Conflict);
 });
+
+test("an id from before a move resolves to where the note is now, through any number of moves, after a reopen too", async () => {
+  const { engine, notes, study, clock } = await open();
+  expect(await engine.resolveNote("physics/gravity")).toMatchObject({ state: "here", id: "physics/gravity" });
+  await engine.moveNote("physics/gravity", "forces/gravity", hashText(FORCE));
+  clock.t += 1000;
+  await engine.moveFolder("forces", "mechanics/forces");
+  expect(await engine.resolveNote("/physics/gravity.md")).toMatchObject({ asked: "physics/gravity", state: "moved", id: "mechanics/forces/gravity" });
+  expect(await engine.resolveNote("forces/gravity")).toMatchObject({ state: "moved", id: "mechanics/forces/gravity" });
+  // Read from the journals by an engine that never saw the moves.
+  const again = await Engine.open({ notes, own: study, clock, device: "laptop1", name: "nbody-notes" });
+  expect(await again.resolveNote("physics/gravity")).toMatchObject({ state: "moved", id: "mechanics/forces/gravity" });
+  // Deleted: the journal stays, so it is known to have been there.
+  await again.deleteNote("integrators/leapfrog", (await again.readNote("integrators/leapfrog")).version);
+  expect(await again.resolveNote("integrators/leapfrog")).toMatchObject({ state: "deleted", id: "integrators/leapfrog" });
+  expect(await again.resolveNote("nowhere/at-all")).toMatchObject({ state: "unknown" });
+});
+
+test("a note with the same file name elsewhere is offered for an id that never was", async () => {
+  const { engine } = await open();
+  expect((await engine.resolveNote("old/gravity")).like).toEqual(["physics/gravity"]);
+});
+
+test("an agent reading, outlining or editing a note by its old path reaches it, and is told where it is", async () => {
+  const { engine } = await open();
+  await engine.moveNote("physics/gravity", "forces/gravity", hashText(FORCE));
+  const read = (await engine.agentLook({ agent: "a", session: "s", tool: "read_note", args: { id: "/physics/gravity.md" } })).text;
+  expect(read.split("\n")[0]).toBe("(/physics/gravity.md moved to /forces/gravity.md)");
+  expect(read).toContain("Every pair of bodies attracts.");
+  expect((await engine.agentLook({ agent: "a", session: "s", tool: "outline_note", args: { id: "physics/gravity" } })).text).toContain("moved to /forces/gravity.md");
+  const edited = (await engine.agentLook({ agent: "a", session: "s", tool: "edit_note", args: { note: "physics/gravity", oldString: "attracts", newString: "attracts every other" } })).text;
+  expect(edited).toContain("moved to /forces/gravity.md");
+  expect((await engine.readNote("forces/gravity")).text).toContain("attracts every other");
+  expect((await engine.notes()).notes.map((n) => n.id)).not.toContain("physics/gravity");
+});
