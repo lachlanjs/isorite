@@ -25,6 +25,7 @@
   import Crystal from "$lib/components/Crystal.svelte";
   import AgentSettings from "$lib/components/AgentSettings.svelte";
   import NoteSettings from "$lib/components/NoteSettings.svelte";
+  import LensSettings from "$lib/components/LensSettings.svelte";
   import SelectionTags from "$lib/components/SelectionTags.svelte";
 
   let { children }: { children: Snippet } = $props();
@@ -200,7 +201,7 @@
             <div class="pbody note-body">{@render children()}</div>
             {#if panes.tree && page.route.id !== "/notes"}<div class="tree"><NoteList /></div>{/if}
           {:else if p === "atlas"}
-            <PaneHead pane="atlas" first={panes.narrow || standing[0] === "atlas"} name="Atlas">
+            <PaneHead pane="atlas" first={panes.narrow || standing[0] === "atlas"} name="Atlas" settings={atlasSettings}>
               {#snippet tools()}
                 {#if app.atlas?.chosen && app.atlas.steps}
                   <span class="says steps" title="{app.atlas.steps} {app.atlas.steps === 1 ? 'step' : 'steps'} back">−{app.atlas.steps}</span>
@@ -263,12 +264,13 @@
 
 {#snippet noteSettings()}<NoteSettings />{/snippet}
 {#snippet agentSettings()}<AgentSettings />{/snippet}
+{#snippet atlasSettings()}<LensSettings />{/snippet}
 
 <style>
   .says { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 5.5em; font-size: 0.75rem; color: var(--text-soft); flex: 0 1 auto; }
   @media (max-width: 760px) { .says { flex: none; } }
   /* The lens picker: quiet while the islands are shown; on, a tint and a 2px bar (docs/taste.md). */
-  .lens { height: 28px; max-width: 11em; min-width: 0; padding: 0 8px; font: inherit; font-size: 0.75rem; color: var(--text-soft); background: transparent; border: 0; box-shadow: inset 2px 0 0 transparent; cursor: pointer; flex: 0 1 auto; transition: background var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
+  .lens { height: 28px; max-width: 11em; min-width: 7em; padding: 0 8px; font: inherit; font-size: 0.75rem; color: var(--text-soft); background: transparent; border: 0; box-shadow: inset 2px 0 0 transparent; cursor: pointer; flex: 0 1 auto; transition: background var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
   .lens:hover, .lens:focus-visible { color: var(--text); }
   .lens.on { color: var(--text); background: color-mix(in srgb, var(--lattice) 14%, transparent); box-shadow: inset 2px 0 0 var(--lattice); }
   @media (prefers-reduced-motion: reduce) { .lens { transition: none; } }

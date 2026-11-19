@@ -151,7 +151,7 @@ A lens (`docs/lenses.md`) gives the layout a different tree and changes nothing 
 | Where | What |
 |---|---|
 | `layout.js` | `LAYOUT_VERSION` 16. `lens` (a name) is in `layoutKey`, and seeds the floorplan's salt (`planCosts.seed`), so each lens is laid out on its own and a lens does not inherit the folders' arrangement (`from`). |
-| `Atlas.svelte` | Chosen in the Atlas header; a lens map takes the same worker, key and beats as the folders. A new lens is a new map, framed afresh. Files and the code switch's items are not in a lens (a lens has notes only until it has `type:` rules). A lens map makes, moves, renames and hides nothing: islands are not folders. |
+| `Atlas.svelte` | Chosen in the Atlas header; a lens map takes the same worker, key and beats as the folders. A new lens is a new map, framed afresh. A lens holds files only where a `type:` rule or a list puts them; `lensModel` places each as an item of its own, and the switches still decide which kinds are drawn. What a lens hides is already out of the resolved lens. A lens map makes, moves, renames and hides nothing: islands are not folders. |
 
 Not measured on the 1,200-note case yet.
 

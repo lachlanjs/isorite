@@ -31,7 +31,7 @@
     remove: (item) => void askRemove(item),
     send: (item) => send(item),
     rename: (item) => { draft = last(item.id); renaming = item.id; },
-    hide: (item) => { void app.hide(item.id).then(() => { said = ""; sent = `${item.title} is hidden. Hold on open ground on the Atlas to bring it back.`; clearTimeout(sentTimer); sentTimer = setTimeout(() => (sent = ""), 5000); }, (e: Error) => { said = e.message; }); },
+    hide: (item) => { const lens = app.lens?.title; void app.hide(item.id).then(() => { said = ""; sent = lens ? `${item.title} is hidden in ${lens}.` : `${item.title} is hidden. Hold on open ground on the Atlas to bring it back.`; clearTimeout(sentTimer); sentTimer = setTimeout(() => (sent = ""), 5000); }, (e: Error) => { said = e.message; }); },
   }, { targetOf: (dir) => document.querySelector(`.notes section[data-dir="${CSS.escape(dir)}"] h2`) });
   let asking = $state.raw<{ item: Item; text: string; empty: boolean } | null>(null);
   const dragged = $derived(g.phase === "moving" ? g.item?.id ?? null : null);
@@ -117,7 +117,7 @@
   $effect(() => {
     const q = query.trim();
     if (q.length < 2) { hits = []; return; }
-    const timer = setTimeout(() => { void app.api.search(q).then((found) => { if (query.trim() === q) hits = found; }, () => undefined); }, 200);
+    const timer = setTimeout(() => { void app.api.search(q, app.lens ? { lens: app.lensName } : undefined).then((found) => { if (query.trim() === q) hits = found; }, () => undefined); }, 200);
     return () => clearTimeout(timer);
   });
 

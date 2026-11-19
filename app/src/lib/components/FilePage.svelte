@@ -13,6 +13,8 @@
   import ArtifactFrame from "./ArtifactFrame.svelte";
   import CodeLines from "./CodeLines.svelte";
   import Glyph from "./Glyph.svelte";
+  import { relocate } from "$lib/pointers.ts";
+  import { pointers } from "$lib/pointers.svelte.ts";
 
   let { path }: { path: string } = $props();
 
@@ -55,6 +57,20 @@
     })().catch((e) => { problem = (e as Error).message; });
     return () => { if (url) URL.revokeObjectURL(url); };
   });
+
+  // A pointer pressed that came from this file (pointers.open): its lines, found again in the file as it is, marked and
+  // scrolled to.
+  let lit = $state.raw<{ from: number; to: number } | null>(null);
+  let lines = $state<HTMLElement>();
+  $effect(() => {
+    const s = pointers.shown, text = source, el = lines;
+    if (!s || s.kind !== "code" || s.ref !== `/${path}` || text === null || !el) return;
+    pointers.shown = null;
+    const now = relocate(text, { ...s, id: -1, title: "" });
+    lit = { from: now.from, to: now.to };
+    requestAnimationFrame(() => el.querySelector(`[data-n="${now.from}"]`)?.scrollIntoView({ block: "center" }));
+  });
+  $effect(() => { void path; lit = null; });
 
   const title = $derived(loaded?.title ?? name);
   const size = (n: number) => (n < 1024 ? `${n} bytes` : n < 1024 ** 2 ? `${(n / 1024).toFixed(1)} kB` : `${(n / 1024 ** 2).toFixed(1)} MB`);
@@ -112,7 +128,7 @@
   {:else if source !== null}
     <!-- Its lines numbered and coloured, as the code reader shows a file of the repository; a selection's tags point to
          it by its path in the base, as the agent's tools name it. -->
-    <CodeLines text={source} {path} point="code:/{path}" />
+    <CodeLines text={source} {path} point="code:/{path}" marked={(n) => !!lit && n >= lit.from && n <= lit.to} bind:box={lines} />
   {:else if table}
     <pre class="shape">{describeShape({ ...table.shape, head: [] }).split("\nFirst rows:")[0]}</pre>
     <div class="rows">

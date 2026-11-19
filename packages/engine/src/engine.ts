@@ -3,10 +3,10 @@
 // what keeps the journal true to the file (docs/architecture.md, section 3).
 
 import {
-  AGENTS_FILE, STRENGTH, ignoredBy, skippedName, MAX_ITEM_BYTES, citeKind, codeTarget, fileType, imageExt, imageType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, HIDDEN_FILE, GITATTRIBUTES, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, IndexCache, type ParseCache, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, LENSES_DIR, parseLens, resolveLens, lensNotes, renameInLens, islandNotes, allIslands, ELSEWHERE_TITLE, type ResolvedLens, type ResolvedIsland, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, type Entry, type FileEntry, type MapModel, type SessionMoment, type Stamp,
+  AGENTS_FILE, STRENGTH, ignoredBy, skippedName, MAX_ITEM_BYTES, citeKind, codeTarget, fileType, imageExt, imageType, pictureSize, pictureType, sha256, embedRefs, embedFor, slugify, spliceText, SETTINGS_FILE, HIDDEN_FILE, GITATTRIBUTES, parseSettings, settingsText, type BaseSettings, kindOf, idsOf, DONE, ABOUT, Bundle, SearchIndex, IndexCache, type ParseCache, change, hashText, journalLine, journalPath, replay, sessionMoments, mapModel, newId, LENSES_DIR, FOLDERS_LENS, parseLens, resolveLens, lensNotes, renameInLens, islandNotes, allIslands, lensHomes, lensShows, hiddenBy, hiddenId, listedIn, editLens, newLensText, LensEditError, type LensEdit, ELSEWHERE_TITLE, type ResolvedLens, type ResolvedIsland, readJournal, reconcile, repairFrontmatter, findSymbol, hasSymbols, splitFrontmatter, stamp, type Entry, type FileEntry, type MapModel, type SessionMoment, type Stamp,
 } from "@isorite/core";
-import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, MAX_IMAGE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type LensSummary, type SearchHit, type Session, type FindResult, type FindHit, type Whereabouts } from "./api.ts";
-import { FIND_SIMILAR, LENS_ARGS, READ_LENS, Lookup, TOOLS, baseOf, noteId, withBase, type Similar, type ToolDef } from "./lookup.ts";
+import { Conflict, EngineError, MAX_CODE_LINES, MAX_FILE_BYTES, MAX_IMAGE_BYTES, type CodeSlice, type AgentLook, type AgentChange, type Api, type FileBytes, type PictureInfo, type AgentRecord, type AgentSession, type TerminalTurn, type Conversation, type ConversationSummary, type EngineEvent, type Listing, type MapReport, type NoteSource, type Saved, type LensSummary, type LensChange, type LensPlace, type SearchHit, type SearchScope, type Session, type FindResult, type FindHit, type Whereabouts } from "./api.ts";
+import { EDIT_LENS, FIND_SIMILAR, LENS_ARGS, READ_LENS, Lookup, TOOLS, baseOf, noteId, withBase, type Similar, type ToolDef } from "./lookup.ts";
 import { ARTIFACTS, ARTIFACT_RECIPE, ASK_QUESTION, OFFER_TEXT, CONVERSATIONS_DIR, ISORITE, PRACTICE, READ_ARTIFACT, READ_DATA, WRITE_ARTIFACT, conversationPath, readTurns, type TurnItem } from "./turn.ts";
 import { WRITING } from "./writing.ts";
 import { Meaning, type Embedder } from "./meaning.ts";
@@ -63,6 +63,11 @@ const fromBase = (base: string, text: string): string => `(From the base ${base}
 
 /** In the knowledge base itself: not one of isorite's own files, whose ids began "@" (the agent's drafts, before M25). */
 const inBase = (id: string): boolean => !id.startsWith("@");
+
+/** A lens's file name, for one made here. */
+const LENS_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
+/** The lens the learn skill keeps: made, it hides its folder (/learning/) from the base and every other lens. */
+export const LEARNING_LENS = "learning";
 
 const BAD_PART = /^\.|[\0\\:*?"<>|]|^\s|\s$/;
 
@@ -170,6 +175,10 @@ export class Engine implements Api {
   private lensFiles = new Map<string, string>();
   private lensKey = "";
   private lensRev = 0;
+  /** The base's hidden list as last read with the lenses: a lens without a list of its own hides what it hides. */
+  private baseHidden: string[] = [];
+  /** Where each note is at home in each lens, worked out once per change to the notes or the lenses. */
+  private placed: { key: string; at: Map<string, LensPlace[]> } | null = null;
   private readonly memoised = new Map<string, { rev: string; value: Promise<unknown> }>();
   private readonly listeners = new Set<(event: EngineEvent) => void>();
   /** The newest entry made anywhere among isorite's files: it decides the session. Undefined until looked for. */
@@ -247,9 +256,11 @@ export class Engine implements Api {
     const own = this.opts.own, names = (await own.list(LENSES_DIR)).filter((f) => !f.dir && f.name.endsWith(".toml")).map((f) => f.name.slice(0, -5)).sort();
     const found = new Map<string, string>();
     for (const n of names) found.set(n, (await own.read(`${LENSES_DIR}/${n}.toml`)) ?? "");
-    const key = JSON.stringify([...found]);
+    // The base's hidden list is read only where there are lenses: they are what it changes.
+    const hidden = found.size ? (await this.hidden()).ids : [];
+    const key = JSON.stringify([[...found], hidden]);
     if (key === this.lensKey) return;
-    this.lensKey = key; this.lensFiles = found; this.lensRev++;
+    this.lensKey = key; this.lensFiles = found; this.baseHidden = hidden; this.lensRev++;
   }
 
   /** The lenses the base has: name and title, with how many islands and how many problems the file has. */
@@ -263,14 +274,56 @@ export class Engine implements Api {
     return this.once(`lens:${name}`, async () => {
       const text = this.lensFiles.get(name);
       if (text === undefined) throw new EngineError(`there is no lens ${name}`, 404);
-      return resolveLens(parseLens(name, text), lensNotes(this.bundle));
+      return resolveLens(parseLens(name, text), lensNotes(this.bundle), this.baseHidden);
     });
   }
 
   /** A lens as agents ask for it, sync: for the revision the engine has read (`revision()` first). */
   private lensNow(name: string): ResolvedLens | null {
     const text = this.lensFiles.get(name);
-    return text === undefined ? null : resolveLens(parseLens(name, text), lensNotes(this.bundle));
+    return text === undefined ? null : resolveLens(parseLens(name, text), lensNotes(this.bundle), this.baseHidden);
+  }
+
+  /** Where each note is at home in each lens (not Elsewhere, not hidden there), for the revision the engine has read. */
+  private placesNow(): Map<string, LensPlace[]> {
+    const key = `${this.rev}|${this.lensKey}`;
+    if (this.placed?.key === key) return this.placed.at;
+    const at = new Map<string, LensPlace[]>();
+    for (const name of this.lensFiles.keys()) {
+      const lens = this.lensNow(name)!;
+      for (const [id, island] of lensHomes(lens)) (at.get(id) ?? at.set(id, []).get(id)!).push({ lens: name, island });
+    }
+    this.placed = { key, at };
+    return at;
+  }
+
+  /** What a search answers an agent with after a note's line, where the base has lenses or hides things: ` [hidden; tour:
+   *  find-your-way]`. Nothing where there is nothing to say. */
+  private placeNote(id: string, inLens = false): string {
+    // Searched in a lens, what it hides was not found: nothing is marked hidden.
+    const parts = [...(!inLens && this.baseHidden.length && hiddenBy(this.baseHidden, id) ? ["hidden"] : []), ...(this.lensFiles.size ? (this.placesNow().get(id) ?? []).map((p) => `${p.lens}: ${p.island}`) : [])];
+    return parts.length ? ` [${parts.join("; ")}]` : "";
+  }
+
+  /** The notes a search is narrowed to by a lens (and an island of it): what the lens shows. Null for every note. */
+  private scopeOf(scope: SearchScope): { only: ReadonlySet<string> | null; lens: ResolvedLens | null } {
+    const name = scope.lens?.trim() ?? "";
+    if (!name || name === FOLDERS_LENS) return { only: null, lens: null };
+    const lens = this.lensNow(name);
+    if (!lens) throw new EngineError(`there is no lens ${name}`, 404);
+    if (scope.all) return { only: null, lens };
+    const island = scope.island?.trim();
+    const only = island ? islandNotes(lens, island) : lensShows(lens);
+    if (!only) throw new EngineError(`there is no island ${island} in the lens ${name}`, 404);
+    return { only, lens };
+  }
+
+  /** A hit as the app is given it: where it is at home in each lens, and whether it is hidden (in the lens asked about,
+   *  else in the base). */
+  private annotate<T extends { id: string }>(hit: T, lens: ResolvedLens | null): T & Pick<SearchHit, "lenses" | "hidden"> {
+    const places = this.lensFiles.size ? this.placesNow().get(hit.id) : undefined;
+    const hidden = lens ? lens.hiddenItems.includes(hit.id) : this.baseHidden.length > 0 && hiddenBy(this.baseHidden, hit.id);
+    return { ...hit, ...(places?.length ? { lenses: places } : {}), ...(hidden ? { hidden: true } : {}) };
   }
 
   /** A note or folder was moved: the lens files that name it follow, so a lens does not lose it. Written as the notes are, one at a time. */
@@ -280,10 +333,84 @@ export class Engine implements Api {
     for (const [name, text] of [...this.lensFiles]) {
       const r = renameInLens(text, from, to, folder);
       if (!r.changed) continue;
-      await this.opts.own.write(`${LENSES_DIR}/${name}.toml`, r.text);
+      await this.writeLens(name, r.text, "you");
       any = true;
     }
     if (any) { await this.readLenses(); this.publish({ type: "lenses" }); }
+  }
+
+  /** A lens file written, and entered in its journal (`@lens/<name>`) as a note's change is: by whom, and what the agent
+   *  was asked. What the file held that the journal had not seen is entered first, as made elsewhere. Null text removes it. */
+  private async writeLens(name: string, text: string | null, who: string, asked?: string): Promise<void> {
+    const id = `@lens/${name}`, path = `${LENSES_DIR}/${name}.toml`, own = this.opts.own;
+    const now = await own.read(path), entries = await this.journal(id);
+    if (now !== null) await this.enter(id, entries, reconcile(entries, now, await this.stamp("external")));
+    if (text === null) await own.remove(path); else await own.write(path, text);
+    await this.enter(id, entries, change(entries, text ?? "", await this.stamp(who), "edit", asked ? { asked } : {}));
+  }
+
+  /** Change a lens: make, remove or rename one, or change its islands, notes, title or hidden list (`LensEdit`). Written
+   *  through the engine, journalled under `who`, and the lenses' revision moves. What comes back says what was done. */
+  async editLens(name: string, edit: LensChange, who = "you", asked?: string): Promise<{ name: string; said: string }> {
+    const lens = name.trim();
+    const named = (n: string) => { if (!LENS_NAME.test(n)) throw new EngineError(`a lens's name is lower case letters, digits and hyphens, as tour or by-kind: not ${JSON.stringify(n)}`, 400); if (n === FOLDERS_LENS) throw new EngineError("folders is the base's own folders: give the lens another name", 400); return n; };
+    const done = await this.one(async () => {
+      await this.readLenses();
+      const text = this.lensFiles.get(lens);
+      if (edit.action === "create") {
+        if (text !== undefined) throw new EngineError(`there is already a lens ${lens}`, 409);
+        if (lens === LEARNING_LENS) {
+          // The learning lens (the learn skill's): what is learnt is kept under /learning/, off every other map and the
+          // base's search, and shown in this lens alone, which hides nothing.
+          await this.writeLens(lens, editLens(newLensText(edit.title?.trim() || "Learning"), { action: "set_hidden", ids: [] }).text, who, asked);
+          const base = await this.hidden();
+          if (!hiddenBy(base.ids, LEARNING_LENS)) await this.setHiddenNow([...base.ids, LEARNING_LENS]);
+          // A lens with a hidden list of its own hides it too.
+          for (const [other, t] of this.lensFiles) {
+            const own = parseLens(other, t).hidden;
+            if (own && !hiddenBy(own, LEARNING_LENS)) await this.writeLens(other, editLens(t, { action: "hide", ids: [LEARNING_LENS] }).text, who, asked);
+          }
+          return { name: lens, said: `Made the lens ${lens}. Notes under /${LEARNING_LENS}/ are hidden everywhere else and shown here.` };
+        }
+        await this.writeLens(named(lens), newLensText(edit.title?.trim() || lens), who, asked);
+        return { name: lens, said: `Made the lens ${lens}.` };
+      }
+      if (text === undefined) throw new EngineError(`there is no lens ${lens}${this.lensFiles.size ? `: the lenses are ${[...this.lensFiles.keys()].join(", ")}` : ""}`, 404);
+      if (edit.action === "delete") { await this.writeLens(lens, null, who, asked); return { name: lens, said: `Removed the lens ${lens}.` }; }
+      if (edit.action === "rename") {
+        const to = named(edit.to.trim());
+        if (to === lens) return { name: lens, said: "Nothing to change." };
+        if (this.lensFiles.has(to)) throw new EngineError(`there is already a lens ${to}`, 409);
+        // The journal goes with it, as a note's does when it moves.
+        const own = this.opts.own, journal = await own.read(journalPath(`@lens/${lens}`));
+        if (journal !== null) { await own.write(journalPath(`@lens/${to}`), journal); await own.remove(journalPath(`@lens/${lens}`)); }
+        await this.writeLens(to, text, who, asked);
+        await own.remove(`${LENSES_DIR}/${lens}.toml`);
+        return { name: to, said: `Renamed the lens ${lens} to ${to}.` };
+      }
+      const added = edit.action === "add_notes" || edit.action === "add_island" ? (edit.notes ?? []) : [];
+      const ids = added.map((raw) => this.itemOf(raw));
+      const missing = added.filter((_, k) => ids[k] === null);
+      if (missing.length) throw new EngineError(`not in the base: ${missing.join(", ")}`, 404);
+      const form = (id: string) => (this.bundle.concepts.has(id) ? `/${id}.md` : `/${id}`);
+      const written = edit.action === "add_notes" || edit.action === "add_island" ? { ...edit, notes: ids.map((id) => form(id!)) } : edit;
+      let r: { text: string; said: string };
+      try { r = editLens(text, written as LensEdit, this.baseHidden); } catch (e) { if (e instanceof LensEditError) throw new EngineError(e.message, e.status); throw e; }
+      if (r.text !== text) await this.writeLens(lens, r.text, who, asked);
+      return { name: lens, said: r.said };
+    });
+    await this.readLenses();
+    this.publish({ type: "lenses" });
+    if (edit.action === "create" && done.name === LEARNING_LENS) this.publish({ type: "hidden" });
+    return done;
+  }
+
+  /** A note's id, or a file's path, from what a person or an agent writes for one; null where the base has neither. */
+  private itemOf(raw: string): string | null {
+    const id = noteId(this.bundle, raw);
+    if (id) return id;
+    const path = raw.trim().replace(/^.*\]\(/, "").replace(/\)$/, "").replace(/^\/+/, "");
+    return this.bundle.files.has(path) ? path : null;
   }
 
   /** `make`'s answer for this revision, worked out once however many ask. */
@@ -416,14 +543,21 @@ export class Engine implements Api {
   }
   /** What is hidden: one id a line in `.isorite/hidden.txt`, so that two people hiding different things merge in git (the
    *  lines are put together); the list in the settings, where it was first kept, is read too. */
-  async hidden(): Promise<{ ids: string[] }> {
+  async hidden(lens?: string): Promise<{ ids: string[]; own?: boolean }> {
+    if (lens && lens !== FOLDERS_LENS) { const l = await this.lens(lens); return { ids: l.hidden, own: l.ownHidden }; }
     const tidy = (x: string): string => x.trim().replace(/^\/+|\/+$/g, "");
     const lines = ((await this.opts.own.read(HIDDEN_FILE)) ?? "").split("\n").map(tidy).filter((l) => l && !/^(<<<<<<<|=======|>>>>>>>)/.test(l));
     return { ids: [...new Set([...lines, ...((await this.settingsOfBase()).hidden ?? []).map(tidy)])].filter(Boolean).sort() };
   }
-  async setHidden(ids: string[]): Promise<void> {
+  async setHidden(ids: string[], lens?: string): Promise<void> {
+    if (lens && lens !== FOLDERS_LENS) { await this.editLens(lens, { action: "set_hidden", ids }); return; }
+    await this.one(() => this.setHiddenNow(ids));
+    this.publish({ type: "hidden" });
+  }
+  /** The base's hidden list written, inside a write already queued. */
+  private async setHiddenNow(ids: string[]): Promise<void> {
     const clean = [...new Set(ids.map((x) => x.trim().replace(/^\/+|\/+$/g, "")).filter(Boolean))].sort();
-    await this.one(async () => {
+    {
       const own = this.opts.own, had = await own.read(HIDDEN_FILE) !== null;
       if (clean.length || had) await own.write(HIDDEN_FILE, clean.length ? `${clean.join("\n")}\n` : "");
       // Moved out of the settings, where it was first kept.
@@ -434,8 +568,7 @@ export class Engine implements Api {
         const attrs = (await own.read(".gitattributes")) ?? "";
         if (!attrs.split("\n").some((l) => l.trim().startsWith(`${HIDDEN_FILE} `))) await own.write(".gitattributes", `${attrs}${attrs && !attrs.endsWith("\n") ? "\n" : ""}${GITATTRIBUTES.split("\n").find((l) => l.startsWith(HIDDEN_FILE))}\n`);
       }
-    });
-    this.publish({ type: "hidden" });
+    }
   }
   private async agentMayWrite(): Promise<void> {
     if (!(await this.agentNotes()).may) throw new EngineError(REFUSED_NOTES, 403);
@@ -547,14 +680,17 @@ export class Engine implements Api {
     if (!was || was.entry < entry) moves.set(from, { to, entry });
   }
 
-  async search(query: string): Promise<SearchHit[]> {
-    return this.indexFor(this.bundle).search(query, { limit: 30 }).map((h) => ({ id: h.concept.id, title: h.concept.title, snippet: h.snippet }));
+  async search(query: string, scope: SearchScope = {}): Promise<SearchHit[]> {
+    await this.revision();
+    const { only, lens } = this.scopeOf(scope);
+    return this.indexFor(this.bundle).search(query, { limit: 30, ...(only ? { only } : {}) }).map((h) => this.annotate({ id: h.concept.id, title: h.concept.title, snippet: h.snippet }, lens));
   }
 
-  async find(query: string): Promise<FindResult> {
+  async find(query: string, scope: SearchScope = {}): Promise<FindResult> {
     const q = query.trim();
     if (!q) return { hits: [], meaning: this.similar ? "on" : "off" };
-    const words = await this.search(q);
+    const words = await this.search(q, scope);
+    const { only, lens } = this.scopeOf(scope);
     const out = new Map<string, FindHit>(words.map((h) => [h.id, { ...h, by: "words" as const }]));
     let state: FindResult["meaning"] = "off";
     const similar = this.similar;
@@ -564,10 +700,10 @@ export class Engine implements Api {
         state = m.ready ? "on" : "pending";
         const top = m.hits[0]?.score ?? 0;
         for (const h of m.hits) {
-          if (h.score < 0.25 || h.score < top - 0.12) continue;
+          if (h.score < 0.25 || h.score < top - 0.12 || (only && !only.has(h.note))) continue;
           const kept = out.get(h.note);
           if (kept) kept.by = "both";
-          else out.set(h.note, { id: h.note, title: this.bundle.concepts.get(h.note)?.title ?? h.note, snippet: h.heading, by: "meaning" });
+          else out.set(h.note, this.annotate({ id: h.note, title: this.bundle.concepts.get(h.note)?.title ?? h.note, snippet: h.heading, by: "meaning" as const }, lens));
         }
       } catch { state = "pending"; }
     }
@@ -580,7 +716,7 @@ export class Engine implements Api {
   async agentTools(): Promise<ToolDef[]> {
     await this.revision();
     const lensed = this.lensFiles.size > 0, search = lensed ? withLensArgs(TOOLS[0]!) : TOOLS[0]!;
-    const tools = [BRIEF, search, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1), ...(lensed ? [READ_LENS] : []), EDIT_NOTE, WRITE_NOTE, ASK_QUESTION, OFFER_TEXT, READ_DATA, ARTIFACT_RECIPE, WRITE_ARTIFACT, READ_ARTIFACT];
+    const tools = [BRIEF, search, ...(this.similar ? [FIND_SIMILAR] : []), ...TOOLS.slice(1), ...(lensed ? [READ_LENS] : []), EDIT_NOTE, WRITE_NOTE, EDIT_LENS, ASK_QUESTION, OFFER_TEXT, READ_DATA, ARTIFACT_RECIPE, WRITE_ARTIFACT, READ_ARTIFACT];
     // While a server holds other bases, every tool takes one (M20); which are lent is asked at each call.
     return this.opts.elsewhere ? withBase(tools, this.lent().map((l) => l.name), true) : tools;
   }
@@ -622,6 +758,7 @@ export class Engine implements Api {
       return { text: `(/${was}.md moved to /${moved}.md)\n${done.text}` };
     }
     if (tool === READ_LENS.function.name) return { text: this.readLens(args) };
+    if (tool === EDIT_LENS.function.name) return { text: await this.agentEditLens(agent, args, asked) };
     if (tool === BRIEF.function.name) {
       const lent = this.lent();
       const agents = (await this.agentsFile())?.trim();
@@ -797,7 +934,7 @@ export class Engine implements Api {
 
   /** A turn is looked up in the base as it is when the turn begins, as the agent's requests are. */
   private startTurn(agent: string, session: string): { request: string; lookup: Lookup } {
-    const turn = { request: `agent:${agent}:${++this.turnCount}`, lookup: new Lookup(this.bundle, "", this.similar, null, (b) => this.indexFor(b), (n) => this.lensNow(n)) };
+    const turn = { request: `agent:${agent}:${++this.turnCount}`, lookup: new Lookup(this.bundle, "", this.similar, null, (b) => this.indexFor(b), (n) => this.lensNow(n), (id, inLens) => this.placeNote(id, inLens)) };
     this.turns.set(`${agent}/${session}`, turn);
     this.publish({ type: "agent-start", request: turn.request, agent, session });
     return turn;
@@ -812,14 +949,15 @@ export class Engine implements Api {
     if (!lens) return `There is no lens ${name}. ${[...this.lensFiles.keys()].join(", ") || "This base has none"}.`;
     const only = typeof args.island === "string" && args.island ? islandNotes(lens, args.island) : null;
     if (typeof args.island === "string" && args.island && !only) return `There is no island ${args.island} in ${name}.`;
-    const line = (id: string) => `- ${this.bundle.concepts.get(id)?.title ?? id} (/${id}.md)`;
+    const line = (id: string) => { const c = this.bundle.concepts.get(id); return c ? `- ${c.title} (/${id}.md)` : `- /${id}`; };
     const out: string[] = [`# ${lens.title} (lens ${lens.name}): the notes in the order the lens gives them`];
     const titleOf = (ref: string) => (ref === ":" ? ELSEWHERE_TITLE : allIslands(lens).find((i) => i.ref === ref)?.title ?? ref);
     const walk = (i: ResolvedIsland, depth: number) => {
       const mine = [...i.notes, ...i.ghosts].filter((id) => !only || only.has(id));
       const kids = i.islands.length;
       if (only && !mine.length && !kids) return;
-      out.push(`${"#".repeat(Math.min(depth + 1, 6))} ${i.title}`);
+      // The name too where the title differs: edit_lens names an island by it.
+      out.push(`${"#".repeat(Math.min(depth + 1, 6))} ${i.title}${i.title === i.name ? "" : ` (${i.name})`}`);
       for (const id of i.notes) if (!only || only.has(id)) out.push(line(id));
       for (const id of i.ghosts) if (!only || only.has(id)) out.push(`${line(id)} (at home in ${titleOf(lens.home[id]!)})`);
       for (const id of i.gone) out.push(`- ${id} (not in the base)`);
@@ -827,7 +965,29 @@ export class Engine implements Api {
     };
     for (const i of lens.islands) walk(i, 2);
     if (lens.elsewhere.length && (!only || lens.elsewhere.some((id) => only.has(id)))) { out.push(`## ${ELSEWHERE_TITLE}`); for (const id of lens.elsewhere) if (!only || only.has(id)) out.push(line(id)); }
+    if (!only && lens.hidden.length) out.push(`Hidden in this lens${lens.ownHidden ? "" : " (as in the base)"}: ${lens.hidden.slice(0, 30).map((h) => `/${h}`).join(", ")}${lens.hidden.length > 30 ? `, and ${lens.hidden.length - 30} more` : ""}`);
     return out.join("\n");
+  }
+
+  /** edit_lens: an agent's change to a lens, refused where agents may not change the notes, and journalled under its name. */
+  private async agentEditLens(agent: string, args: Record<string, unknown>, asked: string): Promise<string> {
+    await this.agentMayWrite();
+    const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+    const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : typeof v === "string" && v ? [v] : []);
+    const lens = str(args.lens), action = str(args.action), island = str(args.island), title = str(args.title), given = [...strs(args.notes), ...strs(args.match)];
+    // A rule has a colon after its key, which no note's id has: given among the notes, it goes to the island's rules.
+    const isRule = (x: string) => /^-?\s*[a-z-]+:/i.test(x.trim()), notes = given.filter((x) => !isRule(x)), match = given.filter(isRule);
+    const need = (what: string, v: string) => { if (!v) throw new EngineError(`edit_lens ${action} needs ${what}`, 400); return v; };
+    const edit: LensChange | null = action === "create" ? { action, ...(title ? { title } : {}) }
+      : action === "title" ? { action, title: need("title", title), ...(island ? { island } : {}) }
+      : action === "add_island" ? { action, island: need("island", island), ...(title ? { title } : {}), notes, match }
+      : action === "remove_island" ? { action, island: need("island", island) }
+      : action === "add_notes" || action === "remove_notes" ? { action, island: need("island", island), notes, match }
+      : action === "hide" || action === "unhide" ? { action, ids: notes }
+      : null;
+    if (!lens) throw new EngineError("edit_lens needs the lens's name", 400);
+    if (!edit) throw new EngineError(`there is no action ${action}: create, title, add_island, remove_island, add_notes, remove_notes, hide, unhide`, 400);
+    return (await this.editLens(lens, edit, `agent:${agent}`, asked || undefined)).said;
   }
 
   private brief(): string {

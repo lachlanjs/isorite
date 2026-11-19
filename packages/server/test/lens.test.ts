@@ -67,3 +67,42 @@ test("the lens over HTTP, and read_lens through the agent's route", async () => 
     expect(((await look.json()) as { text: string }).text).toContain("## Start\n- One (/a/one.md)\n- Two (/a/two.md)\n## Elsewhere\n- Three (/a/three.md)");
   } finally { server.close(); }
 });
+
+test("check: a note the base hides is not counted in no island, and a file a lens lists by path is found", () => {
+  const dir = base("hidden");
+  writeFileSync(join(dir, ".isorite", "hidden.txt"), "a/three\n");
+  mkdirSync(join(dir, "pics"));
+  writeFileSync(join(dir, "pics", "p.png"), "");
+  writeFileSync(join(dir, ".isorite", "lenses", "path.toml"), LENS.replace('"/a/two.md"]', '"/a/two.md", "/pics/p.png"]'));
+  const lines: string[] = [];
+  expect(check(dir, (l) => lines.push(l))).toBe(0);
+  expect(lines.join("\n")).not.toMatch(/in no island/);
+  expect(lines.join("\n")).not.toMatch(/not in the base/);
+});
+
+test("a lens changed over HTTP, hidden in it alone, and searched in; a write needs the page's token", async () => {
+  const dir = base("edit");
+  const api = await openEngine(locate(dir), "dev", null);
+  const server = nodeServe({ fetch: createApp({ api, token: "t", loopback: true, web: join(root, "none") }).fetch, hostname: "127.0.0.1", port: 0 });
+  await new Promise((done) => server.once("listening", done));
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const send = (path: string, body: unknown, token = "t") => fetch(`${url}${path}`, { method: "POST", headers: { Origin: url, "Content-Type": "application/json", "x-isorite-token": token }, body: JSON.stringify(body) });
+  try {
+    expect((await send("/api/lens/edit", { name: "path", change: { action: "title", title: "x" } }, "wrong")).status).toBe(403);
+    expect(await (await send("/api/lens/edit", { name: "tour", change: { action: "create", title: "Tour" } })).json()).toEqual({ name: "tour", said: "Made the lens tour." });
+    expect((await send("/api/lens/edit", { name: "tour", change: { action: "add_island", island: "first", notes: ["/a/three.md"] } })).status).toBe(200);
+    expect((await send("/api/lens/edit", { name: "tour", change: { action: "fly" } })).status).toBe(400);
+    expect((await send("/api/lens/edit", { name: "nope", change: { action: "delete" } })).status).toBe(404);
+    expect(await (await fetch(`${url}/api/lens?name=tour`)).json()).toMatchObject({ islands: [{ name: "first", notes: ["a/three"] }] });
+    expect((await send("/api/hidden", { ids: ["a/one"], lens: "path" })).status).toBe(200);
+    expect(await (await fetch(`${url}/api/hidden?lens=path`)).json()).toEqual({ ids: ["a/one"], own: true });
+    expect(await (await fetch(`${url}/api/hidden`)).json()).toEqual({ ids: [] });
+    const hits = await (await fetch(`${url}/api/search?q=body&lens=path`)).json() as { id: string }[];
+    expect(hits.map((h) => h.id)).toEqual(["a/two"]);
+    const wide = await (await fetch(`${url}/api/search?q=body&lens=path&all=1`)).json() as { id: string; hidden?: true; lenses?: unknown }[];
+    expect(wide.find((h) => h.id === "a/one")).toMatchObject({ hidden: true });
+    expect(wide.find((h) => h.id === "a/three")).toMatchObject({ lenses: [{ lens: "tour", island: "first" }] });
+    expect((await fetch(`${url}/api/search?q=body&lens=nope`)).status).toBe(404);
+    expect((await (await fetch(`${url}/api/find?q=body&lens=tour`)).json() as { hits: { id: string }[] }).hits.map((h) => h.id)).toEqual(["a/three"]);
+  } finally { server.close(); }
+});

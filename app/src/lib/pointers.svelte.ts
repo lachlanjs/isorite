@@ -6,6 +6,7 @@ import { app, codeHref } from "./app.svelte.ts";
 import { panes } from "./panes.svelte.ts";
 import { pointing } from "./pointing.svelte.ts";
 import { COUNT, expand, relocate, used, whole, type Pointer } from "./pointers.ts";
+import { revealPassage } from "./reveal.ts";
 
 class Pointers {
   readonly #all = new Map<number, Pointer>();
@@ -35,13 +36,41 @@ class Pointers {
     this.put(this.make({ kind, ref, title, from: 0, to: 0, text: "" }));
     return true;
   }
-  /** Pressed, not carried: what it points to is shown (a note opens where the pointer was taken, the Atlas follows it). */
-  async open(p: Pointer): Promise<void> {
-    if (p.kind === "note") await panes.open(p.ref, true);
+  /** Where a pointer pressed is to be shown, for the page that opens it to take (a note's editor, a code file's lines):
+   *  its place and words as they were taken; the page finds them again in the file as it is now. `n` tells one press from the next. */
+  shown = $state.raw<(Omit<Pointer, "id" | "title"> & { n: number }) | null>(null);
+  #pressed = 0;
+
+  /** Pressed, not carried: where it came from is shown. A note or file opens at its lines, which are lit (where the words
+   *  are now, if they have moved); a note moved since opens where it is now; a passage of the conversation is scrolled to
+   *  and lit, looked for before `turn` when the pointer is in a sent one. Whether it was found. */
+  async open(p: Omit<Pointer, "id" | "title">, turn: Element | null = null): Promise<boolean> {
+    if (p.kind === "turn") return revealPassage(p.text, turn);
+    if (p.kind === "folder") { pointing.set("agent", { id: p.ref, folder: true, who: "you" }); return true; }
+    const lines = !whole(p) && p.from > 0;
+    if (p.kind === "note") {
+      let id = p.ref;
+      // Moved since it was pointed to: the journal says where it is now (the note's page would say so too, but too late
+      // for its lines to be lit).
+      if (app.listing.notes.length && !app.listing.notes.some((n) => n.id === id)) {
+        try { const w = await app.api.resolveNote(id); if (w.state === "moved" && w.id) id = w.id; } catch { /* opened where it was, and the page says what it can */ }
+      }
+      if (lines) this.shown = { ...p, ref: id, n: ++this.#pressed };
+      await panes.open(id, true);
+      return true;
+    }
     // A code file of the base is named by its path in the base ("/src/a.py"), one of the repository without the slash.
-    else if (p.kind === "code" && p.ref.startsWith("/")) await panes.open(p.ref.slice(1), true);
-    else if (p.kind === "code") { await goto(codeHref(p.ref)); if (panes.narrow) panes.to("note"); }
-    else if (p.kind === "folder") pointing.set("agent", { id: p.ref, folder: true, who: "you" });
+    if (p.ref.startsWith("/")) {
+      if (lines) this.shown = { ...p, n: ++this.#pressed };
+      await panes.open(p.ref.slice(1), true);
+      return true;
+    }
+    // One of the repository: the code reader marks the lines its address names, so they are found again first.
+    let at = p;
+    if (lines) try { const slice = await app.api.code(`code:${p.ref}`, true); if (slice.state === "ok") at = relocate(slice.text, { ...p, id: -1, title: "" }); } catch { /* as they were */ }
+    await goto(codeHref(lines ? `code:${p.ref}#L${at.from}${at.to > at.from ? `-L${at.to}` : ""}` : `code:${p.ref}`));
+    if (panes.narrow) panes.to("note");
+    return true;
   }
 
   make(draft: Omit<Pointer, "id">): Pointer {

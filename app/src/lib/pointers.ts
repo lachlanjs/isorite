@@ -75,6 +75,19 @@ export function askedParts(asked: string): { body: string; notes: { n: number; w
   return notes.length ? { body: asked.slice(0, m.index), notes } : { body: asked, notes: [] };
 }
 
+/** What a sent footnote points at, read back from its place (`/a/b.md L7–9`, `src/x.py L2`, `/a/`, "the agent's
+ *  earlier answer") and its quoted words: so a pointer in a sent turn can be shown where it came from. */
+export function sourceOf(place: string, quote: string): Omit<Pointer, "id" | "title"> | null {
+  if (place === where({ kind: "turn" } as Pointer)) return { kind: "turn", ref: "", from: 0, to: 0, text: quote };
+  const m = /^(.+?)(?: L(\d+)(?:–(\d+))?)?( \(it may have moved\))?$/.exec(place);
+  if (!m) return null;
+  const path = m[1]!, from = m[2] ? Number(m[2]) : 0, to = m[3] ? Number(m[3]) : from;
+  const at = { from, to, text: quote };
+  if (path.startsWith("/") && path.endsWith(".md")) return { kind: "note", ref: path.slice(1, -3), ...at };
+  if (path.startsWith("/") && path.endsWith("/") && path.length > 1) return { kind: "folder", ref: path.slice(1, -1), ...at };
+  return from ? { kind: "code", ref: path, ...at } : null;
+}
+
 const lineOf = (file: string, at: number): number => { let n = 1; for (let i = file.indexOf("\n"); i !== -1 && i < at; i = file.indexOf("\n", i + 1)) n++; return n; };
 
 /** The pointer against the file as it is now: its lines as they were when its text is still there, else where the text is

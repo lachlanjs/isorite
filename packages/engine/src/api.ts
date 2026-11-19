@@ -2,7 +2,7 @@
 // interface and nothing else, so it does not know whether the engine is
 // behind HTTP (the server) or in the same process (a webview, later).
 
-import type { Anchor, Cost, Entry, FileKind, MapModel, Passage, ResolvedLens, SessionMoment } from "@isorite/core";
+import type { Anchor, Cost, Entry, FileKind, LensEdit, MapModel, Passage, ResolvedLens, SessionMoment } from "@isorite/core";
 import type { AgentEdit } from "./agent.ts";
 import type { Step, ToolDef } from "./lookup.ts";
 import type { Given, Turn, TurnItem } from "./turn.ts";
@@ -54,6 +54,14 @@ export interface Saved extends NoteSource {
 
 /** A lens as the list of them shows it: its file's name, title, how many islands, and how many errors the file has. */
 export interface LensSummary { name: string; title: string; islands: number; problems: number }
+/** A change to a lens (`editLens`): one of core's `LensEdit`s to its file, or the file itself made (`create`), removed or
+ *  renamed. */
+export type LensChange = LensEdit | { action: "create"; title?: string } | { action: "delete" } | { action: "rename"; to: string };
+/** Where a note is at home in a lens: the lens's name, and its island's path of names (`Combat > Weapons`). */
+export interface LensPlace { lens: string; island: string }
+/** What a search looks in: every note (the default), or what a lens shows in its islands (`lens`), or in one island of it
+ *  (`island`, Elsewhere too). `all` widens a lens's search to every note again, hidden ones marked as the lens hides them. */
+export interface SearchScope { lens?: string; island?: string; all?: boolean }
 
 /** The base as the Atlas draws it: what the layout takes, and what each block says, by the note's id. */
 export interface MapReport {
@@ -86,10 +94,14 @@ export interface SearchHit {
   id: string;
   title: string;
   snippet: string;
+  /** Where it is at home in each of the base's lenses that shows it; absent where none does. */
+  lenses?: LensPlace[];
+  /** Hidden in the lens searched (`SearchScope.lens`), or in the base where none is named. */
+  hidden?: boolean;
 }
 
 /** A note found for a few words (Ctrl+K): by the words in it, by its meaning, or both. Both first, then words, then meaning. */
-export interface FindHit { id: string; title: string; snippet: string; by: "words" | "meaning" | "both" }
+export interface FindHit extends SearchHit { by: "words" | "meaning" | "both" }
 export interface FindResult { hits: FindHit[]; /** Whether search by meaning took part: `off` where the device has none, `pending` while its vectors are made. */ meaning: "on" | "pending" | "off" }
 
 /** A conversation with the agent from before M25, as the pane draws it, to read. */
@@ -153,7 +165,7 @@ export type EngineEvent =
   | { type: "journal"; id: string; entry: Entry }
   /** What is hidden from the Atlas and the list changed. */
   | { type: "hidden" }
-  /** A lens file was rewritten by isorite (a note it names moved). */
+  /** A lens file was changed by isorite: a change to a lens, or a note it names moved. */
   | { type: "lenses" }
   /** A terminal agent (`agent` is its name, as `opencode`) began a turn in one of its sessions. Each turn ends in agent-done. */
   | { type: "agent-start"; request: string; agent: string; session: string }
@@ -256,12 +268,16 @@ export interface Api {
   restore(id: string, entry: string, base: string): Promise<Saved>;
   /** The moments of the last session across every note, in the order they began: the one going on, or the last ended. */
   timeline(): Promise<SessionMoment[]>;
-  search(query: string): Promise<SearchHit[]>;
+  /** The notes for some words, the best first: in every note, or narrowed to a lens or an island of one (`scope`). */
+  search(query: string, scope?: SearchScope): Promise<SearchHit[]>;
   /** The Atlas's map of the base. */
   map(): Promise<MapReport>;
   /** The lenses the base has (`.isorite/lenses/`), and one of them over the notes as they are: its islands, notes in order. */
   lenses(): Promise<LensSummary[]>;
   lens(name: string): Promise<ResolvedLens>;
+  /** Change a lens (`LensChange`), journalled under `who` (you, unless an agent's) with what was asked. `name` is the lens's
+   *  name after the change; `said` a line on what was done. A lens that is not there is a 404, a name taken a 409. */
+  editLens(name: string, change: LensChange, who?: string, asked?: string): Promise<{ name: string; said: string }>;
   /** A conversation with the agent from before M25, or the latest when none is named; null when there is none. */
   conversation(id?: string): Promise<Conversation | null>;
   /** Every conversation, the newest first (M24, K). */
@@ -279,10 +295,12 @@ export interface Api {
   agentSkillsOff(): Promise<{ off: string[] }>;
   setAgentSkillsOff(off: string[]): Promise<void>;
   /** The notes and folders kept off the Atlas and the list (by id), shared by everyone with the base. Agents still see them. */
-  hidden(): Promise<{ ids: string[] }>;
-  setHidden(ids: string[]): Promise<void>;
-  /** The notes for a few words, by the words and by meaning together (Ctrl+K). */
-  find(query: string): Promise<FindResult>;
+  hidden(lens?: string): Promise<{ ids: string[]; own?: boolean }>;
+  /** With a lens (not `folders`), the hidden list of that lens alone: written into its file. Without, the base's, which is
+   *  also every lens's that has no list of its own. `own` says whether a lens has its own. */
+  setHidden(ids: string[], lens?: string): Promise<void>;
+  /** The notes for a few words, by the words and by meaning together (Ctrl+K), scoped as `search` is. */
+  find(query: string, scope?: SearchScope): Promise<FindResult>;
   /** Code links broken since an agent was last told; each is told once (Q27). */
   brokenNews(): Promise<{ id: string; title: string; href: string }[]>;
   /** The tools an agent is offered over the base (isorite's MCP): a brief of it, the look-ups, changing a note,

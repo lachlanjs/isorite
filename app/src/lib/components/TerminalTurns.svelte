@@ -24,6 +24,8 @@
   import { foldAway } from "$lib/motion.ts";
   import { panes } from "$lib/panes.svelte.ts";
   import { pointedBy, pointing } from "$lib/pointing.svelte.ts";
+  import { sourceOf } from "$lib/pointers.ts";
+  import { pointers } from "$lib/pointers.svelte.ts";
   import { NOTE_CHANGES, askedOf, bareTool as bare, changedIn, failure, plainAsked, terminal } from "$lib/terminal.svelte.ts";
 
   let list = $state<HTMLElement>();
@@ -34,16 +36,16 @@
   // ------------------------------------------------------------ what a tool is
 
   const KIND: Record<string, Kind> = { read_note: "read", outline_note: "outline", search_notes: "search", find_similar: "search", brief_base: "brief", edit_note: "edit", write_note: "write",
-    read: "file", ls: "file", glob: "search", grep: "search", find: "search", edit: "edit", write: "write", bash: "run", shell: "run", execute: "run", webfetch: "web", websearch: "web", read_data: "file", read_artifact: "file", write_artifact: "write", artifact_recipe: "brief" };
+    read: "file", ls: "file", glob: "search", grep: "search", find: "search", edit: "edit", write: "write", bash: "run", shell: "run", execute: "run", webfetch: "web", websearch: "web", read_data: "file", read_artifact: "file", write_artifact: "write", artifact_recipe: "brief", read_lens: "brief", edit_lens: "edit" };
   const kindOf = (name: string): Kind => KIND[bare(name)] ?? "other";
   /** What a tool did, in a word: said by the row's name and tooltip, not printed. */
   const VERB: Record<string, string> = { shell: "Ran", bash: "Ran", execute: "Ran", read: "Read", ls: "Listed", write: "Wrote", edit: "Edited", glob: "Found", grep: "Searched", find: "Found", webfetch: "Fetched", websearch: "Searched the web",
-    search_notes: "Searched", find_similar: "Looked by meaning for", outline_note: "Outlined", read_note: "Read", brief_base: "Looked over the base", edit_note: "Changed", write_note: "Wrote", read_data: "Read", read_artifact: "Read", write_artifact: "Wrote", artifact_recipe: "Read the recipe" };
+    search_notes: "Searched", find_similar: "Looked by meaning for", outline_note: "Outlined", read_note: "Read", brief_base: "Looked over the base", edit_note: "Changed", write_note: "Wrote", read_data: "Read", read_artifact: "Read", write_artifact: "Wrote", artifact_recipe: "Read the recipe", read_lens: "Read the lens", edit_lens: "Changed the lens" };
   const verb = (name: string): string => VERB[bare(name)] ?? bare(name).replaceAll("_", " ");
   /** What a tool is doing while it runs, as the line under the turn says it. */
   const DOING: Record<string, string> = { shell: "Running", bash: "Running", execute: "Running", read: "Reading", write: "Writing", edit: "Editing", glob: "Finding files", grep: "Searching", find: "Finding files", ls: "Listing",
     webfetch: "Fetching", websearch: "Searching the web", search_notes: "Searching for", find_similar: "Looking by meaning for", outline_note: "Outlining", read_note: "Reading",
-    brief_base: "Looking over the base", edit_note: "Changing", write_note: "Writing", ask_question: "Asking a question", offer_text: "Offering words" };
+    brief_base: "Looking over the base", edit_note: "Changing", write_note: "Writing", ask_question: "Asking a question", offer_text: "Offering words", read_lens: "Reading the lens", edit_lens: "Changing the lens" };
   /** The tools that look and change nothing: a run of them folds into one row. */
   const LOOKS = new Set<Kind>(["read", "outline", "search", "brief", "file", "web"]);
 
@@ -305,7 +307,7 @@
   // ------------------------------------------------------------ the person's prompt
 
   /** What was asked, for showing: the handoff's preamble gone, and each footnote mark a pointer chip where it stood. */
-  type Piece = { text: string } | { n: number; where: string; quote: string; id: string | null; chip: string };
+  type Piece = { text: string } | { n: number; where: string; quote: string; id: string | null; chip: string; src: ReturnType<typeof sourceOf> };
   /** What was asked, as Markdown: rendered as the agent's replies are (maths, code, lists, links), by render(), whose
    *  markdown-it takes no HTML and whose output is sanitised, so nothing typed is ever read as markup. Each pointer
    *  stands in it as a private-use mark while it is rendered, and chipsIn puts its chip back in that place. */
@@ -327,20 +329,24 @@
     put(ps);
     return { update: put };
   }
-  /** A pointer's chip in what was asked: where it points, said on it; pressed, its note opens. */
+  /** A pointer's chip in what was asked: where it points, said on it; pressed, where it came from is shown (pointers.open). */
+  const sources = new WeakMap<HTMLElement, NonNullable<ReturnType<typeof sourceOf>>>();
   function chipEl(p: Exclude<Piece, { text: string }>): HTMLElement {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "pt ref";
     if (p.id) b.dataset.to = p.id;
+    if (p.src) sources.set(b, p.src);
     b.title = `${p.where}${p.quote ? `\n${p.quote}` : ""}`;
     b.innerHTML = '<span class="pt-face"><svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 6h6.5M6 3l3 3-3 3" /></svg><span class="pt-text"></span></span>';
     b.querySelector(".pt-text")!.textContent = p.chip;
     return b;
   }
   function chipClicked(e: MouseEvent): void {
-    const to = e.target instanceof Element ? e.target.closest<HTMLElement>(".pt.ref")?.dataset.to : undefined;
-    if (to) void panes.open(to, true);
+    const chip = e.target instanceof Element ? e.target.closest<HTMLElement>(".pt.ref") : null, src = chip ? sources.get(chip) : undefined;
+    if (!chip || !src) return;
+    // A passage of the conversation not found again (the session compacted, say): the chip says so, quietly.
+    void pointers.open(src, chip.closest(".turn")).then((found) => { chip.classList.toggle("pt-gone", !found); if (!found) chip.title = `${chip.title.split("\n")[0]}: not in this session any more`; });
   }
   function pieces(asked: string): Piece[] {
     const a = askedOf(asked);
@@ -351,7 +357,7 @@
       const note = /^\/(.+)\.md(?: L(\d+(?:–\d+)?))?/.exec(r.where), code = /^(\S+) L(\d+(?:–\d+)?)/.exec(r.where);
       const short = (t: string): string => (t.length > 16 ? `${t.slice(0, 15).trimEnd()}…` : t);
       const chip = note ? `${short(titleOf(note[1]!))}${note[2] ? ` · ${note[2]}` : ""}` : code ? `${short(code[1]!.split("/").at(-1)!)} · ${code[2]}` : /answer/.test(r.where) ? "the answer" : short(r.where.replace(/^\/|\/$/g, ""));
-      return { n: r.n, where: r.where, quote: r.quote, id: note ? note[1]! : null, chip };
+      return { n: r.n, where: r.where, quote: r.quote, id: note ? note[1]! : null, chip, src: sourceOf(r.where, r.quote) };
     });
   }
 </script>

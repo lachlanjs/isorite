@@ -10,6 +10,8 @@
 //   write <note id> <title>     write_note: a new note with that title
 //   ask <note id> <title>       ask_question about the note
 //   offer <note id> <text>      offer_text for the note
+//   lens <name> <action> [json] edit_lens: the action, with the JSON's fields ({"island":"a","notes":["/b.md"]})
+//   readlens [name]             read_lens
 //   file <path>                 read a file of the project (pi's read)
 //   run <command>               bash (refused by the loop where the pane's Run is off: the tool is not there)
 //   skill <name> [path]         use_skill: a skill's instructions, or a file it holds
@@ -52,6 +54,8 @@ export function parse(text: string): Script {
     else if (verb === "write" && id) step("write_note", { note: id, content: `---\ntype: Concept\ntitle: ${tail || id.split("/").at(-1)}\n---\n\nWritten by the agent.\n` });
     else if (verb === "ask" && id) step("ask_question", { title: tail || "Why does it drift?", text: "", about: [id] });
     else if (verb === "offer" && id) step("offer_text", { id, text: tail });
+    else if (verb === "lens" && id && more[0]) { let fields: Record<string, unknown> = {}; try { fields = JSON.parse(more.slice(1).join(" ") || "{}") as Record<string, unknown>; } catch { /* none */ } step("edit_lens", { lens: id, action: more[0], ...fields }); }
+    else if (verb === "readlens") step("read_lens", arg ? { name: arg } : {});
     else if (verb === "file" && arg) step("read", { path: arg });
     else if (verb === "run" && arg) step("bash", { command: arg });
     else if (verb === "skill" && id) step("use_skill", { name: id, ...(tail ? { path: tail } : {}) });

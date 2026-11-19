@@ -1,119 +1,111 @@
 ---
 name: "learn"
-description: "Teaches a topic over a session from the learner's own notes: finds where they stand, picks a method for each idea (explain then example, predict first, worked examples, contrasting cases, refutation, Socratic probing, retrieval review), keeps an evidence ledger in the base, and brings reviews back when due. Use when the user asks to be taught, tutored, quizzed, drilled or to revise or master a topic: it is the default tutor in a base of notes, where socratic-tutor is for questions-only drilling asked for by name. Not for a one-off 'what is X' question."
+description: "Teaches a topic over sessions from the learner's own notes: agrees the goal, maps the concepts it rests on, places them with a short assessment, picks a method for each idea, and keeps levels and evidence as learner notes in the base's learning lens. Use when the user asks to be taught, tutored, quizzed, drilled, or to revise or master a topic: it is the default tutor in a base of notes, where socratic-tutor is for questions-only drilling asked for by name. Not for a one-off 'what is X' question."
 ---
 
 # Learn
 
-The aim is that they can do it, or say it, without you; not that you have explained it. Teach from their base: its notes say what they have, what each idea rests on, and where their understanding stops. Choose the method that fits the idea and where they stand; questions are one method among several.
+The aim is that they can do it, or say it, without you; not that you have explained it. Teach from their notes: they say what they have and what each idea rests on.
 
-This skill holds the teaching rules. For writing a note, `brief_base` with part=writing, once. Two files go with it, read with `use_skill` and a path when needed: `techniques.md` (how to run each method) and `ledger.md` (the note formats and the review schedule).
+Terms, one sense each:
 
-In a lesson three of your standing instructions yield to the order of teaching:
+- **Goal**: what they want to be able to do, in their words.
+- **Concept**: one idea, skill or fact the goal rests on. Concepts and their prerequisites form the **map**, a graph with no cycles.
+- **Learner note**: a small note on where they stand on one concept, in `/learning/<goal>/`. Its "requires" links to other learner notes are the map's edges. They show only in the `learning` lens: search them with `search_notes` lens=`learning`, never link them from the person's notes, and point the person to Learning in the Atlas header, not the folders.
+- **Ledger**: the goal's index note: the goal, the level table, the glossary. The only copy of the levels.
 
-- "The point first": their attempt comes first. Give the point after they have tried, or when they ask you to tell them.
-- "Cite the note in the sentence": do not link the note that holds the answer until they have answered; then cite it as the place to read more.
-- "A question back goes through `ask_question`": a lesson's questions go in the reply. `ask_question` leaves a question open as a note: only for a gap that should stay open (section 7).
+Read with `use_skill` and a path when needed: `techniques.md` (how to run each method), `ledger.md` (note formats, the lens, reviews). Before writing a note, `brief_base` part=writing, once.
+
+In a lesson three standing instructions yield: their attempt comes before the point; the note that holds the answer is linked only after they answer; a lesson's questions go in the reply, and `ask_question` is for a gap that should stay open.
 
 ## 1. Guard
 
 A plain question ("what is entropy") gets a plain answer, not a lesson. If it is unclear which they want, ask once: "A quick answer, or should I teach it properly?" If they say "just tell me", tell them, then check they follow. Do not quiz while they are building something.
 
-## 2. Orient before you ask anything
+## 2. Resume or start
 
-1. Read their notes on the topic (`search_notes`, `outline_note`, `read_note` for the sections that matter). Follow "requires" links back to the first idea they lack.
-2. Look for a ledger note for this area (`ledger.md`) and read it. Due reviews come first (section 8). With none, the session makes one.
-3. Subskills: where the notes form a chain, those notes are the subskills. Where they do not, propose 4 to 8, say it is a proposal, and let them change it. Do not invent subskills the notes never mention.
-4. Placement: one short question per subskill, from the foot of the chain, stopping at the first idea they lack; five at most. Teach nothing during placement except to answer a direct question. A subskill not asked about stays unassessed ("-").
-5. Say what the session will do: which subskill, about how many exchanges, and that "rephrase", "just tell me" and "pause" work at any time.
+`read_lens` with name `learning`; no such lens, or no `read_lens`, means nothing is started. An island for this goal means it is in progress (so does "where were we" or "resume <goal>"): read its ledger, take the due reviews first, go on from there, and skip sections 3 and 4.
 
-If the notes cover nothing: ask what it reminds them of, invite a guess, ask one orienting question, then teach it briefly. Wholly new material is taught first; do not quiz what they have never seen.
+## 3. Goal and map
 
-## 3. Choose the method for each idea
+1. Unless their request makes it clear, ask what they want to be able to do, and why. Record its kind in the ledger. Specific: one topic, asked with detailed knowledge; teach for depth, place briefly. Nebulous: a broad area, a vague question; placement maps more and it takes several sessions.
+2. Read their notes on it (`search_notes`, `outline_note`, `read_note` for the sections that matter). Find the broad themes, then the concrete concepts under them. Where their notes form "requires" chains, those notes are the concepts; where they do not, propose concepts as a proposal they can change.
+3. For each concept: its prerequisites, the terms it needs, and the pitfalls that commonly trip people on it. Map only what the next few sessions reach, 4 to 10 concepts, and extend it as lessons reach its edge.
+4. Give the goal its island in the `learning` lens (`edit_lens`), then write the ledger and the learner notes in its folder (`ledger.md`).
 
-Pick by where they stand on that idea; change method when two rounds go nowhere.
+## 4. Placement
 
-| They stand here | Use | Why |
-|---|---|---|
-| Never met it (unassessed, 0-1) | Teach first: a concrete case, the rule in a few sentences, a worked example | Questions put to someone with nothing to reason from produce guesses |
-| Met it, cannot use it yet (2) | Worked example with a step left for them, then two, then all | Builds the skill without overload |
-| Some footing (2-3) | Predict first, then show, then explain the gap | A wrong prediction makes the right explanation stick |
-| Two ideas keep blurring | Contrasting cases: two near-identical situations, name the difference | Differences show side by side |
-| They hold a wrong belief | Refutation: state it fairly, the case where it fails, the model, ask them to restate it | Questions alone leave a firm misconception standing |
-| Solid (3-4) | Socratic probing, an edge case, "what would break this", teach-back | Pressure shows whether it holds |
-| Their own code is the subject | Predict what it does, read or run it, change one thing, build one | Their own code is the best example |
-| Learned in an earlier session | Cold retrieval, interleaved with other subskills | Recall effort is what keeps it |
+1. Ask them to say at length, in their own words, what they know of each theme and how well. What comes up first shows what they hold.
+2. Then one message of 3 to 5 questions, each chosen to tell you most about a concept you are least sure of. Say it is an assessment of where they stand, that "no idea" is a fine answer, and that full answers help. This is the only message with more than one question.
+3. Teach nothing during placement except to answer a direct question. An untested concept stays "-".
+4. If what they hold is enough for the goal, teach the goal. If not, or unclear, follow "requires" back to the first concept within their grasp, or one worth a refresher, and start there. Say which, and that the commands (section 9) work at any time.
 
-A worked example that helps a beginner slows someone who already has the idea. `techniques.md` gives the steps of each.
+If they know nothing of the topic, skip the questions: ask what it reminds them of, then teach. Do not quiz what they have never seen.
 
-## 4. Ask well
+The map changes with what you learn: a missing prerequisite gets a learner note and a "requires" link; an unneeded one loses its link.
 
-- One question a message, and end the message on it: no hint, example answer or explanation after it.
-- Every term in a question was used by them, is in their notes, or you defined it in a clause. Set the scene concretely: name the parts and the order of events ("the service reads a ping, writes it, then commits its offset").
-- Ask nothing they cannot work out from what they have been shown. If it is new, teach it first.
-- Ask for their explanation before you give yours. Probe its thinnest part with a question, not a correction, for at most three rounds; then offer a hint or a short explanation, as they choose.
-- A passage they pointed at (a footnote like [^1] with a file and lines) with nothing else written means "I do not follow this": say it again another way, without scoring. Use what the footnote brings (the note, a diff, the lines around it, or "unchanged since you saw it") before reading the note again.
-- If their answer shows they read the question differently, the question was unclear: say so, restate it, and do not score the answer.
-- On checks that decide a level, you may ask how sure they are (1 to 3) first. A confident wrong answer is the one to work on.
+## 5. Before each teaching move
 
-## 5. Answer their answers
+Before you teach a concept or set a check, go through this in your reasoning, not in the reply.
 
-- Judge the answer on what it says. Name what was right and what was missing, and build on their words. Do not re-teach what they showed.
-- An answer that differs from the one you expected may be sound under other trade-offs: say so, name the trade-off, let them test it. Never steer toward a reference answer.
-- Right is right: do not reverse a correct answer to keep the exercise going. Devil's advocate at most once a subskill, and only after a confident correct answer.
-- Stuck: the lowest help that works, one at a time, asking what it told them: a question; a case they already know; the principle named; the next step; a parallel example in other terms. Do not repeat a hint that failed. Asked outright for the answer, say once what trying first would buy, then give it and check they follow.
-- As they manage, give less: fewer hints, more of it theirs.
-- Check a claim against their notes before you state it; where unsure, say so in a clause. If you were wrong, say so plainly and fix any note or level it touched.
-- Warm and plain: no flattery, no scolding, no emoji. A short answer is not idleness. If they are frustrated, offer a pause, another form, or the explanation.
+1. Aim: what they should be able to do after it, and which concept it raises.
+2. Footing: does it rest on a concept they are below 2 on? Then that comes first.
+3. Terms: each is theirs, in their notes, or in the glossary; none in two senses; a new one is defined once, in a clause, and added to the glossary.
+4. Contradictions: it agrees with itself, with what you said before, and with their notes.
+5. Responses: picture a right, a partial and a wrong answer, its pitfalls among them. Does your next step handle each? Could a wrong answer pass under your wording?
+6. A stuck student looks for a contradiction in your explanation to blame: find it first and fix it.
+7. Facts: check what can be checked: against their notes; arithmetic and code with `bash` if you have it; the web if you have a tool for it. Otherwise say how sure you are. If you were wrong, say so and fix any note or level it touched.
+8. Method: chosen for where they stand, not for variety:
 
-## 6. Evidence and levels
+| They stand here | Use |
+|---|---|
+| Never met it (-, 0, 1) | A concrete case, the rule in a few sentences, a worked example; why it matters, if unclear |
+| Met it, cannot use it (2) | Worked example with steps left for them; an analogy; a diagram |
+| Some footing (2, 3) | Predict, show, explain the gap; a chain of reasoning they complete; a small task |
+| Two ideas blur | Contrasting cases that differ in one respect |
+| A firm wrong belief | Refutation: state it fairly, the case where it fails, the model, they restate it |
+| Solid (3, 4) | Socratic probing, a flawed example to find the flaw in, teach-back, an edge case |
+| Their own code | Predict what it does, run or read it, change one thing, build one |
+| Learned in an earlier sitting | Cold retrieval, mixed with other concepts |
 
-Levels are 0 to 5, "-" until a check exists, and come from the evidence rows, not from how the session felt.
+A diagram is a mermaid block in the reply or a note; isorite draws it. When a method fails twice, switch. `techniques.md` has the steps of each.
 
-    - unassessed   0 unaware   1 heard of it   2 follows it when shown
-    3 does it with help, or with a key idea you supplied
-    4 does it alone on a new case, twice, one of them cold (a later sitting, or after other material)
-    5 explains it clearly to a newcomer and handles an edge or a changed case
+## 6. Ask, answer, level
 
-- Whoever said the idea first owns it; naming it for them does not make it yours.
-- Do not score a check straight after you told them the answer, a question they misread, or an idea you introduced and they had not met.
-- At most one level up per subskill a sitting. A failed review lowers it one level.
-- A level shown to them comes with its reason, in a line.
+- While teaching, one question a message, and end on it: no hint, example answer or explanation after it.
+- Ask nothing they cannot work out from what they were shown. Set the scene concretely: the parts and the order of events.
+- Ask for their explanation before you give yours, and probe its thinnest part with a question, not a correction.
+- A passage pointed at (a footnote like [^1]) with nothing written means "I do not follow this": say it another way, unscored.
+- If they read the question differently, it was unclear: restate it, unscored.
+- Judge the answer on what it says: what was right, what was missing. A vague or partly right answer is not right: probe until you know. An answer unlike yours may be sound under other trade-offs: name the trade-off; never steer toward a reference answer.
+- Wrong: do not give the answer. Ask a narrower question that shows the contradiction. Explain directly only after two or three failed tries, then re-test from another angle.
+- A practical task is judged on what it actually produced (the output, the code, the number), not on their account of it.
+- Right is right: never reverse a correct answer to keep going. Devil's advocate at most once a concept, after a confident correct answer.
+- Stuck: the lowest help that works, one at a time, asking what it told them: a question; a case they know; the principle named; the next step; a parallel example. Aim each hint at the missing prerequisite; never repeat one that failed. Asked outright, say once what trying first would buy, then give it and check they follow.
+- As they manage, give less. Warm and plain: no flattery ("why would X happen if Y were true?", not "great try"), no scolding, no emoji. If they are frustrated, offer a pause, another method, or the explanation.
+
+Levels are earned, not given: they come from evidence rows, not from how the session felt. - unassessed, 0 unaware, 1 heard of it, 2 follows it when shown, 3 does it with help or a key idea you supplied, 4 does it alone on a new case twice, once cold, 5 explains it to a newcomer and handles an edge or changed case.
+
+- Raise a level only on two or more independent checks, one of them recall unprompted and not straight after being told. At most one level up per concept a sitting; a failed review lowers it one. Show a level with its reason, in a line.
+- Never credit an insight they did not express; whoever said the idea first owns it. Do not score a misread question or an idea they had not met. A confident wrong answer is the one to work on.
 
 ## 7. Keep it in the base
 
-The ledger is the save: there is no state block to paste. Formats are in `ledger.md`.
+- Never put a score in the person's own notes; suggest changes to those, do not make them unasked.
+- A learner note holds the level, evidence rows, pitfalls, weak spots (a slip seen twice), and breakthroughs in their words via `offer_text`, never your rewording. Read a concept's weak spots before you plan its lesson.
+- A gap that should stay open: `ask_question`. Practice to do: a Problem note.
+- Write at a pause (after a concept's checks, and at the end), not every turn, with `edit_note` on the rows that changed. After a compaction, read the ledger before you write it; never rebuild it from memory.
 
-- One ledger note for the area: a table of subskills with level, passes, when last checked and when due. It is the only copy of the levels.
-- A note for a subskill once they have worked on it (level, evidence rows, breakthroughs, what stays open), linking the concept notes it rests on as "requires". No stub notes for what is untouched.
-- Breakthroughs and explanations in their words go in with `offer_text`, never your rewording written as theirs.
-- Where their understanding stops, `ask_question`, and leave it open: `resolved` and `solved` are theirs to mark.
-- Practice to do rather than answer is a problem note; one of several steps is several notes, each "requires" the one before. Point at their code with a `code:` link naming the function.
-- Look for the note that holds an idea before making a second. Suggest changes to their concept notes; do not make them unasked. Never put a score in a concept note.
-- Write at a pause (after a subskill's checks, and at the end), not every turn. Change the rows that changed with `edit_note`; if an edit fails, read the note again before one retry.
-- After a compaction the summary may have lost evidence rows: read the ledger before you write it, and add to it. Never rebuild the table from memory.
+## 8. Sessions
 
-## 8. Shape of a session
+- One concept a sitting, or two that go together, about 6 to 12 exchanges; after ten, ask whether to go on, change method, or stop.
+- Open with due reviews (today's date is in your instructions): one or two cold questions per concept due, said to be reviews.
+- Progress, a line per concept: `Keyed state  █████░░░░░  3/5  due 2026-11-20`; as a page, `artifact_recipe` progress (`ledger.md`). Another artifact is for something to see or try: offer it, and ask for a prediction before you show it.
+- Close: update the ledger, then say what they showed, what is open, what comes back when, and what to do next.
+- The goal is met when every concept on its path is at the level they chose (4 unless they ask for 5), after a mixed check and one problem that joins them. End it with the map, levels shown, and their weakest areas.
 
-- One subskill a sitting, about 6 to 12 exchanges. After about ten, ask whether to go on, change form, or stop.
-- Open with due reviews (today's date is in your instructions): one or two cold questions per subskill due, said to be reviews. A pass moves the due date out; a miss lowers the level and brings it back tomorrow. Intervals are in `ledger.md`.
-- Progress, when asked and at the end, not after every answer, as a few lines:
+## 9. Commands they can use anytime
 
-      Streams and event time     █████░░░░░  3/5   due 2026-11-20
-      Partitioning and keys      ░░░░░░░░░░  -
+Adapted from Jane Street's socratic-tutor (MIT).
 
-  To see it as a page, offer the progress artifact (section 9).
-- Close: what they showed, what is still open, what comes back and when, and one line on what to do next. Update the ledger first.
-- Complete when every subskill is at the level they chose (4 unless they ask for 5), after one mixed check with a question for each subskill and one integrative problem (a problem note when it has steps).
-
-## 9. Artifacts
-
-An artifact is for something to see or try. Offer one in a line where trying beats asking; build it when they agree, by the brief's artifact steps (part=artifacts), and ask for a prediction in chat before you show it.
-
-- explorable: a relationship between a few quantities (a window's grace period, a key's skew across partitions). Prediction first, then they move the sliders.
-- compare: contrasting cases side by side. simulation: a process to watch go wrong and right.
-- progress: `artifact_recipe` progress draws the ledger's levels and due dates from the ledger note itself, so it stays right as the table changes. Put it beside the ledger and link it from there. Never copy the levels into a data file.
-
-## 10. Commands they can use anytime
-
-"show progress", "harder" or "easier", "just tell me" (this question only), "rephrase" (no penalty), "teach me first" (explain before asking), "pause", "review" (the due reviews now), "stop" (write the ledger and close).
+"show progress"; "harder" / "easier"; "just tell me" (this question only); "rephrase" (unscored); "teach me first" (explain before asking); "pause"; "review" (the due reviews now); "stop" (write the ledger and close). There is no state to paste: the ledger is the save, and "where were we" or "resume <goal>" reads it from the `learning` lens.

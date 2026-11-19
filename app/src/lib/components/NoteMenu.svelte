@@ -1,15 +1,17 @@
 <script lang="ts">
   // What can be done to a note from the list (M29): move it to a folder (a new one is made by typing its name), or
   // delete it, asked first, saying which notes link to it. The same as the Note pane's settings do for the open note,
-  // where it was hard to find.
+  // where it was hard to find. With a lens chosen (docs/lenses.md), it is put in an island of the lens, or taken out of the
+  // one it is in.
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { app } from "$lib/app.svelte.ts";
   import FolderField from "$lib/components/FolderField.svelte";
   import { flyOut } from "$lib/motion.ts";
+  import { homeOf, islandRows } from "$lib/lenses.ts";
 
   let { id, title }: { id: string; title: string } = $props();
-  let open = $state(false), mode = $state<"menu" | "move" | "delete">("menu"), folder = $state(""), linked = $state<string[]>([]), problem = $state("");
+  let open = $state(false), mode = $state<"menu" | "move" | "delete" | "island">("menu"), folder = $state(""), linked = $state<string[]>([]), problem = $state("");
 
   const name = $derived(id.split("/").at(-1)!);
   const target = $derived([folder.trim().replace(/^\/+|\/+$/g, ""), name].filter(Boolean).join("/"));
@@ -39,6 +41,12 @@
       if (app.open === id) await goto(resolve("/notes"), { replaceState: true });
     } catch (e) { problem = (e as Error).message; }
   }
+  const islands = $derived(app.lens ? islandRows(app.lens) : []);
+  const home = $derived(app.lens ? homeOf(app.lens, id) : null);
+  async function lensDo(act: () => Promise<string>): Promise<void> {
+    problem = "";
+    try { await act(); open = false; } catch (e) { problem = (e as Error).message; }
+  }
   function key(e: KeyboardEvent): void { if (e.key === "Escape") { open = false; e.stopPropagation(); } }
 </script>
 
@@ -47,8 +55,19 @@
   {#if open}
     <span class="panel" role="group" aria-label="{title}" out:flyOut>
       {#if mode === "menu"}
-        <button class="item" type="button" onclick={() => (mode = "move")}>Move to an island…</button>
+        {#if app.lens}
+          {#if islands.length}<button class="item" type="button" onclick={() => (mode = "island")}>Add to island…</button>{/if}
+          {#if home}{@const from = home.path}<button class="item" type="button" onclick={() => void lensDo(() => app.takeOutOf(id, from))}>Take out of {home.title}</button>{/if}
+        {/if}
+        <button class="item" type="button" onclick={() => (mode = "move")}>Move to {app.lens ? "a folder" : "an island"}…</button>
         <button class="item danger-text" type="button" onclick={() => void askDelete()}>Delete…</button>
+      {:else if mode === "island"}
+        <span class="label">add to an island of {app.lens?.title}</span>
+        <span class="islands" role="group" aria-label="Islands of {app.lens?.title}">
+          {#each islands as r (r.ref)}
+            <button class="item" type="button" style:padding-left="{8 + r.depth * 14}px" aria-current={home?.ref === r.ref} disabled={home?.ref === r.ref} onclick={() => void lensDo(() => app.putInIsland(id, r.path))}>{r.title}</button>
+          {/each}
+        </span>
       {:else if mode === "move"}
         <label class="label" for="move-{id}">move to</label>
         <FolderField id="move-{id}" label="Island to move {title} to" bind:value={folder} placeholder="(top level)" onpick={() => void move()} onkeydown={(e) => { if (e.key === "Enter") { e.preventDefault(); void move(); } }} />
@@ -72,6 +91,8 @@
   .item { background: none; border: 0; text-align: left; padding: 6px 8px; color: var(--text-soft); font: 0.8125rem var(--font-ui); cursor: pointer; border-radius: var(--round); transition: background-color var(--dur-1) var(--ease-out); }
   .item:hover, .item:focus-visible { color: var(--text); background: var(--fill-hover); }
   .danger-text { color: var(--rose); }
+  .islands { display: flex; flex-direction: column; max-height: 240px; overflow-y: auto; }
+  .item:disabled { cursor: default; color: var(--text); box-shadow: inset 2px 0 0 var(--lattice); background: color-mix(in srgb, var(--lattice) var(--tint), transparent); }
   .row { display: flex; gap: var(--space-2); }
   .path { overflow-wrap: anywhere; font-size: 0.75rem; }
   .ask { font-size: 0.8125rem; line-height: 1.45; color: var(--text-soft); white-space: normal; }

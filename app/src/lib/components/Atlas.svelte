@@ -3,7 +3,7 @@
   // zoom, what is open at this zoom) and what is chosen, and hands each folder, block and route its place and
   // its marks. The marks are plain maps from a note to a mark, looked up while drawing.
   import { page } from "$app/state";
-  import { ghostOf, isIslandRef, islandTitles, lensModel, reach, STRENGTH } from "@isorite/core";
+  import { ELSEWHERE, ghostOf, isIslandRef, islandTitles, lensModel, reach, STRENGTH } from "@isorite/core";
   import type { Grain, Layout, Point } from "@isorite/core/atlas";
   import type { How, MapReport } from "@isorite/engine";
   import { skillText, untitled } from "$lib/make.ts";
@@ -27,6 +27,7 @@
   import HoldTags from "./HoldTags.svelte";
   import SpotTags from "./SpotTags.svelte";
   import HiddenPicker from "./HiddenPicker.svelte";
+  import { homeOf, islandRows } from "$lib/lenses.ts";
   import { finder } from "$lib/finder.svelte.ts";
   import AtlasFolder from "./AtlasFolder.svelte";
   import AtlasRoutes from "./AtlasRoutes.svelte";
@@ -115,11 +116,17 @@
   let lensIn = $state.raw<import("@isorite/core").ResolvedLens | null>(null);
   const titles = $derived(lensIn ? islandTitles(lensIn) : new Map<string, string>());
   let fresh = false; // the next layout is worked out from nothing, not from where things stood (M37)
+  // Loads overlap (another lens chosen while the last is still laid out): only the latest is drawn, whichever ends last.
+  // The lens as the latest load read it, drawn or not: a lens read again by anything else lays the map out again.
+  let loads = 0, lensRead: import("@isorite/core").ResolvedLens | null = null;
   async function load(): Promise<void> {
+    const mine = ++loads;
     try {
       const got = await app.api.map(), asked = untrack(() => prospects);
       // A lens other than the folders (docs/lenses.md): its islands are the map's folders, each note drawn at its home.
       const lens = await app.loadLens();
+      lensRead = lens;
+      if (mine !== loads) return;
       lensIn = lens;
       const base = lens ? lensModel(got.model, lens) : got.model;
       const notes: MapReport["notes"] = { ...got.notes };
@@ -139,8 +146,10 @@
       // A changed base is laid out from where things stood (V5), on the same grid and the same way.
       const on = `${flow}|${grain}|${lens?.name ?? ""}`, from = laid && laidOn === on && !fresh ? laid.layout.orders ?? null : null;
       if (!shapeFor || fresh || !laid) shapeFor = shapeNow();
-      fresh = false;
       const next_laid = await layoutOf(next.model, { gridFlow: flow, grain, blocks: true, from, aspect: shapeFor, ...(lens ? { lens: lens.name } : {}) });
+      if (mine !== loads) return;
+      // Afresh is used up by the load that is drawn, not by one a later load overtook.
+      fresh = false;
       laidOn = on;
       const changed = !!laid && laid.key !== next_laid.key;
       const was = laid && L ? { refs: new Set(L.items.map((n) => n.ref)), edges: new Set(report!.model.edges.map(([a, b]) => `${a}>${b}`)) } : null;
@@ -196,7 +205,7 @@
     lensWere = now;
     untrack(() => { moved = false; shapeFor = 0; fresh = true; void load(); });
   });
-  $effect(() => { const now = app.lens; untrack(() => { if (now && lensIn && now !== lensIn && JSON.stringify(now) !== JSON.stringify(lensIn)) void load(); }); });
+  $effect(() => { const now = app.lens; untrack(() => { if (now && lensRead && now !== lensRead && JSON.stringify(now) !== JSON.stringify(lensRead)) void load(); }); });
   // Hiding or showing a note or a folder lays the map out again, from where things stood.
   let hiddenWere = "";
   $effect(() => {
@@ -511,7 +520,7 @@
     remove: (item) => void askRemove(item),
     send: (item) => give(item.id, item.kind),
     rename: (item) => { renamingRef = item.id; },
-    hide: (item) => { void app.hide(item.id).then(() => { given = `${item.kind === "folder" ? folderName(item.id) : title(item.id)} is hidden`; clearTimeout(givenTimer); givenTimer = setTimeout(() => (given = ""), 2200); }, (e: Error) => { notice = e.message; }); },
+    hide: (item) => { const lens = app.lens?.title ?? ""; void app.hide(item.id).then(() => { hid = { id: item.id, name: item.kind === "folder" ? folderName(item.id) : title(item.id), lens }; clearTimeout(hidTimer); hidTimer = setTimeout(() => (hid = null), 5000); }, (e: Error) => { notice = e.message; }); },
     unchosen: (item, x, y) => {
       if (item.kind !== "note" || !viewport) return;
       const r = viewport.getBoundingClientRect();
@@ -537,7 +546,7 @@
     const carried = g.item?.kind === "folder" ? g.item.id : null;
     let best: { ref: string; depth: number } | null = null;
     L.items.forEach((n, i) => {
-      if (n.kind !== "folder" || open[i] === "-" || !n.ref || n.ref.startsWith("@") || isIslandRef(n.ref) || gx < n.gx || gx >= n.gx + n.w || gy < n.gy || gy >= n.gy + n.h) return;
+      if (n.kind !== "folder" || open[i] === "-" || !n.ref || n.ref.startsWith("@") || isIslandRef(n.ref) !== !!app.lens || gx < n.gx || gx >= n.gx + n.w || gy < n.gy || gy >= n.gy + n.h) return;
       const ref = n.ref.replace(/\/$/, "");
       if (carried !== null && (ref === carried || ref.startsWith(`${carried}/`))) return;
       if (!best || n.depth > best.depth) best = { ref, depth: n.depth };
@@ -546,6 +555,7 @@
     return (best as { ref: string } | null)?.ref ?? (!app.lens && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom ? "" : null);
   }
   async function moveHeld(item: Item, dir: string): Promise<void> {
+    if (app.lens) { void moveInLens(item, dir); return; }
     const from = item.id.replace(/\/$/, ""), name = from.split("/").at(-1)!, to = dir ? `${dir}/${name}` : name;
     if (to === from) return;
     try {
@@ -553,6 +563,18 @@
       else await app.api.moveNote(from, to, (await app.api.readNote(from)).version);
       await app.refresh();
       void load();
+    } catch (e) { notice = (e as Error).message; }
+  }
+  /** A note carried to an island of the lens shown: put there and taken from the island it was at home in; to Elsewhere,
+   *  taken out of that island alone. */
+  async function moveInLens(item: Item, ref: string): Promise<void> {
+    const lens = app.lens;
+    if (!lens || item.kind !== "note") return;
+    const rows = islandRows(lens), from = homeOf(lens, item.id), to = rows.find((r) => r.ref === ref) ?? null;
+    if ((to?.ref ?? ELSEWHERE) === (from?.ref ?? ELSEWHERE)) return;
+    try {
+      if (to) await app.putInIsland(item.id, to.path, from?.path ?? null);
+      else if (from) await app.takeOutOf(item.id, from.path);
     } catch (e) { notice = (e as Error).message; }
   }
   async function askRemove(item: Item): Promise<void> {
@@ -681,6 +703,10 @@
       void app.refresh();
     } catch (err) { notice = (err as Error).message; }
   }
+  /** What was just hidden, and the lens it was hidden in ("" for the folders): said for a moment, with the choice to hide
+   *  it in every lens. */
+  let hid = $state.raw<{ id: string; name: string; lens: string } | null>(null);
+  let hidTimer: ReturnType<typeof setTimeout> | undefined;
   /** A note given to the agent: into the tray, said on the map for a moment. */
   let given = $state("");
   let givenTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1045,7 +1071,7 @@
       {/if}
     {/each}
     {#if spot && viewport}
-      <SpotTags x={spot.x} y={spot.y} w={viewport.clientWidth} h={viewport.clientHeight} choice={spot.choice} px={spot.px} py={spot.py} hidden={app.hidden.length > 0} />
+      <SpotTags x={spot.x} y={spot.y} w={viewport.clientWidth} h={viewport.clientHeight} choice={spot.choice} px={spot.px} py={spot.py} hidden={app.hiddenHere.length > 0} />
     {/if}
     {#if finding && viewport}
       <HiddenPicker x={finding.x} y={finding.y} w={viewport.clientWidth} h={viewport.clientHeight} onclose={() => (finding = null)} />
@@ -1055,6 +1081,10 @@
     {/if}
     {#if said}<p class="saved" role="status">{said}</p>{/if}
     {#if given}<p class="given" role="status">◆ {given}</p>{/if}
+    {#if hid && !given}
+      {@const h = hid}
+      <p class="hid" role="status" data-hid={h.id}>{h.name} is hidden{h.lens ? ` in ${h.lens}` : ""}{#if app.lenses.length}<button type="button" class="btn quiet" onclick={() => { const id = h.id; hid = null; void app.hideEverywhere(id).catch((e: Error) => { notice = e.message; }); }}>in every lens</button>{/if}</p>
+    {/if}
     <HoldTags {g} mode="point" bounds={viewport?.getBoundingClientRect() ?? null} />
     <HoldTags {g} mode="ghost" />
     {#if asking}
@@ -1136,6 +1166,10 @@
   /* A note carried out of the Atlas towards the Agent pane. */
   .carried { position: fixed; z-index: 50; pointer-events: none; transform: translate(10px, 10px); padding: 3px 8px; background: var(--ground-2); border: 1px solid var(--line-strong); font: 0.75rem var(--font-ui); color: var(--text); white-space: nowrap; box-shadow: var(--lift); animation: appear var(--t-ack) var(--ease-out); }
   .carried.over { border-color: var(--growth); }
+  /* Hidden: said in grey, the colour of the tag that hid it, with the lens it was hidden in. */
+  .hid { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 2px 4px 2px 10px; display: flex; align-items: center; gap: 6px; background: var(--ground-1); border: 1px solid var(--line-strong); color: var(--text-soft); font-size: 0.75rem; z-index: 2; animation: appear var(--dur-1) var(--ease-out); }
+  .hid .btn { height: 26px; font-size: 0.75rem; }
+  @media (prefers-reduced-motion: reduce) { .hid { animation: none; } }
   .notice { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 6px 10px; background: var(--ground-1); border: 1px solid var(--rose); color: var(--rose); font-size: 0.75rem; z-index: 2; }
   /* A pip at the edge (M17): towards the open note (the text's colour), or what is pointed at elsewhere. */
   .pip { position: absolute; z-index: 4; width: 22px; height: 22px; margin: -11px 0 0 -11px; display: grid; place-items: center; padding: 0; background: var(--ground-1); border: 1px solid var(--line-strong); color: var(--text); cursor: pointer; }

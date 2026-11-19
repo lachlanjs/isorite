@@ -112,6 +112,18 @@ class ArtifactWidget extends WidgetType {
   ignoreEvent(): boolean { return true; }
 }
 
+// The mark a link to the web ends in, inside its chip: an arrow out, drawn on the icons' grid.
+class OutWidget extends WidgetType {
+  eq(): boolean { return true; }
+  toDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "cm-lp-out";
+    span.innerHTML = '<svg viewBox="0 0 12 12" width="9" height="9" aria-hidden="true"><path d="M4 3h5v5M9 3 3.5 8.5" /></svg>';
+    return span;
+  }
+}
+const outMark = new OutWidget();
+
 const hide = Decoration.replace({});
 const bullet = Decoration.replace({ widget: new BulletWidget() });
 const rule = Decoration.replace({ widget: new RuleWidget() });
@@ -207,7 +219,9 @@ function build(view: EditorView): DecorationSet {
             lineClass(node.from, node.to, "cm-lp-codeblock");
             return false;
           case "Link": {
-            // [text](url "title"): the text as a link; the rest hidden off the editing line.
+            // [text](url "title"): away from the cursor, a chip whose words are the link's text, its kind as the
+            // weight of its vein along its foot (M24, N) and said with where it goes when pointed at; the rest
+            // hidden. With the cursor in it, the Markdown, to be edited.
             const n = node.node;
             const marks = [];
             let url = false;
@@ -219,14 +233,20 @@ function build(view: EditorView): DecorationSet {
             // Out of the base (M12): to the web, or to code in its repository, which may be gone.
             const u = n.getChild("URL"), href = u ? state.sliceDoc(u.from, u.to) : "";
             const code = href.startsWith("code:"), web = /^https?:/i.test(href);
-            // Its kind as the weight of its vein (M24, N): the link's title names it.
-            const t = n.getChild("LinkTitle"), kind = rating(t ? state.sliceDoc(t.from + 1, t.to - 1) : null);
-            const cls = code ? (state.facet(codeBroken)(href) ? "cm-lp-link cm-lp-codelink cm-lp-broken" : "cm-lp-link cm-lp-codelink") : web ? "cm-lp-link cm-lp-weblink vein web" : `cm-lp-link vein ${kind === "requires" ? "requires" : kind === "see also" ? "also" : "uses"}`;
-            if (open && close && close.from > open.to) decos.push((code ? Decoration.mark({ class: cls, attributes: { title: state.facet(codeBroken)(href) ? `${href.slice(5)}: not in the repository` : href.slice(5) } }) : mark(cls)).range(open.to, close.from));
-            if (!touched(node.from, node.to) && url && open && close) {
-              decos.push(hide.range(open.from, open.to));
-              decos.push(hide.range(close.from, node.to));
-            }
+            const t = n.getChild("LinkTitle"), named = t ? state.sliceDoc(t.from + 1, t.to - 1).trim() : "", kind = rating(named || null);
+            const broken = code ? state.facet(codeBroken)(href) : !web && state.facet(linkBroken)(href);
+            const vein = code ? "" : web ? " vein web" : ` vein ${kind === "requires" ? "requires" : kind === "see also" ? "also" : "uses"}`;
+            const cls = `cm-lp-link${code ? " cm-lp-codelink" : web ? " cm-lp-weblink" : ""}${broken ? " cm-lp-broken" : vein}`;
+            const said = code ? `${href.slice(5)}${broken ? ": not in the repository" : ""}` : broken ? `${href}: no such note here` : web ? href : `${named ? `${named} · ` : ""}${href}`;
+            if (!(open && close && close.from > open.to)) break;
+            if (touched(node.from, node.to) || !url) { decos.push(Decoration.mark({ class: cls, attributes: { title: said } }).range(open.to, close.from)); break; }
+            // Read, not written (read mode, a version): the chip is a link the keyboard reaches with Tab.
+            const reading = !state.facet(EditorView.editable);
+            const attributes: Record<string, string> = { title: said, "data-href": href, ...(reading ? { role: "link", tabindex: "0" } : {}) };
+            decos.push(hide.range(open.from, open.to));
+            // A link to the web ends in a small arrow out, just after the chip: the hidden address is drawn as it.
+            decos.push((web ? Decoration.replace({ widget: outMark }) : hide).range(close.from, node.to));
+            decos.push(Decoration.mark({ class: `${cls} cm-lp-chip`, attributes }).range(open.to, close.from));
             break; // on into the text, for emphasis or code inside it
           }
           case "Image": {
@@ -310,6 +330,9 @@ export const pictures = Facet.define<(href: string) => PictureAt | null, (href: 
 export interface ArtifactAt { path: string; mount: (el: HTMLElement) => () => void }
 export const artifacts = Facet.define<(href: string) => ArtifactAt | null, (href: string) => ArtifactAt | null>({ combine: (all) => all[0] ?? (() => null) });
 
+/** Whether a link names a note or folder of the base that is not there (it may have moved: following it says where). */
+export const linkBroken = Facet.define<(href: string) => boolean, (href: string) => boolean>({ combine: (all) => all[0] ?? (() => false) });
+
 /** Whether a code link (`code:path#L1`, M12) names a file no longer in the base's repository. */
 export const codeBroken = Facet.define<(href: string) => boolean, (href: string) => boolean>({ combine: (all) => all[0] ?? (() => false) });
 
@@ -348,7 +371,20 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-lp-strike": { textDecoration: "line-through" },
   ".cm-lp-code": { fontFamily: "var(--font-mono)", fontSize: ".86em", background: "color-mix(in srgb, var(--text) 8%, transparent)", padding: ".1em .2em" },
   ".cm-lp-codelink": { color: "var(--lattice)", fontFamily: "var(--font-mono)", fontSize: ".86em", textDecoration: "none", borderBottom: "1px solid color-mix(in srgb, var(--lattice) 50%, transparent)" },
-  ".cm-lp-broken": { color: "var(--rose)", textDecoration: "line-through", borderBottomColor: "transparent" },
+  ".cm-lp-broken": { color: "var(--text-faint)", textDecoration: "line-through", textDecorationColor: "color-mix(in srgb, var(--text-faint) 70%, transparent)", borderBottomColor: "transparent" },
+  // A link away from the cursor is a chip, as a pointer is in the prompt, but of the note's own ground and in its words'
+  // colour: a tint, eased corners, a little room each side, and its vein along its foot. Wrapped, each line's part is a
+  // chip of its own. Pressed, it opens what it names (codemirror.ts).
+  ".cm-lp-chip": { padding: "0 .28em", borderRadius: "var(--round)", backgroundColor: "color-mix(in srgb, var(--text) 7%, transparent)", boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone", cursor: "pointer",
+    transition: "background-color var(--t-ack) var(--ease-out), color var(--t-ack) var(--ease-out)" },
+  ".cm-lp-chip:hover, .cm-lp-chip.lit": { backgroundColor: "color-mix(in srgb, var(--lattice) 14%, transparent)" },
+  ".cm-lp-chip.cm-lp-codelink": { borderBottom: "0", backgroundImage: "linear-gradient(color-mix(in srgb, var(--lattice) 50%, transparent), color-mix(in srgb, var(--lattice) 50%, transparent))", backgroundSize: "100% 1px", backgroundPosition: "0 100%", backgroundRepeat: "no-repeat" },
+  // Broken: no ground and no vein, faint and struck through, inside a dashed edge.
+  ".cm-lp-chip.cm-lp-broken, .cm-lp-chip.cm-lp-broken *": { color: "var(--text-faint)" },
+  ".cm-lp-chip.cm-lp-broken": { backgroundColor: "transparent", backgroundImage: "none", outline: "1px dashed color-mix(in srgb, var(--text-faint) 60%, transparent)", outlineOffset: "-1px" },
+  ".cm-lp-out": { display: "inline-block", marginLeft: ".2em", color: "var(--text-faint)", verticalAlign: ".05em" },
+  ".cm-lp-out svg": { display: "block", fill: "none", stroke: "currentColor", strokeWidth: "1.4", strokeLinecap: "round", strokeLinejoin: "round" },
+  "@media (prefers-reduced-motion: reduce)": { ".cm-lp-chip": { transition: "none" } },
   ".cm-lp-picture": { display: "block", margin: "6px auto", width: "fit-content", maxWidth: "100%", lineHeight: "0" },
   ".cm-lp-picture img": { display: "block", maxWidth: "100%", height: "auto" },
   ".cm-lp-picture-left": { float: "left", margin: "4px 16px 4px 0", maxWidth: "50%" },

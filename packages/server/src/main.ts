@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSyn
 import { dirname, join, resolve } from "node:path";
 import { checkArtifact, columnsOf, manifestOf, parseData } from "@isorite/kit";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { LENSES_DIR, OWN_DIR, StudyError, citeKind, lensNotes, parseLens, renameInLens, repairFrontmatter, resolveLens } from "@isorite/core";
+import { HIDDEN_FILE, LENSES_DIR, OWN_DIR, SETTINGS_FILE, StudyError, citeKind, hiddenId, lensNotes, parseLens, parseSettings, renameInLens, repairFrontmatter, resolveLens } from "@isorite/core";
 import { gitRenames } from "./git.ts";
 import { loadBundle } from "@isorite/core/node";
 import { doctor } from "./doctor.ts";
@@ -137,19 +137,23 @@ function checkLenses(root: string, bundle: ReturnType<typeof loadBundle>, out: (
   if (!existsSync(dir)) return { errors: 0, warnings: 0 };
   let errors = 0, warnings = 0;
   const renames = fix ? gitRenames(root) : new Map<string, string>();
-  const now = (id: string): string | null => { let at = `${id}.md`; for (let k = 0; k < 50 && renames.has(at); k++) { at = renames.get(at)!; if (bundle.concepts.has(at.replace(/\.md$/, ""))) return at.replace(/\.md$/, ""); } return null; };
+  // The base's hidden list, which a lens without its own keeps: what it hides is in no island, and not a warning.
+  const own = (f: string) => (existsSync(join(root, OWN_DIR, f)) ? readFileSync(join(root, OWN_DIR, f), "utf8") : null);
+  const hidden = [...(own(HIDDEN_FILE) ?? "").split("\n"), ...(parseSettings(own(SETTINGS_FILE)).hidden ?? [])].map(hiddenId).filter((l) => l && !/^(<<<<<<<|=======|>>>>>>>)/.test(l));
+  // A file a lens lists by its path follows a rename as a note does.
+  const now = (id: string): string | null => { const file = citeKind(id) !== null; let at = file ? id : `${id}.md`; for (let k = 0; k < 50 && renames.has(at); k++) { at = renames.get(at)!; if (file ? bundle.files.has(at) : bundle.concepts.has(at.replace(/\.md$/, ""))) return file ? at : at.replace(/\.md$/, ""); } return null; };
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".toml")).sort()) {
     const name = file.slice(0, -5), at = join(dir, file), shown = `${OWN_DIR}/${LENSES_DIR}/${file}`;
-    let text = readFileSync(at, "utf8"), resolved = resolveLens(parseLens(name, text), lensNotes(bundle));
+    let text = readFileSync(at, "utf8"), resolved = resolveLens(parseLens(name, text), lensNotes(bundle), hidden);
     if (fix) {
       const gone = resolved.islands.flatMap(function walk(i): string[] { return [...i.gone, ...i.islands.flatMap(walk)]; });
       for (const id of new Set(gone)) {
         const to = now(id);
         if (!to) continue;
         const r = renameInLens(text, id, to);
-        if (r.changed) { text = r.text; out(`fixed   ${bold(shown)}: /${id}.md is /${to}.md now`); }
+        if (r.changed) { text = r.text; out(`fixed   ${bold(shown)}: /${citeKind(id) ? id : `${id}.md`} is /${citeKind(to) ? to : `${to}.md`} now`); }
       }
-      if (text !== readFileSync(at, "utf8")) { writeFileSync(at, text); resolved = resolveLens(parseLens(name, text), lensNotes(bundle)); }
+      if (text !== readFileSync(at, "utf8")) { writeFileSync(at, text); resolved = resolveLens(parseLens(name, text), lensNotes(bundle), hidden); }
     }
     for (const p of resolved.problems) {
       const l = p.level === "warning" && strict ? "error" : p.level;

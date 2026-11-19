@@ -17,8 +17,8 @@
   const all = $derived.by((): Row[] => {
     const notes = app.listing.notes.filter((n) => app.isHidden(n.id)).map((n): Row => ({ id: n.id, title: n.title, folder: false, note: n.description }));
     // A hidden folder is listed once, as itself; what is in it is shown with it.
-    const dirs = app.hidden.filter((id) => app.listing.dirs.includes(id) || app.listing.notes.some((n) => n.dir === id || n.dir.startsWith(`${id}/`))).map((id): Row => ({ id, title: id.split("/").at(-1)!, folder: true, note: id }));
-    return [...dirs, ...notes.filter((n) => !app.hidden.some((d) => n.id.startsWith(`${d}/`)))];
+    const dirs = app.hiddenHere.filter((id) => app.listing.dirs.includes(id) || app.listing.notes.some((n) => n.dir === id || n.dir.startsWith(`${id}/`))).map((id): Row => ({ id, title: id.split("/").at(-1)!, folder: true, note: id }));
+    return [...dirs, ...notes.filter((n) => !app.hiddenHere.some((d) => n.id.startsWith(`${d}/`)))];
   });
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
   const rows = $derived.by((): Row[] => {
@@ -36,7 +36,7 @@
   });
   async function show(r: Row): Promise<void> {
     try { await app.unhide(r.id); onshow?.(r.id); } catch { /* the list is put back */ }
-    if (!app.hidden.length) onclose();
+    if (!app.hiddenHere.length) onclose();
   }
   function key(e: KeyboardEvent): void {
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onclose(); }

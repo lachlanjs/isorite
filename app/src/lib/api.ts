@@ -4,7 +4,7 @@
 
 import { pictureType } from "@isorite/core";
 import { baseHere } from "./here.ts";
-import type { Api, Decision, EngineEvent, Given, NoteSource, Session, TerminalView } from "@isorite/engine";
+import type { Api, Decision, EngineEvent, Given, NoteSource, SearchScope, Session, TerminalView } from "@isorite/engine";
 
 /** A request the server refused. For a save that lost a race, `current` is the note as it is now (null: gone). */
 export class ApiError extends Error {
@@ -93,6 +93,9 @@ export interface BasesApi {
   title(name: string, title: string): Promise<BaseRow[]>;
 }
 
+/** A search's scope as the query string carries it: `&lens=…&island=…&all=1`, or nothing. */
+const scoped = (scope?: SearchScope): string => (scope?.lens ? `&lens=${encodeURIComponent(scope.lens)}${scope.island ? `&island=${encodeURIComponent(scope.island)}` : ""}${scope.all ? "&all=1" : ""}` : "");
+
 /** Where the browser fetches a picture from (M22), so an `<img>` asks for it itself, cached and lazily. */
 export interface FileUrls { fileUrl(path: string, from?: "notes" | "code"): string }
 
@@ -151,9 +154,10 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     map: () => ask("map"),
     lenses: () => ask("lenses"),
     lens: (name) => ask(`lens?name=${encodeURIComponent(name)}`),
+    editLens: (name, change) => write("POST", "lens/edit", { name, change }),
     timeline: () => ask("timeline"),
-    search: (query) => ask(`search?q=${encodeURIComponent(query)}`),
-    find: (query) => ask(`find?q=${encodeURIComponent(query)}`),
+    search: (query, scope) => ask(`search?q=${encodeURIComponent(query)}${scoped(scope)}`),
+    find: (query, scope) => ask(`find?q=${encodeURIComponent(query)}${scoped(scope)}`),
     agents: () => ask("agents"),
     saveAgents: (text) => write("POST", "agents", { text }),
     // The server's own: it tells the agent of broken code links with its next prompt.
@@ -163,8 +167,8 @@ export function httpApi(root: string = new URL(baseHere() ? `b/${encodeURICompon
     // The server's own too: the skills are listed and switched through `pi.skills`.
     agentSkillsOff: async () => ({ off: [] }),
     setAgentSkillsOff: async () => undefined,
-    hidden: () => ask("hidden"),
-    setHidden: (ids) => write("POST", "hidden", { ids }),
+    hidden: (lens) => ask(lens ? `hidden?lens=${encodeURIComponent(lens)}` : "hidden"),
+    setHidden: (ids, lens) => write("POST", "hidden", lens ? { ids, lens } : { ids }),
     brokenNews: async () => [],
     conversations: () => ask("conversations"),
     deleteConversation: async (id) => { await write("POST", "conversation/delete", { id }); },

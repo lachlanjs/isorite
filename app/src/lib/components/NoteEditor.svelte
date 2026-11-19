@@ -7,7 +7,7 @@
   import CodeEmbed from "$lib/components/CodeEmbed.svelte";
   import ArtifactEmbed from "./ArtifactEmbed.svelte";
   import { goto } from "$app/navigation";
-  import type { EditorView } from "@codemirror/view";
+  import { EditorView } from "@codemirror/view";
   import { app, codeHref, findEmbed, noteHref, slug } from "$lib/app.svelte.ts";
   import { globalPage } from "$lib/here.ts";
   import { createEditor, setText, type Where } from "$lib/editor/codemirror.ts";
@@ -17,7 +17,8 @@
   import { pictureOf, pictureSrc } from "$lib/pictures.ts";
   import { dirOf, keep, linkTo, refused } from "$lib/images.ts";
   import { address, titled } from "$lib/editor/links.ts";
-  import { setPointedLines, setPointedNote } from "$lib/editor/pointing.ts";
+  import { pointedOf, setPointedLines, setPointedNote, setRevealed } from "$lib/editor/pointing.ts";
+  import { relocate } from "$lib/pointers.ts";
   import { pointers } from "$lib/pointers.svelte.ts";
   import type { NoteSession } from "$lib/note.svelte.ts";
 
@@ -95,6 +96,12 @@
       // An embedded question or problem (M12) opens in the Note pane.
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- noteHref resolves
       embeds: { find: findEmbed, open: (id) => { void goto(noteHref(id)); } },
+      // A link to a note or folder that is not in the base is drawn broken (until the notes are listed, none is).
+      linkBroken: (href) => {
+        const to = pointedOf(href);
+        if (!to || !app.listing.notes.length) return false;
+        return to.folder ? !app.listing.dirs.some((d) => d === to.id || d.startsWith(`${to.id}/`)) && !app.listing.notes.some((n) => n.id.startsWith(`${to.id}/`)) : !app.listing.notes.some((n) => n.id === to.id);
+      },
       // A link under the mouse is lit on the Atlas (M17).
       onPoint: (to) => pointing.set("note", to ? { ...to, who: "you" } : null),
       codeBroken: (href) => app.listing.notes.find((n) => n.id === note.id)?.broken?.includes(href) ?? false,
@@ -131,6 +138,19 @@
   $effect(() => {
     const h = pointers.hover, id = note.id, lines = head.lines;
     if (view) view.dispatch({ effects: setPointedLines.of(h && h.kind === "note" && h.ref === id ? { from: h.from - lines, to: h.to - lines } : null) });
+  });
+
+  // A pointer pressed (in the prompt, or in a sent turn) that came from this note: its words found again in the note as it
+  // is now, scrolled to and lit; where they are gone, the lines they were on, said to have changed.
+  $effect(() => {
+    const s = pointers.shown, v = view;
+    if (!s || s.kind !== "note" || s.ref !== note.id || !v) return;
+    untrack(() => {
+      pointers.shown = null;
+      const now = relocate(note.text, { ...s, id: -1, title: "" }), lines = head.lines;
+      const from = Math.max(1, Math.min(v.state.doc.lines, now.from - lines));
+      v.dispatch({ effects: [setRevealed.of({ from: now.from - lines, to: now.to - lines, changed: !!now.moved }), EditorView.scrollIntoView(v.state.doc.line(from).from, { y: "center" })] });
+    });
   });
 
   // What a moment of the timeline changed, in the lines the editor shows.

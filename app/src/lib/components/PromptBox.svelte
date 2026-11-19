@@ -7,7 +7,7 @@
   import { Compartment, EditorState, type Range } from "@codemirror/state";
   import { Decoration, EditorView, ViewPlugin, WidgetType, drawSelection, keymap, placeholder as hint, type DecorationSet, type ViewUpdate } from "@codemirror/view";
   import { cursorGroupLeft, cursorGroupRight, deleteGroupBackward, deleteGroupForward, history, historyKeymap, insertNewline, selectGroupLeft, selectGroupRight } from "@codemirror/commands";
-  import { MARKS, idOf, markOf, used } from "$lib/pointers.ts";
+  import { MARKS, idOf, markOf, used, type Pointer } from "$lib/pointers.ts";
   import { pointers } from "$lib/pointers.svelte.ts";
   import { tokenEl } from "$lib/pointerToken.ts";
 
@@ -29,8 +29,22 @@
       el.addEventListener("pointerenter", () => { if (p) pointers.hover = p; });
       el.addEventListener("pointerleave", () => { if (pointers.hover?.id === this.id) pointers.hover = null; });
       el.addEventListener("pointerdown", (e) => carry(v, el, e));
+      // A button, for the keyboard too: Tab reaches it from the text, and Enter or Space shows where it came from.
+      el.setAttribute("role", "button");
+      el.tabIndex = 0;
+      el.setAttribute("aria-label", el.title);
+      el.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault(); e.stopPropagation();
+        if (p) show(el, p);
+      });
       return el;
     }
+  }
+
+  /** Where a pointer came from, shown (pointers.open); a passage of the conversation no longer there marks the chip. */
+  function show(el: HTMLElement, p: Pointer): void {
+    void pointers.open(p).then((found) => el.classList.toggle("pt-gone", !found));
   }
 
   function carry(v: EditorView, el: HTMLElement, down: PointerEvent): void {
@@ -54,7 +68,7 @@
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
-      if (!ghost) { const p = pointers.get(Number(el.dataset.pt)); if (p) void pointers.open(p); return; }
+      if (!ghost) { const p = pointers.get(Number(el.dataset.pt)); if (p) show(el, p); return; }
       ghost.remove();
       el.classList.remove("pt-lifted");
       const from = v.posAtDOM(el), at = v.posAtCoords({ x: e.clientX, y: e.clientY });
@@ -174,6 +188,8 @@
   :global(.pt-selected .pt-face)::before { background: color-mix(in srgb, var(--c) 60%, var(--ground-1)); }
   :global(.pt-selected .pt-face) { color: var(--text); }
   :global(.pt-lifted) { opacity: .25; }
+  /* What it points at could not be found again (a passage of a session since compacted): faint, without its glow. */
+  :global(.pt.pt-gone) { --c: var(--text-faint); filter: none; }
   :global(.pt-ghost) { position: fixed; z-index: 80; pointer-events: none; transform: translate(-50%, -50%) scale(1.06); cursor: grabbing; }
   :global(.pt-ghost.pt-ready) { filter: drop-shadow(0 0 10px var(--lattice)); }
 </style>

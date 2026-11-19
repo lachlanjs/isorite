@@ -112,7 +112,9 @@
   .petal.on { scale: 1.16; filter: drop-shadow(0 0 10px color-mix(in srgb, var(--c) 70%, transparent)) drop-shadow(0 4px 8px rgb(0 0 0 / .25)); }
   .petal.on .face::before { background: var(--c); }
   .petal.on .face svg { color: var(--ground-0); }
-  .lbl { position: absolute; left: 50%; bottom: calc(100% + 6px); translate: -50% 4px; padding: 2px 6px; font: 0.6875rem/1.4 var(--font-ui); white-space: nowrap; color: var(--c); background: var(--ground-0); opacity: 0; transition: opacity var(--t-ack) var(--ease-out), translate var(--t-ack) var(--ease-out); }
+  /* Said, never pointed at: unseen, a tag's name would still lie over its neighbour where the item is small (the map zoomed
+     out), and take the pointer meant for that one. */
+  .lbl { pointer-events: none; position: absolute; left: 50%; bottom: calc(100% + 6px); translate: -50% 4px; padding: 2px 6px; font: 0.6875rem/1.4 var(--font-ui); white-space: nowrap; color: var(--c); background: var(--ground-0); opacity: 0; transition: opacity var(--t-ack) var(--ease-out), translate var(--t-ack) var(--ease-out); }
   .petal.below .lbl { bottom: auto; top: calc(100% + 6px); translate: -50% -4px; }
   .petal.on .lbl { opacity: 1; translate: -50% 0; }
 

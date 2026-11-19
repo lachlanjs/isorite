@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { askedParts, expand, full, idOf, markOf, relocate, used, type Pointer } from "./pointers.ts";
+import { askedParts, expand, full, idOf, markOf, relocate, sourceOf, used, type Pointer } from "./pointers.ts";
 
 const note = (id: number, over: Partial<Pointer> = {}): Pointer => ({ id, kind: "note", ref: "basics/bit", title: "Bit", from: 3, to: 4, text: "A bit is a choice\nbetween two.", ...over });
 const table = (...ps: Pointer[]) => (id: number) => ps.find((p) => p.id === id);
@@ -55,5 +55,19 @@ describe("a pointer against the file as it is now", () => {
     expect(relocate("nothing like it", note(1))).toMatchObject({ from: 3, to: 4, moved: true });
     const t: Pointer = { id: 3, kind: "turn", ref: "", title: "the agent", from: 0, to: 0, text: "x" };
     expect(relocate("anything", t)).toBe(t);
+  });
+});
+
+describe("a sent footnote is read back to what it points at, so its chip can show it", () => {
+  test("each kind of place, round the way it was sent", () => {
+    const sent = (p: Pointer) => askedParts(expand(`see ${markOf(p.id)}`, table(p))).notes[0]!;
+    const back = (p: Pointer) => { const n = sent(p); return sourceOf(n.where, n.quote); };
+    expect(back(note(1))).toEqual({ kind: "note", ref: "basics/bit", from: 3, to: 4, text: "A bit is a choice\nbetween two." });
+    expect(back(note(2, { kind: "code", ref: "/src/a.py", from: 2, to: 2, text: "x = 1" }))).toEqual({ kind: "code", ref: "/src/a.py", from: 2, to: 2, text: "x = 1" });
+    expect(back(note(3, { kind: "code", ref: "src/b.py", from: 5, to: 7, text: "y", moved: true }))).toMatchObject({ kind: "code", ref: "src/b.py", from: 5, to: 7 });
+    expect(back(note(4, { kind: "turn", ref: "", from: 0, to: 0, text: "It said so." }))).toEqual({ kind: "turn", ref: "", from: 0, to: 0, text: "It said so." });
+    expect(back(note(5, { kind: "folder", ref: "basics", from: 0, to: 0, text: "" }))).toMatchObject({ kind: "folder", ref: "basics" });
+    expect(back(note(6, { from: 0, to: 0, text: "" }))).toMatchObject({ kind: "note", ref: "basics/bit", from: 0, to: 0 });
+    expect(sourceOf("somewhere else", "")).toBeNull();
   });
 });

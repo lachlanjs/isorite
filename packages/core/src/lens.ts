@@ -7,14 +7,18 @@
 //   [[islands]]
 //   name = "Combat"                  the island's key; `title` is what is shown, when it should differ
 //   notes = ["/combat/hitboxes.md"]  ids as links write them, in the order to be read
-//   match = ["path:/combat/**", "tag:combat", "kind:question", "links-to:/combat/index.md", "-tag:old"]
+//   match = ["path:/combat/**", "tag:combat", "kind:question", "links-to:/combat/index.md", "linked-from:/combat/index.md", "type:picture", "-tag:old"]
 //   [[islands.islands]]              islands nest; a note goes to the deepest island that holds it
+//   hidden = ["/src", "/combat/old.md"]   at the top: what this lens keeps off the map; without it, the base's hidden list
 //
 // File order is the lens's order: islands, and the notes an island lists, keep it, so a lens can be a path to
 // follow. Notes an island selects by rule come after the ones it lists, by id.
+//
+// An island holds notes unless a `type:` rule names other things: `type:picture` and `type:code` select the base's files
+// of that kind (with the island's other rules, if it has any), and a file listed by its path is held whatever its kind.
 
 import { parse } from "smol-toml";
-import type { Bundle } from "./bundle.ts";
+import { citeKind, type Bundle } from "./bundle.ts";
 import type { MapDir, MapModel, MapNote } from "./map.ts";
 
 /** Where lens files are, inside the base's `.isorite/`. */
@@ -24,15 +28,32 @@ export const FOLDERS_LENS = "folders";
 
 export interface Island { name: string; title: string; notes: string[]; match: string[]; islands: Island[] }
 export interface LensProblem { level: "error" | "warning"; message: string }
-/** A lens file, read. `problems` are what the text got wrong (not what the notes do). */
-export interface Lens { name: string; title: string; islands: Island[]; problems: LensProblem[] }
+/** A lens file, read. `problems` are what the text got wrong (not what the notes do). `hidden` is the lens's own hidden
+ *  list (ids and folders, as `hidden.txt` holds them), or null where the file has none and the base's list holds. */
+export interface Lens { name: string; title: string; islands: Island[]; hidden: string[] | null; problems: LensProblem[] }
 
-/** What a rule asks of a note. */
-export interface LensNote { id: string; kind: string; tags: string[]; /** The notes it links to. */ links: string[] }
+/** What the rules ask of an item of the base: a note, or a file (`type` other than note; its id is its path). */
+export interface LensNote { id: string; kind: string; tags: string[]; /** The notes and files it links to. */ links: string[]; type?: LensType }
+/** What a `type:` rule names. A file of another kind (data, an artifact) is held only where an island lists it. */
+export type LensType = "note" | "picture" | "code" | "file";
+export const LENS_TYPES = ["note", "picture", "code"] as const;
 
 const normId = (x: string): string => x.trim().replace(/^\/+/, "").replace(/\.md$/, "");
+/** An entry of a hidden list as `hidden.txt` keeps it: no leading or trailing slash, and a note without `.md`. */
+export const hiddenId = (x: string): string => x.trim().replace(/^\/+|\/+$/g, "").replace(/\.md$/, "");
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean) : typeof v === "string" && v.trim() ? [v.trim()] : []);
-const RULES = ["kind", "tag", "path", "links-to"];
+const RULES = ["kind", "tag", "path", "links-to", "linked-from", "type"];
+const RULES_SAID = "kind:, tag:, path:, links-to:, linked-from:, type:, with a leading - to negate";
+
+/** Whether a hidden list hides an id: it names it, or a folder it is in. A folder's entry does not hide what `listed`
+ *  (the lens's own lists) names by id: the person asked for that one by name. */
+export function hiddenBy(list: readonly string[], id: string, listed?: ReadonlySet<string>): boolean {
+  for (const h of list) {
+    if (h === id) return true;
+    if (id.startsWith(`${h}/`) && !listed?.has(id)) return true;
+  }
+  return false;
+}
 
 /** A rule split into its sign, key and value; null when it is not one. */
 function rule(raw: string): { not: boolean; key: string; value: string } | null {
@@ -63,8 +84,9 @@ function island(raw: unknown, at: string, problems: LensProblem[]): Island | nul
   const match = strings(r.match);
   for (const m of match) {
     const p = rule(m);
-    if (!p || !RULES.includes(p.key) || !p.value) problems.push({ level: "error", message: `${here}: "${m}" is not a rule (kind:, tag:, path:, links-to:, with a leading - to negate)` });
+    if (!p || !RULES.includes(p.key) || !p.value) problems.push({ level: "error", message: `${here}: "${m}" is not a rule (${RULES_SAID})` });
     else if (p.key === "kind" && !["note", "question", "problem"].includes(p.value.toLowerCase())) problems.push({ level: "error", message: `${here}: "${m}": a kind is note, question or problem` });
+    else if (p.key === "type" && !(LENS_TYPES as readonly string[]).includes(p.value.toLowerCase())) problems.push({ level: "error", message: `${here}: "${m}": a type is note, picture or code` });
   }
   const kids = Array.isArray(r.islands) ? r.islands.map((k) => island(k, here, problems)).filter((k): k is Island => k !== null) : [];
   return { name, title: typeof r.title === "string" && r.title.trim() ? r.title.trim() : name, notes: strings(r.notes).map(normId), match, islands: kids };
@@ -77,12 +99,16 @@ export function parseLens(name: string, text: string): Lens {
   try { doc = parse(text) as Record<string, unknown>; } catch (e) { problems.push({ level: "error", message: `not TOML: ${(e as Error).message.split("\n")[0]}` }); }
   const islands = Array.isArray(doc.islands) ? doc.islands.map((k) => island(k, "", problems)).filter((k): k is Island => k !== null) : [];
   if (doc.islands !== undefined && !Array.isArray(doc.islands)) problems.push({ level: "error", message: "islands is a list of [[islands]] tables" });
-  return { name, title: typeof doc.title === "string" && doc.title.trim() ? doc.title.trim() : name, islands, problems };
+  if (doc.hidden !== undefined && !Array.isArray(doc.hidden)) problems.push({ level: "error", message: "hidden is a list of ids" });
+  const hidden = Array.isArray(doc.hidden) ? [...new Set(strings(doc.hidden).map(hiddenId).filter(Boolean))].sort() : null;
+  return { name, title: typeof doc.title === "string" && doc.title.trim() ? doc.title.trim() : name, islands, hidden, problems };
 }
 
-/** What the rules ask of each note of a base. */
+/** What the rules ask of each item of a base: its notes, and its files (which only a `type:` rule, or a list, selects). */
 export function lensNotes(b: Bundle): LensNote[] {
-  return [...b.concepts.values()].map((c) => ({ id: c.id, kind: c.kind, tags: c.tags, links: [...new Set(c.links.filter((l) => !l.broken && l.kind === "concept").map((l) => l.target))] }));
+  const notes = [...b.concepts.values()].map((c): LensNote => ({ id: c.id, kind: c.kind, tags: c.tags, type: "note", links: [...new Set([...c.links.filter((l) => !l.broken && l.kind === "concept").map((l) => l.target), ...c.cites.filter((x) => !x.broken).map((x) => x.target)])] }));
+  const files = [...b.files].map((f): LensNote => { const k = citeKind(f); return { id: f, kind: "file", tags: [], links: [], type: k === "image" ? "picture" : k === "code" ? "code" : "file" }; });
+  return [...notes, ...files];
 }
 
 /** An island in a lens as a shell draws it, with its notes in the order to read them. `ref` is its name on the map: a
@@ -95,6 +121,9 @@ export interface ResolvedIsland {
   ghosts: string[];
   /** Notes it lists that are not in the base. */
   gone: string[];
+  /** What its file says, for a shell that changes it: the ids it lists (as ids), and its rules as written. */
+  listed: string[];
+  match: string[];
   islands: ResolvedIsland[];
 }
 export interface ResolvedLens {
@@ -106,6 +135,11 @@ export interface ResolvedLens {
   order: string[];
   /** Each note's home island, by `ref` ("" for Elsewhere is `ELSEWHERE`). */
   home: Record<string, string>;
+  /** The hidden list the lens keeps (its own, or the base's where `ownHidden` is false), and what of the base it hides:
+   *  those are in no island and not in Elsewhere. */
+  hidden: string[];
+  ownHidden: boolean;
+  hiddenItems: string[];
   problems: LensProblem[];
 }
 export const ELSEWHERE = ":";
@@ -115,10 +149,21 @@ export const isIslandRef = (ref: string): boolean => ref.startsWith(":");
 
 interface Node { src: Island; ref: string; path: string; own: Map<string, number>; kids: Node[]; hits: number[] }
 
-/** A lens over the notes of a base. `rest` is not drawn: a note in no island goes to Elsewhere. */
-export function resolveLens(lens: Lens, notes: readonly LensNote[]): ResolvedLens {
+/** Every id an island of a lens lists, at any depth. */
+export function listedIn(islands: readonly Island[]): Set<string> {
+  const out = new Set<string>();
+  const walk = (list: readonly Island[]) => { for (const i of list) { i.notes.forEach((id) => out.add(id)); walk(i.islands); } };
+  walk(islands);
+  return out;
+}
+
+/** A lens over the items of a base (`lensNotes`). A note in no island goes to Elsewhere; a file in none is not in the
+ *  lens. What the lens's hidden list hides (`baseHidden`, the base's list, where the lens has none) is in neither. */
+export function resolveLens(lens: Lens, notes: readonly LensNote[], baseHidden: readonly string[] = []): ResolvedLens {
   const problems = [...lens.problems], byId = new Map(notes.map((n) => [n.id, n]));
   const sorted = [...notes].map((n) => n.id).sort();
+  const hiddenList = lens.hidden ?? [...new Set(baseHidden.map(hiddenId).filter(Boolean))].sort();
+  const listed = listedIn(lens.islands);
   const build = (list: Island[], above: string, under: string): Node[] => {
     const used = new Set<string>();
     return list.map((src) => {
@@ -128,21 +173,28 @@ export function resolveLens(lens: Lens, notes: readonly LensNote[]): ResolvedLen
       used.add(key);
       const path = under ? `${under} > ${src.name}` : src.name, ref = `${above}${above === ":" ? "" : "/"}${key}`;
       const own = new Map<string, number>();
-      src.notes.forEach((id, i) => { if (byId.has(id)) { if (!own.has(id)) own.set(id, i); } else problems.push({ level: "error", message: `${path}: ${id}.md is not in the base` }); });
+      src.notes.forEach((id, i) => { if (byId.has(id)) { if (!own.has(id)) own.set(id, i); } else problems.push({ level: "error", message: `${path}: ${citeKind(id) ? id : `${id}.md`} is not in the base` }); });
       const rules = src.match.flatMap((raw) => { const r = rule(raw); return r && RULES.includes(r.key) && r.value ? [{ ...r, raw }] : []; });
       const test = (r: (typeof rules)[number], n: LensNote): boolean => {
         const v = r.value;
         return r.key === "kind" ? n.kind === v.toLowerCase()
           : r.key === "tag" ? n.tags.some((t) => t.toLowerCase() === v.toLowerCase())
-          : r.key === "path" ? globRe(v.startsWith("/") ? v : `/${v}`).test(`/${n.id}.md`)
+          : r.key === "path" ? globRe(v.startsWith("/") ? v : `/${v}`).test(n.type && n.type !== "note" ? `/${n.id}` : `/${n.id}.md`)
+          : r.key === "type" ? (n.type ?? "note") === v.toLowerCase()
+          : r.key === "linked-from" ? (byId.get(normId(v))?.links.includes(n.id) ?? false)
           : n.links.includes(normId(v));
       };
-      const hits = rules.map(() => 0), positive = rules.filter((r) => !r.not);
+      // The kinds of item the island holds: those its `type:` rules name, else notes. A `type:` rule alone selects every
+      // item of its type; with other rules, it narrows what they select.
+      const types = new Set(rules.filter((r) => r.key === "type" && !r.not).map((r) => r.value.toLowerCase()));
+      if (!types.size) types.add("note");
+      const hits = rules.map(() => 0), positive = rules.filter((r) => !r.not), selecting = positive.filter((r) => r.key !== "type");
       let seq = 0;
       if (positive.length) for (const id of sorted) {
         const n = byId.get(id)!;
-        let any = false;
-        rules.forEach((r, k) => { if (test(r, n)) { hits[k]!++; if (!r.not) any = true; } });
+        if (!types.has(n.type ?? "note")) continue;
+        let any = !selecting.length;
+        rules.forEach((r, k) => { if (test(r, n)) { hits[k]!++; if (!r.not && r.key !== "type") any = true; } });
         if (any && !rules.some((r) => r.not && test(r, n)) && !own.has(id)) own.set(id, src.notes.length + seq++);
       }
       rules.forEach((r, k) => { if (!hits[k] && !r.not) problems.push({ level: "warning", message: `${path}: "${r.raw}" matches no note` }); });
@@ -163,9 +215,11 @@ export function resolveLens(lens: Lens, notes: readonly LensNote[]): ResolvedLen
     return out;
   };
   const home = new Map<string, Node>(), ghosts = new Map<Node, string[]>(), at = new Map<Node, string[]>();
-  const elsewhere: string[] = [];
+  const elsewhere: string[] = [], hiddenItems: string[] = [];
   for (const id of sorted) {
-    const p = places(roots, id);
+    const p = places(roots, id), note = (byId.get(id)!.type ?? "note") === "note";
+    if (!p.length && !note) continue;
+    if (hiddenList.length && hiddenBy(hiddenList, id, listed)) { hiddenItems.push(id); continue; }
     if (!p.length) { elsewhere.push(id); continue; }
     home.set(id, p[0]!);
     (at.get(p[0]!) ?? at.set(p[0]!, []).get(p[0]!)!).push(id);
@@ -177,14 +231,36 @@ export function resolveLens(lens: Lens, notes: readonly LensNote[]): ResolvedLen
     const mine = inOrder(n, at.get(n) ?? []), g = inOrder(n, ghosts.get(n) ?? []);
     order.push(...mine);
     const islands = n.kids.map(out);
-    const resolved: ResolvedIsland = { ref: n.ref, name: n.src.name, title: n.src.title, notes: mine, ghosts: g, gone: n.src.notes.filter((id) => !byId.has(id)), islands };
+    const resolved: ResolvedIsland = { ref: n.ref, name: n.src.name, title: n.src.title, notes: mine, ghosts: g, gone: n.src.notes.filter((id) => !byId.has(id)), listed: [...n.src.notes], match: [...n.src.match], islands };
     const total = (r: ResolvedIsland): number => r.notes.length + r.ghosts.length + r.islands.reduce((s, k) => s + total(k), 0);
     if (!total(resolved)) problems.push({ level: "warning", message: `${n.path}: holds no notes` });
     return resolved;
   };
   const islands = roots.map(out);
   order.push(...elsewhere);
-  return { name: lens.name, title: lens.title, islands, elsewhere, order, home: Object.fromEntries([...home].map(([id, n]) => [id, n.ref]).concat(elsewhere.map((id) => [id, ELSEWHERE]))), problems };
+  return { name: lens.name, title: lens.title, islands, elsewhere, order, home: Object.fromEntries([...home].map(([id, n]) => [id, n.ref]).concat(elsewhere.map((id) => [id, ELSEWHERE]))), hidden: hiddenList, ownHidden: lens.hidden !== null, hiddenItems, problems };
+}
+
+/** Where each item a lens shows is at home, by the path of its island's names (`Combat > Weapons`): what is in one of its
+ *  islands and not hidden in it. Elsewhere is not an island here. */
+export function lensHomes(lens: ResolvedLens): Map<string, string> {
+  const out = new Map<string, string>();
+  const walk = (list: ResolvedIsland[], above: string) => {
+    for (const i of list) {
+      const path = above ? `${above} > ${i.name}` : i.name;
+      for (const id of i.notes) out.set(id, path);
+      walk(i.islands, path);
+    }
+  };
+  walk(lens.islands, "");
+  return out;
+}
+
+/** The items a lens shows in its islands (home or ghost), not Elsewhere and not hidden. */
+export function lensShows(lens: ResolvedLens): Set<string> {
+  const out = new Set<string>();
+  for (const i of allIslands(lens)) for (const id of [...i.notes, ...i.ghosts]) out.add(id);
+  return out;
 }
 
 /** Every island of a resolved lens, parents before their islands. */
@@ -222,17 +298,24 @@ export const ghostRef = (id: string, island: string): string => `ghost:${id}:${i
 /** The note a ghost's ref stands for, or null where the ref is not a ghost's. */
 export const ghostOf = (ref: string): string | null => (ref.startsWith("ghost:") ? ref.slice(6, ref.indexOf(":", 6)) : null);
 
-/** The map's model of a lens: the model of the folders with its folders replaced by the lens's islands. Only notes are
- *  placed (a lens has no files in it yet); each note is the folders' item for it, drawn once, at its home. A ghost is an
- *  item of its own in the island that holds it, with no links: it takes room, and takes no part in routing. */
+/** The map's model of a lens: the model of the folders with its folders replaced by the lens's islands. What the lens
+ *  holds is placed (notes, and the files a `type:` rule or a list selects); each is the folders' item for it, drawn once,
+ *  at its home. A ghost is an item of its own in the island that holds it, with no links: it takes room, and takes no
+ *  part in routing. Only links between items placed are kept. */
 export function lensModel(model: MapModel, lens: ResolvedLens): MapModel {
   const items = new Map<string, MapNote>();
-  const find = (d: MapDir): void => { for (const c of d.children) if (c.kind === "dir") find(c); else if (c.id.startsWith("c:")) items.set(c.ref, c); };
+  const find = (d: MapDir): void => { for (const c of d.children) if (c.kind === "dir") find(c); else items.set(c.ref, c); };
   find(model.root);
+  // A file the folders' map draws in a folder of pictures (one item for the folder) is an item of its own in a lens.
+  for (const id of lens.order.concat(allIslands(lens).flatMap((i) => i.ghosts))) {
+    const of = items.has(id) ? null : citeKind(id);
+    if (of) items.set(id, { kind: "concept", id: `f:${id}`, ref: id, weight: 1, rank: 0, of });
+  }
   const dir = (i: ResolvedIsland): MapDir => ({ kind: "dir", id: `d:${i.ref}`, ref: i.ref, children: [...i.islands.map(dir), ...i.notes.flatMap((id) => items.get(id) ?? []), ...i.ghosts.flatMap((id): MapNote[] => { const n = items.get(id); return n ? [{ ...n, id: `g:${ghostRef(id, i.ref)}`, ref: ghostRef(id, i.ref) }] : []; })] });
   const children: (MapDir | MapNote)[] = lens.islands.map(dir);
   if (lens.elsewhere.length) children.push({ kind: "dir", id: `d:${ELSEWHERE}`, ref: ELSEWHERE, children: lens.elsewhere.flatMap((id) => items.get(id) ?? []) });
-  return { root: { kind: "dir", id: "d:", ref: "", children }, edges: model.edges.filter(([a, b]) => items.has(a) && items.has(b)) };
+  const placed = new Set(lens.order);
+  return { root: { kind: "dir", id: "d:", ref: "", children }, edges: model.edges.filter(([a, b]) => placed.has(a) && placed.has(b) && items.has(a) && items.has(b)) };
 }
 
 /** The titles of a resolved lens's islands by ref, for naming them on a map. */

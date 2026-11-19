@@ -108,6 +108,8 @@ test("a folder is zoomed to, open ground steps out, and the map is dragged and z
   const whole = await cell(page), box = (await page.locator(".atlas").boundingBox())!;
   await folder(page, "coding").getByRole("button", { name: "coding", exact: true }).click();
   await expect.poll(() => cell(page)).toBeGreaterThan(whole);
+  // Arrived: what is open ground is looked for once the map has stopped moving, or it is under a note by the click.
+  await expect.poll(async () => { const a = await cell(page); await page.waitForTimeout(120); return a === (await cell(page)); }).toBe(true);
   // Open ground: a corner of the map outside the folder zoomed to, and on nothing (the base grows as the tests run,
   // so where the folder lies changes).
   const open = await page.evaluate(({ x, y, w, h }) => {

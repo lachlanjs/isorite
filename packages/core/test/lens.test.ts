@@ -1,7 +1,7 @@
 // Lenses (docs/lenses.md): the file read, the notes resolved into islands, ghosts, Elsewhere, order, and a rename followed.
 
 import { expect, test } from "vitest";
-import { Bundle, ELSEWHERE, allIslands, ghostOf, globRe, islandNotes, lensModel, lensNotes, mapModel, parseLens, renameInLens, resolveLens } from "../src/index.ts";
+import { Bundle, ELSEWHERE, LensEditError, allIslands, editLens, ghostOf, globRe, hiddenBy, islandNotes, lensHomes, lensModel, lensNotes, lensShows, mapModel, newLensText, parseLens, renameInLens, resolveLens } from "../src/index.ts";
 
 const file = (path: string, meta: string, body = "") => ({ path, text: `---\n${meta}\n---\n\n${body}\n` });
 const base = Bundle.fromFiles([
@@ -123,4 +123,113 @@ test("a moved note is followed in a lens file: entries and exact path rules, in 
   expect(folder.text).toContain('"/fight/overview.md"');
   expect(folder.text).toContain('"path:/fight/**"');
   expect(folder.text).toContain('name = "combat"');
+});
+
+// ------------------------------------------------------------ linked-from, type, and each lens's hidden list
+
+const withFiles = Bundle.fromFiles([
+  file("combat/overview.md", "type: Concept\ntitle: Combat", "Read [hit boxes](/combat/hitboxes.md) and see ![a sword](/combat/sword.png)."),
+  file("combat/hitboxes.md", "type: Concept\ntitle: Hit boxes"),
+  file("design/damage.md", "type: Concept\ntitle: Damage", "Back to [combat](/combat/overview.md)."),
+  { path: "combat/sword.png", text: "" },
+  { path: "src/fight.ts", text: "" },
+  { path: "src/data.csv", text: "" },
+]);
+const items = lensNotes(withFiles);
+
+test("linked-from selects what a note links to, one hop; links-to what links to it", () => {
+  const r = resolveLens(parseLens("l", `[[islands]]\nname = "From"\nmatch = ["linked-from:/combat/overview.md"]\n[[islands]]\nname = "To"\nmatch = ["links-to:/combat/overview.md"]\n`), items);
+  expect(r.problems).toEqual([]);
+  expect(r.islands[0]!.notes).toEqual(["combat/hitboxes"]);
+  expect(r.islands[1]!.notes).toEqual(["design/damage"]);
+});
+
+test("type: an island holds notes unless a type rule names pictures or code; a file is listed by its path; others stay out", () => {
+  const r = resolveLens(parseLens("t", `[[islands]]\nname = "Pictures"\nmatch = ["type:picture"]\n[[islands]]\nname = "Code in src"\nmatch = ["type:code", "path:/src/**"]\n[[islands]]\nname = "Src notes"\nmatch = ["path:/src/**"]\n[[islands]]\nname = "Listed"\nnotes = ["/src/data.csv"]\n`), items);
+  expect(r.islands.map((i) => i.notes)).toEqual([["combat/sword.png"], ["src/fight.ts"], [], ["src/data.csv"]]);
+  // Files no island holds are not in the lens at all; Elsewhere is notes.
+  expect(r.elsewhere).toEqual(["combat/hitboxes", "combat/overview", "design/damage"]);
+  expect(parseLens("bad", `[[islands]]\nname = "A"\nmatch = ["type:video"]\n`).problems[0]!.message).toContain("a type is note, picture or code");
+  // The map places a file as the folders' map draws it, or as an item of its own.
+  const model = lensModel(mapModel(withFiles), r);
+  const refs = (d: typeof model.root): string[] => d.children.flatMap((c) => (c.kind === "dir" ? refs(c) : [c.ref]));
+  expect(refs(model.root)).toEqual(expect.arrayContaining(["combat/sword.png", "src/fight.ts", "src/data.csv"]));
+});
+
+test("a lens hides what its own list names, or the base's where it has none; a folder entry does not hide what the lens lists by id", () => {
+  const text = `[[islands]]\nname = "All"\nnotes = ["/combat/hitboxes.md"]\nmatch = ["path:/**"]\n`;
+  const inherits = resolveLens(parseLens("a", text), items, ["combat"]);
+  expect(inherits.ownHidden).toBe(false);
+  expect(inherits.hidden).toEqual(["combat"]);
+  // Listed by id beats the folder; the rest of the folder is hidden, and in no island nor Elsewhere.
+  expect(inherits.islands[0]!.notes).toEqual(["combat/hitboxes", "design/damage"]);
+  expect(inherits.hiddenItems).toEqual(["combat/overview"]);
+  const own = resolveLens(parseLens("b", `hidden = ["/design/damage.md"]\n${text}`), items, ["combat"]);
+  expect(own.ownHidden).toBe(true);
+  expect(own.islands[0]!.notes).toEqual(["combat/hitboxes", "combat/overview"]);
+  expect(own.hiddenItems).toEqual(["design/damage"]);
+  expect([...lensShows(own)]).toEqual(["combat/hitboxes", "combat/overview"]);
+  expect(lensHomes(own).get("combat/overview")).toBe("All");
+  expect(hiddenBy(["a"], "a/b")).toBe(true);
+  expect(hiddenBy(["a"], "a/b", new Set(["a/b"]))).toBe(false);
+  expect(hiddenBy(["a/b"], "a/b", new Set(["a/b"]))).toBe(true);
+  expect(hiddenBy(["a"], "ab")).toBe(false);
+});
+
+test("a lens is changed: islands added in place, nested, renamed, moved and removed; notes added in order and moved; the title", () => {
+  let text = newLensText("Learning");
+  expect(text).toBe('title = "Learning"\n');
+  const go = (edit: Parameters<typeof editLens>[1]) => { const r = editLens(text, edit); text = r.text; return r.said; };
+  go({ action: "add_island", island: "entropy", title: "Entropy", match: ["path:/learning/entropy/**"] });
+  go({ action: "add_island", island: "basics", at: 0 });
+  go({ action: "add_island", island: "entropy > Worked", notes: ["/a.md"] });
+  go({ action: "add_notes", island: "basics", notes: ["/b.md", "/c.md"] });
+  go({ action: "add_notes", island: "basics", notes: ["/c.md"], at: 0 });
+  go({ action: "add_notes", island: "Worked", notes: ["/a.md"] });
+  expect(text).toBe(`title = "Learning"
+
+[[islands]]
+name = "basics"
+notes = ["/c.md", "/b.md"]
+
+[[islands]]
+name = "entropy"
+title = "Entropy"
+match = ["path:/learning/entropy/**"]
+
+[[islands.islands]]
+name = "Worked"
+notes = ["/a.md"]
+`);
+  expect(parseLens("l", text).islands[1]!.islands[0]!.notes).toEqual(["a"]);
+  expect(go({ action: "rename_island", island: "basics", name: "first" })).toBe("Renamed the island basics to first.");
+  expect(parseLens("l", text).islands[0]).toMatchObject({ name: "first", title: "basics" });
+  go({ action: "move_island", island: "first", at: 5 });
+  expect(parseLens("l", text).islands.map((i) => i.name)).toEqual(["entropy", "first"]);
+  go({ action: "remove_notes", island: "first", notes: ["b"] });
+  go({ action: "title", title: "Learn" });
+  go({ action: "title", island: "entropy > worked", title: "Worked examples" });
+  go({ action: "set_match", island: "first", match: ["tag:x"] });
+  go({ action: "remove_island", island: "Worked examples" });
+  expect(parseLens("l", text)).toMatchObject({ title: "Learn", islands: [{ name: "entropy", islands: [] }, { name: "first", notes: ["c"], match: ["tag:x"] }] });
+});
+
+test("a change that cannot be made is refused, and says why", () => {
+  const text = `[[islands]]\nname = "A"\n[[islands.islands]]\nname = "X"\n[[islands]]\nname = "B"\n[[islands.islands]]\nname = "X"\n`;
+  const why = (edit: Parameters<typeof editLens>[1], t = text) => { try { editLens(t, edit); return null; } catch (e) { expect(e).toBeInstanceOf(LensEditError); return (e as LensEditError).message; } };
+  expect(why({ action: "remove_island", island: "X" })).toContain("more than one island is called X");
+  expect(why({ action: "remove_island", island: "Z" })).toBe("there is no island Z in this lens");
+  expect(why({ action: "add_island", island: "A" })).toBe("there is already an island A");
+  expect(why({ action: "add_island", island: "C", match: ["colour:red"] })).toContain("is not a rule");
+  expect(why({ action: "title", title: "x" }, "islands = [")).toContain("not TOML");
+  expect(why({ action: "remove_island", island: "A > X" })).toBeNull();
+});
+
+test("hidden in a lens alone: the base's list is where a lens without one starts; set_hidden null goes back to it", () => {
+  const base = ["src"];
+  const hid = editLens(newLensText("T"), { action: "hide", ids: ["/a/b.md"] }, base);
+  expect(parseLens("t", hid.text).hidden).toEqual(["a/b", "src"]);
+  const shown = editLens(hid.text, { action: "unhide", ids: ["src/"] }, base);
+  expect(parseLens("t", shown.text).hidden).toEqual(["a/b"]);
+  expect(parseLens("t", editLens(shown.text, { action: "set_hidden", ids: null }).text).hidden).toBeNull();
 });

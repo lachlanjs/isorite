@@ -10,7 +10,7 @@ import { writeExample } from "@isorite/example/node";
 import type { TerminalView } from "@isorite/engine";
 import { PiHost } from "../src/pi/host.ts";
 import { scriptedModel } from "../src/pi/scripted.ts";
-import { BUILTIN_SKILLS, Skills, discover, filesOf, readSkillFile, skillTool } from "../src/pi/skills.ts";
+import { BUILTIN_SKILLS, Skills, bodyOf, discover, filesOf, readSkillFile, skillTool } from "../src/pi/skills.ts";
 import { locate, openEngine } from "../src/serve.ts";
 
 const root = mkdtempSync(join(tmpdir(), "isorite-skills-"));
@@ -36,10 +36,15 @@ test("the learn skill is found, names its method, and its reference files are re
   expect(broken).toEqual([]);
   const learn = skills.find((s) => s.name === "learn")!;
   expect(learn.source).toBe("built-in");
-  expect(learn.description).toMatch(/evidence ledger/);
+  expect(learn.description).toMatch(/learning lens/);
+  expect(learn.description).toMatch(/socratic-tutor is for questions-only/);
+  expect(learn.description).toMatch(/Not for a one-off/);
+  // The body is loaded whole on every lesson: it stays within what it cost before the goal and map were added.
+  expect(bodyOf(learn).split(/\s+/).length).toBeLessThanOrEqual(2000);
   expect(filesOf(learn)).toEqual(["ledger.md", "techniques.md"]);
   expect(readSkillFile(learn, "techniques.md")).toMatch(/Worked example with fading/);
   expect(readSkillFile(learn, "ledger.md")).toMatch(/Review schedule/);
+  expect(readSkillFile(learn, "ledger.md")).toMatch(/\.isorite\/lenses\/learning\.toml/);
 });
 
 test("a later source wins by name, and each says where it is from", async () => {

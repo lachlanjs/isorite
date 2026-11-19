@@ -21,7 +21,7 @@ async function open(similar = false) {
 
 test("an agent is offered a brief of the base, the look-ups, and artifacts; find_similar only where there is a search by meaning", async () => {
   const names = async (similar: boolean) => (await (await open(similar)).engine.agentTools()).map((t) => t.function.name);
-  const rest = ["outline_note", "read_note", "edit_note", "write_note", "ask_question", "offer_text", "read_data", "artifact_recipe", "write_artifact", "read_artifact"];
+  const rest = ["outline_note", "read_note", "edit_note", "write_note", "edit_lens", "ask_question", "offer_text", "read_data", "artifact_recipe", "write_artifact", "read_artifact"];
   expect(await names(false)).toEqual(["brief_base", "search_notes", ...rest]);
   expect(await names(true)).toEqual(["brief_base", "search_notes", "find_similar", ...rest]);
 });

@@ -10,7 +10,7 @@ Ctrl is ⌘ on a Mac.
 **Writing**
 
 - `[[` and a few letters of a title: link a note. Alt+1, 2 or 3 sets the link's kind: [requires, uses, see also](/notes/links-and-their-kinds.md "uses").
-- Ctrl+click a link: follow it.
+- Click a link, or Alt+Enter with the cursor in it: follow it. Arrow keys into a link show its Markdown.
 - `[[!` and a name: put a picture, a question or a problem in the note.
 - Ctrl+[ and Ctrl+]: point at the selected passage in your message to [the agent](/agents/give-it-notes.md "see also").
 

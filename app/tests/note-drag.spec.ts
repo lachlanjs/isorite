@@ -78,6 +78,8 @@ test("held, a note shows three tags: the red one asks before deleting, the gold 
   await page.mouse.up();
   await page.getByRole("alertdialog").getByRole("button", { name: "delete", exact: true }).click();
   await expect.poll(() => existsSync(join(NOTES, "held", `doomed-${p}.md`))).toBe(false);
+  // Its row gone from the list, not still folding away above the next one held (which would move from under the press).
+  await expect(page.locator("li", { hasText: `Doomed ${p}` })).toHaveCount(0);
   // Gold: sent.
   await holdThenGo(page, page.locator("li", { hasText: `Sent ${p}` }), "send");
   await page.mouse.up();

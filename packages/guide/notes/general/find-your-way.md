@@ -15,7 +15,7 @@ To get about:
 
 - Follow a link: Ctrl+click it in a note (⌘ on a Mac), or click it in the agent's answer.
 - Click a note on the Atlas to light what it rests on and what rests on it, and again to open it.
-- Press Ctrl+K (⌘K) and type a few words: matches are outlined on the map as you type, and Enter opens one.
+- Press Ctrl+K (⌘K) and type a few words: matches are outlined on the map as you type, and Enter opens one. With a [lens](/atlas/lenses.md "see also") shown, it looks in the lens, and each match says the island it is in; narrow it to one island, or widen it to every note, where what the lens hides comes last.
 - Drag the map to move, pinch or scroll to zoom. A pip at its edge points to the open note when it is off the screen.
 - Each pane's header has [switches](/general/the-switches.md "see also") for what it shows. On a phone the panes are a row, swiped or tapped between.
 

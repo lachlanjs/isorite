@@ -15,7 +15,7 @@ import { tables } from "./tables.ts";
 import { endList, format, formatKeymap, type Format } from "./commands.ts";
 import { linkAt, linkControl } from "./linkControl.ts";
 import { linkCompletion, type LinkTarget, type NoteMaker, type PictureSource } from "./links.ts";
-import { artifacts, livePreview, livePreviewTheme, codeBroken, pictures, type ArtifactAt, type PictureAt } from "./livePreview.ts";
+import { artifacts, livePreview, livePreviewTheme, codeBroken, linkBroken, pictures, type ArtifactAt, type PictureAt } from "./livePreview.ts";
 import { mathsSyntax } from "./maths.ts";
 import { fileOf, noteOf } from "./noteOf.ts";
 import { overlays, touchedLines } from "./overlays.ts";
@@ -59,6 +59,8 @@ export interface EditorOptions {
   onPictures?: (files: File[], at: number, pasted: boolean) => void;
   /** The note or folder a link under the mouse names, and null once it leaves one (M17: lit on the Atlas). */
   onPoint?: (to: Pointed | null) => void;
+  /** Whether a link names a note or folder of the base that is not there: its chip is drawn as broken. */
+  linkBroken?: (href: string) => boolean;
 }
 
 // Plain source is set in the monospaced face; the live preview in the reading one.
@@ -148,7 +150,7 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       syntaxHighlighting(highlight),
       syntaxHighlighting(codeHighlighter),
       theme,
-      ...(opts.source ? [sourceTheme] : [livePreview, livePreviewTheme, renderedBlocks, blocksTheme, linkControl, ...(opts.embeds ? [embeds.of(opts.embeds)] : []), ...(opts.codeBroken ? [codeBroken.of(opts.codeBroken)] : []), ...(opts.pictures ? [pictures.of(opts.pictures)] : []), ...(opts.artifacts ? [artifacts.of(opts.artifacts)] : [])]),
+      ...(opts.source ? [sourceTheme] : [livePreview, livePreviewTheme, renderedBlocks, blocksTheme, linkControl, ...(opts.embeds ? [embeds.of(opts.embeds)] : []), ...(opts.codeBroken ? [codeBroken.of(opts.codeBroken)] : []), ...(opts.linkBroken ? [linkBroken.of(opts.linkBroken)] : []), ...(opts.pictures ? [pictures.of(opts.pictures)] : []), ...(opts.artifacts ? [artifacts.of(opts.artifacts)] : [])]),
       closeBrackets(),
       tables(),
       // Only brackets: closing quotes would get in the way of apostrophes in prose.
@@ -164,6 +166,8 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
       keymap.of([
         { key: "Mod-s", preventDefault: true, run: () => { opts.onSave(); return true; } },
         { key: "Mod-Enter", preventDefault: true, run: (view) => { opts.onAsk?.(where(view.state)); return Boolean(opts.onAsk); } },
+        // The link the cursor is in, opened from the keyboard, as a press on its chip opens it.
+        { key: "Alt-Enter", preventDefault: true, run: (view) => follow(view, view.state.selection.main.head, opts) },
         ...formatKeymap,
         ...closeBracketsKeymap,
         ...completionKeymap,
@@ -172,23 +176,21 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
         ...historyKeymap,
       ]),
       EditorView.domEventHandlers({
+        // A link's chip, pressed, opens what it names; so does Ctrl or Cmd and a click anywhere in a link (its
+        // Markdown showing). Enter on a chip the keyboard is on (read mode) is the same.
         mousedown(event, view) {
-          if (!opts.onFollow || !(event.ctrlKey || event.metaKey) || event.button !== 0) return false;
-          const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
-          const link = pos === null ? null : linkAt(view.state, pos);
-          // A link to code (`code:path#anchor`) is not one the link control knows (it has no kind), so it is looked for here.
-          const code = pos === null || link ? null : codeLinkAt(view.state, pos);
-          if (code && opts.onCode) { event.preventDefault(); opts.onCode(code); return true; }
-          // A note, or since M23 a file of the notes (an artifact, data, …), shown in place or linked.
-          const id = !link ? null : link.embed ? fileOf(link.url) : noteOf(link.url) ?? fileOf(link.url);
-          if (id === null) {
-            if (!link || !opts.onCode || !/^(code|global):/.test(link.url.trim())) return false;
-            event.preventDefault();
-            opts.onCode(link.url.trim());
-            return true;
-          }
+          if (event.button !== 0) return false;
+          const chip = chipOf(event.target);
+          if (!chip && !(event.ctrlKey || event.metaKey)) return false;
+          const pos = chip ? view.posAtDOM(chip) : view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
+          if (pos === null || !follow(view, pos, opts)) return false;
           event.preventDefault();
-          opts.onFollow(id);
+          return true;
+        },
+        keydown(event, view) {
+          const chip = event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.altKey ? chipOf(event.target) : null;
+          if (!chip || !follow(view, view.posAtDOM(chip), opts)) return false;
+          event.preventDefault();
           return true;
         },
       }),
@@ -200,17 +202,34 @@ export function createEditor(parent: HTMLElement, opts: EditorOptions): EditorVi
   return new EditorView({ state, parent });
 }
 
-/** The address of the link to code (`code:…`), plain or an embed, that a position is in or at the end of. */
-function codeLinkAt(state: EditorState, pos: number): string | null {
+/** The address of the link (or embed) that a position is in or at the end of. */
+function urlAt(state: EditorState, pos: number): string | null {
   const tree = syntaxTree(state);
   for (const side of [-1, 1] as const) {
     for (let n: ReturnType<typeof tree.resolveInner> | null = tree.resolveInner(pos, side); n; n = n.parent) {
       if (n.name !== "Link" && n.name !== "Image") continue;
-      const u = n.getChild("URL"), url = u ? state.sliceDoc(u.from, u.to).trim() : "";
-      return /^(code|global):/.test(url) ? url : null;
+      const u = n.getChild("URL");
+      return u ? state.sliceDoc(u.from, u.to).trim() : null;
     }
   }
   return null;
+}
+
+/** A link's chip (livePreview.ts) an event happened in, if any. */
+const chipOf = (t: EventTarget | null): HTMLElement | null => (t instanceof Element ? t.closest<HTMLElement>(".cm-lp-chip") : null);
+
+/** Open what the link at a position names: a note or a file of the notes in its pane, code in the code reader (or
+ *  another base's page), the web in a tab of its own. Whether there was a link there to open. */
+function follow(view: EditorView, pos: number, opts: EditorOptions): boolean {
+  const link = linkAt(view.state, pos);
+  // A note, or since M23 a file of the notes (an artifact, data, …), shown in place or linked.
+  const id = !link ? null : link.embed ? fileOf(link.url) : noteOf(link.url) ?? fileOf(link.url);
+  if (id !== null) { if (!opts.onFollow) return false; opts.onFollow(id); return true; }
+  // A link to code (`code:path#anchor`) or to the global base is not one the link control knows (it has no kind).
+  const url = urlAt(view.state, pos);
+  if (url && /^(code|global):/.test(url) && opts.onCode) { opts.onCode(url); return true; }
+  if (url && /^https?:\/\//i.test(url) && !link) { window.open(url, "_blank", "noopener"); return true; }
+  return false;
 }
 
 /** Take a text written elsewhere (an agent's edit, their version after a conflict, a version restored). Only what

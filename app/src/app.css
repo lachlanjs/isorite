@@ -204,6 +204,9 @@ canvas.lustre { position: fixed; z-index: 999; pointer-events: none; }
 .vein:hover, .vein.lit { color: var(--lattice); text-decoration: none; }
 .vein:hover::after, .vein.lit::after { background-position: 140% 0; transition: background-position var(--t-result) var(--ease-out); }
 @media (prefers-reduced-motion: reduce) { .vein-row::before, .vein-row::after, .vein::after { transition: none !important; } }
+/* Where a pointer came from, in the agent's session, lit for a moment when its chip is pressed (reveal.ts). Blue: it
+   is your reading, not the agent's work. The text keeps its colour; an underline marks it beside the tint. */
+::highlight(revealed) { background-color: color-mix(in srgb, var(--lattice) 30%, transparent); text-decoration: underline 2px var(--lattice); }
 
 /* What a hold does once let go, seen happen (flight.ts): the agent's gold diamond flying to it and the ring where it
    lands, and the card carried as it is put down. */
