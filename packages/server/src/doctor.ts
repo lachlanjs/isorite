@@ -11,7 +11,8 @@ import { getCACertificates } from "node:tls";
 import { join, resolve } from "node:path";
 import { OWN_DIR, SETTINGS_FILE, parseSettings } from "@isorite/core";
 import { loadBundle } from "@isorite/core/node";
-import { configPath, readConfig } from "./config.ts";
+import { configPath, readConfig, table, type Table } from "./config.ts";
+import { checkAgent, type AgentPort } from "./doctor-agent.ts";
 import { repoOf } from "./git.ts";
 import { cacheDir } from "./embedder.ts";
 import { mirrorOf, modelDir, modelInfo, modelPlaces, RELEASE, RELEASE_SHA256, type ModelInfo } from "./model.ts";
@@ -38,6 +39,10 @@ export interface DoctorOptions {
   port?: number;
   /** Asks a yes or no on the terminal (M25: whether to write the project's MCP config); none, nothing is asked. */
   ask?: (question: string) => Promise<boolean>;
+  /** Asks for a key on the terminal, unseen; none, a refused key is only said. */
+  secret?: (question: string) => Promise<string>;
+  /** The agent's keys and model, where a test stands in for them. */
+  agent?: AgentPort;
   version?: string;
   /** How Node was started: its flags, as process.execArgv. */
   execArgv?: string[];
@@ -69,10 +74,13 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
   const path = configPath(env), execArgv = o.execArgv ?? process.execArgv;
 
   // The configuration: the device's id, and (until M25) the agent's provider, now left as written and not read.
+  let config: Table = {};
   if (!existsSync(path)) say("config", "ok", `there is no ${path} yet: it is made when a base is first opened`);
   else try {
-    const config = readConfig(path);
-    say("config", "ok", config.provider || config.tiers ? `${path}: its [provider] and [tiers] were the agent's, and are no longer read; your agent's model is its own` : path);
+    config = readConfig(path);
+    // [provider] with a url is a gateway's, which is read; without one it is how the agent's key was kept until M25.
+    const old = (config.provider && typeof table(config.provider).url !== "string") || config.tiers;
+    say("config", old ? "warn" : "ok", old ? `${path}: its [provider] and [tiers] are from before M25 and are not read. The agent's key and model are kept apart: Model and key… in the Agent pane, or isorite setup` : path);
   } catch (e) {
     say("config", "fail", (e as Error).message);
   }
@@ -168,6 +176,10 @@ export async function doctor(folder: string | undefined, o: DoctorOptions = {}):
       say("notes", "fail", (e as Error).message);
     }
   }
+
+  // isorite's own agent: its model, and whether the provider takes its key. Last, as it loads pi, which changes how
+  // later requests are made, and as it is the slowest.
+  await checkAgent({ env, config, say, note: (line) => { if (!o.report) out(line); }, ...(o.offline ? { offline: true } : {}), ...(o.report ? {} : { ...(o.ask ? { ask: o.ask } : {}), ...(o.secret ? { secret: o.secret } : {}) }), ...(o.agent ? { agent: o.agent } : {}) });
 
   const failed = checks.filter((c) => c.outcome === "fail").length;
   if (o.report) {

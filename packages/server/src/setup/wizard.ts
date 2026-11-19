@@ -10,6 +10,7 @@ import { rememberBase } from "../config.ts";
 import { baseCandidates, prepareBase, shown } from "./base.ts";
 import { environmentChecks, type Finding, type Probes } from "./checks.ts";
 import { connect, detectHarnesses, harnessById, type FoundHarness } from "./harness.ts";
+import { keyRefusal } from "../network.ts";
 import { preferredModel, providerStates, writeGateway } from "./own.ts";
 import { Cancelled, type Prompter } from "./prompt.ts";
 
@@ -139,6 +140,11 @@ async function ownAgent(o: SetupOptions, io: Ports, problems: string[]): Promise
         p.say(`  ${paint.ok} key from ${o.keyEnv} kept in isorite's data folder (readable only by you)`);
       } else if (s.kept) {
         p.say(`  ${paint.ok} using the ${s.name} key kept earlier`);
+        // Run again to change it: a kept key was never offered for replacing, only a refused one.
+        if (!o.yes && (await p.confirm("Replace it with another key?", false))) {
+          const key = (await p.secret(`Paste the new ${s.name} key (Enter to keep the old one):`)).trim();
+          if (key) { await io.agent.keep(provider, key); p.say(`  ${paint.ok} the new key is kept`); }
+        }
       } else if (s.set) {
         p.say(`  ${paint.ok} using ${s.env} from your environment`);
         if (!o.yes && (await p.confirm("Keep a copy where isorite keeps keys (readable only by you), so it works from any terminal?", true))) await io.agent.keep(provider, env[s.env]!);
@@ -163,9 +169,21 @@ async function ownAgent(o: SetupOptions, io: Ports, problems: string[]): Promise
 
     const test = o.test ?? (!o.yes && (await p.confirm("Test it with one tiny request (a few tokens, billed to your key)?", true)));
     if (test) {
-      try { const r = await io.agent.check(provider, model); p.say(`  ${paint.ok} it answered in ${r.ms} ms`); } catch (e) {
-        problems.push(`the test request failed: ${(e as Error).message}`);
-        p.say(`  ${paint.warn} the test request failed: ${(e as Error).message}\n      ${dim("saved anyway; the Agent pane's settings can change the key or model and check again")}`);
+      let failed: Error | null = null;
+      try { const r = await io.agent.check(provider, model); p.say(`  ${paint.ok} it answered in ${r.ms} ms`); } catch (e) { failed = e as Error; }
+      // A key the provider refuses (expired, revoked, mistyped) is the likeliest failure, and one a person can mend now.
+      const refusal = failed ? keyRefusal(failed.message) : null;
+      if (failed && refusal && !o.yes && provider !== "gateway") {
+        p.say(`  ${paint.warn} ${states.find((x) => x.id === provider)?.name ?? provider} refuses the key: ${refusal}`);
+        const fresh = (await p.secret("Paste a new key to replace it (Enter to leave it):")).trim();
+        if (fresh) {
+          await io.agent.keep(provider, fresh);
+          try { const r = await io.agent.check(provider, model); p.say(`  ${paint.ok} the new key is kept, and it answered in ${r.ms} ms`); failed = null; } catch (e) { failed = e as Error; }
+        }
+      }
+      if (failed) {
+        problems.push(`the test request failed: ${failed.message}`);
+        p.say(`  ${paint.warn} the test request failed: ${failed.message}\n      ${dim("saved anyway; the Agent pane's settings can change the key or model and check again, and isorite doctor says what is wrong")}`);
       }
     }
     return true;

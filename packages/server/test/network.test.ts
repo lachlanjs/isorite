@@ -39,7 +39,7 @@ describe("the isorite command, inside a company", () => {
   afterAll(() => { proxy.close(); rmSync(root, { recursive: true, force: true }); });
 
   const doctor = (env: NodeJS.ProcessEnv) => new Promise<string>((done) => {
-    execFile(process.execPath, [MAIN, "doctor", "--port", "1"], { env: { PATH: process.env.PATH, HOME: process.env.HOME, XDG_CONFIG_HOME: root, ISORITE_EMBED_DIR: join(root, "no-model"), ISORITE_MODEL_BASE_URL: "https://models.corp.example/isorite", ...env }, timeout: 60_000 }, (_e, stdout, stderr) => done(stdout + stderr));
+    execFile(process.execPath, [MAIN, "doctor", "--port", "1"], { env: { PATH: process.env.PATH, HOME: process.env.HOME, XDG_CONFIG_HOME: root, XDG_DATA_HOME: join(root, "data"), ISORITE_EMBED_DIR: join(root, "no-model"), ISORITE_MODEL_BASE_URL: "https://models.corp.example/isorite", ...env }, timeout: 60_000 }, (_e, stdout, stderr) => done(stdout + stderr));
   });
 
   it("goes through HTTPS_PROXY without being told, and trusts the system's authorities", async () => {

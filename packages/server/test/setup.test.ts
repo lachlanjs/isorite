@@ -230,6 +230,33 @@ describe("the wizard", () => {
     expect(m.chosen).toHaveLength(1);
   });
 
+  it("a key the provider refuses is offered a replacement, which is kept and tried", async () => {
+    // base, agent, provider: Enter; key typed; model: Enter; test: yes; then the new key; fetch model: no; start: no.
+    const p = person(["", "", "", "sk-or-OLD", "", true, "sk-or-NEW", false, false]);
+    const m = machine({ person: p });
+    let tries = 0;
+    m.ports.agent.check = async () => { if (!tries++) throw new Error('401: {"message":"API key expired.","code":401}'); return { ms: 9, said: "ready" }; };
+    const r = await runSetup({}, m.ports);
+    expect(m.kept).toEqual({ openrouter: "sk-or-NEW" });
+    expect(tries).toBe(2);
+    expect(r.problems).toEqual([]);
+    const said = p.said.join("\n");
+    expect(said).toContain("refuses the key: API key expired");
+    expect(said).not.toContain("OLD");
+    expect(said).not.toContain("NEW");
+  });
+
+  it("a key kept earlier can be replaced when asked, and the model changed", async () => {
+    // base, agent, provider (the one kept): Enter; replace: yes; new key; model: no to the guess, then a name; test: no; fetch model: no; start: no.
+    const p = person(["", "", "", true, "sk-or-FRESH", false, "my/model", false, false, false]);
+    const m = machine({ person: p });
+    m.kept.openrouter = "sk-or-STALE";
+    await runSetup({}, m.ports);
+    expect(m.kept).toEqual({ openrouter: "sk-or-FRESH" });
+    expect(m.chosen).toEqual(["openrouter/my/model"]);
+    expect(p.said.join("\n")).not.toContain("FRESH");
+  });
+
   it("stops cleanly when the person does (Ctrl-C): the error is the wizard's own", async () => {
     const m = machine({ person: person([0]) }); // answers the base, then nothing
     await expect(runSetup({}, m.ports)).rejects.toBeInstanceOf(Cancelled);

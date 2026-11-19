@@ -48,7 +48,13 @@ export function changedIn(t: TerminalTurn): string[] {
 }
 /** Why a turn failed, in a few words, and what would put it right. */
 export function failure(message: string): { said: string; fix: "settings" | "retry" } {
-  if (/api.?key|no key|unauthori[sz]ed|\b401\b|\b403\b|authentication|credential/i.test(message)) return { said: "No key for this model.", fix: "settings" };
+  // A key that is there and refused (expired, revoked) is not a missing one: say what the provider said, as it is
+  // what to act on, and the settings' Test then tries the key again.
+  if (/\b40[123]\b|unauthori[sz]ed|invalid[ _-]?(api[ _-]?)?(key|token)|api key (expired|revoked|invalid)|key (has )?expired|authentication (failed|error)/i.test(message)) {
+    const why = /"message"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(message)?.[1]?.replace(/[.\s]+$/, "");
+    return { said: `The provider refused the key${why && why.length < 80 ? `: ${why}` : ""}.`, fix: "settings" };
+  }
+  if (/api.?key|no key|credential|authentication/i.test(message)) return { said: "No key for this model.", fix: "settings" };
   if (/rate.?limit|\b429\b|too many requests|overloaded|\b529\b/i.test(message)) return { said: "Rate limited by the provider.", fix: "retry" };
   if (/model.*not (found|exist)|no such model|\b404\b/i.test(message)) return { said: "The provider has no such model.", fix: "settings" };
   if (/fetch failed|ECONN|ENOTFOUND|network|socket|timed? ?out/i.test(message)) return { said: "Could not reach the provider.", fix: "retry" };

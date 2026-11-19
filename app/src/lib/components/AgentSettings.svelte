@@ -64,6 +64,11 @@
     <label class="hidden-label" for="agents">AGENTS.md: your instructions for this base</label>
     <textarea id="agents" class="agents" bind:value={agents} rows="6" spellcheck="true" placeholder="Instructions for every agent" title="AGENTS.md" onblur={() => void keepAgents()}></textarea>
   {/if}
+  {#if pi && !local}
+    <!-- Over a tunnel or another name, the model and keys are not offered (the server refuses them too): say so, and where they are. -->
+    <h2 class="label">Model</h2>
+    <p class="note" data-testid="pi-remote">The model and key are set only on the machine isorite runs on: open it there as localhost, or in its terminal run <code>isorite doctor</code> (it tries the key) or <code>isorite setup</code>.</p>
+  {/if}
   {#if model}
     <h2 class="label">Model</h2>
     {#if model.source === "environment"}<p class="note">ISORITE_PI sets the model.</p>{/if}

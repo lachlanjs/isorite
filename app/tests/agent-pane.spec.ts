@@ -171,6 +171,10 @@ test("a failure is said in a few words with the one thing to do: Retry after a r
   await expect(limited.locator(".said")).toHaveCount(0);
   const keyless = await ask(page, `fail No API key for provider: openrouter\n${name()} keyless`, `${name()} keyless`);
   await expect(keyless.getByRole("alert")).toContainText("No key for this model.");
+  // A key that is there and refused is not a missing one: the provider's words are said.
+  const refused = await ask(page, `fail 401: {"message":"API key expired.","code":401}\n${name()} refused`, `${name()} refused`);
+  await expect(refused.getByRole("alert")).toContainText("The provider refused the key: API key expired.");
+  await expect(refused.getByRole("alert")).not.toContainText("No key");
   await shot(page, "agent-failed");
   await keyless.getByRole("button", { name: "Open settings" }).click();
   await expect(page.getByRole("dialog", { name: "Agent settings" })).toBeVisible();

@@ -17,7 +17,7 @@ async function run(toml: string | null, o: DoctorOptions & { folder?: string } =
   mkdirSync(join(root, "isorite"));
   if (toml !== null) writeFileSync(join(root, "isorite", "config.toml"), toml);
   const lines: string[] = [];
-  const code = await doctor(o.folder, { port: 1, execArgv: [], ...o, env: { XDG_CONFIG_HOME: root, ...o.env }, out: (l) => lines.push(l) });
+  const code = await doctor(o.folder, { port: 1, execArgv: [], ...o, env: { XDG_CONFIG_HOME: root, XDG_DATA_HOME: join(root, "data"), ...o.env }, out: (l) => lines.push(l) });
   return { code, text: lines.join("\n") };
 }
 const DEVICE = 'device = "abcd1234"\n';
@@ -31,10 +31,111 @@ describe("isorite doctor", () => {
     expect(code).toBe(0);
   });
 
-  it("says the agent's provider, from before M25, is no longer read", async () => {
+  it("says the agent's provider, from before M25, is no longer read, and that a key there is not used", async () => {
     const { text } = await run(`${DEVICE}[provider]\nkey = "sk-or-old"\n[tiers]\nmid = "x"\n`, { offline: true });
-    expect(text).toContain("its [provider] and [tiers] were the agent's, and are no longer read; your agent's model is its own");
+    expect(text).toContain("! config:");
+    expect(text).toContain("are from before M25 and are not read");
     expect(text).not.toContain("sk-or-old");
+  });
+
+  it("does not call a gateway's [provider] old", async () => {
+    const { text } = await run(`${DEVICE}[provider]\nurl = "https://gw.example.com/v1"\n`, { offline: true });
+    expect(text).toMatch(/✓ config: /);
+  });
+
+  describe("the agent", () => {
+    /** The agent's keys, stood in for: what is chosen, where each key comes from, and what the provider answers. */
+    function agent(o: { choice?: { provider: string; model: string } | null; source?: "saved" | "environment" | null; answers: (key: string | null) => string | null; differs?: boolean }) {
+      let source = o.source ?? null, key: string | null = source ? "current" : null;
+      const kept: string[] = [];
+      return {
+        kept,
+        port: {
+          choice: async () => (o.choice === undefined ? { provider: "openrouter", model: "m/x" } : o.choice),
+          sources: async () => ({ openrouter: source }),
+          differs: async () => o.differs ?? false,
+          keep: async (_p: string, k: string) => { kept.push(k); key = k; source = "saved"; },
+          check: async () => { const bad = o.answers(key); if (bad) throw new Error(bad); return { ms: 800, said: "ready" }; },
+        },
+      };
+    }
+    const EXPIRED = '401: {"message":"API key expired.","code":401}';
+
+    it("says nothing is chosen without failing: an agent of your own needs no model", async () => {
+      const a = agent({ choice: null, answers: () => null });
+      const { text, code } = await run(DEVICE, { agent: a.port });
+      expect(text).toContain("– agent: isorite's own agent has no model chosen");
+      expect(code).toBe(0);
+    });
+
+    it("tries the key with one request, and says it answered", async () => {
+      const a = agent({ source: "saved", answers: () => null });
+      const { text, code } = await run(DEVICE, { agent: a.port });
+      expect(text).toContain("✓ agent: OpenRouter, m/x: the key saved in isorite's data folder answered in 0.8s");
+      expect(code).toBe(0);
+    });
+
+    it("sends no request with --offline", async () => {
+      const a = agent({ source: "saved", answers: () => { throw new Error("asked"); } });
+      const { text } = await run(DEVICE, { agent: a.port, offline: true });
+      expect(text).toContain("not tried: --offline");
+    });
+
+    it("fails a key the provider refuses, in its words, and points at the old config.toml key that is not read", async () => {
+      const a = agent({ source: "saved", answers: () => EXPIRED });
+      const { text, code } = await run(`${DEVICE}[provider]\nkey = "sk-or-NEWER"\n`, { agent: a.port });
+      expect(text).toContain("✗ agent: OpenRouter, m/x: OpenRouter refuses the key saved in isorite's data folder: API key expired.");
+      expect(text).toContain("Agent pane's settings");
+      expect(text).toContain("The key in config.toml's [provider] is not read");
+      expect(text).not.toContain("NEWER");
+      expect(code).toBe(1);
+    });
+
+    it("fails where there is no key at all, naming the variable", async () => {
+      const a = agent({ source: null, answers: () => null });
+      const { text, code } = await run(DEVICE, { agent: a.port });
+      expect(text).toContain("no key for OpenRouter");
+      expect(text).toContain("OPENROUTER_API_KEY");
+      expect(code).toBe(1);
+    });
+
+    it("says what is not the key's fault as the provider said it", async () => {
+      const a = agent({ source: "saved", answers: () => "Connection error." });
+      const { text } = await run(DEVICE, { agent: a.port });
+      expect(text).toContain("✗ agent: OpenRouter, m/x: Connection error.");
+    });
+
+    it("warns when the saved key hides another in the environment", async () => {
+      const a = agent({ source: "saved", differs: true, answers: () => null });
+      const { text } = await run(DEVICE, { agent: a.port });
+      expect(text).toContain("! agent key: OPENROUTER_API_KEY is set and holds another key than the one saved");
+    });
+
+    it("at a terminal, offers the key an old config.toml holds, keeps it, and passes", async () => {
+      const a = agent({ source: "saved", answers: (key) => (key === "sk-or-NEWER" ? null : EXPIRED) });
+      const asked: string[] = [];
+      const { text, code } = await run(`${DEVICE}[provider]\nkey = "sk-or-NEWER"\n`, { agent: a.port, ask: async (q) => { asked.push(q); return true; } });
+      expect(asked[0]).toContain("Keep the key in config.toml's [provider] as your OpenRouter key");
+      expect(a.kept).toEqual(["sk-or-NEWER"]);
+      expect(text).toContain("✓ agent: OpenRouter, m/x: the new key is kept, and answered");
+      expect(text).not.toContain("NEWER");
+      expect(code).toBe(0);
+    });
+
+    it("at a terminal, takes a key typed, and fails again if that is refused too", async () => {
+      const a = agent({ source: "saved", answers: () => EXPIRED });
+      const { text, code } = await run(DEVICE, { agent: a.port, ask: async () => false, secret: async () => "sk-or-TYPED" });
+      expect(a.kept).toEqual(["sk-or-TYPED"]);
+      expect(text).toContain("OpenRouter still refuses it: API key expired");
+      expect(text).not.toContain("TYPED");
+      expect(code).toBe(1);
+    });
+
+    it("asks nothing for a report", async () => {
+      const a = agent({ source: "saved", answers: () => EXPIRED });
+      const { text } = await run(DEVICE, { agent: a.port, report: true, ask: async () => { throw new Error("asked"); }, secret: async () => { throw new Error("asked"); } });
+      expect(text).toContain("OpenRouter refuses");
+    });
   });
 
   it("takes over isorite check: the notes' links in a line, a broken one named", async () => {

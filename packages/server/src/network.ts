@@ -76,3 +76,13 @@ export function unreachable(err: unknown, url: string): string {
     : "";
   return [said || (err as Error)?.message || "no reason given", code && !said.includes(code) ? ` (${code})` : "", advice ? `. ${advice}` : ""].join("");
 }
+
+/** Whether a provider's answer says it refused the key it was sent (not that there was none), and its own words for
+ *  why: `401: {"message":"API key expired."}` gives "API key expired". The word of a provider is what a person can
+ *  act on (expired, revoked, out of credit), so it is kept. */
+export function keyRefusal(message: string): string | null {
+  if (!/\b40[123]\b|unauthori[sz]ed|invalid[ _-]?(api[ _-]?)?(key|token)|incorrect api key|api key (expired|revoked|invalid|not valid)|key (has )?expired|authentication (failed|error)/i.test(message)) return null;
+  const quoted = /"message"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(message)?.[1];
+  const said = (quoted ?? message.replace(/^\s*\(?\s*\d{3}\s*:?\s*/, "")).replace(/\\"/g, '"').replace(/[.\s]+$/, "").trim();
+  return said.length > 120 ? `${said.slice(0, 119)}…` : said || null;
+}

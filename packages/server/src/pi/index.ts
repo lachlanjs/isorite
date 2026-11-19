@@ -13,6 +13,7 @@ import { FileImages } from "./images.ts";
 import { Credentials, DEFAULT_REACH, PROVIDERS, dataDir, type Choice, type Reach } from "./credentials.ts";
 import { GATEWAY, gatewayFetch, gatewayFor, gatewayModels, gatewaySees, readGateway, type Gateway } from "./gateway.ts";
 import { unreachable } from "../network.ts";
+import { openRouterList, openRouterModel } from "./openrouter.ts";
 import { configPath } from "../config.ts";
 import { SCRIPTED, scriptedModel, scriptedOn } from "./scripted.ts";
 import { basename, join } from "node:path";
@@ -39,8 +40,13 @@ export async function modelFor(provider: string, model: string, env: NodeJS.Proc
   if (typeof make !== "function") throw new Error(`pi has no provider "${provider}"`);
   const models = createModels();
   models.setProvider((make as () => Parameters<typeof models.setProvider>[0])());
-  const chosen = models.getModel(provider, model);
-  if (!chosen) throw new Error(`pi's ${provider} has no model "${model}"`);
+  let chosen = models.getModel(provider, model);
+  // Pi's list is as of its release: OpenRouter's own says what a newer model is.
+  if (!chosen && provider === "openrouter") {
+    try { chosen = (await openRouterModel((make as () => { getModels(): readonly never[] })().getModels() as readonly never[], model)) as unknown as typeof chosen; }
+    catch (e) { throw new Error(`pi's openrouter has no model "${model}", and OpenRouter's own list could not be read to find it: ${(e as Error).message}`); }
+  }
+  if (!chosen) throw new Error(provider === "openrouter" ? `OpenRouter has no model "${model}": it is written as <vendor>/<model>, as google/gemini-3-pro` : `pi's ${provider} has no model "${model}": it may be newer than this isorite's list; update isorite, or use it through OpenRouter`);
   return { chosen, streamFn: models.streamSimple.bind(models) };
 }
 
@@ -129,7 +135,10 @@ export class PiControl {
     if (!/^[a-z0-9-]+$/.test(provider)) return [];
     try {
       const make = ((await import(`@earendil-works/pi-ai/providers/${provider}`)) as Record<string, unknown>)[`${camel(provider)}Provider`] as (() => { getModels(): readonly { id: string }[] }) | undefined;
-      return make ? make().getModels().map((m) => m.id).filter((id) => !id.startsWith("~")) : [];
+      const ids = make ? make().getModels().map((m) => m.id).filter((id) => !id.startsWith("~")) : [];
+      // OpenRouter's newer models too, where its list answers: a suggestion, never a need.
+      if (provider === "openrouter") { try { for (const m of await openRouterList(AbortSignal.timeout(4000))) if (!ids.includes(m.id)) ids.push(m.id); } catch { /* pi's own */ } }
+      return ids;
     } catch { return []; }
   }
 

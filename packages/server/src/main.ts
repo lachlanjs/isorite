@@ -44,7 +44,7 @@ const SHORT = `isorite: an agentic harness for understanding
 
   isorite                 open the base here, or choose one
   isorite setup           a short guided setup: your notes, your agent, a check of this machine
-  isorite doctor          can isorite work here, and what to change if not
+  isorite doctor          can isorite work here, does your agent's key work, and what to change if not
   isorite help            this; help all lists every command
   isorite --version
 
@@ -70,8 +70,10 @@ ${SETUP_USAGE}  isorite new <folder>                   a new base: an empty fold
                                          the model for search by meaning: which, and where; else fetch it
                                          (53 MB, once)
   isorite doctor [<notes>] [--report] [--offline]
-                                         can isorite work here, a step at a time; --report: one block to
-                                         paste to someone helping
+                                         can isorite work here, a step at a time, with one tiny request to
+                                         your agent's provider to try its key (--offline: none, nothing
+                                         fetched); a refused key can be replaced there; --report: one block
+                                         to paste to someone helping
   isorite memory [<folder>]              the agent's memory: a base of its own, lent to every session
   isorite bases [lend|keep <name>]       the bases this device knows; lend one to every session, or keep it
   isorite help setup                     every setting and failure, written for an AI helping you set up
@@ -296,7 +298,13 @@ export function main(argv: string[]): number | Promise<number> {
         const rl = createInterface({ input: process.stdin, output: process.stdout });
         try { return /^y(es)?$/i.test((await rl.question(`${question} [y/N] `)).trim()); } finally { rl.close(); }
       } : undefined;
-      return doctor(folder, { report: rest.includes("--report"), offline: rest.includes("--offline"), version: VERSION, ...(port === undefined ? {} : { port }), ...(ask ? { ask } : {}) });
+      // A key is typed unseen; stopping (Ctrl-C) leaves the key as it was.
+      const secret = ask ? async (question: string) => {
+        const { terminal } = await import("./setup/prompt.ts");
+        const prompt = terminal();
+        try { return await prompt.secret(question); } catch { return ""; } finally { prompt.close(); }
+      } : undefined;
+      return doctor(folder, { report: rest.includes("--report"), offline: rest.includes("--offline"), version: VERSION, ...(port === undefined ? {} : { port }), ...(ask ? { ask } : {}), ...(secret ? { secret } : {}) });
     }
     if (command === "example" && rest.find((r) => !r.startsWith("--"))) {
       const folder = rest.find((r) => !r.startsWith("--"))!;
